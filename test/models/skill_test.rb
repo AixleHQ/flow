@@ -28,8 +28,16 @@ class SkillTest < ActiveSupport::TestCase
     assert { skill.errors[:name].present? }
   end
 
-  test "name must start with letter" do
-    skill = build(:skill, name: "123invalid", scope: @project)
+  # Registry names are published by skills.sh and get passed verbatim to
+  # `skills add --skill <name>`, so a digit-leading name has to be accepted —
+  # they exist upstream (e.g. "3b1b-style-animation-skill").
+  test "registry name may start with a digit" do
+    skill = build(:skill, name: "3b1b-style-animation", scope: @project)
+    assert { skill.valid? }
+  end
+
+  test "name rejects a leading hyphen" do
+    skill = build(:skill, name: "-invalid", scope: @project)
     assert { !skill.valid? }
     assert { skill.errors[:name].present? }
   end
@@ -55,9 +63,19 @@ class SkillTest < ActiveSupport::TestCase
     assert { skill.valid? }
   end
 
-  test "name rejects special characters (auto-replaced)" do
+  # The setter used to rewrite junk into underscores, which quietly produced a
+  # name that no longer matched the skill it came from. It is now rejected.
+  test "name rejects special characters instead of rewriting them" do
     skill = build(:skill, name: "my skill!", scope: @project)
-    assert { skill.name == "my_skill_" }
+    assert { skill.name == "my skill!" }
+    assert { !skill.valid? }
+    assert { skill.errors[:name].present? }
+  end
+
+  test "name is capped at the spec's 64 characters" do
+    skill = build(:skill, name: "a" * 65, scope: @project)
+    assert { !skill.valid? }
+    assert { skill.errors[:name].present? }
   end
 
   test "name must be unique within scope" do
@@ -106,10 +124,12 @@ class SkillTest < ActiveSupport::TestCase
     assert { skill.name == "myskill" }
   end
 
-  test "name= replaces spaces with underscores" do
+  # The setter normalizes case and surrounding whitespace only. Anything else is
+  # left intact so validation can reject it instead of silently renaming a skill.
+  test "name= strips surrounding whitespace without rewriting the value" do
     skill = Skill.new
-    skill.name = "my skill"
-    assert { skill.name == "my_skill" }
+    skill.name = "  my skill  "
+    assert { skill.name == "my skill" }
   end
 
   test "name= preserves hyphens" do
@@ -183,11 +203,59 @@ class SkillTest < ActiveSupport::TestCase
     assert_equal "project", skill.scope_indicator
   end
 
+  # ====== Origin ======
+
+  test "origin defaults to registry" do
+    skill = build(:skill, scope: @project)
+    assert_equal "registry", skill.origin
+    assert { skill.registry? }
+  end
+
+  test "manual skill is valid without source or package" do
+    skill = build(:skill, origin: :manual, source: nil, package: nil, name: "my-manual-skill", scope: @project)
+    assert { skill.valid? }
+  end
+
+  test "registry skill still requires source and package" do
+    skill = build(:skill, source: nil, package: nil, scope: @project)
+    assert { !skill.valid? }
+    assert { skill.errors[:source].present? }
+    assert { skill.errors[:package].present? }
+  end
+
+  # A manual skill's name becomes its directory name in the container, and the
+  # Agent Skills spec requires the two to match — so the spec's charset is
+  # enforced here even though registry names are accepted as published.
+  test "manual name rejects characters the Agent Skills spec forbids" do
+    %w[my_skill react:components my--skill trailing-].each do |bad|
+      skill = build(:skill, origin: :manual, source: nil, package: nil, name: bad, scope: @project)
+      assert { !skill.valid? }
+      assert { skill.errors[:name].present? }
+    end
+  end
+
+  test "manual name accepts spec-shaped names" do
+    skill = build(:skill, origin: :manual, source: nil, package: nil, name: "pdf-processing", scope: @project)
+    assert { skill.valid? }
+  end
+
+  test "registry name still accepts underscores and colons published upstream" do
+    %w[my_skill react:components].each do |upstream|
+      skill = build(:skill, name: upstream, scope: @project)
+      assert { skill.valid? }
+    end
+  end
+
   # ====== Registry helpers ======
 
   test "#registry_url returns skills.sh URL" do
     skill = build(:skill, name: "mantine-form", source: "mantinedev/skills", scope: @project)
     assert_equal "https://skills.sh/mantinedev/skills/mantine-form", skill.registry_url
+  end
+
+  test "#registry_url is nil for a manual skill" do
+    skill = build(:skill, origin: :manual, source: nil, package: nil, name: "hand-written", scope: @project)
+    assert_nil skill.registry_url
   end
 
   # ====== Associations ======

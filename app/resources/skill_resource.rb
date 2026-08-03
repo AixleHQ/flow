@@ -10,7 +10,15 @@ class SkillResource < ApplicationResource
     skill.scope_indicator
   end
 
-  typelize :string
+  # Registry vs hand-written. The UI needs it because a manual skill has no
+  # registry page, cannot be re-installed by the CLI, and is labelled as ours.
+  typelize %w[registry manual]
+  attribute :origin do |skill|
+    skill.origin.to_s
+  end
+
+  # Null for a manual skill — there is nothing upstream to link to.
+  typelize :string?
   attribute :registry_url do |skill|
     skill.registry_url
   end

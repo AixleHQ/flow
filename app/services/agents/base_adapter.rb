@@ -167,6 +167,18 @@ module Agents
       raise NotImplementedError, "#{self.class} must implement #skills_agent_name"
     end
 
+    # Directory the skills CLI installs global skills into for this runtime, i.e.
+    # where `skills add -g -a <agent>` puts them. Hand-written skills are written
+    # here directly so they land exactly where installed ones do — the CLI is not
+    # used for them, because it reports the skill's files to skills.sh as telemetry
+    # and a hand-written skill may be private.
+    #
+    # @return [String, nil] nil when the runtime has no such directory, in which
+    #   case a manual skill can only reach it through the context file.
+    def skills_install_path
+      nil
+    end
+
     # =================================================================
     # MCP Server Configuration
     # Each CLI has different MCP config format and file path

@@ -108,9 +108,6 @@ railway_oauth:
   client_id: "<%= ENV['RAILWAY_OAUTH_CLIENT_ID'] %>"
   client_secret: "<%= ENV['RAILWAY_OAUTH_CLIENT_SECRET'] %>"
 
-skills_sh:
-  api_key: <%= ENV['SKILLS_SH_API_KEY'] %>
-
 # Official MCP Registry, source of the connector catalog. Overridable so a
 # self-hosted deployment can point at a private subregistry (it implements the
 # same OpenAPI spec) instead of the public one.

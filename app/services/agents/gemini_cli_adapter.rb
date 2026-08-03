@@ -157,6 +157,12 @@ module Agents
       "gemini-cli"
     end
 
+    # Where `skills add -g -a gemini-cli` puts a skill: the CLI installs into the
+    # agent's own config directory, the same one holding settings.json.
+    def skills_install_path
+      "#{home_dir}/.gemini/skills"
+    end
+
     # MCP config: merged into ~/.gemini/settings.json
     def mcp_config(servers)
       mcp_servers = {}

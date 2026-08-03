@@ -171,6 +171,6 @@ an env var.
 
 ## Third-party APIs
 
-| Variable             | Purpose                                                                  |
-| -------------------- | ------------------------------------------------------------------------ |
-| `SKILLS_SH_API_KEY`  | Optional — pulls reusable Skills from the Skills.sh registry.            |
+No key is required. Skills are read from the public skills.sh endpoints: its
+documented `/api/v1` surface authenticates with a Vercel OIDC token only, and
+skills.sh issues no API keys to services hosted elsewhere.

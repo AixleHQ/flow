@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
-import type { Skill } from 'shared/resources/skills/SkillsContent';
+import type { CatalogSkill, Skill } from 'shared/resources/skills/SkillsContent';
 
 import SkillsPage from './SkillsPage';
 
@@ -13,24 +13,43 @@ const skill = (overrides: Partial<Skill> = {}): Skill => ({
   name: 'react-expert',
   title: null,
   description: 'React best practices',
-  package: 'acme@react-expert',
-  source: 'acme',
-  sourceUrl: 'https://example.com/acme',
+  package: 'acme/skills@react-expert',
+  source: 'acme/skills',
+  sourceUrl: 'https://github.com/acme/skills',
   installCount: 1200,
-  scopeType: 'project',
+  origin: 'registry',
+  scopeType: 'Project',
   scopeId: 9,
   scopeIndicator: 'project',
-  registryUrl: 'https://skills.sh/acme/react-expert',
+  registryUrl: 'https://skills.sh/acme/skills/react-expert',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
   ...overrides,
 });
 
-const pageProps = (skills: Skill[]) => ({
+const catalogSkill = (overrides: Partial<CatalogSkill> = {}): CatalogSkill => ({
+  registryId: 'anthropics/skills/frontend-design',
+  source: 'anthropics/skills',
+  slug: 'frontend-design',
+  title: null,
+  description: 'Design guidance for frontend work',
+  installs: 734_415,
+  featured: true,
+  pickerName: 'frontend-design',
+  package: 'anthropics/skills@frontend-design',
+  iconUrl: null,
+  registryUrl: 'https://skills.sh/anthropics/skills/frontend-design',
+  auditRisk: null,
+  auditProviders: [],
+  ...overrides,
+});
+
+const pageProps = (skills: Skill[], catalogSkills: CatalogSkill[] = []) => ({
   project: { id: 9, name: 'Falcon Project' },
   skills,
-  registryQuery: '',
-  registryResults: [],
+  catalogQuery: '',
+  catalogSkills,
+  catalogSyncedAt: null,
 });
 
 describe('Projects/Skills/SkillsPage', () => {
@@ -38,50 +57,43 @@ describe('Projects/Skills/SkillsPage', () => {
     renderAuthedPage(<SkillsPage />, { props: pageProps([]) });
 
     expect(screen.getByText('Project Skills')).toBeInTheDocument();
-    expect(screen.getByText('Skills from skills.sh registry installed for this project.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Skills this project can use — installed from the public catalog or written by hand.'),
+    ).toBeInTheDocument();
   });
 
-  it('shows the empty state with a registry browse CTA when no skills are installed', () => {
+  it('lists installed skills with their install counts', () => {
+    renderAuthedPage(<SkillsPage />, { props: pageProps([skill()]) });
+
+    expect(screen.getByText('react-expert')).toBeInTheDocument();
+    expect(screen.getByText('1.2K installs')).toBeInTheDocument();
+  });
+
+  it('shows the empty state when nothing is installed', () => {
     renderAuthedPage(<SkillsPage />, { props: pageProps([]) });
 
     expect(screen.getByText('No skills installed')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Browse skills.sh registry' })).toBeInTheDocument();
   });
 
-  it('lists installed skills and filters them by the filter input', async () => {
-    renderAuthedPage(<SkillsPage />, {
-      props: pageProps([
-        skill({ id: 1, name: 'react-expert', package: 'acme@react-expert' }),
-        skill({ id: 2, name: 'mantine-guru', package: 'acme@mantine-guru', source: 'acme' }),
-      ]),
-    });
+  // The defect this feature exists to fix: the catalog now has something to show
+  // before anyone types a query.
+  it('opens the catalog on server-provided entries without a search', async () => {
+    renderAuthedPage(<SkillsPage />, { props: pageProps([], [catalogSkill()]) });
 
-    expect(screen.getByText('react-expert')).toBeInTheDocument();
-    expect(screen.getByText('mantine-guru')).toBeInTheDocument();
+    // The header and the empty state both offer it; either entry point will do.
+    await userEvent.click(screen.getAllByRole('button', { name: 'Browse catalog' })[0]);
 
-    await userEvent.type(screen.getByPlaceholderText('Filter installed skills...'), 'mantine');
-
-    expect(screen.queryByText('react-expert')).not.toBeInTheDocument();
-    expect(screen.getByText('mantine-guru')).toBeInTheDocument();
+    expect(screen.getByText('Suggested skills')).toBeInTheDocument();
+    expect(screen.getByText('frontend-design')).toBeInTheDocument();
+    // Opening the catalog costs nothing: the props are already on the page.
+    expect(router.get).not.toHaveBeenCalled();
   });
 
-  it('shows the no-match state when the filter matches nothing', async () => {
-    renderAuthedPage(<SkillsPage />, {
-      props: pageProps([skill({ id: 1, name: 'react-expert' })]),
-    });
-
-    await userEvent.type(screen.getByPlaceholderText('Filter installed skills...'), 'zzz');
-
-    expect(screen.getByText('No skills match your filter')).toBeInTheDocument();
-  });
-
-  it('opens the registry search modal from the header action', async () => {
+  it('opens the manual authoring form from the header', async () => {
     renderAuthedPage(<SkillsPage />, { props: pageProps([]) });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Add from Registry' }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Add manually' })[0]);
 
-    expect(screen.getByText('Search skills.sh Registry')).toBeInTheDocument();
-    // sanity: opening the modal does not hit the backend on its own
-    expect(router.reload).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('SKILL.md content')).toBeInTheDocument();
   });
 });

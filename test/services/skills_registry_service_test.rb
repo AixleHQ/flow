@@ -2,26 +2,49 @@
 
 require "test_helper"
 
+# Adapter contract test: pins the shapes the two reachable skills.sh endpoints
+# actually return, including the failure shapes. `/api/v1` is deliberately absent —
+# it authenticates with a Vercel OIDC token and 401s for anyone else, so this
+# service no longer has an authenticated path to test.
 class SkillsRegistryServiceTest < ActiveSupport::TestCase
   setup do
     @company = create(:company)
     @user = create(:user, company: @company)
     @project = create(:project, company: @company, owner: @user)
-    @api_key = "sk_live_test_key"
-    Settings.skills_sh.api_key = @api_key
-  end
-
-  teardown do
-    Settings.skills_sh.api_key = nil
   end
 
   test "search returns empty array when query is too short" do
+    # The endpoint answers 400 for a one-character query, so no request is spent.
     assert_equal [], SkillsRegistryService.search("a")
   end
 
-  test "search falls back to public endpoint when api key is missing" do
-    Settings.skills_sh.api_key = nil
+  test "search maps the documented response shape" do
+    stub_request(:get, "https://www.skills.sh/api/search")
+      .with(query: { q: "rails", limit: "100" })
+      .to_return(
+        status: 200,
+        body: {
+          query: "rails",
+          searchType: "fuzzy",
+          skills: [
+            { id: "org/skills/rails", skillId: "rails", name: "rails", source: "org/skills", installs: 42 }
+          ],
+          count: 1
+        }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
 
+    results = SkillsRegistryService.search("rails")
+
+    assert_equal 1, results.size
+    assert_equal "org/skills/rails", results.first[:id]
+    assert_equal "rails", results.first[:slug]
+    assert_equal "rails", results.first[:name]
+    assert_equal "org/skills", results.first[:source]
+    assert_equal 42, results.first[:installs]
+  end
+
+  test "search accepts a bare array body" do
     stub_request(:get, "https://www.skills.sh/api/search")
       .with(query: { q: "react", limit: "100" })
       .to_return(
@@ -35,45 +58,10 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     results = SkillsRegistryService.search("react")
 
     assert_equal 1, results.size
-    assert_equal "vercel-labs/agent-skills/react", results.first[:id]
     assert_equal "React", results.first[:name]
   end
 
-  test "search public fallback handles skills-wrapped response from live API shape" do
-    Settings.skills_sh.api_key = nil
-
-    stub_request(:get, "https://www.skills.sh/api/search")
-      .with(query: { q: "rails", limit: "100" })
-      .to_return(
-        status: 200,
-        body: {
-          query: "rails",
-          searchType: "fuzzy",
-          skills: [
-            {
-              id: "org/skills/rails",
-              skillId: "rails",
-              name: "rails",
-              source: "org/skills",
-              installs: 42
-            }
-          ],
-          count: 1
-        }.to_json,
-        headers: { "Content-Type" => "application/json" }
-      )
-
-    results = SkillsRegistryService.search("rails")
-
-    assert_equal 1, results.size
-    assert_equal "org/skills/rails", results.first[:id]
-    assert_equal "rails", results.first[:slug]
-    assert_equal "rails", results.first[:name]
-  end
-
-  test "search public fallback handles data-wrapped response" do
-    Settings.skills_sh.api_key = nil
-
+  test "search accepts a data-wrapped body" do
     stub_request(:get, "https://www.skills.sh/api/search")
       .with(query: { q: "mantine", limit: "100" })
       .to_return(
@@ -86,15 +74,35 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
         headers: { "Content-Type" => "application/json" }
       )
 
-    results = SkillsRegistryService.search("mantine")
-
-    assert_equal 1, results.size
-    assert_equal "Mantine", results.first[:name]
+    assert_equal "Mantine", SkillsRegistryService.search("mantine").first[:name]
   end
 
-  test "search public fallback returns empty array on HTTP error" do
-    Settings.skills_sh.api_key = nil
+  test "search filters duplicate entries" do
+    stub_request(:get, "https://www.skills.sh/api/search")
+      .with(query: { q: "vitest", limit: "100" })
+      .to_return(
+        status: 200,
+        body: {
+          skills: [
+            { id: "org/skills/vitest", slug: "vitest", name: "Vitest", source: "org/skills", installs: 500 },
+            { id: "fork/skills/vitest", slug: "vitest", name: "Fork", source: "fork/skills", installs: 3, isDuplicate: true }
+          ]
+        }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
 
+    assert_equal %w[org/skills/vitest], SkillsRegistryService.search("vitest").map { |s| s[:id] }
+  end
+
+  test "search clamps the requested limit to the endpoint maximum" do
+    stub_request(:get, "https://www.skills.sh/api/search")
+      .with(query: { q: "ruby", limit: "200" })
+      .to_return(status: 200, body: { skills: [] }.to_json, headers: { "Content-Type" => "application/json" })
+
+    assert_equal [], SkillsRegistryService.search("ruby", limit: 5_000)
+  end
+
+  test "search returns empty array on HTTP error" do
     stub_request(:get, "https://www.skills.sh/api/search")
       .with(query: { q: "ruby", limit: "100" })
       .to_return(status: 503, body: "")
@@ -102,61 +110,14 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     assert_equal [], SkillsRegistryService.search("ruby")
   end
 
-  test "search maps v1 response and filters duplicates" do
-    stub_request(:get, %r{https://skills\.sh/api/v1/skills/search})
-      .with(
-        query: { q: "react", limit: "50" },
-        headers: { "Authorization" => "Bearer #{@api_key}" }
-      )
+  test "install creates a skill from the download endpoint and stores its hash" do
+    stub_request(:get, "https://www.skills.sh/api/download/vercel-labs/agent-skills/next-js-development")
       .to_return(
         status: 200,
         body: {
-          data: [
-            {
-              id: "expo/skills/react-native",
-              slug: "react-native",
-              name: "React Native",
-              source: "expo/skills",
-              installs: 3842,
-              isDuplicate: false
-            },
-            {
-              id: "fork/skills/react-native",
-              slug: "react-native",
-              name: "React Native Fork",
-              source: "fork/skills",
-              installs: 10,
-              isDuplicate: true
-            }
-          ],
-          query: "react",
-          count: 2
-        }.to_json,
-        headers: { "Content-Type" => "application/json" }
-      )
-
-    results = SkillsRegistryService.search("react")
-
-    assert_equal 1, results.size
-    assert_equal "expo/skills/react-native", results.first[:id]
-    assert_equal "react-native", results.first[:slug]
-    assert_equal "React Native", results.first[:name]
-    assert_equal "expo/skills", results.first[:source]
-    assert_equal 3842, results.first[:installs]
-  end
-
-  test "install creates skill from v1 detail endpoint" do
-    skill_id = "vercel-labs/agent-skills/next-js-development"
-    stub_request(:get, "https://skills.sh/api/v1/skills/vercel-labs/agent-skills/next-js-development")
-      .with(headers: { "Authorization" => "Bearer #{@api_key}" })
-      .to_return(
-        status: 200,
-        body: {
-          id: skill_id,
-          source: "vercel-labs/agent-skills",
-          slug: "next-js-development",
-          installs: 24_531,
+          hash: "sha256:deadbeef",
           files: [
+            { path: "LICENSE.txt", contents: "MIT" },
             {
               path: "SKILL.md",
               contents: "---\nname: Next.js Development\ndescription: Build Next.js apps\n---\n\n# Next.js"
@@ -166,7 +127,7 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
         headers: { "Content-Type" => "application/json" }
       )
 
-    skill = SkillsRegistryService.install(skill_id, scope: @project)
+    skill = SkillsRegistryService.install("vercel-labs/agent-skills/next-js-development", scope: @project)
 
     assert_equal "next-js-development", skill.name
     assert_equal "vercel-labs/agent-skills@next-js-development", skill.package
@@ -175,12 +136,24 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     assert_equal "Next.js Development", skill.title
     assert_equal "Build Next.js apps", skill.description
     assert_includes skill.content, "# Next.js"
-    assert_equal 24_531, skill.install_count
+    assert_equal "sha256:deadbeef", skill.content_hash
+    assert_equal "registry", skill.origin
   end
 
-  test "install works without api key via github fallback" do
-    Settings.skills_sh.api_key = nil
-    skill_id = "vercel-labs/agent-skills/vercel-react-best-practices"
+  test "install records the install count the caller already knows" do
+    stub_request(:get, "https://www.skills.sh/api/download/org/skills/rails")
+      .to_return(
+        status: 200,
+        body: { hash: "h", files: [ { path: "SKILL.md", contents: "---\nname: rails\n---\n\n# Rails" } ] }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+    skill = SkillsRegistryService.install("org/skills/rails", scope: @project, installs: 4_242)
+
+    assert_equal 4_242, skill.install_count
+  end
+
+  test "install falls back to GitHub raw when the registry does not carry the skill" do
     skill_md = <<~MD
       ---
       name: vercel-react-best-practices
@@ -189,6 +162,9 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
 
       # React
     MD
+
+    stub_request(:get, "https://www.skills.sh/api/download/vercel-labs/agent-skills/vercel-react-best-practices")
+      .to_return(status: 404, body: { error: "not_found" }.to_json, headers: { "Content-Type" => "application/json" })
 
     stub_request(:get, "https://raw.githubusercontent.com/vercel-labs/agent-skills/HEAD/skills/vercel-react-best-practices/SKILL.md")
       .to_return(status: 404, body: "")
@@ -203,27 +179,69 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     stub_request(:get, "https://raw.githubusercontent.com/vercel-labs/agent-skills/HEAD/skills/react-best-practices/SKILL.md")
       .to_return(status: 200, body: skill_md)
 
-    skill = SkillsRegistryService.install(skill_id, scope: @project)
+    skill = SkillsRegistryService.install("vercel-labs/agent-skills/vercel-react-best-practices", scope: @project)
 
     assert_equal "vercel-react-best-practices", skill.name
-    assert_equal "vercel-labs/agent-skills@vercel-react-best-practices", skill.package
     assert_equal "React best practices", skill.description
     assert_includes skill.content, "# React"
+    assert_nil skill.content_hash
     assert_equal 0, skill.install_count
   end
 
-  test "install raises when skill is not found" do
-    stub_request(:get, %r{https://skills\.sh/api/v1/skills/missing/skill})
-      .to_return(status: 404, body: { error: "not_found", message: "Skill not found" }.to_json)
+  # A publisher hosting its own skills has a two-segment id, which the download
+  # endpoint cannot address at all — RFC 8615 discovery is the only route.
+  test "install resolves a non-GitHub publisher through well-known discovery" do
+    skill_md = "---\nname: lark-doc\ndescription: Read and edit docs\n---\n\n# Lark\n"
+
+    stub_request(:get, "https://example.com/.well-known/agent-skills/index.json")
+      .to_return(
+        status: 200,
+        body: { skills: [ { name: "lark-doc", description: "Read and edit docs", files: [ "SKILL.md" ] } ] }.to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+    stub_request(:get, "https://example.com/.well-known/agent-skills/lark-doc/SKILL.md")
+      .to_return(status: 200, body: skill_md)
+
+    skill = SkillsRegistryService.install("example.com/lark-doc", scope: @project, installs: 519_024)
+
+    assert_equal "lark-doc", skill.name
+    assert_equal "example.com", skill.source
+    assert_equal "example.com@lark-doc", skill.package
+    assert_equal "https://example.com", skill.source_url
+    assert_equal 519_024, skill.install_count
+  end
+
+  # "Skill not found" would blame the user for a publisher that simply does not
+  # publish a discovery index.
+  test "install names the publisher when a self-hosted source cannot be resolved" do
+    stub_request(:get, "https://example.com/.well-known/agent-skills/index.json").to_return(status: 404, body: "")
+    stub_request(:get, "https://example.com/.well-known/skills/index.json").to_return(status: 404, body: "")
 
     error = assert_raises(SkillsRegistryService::RegistryError) do
-      SkillsRegistryService.install("missing/skill", scope: @project)
+      SkillsRegistryService.install("example.com/lark-doc", scope: @project)
+    end
+
+    assert_match(/example\.com does not publish/, error.message)
+  end
+
+  test "install raises when neither the registry nor GitHub has the skill" do
+    stub_request(:get, "https://www.skills.sh/api/download/missing-org/skills/nope")
+      .to_return(status: 404, body: { error: "not_found" }.to_json, headers: { "Content-Type" => "application/json" })
+
+    stub_request(:get, "https://raw.githubusercontent.com/missing-org/skills/HEAD/skills/nope/SKILL.md")
+      .to_return(status: 404, body: "")
+
+    stub_request(:get, "https://api.github.com/repos/missing-org/skills/contents/skills")
+      .to_return(status: 404, body: "")
+
+    error = assert_raises(SkillsRegistryService::RegistryError) do
+      SkillsRegistryService.install("missing-org/skills/nope", scope: @project)
     end
 
     assert_match(/not found/, error.message)
   end
 
-  test "install updates existing skill by package" do
+  test "install updates an existing skill by package" do
     existing = create(
       :skill,
       scope: @project,
@@ -234,22 +252,22 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
       content: "old content"
     )
 
-    stub_request(:get, "https://skills.sh/api/v1/skills/vercel-labs/agent-skills/next-js-development")
+    stub_request(:get, "https://www.skills.sh/api/download/vercel-labs/agent-skills/next-js-development")
       .to_return(
         status: 200,
         body: {
-          id: "vercel-labs/agent-skills/next-js-development",
-          source: "vercel-labs/agent-skills",
-          slug: "next-js-development",
-          installs: 30_000,
+          hash: "sha256:newer",
           files: [ { path: "SKILL.md", contents: "---\nname: Updated Title\n---\n" } ]
         }.to_json,
         headers: { "Content-Type" => "application/json" }
       )
 
-    skill = SkillsRegistryService.install("vercel-labs/agent-skills/next-js-development", scope: @project)
+    assert_no_difference -> { Skill.count } do
+      skill = SkillsRegistryService.install("vercel-labs/agent-skills/next-js-development", scope: @project)
+      assert_equal existing.id, skill.id
+    end
 
-    assert_equal existing.id, skill.id
-    assert_equal "Updated Title", skill.reload.title
+    assert_equal "Updated Title", existing.reload.title
+    assert_equal "sha256:newer", existing.content_hash
   end
 end

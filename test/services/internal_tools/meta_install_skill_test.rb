@@ -20,25 +20,17 @@ class InternalTools::MetaInstallSkillTest < ActiveSupport::TestCase
     @session.define_singleton_method(:project) { project }
     @session.define_singleton_method(:step_run) { step_run }
 
-    @api_key = "sk_live_test_key"
-    Settings.skills_sh.api_key = @api_key
     @skill_id = "vercel-labs/agent-skills/next-js-development"
   end
 
-  teardown do
-    Settings.skills_sh.api_key = nil
-  end
-
-  def stub_detail_endpoint(skill_id: @skill_id, source: "vercel-labs/agent-skills", slug: "next-js-development", installs: 24_531)
-    stub_request(:get, "https://skills.sh/api/v1/skills/#{skill_id}")
-      .with(headers: { "Authorization" => "Bearer #{@api_key}" })
+  # The registry's public download endpoint: whole bundle plus a content hash. It
+  # reports no install count — only the search endpoint does.
+  def stub_detail_endpoint(source: "vercel-labs/agent-skills", slug: "next-js-development", hash: "sha256:abc123")
+    stub_request(:get, "https://www.skills.sh/api/download/#{source}/#{slug}")
       .to_return(
         status: 200,
         body: {
-          id: skill_id,
-          source: source,
-          slug: slug,
-          installs: installs,
+          hash: hash,
           files: [
             {
               path: "SKILL.md",
@@ -72,7 +64,9 @@ class InternalTools::MetaInstallSkillTest < ActiveSupport::TestCase
     assert_equal @project.id, skill.scope_id
     assert_equal "vercel-labs/agent-skills@next-js-development", skill.package
     assert_includes skill.content, "# Next.js"
-    assert_equal 24_531, skill.install_count
+    assert_equal "sha256:abc123", skill.content_hash
+    # The download endpoint carries no install count, so nothing is invented here.
+    assert_equal 0, skill.install_count
   end
 
   test "defaults scope to the session's project when scope_id is omitted" do

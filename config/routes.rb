@@ -317,7 +317,13 @@ Rails.application.routes.draw do
             end
           end
           resources :connectors, only: %i[create]
-          resources :skills, only: %i[index create destroy]
+          resources :skills, only: %i[index create destroy] do
+            collection do
+              # Registering a hand-written SKILL.md, as opposed to installing a
+              # registry entry by id — different input, different validation.
+              post :manual
+            end
+          end
           resources :config_items, only: %i[index create update destroy]
           resources :members, only: %i[index create destroy]
           resource :settings, only: %i[show update]

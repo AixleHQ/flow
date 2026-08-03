@@ -1,4 +1,3 @@
-import { router } from '@inertiajs/react';
 import {
   ActionIcon,
   Badge,
@@ -7,45 +6,40 @@ import {
   Card,
   Center,
   Group,
-  Loader,
-  Modal,
   SimpleGrid,
-  Stack,
   Text,
   TextInput,
   Tooltip,
 } from '@mantine/core';
-import { useDebouncedCallback } from '@mantine/hooks';
-import { IconDownload, IconExternalLink, IconSearch, IconTrash } from '@tabler/icons-react';
+import { IconExternalLink, IconPencilPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 
 import { DeleteSkillModal } from './DeleteSkillModal';
+import { ManualSkillModal } from './ManualSkillModal';
+import { SkillsCatalogModal, type CatalogSkill } from './SkillsCatalogModal';
+
+export type { CatalogSkill };
 
 export interface Skill {
   id: number;
   name: string;
   title: string | null;
   description: string | null;
-  package: string;
+  /** Null for a hand-written skill — there is no registry package behind it. */
+  package: string | null;
   source: string | null;
   sourceUrl: string | null;
   installCount: number;
+  origin: 'registry' | 'manual';
   scopeType: string | null;
   scopeId: number | null;
   scopeIndicator: string;
-  registryUrl: string;
+  /** Null for a hand-written skill. */
+  registryUrl: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface RegistrySkill {
-  id: string;
-  slug: string;
-  name: string;
-  source: string;
-  installs: number;
 }
 
 interface SkillsContentProps {
@@ -53,8 +47,9 @@ interface SkillsContentProps {
   basePath: string;
   title: string;
   subtitle: string;
-  registryQuery: string;
-  registryResults: RegistrySkill[];
+  catalogSkills: CatalogSkill[];
+  catalogQuery: string;
+  catalogSyncedAt: string | null;
 }
 
 function formatInstalls(count: number): string {
@@ -68,13 +63,15 @@ export function SkillsContent({
   basePath,
   title,
   subtitle,
-  registryQuery,
-  registryResults,
+  catalogSkills,
+  catalogQuery,
+  catalogSyncedAt,
 }: SkillsContentProps) {
   const { canExecute } = useProjectPermissions();
   const [filterSearch, setFilterSearch] = useState('');
   const [deleteSkill, setDeleteSkill] = useState<Skill | null>(null);
-  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
 
   const filtered = useMemo(() => {
     if (!filterSearch.trim()) return skills;
@@ -87,8 +84,11 @@ export function SkillsContent({
     );
   }, [skills, filterSearch]);
 
-  const installedPackages = useMemo(() => new Set(skills.map((s) => s.package)), [skills]);
-  const isProjectPage = basePath.includes('/projects/');
+  // Manual skills have no package, so they can never mark a catalog entry installed.
+  const installedPackages = useMemo(
+    () => new Set(skills.map((s) => s.package).filter((pkg): pkg is string => !!pkg)),
+    [skills],
+  );
 
   return (
     <Box>
@@ -102,9 +102,14 @@ export function SkillsContent({
           </Text>
         </Box>
         {canExecute && (
-          <Button leftSection={<IconSearch size={16} />} onClick={() => setSearchModalOpen(true)}>
-            Add from Registry
-          </Button>
+          <Group gap="xs">
+            <Button variant="default" leftSection={<IconPencilPlus size={16} />} onClick={() => setManualOpen(true)}>
+              Add manually
+            </Button>
+            <Button leftSection={<IconSearch size={16} />} onClick={() => setCatalogOpen(true)}>
+              Browse catalog
+            </Button>
+          </Group>
         )}
       </Group>
 
@@ -128,13 +133,23 @@ export function SkillsContent({
           }}
         >
           <Text fz={48}>🔧</Text>
-          <Text fz={16} c="dimmed" mt="sm">
+          <Text fz={16} fw={500} c="var(--app-text-primary)" mt="sm">
             {filterSearch ? 'No skills match your filter' : 'No skills installed'}
           </Text>
+          {!filterSearch && (
+            <Text fz={13} c="dimmed" mt={4} maw={420} ta="center">
+              Skills are packaged instructions an agent can load on demand during a session.
+            </Text>
+          )}
           {!filterSearch && canExecute && (
-            <Button variant="outline" mt="sm" onClick={() => setSearchModalOpen(true)}>
-              Browse skills.sh registry
-            </Button>
+            <Group gap="xs" mt="md">
+              <Button variant="outline" onClick={() => setCatalogOpen(true)}>
+                Browse catalog
+              </Button>
+              <Button variant="subtle" onClick={() => setManualOpen(true)}>
+                Add manually
+              </Button>
+            </Group>
           )}
         </Center>
       ) : (
@@ -158,35 +173,25 @@ export function SkillsContent({
                   <Text fz={15} fw={600} c="var(--app-text-primary)" ff="JetBrains Mono, monospace" truncate>
                     {skill.name}
                   </Text>
-                  <Badge
-                    color={skill.scopeIndicator === 'company' ? 'blue' : 'teal'}
-                    size="xs"
-                    variant="light"
-                    style={{ flexShrink: 0 }}
-                  >
-                    {skill.scopeIndicator}
-                  </Badge>
+                  {skill.origin === 'manual' && (
+                    <Badge color="grape" size="xs" variant="light" style={{ flexShrink: 0 }}>
+                      manual
+                    </Badge>
+                  )}
                 </Group>
-                {isProjectPage && skill.scopeIndicator === 'company' ? (
-                  <Tooltip label="Company skills can only be removed from Company Skills by an admin">
-                    <ActionIcon variant="subtle" size="sm" color="gray" disabled style={{ flexShrink: 0 }}>
+                {canExecute && (
+                  <Tooltip label="Remove">
+                    <ActionIcon
+                      aria-label={`Remove ${skill.name}`}
+                      variant="subtle"
+                      size="sm"
+                      color="red"
+                      onClick={() => setDeleteSkill(skill)}
+                      style={{ flexShrink: 0 }}
+                    >
                       <IconTrash size={16} />
                     </ActionIcon>
                   </Tooltip>
-                ) : (
-                  canExecute && (
-                    <Tooltip label="Remove">
-                      <ActionIcon
-                        variant="subtle"
-                        size="sm"
-                        color="red"
-                        onClick={() => setDeleteSkill(skill)}
-                        style={{ flexShrink: 0 }}
-                      >
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                  )
                 )}
               </Group>
 
@@ -209,7 +214,7 @@ export function SkillsContent({
               >
                 <Group gap={4} align="center">
                   <Text fz={11} c="dimmed" ff="JetBrains Mono, monospace">
-                    {skill.source}
+                    {skill.source ?? 'written here'}
                   </Text>
                   {skill.registryUrl && (
                     <ActionIcon
@@ -219,6 +224,7 @@ export function SkillsContent({
                       href={skill.registryUrl}
                       target="_blank"
                       rel="noopener"
+                      aria-label={`Open ${skill.name} on skills.sh`}
                     >
                       <IconExternalLink size={10} />
                     </ActionIcon>
@@ -235,14 +241,17 @@ export function SkillsContent({
         </SimpleGrid>
       )}
 
-      <RegistrySearchModal
-        opened={searchModalOpen}
-        onClose={() => setSearchModalOpen(false)}
-        basePath={basePath}
+      <SkillsCatalogModal
+        opened={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        catalogSkills={catalogSkills}
+        query={catalogQuery}
+        pagePath={basePath}
+        installPath={basePath}
+        catalogSyncedAt={catalogSyncedAt}
         installedPackages={installedPackages}
-        initialQuery={registryQuery}
-        results={registryResults}
       />
+      <ManualSkillModal opened={manualOpen} onClose={() => setManualOpen(false)} basePath={basePath} />
       <DeleteSkillModal
         opened={!!deleteSkill}
         onClose={() => setDeleteSkill(null)}
@@ -250,227 +259,5 @@ export function SkillsContent({
         basePath={basePath}
       />
     </Box>
-  );
-}
-
-interface RegistrySearchModalProps {
-  opened: boolean;
-  onClose: () => void;
-  basePath: string;
-  installedPackages: Set<string>;
-  initialQuery: string;
-  results: RegistrySkill[];
-}
-
-export function RegistrySearchModal({
-  opened,
-  onClose,
-  basePath,
-  installedPackages,
-  initialQuery,
-  results,
-}: RegistrySearchModalProps) {
-  const [query, setQuery] = useState(initialQuery);
-  const [installing, setInstalling] = useState<string | null>(null);
-  const [searching, setSearching] = useState(false);
-
-  const sortedResults = useMemo(() => [...results].sort((a, b) => b.installs - a.installs), [results]);
-
-  const debouncedSearch = useDebouncedCallback((q: string) => {
-    const trimmed = q.trim();
-    if (trimmed.length > 0 && trimmed.length < 2) return;
-
-    setSearching(true);
-    router.reload({
-      data: { q: trimmed || undefined },
-      only: ['registryQuery', 'registryResults'],
-      onFinish: () => setSearching(false),
-    });
-  }, 400);
-
-  const handleQueryChange = (value: string) => {
-    setQuery(value);
-    debouncedSearch(value);
-  };
-
-  const handleInstall = (skillId: string) => {
-    setInstalling(skillId);
-    router.post(
-      basePath,
-      { skillId },
-      {
-        preserveScroll: true,
-        onFinish: () => {
-          setInstalling(null);
-          setQuery('');
-          router.reload({
-            data: { q: undefined },
-            only: ['skills', 'registryQuery', 'registryResults'],
-          });
-        },
-      },
-    );
-  };
-
-  const handleClose = () => {
-    onClose();
-    if (query) {
-      router.reload({ data: { q: undefined }, only: ['registryQuery', 'registryResults'] });
-    }
-  };
-
-  const packageFromSkill = (skill: RegistrySkill) => `${skill.source}@${skill.slug}`;
-
-  return (
-    <Modal
-      opened={opened}
-      onClose={handleClose}
-      title={
-        <Text fz={18} fw={600} c="var(--app-text-primary)">
-          Search skills.sh Registry
-        </Text>
-      }
-      size="xl"
-      styles={{
-        body: { minHeight: 500 },
-      }}
-    >
-      <Stack gap="md">
-        <TextInput
-          placeholder="Search skills... (min 2 characters, e.g. react, mantine)"
-          leftSection={<IconSearch size={16} />}
-          rightSection={searching ? <Loader size={14} /> : undefined}
-          value={query}
-          onChange={(e) => handleQueryChange(e.currentTarget.value)}
-          autoFocus
-          size="md"
-        />
-
-        {sortedResults.length > 0 && (
-          <Box
-            style={{
-              maxHeight: 480,
-              overflowY: 'auto',
-            }}
-          >
-            <Stack gap="xs">
-              {sortedResults.map((skill) => {
-                const pkg = packageFromSkill(skill);
-                const isInstalled = installedPackages.has(pkg);
-
-                return (
-                  <Card
-                    key={skill.id}
-                    padding="md"
-                    radius="md"
-                    withBorder
-                    style={{
-                      borderColor: 'var(--app-border-default)',
-                      backgroundColor: isInstalled ? 'var(--app-bg-deep)' : 'var(--app-bg-paper)',
-                    }}
-                  >
-                    <Group justify="space-between" align="flex-start" wrap="nowrap">
-                      <Box style={{ minWidth: 0, flex: 1 }}>
-                        <Group gap={8} align="center">
-                          <Text fz={15} fw={600} c="var(--app-text-primary)" ff="JetBrains Mono, monospace">
-                            {skill.name}
-                          </Text>
-                          <Badge size="xs" variant="light" color="gray">
-                            {formatInstalls(skill.installs)} installs
-                          </Badge>
-                        </Group>
-                        <Group gap={4} mt={6} align="center">
-                          <Text fz={12} c="dimmed" ff="JetBrains Mono, monospace">
-                            {skill.id}
-                          </Text>
-                          <ActionIcon
-                            variant="subtle"
-                            size={16}
-                            component="a"
-                            href={`https://skills.sh/${skill.id}`}
-                            target="_blank"
-                            rel="noopener"
-                          >
-                            <IconExternalLink size={10} />
-                          </ActionIcon>
-                        </Group>
-                      </Box>
-                      <Box pt={2}>
-                        {isInstalled ? (
-                          <Badge color="green" size="md" variant="light">
-                            Installed
-                          </Badge>
-                        ) : (
-                          <Button
-                            size="xs"
-                            variant="light"
-                            leftSection={<IconDownload size={14} />}
-                            loading={installing === skill.id}
-                            onClick={() => handleInstall(skill.id)}
-                          >
-                            Install
-                          </Button>
-                        )}
-                      </Box>
-                    </Group>
-                  </Card>
-                );
-              })}
-            </Stack>
-          </Box>
-        )}
-
-        {!searching && initialQuery && sortedResults.length === 0 && (
-          <Center py="xl" mih={300}>
-            <Stack align="center" gap="xs">
-              <Text fz={14} c="dimmed">
-                No skills found for &ldquo;{initialQuery}&rdquo;
-              </Text>
-              <Text fz={12} c="dimmed">
-                Try different keywords or browse{' '}
-                <Text
-                  span
-                  c="brand"
-                  component="a"
-                  href="https://skills.sh"
-                  target="_blank"
-                  rel="noopener"
-                  td="underline"
-                >
-                  skills.sh
-                </Text>
-              </Text>
-            </Stack>
-          </Center>
-        )}
-
-        {!initialQuery && (
-          <Center py="xl" mih={300}>
-            <Stack align="center" gap="xs">
-              <Text fz={36}>🔍</Text>
-              <Text fz={14} c="dimmed">
-                Search the{' '}
-                <Text
-                  span
-                  c="brand"
-                  component="a"
-                  href="https://skills.sh"
-                  target="_blank"
-                  rel="noopener"
-                  td="underline"
-                >
-                  skills.sh
-                </Text>{' '}
-                registry to find and install agent skills
-              </Text>
-              <Text fz={12} c="dimmed" maw={400} ta="center">
-                Skills teach your AI agent best practices, framework knowledge, and project-specific conventions.
-                Installed skills are applied automatically at session start.
-              </Text>
-            </Stack>
-          </Center>
-        )}
-      </Stack>
-    </Modal>
   );
 }
