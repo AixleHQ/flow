@@ -8,7 +8,6 @@ import {
   Center,
   Group,
   Loader,
-  Progress,
   Select,
   SimpleGrid,
   Stack,
@@ -19,18 +18,22 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
+  IconBrandGoogleFilled,
+  IconBrandOpenai,
   IconBrush,
   IconBuilding,
   IconCheck,
   IconChevronLeft,
   IconChevronRight,
-  IconCode,
   IconClipboardList,
-  IconRocket,
+  IconCode,
+  IconCursorText,
+  IconDots,
+  IconPlug,
+  IconSparkles,
   IconTestPipe,
-  IconUser,
 } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type TerminalSession from 'types/generated/TerminalSession';
 
@@ -47,10 +50,8 @@ const POSITION_OPTIONS = [
   { value: 'pm_po_ba', label: 'Product Manager / BA', icon: IconClipboardList },
   { value: 'designer', label: 'Designer', icon: IconBrush },
   { value: 'cto', label: 'CTO', icon: IconBuilding },
+  { value: 'other', label: 'Other', icon: IconDots },
 ];
-
-// Kept for label lookups only (no icon needed in non-grid contexts)
-const POSITION_LABEL_MAP = Object.fromEntries(POSITION_OPTIONS.map((o) => [o.value, o.label]));
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
@@ -65,22 +66,30 @@ const LANGUAGE_OPTIONS = [
   { value: 'pl', label: 'Polish' },
 ];
 
-const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string }[] = [
+const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; icon: typeof IconSparkles }[] = [
   {
     type: 'claude_code',
     name: 'Claude Code',
     description: "Anthropic's AI coding assistant with deep reasoning capabilities",
+    icon: IconSparkles,
   },
-  { type: 'cursor_cli', name: 'Cursor CLI', description: 'AI-powered code editor with context-aware suggestions' },
+  {
+    type: 'cursor_cli',
+    name: 'Cursor CLI',
+    description: 'AI-powered code editor with context-aware suggestions',
+    icon: IconCursorText,
+  },
   {
     type: 'codex',
     name: 'OpenAI Codex',
     description: "OpenAI's code generation model optimized for multiple languages",
+    icon: IconBrandOpenai,
   },
   {
     type: 'gemini_cli',
     name: 'Gemini CLI',
     description: "Google's multimodal AI assistant for code generation and analysis",
+    icon: IconBrandGoogleFilled,
   },
 ];
 
@@ -97,14 +106,13 @@ interface ViewerWorkflowPreview {
   steps: Array<{ name: string; description: string }>;
 }
 
-// Viewer step map: server state → visual step index
-// step1 → 0 (Profile), step2/step3 → 1 (See the platform), step4/completed → 2 (Complete)
-const viewerStepMap: Record<string, number> = {
+// Server state → visual step index. Two steps only: step1 (0, Profile) and
+// step2 (1, Connect Agents / See the platform) — `complete` finishes directly
+// from step2, so `completed` still renders the same step until the redirect lands.
+const STEP_MAP: Record<string, number> = {
   step1: 0,
   step2: 1,
-  step3: 1,
-  step4: 2,
-  completed: 2,
+  completed: 1,
 };
 
 // ── Agent Auth Terminal ────────────────────────────
@@ -312,99 +320,107 @@ function ConnectAgentsStep({
   }, []);
 
   return (
-    <Card withBorder p={0} style={{ overflow: 'hidden' }}>
-      <Box p="xl" style={{ borderBottom: '1px solid var(--app-border-default)' }}>
+    <>
+      <Card withBorder p={28}>
         <Text fw={600} size="lg" mb={4}>
           Connect your agents
         </Text>
-        <Text size="sm" c="dimmed">
-          Sign in to at least one agent to enable it for your workflows.
+        <Text size="sm" c="dimmed" mb="md">
+          Connect at least one agent to continue. You can add the rest later in Settings.
         </Text>
-      </Box>
 
-      <Stack gap={0}>
-        {AVAILABLE_AGENTS.map((agent) => {
-          const isConfigured = configuredAgents.includes(agent.type);
-          const session = authSessions.find((s) => s.agentType === agent.type);
-          const hasActiveSession = !!session;
-          const isExpanded = expandedAgent === agent.type;
+        <Stack gap="xs">
+          {AVAILABLE_AGENTS.map((agent) => {
+            const isConfigured = configuredAgents.includes(agent.type);
+            const session = authSessions.find((s) => s.agentType === agent.type);
+            const hasActiveSession = !!session;
+            const isExpanded = expandedAgent === agent.type;
 
-          let chipEl: React.ReactNode;
-          if (isConfigured) {
-            chipEl = (
-              <Badge variant="light" color="green" size="sm" leftSection={<IconCheck size={10} />}>
-                Connected
-              </Badge>
-            );
-          } else if (hasActiveSession && session?.state !== 'failed') {
-            chipEl = (
-              <Badge variant="outline" color="gray" size="sm" leftSection={<Loader size={10} />}>
-                Connecting
-              </Badge>
-            );
-          } else {
-            chipEl = (
-              <Badge variant="outline" color="gray" size="sm">
-                NOT CONNECTED
-              </Badge>
-            );
-          }
+            let chipEl: React.ReactNode;
+            if (isConfigured) {
+              chipEl = (
+                <Badge variant="light" color="green" size="sm" leftSection={<IconCheck size={10} />}>
+                  Connected
+                </Badge>
+              );
+            } else if (hasActiveSession && session?.state !== 'failed') {
+              chipEl = (
+                <Badge variant="outline" color="gray" size="sm" leftSection={<Loader size={10} />}>
+                  Connecting
+                </Badge>
+              );
+            } else {
+              chipEl = (
+                <Badge variant="outline" color="gray" size="sm">
+                  NOT CONNECTED
+                </Badge>
+              );
+            }
 
-          return (
-            <Box key={agent.type} className={classes.authRow}>
-              <Group justify="space-between" wrap="nowrap">
-                <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-                  <Box className={classes.agentLogo} style={{ backgroundColor: AGENT_COLORS[agent.type] ?? '#666' }} />
-                  <Box style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={500} truncate>
-                      {agent.name}
-                    </Text>
-                    <Text size="xs" c="dimmed" truncate>
-                      {agent.description}
-                    </Text>
-                  </Box>
+            return (
+              <Box key={agent.type} className={classes.authRow}>
+                <Group justify="space-between" wrap="nowrap">
+                  <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+                    <Box className={classes.agentLogo} style={{ backgroundColor: AGENT_COLORS[agent.type] ?? '#666' }}>
+                      <agent.icon size={12} color="white" />
+                    </Box>
+                    <Box style={{ minWidth: 0 }}>
+                      <Text size="sm" fw={500} truncate>
+                        {agent.name}
+                      </Text>
+                      <Text size="xs" c="dimmed" truncate>
+                        {agent.description}
+                      </Text>
+                    </Box>
+                  </Group>
+                  <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
+                    {chipEl}
+                    {!isConfigured && (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        color="brand"
+                        leftSection={!isExpanded ? <IconPlug size={12} /> : undefined}
+                        onClick={() => handleConnect(agent.type)}
+                      >
+                        {isExpanded ? 'Collapse' : 'Connect'}
+                      </Button>
+                    )}
+                  </Group>
                 </Group>
-                <Group gap="xs" wrap="nowrap" style={{ flexShrink: 0 }}>
-                  {chipEl}
-                  {!isConfigured && (
-                    <Button size="xs" variant="outline" color="brand" onClick={() => handleConnect(agent.type)}>
-                      {isExpanded ? 'Collapse' : 'Connect'}
-                    </Button>
-                  )}
-                </Group>
-              </Group>
 
-              {isExpanded && !isConfigured && (
-                <Box
-                  mt="sm"
-                  style={{
-                    height: 280,
-                    border: '1px solid var(--app-border-default)',
-                    borderRadius: 6,
-                    overflow: 'hidden',
-                  }}
-                >
-                  <AgentAuthTerminal
-                    key={agent.type}
-                    agentType={agent.type}
-                    session={session}
-                    isConfigured={false}
-                    onAuthenticated={() => {
-                      setExpandedAgent(null);
-                      router.reload();
+                {isExpanded && !isConfigured && (
+                  <Box
+                    mt="sm"
+                    style={{
+                      height: 280,
+                      border: '1px solid var(--app-border-default)',
+                      borderRadius: 6,
+                      overflow: 'hidden',
                     }}
-                  />
-                </Box>
-              )}
-            </Box>
-          );
-        })}
-      </Stack>
+                  >
+                    <AgentAuthTerminal
+                      key={agent.type}
+                      agentType={agent.type}
+                      session={session}
+                      isConfigured={false}
+                      onAuthenticated={() => {
+                        setExpandedAgent(null);
+                        router.reload();
+                      }}
+                    />
+                  </Box>
+                )}
+              </Box>
+            );
+          })}
+        </Stack>
+      </Card>
 
-      <Group justify="space-between" p="md" style={{ borderTop: '1px solid var(--app-border-default)' }}>
+      <Group justify="space-between" mt="lg">
         <Button
           variant="outline"
-          size="md"
+          size="sm"
           leftSection={<IconChevronLeft size={16} />}
           onClick={onBack}
           loading={loading}
@@ -416,65 +432,21 @@ function ConnectAgentsStep({
             {configuredCount} of {AVAILABLE_AGENTS.length} connected
           </Text>
           <Button
-            size="md"
+            size="sm"
             rightSection={<IconChevronRight size={16} />}
             onClick={onNext}
             loading={loading}
             disabled={configuredCount === 0}
           >
-            Continue
+            Get started
           </Button>
         </Group>
       </Group>
-    </Card>
+    </>
   );
 }
 
 // ── Main Page ──────────────────────────────────────
-
-const CONFETTI_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
-
-function Confetti() {
-  const pieces = useMemo(
-    () =>
-      Array.from({ length: 24 }, (_, i) => ({
-        id: i,
-        left: `${Math.random() * 100}%`,
-        color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-        delay: `${Math.random() * 2}s`,
-        duration: `${2 + Math.random() * 2}s`,
-        size: 6 + Math.random() * 6,
-      })),
-    [],
-  );
-
-  return (
-    <Box className={classes.confettiContainer}>
-      {pieces.map((p) => (
-        <Box
-          key={p.id}
-          className={classes.confettiPiece}
-          style={{
-            left: p.left,
-            backgroundColor: p.color,
-            width: p.size,
-            height: p.size,
-            animationDelay: p.delay,
-            animationDuration: p.duration,
-          }}
-        />
-      ))}
-    </Box>
-  );
-}
-
-const contributorStepMap: Record<string, number> = {
-  step1: 0,
-  step2: 1,
-  step3: 1,
-  step4: 2,
-  completed: 2,
-};
 
 const OnboardingPage = () => {
   const {
@@ -495,9 +467,9 @@ const OnboardingPage = () => {
   const company = currentUser?.currentCompany ?? null;
   const isViewer = currentUser?.currentRole === 'viewer';
   const onboardingState = currentUser?.onboardingState ?? 'step1';
-  // Viewers see: Profile (0) → See the platform (1) → Complete (2)
-  // Contributors see: Profile (0) → Connect Agents (1) → Complete (2)
-  const activeStep = isViewer ? (viewerStepMap[onboardingState] ?? 0) : (contributorStepMap[onboardingState] ?? 0);
+  // Two steps: Profile (0) → Connect Agents / See the platform (1). "Get started"
+  // on step 2 fires `complete` directly — there is no separate summary step.
+  const activeStep = STEP_MAP[onboardingState] ?? 0;
 
   const [position, setPosition] = useState(currentUser?.position ?? '');
   const [language, setLanguage] = useState(currentUser?.preferredAgentLanguage ?? '');
@@ -556,37 +528,25 @@ const OnboardingPage = () => {
   }, []);
 
   const handleNext = useCallback(() => {
-    if (activeStep === 0) {
-      if (!canAdvanceStep1) {
-        setValidationWarning('Please fill in all required fields to continue');
-        return;
-      }
-      submitStep({
-        position,
-        preferredAgentLanguage: language,
-        selectedAgents: selectedAgents,
-        onboardingStateEvent: 'go_next',
-      });
-    } else if (activeStep === 1 && isViewer) {
-      // Viewer "See the platform" step → viewer_advance jumps step2→step4
-      submitStep({ onboardingStateEvent: 'viewer_advance' });
+    if (!canAdvanceStep1) {
+      setValidationWarning('Please fill in all required fields to continue');
+      return;
     }
-  }, [activeStep, isViewer, position, language, selectedAgents, canAdvanceStep1, submitStep]);
+    submitStep({
+      position,
+      preferredAgentLanguage: language,
+      selectedAgents: selectedAgents,
+      onboardingStateEvent: 'go_next',
+    });
+  }, [position, language, selectedAgents, canAdvanceStep1, submitStep]);
 
   const handleBack = useCallback(() => {
     setValidationWarning(null);
     submitStep({ onboardingStateEvent: 'go_previous' });
   }, [submitStep]);
 
-  const handleConnectAgentsNext = useCallback(() => {
-    // Server may be at step2 (first time on Connect Agents) or step3 (re-visiting).
-    // Send go_next once; if server is at step2 it advances to step3, which triggers
-    // another go_next via a follow-up call since step3→step4 guard passes for contributors
-    // who have at least one configured agent.
-    submitStep({ onboardingStateEvent: 'go_next' });
-  }, [submitStep]);
-
-  const handleComplete = useCallback(() => {
+  // Step 2's "Get started" finishes onboarding directly — step2 → completed.
+  const handleFinish = useCallback(() => {
     submitStep({ onboardingStateEvent: 'complete' });
   }, [submitStep]);
 
@@ -610,44 +570,35 @@ const OnboardingPage = () => {
         </Stack>
       </Center>
 
-      <Progress
-        value={
-          isViewer
-            ? activeStep === 0
-              ? 0
-              : activeStep === 1
-                ? 50
-                : 100
-            : activeStep === 0
-              ? 0
-              : activeStep === 1
-                ? 50
-                : 100
-        }
-        animated
-        size="sm"
-        mb="lg"
-        radius="xl"
-      />
-
-      <Stepper active={activeStep} mb="xl" allowNextStepsSelect={false}>
-        <Stepper.Step label="Your Profile" icon={<IconUser size={18} />} />
-        {!isViewer && <Stepper.Step label="Connect Agents" />}
-        {isViewer && <Stepper.Step label="See the platform" />}
-        <Stepper.Step label="Complete" icon={<IconCheck size={18} />} />
+      <Stepper
+        active={activeStep}
+        mb="xl"
+        size="xs"
+        iconSize={26}
+        allowNextStepsSelect={false}
+        classNames={{ stepLabel: classes.stepLabel, stepIcon: classes.stepIcon }}
+      >
+        <Stepper.Step label="Profile" />
+        <Stepper.Step label={isViewer ? 'Platform' : 'Agents'} />
       </Stepper>
 
       {/* Step 1: Profile */}
       {activeStep === 0 && (
         <Box key="step-0" className={classes.stepContent}>
-          <Card withBorder p="xl">
-            <Text fw={600} size="lg" mb="md">
+          <Card withBorder p={28}>
+            <Text fw={600} size="lg" mb={4}>
               Tell us about yourself
+            </Text>
+            <Text size="sm" c="dimmed" mb="md">
+              This helps us tailor agent defaults to your role.
             </Text>
             <Stack gap="md">
               <Box>
-                <Text size="sm" fw={500} mb="xs">
-                  Your Position
+                <Text size="xs" c="dimmed" fw={500} mb="xs">
+                  Your position{' '}
+                  <Text component="span" c="red" inherit>
+                    *
+                  </Text>
                 </Text>
                 <SimpleGrid cols={2} spacing="xs">
                   {POSITION_OPTIONS.map((opt) => {
@@ -661,7 +612,7 @@ const OnboardingPage = () => {
                         aria-pressed={selected}
                       >
                         <Icon size={18} />
-                        <Text size="sm" fw={500} mt={4}>
+                        <Text size="sm" fw={500}>
                           {opt.label}
                         </Text>
                       </UnstyledButton>
@@ -670,14 +621,14 @@ const OnboardingPage = () => {
                 </SimpleGrid>
               </Box>
               <Select
-                label="Preferred Agent Language"
+                label="Agent response language"
                 placeholder="Select language"
                 data={LANGUAGE_OPTIONS}
                 value={language}
                 onChange={handleLanguageChange}
                 searchable
-                required
-                size="md"
+                size="sm"
+                classNames={{ label: classes.fieldLabel }}
               />
             </Stack>
             {validationWarning && (
@@ -685,18 +636,18 @@ const OnboardingPage = () => {
                 ⚠ {validationWarning}
               </Text>
             )}
-            <Group justify="flex-end" mt="xl">
-              <Button
-                size="md"
-                rightSection={<IconChevronRight size={16} />}
-                onClick={handleNext}
-                loading={loading}
-                disabled={!canAdvanceStep1}
-              >
-                Continue
-              </Button>
-            </Group>
           </Card>
+          <Group justify="flex-end" mt="lg">
+            <Button
+              size="sm"
+              rightSection={<IconChevronRight size={16} />}
+              onClick={handleNext}
+              loading={loading}
+              disabled={!canAdvanceStep1}
+            >
+              Continue
+            </Button>
+          </Group>
         </Box>
       )}
 
@@ -708,7 +659,7 @@ const OnboardingPage = () => {
             authSessions={authSessions}
             loading={loading}
             onBack={handleBack}
-            onNext={handleConnectAgentsNext}
+            onNext={handleFinish}
           />
         </Box>
       )}
@@ -716,7 +667,7 @@ const OnboardingPage = () => {
       {/* Step 2: See the platform (viewers only) */}
       {activeStep === 1 && isViewer && (
         <Box key="step-viewer" className={classes.stepContent}>
-          <Card withBorder p="xl">
+          <Card withBorder p={28}>
             {viewerWorkflowPreview ? (
               <>
                 <Text fw={600} size="lg" mb={4}>
@@ -764,96 +715,21 @@ const OnboardingPage = () => {
                 </Text>
               </>
             )}
-            <Group justify="flex-end">
-              <Button size="md" rightSection={<IconChevronRight size={16} />} onClick={handleNext} loading={loading}>
-                Continue
-              </Button>
-            </Group>
           </Card>
-        </Box>
-      )}
-
-      {/* Step 3/2: Complete */}
-      {((!isViewer && activeStep === 2) || (isViewer && activeStep === 2)) && (
-        <Box key="step-complete" className={classes.stepContent} pos="relative">
-          <Confetti />
-          <Card withBorder p="xl">
-            <Center mb="md">
-              <ThemeIcon size="xl" radius="xl" color="green" variant="light">
-                <IconCheck size={28} />
-              </ThemeIcon>
-            </Center>
-            <Text fw={600} size="lg" ta="center" mb="xs">
-              You&apos;re all set!
-            </Text>
-            <Text size="sm" c="dimmed" ta="center" mb="xl">
-              Review your configuration and click &quot;Get Started&quot; to begin.
-            </Text>
-
-            <Stack gap="sm" mb="xl" style={{ maxWidth: 500, margin: '0 auto' }}>
-              <Card withBorder p="sm">
-                <Group justify="space-between">
-                  <Text size="sm" c="dimmed">
-                    Position
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {POSITION_LABEL_MAP[position] ?? position}
-                  </Text>
-                </Group>
-              </Card>
-              <Card withBorder p="sm">
-                <Group justify="space-between">
-                  <Text size="sm" c="dimmed">
-                    Language
-                  </Text>
-                  <Text size="sm" fw={500}>
-                    {LANGUAGE_OPTIONS.find((o) => o.value === language)?.label ?? language}
-                  </Text>
-                </Group>
-              </Card>
-
-              {!isViewer &&
-                selectedAgents.map((a) => {
-                  const agent = AVAILABLE_AGENTS.find((ag) => ag.type === a);
-                  const isAuth = configuredAgents.includes(a);
-                  return (
-                    <Card
-                      key={a}
-                      withBorder
-                      p="sm"
-                      className={`${classes.summaryCard} ${classes.agentCard}`}
-                      style={{ borderLeftColor: AGENT_COLORS[a] ?? '#666' }}
-                    >
-                      <Group justify="space-between">
-                        <Text size="sm" fw={500}>
-                          {agent?.name ?? a}
-                        </Text>
-                        <Badge size="sm" color={isAuth ? 'green' : 'yellow'} variant="filled">
-                          {isAuth ? '✓ Authenticated' : '⚠ Not authenticated'}
-                        </Badge>
-                      </Group>
-                    </Card>
-                  );
-                })}
-            </Stack>
-
-            <Group justify={isViewer ? 'flex-end' : 'space-between'}>
-              {!isViewer && (
-                <Button
-                  variant="outline"
-                  size="md"
-                  leftSection={<IconChevronLeft size={16} />}
-                  onClick={handleBack}
-                  loading={loading}
-                >
-                  Back
-                </Button>
-              )}
-              <Button size="md" leftSection={<IconRocket size={16} />} onClick={handleComplete} loading={loading}>
-                Get Started
-              </Button>
-            </Group>
-          </Card>
+          <Group justify="space-between" mt="lg">
+            <Button
+              variant="outline"
+              size="sm"
+              leftSection={<IconChevronLeft size={16} />}
+              onClick={handleBack}
+              loading={loading}
+            >
+              Back
+            </Button>
+            <Button size="sm" rightSection={<IconChevronRight size={16} />} onClick={handleFinish} loading={loading}>
+              Get started
+            </Button>
+          </Group>
         </Box>
       )}
     </PageShell>

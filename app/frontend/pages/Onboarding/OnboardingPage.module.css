@@ -2,18 +2,18 @@
 
 .roleOpt {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 12px 8px;
+  justify-content: flex-start;
+  gap: 10px;
+  padding: 11px 14px;
   border: 1px solid var(--app-border-default);
-  border-radius: 8px;
-  background-color: var(--app-bg-elevated);
+  border-radius: 5px;
+  background-color: var(--app-bg-default);
   color: var(--mantine-color-text);
   cursor: pointer;
   transition: border-color 150ms ease, background-color 150ms ease;
-  text-align: center;
+  text-align: left;
   width: 100%;
 }
 
@@ -28,20 +28,38 @@
   color: var(--mantine-color-brand-6);
 }
 
+/* ── Stepper (2-step: Profile / Agents) ──────── */
+
+.stepIcon {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.stepLabel {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+/* ── Field label (Step 1 form fields) ────────── */
+
+.fieldLabel {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--app-text-secondary) !important;
+  margin-bottom: 8px !important;
+}
+
 /* ── Agent auth rows (Connect Agents step) ──── */
 
 .authRow {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--app-border-default);
-  transition: background-color 150ms ease;
+  padding: 12px 14px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 5px;
+  background-color: var(--app-bg-default);
 }
 
 .authRow:last-child {
-  border-bottom: none;
-}
-
-.authRow:hover {
-  background-color: var(--app-bg-elevated);
+  margin-bottom: 0;
 }
 
 /* ── Agent logo bubble ──────────────────────── */
@@ -51,6 +69,9 @@
   height: 20px;
   border-radius: 4px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ── Welcome card ──────────────────────────── */
@@ -82,36 +103,9 @@
     animation: none;
   }
 
-  .agentCard,
-  .summaryCard,
-  .roleOpt,
-  .authRow {
+  .roleOpt {
     transition: none;
   }
-}
-
-/* ── Agent cards (Step 2) ──────────────────── */
-
-.agentCard {
-  cursor: pointer;
-  border-left-width: 4px !important;
-  border-left-style: solid !important;
-  transition: border-color 150ms ease, background-color 150ms ease, transform 150ms ease;
-}
-
-.agentCard:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* ── Agent summary cards (Step 4) ──────────── */
-
-.summaryCard {
-  transition: transform 150ms ease;
-}
-
-.summaryCard:hover {
-  transform: translateY(-1px);
 }
 
 /* ── Company logo ──────────────────────────── */
@@ -127,39 +121,4 @@
 
 .subtitle {
   font-family: var(--app-font-body, 'Figtree', sans-serif);
-}
-
-/* ── Confetti (Step 4) ────────────────────── */
-
-@keyframes confettiFall {
-  0% {
-    opacity: 1;
-    transform: translateY(-20px) rotate(0deg);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(420px) rotate(720deg);
-  }
-}
-
-.confettiContainer {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.confettiPiece {
-  position: absolute;
-  top: -10px;
-  border-radius: 2px;
-  animation: confettiFall linear forwards;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .confettiPiece {
-    animation: none;
-    display: none;
-  }
 }

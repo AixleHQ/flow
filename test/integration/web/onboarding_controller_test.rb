@@ -27,27 +27,15 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
-  test "viewer advances from step3 to step4 without agent credentials" do
-    viewer = create(:user, :viewer, company: @company, onboarding_state: "step3",
-                                    position: "dev", preferred_agent_language: "en",
-                                    email: "client@ext.com",
-                                    password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
-    sign_in_as(viewer)
-
-    patch onboarding_path, params: { onboarding: { onboarding_state_event: "go_next" } }
-    assert_equal "step4", viewer.company_memberships.sole.reload.onboarding_state
-  end
-
-  test "non-viewer stays at step3 without agent credentials (silent no-op)" do
-    membership = @user.company_memberships.sole
-    membership.update!(onboarding_state: "step3", position: "dev", preferred_agent_language: "en")
-
-    patch onboarding_path, params: { onboarding: { onboarding_state_event: "go_next" } }
-    assert_equal "step3", membership.reload.onboarding_state
+  test "go_next advances from step1 to step2" do
+    patch onboarding_path, params: {
+      onboarding: { position: "dev", preferred_agent_language: "en", onboarding_state_event: "go_next" }
+    }
+    assert_equal "step2", @user.company_memberships.sole.reload.onboarding_state
   end
 
   test "viewer completes onboarding without agents" do
-    viewer = create(:user, :viewer, company: @company, onboarding_state: "step4",
+    viewer = create(:user, :viewer, company: @company, onboarding_state: "step2",
                                     position: "dev", preferred_agent_language: "en",
                                     email: "client2@ext.com",
                                     password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
@@ -57,23 +45,20 @@ class Web::OnboardingControllerTest < ActionDispatch::IntegrationTest
     assert_equal "completed", viewer.company_memberships.sole.reload.onboarding_state
   end
 
-  test "viewer PATCH with viewer_advance event advances from step2 to step4" do
-    viewer = create(:user, :viewer, company: @company, onboarding_state: "step2",
-                                    position: "dev", preferred_agent_language: "en",
-                                    email: "client3@ext.com",
-                                    password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
-    sign_in_as(viewer)
-
-    patch onboarding_path, params: { onboarding: { onboarding_state_event: "viewer_advance" } }
-    assert_redirected_to onboarding_path
-    assert_equal "step4", viewer.company_memberships.sole.reload.onboarding_state
-  end
-
-  test "non-viewer cannot use viewer_advance event" do
+  test "non-viewer cannot complete at step2 without agent credentials (silent no-op)" do
     membership = @user.company_memberships.sole
     membership.update!(onboarding_state: "step2", position: "dev", preferred_agent_language: "en")
 
-    patch onboarding_path, params: { onboarding: { onboarding_state_event: "viewer_advance" } }
+    patch onboarding_path, params: { onboarding: { onboarding_state_event: "complete" } }
     assert_equal "step2", membership.reload.onboarding_state
+  end
+
+  test "non-viewer completes onboarding at step2 with an agent credential" do
+    membership = @user.company_memberships.sole
+    membership.update!(onboarding_state: "step2", position: "dev", preferred_agent_language: "en")
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+
+    patch onboarding_path, params: { onboarding: { onboarding_state_event: "complete" } }
+    assert_equal "completed", membership.reload.onboarding_state
   end
 end

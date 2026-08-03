@@ -42,6 +42,19 @@ are flock-serialized; direct `bin/rails test` runs are not — check nothing els
 running first. Test parallelization is deliberately off — see the note in
 `test/test_helper.rb` before re-enabling.
 
+## Writing commit messages
+
+Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`.
+
+- **type** — one of `feat`, `fix`, `refactor`, `test`, `docs`, `chore`, `ci`, `style`, `perf`, `build`.
+- **scope** — optional, the area touched (e.g. `onboarding`, `web`, `ci`). Omit if the change is broad or scope would be redundant with the subject.
+- **subject** — imperative mood ("add", not "added"/"adds"), no trailing period, under ~72 chars.
+- A breaking change gets a `!` after the type/scope (`feat(onboarding)!: ...`) and/or a `BREAKING CHANGE:` footer explaining the migration.
+- Body (optional, blank line after the subject): explain *why*, not what — the diff already shows what changed.
+
+Examples: `fix(onboarding): guard complete event without configured agent`,
+`refactor(state-machine): collapse onboarding to two steps`.
+
 ## Writing tests
 
 **Read `docs/testing.md` before writing or changing any test.** It defines what to test at

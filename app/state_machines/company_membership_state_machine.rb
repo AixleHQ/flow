@@ -39,31 +39,25 @@ module CompanyMembershipStateMachine
     # Onboarding is PER COMPANY: the role differs, the chosen agents differ, and
     # the agent credential must differ (billing is per company). Joining a second
     # company therefore runs the whole flow again.
+    #
+    # Two steps only: step1 (profile) → step2 (connect agents / viewer preview),
+    # then complete finishes directly from step2 — no separate "ready to finish"
+    # or summary state.
     aasm :onboarding_state, column: :onboarding_state do
       state :step1, initial: true
       state :step2
-      state :step3
-      state :step4
       state :completed
 
       event :go_next do
         transitions from: :step1, to: :step2
-        transitions from: :step2, to: :step3
-        transitions from: :step3, to: :step4, guard: :can_advance_to_authenticated?
       end
 
       event :go_previous do
         transitions from: :step2, to: :step1
-        transitions from: :step3, to: :step2
-        transitions from: :step4, to: :step3
-      end
-
-      event :viewer_advance, guard: :viewer? do
-        transitions from: :step2, to: :step4
       end
 
       event :complete, guard: :can_complete_onboarding?, after: :set_onboarding_completed_at do
-        transitions from: :step4, to: :completed
+        transitions from: :step2, to: :completed
       end
 
       # A role change within a company can newly require an agent this membership
@@ -75,7 +69,7 @@ module CompanyMembershipStateMachine
     end
 
     validates :onboarding_state, inclusion: {
-      in: %w[step1 step2 step3 step4 completed],
+      in: %w[step1 step2 completed],
       message: "is not a valid onboarding state"
     }
   end
