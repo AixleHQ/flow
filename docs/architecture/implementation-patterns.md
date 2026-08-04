@@ -163,6 +163,27 @@ Authorization is automatic via `dynamic_authorize!`:
 - **TS types:** Typelizer generates camelCase interfaces (`config/initializers/typelizer.rb`)
 - **Rule:** Ruby stays snake_case; TS interfaces are always camelCase
 
+### Configuration & Environment Variables
+
+- **One aggregation point.** Every environment variable is declared in `config/settings.yml`
+  (ERB: `<%= ENV['X'] || default %>`), grouped by domain, with per-environment overrides in
+  `config/settings/<env>.yml`. App code reads `Settings.temporal.task_queue`, never
+  `ENV["TEMPORAL_TASK_QUEUE"]`.
+- **Why:** one inventory of what a deploy needs, defaults visible next to the key, no `ENV` typo
+  silently becoming `nil` inside a service, and tests stub one config object instead of mutating
+  process state.
+- **Exceptions** (things loading before Settings or outside the app process): `config/boot.rb`,
+  `config/application.rb`, `config/puma.rb`, `config/environments/*.rb`, `config/database.yml`,
+  the production fail-fast checks in `config/initializers/required_env.rb`, boot-time
+  kill-switch flags (e.g. `AIXLE_TOOLS_RECONCILE_ON_BOOT`), and Dockerfile / docker-compose /
+  CI config. Each raw `ENV` read outside those carries a comment saying why.
+- **Adding a var** means: `config/settings.yml` + `.env.example` + deploy config, in the same
+  change. A var referenced only from code is invisible to whoever deploys it.
+- Reviewer's grep: `grep -rnE "ENV\[|ENV\.fetch" app` stays empty — today its only hit is a false
+  positive on the `BEDROCK_MODEL_ENV` constant. `RAILS_MAX_THREADS` now arrives as
+  `Settings.temporal.worker_max_threads` (Temporal activity slots + the worker's DB pool in
+  `bin/temporal_worker`, which runs after `config/environment`).
+
 ### Error Handling
 - **Controllers:** `rescue_from` in `ApplicationController` for global errors
 - **Services:** custom exceptions → `Temporalio::Error::ApplicationError`
