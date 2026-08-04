@@ -204,6 +204,3 @@ Corporation are covered whether or not that individual appears here.*
 ---
 
 To execute this Agreement, contact `legal.flow@aixle.com`.
-
-> **TODO (product):** confirm `legal.flow@aixle.com` is provisioned and monitored before the
-> repository goes public.

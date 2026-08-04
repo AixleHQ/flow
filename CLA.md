@@ -15,8 +15,8 @@ present, and future Contribution submitted by you to the Project.
 No Contribution submitted by you will be reviewed, merged, incorporated into, or otherwise
 accepted as part of the Project unless and until you have executed this Agreement. A pull
 request, patch, or other submission made prior to execution of this Agreement is not a
-"Contribution" for purposes of this Agreement and may be closed, rejected, or ignored at
-Dualboot's sole discretion, regardless of its licensing terms.
+"Contribution" for purposes of the Project's Terms of Service and may be closed, rejected,
+or ignored at Dualboot's sole discretion, regardless of its licensing terms.
 
 ## 2. Definitions
 
@@ -132,15 +132,21 @@ term will be substituted reflecting the parties' intent as closely as possible.
 
 ## How to sign
 
-You do **not** need to print, sign, and email anything. On your first pull request, a bot
-comments with a signing link; signing is a one-time step and applies to all your future
-contributions to this Project.
+Signing is electronic, as § 8 provides, and is a one-time step that covers all your future
+contributions to this Project. There is nothing to print or email.
 
 1. Open your pull request as normal.
-2. The CLA bot comments on the PR with the current status.
-3. Follow the link (or post the confirmation statement the bot specifies) from the account
-   that authored the commits.
-4. The check turns green and the PR becomes mergeable.
+2. The CLA bot comments on it with the status and the exact sentence to reply with.
+3. From the account that authored the commits, post that sentence as a pull request
+   comment, word for word:
+
+   > I have read the CLA Document and I hereby sign the CLA
+
+4. The bot records your signature and the check turns green. If it does not update,
+   comment `recheck`.
+
+Your account identifier, name, email address, and the date and time of acceptance are
+recorded as evidence of the signature, as § 8 provides.
 
 This Agreement applies in addition to the project's open-source license (the
 [Apache License 2.0](LICENSE)) and to the per-commit
@@ -153,5 +159,18 @@ execute the [Corporate Contributor License Agreement](CLA-CORPORATE.md) instead 
 
 Questions about contribution rights or this Agreement: `legal.flow@aixle.com`.
 
-> **TODO (product):** confirm `legal.flow@aixle.com` is provisioned and monitored before
-> the repository goes public.
+## Signature
+
+By signing below (or by clicking "I agree" / completing the associated electronic CLA
+process), You agree to the terms of this Individual Contributor License Agreement.
+
+The block below is not required if you sign electronically as described above; it is
+provided for a contributor who cannot use that flow.
+
+| Field | Value |
+| --- | --- |
+| Full name | |
+| Email | |
+| GitHub / repository username (if applicable) | |
+| Date | |
+| Signature | |
