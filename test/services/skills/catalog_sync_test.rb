@@ -412,13 +412,14 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
   # Rows are not marked as attempted on a throttle: rotating them to the back of the
   # queue would punish them for our rate limit.
   test "a throttled backfill leaves the queue untouched" do
+    week_ago = 1.week.ago
     row = create(:catalog_skill, registry_id: "org/skills/pending", source: "org/skills", slug: "pending",
-                 description: nil, registry_synced_at: 1.week.ago, updated_at: 1.week.ago)
+                 description: nil, registry_synced_at: week_ago, updated_at: week_ago)
     @registry.rate_limited = true
 
     sync
 
-    assert_equal 1.week.ago.to_i, row.reload.updated_at.to_i
+    assert_equal week_ago.to_i, row.reload.updated_at.to_i
   end
 
   test "sweeps every seed query and owner" do
