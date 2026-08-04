@@ -22,7 +22,7 @@ class TemporalService
           interceptors: interceptors,
           graceful_shutdown_period: worker_graceful_shutdown_period,
           tuner: Temporalio::Worker::Tuner.create_fixed(
-            activity_slots: (ENV.fetch("RAILS_MAX_THREADS", 5).to_i * 0.8).ceil
+            activity_slots: worker_activity_slots
           ),
         )
       end
@@ -249,6 +249,13 @@ class TemporalService
 
     def worker_graceful_shutdown_period
       Settings.temporal.worker_graceful_shutdown_period.to_i
+    end
+
+    # Activity concurrency: 80% of the process thread budget, so in-flight
+    # activities stay under the DB pool bin/temporal_worker establishes from the
+    # same setting. Floor of 1 — a misconfigured 0 would wedge the worker.
+    def worker_activity_slots
+      [ (Settings.temporal.worker_max_threads.to_i * 0.8).ceil, 1 ].max
     end
 
     private

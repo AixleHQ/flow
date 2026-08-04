@@ -163,6 +163,13 @@ Events: `start!`, `mark_ready!`, `finish!`, `fail!`
 - Mocks via `mocha`
 - WebMock for HTTP stubs in tests
 - Multi-tenancy: always filter by `company_id`
+- Config: read `Settings.*`, never `ENV[...]` in app code — every env var is aggregated in
+  `config/settings.yml` (+ `config/settings/<env>.yml`). Exceptions are only things that load
+  before Settings or outside the app process: `config/boot.rb`, `config/application.rb`,
+  `config/puma.rb`, `config/environments/*.rb`, `config/database.yml`, the fail-fast presence
+  checks in `config/initializers/required_env.rb`, boot kill-switch flags, and
+  Dockerfile/compose/CI. A new env var lands in `settings.yml` + `.env.example` + deploy config
+  in the same change.
 - Authorization: Pundit policies for all resources, `BaseContext` as policy context
 - Serialization: Alba resources for all Inertia props and new JSON endpoints
 
@@ -303,6 +310,7 @@ Key difference: Docker exec returns `[[stdout], [stderr], exit_code]`, K8s exec 
 - **Never use AMS for Inertia props** — use Alba resources with Typelizer
 - **Never use `as_json` or inline hashes for Inertia props** — bypass type generation
 - **Never forget `company_id` filter** in multi-tenant queries
+- **Never read `ENV[...]` from app code** — add the key to `config/settings.yml` and read `Settings.*` (pre-Settings boot files are the only exception)
 - **Never skip `frozen_string_literal: true`** in Ruby files
 - **Never use `new Date()` on Alba-serialized dates** — use `shared/lib/formatDate` helpers
 - **Container exec format differs between runtimes** — Docker: `[[stdout], [stderr], exit_code]`, K8s: `[stdout, stderr, exit_code]`

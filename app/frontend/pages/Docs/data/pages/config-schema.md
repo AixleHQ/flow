@@ -10,7 +10,7 @@ it's required.
 | Variable                | Required | Default              | Purpose                                                  |
 | ----------------------- | -------- | -------------------- | -------------------------------------------------------- |
 | `RAILS_SECRET_KEY_BASE` | yes (prod) | dev key             | Rails secret key base — session encryption, signed IDs.  |
-| `RAILS_MAX_THREADS`     | no       | `5`                  | Puma thread pool size.                                   |
+| `RAILS_MAX_THREADS`     | no       | `5`                  | Thread budget: Puma pool, Temporal activity slots (80%), worker DB pool. |
 | `RAILS_LOG_TO_STDOUT`   | no       | unset                | Log to stdout (use in containers).                       |
 | `RAILS_PORT` / `PORT`   | no       | `4000`               | HTTP port the web server listens on.                     |
 | `APP_VERSION`           | no       | unset                | App version string shown in UI footer / API headers.     |

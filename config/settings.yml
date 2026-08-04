@@ -85,6 +85,11 @@ temporal:
   task_queue: <%= ENV['TEMPORAL_TASK_QUEUE'] || 'aixle_ruby' %>
   worker_graceful_shutdown_period: <%= ENV['TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD'] || 900 %>
   ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'http://localhost:8080' %>
+  # The worker process' thread budget — same knob as the Puma pool (RAILS_MAX_THREADS),
+  # since a worker container is sized like a web container. Activity slots derive from it
+  # in TemporalService (80%, so activities stay under the DB pool) and bin/temporal_worker
+  # sizes the worker's DB pool from it. Aggregated here so no app code reads ENV directly.
+  worker_max_threads: <%= ENV['RAILS_MAX_THREADS'] || 5 %>
 
 # At-rest encryption keys. Bare ENV in the base file (no fallbacks): production
 # MUST set these — see config/initializers/required_env.rb, which fails the boot
