@@ -13,7 +13,7 @@ gem "puma", ">= 5.0"
 # Durable ActiveJob backend. Without it Rails falls back to the in-memory async
 # adapter, where an enqueued mail is lost on restart — and the invitation mail is
 # the only way a person gets into the product.
-gem "solid_queue", "~> 1.2"
+gem "solid_queue", "~> 1.6"
 # Use Tailwind CSS [https://github.com/rails/tailwindcss-rails]
 # gem "tailwindcss-rails"
 # Build JSON APIs with ease [https://github.com/rails/jbuilder]
