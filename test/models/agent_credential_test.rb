@@ -70,13 +70,43 @@ class AgentCredentialTest < ActiveSupport::TestCase
     refute cred.config_data.key?("oauthAccount")
   end
 
-  test "from_artifacts preserves user default_model across re-auth" do
+  test "from_artifacts preserves user default_model on a token refresh" do
     cred = create(:agent_credential, user: @user, agent_type: "claude_code")
     cred.update!(metadata: (cred.metadata || {}).merge("default_model" => "claude-opus-4-8"))
 
     updated = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-fresh" })
 
     assert_equal "claude-opus-4-8", updated.metadata["default_model"]
+    assert_equal({ "primaryApiKey" => "sk-fresh" }, updated.config_data)
+  end
+
+  test "from_artifacts drops default_model on a new authorization" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+    cred.update!(metadata: (cred.metadata || {}).merge(
+      "default_model" => "arn:aws:bedrock:us-east-1:1234:application-inference-profile/abc",
+      "google_cloud_project" => "keep-me"
+    ))
+
+    updated = AgentCredential.from_artifacts(
+      @user.id, @company.id, "claude_code",
+      { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-new" } },
+      new_authorization: true
+    )
+
+    refute updated.metadata.key?("default_model"),
+           "a model chosen under the previous auth cannot be invoked by the new one"
+    assert_equal "keep-me", updated.metadata["google_cloud_project"],
+                 "non-auth settings still survive a new authorization"
+  end
+
+  test "from_artifacts on a new authorization is a no-op when no default_model was set" do
+    create(:agent_credential, user: @user, agent_type: "claude_code")
+
+    updated = AgentCredential.from_artifacts(
+      @user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-fresh" }, new_authorization: true
+    )
+
+    refute updated.metadata.key?("default_model")
     assert_equal({ "primaryApiKey" => "sk-fresh" }, updated.config_data)
   end
 

@@ -61,16 +61,26 @@ class AgentCredential < ApplicationRecord
   # Create or replace credential from collected artifacts.
   # config_data is fully replaced (not merged) so re-authentication wipes any
   # stale fields from a previous login/auth method. Settings stored in metadata
-  # (the user's default_model, env-field values like google_cloud_project) are
-  # not auth data, so they survive re-auth — only the two bookkeeping keys are
-  # refreshed.
+  # (env-field values like google_cloud_project) are not auth data, so they
+  # survive — only the two bookkeeping keys are refreshed.
   # company_id is part of the identity: the same user holds one credential per
   # company, so a re-auth must replace the right row and never overwrite another
   # company's (separately billed) token.
-  def self.from_artifacts(user_id, company_id, agent_type, artifacts_hash)
+  #
+  # `new_authorization:` marks the call as "the user just logged in again", which
+  # additionally drops `default_model`. A model is only meaningful for the auth it
+  # was chosen under: authenticating claude_code with a subscription OAuth login
+  # after it had been a Bedrock connection left the Bedrock inference-profile ARN
+  # in place, and resolve_session_model kept handing every new session a model the
+  # new auth cannot invoke ("There's an issue with the selected model … Run /model").
+  # Token REFRESH must not pass this — rotating a token is not a new authorization,
+  # and wiping the user's pick on every refresh would be its own bug.
+  def self.from_artifacts(user_id, company_id, agent_type, artifacts_hash, new_authorization: false)
     credential = find_or_initialize_by(user_id: user_id, company_id: company_id, agent_type: agent_type)
     credential.config_data = artifacts_hash
-    preserved = (credential.metadata || {}).except("collected_at", "artifact_keys")
+    dropped = %w[collected_at artifact_keys]
+    dropped << "default_model" if new_authorization
+    preserved = (credential.metadata || {}).except(*dropped)
     credential.metadata = preserved.merge(
       "collected_at" => Time.current,
       "artifact_keys" => artifacts_hash.keys
