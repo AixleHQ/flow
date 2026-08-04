@@ -1,5 +1,5 @@
 # Application Management
-.PHONY: deps db-prepare db-reset check check_all be_check_all fe_check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup up down reset worker shell build-web build-otlp-ingest build-agents restore-dump help
+.PHONY: deps db-prepare db-reset check check_all be_check_all fe_check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup git-hooks up down reset worker shell build-web build-otlp-ingest build-agents restore-dump help
 
 DOCKER_COMPOSE ?= docker compose
 
@@ -247,8 +247,13 @@ ensure-env:
 	@test -f .env.development || (cp .env.example .env.development && echo "Created .env.development from .env.example")
 	@test -f test/playwright/helpers/.env || (cp test/playwright/helpers/.env.example test/playwright/helpers/.env && echo "Created test/playwright/helpers/.env")
 
+# Point git at the repo's hooks, so commits get their DCO sign-off automatically
+git-hooks:
+	@git config core.hooksPath .githooks
+	@echo "core.hooksPath -> .githooks (commits are signed off automatically)"
+
 # First-time setup: build images, install deps, prepare database
-setup: ensure-env
+setup: ensure-env git-hooks
 	$(DOCKER_COMPOSE) build
 	$(DOCKER_COMPOSE) run --rm web echo "Setup complete"
 	@make build-agents
@@ -322,6 +327,7 @@ help:
 	@echo "  make license-report         - Generate Ruby and npm license reports"
 	@echo "  make license-report-ruby    - Generate Ruby gem license report"
 	@echo "  make license-report-js      - Generate npm production license report"
+	@echo "  make git-hooks              - Enable the repo's git hooks (auto DCO sign-off)"
 	@echo "  make db_restore_remote      - Restore database remotely"
 	@echo "  make restore-dump           - Restore a locally available database dump"
 	@echo "  make default                - Same as 'check'"

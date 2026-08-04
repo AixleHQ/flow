@@ -58,6 +58,16 @@ them. It runs on every PR and fails if any commit is missing a sign-off or is
 signed off by someone other than its author. Merge commits and commits authored
 by bots are exempt.
 
+To stop having to remember the flag, use the repo's hook — `make setup` enables
+it, or turn it on directly:
+
+```bash
+make git-hooks   # same as: git config core.hooksPath .githooks
+```
+
+Every commit then gets its sign-off automatically, with no duplicate when you
+pass `-s` yourself.
+
 ### 2. Contributor License Agreement (CLA)
 
 Before your first contribution can be merged, you must sign the project's
