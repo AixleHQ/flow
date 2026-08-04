@@ -5,7 +5,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@testing-library/dom": "^10",
-    "@testing-library/jest-dom": "^6",
+    "@testing-library/jest-dom": "^7",
     "@testing-library/react": "^16",
     "@testing-library/user-event": "^14",
     "@types/lodash": "^4.17.16",
