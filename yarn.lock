@@ -3499,9 +3499,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@uiw/codemirror-extensions-langs@npm:^4.25.10":
-  version: 4.25.10
-  resolution: "@uiw/codemirror-extensions-langs@npm:4.25.10"
+"@uiw/codemirror-extensions-langs@npm:^4.25.11":
+  version: 4.25.11
+  resolution: "@uiw/codemirror-extensions-langs@npm:4.25.11"
   dependencies:
     "@codemirror/lang-cpp": "npm:^6.0.0"
     "@codemirror/lang-css": "npm:^6.0.0"
@@ -3531,7 +3531,7 @@ __metadata:
     codemirror-lang-mermaid: "npm:^0.5.0"
   peerDependencies:
     "@codemirror/language": ">=6.0.0"
-  checksum: 10c0/cad2c9091c1f680546ba1478b4660b3133b7f6a73bc315f088188b75c131fc678d87884994433e9c6b49b8c8c47228ca28ca4e06d5a652bba1a38fe884302292
+  checksum: 10c0/1efea912cfc9047d0a261d03cfcb915598b4f50509781fc651838c0501d17a6cd8e5062ba090b9899a50ae20612a17e6fd58435fba2d9416c42fd20416d73f1c
   languageName: node
   linkType: hard
 
@@ -9543,7 +9543,7 @@ __metadata:
     "@types/recharts": "npm:^2.0.1"
     "@typescript-eslint/eslint-plugin": "npm:^8.64.0"
     "@typescript-eslint/parser": "npm:^8.62.1"
-    "@uiw/codemirror-extensions-langs": "npm:^4.25.10"
+    "@uiw/codemirror-extensions-langs": "npm:^4.25.11"
     "@uiw/codemirror-theme-vscode": "npm:^4.25.11"
     "@uiw/react-codemirror": "npm:^4.25.11"
     "@uppy/aws-s3": "npm:^5.1.0"
