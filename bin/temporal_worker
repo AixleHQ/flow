@@ -4,8 +4,10 @@
 
 require_relative "../config/environment"
 
-# Ensure DB pool is large enough for concurrent Temporal activities
-desired_pool = (ENV.fetch("RAILS_MAX_THREADS", 5).to_i * 2).clamp(10, 30)
+# Ensure DB pool is large enough for concurrent Temporal activities. Reads the
+# aggregated setting (config/settings.yml) rather than ENV — this runs after
+# config/environment, so Settings is available.
+desired_pool = (Settings.temporal.worker_max_threads.to_i * 2).clamp(10, 30)
 ActiveRecord::Base.connection_pool.disconnect!
 db_config = ActiveRecord::Base.connection_db_config
 new_config = db_config.configuration_hash.merge(pool: desired_pool)
