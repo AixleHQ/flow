@@ -3,8 +3,7 @@
 class Web::Company::Projects::SettingsController < Web::Company::Projects::ApplicationController
   def show
     render inertia: "Projects/Settings/SettingsPage", props: {
-      project: settings_project_props,
-      members: project_members_props
+      project: settings_project_props
     }
   end
 
@@ -36,23 +35,7 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
       updated_at: project.updated_at.iso8601,
       owner_name: project.owner.name,
       owner_email: project.owner.email,
-      sessions_count: project.terminal_sessions.count,
-      workflows_count: project.workflows.where(deleted_at: nil).count,
-      board_tasks_count: project.board&.board_tasks&.count || 0,
-      repositories_count: project.repositories.count,
-      integrations_count: Integration.visible_for_project(project).count,
       can_delete: project.admin?(current_user) || current_project_membership&.admin? || false
     }
-  end
-
-  def project_members_props
-    current_project.member_users.map do |user|
-      {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        is_owner: user.id == current_project.owner_id
-      }
-    end
   end
 end
