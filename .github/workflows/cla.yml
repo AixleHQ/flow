@@ -66,11 +66,14 @@ jobs:
         with:
           branch: cla-signatures
           path-to-signatures: signatures/cla.json
-          path-to-document: https://github.com/palad-ai/palad-app/blob/develop/CLA.md
+          # Resolved from the workflow context and `HEAD` rather than hardcoded, so the
+          # link keeps working whichever repository the public release lives in and
+          # whatever its default branch is called.
+          path-to-document: ${{ github.server_url }}/${{ github.repository }}/blob/HEAD/CLA.md
           custom-pr-sign-comment: I have read the CLA Document and I hereby sign the CLA
           custom-notsigned-prcomment: >
             Thanks for your pull request! Before we can merge it, we need you to sign our
-            [Contributor License Agreement](https://github.com/palad-ai/palad-app/blob/develop/CLA.md).
+            [Contributor License Agreement](${{ github.server_url }}/${{ github.repository }}/blob/HEAD/CLA.md).
             It is a one-time step and covers all your future contributions.
 
 
