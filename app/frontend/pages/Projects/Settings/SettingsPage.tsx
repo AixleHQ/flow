@@ -1,8 +1,6 @@
 import type { FormDataConvertible } from '@inertiajs/core';
 import { Head, router, usePage } from '@inertiajs/react';
 import {
-  Avatar,
-  Badge,
   Box,
   Button,
   Card,
@@ -11,29 +9,23 @@ import {
   Group,
   Modal,
   Select,
-  SimpleGrid,
   Stack,
   Text,
   TextInput,
   Textarea,
-  Title,
   Tooltip,
-  UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
+  IconAdjustments,
+  IconAlertTriangle,
   IconArchive,
   IconCheck,
-  IconChevronRight,
   IconCopy,
-  IconLink,
-  IconListDetails,
+  IconInfoCircle,
   IconLock,
-  IconPlayerPlay,
-  IconRoute,
-  IconSourceCode,
   IconTrash,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
@@ -58,10 +50,10 @@ const LANGUAGE_OPTIONS = [
   { value: 'uk', label: 'Ukrainian' },
 ];
 
-const STATE_CONFIG: Record<string, { label: string; color: string }> = {
-  active: { label: 'Active', color: 'green' },
-  paused: { label: 'Paused', color: 'yellow' },
-  archived: { label: 'Archived', color: 'gray' },
+const STATUS_CONFIG: Record<string, { label: string; chipClass: string; dotClass: string }> = {
+  active: { label: 'Active', chipClass: 'statusChipOk', dotClass: 'statusDotOk' },
+  paused: { label: 'Paused', chipClass: 'statusChipPaused', dotClass: 'statusDotPaused' },
+  archived: { label: 'Archived', chipClass: 'statusChipDefault', dotClass: 'statusDotDefault' },
 };
 
 const schema = z.object({
@@ -69,13 +61,6 @@ const schema = z.object({
   description: z.string().max(500).optional(),
   preferredArtifactsLanguage: z.string(),
 });
-
-interface Member {
-  id: number;
-  name: string;
-  email: string;
-  isOwner: boolean;
-}
 
 interface Project {
   id: number;
@@ -88,17 +73,11 @@ interface Project {
   updatedAt: string;
   ownerName: string;
   ownerEmail: string;
-  sessionsCount: number;
-  workflowsCount: number;
-  boardTasksCount: number;
-  repositoriesCount: number;
-  integrationsCount: number;
   canDelete: boolean;
 }
 
 interface Props {
   project: Project;
-  members: Member[];
 }
 
 function avatarInitials(name: string): string {
@@ -111,7 +90,7 @@ function avatarInitials(name: string): string {
 }
 
 const SettingsPage = () => {
-  const { project, members } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project } = usePage<{ props: Props }>().props as unknown as Props;
   const basePath = `/company/projects/${project.id}`;
 
   const form = useForm({
@@ -123,7 +102,11 @@ const SettingsPage = () => {
     validate: zodResolver(schema),
   });
 
+  const [saved, setSaved] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSubmit = (values: typeof form.values) => {
+    setIsSubmitting(true);
     router.patch(
       `${basePath}/settings`,
       {
@@ -136,9 +119,13 @@ const SettingsPage = () => {
       {
         preserveScroll: true,
         onSuccess: () => {
+          setIsSubmitting(false);
+          form.resetDirty();
+          setSaved(true);
           notifications.show({ message: 'Project settings saved', color: 'green' });
         },
         onError: () => {
+          setIsSubmitting(false);
           notifications.show({ message: 'Failed to save settings', color: 'red' });
         },
       },
@@ -155,7 +142,7 @@ const SettingsPage = () => {
         </Text>
       ),
       labels: { confirm: 'Archive', cancel: 'Cancel' },
-      confirmProps: { color: 'orange' },
+      confirmProps: { color: 'red' },
       onConfirm: () => {
         router.patch(
           `${basePath}/settings`,
@@ -164,7 +151,7 @@ const SettingsPage = () => {
           } as Record<string, FormDataConvertible>,
           {
             onSuccess: () => {
-              notifications.show({ message: 'Project archived', color: 'orange' });
+              notifications.show({ message: 'Project archived', color: 'red' });
               router.visit('/company/projects');
             },
             onError: () => {
@@ -176,9 +163,6 @@ const SettingsPage = () => {
     });
   };
 
-  // Permanently destroying a project used to be one click on a red button in a
-  // modal — the same friction as removing a tag. Typing the name is the
-  // difference between "I meant this project" and "I clicked the red one".
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
@@ -196,304 +180,216 @@ const SettingsPage = () => {
     });
   };
 
-  const stateConfig = STATE_CONFIG[project.state] ?? { label: project.state, color: 'gray' };
+  const stateConfig = STATUS_CONFIG[project.state] ?? {
+    label: project.state,
+    chipClass: 'statusChipDefault',
+    dotClass: 'statusDotDefault',
+  };
 
   return (
     <>
       <Head title={`Settings — ${project.name}`} />
-      <Box className={classes.container}>
+
+      <Box mb={24}>
         <Text className={classes.pageTitle}>Project Settings</Text>
         <Text className={classes.pageSubtitle}>Manage project configuration and preferences</Text>
+      </Box>
 
-        {/* General */}
-        <Card p={24} withBorder mb="lg" radius="md">
-          <Title order={4} mb={4}>
+      <div className={classes.grid2}>
+        {/* LEFT COLUMN: General (editable) */}
+        <Card p={22} withBorder radius={8}>
+          <div className={classes.secLabel}>
+            <IconAdjustments size={14} className={classes.secLabelIcon} />
             General
-          </Title>
-          <Divider mb="md" />
+          </div>
 
           <form onSubmit={form.onSubmit(handleSubmit)}>
             <Stack gap="md">
-              <TextInput label="Project Name" placeholder="Enter project name" {...form.getInputProps('name')} />
+              <TextInput
+                label="Project Name"
+                placeholder="Enter project name"
+                {...form.getInputProps('name')}
+                onChange={(e) => {
+                  form.getInputProps('name').onChange(e);
+                  setSaved(false);
+                }}
+              />
 
               <Textarea
                 label="Description"
                 placeholder="Enter project description"
                 minRows={3}
                 {...form.getInputProps('description')}
+                onChange={(e) => {
+                  form.getInputProps('description').onChange(e);
+                  setSaved(false);
+                }}
               />
 
-              <Select
-                label="Artifacts Language"
-                description="Language AI agents will use when generating artifacts and summaries"
-                data={LANGUAGE_OPTIONS}
-                {...form.getInputProps('preferredArtifactsLanguage')}
-              />
+              <Box>
+                <Text size="sm" fw={500} mb={4}>
+                  Artifacts Language
+                </Text>
+                <Text size="xs" c="dimmed" mb={6}>
+                  Language AI agents use when generating artifacts and summaries
+                </Text>
+                <Select
+                  data={LANGUAGE_OPTIONS}
+                  {...form.getInputProps('preferredArtifactsLanguage')}
+                  onChange={(v) => {
+                    form.getInputProps('preferredArtifactsLanguage').onChange(v);
+                    setSaved(false);
+                  }}
+                />
+              </Box>
 
-              <Group justify="flex-end" mt="xs">
-                <Button type="submit" disabled={!form.isDirty() || !form.values.name.trim()}>
+              <div className={classes.saveRow}>
+                {saved && (
+                  <span className={classes.savedChip}>
+                    <IconCheck size={12} /> Saved
+                  </span>
+                )}
+                <Button
+                  type="submit"
+                  size="compact-sm"
+                  disabled={!form.isDirty() || !form.values.name.trim() || isSubmitting}
+                  loading={isSubmitting}
+                >
                   Save Changes
                 </Button>
-              </Group>
+              </div>
             </Stack>
           </form>
         </Card>
 
-        {/* Quick Links */}
-        <Card p={24} withBorder mb="lg" radius="md">
-          <Title order={4} mb={4}>
-            Connections
-          </Title>
-          <Divider mb="md" />
+        {/* RIGHT COLUMN: Details + Danger Zone */}
+        <div className={classes.colSide}>
+          {/* Details (read-only) */}
+          <Card p={22} withBorder radius={8}>
+            <div className={classes.secLabel}>
+              <IconInfoCircle size={14} className={classes.secLabelIcon} />
+              Details
+            </div>
 
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-            <UnstyledButton className={classes.quickLinkCard} onClick={() => router.visit(`${basePath}/integrations`)}>
-              <Group justify="space-between" wrap="nowrap">
-                <Group gap="md" wrap="nowrap">
-                  <IconLink size={22} color="var(--mantine-color-blue-5)" />
+            <div className={classes.metaGrid}>
+              <Box>
+                <Text className={classes.metaKey}>Status</Text>
+                <span className={classes[stateConfig.chipClass]}>
+                  <span className={classes[stateConfig.dotClass]} />
+                  {stateConfig.label}
+                </span>
+              </Box>
+
+              <Box>
+                <Text className={classes.metaKey}>Created</Text>
+                <Text size="sm">
+                  {new Date(project.createdAt).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </Text>
+              </Box>
+
+              <Box>
+                <Text className={classes.metaKey}>Owner</Text>
+                <Group gap="sm">
+                  <Box className={classes.ownerAvatar} bg="var(--accent-dim)" c="var(--accent)">
+                    {avatarInitials(project.ownerName)}
+                  </Box>
                   <Box>
-                    <Text fw={600} size="sm">
-                      Integrations
+                    <Text size="sm" lh={1.3}>
+                      {project.ownerName}
                     </Text>
-                    <Text size="xs" c="dimmed">
-                      {(project.integrationsCount ?? 0) > 0
-                        ? `${project.integrationsCount} connected`
-                        : 'Not configured'}
+                    <Text size="xs" c="dimmed" lh={1.3}>
+                      {project.ownerEmail}
                     </Text>
                   </Box>
                 </Group>
-                <IconChevronRight size={16} color="var(--mantine-color-dimmed)" />
-              </Group>
-            </UnstyledButton>
-
-            <UnstyledButton className={classes.quickLinkCard} onClick={() => router.visit(`${basePath}/repositories`)}>
-              <Group justify="space-between" wrap="nowrap">
-                <Group gap="md" wrap="nowrap">
-                  <IconSourceCode size={22} color="var(--mantine-color-teal-5)" />
-                  <Box>
-                    <Text fw={600} size="sm">
-                      Repositories
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {project.repositoriesCount > 0
-                        ? `${project.repositoriesCount} repo${project.repositoriesCount !== 1 ? 's' : ''}`
-                        : 'No repos added'}
-                    </Text>
-                  </Box>
-                </Group>
-                <IconChevronRight size={16} color="var(--mantine-color-dimmed)" />
-              </Group>
-            </UnstyledButton>
-          </SimpleGrid>
-        </Card>
-
-        {/* Project Info */}
-        <Card p={24} withBorder mb="lg" radius="md">
-          <Title order={4} mb={4}>
-            Project Info
-          </Title>
-          <Divider mb="md" />
-
-          <Stack gap="md">
-            <Box>
-              <Box className={classes.fieldLabel}>
-                <Text size="sm" fw={500} c="dimmed">
-                  Status
-                </Text>
               </Box>
-              <Badge color={stateConfig.color} size="sm" variant="filled">
-                {stateConfig.label}
-              </Badge>
-            </Box>
 
-            <Box>
-              <Box className={classes.fieldLabel}>
-                <Text size="sm" fw={500} c="dimmed">
-                  Slug
+              <Box>
+                <Text className={classes.metaKey}>
+                  Slug <IconLock size={11} color="var(--mantine-color-dimmed)" />
                 </Text>
-                <Tooltip label="Used in URLs and API. Cannot be changed.">
-                  <IconLock size={14} color="var(--mantine-color-dimmed)" />
-                </Tooltip>
-              </Box>
-              <Group gap="xs">
-                <Text size="sm" ff="monospace">
-                  {project.slug}
-                </Text>
-                <CopyButton value={project.slug}>
-                  {({ copied, copy }) => (
-                    <Tooltip label={copied ? 'Copied' : 'Copy slug'}>
-                      <Button variant="subtle" size="compact-xs" p={4} onClick={copy}>
-                        {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                      </Button>
-                    </Tooltip>
-                  )}
-                </CopyButton>
-              </Group>
-            </Box>
-
-            <Box>
-              <Text size="sm" fw={500} c="dimmed" mb={4}>
-                Owner
-              </Text>
-              <Group gap="sm">
-                <Avatar size={28} radius="xl" color="blue">
-                  {avatarInitials(project.ownerName)}
-                </Avatar>
-                <Box>
-                  <Text size="sm" lh={1.2}>
-                    {project.ownerName}
+                <Group gap="xs">
+                  <Text size="sm" style={{ fontFamily: 'var(--app-font-mono)' }}>
+                    {project.slug}
                   </Text>
-                  <Text size="xs" c="dimmed" lh={1.2}>
-                    {project.ownerEmail}
+                  <CopyButton value={project.slug}>
+                    {({ copied, copy }) => (
+                      <Tooltip label={copied ? 'Copied' : 'Copy slug'}>
+                        <Button variant="subtle" size="compact-xs" p={4} onClick={copy}>
+                          {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                        </Button>
+                      </Tooltip>
+                    )}
+                  </CopyButton>
+                </Group>
+              </Box>
+            </div>
+          </Card>
+
+          {/* Danger Zone */}
+          <Card p={22} className={classes.dangerCard}>
+            <div className={classes.secLabelDanger}>
+              <IconAlertTriangle size={14} className={classes.secLabelDangerIcon} />
+              Danger Zone
+            </div>
+
+            <Stack gap="lg">
+              <div className={classes.dangerRow}>
+                <Box>
+                  <Text size="sm" fw={500}>
+                    Archive this project
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    Hide from the sidebar and prevent new sessions. Data will be preserved.
                   </Text>
                 </Box>
-              </Group>
-            </Box>
-
-            <Box>
-              <Text size="sm" fw={500} c="dimmed" mb={4}>
-                Created
-              </Text>
-              <Text size="sm">
-                {new Date(project.createdAt).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                })}
-              </Text>
-            </Box>
-
-            <Divider />
-
-            <Box className={classes.statsGrid}>
-              <Box className={classes.statItem}>
-                <Group gap={4} justify="center" mb={2}>
-                  <IconPlayerPlay size={14} color="var(--mantine-color-blue-5)" />
-                </Group>
-                <Text className={classes.statValue}>{project.sessionsCount}</Text>
-                <Text className={classes.statLabel}>Sessions</Text>
-              </Box>
-              <Box className={classes.statItem}>
-                <Group gap={4} justify="center" mb={2}>
-                  <IconRoute size={14} color="var(--mantine-color-indigo-5)" />
-                </Group>
-                <Text className={classes.statValue}>{project.workflowsCount}</Text>
-                <Text className={classes.statLabel}>Workflows</Text>
-              </Box>
-              <Box className={classes.statItem}>
-                <Group gap={4} justify="center" mb={2}>
-                  <IconSourceCode size={14} color="var(--mantine-color-teal-5)" />
-                </Group>
-                <Text className={classes.statValue}>{project.repositoriesCount}</Text>
-                <Text className={classes.statLabel}>Repos</Text>
-              </Box>
-              <Box className={classes.statItem}>
-                <Group gap={4} justify="center" mb={2}>
-                  <IconListDetails size={14} color="var(--mantine-color-yellow-5)" />
-                </Group>
-                <Text className={classes.statValue}>{project.boardTasksCount}</Text>
-                <Text className={classes.statLabel}>Tasks</Text>
-              </Box>
-            </Box>
-          </Stack>
-        </Card>
-
-        {/* Members */}
-        <Card p={24} withBorder mb="lg" radius="md">
-          <Group justify="space-between" mb={4}>
-            <Title order={4}>Members</Title>
-            <Text size="xs" c="dimmed">
-              {members.length} member{members.length !== 1 ? 's' : ''}
-            </Text>
-          </Group>
-          <Divider mb="md" />
-
-          <Stack gap="sm">
-            {members.map((member) => (
-              <Group key={member.id} justify="space-between">
-                <Group gap="sm">
-                  <Avatar size={32} radius="xl" color="blue">
-                    {avatarInitials(member.name)}
-                  </Avatar>
-                  <Box>
-                    <Text size="sm" fw={500} lh={1.2}>
-                      {member.name}
-                    </Text>
-                    <Text size="xs" c="dimmed" lh={1.2}>
-                      {member.email}
-                    </Text>
-                  </Box>
-                </Group>
-                <Badge
-                  size="xs"
-                  variant={member.isOwner ? 'filled' : 'outline'}
-                  color={member.isOwner ? 'blue' : 'gray'}
+                <Button
+                  variant="outline"
+                  color="red"
+                  size="compact-sm"
+                  leftSection={<IconArchive size={14} />}
+                  onClick={handleArchive}
+                  style={{ flexShrink: 0 }}
                 >
-                  {member.isOwner ? 'Owner' : 'Member'}
-                </Badge>
-              </Group>
-            ))}
-          </Stack>
-        </Card>
+                  Archive
+                </Button>
+              </div>
 
-        {/* Danger Zone */}
-        <Card p={24} className={classes.dangerCard} mb="lg">
-          <Title order={4} mb={4} c="var(--app-danger-fg)">
-            Danger Zone
-          </Title>
-          <Divider mb="md" color="red.9" />
+              {project.canDelete && (
+                <>
+                  <Divider color="red.9" />
 
-          <Stack gap="lg">
-            <Group justify="space-between" align="flex-start" wrap="nowrap">
-              <Box>
-                <Text size="sm" fw={500}>
-                  Archive this project
-                </Text>
-                <Text size="xs" c="dimmed">
-                  Hide from the sidebar and prevent new sessions. Data will be preserved.
-                </Text>
-              </Box>
-              <Button
-                variant="outline"
-                color="orange"
-                size="compact-sm"
-                leftSection={<IconArchive size={14} />}
-                onClick={handleArchive}
-                style={{ flexShrink: 0 }}
-              >
-                Archive
-              </Button>
-            </Group>
+                  <div className={classes.dangerRow}>
+                    <Box>
+                      <Text size="sm" fw={500}>
+                        Delete this project
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        Permanently remove this project and all of its data. This action cannot be undone.
+                      </Text>
+                    </Box>
+                    <Button
+                      variant="outline"
+                      color="red"
+                      size="compact-sm"
+                      leftSection={<IconTrash size={14} />}
+                      onClick={handleDelete}
+                      style={{ flexShrink: 0 }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </>
+              )}
+            </Stack>
+          </Card>
+        </div>
+      </div>
 
-            {project.canDelete && (
-              <>
-                <Divider color="red.9" />
-
-                <Group justify="space-between" align="flex-start" wrap="nowrap">
-                  <Box>
-                    <Text size="sm" fw={500}>
-                      Delete this project
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      Permanently remove this project and all of its data. This action cannot be undone.
-                    </Text>
-                  </Box>
-                  <Button
-                    variant="outline"
-                    color="red"
-                    size="compact-sm"
-                    leftSection={<IconTrash size={14} />}
-                    onClick={handleDelete}
-                    style={{ flexShrink: 0 }}
-                  >
-                    Delete
-                  </Button>
-                </Group>
-              </>
-            )}
-          </Stack>
-        </Card>
-      </Box>
       <Modal
         opened={deleteOpen}
         onClose={() => {
@@ -512,13 +408,21 @@ const SettingsPage = () => {
             This permanently deletes <b>{project.name}</b> and everything in it — sessions, assets, workflows and
             workflow runs. It cannot be undone.
           </Text>
-          <TextInput
-            label={`Type "${project.name}" to confirm`}
-            value={deleteConfirmText}
-            onChange={(e) => setDeleteConfirmText(e.currentTarget.value)}
-            placeholder={project.name}
-            autoComplete="off"
-          />
+          <Box>
+            <Text size="sm" fw={500} mb={6}>
+              To confirm, type the project name:
+            </Text>
+            <Text size="sm" c="dimmed" mb={8}>
+              <code>{project.name}</code>
+            </Text>
+            <TextInput
+              label="Project name"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.currentTarget.value)}
+              placeholder={project.name}
+              autoComplete="off"
+            />
+          </Box>
           <Group justify="flex-end" gap="sm">
             <Button
               variant="default"
@@ -529,7 +433,11 @@ const SettingsPage = () => {
             >
               Cancel
             </Button>
-            <Button color="red" disabled={deleteConfirmText !== project.name} onClick={confirmDelete}>
+            <Button
+              color="red"
+              disabled={deleteConfirmText.toLowerCase() !== project.name.toLowerCase()}
+              onClick={confirmDelete}
+            >
               Delete project
             </Button>
           </Group>
