@@ -174,6 +174,9 @@ an env var.
 
 ## Third-party APIs
 
-| Variable             | Purpose                                                                  |
-| -------------------- | ------------------------------------------------------------------------ |
-| `SKILLS_SH_API_KEY`  | Optional — pulls reusable Skills from the Skills.sh registry.            |
+| Variable                   | Purpose                                                                  |
+| -------------------------- | ------------------------------------------------------------------------ |
+| `GITHUB_PUBLIC_READ_TOKEN` | Optional — raises the `api.github.com` rate limit for the public skills catalog from 60 to 5,000 requests/hour. Needs no scopes; a tenant installation token must not be used. |
+
+The Skills.sh registry needs no key: its v1 API authenticates with Vercel OIDC
+only, so the catalog is browsed through the local mirror instead.
