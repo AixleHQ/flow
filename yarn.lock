@@ -1128,9 +1128,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@inertiajs/core@npm:3.6.0":
-  version: 3.6.0
-  resolution: "@inertiajs/core@npm:3.6.0"
+"@inertiajs/core@npm:3.6.1":
+  version: 3.6.1
+  resolution: "@inertiajs/core@npm:3.6.1"
   dependencies:
     "@jridgewell/trace-mapping": "npm:^0.3.31"
     es-toolkit: "npm:^1.33.0"
@@ -1140,21 +1140,21 @@ __metadata:
   peerDependenciesMeta:
     axios:
       optional: true
-  checksum: 10c0/a5ba3d65d0621503257f0c400dd1a65123878e246d268dae8b4271f4302c48b7e0a57a3686679089301f12c7e11199e5a497f8c1f183ad1c15dd5a2817cda9d4
+  checksum: 10c0/1bd8c10310ee9b17c2e79f3e1b96f1a69f73921fd7800c6cf08c46ee197d7cce367af46305d2783f39727be88a632e6a4dd26341bb97d2c9c5af6fc180f4704b
   languageName: node
   linkType: hard
 
-"@inertiajs/react@npm:^3.6.0":
-  version: 3.6.0
-  resolution: "@inertiajs/react@npm:3.6.0"
+"@inertiajs/react@npm:^3.6.1":
+  version: 3.6.1
+  resolution: "@inertiajs/react@npm:3.6.1"
   dependencies:
-    "@inertiajs/core": "npm:3.6.0"
+    "@inertiajs/core": "npm:3.6.1"
     es-toolkit: "npm:^1.33.0"
     laravel-precognition: "npm:^2.0.0"
   peerDependencies:
     react: ^19.0.0
     react-dom: ^19.0.0
-  checksum: 10c0/a595aea645574b63f570ffc39f12099b729b49efc9c118f3349f2ec01bfba98f40994fff14b95b2ac54a51f7168f41422667660cf5fddafb48a6aa5dd0285d2e
+  checksum: 10c0/1683fcc47a1991046e1ff9f4d90737721e1bb2c3e436dd205537f1b4b872ef2925358204e7892440e5517e7740a8e268fa76d39f63cfb9676d0b61e2f94ea6aa
   languageName: node
   linkType: hard
 
@@ -9589,7 +9589,7 @@ __metadata:
     "@emoji-mart/react": "npm:^1.1.1"
     "@eslint/js": "npm:^10.0.1"
     "@inertia-cable/react": "npm:^0.2.2"
-    "@inertiajs/react": "npm:^3.6.0"
+    "@inertiajs/react": "npm:^3.6.1"
     "@inertiajs/vite": "npm:^3.4.0"
     "@mantine/core": "npm:^9.5.1"
     "@mantine/dates": "npm:^9.5.1"
