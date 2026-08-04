@@ -162,7 +162,7 @@ gem "aws-sdk-s3", "~> 1.228"
 # their permission set cannot actually invoke a model is to try. Claude Code hides
 # Bedrock errors, so without this the failure surfaces as an agent that never answers.
 # (STS, SSO and SSO-OIDC clients already ship inside aws-sdk-core.)
-gem "aws-sdk-bedrockruntime", "~> 1.0"
+gem "aws-sdk-bedrockruntime", "~> 1.83"
 
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
