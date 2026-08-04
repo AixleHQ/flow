@@ -142,7 +142,17 @@ module ContainerStrategies
       config_data = adapter.reconcile_captured_credentials(auth_kind, current, captured)
       return nil if config_data.blank?
 
-      AgentCredential.from_artifacts(session.user_id, SessionCompany.company_id_for(session), input[:agent_type], config_data)
+      # A base login is a NEW authorization, so any default model chosen under the
+      # previous one is dropped (a Bedrock inference-profile ARN cannot be invoked by a
+      # subscription OAuth login, and every session would start on it). A layering kind
+      # (design) only adds scopes to the existing login, so the user's pick stands.
+      AgentCredential.from_artifacts(
+        session.user_id,
+        SessionCompany.company_id_for(session),
+        input[:agent_type],
+        config_data,
+        new_authorization: auth_kind != Agents::ClaudeCodeAdapter::DESIGN_KIND
+      )
     end
   end
 end

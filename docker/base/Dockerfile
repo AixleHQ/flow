@@ -52,6 +52,10 @@ FROM node:22-slim
 
 # -----------------------------------------------------------------------------
 # System dependencies
+#
+# Every apt layer removes /var/lib/apt/lists itself. Deleting them in a LATER
+# layer (as this file used to) leaves ~19 MB of index files in the image forever
+# — the deletion only hides them from the final filesystem.
 # -----------------------------------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Terminal & shell
@@ -70,17 +74,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3-tools \
     # Archive extraction (tar/gzip already in base image)
     unzip \
-    p7zip-full \
     xz-utils \
     bzip2 \
     zstd \
-    # Process management
+    # Process management. procps is for the AGENT, not for us: `ps aux`, `pgrep`,
+    # `pkill`, `top` and `free` are what an agent reaches for to find the dev server
+    # it started or whatever is holding a port. Without it those commands just fail.
     tini \
     sudo \
-    # Build tools (for native npm modules)
+    procps \
+    # Python runtime for mitmproxy + the pipx MCP runtime
     python3 \
     python3-pip \
     pipx \
+    # Build tools (for native npm modules): node-gyp compiles C++ on the spot when a
+    # dependency ships no prebuilt binary for this platform (sharp, better-sqlite3,
+    # canvas, bcrypt, node-pty). ~233 MiB with its pulled-in deps, and it has to be
+    # decided here — an apt layer keeps the bytes of whatever it installed, so
+    # purging the toolchain in a later layer would save nothing.
     make \
     g++ \
     # ttyd runtime libs (binary built from main in the ttyd-builder stage).
@@ -90,7 +101,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjson-c5 \
     libuv1 \
     libwebsockets17 \
-    libwebsockets-evlib-uv
+    libwebsockets-evlib-uv \
+    && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
 # uv / uvx (Astral)
@@ -188,26 +200,70 @@ RUN ARCH=$(dpkg --print-architecture) && \
 # -----------------------------------------------------------------------------
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright-browsers
 
+# Playwright does not treat the browsers dir as read-only: at first launch it creates
+# a browser-server dir inside it (`.../ms-playwright/b`), so an agent running as a
+# non-root user needs write access there or every browser session dies with
+#   EACCES: permission denied, mkdir '$HOME/.cache/ms-playwright/b'
+#
+# The access is granted by GROUP, set once in the layer that installs the browser.
+# Each agent image then adds its user to this group (`useradd -G`), which is a
+# constant-size operation — the old `chown -R`/`chmod -R` over the ~984 MiB tree in a
+# derived image copied up every file and cost 1.03 GB per image.
+ENV AGENT_BROWSERS_GROUP=agent-browsers
+
 # Pin to the version verified against task #340. Keep in sync with
 # PLAYWRIGHT_MCP_VERSION in app/services/agents/base_adapter.rb (the runtime MCP
 # command is pinned to the same version so it cannot float off this baked browser).
 # Bump deliberately and rebuild.
 ARG PLAYWRIGHT_MCP_VERSION=0.0.78
-RUN npm install -g @playwright/mcp@${PLAYWRIGHT_MCP_VERSION}
+RUN npm install -g @playwright/mcp@${PLAYWRIGHT_MCP_VERSION} && npm cache clean --force
 
-RUN apt-get update \
-    && node $(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js install --with-deps chrome-for-testing \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN CHROMIUM_BIN=$(find ${PLAYWRIGHT_BROWSERS_PATH} -name "chrome" -path "*/chrome-linux*" | head -1) \
-    && echo "Found chromium at: ${CHROMIUM_BIN}" \
-    && mkdir -p /opt/google/chrome \
-    && ln -s "$CHROMIUM_BIN" /opt/google/chrome/chrome \
-    && rm -rf ${PLAYWRIGHT_BROWSERS_PATH}/.links \
-    && chmod -R 755 ${PLAYWRIGHT_BROWSERS_PATH} \
-    && npm cache clean --force \
-    && rm -rf /tmp/*
+# Browser install, trim and final permissions in ONE layer.
+#
+# This must stay a single instruction. A recursive chmod/chown in a separate layer
+# copies up every file it touches, so the old three-layer version shipped the
+# ~984 MiB browser tree three times (docs/research/technical-agent-image-size-audit-2026-08-04.md).
+#
+# What gets dropped, and why it is safe:
+#   * chromium_headless_shell-* (340 MiB) — playwright's browsers.json marks it
+#     installByDefault, but it is only launched by a CHANNEL-LESS headless
+#     Chromium. Every browser session here goes through @playwright/mcp, which
+#     requests the chrome-for-testing channel, i.e. the chrome binary below.
+#   * libgl1-mesa-dri + libllvm15 (~130 MiB) and Xvfb — Chrome renders WebGL via
+#     its own bundled SwiftShader (libvk_swiftshader.so), never Mesa, and nothing
+#     in this repo starts a virtual X server.
+#   * CJK/Thai fallback fonts — fonts-liberation + fonts-noto-color-emoji stay, so
+#     Latin text and emoji still render; only CJK/Thai glyphs degrade to tofu.
+# The probe below is the guard: it launches the browser exactly the way the MCP
+# does, so a future Playwright bump that changes the default channel fails the
+# BUILD instead of failing a live session. It runs twice — as root, and as the
+# unprivileged `node` user added to AGENT_BROWSERS_GROUP — because the non-root
+# path is the one that broke when the browser tree was left root-only.
+COPY probe-browser.js /opt/probe-browser.js
+RUN set -eux; \
+    apt-get update; \
+    node "$(npm root -g)/@playwright/mcp/node_modules/playwright/cli.js" install --with-deps chrome-for-testing; \
+    rm -rf ${PLAYWRIGHT_BROWSERS_PATH}/chromium_headless_shell-*; \
+    apt-get purge -y libgl1-mesa-dri xvfb xserver-common \
+        fonts-wqy-zenhei fonts-unifont fonts-ipafont-gothic fonts-tlwg-loma-otf; \
+    apt-get autoremove -y --purge; \
+    CHROMIUM_BIN="$(find ${PLAYWRIGHT_BROWSERS_PATH} -name chrome -path '*/chrome-linux*' | head -1)"; \
+    test -x "$CHROMIUM_BIN"; \
+    echo "Found chromium at: ${CHROMIUM_BIN}"; \
+    mkdir -p /opt/google/chrome; \
+    ln -s "$CHROMIUM_BIN" /opt/google/chrome/chrome; \
+    rm -rf ${PLAYWRIGHT_BROWSERS_PATH}/.links; \
+    groupadd -g 2000 ${AGENT_BROWSERS_GROUP}; \
+    chgrp -R ${AGENT_BROWSERS_GROUP} ${PLAYWRIGHT_BROWSERS_PATH}; \
+    chmod -R 775 ${PLAYWRIGHT_BROWSERS_PATH}; \
+    find ${PLAYWRIGHT_BROWSERS_PATH} -type d -exec chmod g+s {} +; \
+    install -d -m 0777 /tmp/probe-root /tmp/probe-node; \
+    PROBE_CWD=/tmp/probe-root node /opt/probe-browser.js; \
+    usermod -aG ${AGENT_BROWSERS_GROUP} node; \
+    su node -c "PROBE_CWD=/tmp/probe-node node /opt/probe-browser.js"; \
+    npm cache clean --force; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/* /var/cache/debconf/*-old /tmp/* /root/.npm /root/.cache
 
 # Make the baked browser discoverable WITHOUT relying on PLAYWRIGHT_BROWSERS_PATH
 # reaching the MCP subprocess (task #340).

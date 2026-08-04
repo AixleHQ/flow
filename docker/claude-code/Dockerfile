@@ -10,14 +10,24 @@ FROM ${BASE_IMAGE}
 # =============================================================================
 # Agent-specific layers (CACHED when only shared scripts change)
 # =============================================================================
-RUN useradd -m -d /home/claude -s /bin/bash claude \
-    && chown -R claude:claude /workspace /home/claude \
-    && chown -R root:claude /opt/playwright-browsers \
-    && chmod -R 775 /opt/playwright-browsers
+# Browser access comes from the group membership (-G), NOT from re-owning
+# /opt/playwright-browsers: the base image already made that tree group-writable for
+# AGENT_BROWSERS_GROUP. A `chown -R`/`chmod -R` over those ~984 MiB here copied up
+# every file and added 1.03 GB to this image alone
+# (docs/research/technical-agent-image-size-audit-2026-08-04.md).
+RUN useradd -m -d /home/claude -s /bin/bash -G ${AGENT_BROWSERS_GROUP} claude \
+    && chown -R claude:claude /workspace /home/claude
 
 USER claude
 WORKDIR /home/claude
-RUN curl -fsSL https://claude.ai/install.sh | bash
+# Download THEN run, and verify the binary — never `curl … | bash`. In a pipe, a failed
+# curl still leaves bash reading empty stdin and exiting 0, so a network blip produced an
+# image with no Claude CLI at all and the build reported success (seen 2026-08-05).
+RUN curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh \
+    && bash /tmp/claude-install.sh \
+    && rm -f /tmp/claude-install.sh \
+    && test -x /home/claude/.local/bin/claude \
+    && /home/claude/.local/bin/claude --version
 
 ENV PATH="/home/claude/.local/bin:${PATH}"
 
@@ -51,8 +61,11 @@ RUN set -eux; \
 # .aws must exist and be agent-owned: the Bedrock setup wizard reads the profile
 # from the literal $HOME/.aws/config (it ignores AWS_CONFIG_FILE), and an SSO
 # login has to create ~/.aws/sso/cache/ next to it.
-RUN mkdir -p /home/claude/.claude /home/claude/.aws \
-    && chown -R claude:claude /home/claude
+#
+# `install -d` creates just these two dirs with the right owner. A `chown -R` over
+# /home/claude would be a no-op (the CLI above was installed AS claude) that still
+# copied up the whole 272 MB install into this layer.
+RUN install -d -o claude -g claude /home/claude/.claude /home/claude/.aws
 
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)
