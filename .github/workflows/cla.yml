@@ -1,0 +1,91 @@
+name: CLA
+
+# Fails the check until the contributor has signed the Individual CLA (CLA.md), or is
+# covered by a Corporate CLA (CLA-CORPORATE.md) recorded in the allowlist below. It only
+# *blocks merge* once it is added to the branch protection required checks, which needs
+# the repository to be public (or on a paid plan).
+#
+# Signatures are stored as JSON in a separate branch of this repository, so the record
+# lives with the project rather than in a third-party service. A contributor signs once
+# by commenting the sentence in `custom-pr-sign-comment`; the check then passes for all
+# their future PRs.
+#
+# One-time setup, required before the first run — the action does not bootstrap its own
+# storage (its 404 handling compares the numeric HTTP status against the string "404",
+# so a missing file surfaces as a hard failure instead):
+#
+#     git switch --orphan cla-signatures
+#     mkdir -p signatures && printf '{"signedContributors": []}\n' > signatures/cla.json
+#     git add signatures/cla.json
+#     git commit -s -m "chore(cla): seed signature store"
+#     git push -u origin cla-signatures
+#
+# The branch must stay unprotected — the action commits to it on every signature.
+#
+# Both triggers below run the copy of this file that is on the **default branch**, and
+# neither fires at all until it is there — so nothing about this workflow, including
+# edits to it, takes effect from a topic branch or from a pull request that has not
+# merged yet. Verified: a PR whose base branch carried this file produced no run.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  cla:
+    runs-on: ubuntu-latest
+    # Run on PR events and on comments made on a pull request — never on issue comments.
+    # The action itself decides whether a comment is a signature: it lowercases both
+    # sides before comparing, and also understands `recheck`. Matching the sentence here
+    # too would be case-sensitive, and would silently drop a signature typed in a
+    # different case.
+    if: github.event_name == 'pull_request_target' || github.event.issue.pull_request
+    steps:
+      - name: Check CLA signature
+        # Pinned to a commit SHA: this is a third-party action running in a
+        # `pull_request_target` workflow with write permissions, so a mutable tag would
+        # be a supply-chain risk. Upstream is archived and read-only, so the pin is also
+        # permanent — there are no further releases to track. Note there is no `v2` tag
+        # in that repository at all; only exact versions (v2.2.0 … v2.6.1).
+        uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 # v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PERSONAL_ACCESS_TOKEN is deliberately unset: the action only reads it when
+          # `remote-repository-name`/`remote-organization-name` point the signature
+          # store at another repository. A different branch of *this* repository is
+          # written with GITHUB_TOKEN plus the `contents: write` permission above.
+        with:
+          branch: cla-signatures
+          path-to-signatures: signatures/cla.json
+          # Resolved from the workflow context and `HEAD` rather than hardcoded, so the
+          # link keeps working whichever repository the public release lives in and
+          # whatever its default branch is called.
+          path-to-document: ${{ github.server_url }}/${{ github.repository }}/blob/HEAD/CLA.md
+          custom-pr-sign-comment: I have read the CLA Document and I hereby sign the CLA
+          custom-notsigned-prcomment: >
+            Thanks for your pull request! Before we can merge it, we need you to sign our
+            [Contributor License Agreement](${{ github.server_url }}/${{ github.repository }}/blob/HEAD/CLA.md).
+            It is a one-time step and covers all your future contributions.
+
+
+            To sign, reply to this pull request with exactly:
+          custom-allsigned-prcomment: >
+            All contributors have signed the CLA. Thank you!
+          # Bots and accounts covered by a Corporate CLA on file.
+          # TODO (maintainers): as organizations execute the cCLA, add their designated
+          # contributors here (cCLA § 6 makes Schedule A administrative, not a condition
+          # of the grant — this list is only what tells the bot to stop asking).
+          allowlist: dependabot[bot],renovate[bot],github-actions[bot]
+          lock-pullrequest-aftermerge: false
+          # Tells contributors they can re-run the check by commenting `recheck` — which
+          # the job condition above now allows through.
+          suggest-recheck: true

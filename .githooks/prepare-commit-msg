@@ -1,0 +1,27 @@
+#!/bin/sh
+# Adds the DCO sign-off trailer (`Signed-off-by:`) that the DCO check requires on
+# every commit, so `git commit` behaves like `git commit -s` without having to
+# remember the flag. See CONTRIBUTING.md and https://developercertificate.org/
+#
+# Enabled by `make setup`, or by hand:
+#     git config core.hooksPath .githooks
+
+set -eu
+
+COMMIT_MSG_FILE="$1"
+COMMIT_SOURCE="${2:-}"
+
+# Merge commits are generated, not authored, and the DCO check skips them.
+[ "$COMMIT_SOURCE" = "merge" ] && exit 0
+
+name=$(git config user.name || true)
+email=$(git config user.email || true)
+[ -n "$name" ] && [ -n "$email" ] || exit 0
+
+trailer="Signed-off-by: $name <$email>"
+
+# Already signed off by this author — `git commit -s`, an amend, or a rebase
+# replaying a commit that carries the trailer.
+grep -qsF "$trailer" "$COMMIT_MSG_FILE" && exit 0
+
+git interpret-trailers --in-place --trailer "$trailer" "$COMMIT_MSG_FILE"

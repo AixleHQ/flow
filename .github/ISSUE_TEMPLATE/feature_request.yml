@@ -1,0 +1,40 @@
+name: ✨ Feature request
+description: Suggest an idea or improvement
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Please check
+        [existing issues](https://github.com/palad-ai/palad-app/issues) and the
+        [roadmap](https://github.com/palad-ai/palad-app/blob/develop/ROADMAP.md)
+        first.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem are you trying to solve? What's the use case?
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: What would you like to see happen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative solutions or workarounds you've considered.
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else — mockups, links, related tools.
+    validations:
+      required: false
