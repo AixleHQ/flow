@@ -226,7 +226,7 @@ class SkillsRegistryService
 
     body = response.body
     return nil if body.blank? || body.start_with?("<!DOCTYPE", "<html")
-    return body if Skills::SkillMarkdown.name(body) == slug
+    return body if Skills::SkillMarkdown.matches_slug?(body, slug)
 
     nil
   end

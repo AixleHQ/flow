@@ -99,6 +99,42 @@ module Skills
         meta["description"].presence&.to_s&.strip&.truncate(MAX_DESCRIPTION_LENGTH)
       end
 
+      # Does this SKILL.md belong to the slug we asked for?
+      #
+      # This is the ONLY reliable identity check available when reading someone else's
+      # repository: a registry slug is derived from the frontmatter `name` upstream, so
+      # the two agree by construction, while the directory holding the file is up to
+      # the publisher (`encore/database/` for `encore-database`,
+      # `plugins/stitch-build/skills/react-components/` for `stitch::react-components`).
+      # Path shape can therefore only ever be a hint about where to look — never proof
+      # of what was found.
+      #
+      # Compared after parameterising, because a handful of publishers write a display
+      # name where the spec wants a slug (`name: 'Database Sync'` for `database-sync`).
+      # Rejecting those cost real descriptions for no safety gain: the parameterised
+      # forms still have to match exactly, so someone else's skill cannot slip through.
+      def matches_slug?(content, slug)
+        published = name(content)
+        return false if published.blank? || slug.blank?
+
+        published == slug || published.parameterize == slug.to_s.parameterize
+      end
+
+      # A WEAKER match: the registry slug is this skill's published name carrying a
+      # publisher's prefix. `vercel-labs/json-render` publishes `skills/react/SKILL.md`
+      # with `name: react`, and skills.sh lists it as `json-render-react`.
+      #
+      # Only ever a fallback, and only inside a repository already narrowed to a
+      # candidate path, because on its own it is ambiguous — `react` would answer to any
+      # `*-react`. Callers must prefer #matches_slug? and reach for this only when
+      # nothing in the repository identified itself exactly.
+      def prefixed_slug?(content, slug)
+        published = name(content)&.parameterize
+        return false if published.blank? || slug.blank?
+
+        slug.to_s.parameterize.end_with?("-#{published}")
+      end
+
       private
 
       def normalize(content)

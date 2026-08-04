@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_03_000004) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_04_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -197,6 +197,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_03_000004) do
     t.string "content_hash"
     t.datetime "created_at", null: false
     t.text "description"
+    t.datetime "description_checked_at"
     t.boolean "featured", default: false, null: false
     t.integer "install_count", default: 0, null: false
     t.integer "installs", default: 0, null: false
@@ -208,8 +209,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_03_000004) do
     t.string "title"
     t.datetime "updated_at", null: false
     t.index ["audit_risk"], name: "index_catalog_skills_on_audit_risk"
+    t.index ["description_checked_at"], name: "index_catalog_skills_on_backfill_queue", where: "(description IS NULL)"
     t.index ["featured", "bulk_publisher", "installs"], name: "index_catalog_skills_on_ranking"
     t.index ["registry_id"], name: "index_catalog_skills_on_registry_id", unique: true
+    t.index ["registry_synced_at"], name: "index_catalog_skills_on_registry_synced_at"
     t.index ["search_vector"], name: "index_catalog_skills_on_search_vector", using: :gin
     t.index ["source"], name: "index_catalog_skills_on_source"
   end

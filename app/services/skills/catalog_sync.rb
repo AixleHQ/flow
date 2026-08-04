@@ -57,12 +57,16 @@ module Skills
     # description is what tells an agent when to use a skill — so an undescribed row
     # is a card nobody can judge.
     #
-    # How many undescribed rows a run considers. Generous, because roughly two thirds
-    # are answered from GitHub raw (measured), which spends no skills.sh quota — 600
-    # rows is ~400 CDN reads and well under a minute of the run's 20-minute budget,
-    # while the registry endpoint is still capped at DOWNLOAD_BUDGET below. At eight
-    # runs a week this describes the catalog in weeks rather than months.
-    BACKFILL_LIMIT = 600
+    # How many undescribed rows a run considers. Almost all of them resolve from
+    # raw.githubusercontent.com, which spends no skills.sh quota and is not the host
+    # REQUEST_DELAY exists to be polite to — so the ceiling here is the run's own
+    # 20-minute wall clock, not anyone's rate limit. The registry endpoint is still
+    # capped separately at DOWNLOAD_BUDGET.
+    BACKFILL_LIMIT = 1_500
+    # Tree listings (api.github.com) for the repositories whose layout cannot be
+    # guessed are budgeted by Skills::GithubSkillTree itself, since what the deployment
+    # is allowed depends on whether a read token is configured. One request covers a
+    # whole publisher, so the cost is per-REPOSITORY and not per-skill.
     # How many of those may fall through to the registry's download endpoint, which is
     # capped at a MEASURED 60 requests per hour for the whole deployment
     # (`RegistryClient::DOWNLOAD_HOURLY_LIMIT`) — a budget every user install also
@@ -82,6 +86,10 @@ module Skills
     # Wall-clock budget for the whole run, comfortably inside the activity's
     # start_to_close of 1800s. nil disables it (tests).
     TIME_BUDGET = 20.minutes
+    # Held back from the backfill so the audit pass is reached even when there are more
+    # undescribed rows than time. Audits are what warn a user before they install
+    # something flagged; a slightly slower description sweep is the cheaper sacrifice.
+    AUDIT_RESERVE = 4.minutes
 
     Result = Struct.new(:fetched, :upserted, :failed, :backfilled, :audited, keyword_init: true) do
       def to_s
@@ -97,20 +105,27 @@ module Skills
     # mirrors the slice of the registry users are about to install from — the part the
     # guessed-at topic seeds cannot know about. Owner sweeps are skipped: they are
     # broad coverage, which is the weekly run's job.
-    def self.demand(client: RegistryClient, github: GithubSkillMd, delay: REQUEST_DELAY, budget: TIME_BUDGET)
+    def self.demand(client: RegistryClient, github: GithubSkillMd, tree: nil,
+                    delay: REQUEST_DELAY, budget: TIME_BUDGET)
       terms = CatalogSearchQuery.top_terms
-      new(client: client, github: github, delay: delay, budget: budget, queries: terms, owners: []).call.tap do
+      new(client: client, github: github, tree: tree, delay: delay, budget: budget,
+          queries: terms, owners: []).call.tap do
         CatalogSearchQuery.prune!
       end
     end
 
     # `client` is injected rather than referenced directly so tests drive the sweep
     # through FakeSkillsRegistry instead of stubbing HTTP or the collaborator class.
-    def initialize(client: RegistryClient, github: GithubSkillMd, delay: REQUEST_DELAY,
+    #
+    # `tree` carries per-run budget state (see GithubSkillTree), so it is built here
+    # rather than referenced as a class — one object for the whole sweep, so a
+    # repository is listed once no matter how many of its skills the queue holds.
+    def initialize(client: RegistryClient, github: GithubSkillMd, tree: nil, delay: REQUEST_DELAY,
                    budget: TIME_BUDGET, queries: SEED_QUERIES, owners: SEED_OWNERS,
                    download_budget: DOWNLOAD_BUDGET)
       @client = client
       @github = github
+      @tree = tree || GithubSkillTree.new
       @delay = delay
       @download_budget = download_budget
       @queries = queries
@@ -141,9 +156,12 @@ module Skills
     # read timeout against an unresponsive host, which on its own could outlast the
     # activity's start_to_close and leave the backfill and audits permanently
     # unreached. Running out of budget degrades coverage; it does not fail the run.
-    def budget_left?
+    def budget_left?(reserve: 0)
       return true if @deadline.nil?
-      return true if Time.current < @deadline
+      return true if Time.current < @deadline - reserve
+      # A stage that stopped early to protect a later one has not exhausted anything;
+      # only the real deadline is worth a warning.
+      return false if reserve.positive?
 
       unless @budget_exhausted
         @budget_exhausted = true
@@ -310,73 +328,122 @@ module Skills
     # Fills in what the search endpoint does not carry: a description, which is what
     # tells an agent when to use a skill.
     #
-    # Rotation matters here. Selecting `where(description: nil)` ordered by `featured`
-    # alone would re-fetch the same rows every week forever, because a SKILL.md
-    # without a `description` key legitimately yields nil — those rows would hold the
-    # whole budget and no other row would ever be reached. Ordering by
-    # `registry_synced_at` and stamping it on every ATTEMPT (not just successes) makes
-    # the queue rotate.
+    # ROTATION IS THE WHOLE DESIGN. A SKILL.md legitimately without a `description`
+    # key yields nil, so `description IS NULL` cannot tell "never looked" from
+    # "looked, nothing there". Without a record of the attempt, a ranking-ordered
+    # queue re-offers the same unanswerable rows first on every run and progress
+    # decays to nothing — which is exactly what happened: 609 of 5,669 rows described
+    # after three runs, the geometric tail of a 600-row budget spent mostly on
+    # re-tries. `description_checked_at` exists to make the attempt itself durable.
+    #
+    # An earlier version tried to get this from `updated_at ASC` appended to
+    # CatalogSkill::RANKING. It never fired: RANKING ends in `registry_synced_at DESC`,
+    # which CatalogUpsert stamps per row, so the ordering was already total and the
+    # rotation key was unreachable.
     def backfill_metadata
-      # Ordered by the SAME ranking the grid uses, so the rows a user can actually
-      # see are described first — `featured DESC` alone left most of the visible page
-      # blank while spending the budget on entries nobody was looking at.
-      # `updated_at` breaks ties, and since every attempt stamps it, rows that will
-      # never yield a description rotate to the back instead of holding the budget.
-      rows = CatalogSkill.where(description: nil)
-                         .order(Arel.sql("#{CatalogSkill::RANKING}, updated_at ASC"))
-                         .limit(BACKFILL_LIMIT)
       downloads_used = 0
 
-      rows.each do |row|
-        break unless budget_left?
+      CatalogSkill.undescribed_first.limit(BACKFILL_LIMIT).each do |row|
+        # Reserved so the audit pass is still reached; descriptions are worth less than
+        # a security warning shown before an install.
+        break unless budget_left?(reserve: AUDIT_RESERVE)
 
-        # GitHub raw first, because it costs nothing from the 60-per-hour download
-        # budget that user installs also draw on. Only rows whose layout raw does not
-        # cover fall through to the registry.
-        content = @github.fetch(row.source, row.slug)
+        content = resolve_skill_md(row)
         bundle = nil
+        answered = false
+        refused = false
 
-        if content.blank?
-          # Stop DOWNLOADING, not scanning: the budget (and a 429) only applies to the
-          # registry endpoint, while raw keeps answering for free. Aborting the whole
-          # pass on the first refused download meant one early miss cost every row
-          # behind it — which is exactly what happened on the first live run.
-          if downloads_used < @download_budget && !@downloads_exhausted
-            downloads_used += 1
-            begin
-              bundle = @client.download(row.source, row.slug)
-              content = bundle&.skill_md
-            rescue RegistryClient::RateLimited => e
-              Rails.logger.warn("[Skills::CatalogSync] Download budget closed — #{e.message}")
-              @downloads_exhausted = true
-            end
+        if content.blank? && download_allowed?(downloads_used)
+          downloads_used += 1
+          begin
+            bundle = @client.download(row.source, row.slug)
+            content = bundle&.skill_md
+            answered = true
+          rescue RegistryClient::RateLimited => e
+            # Stop DOWNLOADING, not scanning: the budget (and a 429) only applies to the
+            # registry endpoint, while raw keeps answering for free. Aborting the whole
+            # pass on the first refused download meant one early miss cost every row
+            # behind it — which is exactly what happened on the first live run.
+            Rails.logger.warn("[Skills::CatalogSync] Download budget closed — #{e.message}")
+            @downloads_exhausted = true
+            refused = true
           end
+          # Paced because this one is skills.sh, whose terms ask for it. The raw and
+          # tree reads above are GitHub's CDN and API and are not throttled by us.
+          sleep(@delay) if @delay.positive?
         end
 
-        sleep(@delay) if @delay.positive?
+        next unresolved(row, answered: answered, refused: refused) if content.blank?
 
-        if content.blank?
-          # A row we never actually asked about (budget closed) must not be judged:
-          # marking it attempted would rotate it back for nothing, and dropping it
-          # would delete a real entry because WE ran out of requests.
-          drop_unresolvable_seed(row) unless @downloads_exhausted && bundle.nil?
-          next
-        end
-
-        description = SkillMarkdown.description(content)
-        row.update_columns(
-          description: description,
-          title: row.title.presence || SkillMarkdown.name(content),
-          # Only the registry's own bundle carries a hash; a raw read has none, and
-          # inventing one would break "has upstream changed since we looked".
-          content_hash: bundle&.content_hash || row.content_hash,
-          registry_synced_at: Time.current,
-          updated_at: Time.current
-        )
-        # Counted only when a description actually landed, so the activity's summary
-        # cannot report progress for a no-op.
-        @result.backfilled += 1 if description.present?
+        record_metadata(row, content, bundle)
       end
+    end
+
+    # Free sources only, in order of what they cost us:
+    #
+    #   raw path guesses — a CDN read against a handful of conventional layouts, no
+    #     budget of any kind
+    #   the repository's real tree — one api.github.com request per REPOSITORY, which
+    #     is the only thing that reaches the nested layouts (`plugins/<x>/skills/…`)
+    #     carrying most of this catalog's rows
+    #
+    # The registry's download endpoint is deliberately not here: it is 60 requests an
+    # hour for the whole deployment and a user installing a skill spends one.
+    def resolve_skill_md(row)
+      content = @github.fetch(row.source, row.slug)
+      return content if content.present?
+
+      @tree.fetch(row.source, row.slug)
+    end
+
+    def download_allowed?(downloads_used)
+      downloads_used < @download_budget && !@downloads_exhausted
+    end
+
+    # Nothing resolved. What that means depends on who said no.
+    #
+    #   refused  — upstream threw a 429 at THIS row. Its fate is genuinely unknown, so
+    #     nothing is recorded and it keeps its place in the queue for a real turn next
+    #     run. Marking it would punish it for our rate limit.
+    #   answered — the registry itself looked and had nothing. That is the only
+    #     testimony strong enough to drop a never-confirmed curated seed, because a raw
+    #     or tree miss says OUR lookup failed, not that upstream lacks the skill.
+    #   neither  — we did not spend a download, but raw and the repository tree both
+    #     looked. That is a real attempt and it is stamped, so the row rotates and
+    #     something else gets a turn. Refusing to stamp here is what let a handful of
+    #     unanswerable rows hold the whole budget on every run.
+    def unresolved(row, answered:, refused:)
+      return if refused
+      return drop_unresolvable_seed(row) if answered
+
+      stamp_attempt(row)
+    end
+
+    def record_metadata(row, content, bundle)
+      description = SkillMarkdown.description(content)
+      row.update_columns(
+        description: description,
+        title: row.title.presence || SkillMarkdown.name(content),
+        # Only the registry's own bundle carries a hash; a raw read has none, and
+        # inventing one would break "has upstream changed since we looked".
+        content_hash: bundle&.content_hash || row.content_hash,
+        description_checked_at: Time.current,
+        # Moved only when the answer came from the REGISTRY. Reading a description off
+        # GitHub is not upstream confirming this row exists, and `drop_unresolvable_seed`
+        # reads a NULL here as "no sweep has ever seen it" — so writing it on a raw read
+        # would quietly make a phantom seed permanent.
+        registry_synced_at: bundle ? Time.current : row.registry_synced_at,
+        updated_at: Time.current
+      )
+      # Counted only when a description actually landed, so the activity's summary
+      # cannot report progress for a no-op.
+      @result.backfilled += 1 if description.present?
+    end
+
+    # "We looked." NOT `registry_synced_at`, which means "upstream confirmed this row"
+    # and must not move because a lookup of ours came back empty.
+    def stamp_attempt(row)
+      row.update_columns(description_checked_at: Time.current, updated_at: Time.current)
     end
 
     # A curated seed the registry cannot resolve is not a catalog entry — it is a card
@@ -401,9 +468,7 @@ module Skills
         return
       end
 
-      # `updated_at`, not `registry_synced_at`: the latter means "upstream confirmed
-      # this row", and a failed download confirms nothing.
-      row.update_columns(updated_at: Time.current)
+      stamp_attempt(row)
     end
   end
 end

@@ -168,9 +168,9 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
 
     # Skills::GithubSkillMd tries the conventional layouts first; none of them hold this
     # skill, so resolution falls through to the repo's `skills/` listing below.
-    stub_request(:get, %r{raw\.githubusercontent\.com/vercel-labs/agent-skills/HEAD/(skills/)?(vercel-)?react-best-practices/SKILL\.md})
+    stub_request(:get, %r{raw\.githubusercontent\.com/vercel-labs/agent-skills/HEAD/(\.agents/|\.claude/)?(skills/)?(vercel-)?react-best-practices/SKILL\.md})
       .to_return(status: 404, body: "")
-    stub_request(:get, "https://raw.githubusercontent.com/vercel-labs/agent-skills/HEAD/skills/vercel-react-best-practices/SKILL.md")
+    stub_request(:get, %r{raw\.githubusercontent\.com/vercel-labs/agent-skills/HEAD/(\.agents/|\.claude/)?(skills/)?vercel-react-best-practices/SKILL\.md})
       .to_return(status: 404, body: "")
 
     stub_request(:get, "https://api.github.com/repos/vercel-labs/agent-skills/contents/skills")

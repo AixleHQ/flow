@@ -8,17 +8,19 @@ require "test_helper"
 class Skills::CatalogSyncTest < ActiveSupport::TestCase
   setup do
     @registry = FakeSkillsRegistry.new
-    # Empty by default: most repositories do not lay skills out at a guessable raw
-    # path, so the backfill falls through to the registry — the common case.
+    # Both free resolvers are empty by default: raw path guesses answer 54% of live
+    # entries and a repository we cannot list answers none, so the fall-through to the
+    # registry's download endpoint is the case worth defaulting to.
     @github = FakeGithubSkillMd.new
+    @tree = FakeGithubSkillTree.new
   end
 
   # `download_budget` is raised here on purpose: production keeps a quarter of the
   # registry's 60-per-hour ceiling and leaves the rest to people installing skills, but
   # a test asserting backfill behaviour should not be fighting that quota. The cap
   # itself is covered by its own test below.
-  def sync(client: @registry, github: @github, download_budget: 200)
-    Skills::CatalogSync.new(client: client, github: github, delay: 0,
+  def sync(client: @registry, github: @github, tree: @tree, download_budget: 200)
+    Skills::CatalogSync.new(client: client, github: github, tree: tree, delay: 0,
                             download_budget: download_budget).call
   end
 
@@ -254,10 +256,24 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
 
     assert_not_nil CatalogSkill.find_by(registry_id: "org/skills/untouched"),
                    "a previously mirrored row must survive a failed download"
-    assert_operator confirmed.reload.updated_at, :>, 1.day.ago,
-                    "the attempt should be stamped so the queue rotates"
+    assert_not_nil confirmed.reload.description_checked_at,
+                   "the attempt should be recorded so the queue rotates"
     assert_equal week_ago.to_i, confirmed.registry_synced_at.to_i,
                  "a failed download confirms nothing, so registry_synced_at must not move"
+  end
+
+  # Only the registry can testify that a skill does not exist. A raw or tree miss says
+  # our lookup failed — and deleting a curated seed on that signal removes it from every
+  # project's default view because WE ran out of requests.
+  test "never drops a seed whose download the budget did not pay for" do
+    seeded = CatalogSkill::FEATURED.first
+
+    sync(download_budget: 0)
+
+    row = CatalogSkill.find_by(registry_id: seeded)
+    assert_not_nil row, "a seed nobody asked the registry about must not be deleted"
+    assert_not_nil row.description_checked_at, "raw and the tree both looked, so the row still rotates"
+    assert_empty @registry.downloads
   end
 
   # Descriptions are what tell an agent when to use a skill, so the rows a user can
@@ -280,23 +296,40 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
   end
 
   # Without rotation, rows whose SKILL.md legitimately has no description hold the
-  # whole backfill budget on every run and nothing else is ever reached.
-  test "backfill rotates rather than re-fetching the same descriptionless rows" do
+  # whole backfill budget on every run and nothing else is ever reached. This is the
+  # failure that stalled the live catalog at 609 described rows out of 5,669: the queue
+  # was ordered by ranking, and its rotation key (`updated_at ASC`) sat behind
+  # `registry_synced_at DESC`, which is unique per row — so it never fired.
+  test "records the attempt on a row whose SKILL.md carries no description" do
     @registry.add("org/skills/no-description", installs: 5)
     @registry.bundle("org/skills", "no-description", skill_md: "---\nname: no-description\n---\n\nbody")
 
     sync
-    first_pass = @registry.downloads.count { |d| d == "org/skills/no-description" }
+
     row = CatalogSkill.find_by(registry_id: "org/skills/no-description")
     assert_nil row.description
-    assert_not_nil row.registry_synced_at, "an attempt must be stamped so the queue moves on"
-    assert_equal 1, first_pass
-
-    # It stays eligible (still no description) but is no longer at the front of the
-    # queue, and the counter did not claim success.
-    result = sync
-    assert_equal 0, result.backfilled
+    assert_not_nil row.description_checked_at, "an attempt must be recorded so the queue moves on"
+    assert_equal 1, @registry.downloads.count { |d| d == "org/skills/no-description" }
   end
+
+  # Nested layouts (`plugins/<plugin>/skills/<slug>/SKILL.md` and friends) cannot be
+  # guessed, and they carry most of this catalog's rows — 44% of live entries miss every
+  # flat guess. Reading the repository's real tree is what describes them without
+  # touching the registry's 60-per-hour download budget.
+  test "describes a row from the repository tree when no raw path can be guessed" do
+    @registry.add("wshobson/agents/screen-reader-testing", installs: 4_000)
+    @tree.stub("wshobson/agents", "screen-reader-testing",
+               skill_md: "---\nname: screen-reader-testing\ndescription: Audits with a screen reader\n---\n\nb")
+
+    result = sync
+
+    row = CatalogSkill.find_by(registry_id: "wshobson/agents/screen-reader-testing")
+    assert_equal "Audits with a screen reader", row.description
+    assert_not_includes @registry.downloads, "wshobson/agents/screen-reader-testing",
+                        "a row answered by the tree must not spend a download request"
+    assert result.backfilled.positive?
+  end
+
 
   # The only external judgement available for a catalog with no ownership proof.
   test "stores third-party audits, keeping the worst verdict as the headline" do
@@ -349,7 +382,7 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
     CatalogSearchQuery.record("svelte")
     @registry.add("microsoft/playwright-cli/playwright-cli", installs: 12_000)
 
-    Skills::CatalogSync.demand(client: @registry, github: @github, delay: 0, budget: nil)
+    Skills::CatalogSync.demand(client: @registry, github: @github, tree: @tree, delay: 0, budget: nil)
 
     queries = @registry.searches.map { |s| s[:query] }
     assert_equal %w[playwright svelte], queries
@@ -360,13 +393,13 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
   test "the demand sweep prunes the term table afterwards" do
     CatalogSearchQuery.create!(term: "forgotten", search_count: 99, last_searched_at: 40.days.ago)
 
-    Skills::CatalogSync.demand(client: @registry, github: @github, delay: 0, budget: nil)
+    Skills::CatalogSync.demand(client: @registry, github: @github, tree: @tree, delay: 0, budget: nil)
 
     assert_nil CatalogSearchQuery.find_by(term: "forgotten")
   end
 
   test "the demand sweep does nothing upstream when nobody has searched yet" do
-    Skills::CatalogSync.demand(client: @registry, github: @github, delay: 0, budget: nil)
+    Skills::CatalogSync.demand(client: @registry, github: @github, tree: @tree, delay: 0, budget: nil)
 
     assert_empty @registry.searches
   end
@@ -384,9 +417,11 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
     assert_equal 0, result.backfilled
   end
 
-  # GitHub raw costs nothing from the registry's 60-per-hour budget, so it is tried
-  # first and a row it answers never spends a download at all.
-  test "prefers GitHub raw over the rate-limited download endpoint" do
+  # Sources are tried in order of what they cost us: a raw path guess spends no budget
+  # at all, a tree listing spends one api.github.com request per repository out of an
+  # allowance the install path shares, and the registry's download endpoint is 60 an
+  # hour for the whole deployment.
+  test "prefers GitHub raw over both the repository tree and the download endpoint" do
     @registry.add("obra/superpowers/brainstorming", installs: 300_000)
     @github.stub("obra/superpowers", "brainstorming",
                  skill_md: "---\nname: brainstorming\ndescription: Refines an idea first\n---\n\nbody")
@@ -396,6 +431,8 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
     row = CatalogSkill.find_by(registry_id: "obra/superpowers/brainstorming")
     assert_equal "Refines an idea first", row.description
     assert_includes @github.requests, "obra/superpowers/brainstorming"
+    assert_not_includes @tree.requests, "obra/superpowers/brainstorming",
+                        "a row answered by raw must not cost a tree listing"
     assert_not_includes @registry.downloads, "obra/superpowers/brainstorming",
                         "a row answered by raw must not spend a download request"
   end
@@ -410,17 +447,28 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
     assert_equal 2, @registry.downloads.size
   end
 
-  # Rows are not marked as attempted on a throttle: rotating them to the back of the
-  # queue would punish them for our rate limit.
-  test "a throttled backfill leaves the queue untouched" do
-    week_ago = 1.week.ago
-    row = create(:catalog_skill, registry_id: "org/skills/pending", source: "org/skills", slug: "pending",
-                 description: nil, registry_synced_at: week_ago, updated_at: week_ago)
+  # The row whose download upstream actually refused keeps its place: its fate is
+  # unknown, and rotating it would punish it for our rate limit. Rows behind it are a
+  # different case — raw and the tree still looked at them, so they rotate normally and
+  # a throttle cannot freeze the whole queue.
+  #
+  # This replaces "a throttled backfill leaves the queue untouched": once raw and the
+  # repository tree do the resolving and downloads are the rare fallback, refusing to
+  # record ANY attempt after one 429 froze the whole queue for the rest of the run.
+  test "a row whose download was refused keeps its place in the queue" do
+    behind = create(:catalog_skill, registry_id: "org/skills/behind", source: "org/skills", slug: "behind",
+                    description: nil, installs: 1, registry_synced_at: 1.week.ago)
     @registry.rate_limited = true
 
     sync
 
-    assert_equal week_ago.to_i, row.reload.updated_at.to_i
+    assert_equal 1, @registry.downloads.size, "one refused request is enough to stop downloading"
+    # Whichever row the queue happened to offer first — a download is recorded as
+    # "source/slug", which is exactly a registry_id.
+    refused = CatalogSkill.find_by(registry_id: @registry.downloads.first)
+    assert_not_nil refused, "a refused download is not evidence that a row is a phantom"
+    assert_nil refused.description_checked_at, "the refused row must be offered a real turn next run"
+    assert_not_nil behind.reload.description_checked_at, "a throttle must not freeze the rest of the queue"
   end
 
   test "sweeps every seed query and owner" do
