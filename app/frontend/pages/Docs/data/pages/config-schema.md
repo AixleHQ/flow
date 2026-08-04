@@ -97,6 +97,7 @@ it's required.
 | `GITHUB_APP_PRIVATE_KEY`  | GitHub App private key (PEM, multi-line).               |
 | `GITHUB_APP_SLUG`         | The App's slug.                                         |
 | `GITHUB_WEBHOOK_SECRET`   | HMAC secret for `/webhooks/github` verification.        |
+| `GITHUB_PUBLIC_READ_TOKEN`| Optional read-only token used only to list public repository trees while describing the skills catalog. Needs no scopes. Without it, api.github.com allows 60 requests/hour for the whole deployment and the catalog is described a couple of dozen publishers at a time; with it, 5,000/hour. |
 | `GITLAB_ENDPOINT`         | GitLab API server URL (defaults to `https://gitlab.com/api/v4`). |
 
 GitLab access uses a per-integration personal access token (stored

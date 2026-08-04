@@ -124,6 +124,14 @@ github:
   app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
   private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
   webhook_secret: <%= ENV['GITHUB_WEBHOOK_SECRET'] %>
+  # OPTIONAL, and unrelated to the GitHub App above. A read-only token used only to
+  # list PUBLIC repository trees while describing the skills catalog
+  # (Skills::GithubSkillTree). Unauthenticated api.github.com allows 60 requests/hour
+  # for the whole deployment, which caps the catalog backfill at a couple of dozen
+  # publishers per run; any token raises that to 5,000/hour. Needs no scopes —
+  # public_repo read is enough, and a tenant's installation token must NOT be used
+  # here, since this reads repositories no customer installed the app on.
+  read_token: <%= ENV['GITHUB_PUBLIC_READ_TOKEN'] %>
 
 gitlab:
   endpoint: <%= ENV['GITLAB_ENDPOINT'] || 'https://gitlab.com/api/v4' %>

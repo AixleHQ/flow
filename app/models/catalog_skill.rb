@@ -37,6 +37,23 @@ class CatalogSkill < ApplicationRecord
 
   scope :popular, -> { order(Arel.sql(RANKING)) }
 
+  # The description-backfill queue: rows still missing a description,
+  # least-recently-attempted first.
+  #
+  # `description_checked_at` leads, and that is the whole point. A SKILL.md
+  # legitimately without a `description` key yields nil, so `description IS NULL`
+  # cannot tell "never looked" from "looked, nothing there" — and a queue led by
+  # RANKING re-offers the same unanswerable rows first on every run until they have
+  # eaten the entire per-run budget. This ordering gives every row a turn before any
+  # row gets a second one.
+  #
+  # RANKING breaks ties, which on a cold catalog is every row — so a first pass still
+  # describes what the grid actually renders before it works through the tail.
+  scope :undescribed_first, lambda {
+    where(description: nil)
+      .order(Arel.sql("description_checked_at ASC NULLS FIRST, #{RANKING}"))
+  }
+
   # One entry per publisher, best first. Ranking alone is not enough: a repo with
   # twenty-five similar skills would otherwise fill the grid even after the
   # bulk-publisher penalty, because the penalty orders publishers — it does not

@@ -48,6 +48,47 @@ class CatalogSkillTest < ActiveSupport::TestCase
     assert_equal [ best.id, other.id ], ids
   end
 
+  # ====== Backfill queue ======
+
+  # The measured failure THIS ordering exists to prevent: the live catalog stalled at
+  # 609 described rows out of 5,669 because the queue led with RANKING, so rows whose
+  # SKILL.md has no `description` key kept their place at the front and re-consumed the
+  # per-run budget forever. Progress decayed geometrically instead of converging.
+  test "a row already looked at waits behind one nobody has looked at" do
+    checked = create(:catalog_skill, source: "org/a", slug: "a", registry_id: "org/a/a", installs: 900_000,
+                     description: nil, description_checked_at: 1.day.ago)
+    never_checked = create(:catalog_skill, source: "org/b", slug: "b", registry_id: "org/b/b", installs: 1,
+                           description: nil, description_checked_at: nil)
+
+    assert_equal [ never_checked.id, checked.id ], CatalogSkill.undescribed_first.pluck(:id)
+  end
+
+  test "among rows already looked at, the least recently checked leads" do
+    stale = create(:catalog_skill, source: "org/a", slug: "a", registry_id: "org/a/a", installs: 1,
+                   description: nil, description_checked_at: 1.week.ago)
+    recent = create(:catalog_skill, source: "org/b", slug: "b", registry_id: "org/b/b", installs: 900_000,
+                    description: nil, description_checked_at: 1.hour.ago)
+
+    assert_equal [ stale.id, recent.id ], CatalogSkill.undescribed_first.pluck(:id)
+  end
+
+  # On a cold catalog every row is unchecked, so the tie-break is what decides — and it
+  # has to be the grid's own ranking, or a first pass describes the tail while the
+  # visible page stays blank.
+  test "unchecked rows fall back to the ranking the grid renders" do
+    tail = create(:catalog_skill, source: "org/a", slug: "a", registry_id: "org/a/a", installs: 1, description: nil)
+    front = create(:catalog_skill, source: "org/b", slug: "b", registry_id: "org/b/b", installs: 900_000,
+                   description: nil)
+
+    assert_equal [ front.id, tail.id ], CatalogSkill.undescribed_first.pluck(:id)
+  end
+
+  test "a described row is not queued at all" do
+    create(:catalog_skill, source: "org/a", slug: "a", registry_id: "org/a/a", description: "Already described")
+
+    assert_empty CatalogSkill.undescribed_first
+  end
+
   # ====== Search ======
 
   test "search matches slug, title and description" do

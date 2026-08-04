@@ -35,36 +35,34 @@ module Skills
         return nil unless source.to_s.match?(SOURCE_FORMAT)
         return nil if slug.blank?
 
+        prefixed = nil
+
         paths(slug).each do |path|
-          content = get(source, path)
+          content = read(source, path)
           next if content.blank?
           # A guessed path that holds a DIFFERENT skill must not be accepted.
-          next unless SkillMarkdown.name(content).to_s == slug
+          return content if SkillMarkdown.matches_slug?(content, slug)
 
-          return content
+          # The registry sometimes prefixes a publisher's name onto the slug while the
+          # file keeps the bare one. Kept as a fallback so an exact match at a later
+          # path still wins.
+          prefixed ||= content if SkillMarkdown.prefixed_slug?(content, slug)
         end
 
-        nil
+        prefixed
       rescue StandardError => e
         Rails.logger.warn("[Skills::GithubSkillMd] #{source}/#{slug} failed: #{e.message}")
         nil
       end
 
-      private
-
-      # The two layouts that actually occur: a `skills/` directory (anthropics/skills,
-      # obra/superpowers, shadcn/ui) and skills at the repository root. Repos that nest
-      # deeper are left to the download endpoint rather than guessed at.
-      def paths(slug)
-        candidates = [ "skills/#{slug}/SKILL.md", "#{slug}/SKILL.md" ]
-        # Some publishers prefix the registry slug with their own name while the
-        # directory is unprefixed (`vercel-react-best-practices` → `react-best-practices`).
-        stripped = slug.sub(/\A[a-z0-9]+-/, "")
-        candidates << "skills/#{stripped}/SKILL.md" if stripped != slug
-        candidates
-      end
-
-      def get(source, path)
+      # One raw read of an exact path, with no identity check — the caller decides what
+      # counts as a match. Public because GithubSkillTree reads paths it discovered
+      # rather than guessed, and there must be exactly one place that knows how this
+      # deployment talks to raw.githubusercontent.com.
+      #
+      # @return [String, nil] the file, or nil for a miss, an HTML error page or an
+      #   implausibly large body
+      def read(source, path)
         uri = URI("#{RAW_BASE}/#{source}/HEAD/#{path}")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
@@ -82,6 +80,28 @@ module Skills
         return nil if body.blank? || body.start_with?("<!DOCTYPE", "<html")
 
         body
+      end
+
+      private
+
+      # Flat layouts only, in descending order of how often they occur. A guess costs a
+      # CDN read and nothing else, so the list is allowed to be a little speculative —
+      # but it stays FLAT: repositories that nest their skills (`plugins/<plugin>/skills/
+      # <slug>/`, `<group>/skills/<slug>/`, `skills/<group>/<slug>/`) cannot be guessed
+      # at all and are resolved by GithubSkillTree, which reads the real tree instead.
+      #
+      #   skills/<slug>/     anthropics/skills, obra/superpowers, shadcn/ui
+      #   <slug>/            repositories holding one skill at the root
+      #   .agents/skills/    the Agent Skills spec's own location (clerk/skills)
+      #   .claude/skills/    the same layout under the Claude-specific directory
+      def paths(slug)
+        candidates = [ "skills/#{slug}/SKILL.md", "#{slug}/SKILL.md",
+                       ".agents/skills/#{slug}/SKILL.md", ".claude/skills/#{slug}/SKILL.md" ]
+        # Some publishers prefix the registry slug with their own name while the
+        # directory is unprefixed (`vercel-react-best-practices` → `react-best-practices`).
+        stripped = slug.sub(/\A[a-z0-9]+-/, "")
+        candidates << "skills/#{stripped}/SKILL.md" if stripped != slug
+        candidates
       end
     end
   end
