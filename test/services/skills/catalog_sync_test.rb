@@ -244,9 +244,10 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
   # signal erased 398 real rows on the first live backfill, and would erase most of
   # the catalog under a demand-seeded sweep that only touches a few dozen queries.
   test "never deletes a row upstream has confirmed, even when no sweep touched it now" do
+    week_ago = 1.week.ago
     confirmed = create(:catalog_skill, registry_id: "org/skills/untouched", source: "org/skills",
-                       slug: "untouched", description: nil, registry_synced_at: 1.week.ago,
-                       updated_at: 1.week.ago)
+                       slug: "untouched", description: nil, registry_synced_at: week_ago,
+                       updated_at: week_ago)
 
     # This run's seeds match nothing, and the row has no downloadable bundle.
     sync
@@ -255,7 +256,7 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
                    "a previously mirrored row must survive a failed download"
     assert_operator confirmed.reload.updated_at, :>, 1.day.ago,
                     "the attempt should be stamped so the queue rotates"
-    assert_equal 1.week.ago.to_i, confirmed.registry_synced_at.to_i,
+    assert_equal week_ago.to_i, confirmed.registry_synced_at.to_i,
                  "a failed download confirms nothing, so registry_synced_at must not move"
   end
 
