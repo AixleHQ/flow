@@ -52,14 +52,20 @@ git commit -s -m "feat: my change"
 ```
 
 This appends a `Signed-off-by: Your Name <you@example.com>` line to the commit
-message. The name and email must match your real identity. A DCO check runs on
-every PR and will fail if any commit is missing the sign-off.
+message. The name and email must match your real identity, and the email must be
+the one you author commits with (`git config user.email`) — the check compares
+them. It runs on every PR and fails if any commit is missing a sign-off or is
+signed off by someone other than its author. Merge commits and commits authored
+by bots are exempt.
 
 ### 2. Contributor License Agreement (CLA)
 
 Before your first contribution can be merged, you must sign the project's
-Contributor License Agreement. A bot will comment on your PR with a one-time
-signing link; once signed, it covers all your future contributions. The CLA
+Contributor License Agreement. A bot comments on your PR with a link to the
+agreement and the sentence to reply with; post that sentence as a PR comment,
+exactly as given, and the bot records the signature. It is a one-time step that
+covers all your future contributions. If the check does not update, comment
+`recheck` to re-run it. The CLA
 grants the maintainers the rights needed to distribute, sublicense, and — if
 ever necessary — relicense the project, which a DCO sign-off alone does not
 provide. You keep full ownership of your contributions either way.
