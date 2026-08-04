@@ -10,9 +10,13 @@ FROM ${BASE_IMAGE}
 # =============================================================================
 # Agent-specific layers (CACHED when only shared scripts change)
 # =============================================================================
-RUN npm install -g @openai/codex
+# The cache clean has to be in THIS instruction: a later `npm cache clean` (the
+# watcher layer runs one) leaves ~180 MB of /root/.npm in this layer forever.
+RUN npm install -g @openai/codex && npm cache clean --force
 
-RUN useradd -m -d /home/codex -s /bin/bash codex
+# -G AGENT_BROWSERS_GROUP: write access to the shared browser tree (Playwright creates
+# a server dir inside it on first launch) without a 1 GB-duplicating recursive chown.
+RUN useradd -m -d /home/codex -s /bin/bash -G ${AGENT_BROWSERS_GROUP} codex
 
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)

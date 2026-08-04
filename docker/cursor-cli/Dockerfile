@@ -10,7 +10,9 @@ FROM ${BASE_IMAGE}
 # =============================================================================
 # Agent-specific layers (CACHED when only shared scripts change)
 # =============================================================================
-RUN useradd -m -d /home/cursor -s /bin/bash cursor \
+# -G AGENT_BROWSERS_GROUP: write access to the shared browser tree (Playwright creates
+# a server dir inside it on first launch) without a 1 GB-duplicating recursive chown.
+RUN useradd -m -d /home/cursor -s /bin/bash -G ${AGENT_BROWSERS_GROUP} cursor \
     && chown -R cursor:cursor /workspace /home/cursor
 
 USER cursor
@@ -20,10 +22,13 @@ RUN curl https://cursor.com/install -fsS | bash \
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 USER root
+# `install -d` creates just the config dirs with the right owner. A `chown -R` over
+# /home/cursor would be a no-op (the installer above ran AS cursor) that still copied
+# up the whole 229 MB install — bundled node included — into this layer
+# (docs/research/technical-agent-image-size-audit-2026-08-04.md).
 RUN test -x /home/cursor/.local/bin/agent \
     && ln -sf /home/cursor/.local/bin/agent /usr/local/bin/agent \
-    && mkdir -p /home/cursor/.config/cursor /home/cursor/.cursor \
-    && chown -R cursor:cursor /home/cursor
+    && install -d -o cursor -g cursor /home/cursor/.config /home/cursor/.config/cursor /home/cursor/.cursor
 
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)
