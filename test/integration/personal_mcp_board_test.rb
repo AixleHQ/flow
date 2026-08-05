@@ -63,6 +63,27 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_equal "To Do", created["column"]
   end
 
+  test "create_board_task can assign the task on creation" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+
+    created = payload(call_tool("create_board_task",
+                                { project_id: @project.id, column_id: @todo.id,
+                                  title: "Assigned on create", assignee_id: member.id }))
+    assert_equal member.id, created["assignee_id"]
+    assert_equal member.id, BoardTask.find(created["id"]).assignee_id
+  end
+
+  test "create_board_task refuses an assignee who cannot reach the project" do
+    outsider = create(:user, :with_company)
+
+    body = call_tool("create_board_task",
+                     { project_id: @project.id, column_id: @todo.id, title: "Nope", assignee_id: outsider.id })
+    assert tool_error?(body)
+    assert_match(/member of the project/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert_not BoardTask.exists?(title: "Nope")
+  end
+
   test "update_board_task updates fields" do
     body = call_tool("update_board_task", { project_id: @project.id, task_id: @task.id, priority: "high" })
     assert_not tool_error?(body)

@@ -49,6 +49,33 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     assert_equal "Backlog", data["column"]
   end
 
+  test "board_create_task assigns the task on creation" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+
+    result = InternalTools::BoardCreateTask.new(
+      params: { title: "Assigned on create", assignee_id: member.id },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    assert_equal member.id, JSON.parse(result[:stdout])["assignee_id"]
+    assert_equal member.id, BoardTask.find(JSON.parse(result[:stdout])["id"]).assignee_id
+  end
+
+  test "board_create_task reports an assignee who cannot reach the project" do
+    outsider = create(:user, :with_company)
+
+    result = InternalTools::BoardCreateTask.new(
+      params: { title: "Nope", assignee_id: outsider.id },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/member of the project/i, result[:stderr])
+    assert_not BoardTask.exists?(title: "Nope")
+  end
+
   test "board_create_task returns error for unknown column" do
     result = InternalTools::BoardCreateTask.new(
       params: { title: "Task", column_name: "Nonexistent" },

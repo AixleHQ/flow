@@ -65,7 +65,7 @@ module ContextBuilders
       lines << "- **board_get_task_assets** — get assets attached to a task"
       lines << "- **board_add_comment** — add a comment to a task (markdown supported in body)"
       lines << "- **board_update_task** — update task fields (title, description, priority, assignee_id, etc)"
-      lines << "- **board_create_task** — create a new task on the board"
+      lines << "- **board_create_task** — create a new task on the board (optionally assignee_id)"
       lines << "- **board_move_task** — move a task to a different column by column_name"
       lines << "- **board_attach_asset** — attach a file to a task (use file_path for screenshots, file_content for small text)"
       lines << "- **board_manage_tags** — add/remove tags on a task"

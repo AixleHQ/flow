@@ -30,6 +30,10 @@ module InternalTools
             type: "string",
             description: "Target column name. Defaults to the first column."
           },
+          assignee_id: {
+            type: "integer",
+            description: "Optional user ID to assign the task to — must be a project member (see board_list_members)"
+          },
           description: {
             type: "string",
             description: "Task description"
@@ -55,6 +59,7 @@ module InternalTools
         title: params[:title],
         description: params[:description],
         task_type: params[:task_type] || :not_specified,
+        assignee_id: params[:assignee_id].presence,
         tags: params[:tags] || []
       )
 
@@ -62,8 +67,13 @@ module InternalTools
         id: task.id,
         title: task.title,
         column: column.name,
+        assignee_id: task.assignee_id,
         position: task.position
       }.to_json)
+    rescue ActiveRecord::RecordInvalid => e
+      # An assignee who can't reach the project is the realistic case here, and
+      # the step should read the reason rather than die on the exception.
+      error(e.record.errors.full_messages.to_sentence.presence || e.message)
     end
   end
 end
