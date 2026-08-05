@@ -32,6 +32,12 @@ paths = [
 ]
 
 [[allowlists]]
+description = "Public claude.ai OAuth client_id — a published identifier that ships in Anthropic's CLI, not a credential"
+paths = ['''^app/services/agents/claude_code_adapter\.rb$''']
+regexTarget = "line"
+regexes = ['''BASE_OAUTH_CLIENT_ID\s*=''']
+
+[[allowlists]]
 description = "Documentation showing Authorization header shapes, not real tokens"
 paths = [
   '''^app/frontend/pages/Docs/data/''',
