@@ -84,9 +84,11 @@ class InternalTools::MetaCreateMCPServerTest < ActiveSupport::TestCase
     mcp = MCPServer.find(JSON.parse(result[:stdout])["id"])
     assert mcp.valid?, mcp.errors.full_messages.to_sentence
     assert_equal "stdio", mcp.transport.to_s
-    assert_equal "npx @playwright/mcp --headless", mcp.command
     assert_nil mcp.url
-    assert_equal %w[npx @playwright/mcp --headless], mcp.parsed_command
+    # The tool takes one line, like the install form; the model stores it split.
+    assert_equal "npx", mcp.command
+    assert_equal %w[@playwright/mcp --headless], mcp.args
+    assert_equal "npx @playwright/mcp --headless", mcp.command_line
   end
 
   # ── explicit attributes; name is stored verbatim ──

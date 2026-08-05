@@ -39,6 +39,28 @@ class Web::Company::Projects::MCPServersControllerTest < ActionDispatch::Integra
     assert_response :redirect
   end
 
+  # The form posts one free-form line; storage keeps the executable and its argv
+  # apart — the shape .mcp.json needs, and the shape a catalog install already
+  # arrives in. (MCPServerResource joins it back for the field; see its own test.)
+  test "a stdio server posted as one line is stored split" do
+    post company_project_mcp_servers_path(@project), params: {
+      mcp_server: { name: "local-mcp", transport: "stdio", command: "uvx local-mcp-server --verbose" }
+    }
+
+    server = MCPServer.find_by(name: "local-mcp")
+    assert_equal "uvx", server.command
+    assert_equal [ "local-mcp-server", "--verbose" ], server.args
+  end
+
+  test "a stdio command the agent image cannot launch is refused with a reason" do
+    post company_project_mcp_servers_path(@project), params: {
+      mcp_server: { name: "docker-mcp", transport: "stdio", command: "docker run -i ghcr.io/example/mcp" }
+    }
+
+    assert_nil MCPServer.find_by(name: "docker-mcp")
+    assert_match(/Docker/, Array(session["inertia_errors"][:command]).to_sentence)
+  end
+
   test "create persists auth_type and credential_scope so the OAuth flow is reachable" do
     post company_project_mcp_servers_path(@project), params: {
       mcp_server: { name: "oauth-mcp", url: "https://mcp.test/v1",

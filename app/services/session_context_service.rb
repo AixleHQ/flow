@@ -728,9 +728,11 @@ class SessionContextService
         env: resolved_env
       }
 
+      # The adapters see this OpenStruct, never the record, so the two ways a launch
+      # line can be stored have to be reconciled here — see MCPServer#launch_args.
       if server.transport_stdio?
         attrs[:command] = server.command_executable
-        attrs[:args] = server.command_args
+        attrs[:args] = server.launch_args
       end
 
       OpenStruct.new(attrs)

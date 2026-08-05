@@ -176,8 +176,8 @@ module Agents
     test "mcp_config emits mcp.json + pre-approvals for stdio and remote servers" do
       project = create(:project, :standalone)
       stdio = create(:mcp_server, :stdio_transport,
-                     name: "playwright", command: "npx @playwright/mcp",
-                     args: [ "--headless" ], env: { "KEY" => "v" }, scope: project)
+                     name: "playwright", command: "npx @playwright/mcp --headless",
+                     env: { "KEY" => "v" }, scope: project)
       remote = create(:mcp_server, :with_headers,
                       name: "context7", url: "https://mcp.context7.com/v1", scope: project)
 
@@ -189,8 +189,11 @@ module Agents
       # stdio server: command/args/env, no url. The baked-browser path is injected
       # into every stdio server's env (task #340) and the server's own env is merged
       # on top of it.
-      assert_equal "npx @playwright/mcp", servers["playwright"]["command"]
-      assert_equal [ "--headless" ], servers["playwright"]["args"]
+      # The line was stored split, so the package spec sits in `args` where the
+      # #340 version pin can reach it — it could not when it was part of `command`.
+      assert_equal "npx", servers["playwright"]["command"]
+      assert_equal [ "@playwright/mcp@#{Agents::BaseAdapter::PLAYWRIGHT_MCP_VERSION}", "--headless" ],
+                   servers["playwright"]["args"]
       assert_equal({ "PLAYWRIGHT_BROWSERS_PATH" => "/opt/playwright-browsers", "KEY" => "v" },
                    servers["playwright"]["env"])
       refute servers["playwright"].key?("url")

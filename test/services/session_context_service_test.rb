@@ -173,6 +173,39 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "https://tavily.com/mcp", config["mcpServers"]["tavily"]["url"]
   end
 
+  # The adapters never see an MCPServer record — they are handed the resolved
+  # OpenStruct — so this is the seam where a catalog install's argv can go missing.
+  # It did: `command` alone was shell-split, which for a package connector holds the
+  # runtime and nothing else, and the emitted config launched a bare `npx`.
+  test "generate_mcp_config keeps the argv of a stdio server installed from the catalog" do
+    server = create(:mcp_server, :custom, :stdio_transport, name: "remote-fs", scope: @project,
+                    command: "npx", args: [ "-y", "remote-filesystem-mcp-server@0.1.2" ],
+                    env: { "FS_TOKEN" => "t" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+
+    entry = JSON.parse(SessionContextService.generate_mcp_config(session)["/workspace/.mcp.json"])
+              .dig("mcpServers", "remote-fs")
+
+    assert_equal "stdio", entry["type"]
+    assert_equal "npx", entry["command"]
+    assert_equal [ "-y", "remote-filesystem-mcp-server@0.1.2" ], entry["args"]
+    assert_equal "t", entry["env"]["FS_TOKEN"]
+  end
+
+  test "generate_mcp_config splits the command line of a hand-written stdio server" do
+    server = create(:mcp_server, :custom, :stdio_transport, name: "local-mcp", scope: @project,
+                    command: "uvx local-mcp-server --verbose")
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+
+    entry = JSON.parse(SessionContextService.generate_mcp_config(session)["/workspace/.mcp.json"])
+              .dig("mcpServers", "local-mcp")
+
+    assert_equal "uvx", entry["command"]
+    assert_equal [ "local-mcp-server", "--verbose" ], entry["args"]
+  end
+
   test "generate_mcp_config generates Cursor CLI format" do
     server = create(:mcp_server, :custom, name: "context7", url: "https://context7.com/mcp",
                     transport: "sse", scope: @project, headers: { "Authorization" => "Bearer test" })

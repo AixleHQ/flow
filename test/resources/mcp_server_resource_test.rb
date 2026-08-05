@@ -50,4 +50,21 @@ class MCPServerResourceTest < ActiveSupport::TestCase
     hash = MCPServerResource.new(server, params: { user: @user }).to_h
     assert_nil hash["oauthStatus"]
   end
+
+  # The install form edits one line, so the resource sends one line — regardless of
+  # whether the row was typed in or rendered by a catalog install, which stores the
+  # executable and its argv apart.
+  test "command is the whole launch line, not just the executable" do
+    server = create(:mcp_server, :stdio_transport, scope: @project, kind: :custom,
+                    command: "npx", args: [ "-y", "remote-filesystem-mcp-server@0.1.2" ])
+
+    assert_equal "npx -y remote-filesystem-mcp-server@0.1.2",
+                 MCPServerResource.new(server, params: { user: @user }).to_h["command"]
+  end
+
+  test "command is null for a server with no launch line at all" do
+    server = create(:mcp_server, scope: @project, kind: :custom, transport: :sse)
+
+    assert_nil MCPServerResource.new(server, params: { user: @user }).to_h["command"]
+  end
 end
