@@ -45,6 +45,21 @@ class MCPServer < ApplicationRecord
     self.class.config_key_for(name)
   end
 
+  # `FOO=bar cmd` is shell syntax for a one-off environment variable. Spawned
+  # directly it is read as the name of the program to run.
+  ENV_ASSIGNMENT_FORMAT = /\A[A-Za-z_][A-Za-z0-9_]*=/
+  # Matched as whole tokens, so a quoted argument that merely contains one
+  # (`--filter="a && b"`) is left alone.
+  SHELL_OPERATORS = %w[| || & && ; > >> < << 2>&1].freeze
+
+  # A stdio launch line is stored split: the executable in `command`, its argv in
+  # `args`. That is the shape .mcp.json wants, and the shape a catalog install
+  # already arrives in (MCP::ConnectorAttributes). The install form takes one
+  # free-form line, so the line is split HERE rather than at whichever consumer
+  # happens to need it — one representation in the database is what stops the two
+  # halves of the system from disagreeing about where the arguments live.
+  before_validation :split_command_line, if: -> { transport_stdio? && command_changed? }
+
   # Validations
   validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
@@ -54,6 +69,9 @@ class MCPServer < ApplicationRecord
   validates :scope, presence: true, if: :custom?
   validates :scope_type, inclusion: { in: %w[Project], message: "must be a project" }, if: :custom?
   validate :url_safety, if: -> { custom? && url.present? }
+  # Only when the launch line is being written, so a row that predates these rules
+  # can still be edited for an unrelated reason (renamed, disabled).
+  validate :launchable_command_line, if: -> { transport_stdio? && (command_changed? || args_changed?) }
 
   # Scopes
   scope :internal_servers, -> { where(kind: "internal") }
@@ -76,8 +94,14 @@ class MCPServer < ApplicationRecord
   def oauth? = auth_type_oauth?
 
   # Split "npx @playwright/mcp --headless" → ["npx", "@playwright/mcp", "--headless"]
+  #
+  # Never raises: an unbalanced quote is reported by #launchable_command_line when
+  # the line is written, and a legacy row that predates that check must not take a
+  # whole session's config generation down with it.
   def parsed_command
     Shellwords.split(command.to_s)
+  rescue ArgumentError
+    []
   end
 
   def command_executable
@@ -88,19 +112,25 @@ class MCPServer < ApplicationRecord
     parsed_command.drop(1)
   end
 
-  # The argv to launch with, whichever way the server was authored.
+  # The argv to launch with.
   #
-  # A catalog install stores the executable alone in `command` and the rest in
-  # `args` (MCP::ConnectorAttributes), because the registry manifest describes the
-  # two separately and the launched spec must stay version-pinned exactly as it was
-  # rendered. A hand-written server has no `args` — the install form takes one
-  # free-form line — so its argv comes from splitting `command`.
-  #
-  # Everything downstream must go through here rather than picking one shape:
-  # reading only `command` drops a catalog install's package spec (leaving a bare
-  # `npx`), and reading only `args` drops a hand-written server's arguments.
+  # Both authoring paths now store the executable in `command` and its argv in
+  # `args` — a catalog install because MCP::ConnectorAttributes renders them
+  # separately, a hand-written one because #split_command_line normalizes the
+  # pasted line on write. `command_args` remains the fallback for rows written
+  # before that normalization and skipped by its backfill (an unbalanced quote),
+  # so no consumer has to know which era a row comes from.
   def launch_args
     Array(args).presence&.map(&:to_s) || command_args
+  end
+
+  # The launch line as one string, which is how the install form shows it and how
+  # every MCP README publishes it. Only tokens that would not survive a re-split
+  # are quoted — shell-escaping everything would render an ordinary `--port=8080`
+  # as `--port\=8080` in the field.
+  def command_line
+    tokens = [ command.to_s.presence, *launch_args ].compact
+    tokens.map { |token| token.match?(/[\s"']/) ? %("#{token.gsub('"', '\"')}") : token }.join(" ")
   end
 
   # ----- Connector catalog provenance -----
@@ -172,5 +202,47 @@ class MCPServer < ApplicationRecord
 
   def url_safety
     UrlSafetyValidator.errors_for(url, require_https: auth_type_oauth?).each { |msg| errors.add(:url, msg) }
+  end
+
+  # Only a line carrying arguments is split. A single token leaves `args` alone,
+  # which is what keeps a catalog install (`command` = "npx", `args` already
+  # rendered) from being emptied out by a save that touches something else.
+  # Re-splitting a resubmitted line replaces `args` wholesale, so editing the line
+  # in the form removes an argument rather than accumulating one.
+  def split_command_line
+    tokens = parsed_command
+    return if tokens.size < 2
+
+    self.command = tokens.first
+    self.args = tokens.drop(1)
+  end
+
+  # An MCP stdio server is spawned directly, not through a shell, so the three
+  # shapes below are accepted by the form today and then fail invisibly at session
+  # start — the process never comes up and a server that never starts looks exactly
+  # like one nobody called.
+  def launchable_command_line
+    return errors.add(:command, "has an unbalanced quote") if unbalanced_quotes?
+
+    if command.to_s.match?(ENV_ASSIGNMENT_FORMAT)
+      errors.add(:command, "must start with the program to run — put environment variables in the Env section")
+    end
+
+    if ([ command.to_s ] + Array(args).map(&:to_s)).any? { |token| SHELL_OPERATORS.include?(token) }
+      errors.add(:command, "cannot use shell operators — the process is launched directly, without a shell")
+    end
+
+    # Same policy the connector catalog applies to a package target, from the same
+    # list: a runtime the agent image does not carry cannot be launched by hand
+    # either. See MCP::ConnectorManifest::UNAVAILABLE_RUNTIMES.
+    unavailable = MCP::ConnectorManifest::UNAVAILABLE_RUNTIMES[command.to_s]
+    errors.add(:command, unavailable) if unavailable
+  end
+
+  def unbalanced_quotes?
+    Shellwords.split(command.to_s)
+    false
+  rescue ArgumentError
+    true
   end
 end

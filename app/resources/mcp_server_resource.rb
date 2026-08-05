@@ -6,7 +6,17 @@ class MCPServerResource < ApplicationResource
   typelize headers: "Record<string, unknown>", env: "Record<string, unknown>"
   attributes :id, :name, :url, :transport,
              :description, :kind, :scope_type, :scope_id, :enabled,
-             :command, :created_at, :updated_at
+             :created_at, :updated_at
+
+  # The whole launch line, not the `command` column. Storage keeps the executable
+  # and its argv apart (see MCPServer#split_command_line); the form has always
+  # edited one line and still posts one, which the model re-splits on write.
+  # Spelled out rather than `:string?`, which Typelizer renders as OPTIONAL — the
+  # key is always sent, and it is null for a server with no launch line at all.
+  typelize command: "string | null"
+  attribute :command do |server|
+    server.command_line.presence
+  end
 
   # SECURITY (oauth-unification §7): header/env VALUES can carry secrets (bearer
   # tokens, API keys, resolved config-item references) and must never round-trip to

@@ -411,33 +411,114 @@ class MCPServerTest < ActiveSupport::TestCase
     assert_empty server.errors[:url]
   end
 
-  # The two shapes a stdio launch line arrives in. A catalog install fills `args`
-  # (MCP::ConnectorAttributes); the install form fills only `command`.
-  test "launch_args takes the stored args of a catalog install" do
-    server = MCPServer.new(
-      name: "remote-fs", kind: "custom", scope: @project, transport: "stdio",
-      command: "npx", args: [ "-y", "remote-filesystem-mcp-server@0.1.2" ]
-    )
+  # ---- stdio launch line: one storage shape, whichever path wrote the row ----
 
-    assert_equal "npx", server.command_executable
-    assert_equal [ "-y", "remote-filesystem-mcp-server@0.1.2" ], server.launch_args
+  def stdio_server(**attrs)
+    MCPServer.new({ name: "stdio-#{SecureRandom.hex(3)}", kind: "custom", scope: @project,
+                    transport: "stdio" }.merge(attrs))
   end
 
-  test "launch_args splits the command line of a hand-written server" do
-    server = MCPServer.new(
-      name: "playwright", kind: "custom", scope: @project, transport: "stdio",
-      command: "npx @playwright/mcp --headless"
-    )
+  test "a pasted command line is stored split into the executable and its argv" do
+    server = stdio_server(command: "npx @playwright/mcp --headless")
 
-    assert_equal "npx", server.command_executable
+    assert server.save, server.errors.full_messages.to_sentence
+    assert_equal "npx", server.command
+    assert_equal [ "@playwright/mcp", "--headless" ], server.args
     assert_equal [ "@playwright/mcp", "--headless" ], server.launch_args
   end
 
-  test "launch_args is empty for a bare command with no arguments" do
-    server = MCPServer.new(
-      name: "bare", kind: "custom", scope: @project, transport: "stdio", command: "my-mcp"
-    )
+  test "a catalog install keeps the argv it was rendered with" do
+    server = stdio_server(command: "npx", args: [ "-y", "remote-filesystem-mcp-server@0.1.2" ],
+                          connector_name: "io.github.example/remote-fs")
 
-    assert_empty server.launch_args
+    assert server.save, server.errors.full_messages.to_sentence
+    assert_equal "npx", server.command
+    assert_equal [ "-y", "remote-filesystem-mcp-server@0.1.2" ], server.args
+  end
+
+  test "editing the line replaces the stored argv rather than adding to it" do
+    server = stdio_server(command: "uvx server-a --verbose")
+    server.save!
+
+    server.update!(command: "uvx server-b")
+
+    assert_equal "uvx", server.command
+    assert_equal [ "server-b" ], server.args
+  end
+
+  test "saving an unrelated field leaves an already-split line alone" do
+    server = stdio_server(command: "npx pkg --flag")
+    server.save!
+
+    server.update!(description: "renamed")
+
+    assert_equal "npx", server.command
+    assert_equal [ "pkg", "--flag" ], server.args
+  end
+
+  test "command_line rejoins the launch line for the form, quoting only what needs it" do
+    server = stdio_server(command: "npx", args: [ "--port=8080", "--title", "my server" ])
+
+    assert_equal 'npx --port=8080 --title "my server"', server.command_line
+    assert_equal [ "npx", "--port=8080", "--title", "my server" ], Shellwords.split(server.command_line)
+  end
+
+  test "command_line round-trips a quoted argument through a re-save" do
+    server = stdio_server(command: 'npx pkg --title "my server"')
+    server.save!
+
+    reparsed = stdio_server(name: "reparsed", command: server.command_line)
+    reparsed.save!
+
+    assert_equal server.args, reparsed.args
+  end
+
+  # ---- what cannot be launched, refused where the user can still see it ----
+
+  test "rejects an environment assignment in place of the program" do
+    server = stdio_server(command: "API_KEY=secret npx pkg")
+
+    assert_not server.valid?
+    assert_includes server.errors[:command].to_sentence, "put environment variables in the Env section"
+  end
+
+  test "rejects shell operators, which a directly spawned process never sees" do
+    server = stdio_server(command: "npx pkg | tee log")
+
+    assert_not server.valid?
+    assert_includes server.errors[:command].to_sentence, "without a shell"
+  end
+
+  test "rejects a runtime the agent image does not carry" do
+    server = stdio_server(command: "docker run -i ghcr.io/example/mcp")
+
+    assert_not server.valid?
+    assert_equal [ MCP::ConnectorManifest::UNAVAILABLE_RUNTIMES["docker"] ], server.errors[:command]
+  end
+
+  test "rejects an unbalanced quote instead of silently dropping the rest of the line" do
+    server = stdio_server(command: 'npx pkg --title "unclosed')
+
+    assert_not server.valid?
+    assert_includes server.errors[:command].to_sentence, "unbalanced quote"
+  end
+
+  test "an argument that merely contains an operator is not mistaken for one" do
+    server = stdio_server(command: 'npx pkg --filter "a && b"')
+
+    assert server.valid?, server.errors.full_messages.to_sentence
+    assert_equal [ "pkg", "--filter", "a && b" ], server.args
+  end
+
+  # A row written before the split existed keeps working, and stays editable for a
+  # reason that has nothing to do with its command.
+  test "a legacy unsplit row can still be disabled" do
+    server = stdio_server(command: "npx legacy-pkg --flag")
+    server.save!
+    server.update_columns(command: "npx legacy-pkg --flag", args: [])
+
+    server.reload
+    assert server.update(enabled: false), server.errors.full_messages.to_sentence
+    assert_equal [ "legacy-pkg", "--flag" ], server.reload.launch_args
   end
 end
