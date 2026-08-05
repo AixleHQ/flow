@@ -6,11 +6,11 @@ body:
     attributes:
       value: |
         Thanks for taking the time to file a bug! Please search
-        [existing issues](https://github.com/palad-ai/palad-app/issues) first to
+        [existing issues](https://github.com/AixleHQ/flow/issues) first to
         avoid duplicates.
 
         ⚠️ **Do not report security vulnerabilities here.** See
-        [SECURITY.md](https://github.com/palad-ai/palad-app/blob/develop/SECURITY.md).
+        [SECURITY.md](https://github.com/AixleHQ/flow/blob/develop/SECURITY.md).
   - type: textarea
     id: what-happened
     attributes:

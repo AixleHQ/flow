@@ -140,7 +140,7 @@ Recommended protocol (verified against [Rails 8 invitation flow write-ups](https
 |---|---|---|
 | No account | — | Pre-filled signup (set name/password **or** "Continue with Google"), then membership activates; onboarding runs once per user, not per company |
 | Has account | Logged out | Redirect to login (email pre-filled, Google or password), then auto-accept on return — store pending token in session across the auth round-trip |
-| Has account | Logged in, same email | One-click accept screen: "«Acme» приглашает вас — Accept / Decline" |
+| Has account | Logged in, same email | One-click accept screen: "«Acme» invites you — Accept / Decline" |
 | Has account | Logged in as a *different* user | Show "invitation is for X@…, you are Y@…" → offer logout-and-continue; never silently attach to the wrong identity |
 
 Key security rule (multi-source, [Auth0 B2B onboarding](https://auth0.com/blog/user-onboarding-strategies-b2b-saas/), [supersaas invite flow](https://supersaas.dev/docs/teams/invite-flow)): the invite email address is the identity anchor — accept only into the `User` whose email matches the invitation, and treat the emailed link itself as email-ownership proof (it substitutes for the confirmation step; no separate email confirmation needed).

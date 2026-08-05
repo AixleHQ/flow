@@ -6,8 +6,8 @@ body:
     attributes:
       value: |
         Thanks for the suggestion! Please check
-        [existing issues](https://github.com/palad-ai/palad-app/issues) and the
-        [roadmap](https://github.com/palad-ai/palad-app/blob/develop/ROADMAP.md)
+        [existing issues](https://github.com/AixleHQ/flow/issues) and the
+        [roadmap](https://github.com/AixleHQ/flow/blob/develop/ROADMAP.md)
         first.
   - type: textarea
     id: problem

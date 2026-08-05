@@ -24,4 +24,4 @@ tagged releases begin.
 - Community health files: Code of Conduct, Security Policy, Governance, issue
   and pull-request templates, CODEOWNERS, and this changelog.
 
-[Unreleased]: https://github.com/palad-ai/palad-app/commits/develop
+[Unreleased]: https://github.com/AixleHQ/flow/commits/develop

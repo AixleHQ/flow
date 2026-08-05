@@ -1,7 +1,7 @@
 # Internal Contributor Notes
 
 > Not linked from the public README. This file documents commands and
-> integrations that only apply to Palad AI team members. External
+> integrations that only apply to Aixle team members. External
 > contributors do not need any of this.
 
 ## AWS Vault Configuration
@@ -35,7 +35,7 @@ documentation. The public-facing reference lives under `docs/`.
   the Container Execution Framework (`app/services/container_strategies/`)
 - `references/aixle-system-reference.md` — full domain model reference
   used by the internal Aixle Builder agent
-- `docs/palad-strategy-draft.md` — internal product strategy draft
+- `docs/strategy/aixle-flow-strategy-draft.md` — internal product strategy draft
 
 ## Database Dumps
 

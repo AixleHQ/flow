@@ -10,8 +10,8 @@ decisions, the roles people hold, and how those roles change over time.
 
 ## Overview
 
-Aixle Flow is an open-source project stewarded by **Palad AI**
-([github.com/palad-ai](https://github.com/palad-ai)). The company employs the
+Aixle Flow is an open-source project stewarded by **Aixle**
+([github.com/AixleHQ](https://github.com/AixleHQ)). The company employs the
 core maintainers and sets the overall product direction; day-to-day technical
 decisions are made by the maintainers in the open.
 
@@ -59,7 +59,7 @@ objects within a reasonable review window. For anything substantial:
   cross-cutting changes should be discussed in an issue first.
 - **Architectural or breaking changes** are discussed openly (issue or
   discussion) and decided by maintainer consensus.
-- **Product direction and roadmap** are set by Palad AI in consultation with
+- **Product direction and roadmap** are set by Aixle in consultation with
   maintainers; the public roadmap lives in [`ROADMAP.md`](ROADMAP.md).
 - If consensus cannot be reached, the maintainer group decides by simple
   majority; ties are resolved by the project lead.

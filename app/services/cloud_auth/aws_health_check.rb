@@ -5,7 +5,7 @@ module CloudAuth
   # session would, then try to invoke a model with them.
   #
   # This is the platform equivalent of the `check` command in the corporate runbook,
-  # which exists for exactly one reason — "Claude молчит об ошибке". Every layer that can
+  # which exists for exactly one reason — "Claude fails silently". Every layer that can
   # fail (refresh token, permission set, model enablement, region) fails differently
   # here, and the user sees which.
   class AwsHealthCheck

@@ -619,7 +619,7 @@ REST / webhook API for triggering workflows from CI/CD pipelines (GitHub Actions
 - n8n.io — Medium/n8n comparison vs Make 2026, 2026
 
 **Competitive data — July 2026 revision of § 3:**
-- Habr #1063558 — "Армия в терминале" ("Army in the terminal"), six-layer infrastructure retrospective, Jul 2026 — the survey that triggered this revision
+- Habr #1063558 — "Army in the terminal" (Russian-language post), six-layer infrastructure retrospective, Jul 2026 — the survey that triggered this revision
 - Databricks Blog — "Introducing Omnigent: A Meta-Harness to Combine, Control and Share Your Agents", 13 Jun 2026
 - MarkTechPost — Databricks open-sources Omnigent (agent coverage, Apache-2.0), 13 Jun 2026
 - openhands.dev/blog — "Controlling any Coding Agent with the OpenHands Agent Canvas and SDK" (ACP, cloud backend, auth injection), 18 Jun 2026

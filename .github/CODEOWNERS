@@ -5,33 +5,33 @@
 # Docs: https://docs.github.com/articles/about-code-owners
 #
 # TODO (maintainers): replace the placeholder team/handles below with real
-# GitHub usernames or a @palad-ai/<team> team, then keep this in sync with the
+# GitHub usernames or a @AixleHQ/<team> team, then keep this in sync with the
 # maintainer list in GOVERNANCE.md.
 
 # Default owners for everything in the repo
-*                               @palad-ai/maintainers
+*                               @AixleHQ/maintainers
 
 # Backend (Rails)
-/app/                           @palad-ai/maintainers
-/app/policies/                  @palad-ai/maintainers
-/app/state_machines/            @palad-ai/maintainers
-/app/services/                  @palad-ai/maintainers
-/config/                        @palad-ai/maintainers
-/db/                            @palad-ai/maintainers
-/test/                          @palad-ai/maintainers
+/app/                           @AixleHQ/maintainers
+/app/policies/                  @AixleHQ/maintainers
+/app/state_machines/            @AixleHQ/maintainers
+/app/services/                  @AixleHQ/maintainers
+/config/                        @AixleHQ/maintainers
+/db/                            @AixleHQ/maintainers
+/test/                          @AixleHQ/maintainers
 
 # Frontend (React / Inertia / Mantine)
-/app/frontend/                  @palad-ai/maintainers
+/app/frontend/                  @AixleHQ/maintainers
 
 # Container runtimes & agent images
-/docker/                        @palad-ai/maintainers
-/kube/                          @palad-ai/maintainers
+/docker/                        @AixleHQ/maintainers
+/kube/                          @AixleHQ/maintainers
 
 # Docs, community health, and project meta
-/docs/                          @palad-ai/maintainers
-/README.md                      @palad-ai/maintainers
-/ROADMAP.md                     @palad-ai/maintainers
-/ARCHITECTURE.md                @palad-ai/maintainers
-/GOVERNANCE.md                  @palad-ai/maintainers
-/SECURITY.md                    @palad-ai/maintainers
-/.github/                       @palad-ai/maintainers
+/docs/                          @AixleHQ/maintainers
+/README.md                      @AixleHQ/maintainers
+/ROADMAP.md                     @AixleHQ/maintainers
+/ARCHITECTURE.md                @AixleHQ/maintainers
+/GOVERNANCE.md                  @AixleHQ/maintainers
+/SECURITY.md                    @AixleHQ/maintainers
+/.github/                       @AixleHQ/maintainers

@@ -4,7 +4,7 @@
 > This file is the source of truth. The
 > [GitHub Projects board][board] mirrors it for live status tracking.
 
-[board]: https://github.com/orgs/palad-ai/projects/1
+[board]: https://github.com/orgs/AixleHQ/projects/1
 
 **Legend:** ✅ shipped · 🟡 in progress · ⬜ planned · 💡 exploring
 
@@ -21,12 +21,12 @@ in place.
 
 | Status | Item                                              | Issue |
 | :----: | ------------------------------------------------- | ----- |
-| ✅     | Apache 2.0 LICENSE + NOTICE + CLA/DCO contributor model | [#167](https://github.com/palad-ai/palad-app/issues/167) |
-| ✅     | Public README with 30-second hook                 | [#167](https://github.com/palad-ai/palad-app/issues/167) |
-| ✅     | Tiered docs (Quickstart / User Guide / Reference) | [#167](https://github.com/palad-ai/palad-app/issues/167) |
-| ✅     | Public roadmap (this file)                        | [#167](https://github.com/palad-ai/palad-app/issues/167) |
-| ✅     | Demo GIF / screenshot in README                   | [#177](https://github.com/palad-ai/palad-app/issues/177) |
-| ⬜     | FAQ — drafted from first 2–4 weeks of user questions | [#178](https://github.com/palad-ai/palad-app/issues/178) |
+| ✅     | Apache 2.0 LICENSE + NOTICE + CLA/DCO contributor model | [#167](https://github.com/AixleHQ/flow/issues/167) |
+| ✅     | Public README with 30-second hook                 | [#167](https://github.com/AixleHQ/flow/issues/167) |
+| ✅     | Tiered docs (Quickstart / User Guide / Reference) | [#167](https://github.com/AixleHQ/flow/issues/167) |
+| ✅     | Public roadmap (this file)                        | [#167](https://github.com/AixleHQ/flow/issues/167) |
+| ✅     | Demo GIF / screenshot in README                   | [#177](https://github.com/AixleHQ/flow/issues/177) |
+| ⬜     | FAQ — drafted from first 2–4 weeks of user questions | [#178](https://github.com/AixleHQ/flow/issues/178) |
 | ⬜     | `SECURITY.md` with private vulnerability reporting | — |
 | ⬜     | `CODE_OF_CONDUCT.md` (Contributor Covenant)        | — |
 | ⬜     | Issue & PR templates + `CODEOWNERS`                | — |
@@ -86,7 +86,7 @@ Direction-setting items. Specifics will firm up as v0.2 ships.
 - **Comment on existing issues** if you'd like to see one prioritized.
 - Look for [`good first issue`][gfi] if you want to contribute code.
 
-[gfi]: https://github.com/palad-ai/palad-app/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+[gfi]: https://github.com/AixleHQ/flow/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
 
 The roadmap is **directional, not contractual** — we change it as we
 learn. Significant scope changes are announced in repository releases.

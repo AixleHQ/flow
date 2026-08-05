@@ -4,8 +4,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: 💬 Questions & discussion
-    url: https://github.com/palad-ai/palad-app/discussions
+    url: https://github.com/AixleHQ/flow/discussions
     about: Ask questions, share ideas, and discuss usage in GitHub Discussions.
   - name: 🔒 Report a security vulnerability
-    url: https://github.com/palad-ai/palad-app/security/policy
+    url: https://github.com/AixleHQ/flow/security/policy
     about: Please report security issues privately — never as a public issue.

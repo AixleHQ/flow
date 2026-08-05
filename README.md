@@ -40,7 +40,7 @@ It is the only open platform we know of that combines:
 Three commands to a working app on `http://localhost:4000`.
 
 ```bash
-git clone https://github.com/palad-ai/palad-app.git && cd palad-app
+git clone https://github.com/AixleHQ/flow.git && cd flow
 cp .env.example .env.development   # fill in OAuth secrets if you want SSO
 make setup                          # builds containers, installs deps, seeds DB
 ```
@@ -77,7 +77,7 @@ What's planned and what's in flight — see [ROADMAP.md](ROADMAP.md).
 Issues tagged [`good first issue`][gfi] are a good place to start
 contributing.
 
-[gfi]: https://github.com/palad-ai/palad-app/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+[gfi]: https://github.com/AixleHQ/flow/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
 
 ## Tech Stack
 

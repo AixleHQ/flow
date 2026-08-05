@@ -29,7 +29,7 @@ problems.** Public disclosure before a fix puts every user at risk.
 Report privately through one of these channels:
 
 1. **GitHub Private Vulnerability Reporting (preferred)** — go to the
-   [**Security** tab](https://github.com/palad-ai/palad-app/security) of this
+   [**Security** tab](https://github.com/AixleHQ/flow/security) of this
    repository and click **"Report a vulnerability"**. This opens a private
    advisory visible only to maintainers.
 2. **Email** — `security@aixle.com`.
