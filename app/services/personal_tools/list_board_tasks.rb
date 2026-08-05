@@ -28,7 +28,7 @@ module PersonalTools
       rows = tasks.limit(LIMIT).map do |t|
         { id: t.id, title: t.title, task_type: t.task_type, priority: t.priority,
           column: t.board_column&.name, column_id: t.board_column_id,
-          assignee: t.assignee&.name, tags: t.tags }
+          assignee: t.assignee&.name, assignee_id: t.assignee_id, tags: t.tags }
       end
       payload = { project_id: project.id, tasks: rows }
       payload[:truncated] = true if tasks.count > LIMIT
