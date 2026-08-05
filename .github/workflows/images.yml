@@ -1,0 +1,219 @@
+name: Build Images
+
+# Publishes every runtime image to GHCR, which is free and unmetered for public
+# repositories. Deployments consume these published tags; nothing here touches a
+# cloud account, so forks and external contributors can read the whole pipeline.
+
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  # GHCR rejects uppercase path segments, so the owner is written out in
+  # lowercase rather than interpolated from github.repository.
+  REGISTRY_PREFIX: ghcr.io/aixlehq
+
+jobs:
+  web:
+    name: Build Web
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY_PREFIX }}/flow-web
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=
+            type=semver,pattern={{version}}
+
+      - name: Build And Push Web Image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+            AUTHOR_NAME=github-actions
+            AUTHOR_EMAIL=github-actions@users.noreply.github.com
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  otlp-ingest:
+    name: Build OTLP Ingest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY_PREFIX }}/flow-otlp-ingest
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=
+            type=semver,pattern={{version}}
+
+      - name: Build And Push OTLP Ingest Image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./docker/otlp-ingest
+          file: ./docker/otlp-ingest/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  agent-base:
+    name: Build Agent Base
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compute Short SHA
+        id: vars
+        run: echo "short_sha=$(echo ${GITHUB_SHA} | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY_PREFIX }}/flow-agent-base-core
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=
+            type=semver,pattern={{version}}
+
+      - name: Build And Push Agent Base Core Image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./docker/base
+          file: ./docker/base/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  agent-images:
+    name: Build ${{ matrix.image_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: agent-base
+    strategy:
+      matrix:
+        include:
+          - image_name: Claude Code
+            image_suffix: claude-code
+            dockerfile: ./docker/claude-code/Dockerfile
+          - image_name: Cursor CLI
+            image_suffix: cursor-cli
+            dockerfile: ./docker/cursor-cli/Dockerfile
+          - image_name: Codex
+            image_suffix: codex
+            dockerfile: ./docker/codex/Dockerfile
+          - image_name: Gemini CLI
+            image_suffix: gemini-cli
+            dockerfile: ./docker/gemini-cli/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image_suffix }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=
+            type=semver,pattern={{version}}
+
+      - name: Build And Push Image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./docker
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            BASE_IMAGE=${{ env.REGISTRY_PREFIX }}/flow-agent-base-core:${{ needs.agent-base.outputs.short_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

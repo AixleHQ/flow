@@ -6,29 +6,20 @@ on:
       command:
         required: true
         type: string
-      runner:
-        required: false
-        type: string
-        default: ""
       needs-db:
         required: false
         type: boolean
         default: false
       run-coverage:
-        # Coverage gate decision (task #288), forwarded from the deploy workflow's
-        # "Prepare Config" job into the container as RUN_COVERAGE. "1" = run coverage,
-        # "0" = skip. Empty (the default) leaves it to the Makefile, which defaults to on.
+        # Coverage gate: "1" = run coverage, "0" = skip. Empty (the default)
+        # leaves it to the Makefile, which defaults to on.
         required: false
         type: string
         default: ""
       timeout:
         required: false
         type: number
-        default: 10
-      image-tag:
-        required: false
-        type: string
-        default: ""
+        default: 30
       artifact-path:
         required: false
         type: string
@@ -40,45 +31,48 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
-  AWS_REGION: us-east-1
-  ECR_REGISTRY: 541894707537.dkr.ecr.us-east-1.amazonaws.com
-  ECR_ROLE_ARN: arn:aws:iam::541894707537:role/aixle-staging-gha-runner-image-push-role
   COMPOSE_FILE: docker-compose.ci.yml
-  IMAGE: 541894707537.dkr.ecr.us-east-1.amazonaws.com/aixle-app-web
 
 jobs:
   check:
     name: Run
-    runs-on: ${{ inputs.runner != '' && inputs.runner || vars.CI_RUNNER || 'ubuntu-latest' }}
+    # Deliberately pinned to GitHub-hosted runners. This repository is public,
+    # so a self-hosted runner would execute arbitrary fork-PR code inside our
+    # network. Public repositories also get unmetered standard-runner minutes.
+    runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout }}
     env:
       RAILS_ENV: test
     steps:
       - uses: actions/checkout@v7
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v6
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
         with:
-          role-to-assume: ${{ env.ECR_ROLE_ARN }}
-          role-session-name: aixle-app-code-check
-          aws-region: ${{ env.AWS_REGION }}
+          # Pull docker.io base images through Google's mirror to avoid Docker
+          # Hub's anonymous pull rate limit on CI runners (shared egress IPs).
+          # FROM lines stay on docker.io, so Dependabot keeps tracking them.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Pull image
-        run: |
-          IMAGE_TAG="${{ inputs.image-tag }}"
-
-          if [ -z "$IMAGE_TAG" ]; then
-            IMAGE_TAG="$(echo "$GITHUB_SHA" | cut -c1-7)"
-          fi
-
-          docker pull "${IMAGE}:${IMAGE_TAG}"
-          docker tag  "${IMAGE}:${IMAGE_TAG}" web
+      - name: Build test image
+        # Built here rather than pulled from a registry: the image must be
+        # available to fork pull requests, which get no registry credentials.
+        # The layer cache is shared with the other check job through type=gha.
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: web
+          build-args: |
+            APP_VERSION=ci
+            AUTHOR_NAME=github-actions
+            AUTHOR_EMAIL=github-actions@users.noreply.github.com
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Start database
         if: ${{ inputs.needs-db }}

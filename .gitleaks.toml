@@ -1,0 +1,39 @@
+# gitleaks configuration for the CI secret scan (see .github/workflows/ci.yml).
+#
+# The default rule set is kept in full — this file only records the known
+# false positives, so a new finding means a real one. Every entry below was
+# inspected by hand: placeholders in example env files, deliberately fake test
+# fixtures, vendored documentation and content checksums.
+#
+# Never add a path here to silence a real credential. Rotate it, remove it from
+# the tree, and treat the history as compromised.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Example env file: every value is a documented placeholder"
+paths = ['''^\.env\.example$''']
+
+[[allowlists]]
+description = "Vendored tooling manifests and knowledge bases (content checksums, doc samples)"
+paths = [
+  '''^_bmad/''',
+  '''^ai/BMAD-METHOD/''',
+  '''^\.cursor/''',
+]
+
+[[allowlists]]
+description = "Test fixtures: fake API keys, fake OAuth tokens and unsigned JWTs"
+paths = [
+  '''^test/''',
+  '''.*\.test\.tsx$''',
+  '''.*\.test\.ts$''',
+]
+
+[[allowlists]]
+description = "Documentation showing Authorization header shapes, not real tokens"
+paths = [
+  '''^app/frontend/pages/Docs/data/''',
+  '''^docs/''',
+]

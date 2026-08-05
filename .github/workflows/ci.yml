@@ -1,0 +1,59 @@
+name: CI
+
+# Replaces the deployment pipeline that used to carry these checks. Deployment
+# lives outside this repository: images are published to GHCR by images.yml and
+# rolled out from a separate operations repository.
+
+on:
+  push:
+    branches:
+      - develop
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  be-checks:
+    name: Backend Checks
+    uses: ./.github/workflows/code-check.yml
+    with:
+      # rails-test + rubocop + brakeman (Ruby). Needs the DB for the Rails test suite.
+      command: be_check_all
+      needs-db: true
+      # Coverage instrumentation is a large runtime multiplier, so it runs on the
+      # integration branches and is skipped on ordinary pull requests.
+      run-coverage: ${{ github.event_name == 'push' && '1' || '0' }}
+      timeout: 35
+
+  fe-checks:
+    name: Frontend Checks
+    uses: ./.github/workflows/code-check.yml
+    with:
+      # eslint + tsc, then Vitest on its own (backendless, no DB needed).
+      command: fe_check_all
+      needs-db: false
+      run-coverage: ${{ github.event_name == 'push' && '1' || '0' }}
+      timeout: 30
+
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # gitleaks scans commit history, which needs more than the default
+          # single-commit checkout.
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"
+          GITLEAKS_ENABLE_SUMMARY: "true"

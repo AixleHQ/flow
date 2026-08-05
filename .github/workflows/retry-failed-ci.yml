@@ -36,8 +36,8 @@ name: Retry failed CI
 on:
   workflow_run:
     workflows:
-      - Deploy aixle domains
-      - Build Extra Images
+      - CI
+      - Build Images
     types:
       - completed
 
