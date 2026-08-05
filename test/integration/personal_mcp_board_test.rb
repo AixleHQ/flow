@@ -45,9 +45,13 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_empty filtered
   end
 
-  test "get_board_task returns full detail" do
+  test "get_board_task returns full detail with snake_case keys" do
     task = payload(call_tool("get_board_task", { project_id: @project.id, task_id: @task.id }))
     assert_equal "First task", task["title"]
+    # The resource camelizes for the frontend; a tool payload must not.
+    assert_equal @todo.id, task["board_column_id"]
+    assert task.key?("comments_count")
+    assert_empty task.keys.grep(/[A-Z]/)
   end
 
   test "create_board_task creates a task in the target column" do
@@ -74,9 +78,8 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_not tool_error?(assigned)
     assert_equal member.id, @task.reload.assignee_id
     assert_equal member.id, payload(assigned)["assignee_id"]
-    # get_board_task serializes through BoardTaskResource, whose keys are camelCase.
-    assert_equal member.id, payload(call_tool("get_board_task",
-                                             { project_id: @project.id, task_id: @task.id }))["assigneeId"]
+    detail = payload(call_tool("get_board_task", { project_id: @project.id, task_id: @task.id }))
+    assert_equal member.id, detail["assignee_id"]
 
     cleared = call_tool("update_board_task",
                         { project_id: @project.id, task_id: @task.id, unassign: true })

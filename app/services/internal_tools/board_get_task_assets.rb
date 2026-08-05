@@ -34,7 +34,7 @@ module InternalTools
       assets = task.task_assets.includes(:author).order(created_at: :desc)
       assets = assets.with_tag(params[:tag]) if params[:tag].present?
 
-      result = assets.map { |a| TaskAssetResource.new(a).to_h }
+      result = assets.map { |a| TaskAssetResource.new(a, params: { snake_keys: true }).to_h }
       success(result.to_json)
     end
   end

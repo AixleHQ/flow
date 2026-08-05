@@ -32,7 +32,7 @@ module InternalTools
                   .find_by(id: task_id)
       return error("Task not found on this board") unless task
 
-      success(BoardTaskResource.new(task).to_h.to_json)
+      success(BoardTaskResource.new(task, params: { snake_keys: true }).to_h.to_json)
     end
   end
 end

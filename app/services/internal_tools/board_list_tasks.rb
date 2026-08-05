@@ -49,7 +49,7 @@ module InternalTools
       tasks = tasks.where(task_type: params[:task_type]) if params[:task_type].present?
       tasks = tasks.where(assignee_id: params[:assignee_id]) if params[:assignee_id].present?
 
-      result = tasks.map { |t| BoardTaskResource.new(t).to_h }
+      result = tasks.map { |t| BoardTaskResource.new(t, params: { snake_keys: true }).to_h }
       success(result.to_json)
     end
   end
