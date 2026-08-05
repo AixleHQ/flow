@@ -37,6 +37,27 @@ the project level) and paste a token with `api` scope.
 - Webhook endpoint: `https://<your-host>/webhooks/gitlab`, verified with
   a per-repository secret.
 
+### Public repositories (no integration)
+
+A project can also attach any **public** github.com or gitlab.com
+repository — nobody has to install the App on it. Under **Project →
+Repositories → Add Repository**, switch to **Public repository** and
+paste the url.
+
+Aixle Flow verifies the repository exists and is public, then clones it
+into sessions **without any credentials**. That means:
+
+- read-only — agents can read the code, but cannot push or open PRs, and
+  tools taking a `repository_id` refuse these repositories;
+- no CI events — checks and pipeline gates only work for repositories
+  reached through an integration;
+- optional: set `GITHUB_PUBLIC_READ_TOKEN` (any token, no scopes needed)
+  to lift the anonymous api.github.com limit of 60 requests/hour that
+  the verification step shares with the skills catalog.
+
+To let an agent write to a public repository, fork it into an
+organisation where the App is installed and connect the fork instead.
+
 ### Linear
 
 Linear is supported as an issue-tracker integration (connected under

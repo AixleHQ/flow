@@ -61,6 +61,10 @@ module Github
       assert_equal "octocat", integration.name
       assert_equal "User", integration.settings["account_type"]
       assert_equal "User", integration.settings["target_type"]
+      # Recorded separately from the display name: Repository checks every
+      # attached repo's owner against it, because a clone token is scoped by
+      # repo NAME within this account.
+      assert_equal "octocat", integration.reload.github_account_login
     end
 
     test "scoping: project-scoped integration is persisted with the project" do

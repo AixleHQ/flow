@@ -37,8 +37,10 @@ describe('typed factories', () => {
   });
 
   it('buildRepository nests a full Integration and applies overrides', () => {
-    expect(buildRepository().integration.provider).toBe('github');
+    expect(buildRepository().integration?.provider).toBe('github');
     expect(buildRepository({ sourceBranch: 'develop' }).sourceBranch).toBe('develop');
+    // Public repositories carry no integration at all.
+    expect(buildRepository({ integration: null, publicSource: true }).integration).toBeNull();
   });
 
   it('buildBoard applies overrides', () => {

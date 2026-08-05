@@ -34,7 +34,17 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
   end
 
   def create
-    repo = Repository.new(create_params.merge(scope: current_project))
+    repo =
+      if public_params[:public_url].present?
+        begin
+          build_public_repository
+        rescue PublicRepositoryService::Error => e
+          return redirect_to company_project_repositories_path(current_project),
+                             inertia: { errors: { public_url: e.message } }
+        end
+      else
+        Repository.new(create_params.merge(scope: current_project))
+      end
 
     if repo.save
       redirect_to company_project_repositories_path(current_project), notice: "Repository added"
@@ -61,8 +71,27 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
 
   private
 
+  # A public repository is verified against the host's public API before it is
+  # attached: it must exist and be public, or an anonymous clone would fail
+  # inside the session with nothing to explain it. The clone url comes from the
+  # resolver, never from the request.
+  def build_public_repository
+    resolved = PublicRepositoryService.resolve(public_params[:public_url])
+    attributes = resolved.to_repository_attributes
+    attributes[:source_branch] = public_params[:source_branch] if public_params[:source_branch].present?
+
+    Repository.new(attributes.merge(scope: current_project, purpose: public_params[:purpose]))
+  end
+
+  # clone_url is derived (from the integration's provider, or from the resolver)
+  # and never accepted from the client: it reaches a `git clone` command line in
+  # the session container.
   def create_params
-    params.require(:repository).permit(:full_name, :clone_url, :source_branch, :integration_id, :description, :purpose, :is_private)
+    params.require(:repository).permit(:full_name, :source_branch, :integration_id, :description, :purpose, :is_private)
+  end
+
+  def public_params
+    params.require(:repository).permit(:public_url, :source_branch, :purpose)
   end
 
   def update_params

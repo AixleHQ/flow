@@ -72,6 +72,80 @@ class RepositoryTest < ActiveSupport::TestCase
     assert { !repo.valid? }
   end
 
+  test "integration must be a code host" do
+    linear = create(:integration, :linear, company: @company, connected_by: @user)
+    repo = build(:repository, scope: @project, integration: linear)
+
+    assert { !repo.valid? }
+    assert { repo.errors[:integration].present? }
+  end
+
+  test "github repository owner must match the installation account when it is known" do
+    @integration.update!(settings: { "account_login" => "acme" })
+
+    mismatched = build(:repository, full_name: "other-org/app", scope: @project, integration: @integration)
+    assert { !mismatched.valid? }
+    assert_match(/acme/, mismatched.errors[:full_name].to_sentence)
+
+    matching = build(:repository, full_name: "ACME/app", scope: @project, integration: @integration)
+    assert { matching.valid? }
+  end
+
+  test "owner is not checked against installations that never recorded an account" do
+    repo = build(:repository, full_name: "any-org/app", scope: @project, integration: @integration)
+    assert { repo.valid? }
+  end
+
+  # ====== Public sources ======
+
+  test "public repository is valid without an integration" do
+    repo = build(:repository, :public_source, full_name: "rails/rails",
+                 clone_url: "https://github.com/rails/rails.git", scope: @project)
+
+    assert repo.valid?, repo.errors.full_messages.to_sentence
+    assert repo.public_source?
+    assert_equal "github", repo.provider
+  end
+
+  test "public repository is forced to non-private" do
+    repo = create(:repository, :public_source, full_name: "rails/rails", is_private: true,
+                  clone_url: "https://github.com/rails/rails.git", scope: @project)
+
+    assert_equal false, repo.is_private # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "public clone_url must be the anonymous https url of full_name on an allowlisted host" do
+    [
+      "https://evil.com/rails/rails.git",
+      "http://github.com/rails/rails.git",
+      "https://user:token@github.com/rails/rails.git",
+      "https://github.com/other/repo.git",
+      "https://github.com/rails/rails.git?x=1",
+      "https://github.com:8443/rails/rails.git"
+    ].each do |clone_url|
+      repo = build(:repository, :public_source, full_name: "rails/rails", clone_url: clone_url, scope: @project)
+
+      assert { !repo.valid? }
+      assert repo.errors[:clone_url].present?, "expected #{clone_url} to be rejected"
+    end
+  end
+
+  test "public gitlab repository derives its provider from the clone host" do
+    repo = build(:repository, :public_source, full_name: "group/sub/app",
+                 clone_url: "https://gitlab.com/group/sub/app.git", scope: @project)
+
+    assert repo.valid?, repo.errors.full_messages.to_sentence
+    assert_equal "gitlab", repo.provider
+  end
+
+  test "public_sources scope returns only integration-less repositories" do
+    create(:repository, full_name: "org/app", scope: @project, integration: @integration)
+    public_repo = create(:repository, :public_source, full_name: "rails/rails",
+                         clone_url: "https://github.com/rails/rails.git", scope: @project)
+
+    assert_equal [ public_repo.id ], Repository.public_sources.pluck(:id)
+  end
+
   # ====== Scopes ======
 
   test "for_project scope" do

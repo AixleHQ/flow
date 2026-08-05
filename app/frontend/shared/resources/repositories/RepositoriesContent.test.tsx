@@ -22,6 +22,19 @@ const makeRepo = (overrides: Partial<Repository> = {}): Repository => ({
 });
 
 describe('RepositoriesContent', () => {
+  it('marks a public repository as read-only and survives its missing integration', () => {
+    renderPage(
+      <RepositoriesContent
+        title="Code Repositories"
+        basePath="/projects/1/repositories"
+        repositories={[makeRepo({ fullName: 'rails/rails', integration: null, publicSource: true })]}
+      />,
+    );
+
+    expect(screen.getByText('rails/rails')).toBeInTheDocument();
+    expect(screen.getByText('public read-only')).toBeInTheDocument();
+  });
+
   it('renders the title and a row per seeded repository', () => {
     renderPage(
       <RepositoriesContent

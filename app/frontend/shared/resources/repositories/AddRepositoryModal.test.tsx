@@ -353,6 +353,64 @@ describe('AddRepositoryModal', () => {
     );
   });
 
+  it('swaps the integration pickers for a url field in public mode', async () => {
+    renderPage(
+      <AddRepositoryModal
+        opened
+        onClose={vi.fn()}
+        basePath="/projects/1/repositories"
+        existingRepoNames={new Set<string>()}
+      />,
+      { props: { integrations: [integration] } },
+    );
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Public repository' }));
+
+    expect(screen.getByRole('textbox', { name: /repository url/i })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: /^branch/i })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /integration/i })).not.toBeInTheDocument();
+  });
+
+  it('submits a public repository as a url, leaving the branch to the backend', async () => {
+    renderPage(
+      <AddRepositoryModal
+        opened
+        onClose={vi.fn()}
+        basePath="/projects/1/repositories"
+        existingRepoNames={new Set<string>()}
+      />,
+      { props: { integrations: [] } },
+    );
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Public repository' }));
+    await userEvent.type(screen.getByRole('textbox', { name: /repository url/i }), 'https://github.com/rails/rails');
+    await userEvent.click(screen.getByRole('button', { name: 'Add Repository' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/projects/1/repositories',
+      { repository: { publicUrl: 'https://github.com/rails/rails', sourceBranch: '', purpose: '' } },
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('does not submit a public repository without a url', async () => {
+    renderPage(
+      <AddRepositoryModal
+        opened
+        onClose={vi.fn()}
+        basePath="/projects/1/repositories"
+        existingRepoNames={new Set<string>()}
+      />,
+      { props: { integrations: [] } },
+    );
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Public repository' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add Repository' }));
+
+    expect(await screen.findByText('Repository URL is required')).toBeInTheDocument();
+    expect(router.post).not.toHaveBeenCalled();
+  });
+
   it('shows the submit button enabled and labeled before any submission', () => {
     renderPage(
       <AddRepositoryModal

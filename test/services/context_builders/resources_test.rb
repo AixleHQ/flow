@@ -67,8 +67,21 @@ class ContextBuilders::ResourcesTest < ActiveSupport::TestCase
     content = section.content
 
     assert_includes content, "## Available Repositories"
-    assert_includes content, "| #{repo.id} | acme/api | /workspace/repo/api | develop | Backend API |"
+    assert_includes content, "| #{repo.id} | acme/api | /workspace/repo/api | develop | integration | Backend API |"
     assert_includes content, "Use the repository **ID**"
+  end
+
+  test "build marks public repositories as read-only and says why" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+      mode: "interactive")
+    repo = create(:repository, :public_source, scope: @project, full_name: "rails/rails",
+      clone_url: "https://github.com/rails/rails.git", source_branch: "main", purpose: "Reference")
+    session.repositories << repo
+
+    content = ContextBuilders::Resources.new(session.reload).build.first.content
+
+    assert_includes content, "| #{repo.id} | rails/rails | /workspace/repo/rails | main | public, read-only | Reference |"
+    assert_includes content, "cloned anonymously"
   end
 
   test "build shows an em dash for repositories without a purpose" do
@@ -79,7 +92,7 @@ class ContextBuilders::ResourcesTest < ActiveSupport::TestCase
 
     content = ContextBuilders::Resources.new(session.reload).build.first.content
 
-    assert_includes content, "| acme/web | /workspace/repo/web | main | — |"
+    assert_includes content, "| acme/web | /workspace/repo/web | main | integration | — |"
   end
 
   test "build omits repositories recorded as failed in session metadata" do
