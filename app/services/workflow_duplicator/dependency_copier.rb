@@ -122,7 +122,7 @@ class WorkflowDuplicator
         scope: @project,
         name: skill.name, title: skill.title, description: skill.description,
         package: skill.package, source: skill.source, source_url: skill.source_url,
-        content: skill.content, references_data: skill.references_data, install_count: 0
+        content: skill.content, install_count: 0
       ).id
     end
 

@@ -18,8 +18,14 @@ class AddRelayStateToTriggerEvents < ActiveRecord::Migration[8.0]
 
     # The relay sweep only ever scans not-yet-done rows; a partial index keeps it
     # cheap as the (mostly-dispatched) event log grows.
+    #
+    # Spelled out as `= ANY (ARRAY[...])` with the casts Postgres itself applies,
+    # rather than the `IN (...)` this was originally written as: the two are the
+    # same predicate, but Postgres prints them differently, so the `IN` form made
+    # the dump of a migrated database differ from the dump of a schema-loaded one
+    # (see SchemaParityTest). This form survives the dump/load round trip.
     add_index :trigger_events, [ :relay_state, :created_at ],
-      where: "relay_state IN ('pending', 'dispatching')",
+      where: "(relay_state)::text = ANY (ARRAY[('pending'::character varying)::text, ('dispatching'::character varying)::text])",
       name: "index_trigger_events_pending_relay"
   end
 end

@@ -141,11 +141,15 @@ class ConsolidatedMigration < ActiveRecord::Migration[8.0]
 
   private
 
+  # The action_mcp gem is gone (see DropActionMCPTables), so its
+  # ApplicationRecord no longer resolves. It pointed at this same database, so
+  # the migration's own connection answers identically — and replaying the
+  # migrations from scratch stops raising NameError halfway through.
   def table_exists?(table_name)
-    ActionMCP::ApplicationRecord.connection.table_exists?(table_name)
+    connection.table_exists?(table_name)
   end
 
   def column_exists?(table_name, column_name)
-    ActionMCP::ApplicationRecord.connection.column_exists?(table_name, column_name)
+    connection.column_exists?(table_name, column_name)
   end
 end
