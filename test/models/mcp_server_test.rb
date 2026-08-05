@@ -410,4 +410,34 @@ class MCPServerTest < ActiveSupport::TestCase
     server.valid?
     assert_empty server.errors[:url]
   end
+
+  # The two shapes a stdio launch line arrives in. A catalog install fills `args`
+  # (MCP::ConnectorAttributes); the install form fills only `command`.
+  test "launch_args takes the stored args of a catalog install" do
+    server = MCPServer.new(
+      name: "remote-fs", kind: "custom", scope: @project, transport: "stdio",
+      command: "npx", args: [ "-y", "remote-filesystem-mcp-server@0.1.2" ]
+    )
+
+    assert_equal "npx", server.command_executable
+    assert_equal [ "-y", "remote-filesystem-mcp-server@0.1.2" ], server.launch_args
+  end
+
+  test "launch_args splits the command line of a hand-written server" do
+    server = MCPServer.new(
+      name: "playwright", kind: "custom", scope: @project, transport: "stdio",
+      command: "npx @playwright/mcp --headless"
+    )
+
+    assert_equal "npx", server.command_executable
+    assert_equal [ "@playwright/mcp", "--headless" ], server.launch_args
+  end
+
+  test "launch_args is empty for a bare command with no arguments" do
+    server = MCPServer.new(
+      name: "bare", kind: "custom", scope: @project, transport: "stdio", command: "my-mcp"
+    )
+
+    assert_empty server.launch_args
+  end
 end

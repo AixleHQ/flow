@@ -88,6 +88,21 @@ class MCPServer < ApplicationRecord
     parsed_command.drop(1)
   end
 
+  # The argv to launch with, whichever way the server was authored.
+  #
+  # A catalog install stores the executable alone in `command` and the rest in
+  # `args` (MCP::ConnectorAttributes), because the registry manifest describes the
+  # two separately and the launched spec must stay version-pinned exactly as it was
+  # rendered. A hand-written server has no `args` — the install form takes one
+  # free-form line — so its argv comes from splitting `command`.
+  #
+  # Everything downstream must go through here rather than picking one shape:
+  # reading only `command` drops a catalog install's package spec (leaving a bare
+  # `npx`), and reading only `args` drops a hand-written server's arguments.
+  def launch_args
+    Array(args).presence&.map(&:to_s) || command_args
+  end
+
   # ----- Connector catalog provenance -----
   # Null for hand-authored servers; set when installed from the public catalog.
 
