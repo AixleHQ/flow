@@ -498,22 +498,50 @@ class SessionContextService
       adapter = adapter_for(session)
       uid = adapter.container_uid
 
-      repos.group_by(&:integration_id).each do |_integration_id, group_repos|
+      repos.group_by(&:integration_id).each do |integration_id, group_repos|
+        # Public repositories carry no integration: they are cloned anonymously,
+        # so there is no token to mint and nothing to share across the group.
+        if integration_id.nil?
+          group_repos.each { |repo| clone_repository(container_id, repo, nil, nil, uid, session) }
+          next
+        end
+
         integration = group_repos.first.integration
         unless integration&.active?
           group_repos.each { |r| record_failed_repo(session, r, "Integration not active") }
           next
         end
 
-        begin
-          token = generate_clone_token(integration, group_repos)
+        token = begin
+          generate_clone_token(integration, group_repos)
         rescue => e
-          Rails.logger.error("[SessionContext] Failed to generate token for integration #{integration.id}: #{e.message}")
-          group_repos.each { |r| record_failed_repo(session, r, "Token generation failed: #{e.message}") }
+          Rails.logger.warn("[SessionContext] Group token failed for integration #{integration.id}: #{e.message}")
+          nil
+        end
+
+        if token
+          group_repos.each { |repo| clone_repository(container_id, repo, integration, token, uid, session) }
+        else
+          clone_with_per_repo_tokens(container_id, group_repos, integration, uid, session)
+        end
+      end
+    end
+
+    # One repository the installation cannot reach (attached before the App lost
+    # access to it, say) fails the WHOLE group's token — GitHub rejects the
+    # `repositories:` list wholesale with a 422. Falling back to a token per
+    # repository keeps the failure with the repository that caused it.
+    def clone_with_per_repo_tokens(container_id, group_repos, integration, uid, session)
+      group_repos.each do |repo|
+        token = begin
+          generate_clone_token(integration, [ repo ])
+        rescue => e
+          Rails.logger.error("[SessionContext] Failed to generate token for #{repo.full_name}: #{e.message}")
+          record_failed_repo(session, repo, "Token generation failed: #{e.message}")
           next
         end
 
-        group_repos.each { |repo| clone_repository(container_id, repo, integration, token, uid, session) }
+        clone_repository(container_id, repo, integration, token, uid, session)
       end
     end
 
@@ -558,14 +586,19 @@ class SessionContextService
       runtime.exec(container_id, cmd)
     end
 
+    # Public repositories clone with no credentials at all. Their clone_url is
+    # validated by Repository to be the anonymous https url of full_name on an
+    # allowlisted host, which is what makes it safe to interpolate here.
     def build_clone_url(repo, integration, token)
+      return Shellwords.escape(repo.clone_url) if integration.nil?
+
       case integration.provider.to_s
       when "github"
         "https://x-access-token:#{token}@github.com/#{repo.full_name}.git"
       when "gitlab"
         "https://oauth2:#{token}@gitlab.com/#{repo.full_name}.git"
       else
-        repo.clone_url
+        Shellwords.escape(repo.clone_url)
       end
     end
 

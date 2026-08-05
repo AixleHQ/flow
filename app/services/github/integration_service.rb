@@ -24,6 +24,10 @@ module Github
         info = Github::TokenService.new(integration).verify_installation
         integration.name = info[:account_login]
         integration.settings = {
+          # Kept separately from `name`, which is a display label: Repository
+          # checks the owner of every attached repo against this login, because
+          # a clone token is scoped by repo NAME within this account.
+          account_login: info[:account_login],
           account_type: info[:account_type],
           target_type: info[:target_type]
         }

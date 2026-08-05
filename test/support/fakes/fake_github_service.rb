@@ -36,19 +36,30 @@ module FakeGithub
     # @param verify_error [Exception, nil] raised by #verify_installation when set
     #   (use the real Github::TokenService::AuthenticationError to exercise
     #   caller rescue branches)
+    # @param unreachable [Array<String>] repo NAMES the installation cannot reach.
+    #   Requesting any of them fails the whole call, which is what GitHub does:
+    #   a `repositories:` list containing one repository outside the installation
+    #   is rejected wholesale with a 422, not trimmed.
     def initialize(integration = nil, token: DEFAULT_TOKEN, installation: DEFAULT_INSTALLATION,
-                   token_error: nil, verify_error: nil)
+                   token_error: nil, verify_error: nil, unreachable: [])
       @integration = integration
       @token = token
       @installation = installation.dup
       @token_error = token_error
       @verify_error = verify_error
+      @unreachable = unreachable.dup
       @calls = []
     end
 
     def generate_installation_token(repositories: [])
       @calls << { method: :generate_installation_token, repositories: repositories }
       raise @token_error if @token_error
+
+      if (repositories & @unreachable).any?
+        raise Github::TokenService::AuthenticationError,
+              "Failed to generate installation token: POST https://api.github.com/app/installations/1/access_tokens: " \
+              "422 - There is at least one repository that does not exist or is not accessible to the parent installation"
+      end
 
       @token
     end

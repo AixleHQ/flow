@@ -62,6 +62,13 @@ class Integration < ApplicationRecord
     credentials_data["installation_id"]
   end
 
+  # GitHub account (org or user) the App is installed on. Recorded at connect
+  # time by Github::IntegrationService; blank on integrations connected before
+  # that, and on installations that never verified.
+  def github_account_login
+    settings&.dig("account_login")
+  end
+
   # ----- Coder accessors -----
 
   def coder_url

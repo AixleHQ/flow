@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Button, Group, Loader, Modal, Select, Stack, Textarea } from '@mantine/core';
+import { Button, Group, Modal, Select, Stack, TextInput, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState, type FC } from 'react';
@@ -19,7 +19,7 @@ interface Repository {
   sourceBranch: string;
   purpose: string | null;
   description: string | null;
-  integration: { id: number; name: string; provider: string };
+  integration: { id: number; name: string; provider: string } | null;
 }
 
 interface Props {
@@ -73,15 +73,20 @@ export const EditRepositoryModal: FC<Props> = ({ repo, branches = [], basePath, 
     <Modal opened={!!repo} onClose={onClose} title={`Edit ${repo?.fullName ?? 'Repository'}`} centered>
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
-          <Select
-            label="Source branch"
-            data={branches}
-            searchable
-            allowDeselect={false}
-            {...form.getInputProps('sourceBranch')}
-            rightSection={branches.length === 0 ? <Loader size={16} /> : undefined}
-            required
-          />
+          {/* Branch lists come from the integration's API; public repositories
+              have none to list, so the branch stays free text there. */}
+          {branches.length > 0 ? (
+            <Select
+              label="Source branch"
+              data={branches}
+              searchable
+              allowDeselect={false}
+              {...form.getInputProps('sourceBranch')}
+              required
+            />
+          ) : (
+            <TextInput label="Source branch" placeholder="main" {...form.getInputProps('sourceBranch')} withAsterisk />
+          )}
           <Textarea
             label="Purpose"
             placeholder='e.g. "Our main Rails app" or "React template for new projects"'

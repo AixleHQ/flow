@@ -60,6 +60,18 @@ class Tools::CallExecutorTest < ActiveSupport::TestCase
     assert fake_github.called?(:generate_installation_token)
   end
 
+  test "a public repository_id raises instead of minting a token it has no installation for" do
+    repo = create(:repository, :public_source, scope: @project, full_name: "rails/rails",
+                  clone_url: "https://github.com/rails/rails.git")
+    @session.repositories << repo
+    tool = Tool.shadow_for(Tools::Registry.fetch("list_sub_steps"))
+
+    error = assert_raises(RuntimeError) do
+      Tools::CallExecutor.execute(tool, { "repository_id" => repo.id }, @session)
+    end
+    assert_match(/public read-only source/, error.message)
+  end
+
   test "unattached repository_id raises" do
     tool = Tool.shadow_for(Tools::Registry.fetch("list_sub_steps"))
 

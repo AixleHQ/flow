@@ -71,6 +71,12 @@ module Tools
         repo = session.repositories.find_by(id: repo_id)
         raise "Repository #{repo_id} is not attached to this session" unless repo
 
+        if repo.public_source?
+          raise "Repository #{repo.full_name} is a public read-only source — it has no credentials, " \
+                "so tools that write to it cannot run. Attach it through a GitHub integration first."
+        end
+        raise "Repository #{repo.full_name} is not a GitHub repository" unless repo.integration.github?
+
         token = Github::TokenService.new(repo.integration).generate_installation_token
 
         arguments.except("repository_id").merge(

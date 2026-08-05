@@ -37,14 +37,21 @@ module ContextBuilders
       lines << ""
       lines << "The following code repositories have been cloned into this session:"
       lines << ""
-      lines << "| ID | Repository | Path | Branch | Purpose |"
-      lines << "|---|---|---|---|---|"
+      lines << "| ID | Repository | Path | Branch | Access | Purpose |"
+      lines << "|---|---|---|---|---|---|"
       cloned.each do |repo|
         purpose = repo.purpose.presence || "—"
-        lines << "| #{repo.id} | #{repo.full_name} | /workspace/repo/#{repo.repo_name} | #{repo.source_branch} | #{purpose} |"
+        access = repo.public_source? ? "public, read-only" : "integration"
+        lines << "| #{repo.id} | #{repo.full_name} | /workspace/repo/#{repo.repo_name} | #{repo.source_branch} | #{access} | #{purpose} |"
       end
       lines << ""
       lines << "Use the repository **ID** when calling tools that require a `repository_id` parameter."
+      if cloned.any?(&:public_source?)
+        lines << ""
+        lines << "Repositories marked **public, read-only** were cloned anonymously. There are no " \
+                 "credentials for them: read the code, but do not try to push, open pull requests, " \
+                 "or call tools that write to them."
+      end
       lines.join("\n")
     end
 

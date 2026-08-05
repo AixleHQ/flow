@@ -29,7 +29,8 @@ export interface Repository {
   description: string | null;
   purpose: string | null;
   scopeIndicator: string;
-  integration: { id: number; name: string; provider: string };
+  integration: { id: number; name: string; provider: string } | null;
+  publicSource?: boolean;
   createdAt: string;
 }
 
@@ -74,9 +75,14 @@ const RepoCard = ({
                 {repo.scopeIndicator}
               </Badge>
             )}
+            {repo.publicSource && (
+              <Badge size="xs" variant="light" color="blue" title="Cloned without credentials — read-only">
+                public read-only
+              </Badge>
+            )}
           </Group>
           <Text size="xs" c="dimmed" truncate>
-            {repo.integration.name}
+            {repo.integration?.name ?? 'No integration'}
             {repo.description && ` · ${repo.description}`}
           </Text>
           {repo.purpose && (

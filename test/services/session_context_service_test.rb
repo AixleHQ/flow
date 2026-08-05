@@ -937,6 +937,66 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_not_nil repo.last_fetched_at
   end
 
+  test "inject_repositories clones a public repository anonymously" do
+    repo = create(:repository, :public_source, full_name: "rails/rails", source_branch: "main",
+                  clone_url: "https://github.com/rails/rails.git", scope: @project)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.repositories << repo
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+
+    Github::TokenService.expects(:new).never
+
+    runtime_mock.expects(:exec).with do |_ctr, cmd|
+      cmd[2].include?("git clone --depth=1 --branch=main https://github.com/rails/rails.git /workspace/repo/rails") &&
+        !cmd[2].include?("x-access-token")
+    end.returns([ [], [], 0 ])
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    repo.reload
+    assert_not_nil repo.last_fetched_at
+    assert_nil session.reload.metadata["failed_repos"]
+  end
+
+  test "inject_repositories falls back to per-repository tokens when one repo poisons the group token" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :active)
+    repo_ok = create(:repository, full_name: "acme/good", source_branch: "main",
+                     integration: integration, scope: @project)
+    repo_bad = create(:repository, full_name: "acme/bad", source_branch: "main",
+                      integration: integration, scope: @project)
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.repositories << [ repo_ok, repo_bad ]
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+
+    fake_tokens = FakeGithub::TokenService.new(token: "ghs_scoped", unreachable: [ "bad" ])
+    Github::TokenService.stubs(:new).returns(fake_tokens)
+
+    runtime_mock.expects(:exec).with do |_ctr, cmd|
+      cmd[2].include?("x-access-token:ghs_scoped@github.com/acme/good.git")
+    end.returns([ [], [], 0 ])
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    # The group call (good + bad) is rejected, then each repository is minted on
+    # its own: the good one clones, only the bad one is recorded as failed.
+    assert_equal [ %w[good bad], [ "good" ], [ "bad" ] ],
+                 fake_tokens.calls_to(:generate_installation_token).map { |call| call[:repositories] }
+
+    repo_ok.reload
+    assert_not_nil repo_ok.last_fetched_at
+
+    failed = session.reload.metadata["failed_repos"]
+    assert_equal 1, failed.size
+    assert_equal "acme/bad", failed.first["full_name"]
+    assert_match(/Token generation failed/, failed.first["error"])
+  end
+
   test "inject_repositories skips inactive integration" do
     integration = create(:integration, company: @company, connected_by: @user, status: :inactive)
     repo = create(:repository, full_name: "acme/repo", source_branch: "main",

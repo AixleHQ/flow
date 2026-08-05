@@ -18,5 +18,10 @@ FactoryBot.define do
     trait :private do
       is_private { true }
     end
+
+    # Attached without an integration: cloned anonymously, read-only.
+    trait :public_source do
+      integration { nil }
+    end
   end
 end
