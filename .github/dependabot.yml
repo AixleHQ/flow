@@ -1,4 +1,12 @@
 version: 2
+
+# Updates are grouped so a weekly run opens a handful of pull requests instead of
+# dozens. Each ungrouped PR costs a full CI matrix (image build + backend suite +
+# frontend suite + secret scan), and sixteen of them at once starved the queue of
+# the pushes they were meant to validate.
+#
+# Minor and patch bumps travel together per ecosystem; majors stay on their own
+# so a breaking change is never buried inside a batch.
 updates:
   - package-ecosystem: bundler
     directory: "/"
@@ -6,6 +14,10 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     target-branch: "develop"
+    groups:
+      bundler-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: npm
     directory: "/"
@@ -13,6 +25,15 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     target-branch: "develop"
+    groups:
+      # Mantine pins its packages to exact peer versions, so a partial bump
+      # breaks the build. Keep the whole family in one PR, majors included.
+      mantine:
+        patterns: ["@mantine/*"]
+      npm-minor-patch:
+        patterns: ["*"]
+        exclude-patterns: ["@mantine/*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: docker
     directory: "/"
@@ -20,6 +41,10 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     target-branch: "develop"
+    groups:
+      docker-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -27,3 +52,6 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     target-branch: "develop"
+    groups:
+      github-actions:
+        patterns: ["*"]

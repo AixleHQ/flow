@@ -6,12 +6,10 @@ name: Build Images
 
 on:
   push:
+    # Only the image-release branch publishes. develop is the integration branch
+    # and deliberately does not build images: every merge would otherwise
+    # republish seven images that nothing is ready to deploy.
     branches:
-      - develop
-      # Image-release branch: pushing it rebuilds and republishes every image
-      # without waiting for a develop push. `latest` still follows the default
-      # branch only, so the two never fight over the same moving tag — a
-      # main-images build is addressable by its branch tag and its short sha.
       - main-images
     tags:
       - "v*"
@@ -60,7 +58,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_PREFIX }}/flow-web
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
             type=ref,event=branch
             type=sha,format=short,prefix=
             type=semver,pattern={{version}}
@@ -106,7 +104,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_PREFIX }}/flow-otlp-ingest
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
             type=ref,event=branch
             type=sha,format=short,prefix=
             type=semver,pattern={{version}}
@@ -155,7 +153,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_PREFIX }}/flow-agent-base-core
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
             type=ref,event=branch
             type=sha,format=short,prefix=
             type=semver,pattern={{version}}
@@ -215,7 +213,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image_suffix }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
             type=ref,event=branch
             type=sha,format=short,prefix=
             type=semver,pattern={{version}}

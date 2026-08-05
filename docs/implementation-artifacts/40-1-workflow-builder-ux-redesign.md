@@ -571,10 +571,14 @@ Also confirm the "New Workflow" modal (`createModal`) is already present on `Wor
 
 ### Key Previous Stories for Context
 
-- **Story 12.10** (`ai/implementation-artifacts/12-10-workflow-builder-page.md`) — original builder page implementation; contains full type definitions (`Step`, `SubStep`, `AssetSpec`, `Workflow`), API hook details, and scope detection logic. Read it before starting.
-- **Story 31.2** (`ai/implementation-artifacts/31-2-workflow-builder-base-resources-section-ui.md`) — `BaseResourcesSection.tsx` implementation; Task 7 reuses and moves this component.
-- **Story 34.3** (`ai/implementation-artifacts/34-3-frontend-bmad-toggle-in-step-editor.md`) — BMAD toggle in step editor; **subsumed by this story**, implement as part of Behavior section.
-- **Story 29.3** (`ai/implementation-artifacts/29-3-workflow-inherit-all-project-resources-flag.md`) — `inheritAllProjectResources` flag on workflow; already serialized; use in Base Resources tab toggle.
+These four stories predate this artifact and were never carried over when specs
+moved under `docs/`; they are not in the repository. The shipped code they
+describe is, so read the components rather than the missing documents.
+
+- **Story 12.10** — original builder page implementation; full type definitions (`Step`, `SubStep`, `AssetSpec`, `Workflow`), API hook details, scope detection logic.
+- **Story 31.2** — `BaseResourcesSection.tsx` implementation; Task 7 reuses and moves this component.
+- **Story 34.3** — BMAD toggle in step editor; **subsumed by this story**, implemented as part of the Behavior section.
+- **Story 29.3** — `inheritAllProjectResources` flag on workflow; already serialized; used in the Base Resources tab toggle.
 
 ### References
 

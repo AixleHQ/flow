@@ -4,7 +4,7 @@ services:
     depends_on:
       - db
     environment:
-      # Marks the run as CI so vitest applies the slower-runner timeout/retry budget
+      # Marks the run as CI so vitest applies the slower-runner timeout budget
       # (see vitest.config.ts). `docker compose run` only forwards declared env vars,
       # not the runner's ambient CI=true, so it must be set here explicitly.
       CI: "true"

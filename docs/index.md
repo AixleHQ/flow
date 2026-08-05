@@ -47,6 +47,7 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
   - **[implementation-artifacts/spec-skills-catalog.md](./implementation-artifacts/spec-skills-catalog.md)** — Skills catalog: featured browse, `catalog_skills` mirror with a weekly seeded sweep, manual `SKILL.md` authoring, audit badges
   - **[implementation-artifacts/spec-multi-company-membership.md](./implementation-artifacts/spec-multi-company-membership.md)** — Multi-company membership
   - **[implementation-artifacts/spec-session-terminal-replay.md](./implementation-artifacts/spec-session-terminal-replay.md)** — Session terminal replay
+  - **[implementation-artifacts/40-1-workflow-builder-ux-redesign.md](./implementation-artifacts/40-1-workflow-builder-ux-redesign.md)** — Workflow builder full UX redesign (story 40.1, shipped): tab layout, step editor sections, Base Resources move. Older BMAD story format, moved here from the retired `ai/` tree
 
 ## Strategy
 
