@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_04_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_06_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -574,7 +574,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_000001) do
     t.string "name", null: false
     t.string "origin", default: "registry", null: false
     t.string "package"
-    t.jsonb "references_data", default: {}
     t.bigint "scope_id"
     t.string "scope_type"
     t.string "source"
@@ -917,7 +916,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_000001) do
     t.index ["deleted_at"], name: "index_tools_on_deleted_at"
     t.index ["name"], name: "index_tools_on_name_where_source_code", unique: true, where: "(((source)::text = 'code'::text) AND (deleted_at IS NULL))"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true, where: "(deleted_at IS NULL)"
-    t.index ["scope_type"], name: "index_tools_on_scope_type"
   end
 
   add_check_constraint "tools", "name::text !~~ 'mcp\\_\\_%'::text", name: "tools_name_not_managed_namespace", validate: false
@@ -992,7 +990,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_04_000001) do
     t.bigint "cache_write_tokens", default: 0, null: false
     t.bigint "cost_cents", default: 0, null: false
     t.datetime "created_at", null: false
-    t.decimal "cursor_token_fee_cents", precision: 12, scale: 6, default: "0.0"
     t.integer "events_count", default: 0, null: false
     t.jsonb "events_data", default: []
     t.bigint "input_tokens", default: 0, null: false
