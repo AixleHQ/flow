@@ -45,9 +45,13 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_empty filtered
   end
 
-  test "get_board_task returns full detail" do
+  test "get_board_task returns full detail with snake_case keys" do
     task = payload(call_tool("get_board_task", { project_id: @project.id, task_id: @task.id }))
     assert_equal "First task", task["title"]
+    # The resource camelizes for the frontend; a tool payload must not.
+    assert_equal @todo.id, task["board_column_id"]
+    assert task.key?("comments_count")
+    assert_empty task.keys.grep(/[A-Z]/)
   end
 
   test "create_board_task creates a task in the target column" do
@@ -59,10 +63,89 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_equal "To Do", created["column"]
   end
 
+  test "create_board_task can assign the task on creation" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+
+    created = payload(call_tool("create_board_task",
+                                { project_id: @project.id, column_id: @todo.id,
+                                  title: "Assigned on create", assignee_id: member.id }))
+    assert_equal member.id, created["assignee_id"]
+    assert_equal member.id, BoardTask.find(created["id"]).assignee_id
+  end
+
+  test "create_board_task refuses an assignee who cannot reach the project" do
+    outsider = create(:user, :with_company)
+
+    body = call_tool("create_board_task",
+                     { project_id: @project.id, column_id: @todo.id, title: "Nope", assignee_id: outsider.id })
+    assert tool_error?(body)
+    assert_match(/member of the project/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert_not BoardTask.exists?(title: "Nope")
+  end
+
   test "update_board_task updates fields" do
     body = call_tool("update_board_task", { project_id: @project.id, task_id: @task.id, priority: "high" })
     assert_not tool_error?(body)
     assert_equal "high", @task.reload.priority
+  end
+
+  test "update_board_task assigns and then unassigns a project member" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+
+    assigned = call_tool("update_board_task",
+                         { project_id: @project.id, task_id: @task.id, assignee_id: member.id })
+    assert_not tool_error?(assigned)
+    assert_equal member.id, @task.reload.assignee_id
+    assert_equal member.id, payload(assigned)["assignee_id"]
+    detail = payload(call_tool("get_board_task", { project_id: @project.id, task_id: @task.id }))
+    assert_equal member.id, detail["assignee_id"]
+
+    cleared = call_tool("update_board_task",
+                        { project_id: @project.id, task_id: @task.id, unassign: true })
+    assert_not tool_error?(cleared)
+    assert_nil @task.reload.assignee_id
+  end
+
+  test "update_board_task refuses an assignee who cannot reach the project" do
+    outsider = create(:user, :with_company)
+
+    body = call_tool("update_board_task",
+                     { project_id: @project.id, task_id: @task.id, assignee_id: outsider.id })
+    assert tool_error?(body)
+    assert_match(/member of the project/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert_nil @task.reload.assignee_id
+  end
+
+  test "update_board_task rejects assignee_id together with unassign" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    @task.update!(assignee: member)
+
+    body = call_tool("update_board_task",
+                     { project_id: @project.id, task_id: @task.id, assignee_id: member.id, unassign: true })
+    assert tool_error?(body)
+    assert_match(/either assignee_id or unassign/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert_equal member.id, @task.reload.assignee_id
+  end
+
+  test "list_project_members returns assignable users with roles" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+
+    members = payload(call_tool("list_project_members", { project_id: @project.id }))["members"]
+    assert_equal [ "owner", "collaborator" ], members.map { |m| m["role"] }
+    assert_equal [ @user.id, member.id ], members.map { |m| m["id"] }
+  end
+
+  test "list_project_members omits a collaborator whose company membership was revoked" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    member.company_memberships.find_by(company: @company).revoke!
+
+    members = payload(call_tool("list_project_members", { project_id: @project.id }))["members"]
+    assert_equal [ @user.id ], members.map { |m| m["id"] }
   end
 
   test "move_board_task moves to another column" do

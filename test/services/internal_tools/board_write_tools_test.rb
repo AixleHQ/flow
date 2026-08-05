@@ -49,6 +49,33 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
     assert_equal "Backlog", data["column"]
   end
 
+  test "board_create_task assigns the task on creation" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+
+    result = InternalTools::BoardCreateTask.new(
+      params: { title: "Assigned on create", assignee_id: member.id },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    assert_equal member.id, JSON.parse(result[:stdout])["assignee_id"]
+    assert_equal member.id, BoardTask.find(JSON.parse(result[:stdout])["id"]).assignee_id
+  end
+
+  test "board_create_task reports an assignee who cannot reach the project" do
+    outsider = create(:user, :with_company)
+
+    result = InternalTools::BoardCreateTask.new(
+      params: { title: "Nope", assignee_id: outsider.id },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/member of the project/i, result[:stderr])
+    assert_not BoardTask.exists?(title: "Nope")
+  end
+
   test "board_create_task returns error for unknown column" do
     result = InternalTools::BoardCreateTask.new(
       params: { title: "Task", column_name: "Nonexistent" },
@@ -81,6 +108,73 @@ class InternalTools::BoardWriteToolsTest < ActiveSupport::TestCase
 
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "No valid fields"
+  end
+
+  test "board_update_task assigns and then unassigns a project member" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+
+    assigned = InternalTools::BoardUpdateTask.new(
+      params: { task_id: @task.id, assignee_id: member.id },
+      session: @session
+    ).execute
+
+    assert_equal 0, assigned[:exit_code]
+    assert_equal member.id, JSON.parse(assigned[:stdout])["assignee_id"]
+    assert_equal member.id, @task.reload.assignee_id
+
+    cleared = InternalTools::BoardUpdateTask.new(
+      params: { task_id: @task.id, unassign: true },
+      session: @session
+    ).execute
+
+    assert_equal 0, cleared[:exit_code]
+    assert_nil @task.reload.assignee_id
+  end
+
+  test "board_update_task reports an assignee who cannot reach the project" do
+    outsider = create(:user, :with_company)
+
+    result = InternalTools::BoardUpdateTask.new(
+      params: { task_id: @task.id, assignee_id: outsider.id },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/member of the project/i, result[:stderr])
+    assert_nil @task.reload.assignee_id
+  end
+
+  test "board_update_task rejects assignee_id together with unassign" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    @task.update!(assignee: member)
+
+    result = InternalTools::BoardUpdateTask.new(
+      params: { task_id: @task.id, assignee_id: member.id, unassign: true },
+      session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/either assignee_id or unassign/i, result[:stderr])
+    assert_equal member.id, @task.reload.assignee_id
+  end
+
+  # === board_list_members ===
+
+  test "board_list_members lists assignable users and omits revoked memberships" do
+    member = create(:user, company: @company)
+    @project.add_collaborator(member)
+    revoked = create(:user, company: @company)
+    @project.add_collaborator(revoked)
+    revoked.company_memberships.find_by(company: @company).revoke!
+
+    result = InternalTools::BoardListMembers.new(params: {}, session: @session).execute
+
+    assert_equal 0, result[:exit_code]
+    members = JSON.parse(result[:stdout])["members"]
+    assert_equal [ @user.id, member.id ], members.map { |m| m["id"] }
+    assert_equal [ "owner", "collaborator" ], members.map { |m| m["role"] }
   end
 
   test "board_update_task returns error for unknown task" do

@@ -40,7 +40,7 @@ module InternalTools
       comments = comments.with_tag(params[:tag]) if params[:tag].present?
       comments = comments.by_author_type(params[:author_type]) if params[:author_type].present?
 
-      result = comments.map { |c| TaskCommentResource.new(c).to_h }
+      result = comments.map { |c| TaskCommentResource.new(c, params: { snake_keys: true }).to_h }
       success(result.to_json)
     end
   end

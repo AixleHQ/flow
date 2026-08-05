@@ -18,7 +18,7 @@ module PersonalTools
       task = find_task(project)
       return error("Task not found on this project's board") unless task
 
-      success(BoardTaskResource.new(task).to_h)
+      success(BoardTaskResource.new(task, params: { snake_keys: true }).to_h)
     end
 
     private

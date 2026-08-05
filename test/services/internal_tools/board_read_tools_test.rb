@@ -77,10 +77,10 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     assert_equal @task.id, data["id"]
     assert_equal "Test task", data["title"]
     assert_equal "Do something", data["description"]
-    assert_equal @col1.id, data["boardColumnId"]
-    assert data.key?("childrenCount")
-    assert data.key?("commentsCount")
-    assert data.key?("assetsCount")
+    assert_equal @col1.id, data["board_column_id"]
+    assert data.key?("children_count")
+    assert data.key?("comments_count")
+    assert data.key?("assets_count")
   end
 
   test "board_get_task uses workflow_run board_task_id when no task_id param" do
@@ -106,8 +106,8 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     assert_equal 0, result[:exit_code]
     data = JSON.parse(result[:stdout])
     assert_equal 2, data.size
-    assert data.first.key?("authorName")
-    assert data.first.key?("authorType")
+    assert data.first.key?("author_name")
+    assert data.first.key?("author_type")
   end
 
   test "board_get_comments filters by tag" do
@@ -140,7 +140,7 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     data = JSON.parse(result[:stdout])
     assert_equal 1, data.size
     assert_equal "report.md", data.first["name"]
-    assert data.first.key?("fileUrl")
+    assert data.first.key?("file_url")
   end
 
   test "board_get_task_assets filters by tag" do
@@ -161,8 +161,8 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
     data = JSON.parse(result[:stdout])
     assert_equal @board.id, data["id"]
     assert_equal @board.name, data["name"]
-    assert_equal 2, data["boardColumns"].size
-    assert_equal "Backlog", data["boardColumns"].first["name"]
-    assert_equal "New tasks", data["boardColumns"].first["purpose"]
+    assert_equal 2, data["board_columns"].size
+    assert_equal "Backlog", data["board_columns"].first["name"]
+    assert_equal "New tasks", data["board_columns"].first["purpose"]
   end
 end

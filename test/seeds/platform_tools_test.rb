@@ -17,6 +17,7 @@ class PlatformToolsReconcileTest < ActiveSupport::TestCase
       board_move_task
       board_attach_asset
       board_manage_tags
+      board_list_members
     ].each do |tool_name|
       tool = Tool.find_by(name: tool_name)
       assert_not_nil tool, "expected #{tool_name} to be seeded"

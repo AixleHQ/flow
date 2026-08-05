@@ -46,7 +46,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     defs = Tools::Registry.definitions.values
 
     assert_equal 28, defs.count { |d| d.tags.include?(:builder) }
-    assert_equal 17, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
+    assert_equal 18, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
     assert_equal 3, defs.count { |d| d.inject_rules.intersect?(%i[container_tools_present non_interactive_session]) }
   end
 end
