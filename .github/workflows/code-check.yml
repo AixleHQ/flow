@@ -59,9 +59,14 @@ jobs:
               mirrors = ["mirror.gcr.io"]
 
       - name: Build test image
-        # Built here rather than pulled from a registry: the image must be
-        # available to fork pull requests, which get no registry credentials.
-        # The layer cache is shared with the other check job through type=gha.
+        # Materialised here rather than pulled from a registry: the image must be
+        # available to fork pull requests, which get no registry credentials. The
+        # layers themselves come from the cache that ci.yml's build-image job wrote
+        # earlier in this run, so this is a load rather than a real build.
+        #
+        # Read-only on purpose — no cache-to. Two check jobs writing the same
+        # `type=gha` scope in parallel is what made the cache useless before, and it
+        # churns the repository's 10 GB cache budget for no gain.
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -72,7 +77,6 @@ jobs:
             AUTHOR_NAME=github-actions
             AUTHOR_EMAIL=github-actions@users.noreply.github.com
           cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       - name: Start database
         if: ${{ inputs.needs-db }}

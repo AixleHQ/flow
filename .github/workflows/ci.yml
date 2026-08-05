@@ -19,8 +19,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  build-image:
+    name: Build Test Image
+    # Builds the test image once per run to populate the buildx layer cache, which
+    # the two check jobs then read instead of each compiling gems and assets from
+    # scratch. Measured on 31041703132, before this job existed: the same image was
+    # built twice in parallel, 638s in the backend job and 473s in the frontend one
+    # — 18 of the run's 24 machine-minutes. Two concurrent builds writing one
+    # `type=gha` scope cannot warm each other, and `mode=max` on an 18-layer,
+    # 1.45 GB image also churns against the repository's 10 GB cache limit.
+    #
+    # Deliberately not sharing the image itself. Pushing it to GHCR under a
+    # run-scoped tag would be faster, but pull requests from forks get a read-only
+    # token and no package write, so external contributions — the point of a public
+    # repository — would need a second, untested code path. A `docker save`
+    # artifact moves 1.45 GB twice and gives most of the saving back.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
+
+      - name: Warm the layer cache
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          # cacheonly: this job exists for its cache write, so skip materialising
+          # a local image that nothing here will run.
+          outputs: type=cacheonly
+          build-args: |
+            APP_VERSION=ci
+            AUTHOR_NAME=github-actions
+            AUTHOR_EMAIL=github-actions@users.noreply.github.com
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   be-checks:
     name: Backend Checks
+    needs: build-image
     uses: ./.github/workflows/code-check.yml
     with:
       # rails-test + rubocop + brakeman (Ruby). Needs the DB for the Rails test suite.
@@ -33,6 +75,7 @@ jobs:
 
   fe-checks:
     name: Frontend Checks
+    needs: build-image
     uses: ./.github/workflows/code-check.yml
     with:
       # eslint + tsc, then Vitest on its own (backendless, no DB needed).
