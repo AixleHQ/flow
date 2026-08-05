@@ -15,6 +15,11 @@ import IndexPage from './IndexPage';
 const project = (overrides: Partial<Project> = {}): Project =>
   buildProject({ description: 'First project', ...overrides });
 
+// Stat number and label render as separate elements (different fonts), so their
+// combined text is split across nodes — match on the element whose own text equals it.
+const withText = (text: string) => (_content: string, element: Element | null) =>
+  element?.textContent === text && element.children.length === 2;
+
 describe('Projects/IndexPage', () => {
   it('renders the empty state with a create CTA when there are no projects', () => {
     renderAuthedPage(<IndexPage />, { props: { projects: [] } });
@@ -48,7 +53,7 @@ describe('Projects/IndexPage', () => {
   it('navigates to the project when a card is opened', async () => {
     renderAuthedPage(<IndexPage />, { props: { projects: [project({ id: 7, name: 'Acme' })] } });
 
-    await userEvent.click(screen.getByTitle('Open project'));
+    await userEvent.click(screen.getByRole('button', { name: /open/i }));
 
     expect(router.visit).toHaveBeenCalledWith('/company/projects/7');
   });
@@ -169,12 +174,12 @@ describe('Projects/IndexPage', () => {
   it('navigates to project settings from the card settings action', async () => {
     renderAuthedPage(<IndexPage />, { props: { projects: [project({ id: 42, name: 'Acme' })] } });
 
-    await userEvent.click(screen.getByTitle('Project settings'));
+    await userEvent.click(screen.getByRole('button', { name: /settings/i }));
 
     expect(router.visit).toHaveBeenCalledWith('/company/projects/42/settings');
   });
 
-  it('renders pluralized stat labels and member badge on a card', () => {
+  it('renders pluralized stat labels and a member avatar group on a card', () => {
     renderAuthedPage(<IndexPage />, {
       props: {
         projects: [
@@ -183,9 +188,53 @@ describe('Projects/IndexPage', () => {
       },
     });
 
-    expect(screen.getByText('1 session')).toBeInTheDocument();
-    expect(screen.getByText('3 workflows')).toBeInTheDocument();
-    expect(screen.getByText('0 tasks')).toBeInTheDocument();
-    expect(screen.getByText('2 members')).toBeInTheDocument();
+    expect(screen.getByText(withText('1 session'))).toBeInTheDocument();
+    expect(screen.getByText(withText('3 workflows'))).toBeInTheDocument();
+    expect(screen.getByText(withText('0 tasks'))).toBeInTheDocument();
+    expect(screen.getByLabelText('2 members')).toBeInTheDocument();
+  });
+
+  it('hides archived projects by default and shows them under the Archived filter', async () => {
+    renderAuthedPage(<IndexPage />, {
+      props: {
+        projects: [
+          project({ id: 1, name: 'Active One', state: 'active' }),
+          project({ id: 2, name: 'Old One', slug: 'old-one', state: 'archived' }),
+        ],
+      },
+    });
+
+    expect(screen.getByText('Active One')).toBeInTheDocument();
+    expect(screen.queryByText('Old One')).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Archived' }));
+
+    expect(screen.queryByText('Active One')).not.toBeInTheDocument();
+    expect(screen.getByText('Old One')).toBeInTheDocument();
+  });
+
+  it('shows an empty state when the selected filter has no matching projects', async () => {
+    renderAuthedPage(<IndexPage />, { props: { projects: [project({ id: 1, name: 'Acme', state: 'active' })] } });
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Archived' }));
+
+    expect(screen.getByText('No archived projects')).toBeInTheDocument();
+  });
+
+  it('updates the result count as the filter changes', async () => {
+    renderAuthedPage(<IndexPage />, {
+      props: {
+        projects: [
+          project({ id: 1, name: 'Active One', state: 'active' }),
+          project({ id: 2, name: 'Old One', slug: 'old-one', state: 'archived' }),
+        ],
+      },
+    });
+
+    expect(screen.getByText('1', { selector: 'span' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'All' }));
+
+    expect(screen.getByText('2', { selector: 'span' })).toBeInTheDocument();
   });
 });

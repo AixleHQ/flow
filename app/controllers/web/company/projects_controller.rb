@@ -6,6 +6,7 @@ class Web::Company::ProjectsController < Web::Company::ApplicationController
     # other companies' projects here (for_user alone spans all memberships).
     projects = Project.for_user(current_user)
                       .for_company(current_company)
+                      .includes(:owner, :collaborators)
                       .select(
                         "projects.*",
                         "(SELECT COUNT(*) FROM project_collaborators WHERE project_collaborators.project_id = projects.id) AS cached_collaborators_count",
@@ -17,7 +18,7 @@ class Web::Company::ProjectsController < Web::Company::ApplicationController
                       .order(:name)
 
     render inertia: "Projects/IndexPage", props: {
-      projects: projects.map { |p| ProjectResource.new(p).to_h }
+      projects: projects.map { |p| ProjectResource.new(p, params: { with_members: true }).to_h }
     }
   end
 

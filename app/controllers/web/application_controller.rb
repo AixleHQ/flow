@@ -38,6 +38,9 @@ class Web::ApplicationController < ApplicationController
         # dual-membership user sees the other company's projects after a switch.
         projects: InertiaRails.always {
           scope = current_company ? Project.for_user(current_user).for_company(current_company) : Project.none
+          # `members` (owner/collaborator avatars) is opt-in via params — the
+          # sidebar only needs name/counts, and loading owner+collaborators for
+          # every project on every page load would be a flat but pointless cost.
           scope.with_state(:active).with_computed_counts.order(:name).map { |p| ProjectResource.new(p).to_h }
         }
       )

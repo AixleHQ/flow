@@ -1,52 +1,135 @@
 .card {
-  background-color: var(--app-bg-paper);
+  background-color: var(--app-bg-card);
   border: 1px solid var(--app-border-default);
-  border-radius: 12px;
-  transition: all 0.2s ease;
+  border-radius: 10px;
+  transition:
+    border-color 0.14s ease,
+    background-color 0.14s ease,
+    opacity 0.14s ease;
   height: 100%;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  position: relative;
+  gap: 16px;
+  padding: 18px 20px;
 }
 
 .card:hover {
-  border-color: var(--mantine-color-brand-4);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border-color: var(--app-border-active);
+  background-color: var(--app-bg-elevated);
 }
 
-.cardActions {
-  position: absolute;
-  top: 12px;
-  right: 12px;
+.card.archived {
+  opacity: 0.6;
+}
+
+.card.archived:hover {
+  opacity: 0.85;
+}
+
+.clickArea {
   display: flex;
-  gap: 4px;
-  z-index: 1;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.card:hover .cardActions {
-  opacity: 1;
-}
-
-.descriptionSlot {
+  flex-direction: column;
+  gap: 16px;
   width: 100%;
-  min-height: 42px;
-  margin-bottom: 16px;
+  text-align: left;
+  border-radius: 6px;
 }
 
-.description {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+.avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background-color: var(--app-bg-paper);
+  border: 1px solid var(--app-border-strong);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--app-text-primary);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusBadge {
+  flex-shrink: 0;
 }
 
 .statsGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 16px;
-  width: 100%;
+  display: flex;
+  align-items: stretch;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.stat {
+  flex: 1;
+  padding: 10px 12px;
+  position: relative;
+}
+
+.stat + .stat {
+  border-left: 1px solid var(--app-border-default);
+}
+
+.statNum {
+  font-family: var(--app-font-mono);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--app-text-primary);
+  line-height: 1;
+}
+
+.statLabel {
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+}
+
+.activity {
+  min-width: 0;
+  color: var(--app-text-tertiary);
+}
+
+.activityText {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.memberAvatar {
+  border: 1.5px solid var(--app-bg-card);
+  background-color: var(--app-bg-paper);
+  color: var(--app-text-secondary);
+  font-size: 9.5px;
+  font-weight: 600;
+  margin-left: -7px;
+  transition: border-color 0.14s ease;
+}
+
+.memberAvatar:first-child {
+  margin-left: 0;
+}
+
+.card:hover .memberAvatar {
+  border-color: var(--app-bg-elevated);
+}
+
+.actions {
+  padding-top: 14px;
+  border-top: 1px solid var(--app-border-default);
+}
+
+.openButton {
+  border: 1px solid var(--app-accent-muted);
 }
