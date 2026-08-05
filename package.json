@@ -46,7 +46,7 @@
     "@emoji-mart/react": "^1.1.1",
     "@inertia-cable/react": "^0.2.2",
     "@inertiajs/react": "^3.6.1",
-    "@inertiajs/vite": "^3.4.0",
+    "@inertiajs/vite": "^3.6.1",
     "@mantine/core": "^9.5.1",
     "@mantine/dates": "^9.5.1",
     "@mantine/form": "^9.5.1",

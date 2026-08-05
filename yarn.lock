@@ -1112,22 +1112,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@inertiajs/core@npm:3.4.0":
-  version: 3.4.0
-  resolution: "@inertiajs/core@npm:3.4.0"
-  dependencies:
-    "@jridgewell/trace-mapping": "npm:^0.3.31"
-    es-toolkit: "npm:^1.33.0"
-    laravel-precognition: "npm:^2.0.0"
-  peerDependencies:
-    axios: ^1.15.2
-  peerDependenciesMeta:
-    axios:
-      optional: true
-  checksum: 10c0/89824a72f525e91afa764a37eddb269e2e50e9636b04c467a6afd781ec1e47a3186490353dab58b7886c09bccebff358be5f477dd328049c075e672c7bb6996a
-  languageName: node
-  linkType: hard
-
 "@inertiajs/core@npm:3.6.1":
   version: 3.6.1
   resolution: "@inertiajs/core@npm:3.6.1"
@@ -1158,15 +1142,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@inertiajs/vite@npm:^3.4.0":
-  version: 3.4.0
-  resolution: "@inertiajs/vite@npm:3.4.0"
+"@inertiajs/vite@npm:^3.6.1":
+  version: 3.6.1
+  resolution: "@inertiajs/vite@npm:3.6.1"
   dependencies:
-    "@inertiajs/core": "npm:3.4.0"
+    "@inertiajs/core": "npm:3.6.1"
     tinyglobby: "npm:^0.2.15"
   peerDependencies:
     vite: ^7.0.0 || ^8.0.0
-  checksum: 10c0/5963ec65d0ce92c1c1ae96765b757a92c8597efff567ffd1cd0e8d9c0f5394e540494d0655d2ad7e6016ab79453107ef0e38febd20908fee538c4f6b91b7cfae
+  checksum: 10c0/40c78cd2f0b0fa18b1bc0aac6b6072fe018471c2267d95b1ffa6e2a4cdce0e360430958b9f01c66d30bdc84909705f6c90f4d344be9fcbbb013e87ea668ea967
   languageName: node
   linkType: hard
 
@@ -9590,7 +9574,7 @@ __metadata:
     "@eslint/js": "npm:^10.0.1"
     "@inertia-cable/react": "npm:^0.2.2"
     "@inertiajs/react": "npm:^3.6.1"
-    "@inertiajs/vite": "npm:^3.4.0"
+    "@inertiajs/vite": "npm:^3.6.1"
     "@mantine/core": "npm:^9.5.1"
     "@mantine/dates": "npm:^9.5.1"
     "@mantine/form": "npm:^9.5.1"
