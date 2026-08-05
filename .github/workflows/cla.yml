@@ -48,7 +48,15 @@ jobs:
     # sides before comparing, and also understands `recheck`. Matching the sentence here
     # too would be case-sensitive, and would silently drop a signature typed in a
     # different case.
-    if: github.event_name == 'pull_request_target' || github.event.issue.pull_request
+    #
+    # Bot-authored pull requests skip the job outright rather than relying on the
+    # allowlist below. A bot cannot comment a signature, and Dependabot-triggered
+    # events get a read-only GITHUB_TOKEN regardless of the permissions block, so the
+    # action cannot write the signature branch and fails the check with
+    # "Branch cla-signatures not found" instead of passing.
+    if: >-
+      (github.event_name == 'pull_request_target' && github.event.pull_request.user.type != 'Bot')
+      || (github.event_name == 'issue_comment' && github.event.issue.pull_request && github.event.issue.user.type != 'Bot')
     steps:
       - name: Check CLA signature
         # Pinned to a commit SHA: this is a third-party action running in a
