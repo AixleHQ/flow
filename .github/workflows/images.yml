@@ -8,6 +8,11 @@ on:
   push:
     branches:
       - develop
+      # Image-release branch: pushing it rebuilds and republishes every image
+      # without waiting for a develop push. `latest` still follows the default
+      # branch only, so the two never fight over the same moving tag — a
+      # main-images build is addressable by its branch tag and its short sha.
+      - main-images
     tags:
       - "v*"
   workflow_dispatch:
@@ -15,6 +20,12 @@ on:
 permissions:
   contents: read
   packages: write
+
+# Serialise per ref rather than cancelling: a cancelled publish can leave a tag
+# pointing at a half-pushed manifest, so let an in-flight build finish.
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   # GHCR rejects uppercase path segments, so the owner is written out in
@@ -50,6 +61,7 @@ jobs:
           images: ${{ env.REGISTRY_PREFIX }}/flow-web
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
             type=sha,format=short,prefix=
             type=semver,pattern={{version}}
 
@@ -95,6 +107,7 @@ jobs:
           images: ${{ env.REGISTRY_PREFIX }}/flow-otlp-ingest
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
             type=sha,format=short,prefix=
             type=semver,pattern={{version}}
 
@@ -143,6 +156,7 @@ jobs:
           images: ${{ env.REGISTRY_PREFIX }}/flow-agent-base-core
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
             type=sha,format=short,prefix=
             type=semver,pattern={{version}}
 
@@ -202,6 +216,7 @@ jobs:
           images: ${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image_suffix }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=branch
             type=sha,format=short,prefix=
             type=semver,pattern={{version}}
 
