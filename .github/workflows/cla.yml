@@ -84,7 +84,11 @@ jobs:
           # TODO (maintainers): as organizations execute the cCLA, add their designated
           # contributors here (cCLA § 6 makes Schedule A administrative, not a condition
           # of the grant — this list is only what tells the bot to stop asking).
-          allowlist: dependabot[bot],renovate[bot],github-actions[bot]
+          # aixle-com[bot] (formerly palad-ai[bot]) is our own GitHub App — the
+          # account the platform's agents commit through. It cannot reply to a
+          # pull request to sign, and its output is already covered by the
+          # company's own grant.
+          allowlist: dependabot[bot],renovate[bot],github-actions[bot],aixle-com[bot],palad-ai[bot],aixle-developer-agent
           lock-pullrequest-aftermerge: false
           # Tells contributors they can re-run the check by commenting `recheck` — which
           # the job condition above now allows through.
