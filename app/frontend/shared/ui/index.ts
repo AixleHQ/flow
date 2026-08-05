@@ -6,6 +6,7 @@ export { InertiaRouteIndicator } from './InertiaRouteIndicator';
 export { PageShell } from './PageShell';
 export { PageHeader } from './PageHeader';
 export { EmptyState } from './EmptyState';
+export { Identicon } from './Identicon';
 export { StatusBadge, statusTone, statusLabel, type StatusTone } from './StatusBadge';
 export type {
   SharedProps,

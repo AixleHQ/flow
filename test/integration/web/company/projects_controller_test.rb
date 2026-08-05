@@ -14,6 +14,18 @@ class Web::Company::ProjectsControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_page "Projects/IndexPage"
   end
 
+  test "index includes each project's owner/collaborator avatar preview" do
+    collaborator = create(:user, :employee, :onboarding_completed, company: @company)
+    project = create(:project, company: @company, owner: @user)
+    project.add_collaborator(collaborator)
+
+    get company_projects_path
+
+    props_project = inertia.props[:projects].find { |p| p[:id] == project.id }
+    assert_equal 2, props_project[:membersCount]
+    assert_equal [ @user.id, collaborator.id ], props_project[:members].pluck(:id)
+  end
+
   test "create redirects on success" do
     post company_projects_path, params: { project: { name: "Test Project", description: "A test" } }
     assert_response :redirect

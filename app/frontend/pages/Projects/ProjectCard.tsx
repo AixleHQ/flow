@@ -1,6 +1,8 @@
 import { router } from '@inertiajs/react';
-import { ActionIcon, Avatar, Badge, Box, Group, Text, UnstyledButton } from '@mantine/core';
-import { IconExternalLink, IconRoute, IconSettings, IconSubtask, IconTerminal2 } from '@tabler/icons-react';
+import { Avatar, Box, Button, Group, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { IconArrowRight, IconClock, IconSettings } from '@tabler/icons-react';
+
+import { Identicon, StatusBadge } from 'shared/ui';
 
 import classes from './ProjectCard.module.css';
 
@@ -17,6 +19,7 @@ interface Project {
   boardTasksCount: number;
   lastActivityAt?: string | null;
   createdAt: string;
+  members: { id: number; initials: string }[];
 }
 
 interface ProjectCardProps {
@@ -24,23 +27,8 @@ interface ProjectCardProps {
   onClick?: () => void;
 }
 
-const AVATAR_COLORS = [
-  'blue',
-  'cyan',
-  'teal',
-  'green',
-  'lime',
-  'yellow',
-  'orange',
-  'red',
-  'pink',
-  'grape',
-  'violet',
-  'indigo',
-] as const;
-
 const formatRelativeTime = (dateString?: string | null): string => {
-  if (!dateString) return '';
+  if (!dateString) return 'Not yet active';
 
   const date = new Date(dateString);
   const now = new Date();
@@ -49,114 +37,101 @@ const formatRelativeTime = (dateString?: string | null): string => {
   const diffHours = Math.floor(diffMins / 60);
   const diffDays = Math.floor(diffHours / 24);
 
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString();
+  if (diffDays >= 7) return `Updated ${date.toLocaleDateString()}`;
+  if (diffDays >= 1) return `Updated ${diffDays}d ago`;
+  if (diffHours >= 1) return `Updated ${diffHours}h ago`;
+  if (diffMins >= 1) return `Updated ${diffMins}m ago`;
+  return 'Updated just now';
 };
 
 const pluralize = (count: number, singular: string) => (count === 1 ? singular : `${singular}s`);
 
-const StatItem = ({ icon: Icon, value, label }: { icon: typeof IconTerminal2; value: number; label: string }) => (
-  <Group gap={6} wrap="nowrap">
-    <Icon size={16} style={{ opacity: 0.45, flexShrink: 0 }} />
-    <Text fz={13} c="dimmed">
-      {value} {pluralize(value, label)}
-    </Text>
-  </Group>
+const StatItem = ({ value, label }: { value: number; label: string }) => (
+  <Box className={classes.stat}>
+    <Group gap={5} align="baseline">
+      <Text className={classes.statNum}>{value}</Text>
+      <Text className={classes.statLabel}> {pluralize(value, label)}</Text>
+    </Group>
+  </Box>
 );
 
+const MemberAvatars = ({ members, total }: { members: { id: number; initials: string }[]; total: number }) => {
+  const overflow = total - members.length;
+  return (
+    <Group gap={0} aria-label={`${total} ${pluralize(total, 'member')}`}>
+      {members.map((member) => (
+        <Avatar key={member.id} size={24} radius="xl" className={classes.memberAvatar}>
+          {member.initials}
+        </Avatar>
+      ))}
+      {overflow > 0 && (
+        <Avatar size={24} radius="xl" className={classes.memberAvatar}>
+          +{overflow}
+        </Avatar>
+      )}
+    </Group>
+  );
+};
+
 export const ProjectCard = ({ project, onClick }: ProjectCardProps) => {
-  const avatarColor = AVATAR_COLORS[project.id % AVATAR_COLORS.length];
-  const isActive = project.state === 'active';
+  const isArchived = project.state === 'archived';
 
   return (
-    <Box className={classes.card} pos="relative">
-      <Box className={classes.cardActions}>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
+    <Box className={`${classes.card} ${isArchived ? classes.archived : ''}`}>
+      <UnstyledButton onClick={onClick} className={classes.clickArea}>
+        <Group gap={12} align="center" wrap="nowrap">
+          <Box className={classes.avatar}>
+            <Identicon seed={project.name} size={24} />
+          </Box>
+          <Tooltip label={project.description} disabled={!project.description} openDelay={300}>
+            <Text className={classes.name} title={project.name}>
+              {project.name}
+            </Text>
+          </Tooltip>
+          <StatusBadge state={project.state} className={classes.statusBadge} />
+        </Group>
+
+        <Box className={classes.statsGrid}>
+          <StatItem value={project.sessionsCount} label="session" />
+          <StatItem value={project.workflowsCount} label="workflow" />
+          <StatItem value={project.boardTasksCount} label="task" />
+        </Box>
+
+        <Group justify="space-between" align="center" wrap="nowrap" gap={12}>
+          <Group gap={6} wrap="nowrap" className={classes.activity}>
+            <IconClock size={13} style={{ flexShrink: 0 }} />
+            <Text className={classes.activityText}>{formatRelativeTime(project.lastActivityAt)}</Text>
+          </Group>
+          <MemberAvatars members={project.members} total={project.membersCount} />
+        </Group>
+      </UnstyledButton>
+
+      <Group gap={8} className={classes.actions}>
+        <Button
+          variant="light"
+          color="brand"
+          leftSection={<IconArrowRight size={14} />}
           size="sm"
+          className={classes.openButton}
           onClick={(e) => {
             e.stopPropagation();
             onClick?.();
           }}
-          title="Open project"
         >
-          <IconExternalLink size={16} />
-        </ActionIcon>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
+          Open
+        </Button>
+        <Button
+          variant="default"
+          leftSection={<IconSettings size={14} />}
           size="sm"
           onClick={(e) => {
             e.stopPropagation();
             router.visit(`/company/projects/${project.id}/settings`);
           }}
-          title="Project settings"
         >
-          <IconSettings size={16} />
-        </ActionIcon>
-      </Box>
-
-      <UnstyledButton
-        onClick={onClick}
-        p={20}
-        display="flex"
-        w="100%"
-        style={{ flexDirection: 'column', alignItems: 'flex-start', flex: 1, borderRadius: 12 }}
-      >
-        <Group gap={12} align="center" w="100%" wrap="nowrap" mb={12}>
-          <Avatar color={avatarColor} variant="filled" radius="xl" size="md">
-            {project.name.charAt(0).toUpperCase()}
-          </Avatar>
-          <Group gap={8} wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
-            <Box
-              w={8}
-              h={8}
-              style={{
-                borderRadius: '50%',
-                backgroundColor: isActive ? 'var(--mantine-color-green-6)' : 'var(--mantine-color-gray-6)',
-                flexShrink: 0,
-              }}
-            />
-            <Text fz={18} fw={600} c="var(--app-text-primary)" lh={1.4} truncate style={{ flex: 1, minWidth: 0 }}>
-              {project.name}
-            </Text>
-          </Group>
-        </Group>
-
-        <Box className={classes.descriptionSlot}>
-          {project.description && (
-            <Text fz={14} c="dimmed" className={classes.description}>
-              {project.description}
-            </Text>
-          )}
-        </Box>
-
-        <Box mt="auto" w="100%">
-          <Box className={classes.statsGrid}>
-            <StatItem icon={IconTerminal2} value={project.sessionsCount} label="session" />
-            <StatItem icon={IconRoute} value={project.workflowsCount} label="workflow" />
-            <StatItem icon={IconSubtask} value={project.boardTasksCount} label="task" />
-          </Box>
-          <Group justify="space-between" align="center" mt={8}>
-            <Text
-              fz={12}
-              c="dimmed"
-              mih={18}
-              lh="18px"
-              style={{ visibility: project.lastActivityAt ? 'visible' : 'hidden' }}
-            >
-              Last activity {formatRelativeTime(project.lastActivityAt)}
-            </Text>
-            <Badge variant="default" size="xs" styles={{ root: { color: 'var(--app-text-secondary)' } }}>
-              {project.membersCount} {pluralize(project.membersCount, 'member')}
-            </Badge>
-          </Group>
-        </Box>
-      </UnstyledButton>
+          Settings
+        </Button>
+      </Group>
     </Box>
   );
 };

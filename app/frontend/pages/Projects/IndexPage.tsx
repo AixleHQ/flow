@@ -1,13 +1,15 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Box, Button, Center, Group, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
-import { IconPlus, IconSearch } from '@tabler/icons-react';
+import { Box, Button, Group, SegmentedControl, Select, Text, TextInput } from '@mantine/core';
+import { IconArrowsSort, IconFilterOff, IconFolder, IconPlus, IconSearch } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { EmptyState } from 'shared/ui';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { CreateProjectModal } from './CreateProjectModal';
+import classes from './IndexPage.module.css';
 import { ProjectCard } from './ProjectCard';
 
 interface Project {
@@ -23,6 +25,7 @@ interface Project {
   boardTasksCount: number;
   lastActivityAt?: string | null;
   createdAt: string;
+  members: { id: number; initials: string }[];
 }
 
 interface PageProps {
@@ -31,6 +34,7 @@ interface PageProps {
 }
 
 type SortKey = 'name' | 'last_activity' | 'newest';
+type StateFilter = 'all' | 'active' | 'paused' | 'archived';
 
 const SORT_OPTIONS = [
   { value: 'name', label: 'Name' },
@@ -38,14 +42,30 @@ const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest first' },
 ];
 
+const STATE_FILTER_OPTIONS: { value: StateFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'paused', label: 'Paused' },
+  { value: 'archived', label: 'Archived' },
+];
+
 const IndexPage = () => {
   const { projects } = usePage<PageProps>().props;
   const [createOpened, setCreateOpened] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('name');
+  // Archived (and paused) projects are noise in the everyday view, so the
+  // default view hides everything but active — matching the segmented
+  // control's default selection.
+  const [stateFilter, setStateFilter] = useState<StateFilter>('active');
+
+  const byState = useMemo(
+    () => (stateFilter === 'all' ? projects : projects.filter((p) => p.state === stateFilter)),
+    [projects, stateFilter],
+  );
 
   const sortedAndFiltered = useMemo(() => {
-    const sorted = [...projects];
+    const sorted = [...byState];
 
     switch (sortBy) {
       case 'last_activity':
@@ -67,11 +87,13 @@ const IndexPage = () => {
     if (!searchQuery.trim()) return sorted;
     const query = searchQuery.toLowerCase();
     return sorted.filter((p) => p.name.toLowerCase().includes(query) || p.description?.toLowerCase().includes(query));
-  }, [projects, searchQuery, sortBy]);
+  }, [byState, searchQuery, sortBy]);
 
   const handleProjectClick = (projectId: number) => {
     router.visit(`/company/projects/${projectId}`);
   };
+
+  const stateFilterLabel = STATE_FILTER_OPTIONS.find((o) => o.value === stateFilter)?.label ?? stateFilter;
 
   return (
     <AuthLayout>
@@ -89,7 +111,7 @@ const IndexPage = () => {
         />
 
         {projects.length > 0 && (
-          <Group gap={16} mb={24}>
+          <Group gap={12} mb={20} wrap="wrap">
             <TextInput
               placeholder="Search projects..."
               value={searchQuery}
@@ -98,51 +120,52 @@ const IndexPage = () => {
               w={300}
               size="sm"
             />
-            <Select
-              value={sortBy}
-              onChange={(v) => setSortBy((v as SortKey) || 'name')}
-              data={SORT_OPTIONS}
-              w={180}
+            <SegmentedControl
+              value={stateFilter}
+              onChange={(v) => setStateFilter(v as StateFilter)}
+              data={STATE_FILTER_OPTIONS}
               size="sm"
             />
+            <Group gap={14} ml="auto" wrap="nowrap">
+              <Text className={classes.resultCount}>
+                <Text component="span" className={classes.resultCountNum}>
+                  {sortedAndFiltered.length}
+                </Text>{' '}
+                {sortedAndFiltered.length === 1 ? 'project' : 'projects'}
+              </Text>
+              <Select
+                value={sortBy}
+                onChange={(v) => setSortBy((v as SortKey) || 'name')}
+                data={SORT_OPTIONS}
+                leftSection={<IconArrowsSort size={15} />}
+                w={180}
+                size="sm"
+              />
+            </Group>
           </Group>
         )}
 
         {projects.length === 0 ? (
-          <Center mih={400}>
-            <Stack align="center" gap="md">
-              <Text fz={48} opacity={0.5}>
-                📁
-              </Text>
-              <Text fz={20} fw={500} c="var(--app-text-primary)">
-                No projects yet
-              </Text>
-              <Text fz={14} c="dimmed" ta="center" maw={400}>
-                Create your first project to start organizing your work and collaborate with your team.
-              </Text>
-              <Button onClick={() => setCreateOpened(true)}>Create Your First Project</Button>
-            </Stack>
-          </Center>
+          <EmptyState
+            icon={<IconFolder size={22} />}
+            title="No projects yet"
+            description="Create your first project to start organizing your work and collaborate with your team."
+            action={<Button onClick={() => setCreateOpened(true)}>Create Your First Project</Button>}
+          />
+        ) : byState.length === 0 ? (
+          <EmptyState icon={<IconFilterOff size={22} />} title={`No ${stateFilterLabel.toLowerCase()} projects`} />
         ) : sortedAndFiltered.length === 0 ? (
-          <Center mih={400}>
-            <Stack align="center" gap="md">
-              <Text fz={48} opacity={0.5}>
-                🔍
-              </Text>
-              <Text fz={20} fw={500} c="var(--app-text-primary)">
-                No projects found
-              </Text>
-              <Text fz={14} c="dimmed">
-                No projects match your search. Try a different query.
-              </Text>
-            </Stack>
-          </Center>
+          <EmptyState
+            icon={<IconSearch size={22} />}
+            title="No projects found"
+            description={`No projects match "${searchQuery}".`}
+          />
         ) : (
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing={24} mt={24}>
+          <Box className={classes.grid}>
             {sortedAndFiltered.map((project) => (
               <ProjectCard key={project.id} project={project} onClick={() => handleProjectClick(project.id)} />
             ))}
-          </SimpleGrid>
+          </Box>
         )}
 
         <CreateProjectModal opened={createOpened} onClose={() => setCreateOpened(false)} />
