@@ -129,7 +129,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     content = ContextBuilders::BoardContext.new(session).build.first.content
     %w[board_get_board_info board_list_tasks board_get_task board_get_comments
        board_get_task_assets board_add_comment board_update_task board_create_task
-       board_move_task board_attach_asset board_manage_tags].each do |tool|
+       board_move_task board_attach_asset board_manage_tags board_list_members].each do |tool|
       assert_includes content, tool, "Expected content to include #{tool}"
     end
   end

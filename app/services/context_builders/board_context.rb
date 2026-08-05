@@ -36,6 +36,7 @@ module ContextBuilders
       lines << "- **Priority:** #{task.priority}" if task.priority.present?
       lines << "- **Description:** #{task.description.truncate(500)}" if task.description.present?
       lines << "- **Tags:** #{task.tags.join(', ')}" if task.tags.present?
+      lines << "- **Assignee:** #{task.assignee.name} (id: #{task.assignee_id})" if task.assignee
 
       lines << ""
       lines << "### Board Columns"
@@ -63,11 +64,12 @@ module ContextBuilders
       lines << "- **board_get_comments** — get comments for a task"
       lines << "- **board_get_task_assets** — get assets attached to a task"
       lines << "- **board_add_comment** — add a comment to a task (markdown supported in body)"
-      lines << "- **board_update_task** — update task fields (title, description, priority, etc)"
+      lines << "- **board_update_task** — update task fields (title, description, priority, assignee_id, etc)"
       lines << "- **board_create_task** — create a new task on the board"
       lines << "- **board_move_task** — move a task to a different column by column_name"
       lines << "- **board_attach_asset** — attach a file to a task (use file_path for screenshots, file_content for small text)"
       lines << "- **board_manage_tags** — add/remove tags on a task"
+      lines << "- **board_list_members** — list project members with the user ids to assign a task to"
 
       lines.join("\n")
     end
