@@ -1,6 +1,5 @@
 import { router } from '@inertiajs/react';
 import {
-  Alert,
   Avatar,
   Badge,
   Button,
@@ -189,164 +188,174 @@ export const SkillsCatalogModal: FC<SkillsCatalogModalProps> = ({
   };
 
   return (
-    <Modal
-      opened={opened}
-      onClose={close}
-      title="Skills catalog"
-      size="90%"
-      closeButtonProps={{ 'aria-label': 'Close catalog' }}
-    >
+    <>
+      {/* Its own modal, not a banner inside the catalog: the flagged card can be
+          several rows down a scrolled grid, and an alert pinned above the search
+          field would render off-screen — the click would read as a dead button. */}
       {confirming && (
-        <Alert
-          variant="light"
-          color="red"
-          icon={<IconAlertTriangle size={16} />}
-          title={`${confirming.pickerName} is flagged as ${confirming.auditRisk} risk`}
-          mb="md"
-          withCloseButton
+        <Modal
+          opened
           onClose={() => setConfirming(null)}
+          centered
+          size="md"
+          zIndex={1000}
+          title={
+            <Group gap={8} wrap="nowrap">
+              <IconAlertTriangle size={18} color="var(--mantine-color-red-6)" />
+              <Text fw={600} fz={15}>{`${confirming.pickerName} is flagged as ${confirming.auditRisk} risk`}</Text>
+            </Group>
+          }
+          closeButtonProps={{ 'aria-label': 'Cancel install' }}
         >
-          <Text fz={13} mb="xs">
+          <Text fz={13} mb="md">
             {auditSummary(confirming)}. A skill runs as instructions inside your agent&apos;s context — install it only
             if you trust this publisher.
           </Text>
-          <Group gap="xs">
-            <Button size="xs" color="red" onClick={() => install(confirming)}>
-              Install anyway
-            </Button>
+          <Group gap="xs" justify="flex-end">
             <Button size="xs" variant="default" onClick={() => setConfirming(null)}>
               Cancel
             </Button>
-          </Group>
-        </Alert>
-      )}
-      <TextInput
-        placeholder="Search skills — try 'playwright' or 'design'"
-        aria-label="Search skills"
-        leftSection={<IconSearch size={16} />}
-        value={search}
-        onChange={(e) => changeSearch(e.currentTarget.value)}
-        rightSection={
-          searching ? (
-            <Loader size="xs" />
-          ) : (
-            search && <CloseButton size="sm" aria-label="Clear search" onClick={() => changeSearch('')} />
-          )
-        }
-        mb="md"
-      />
-
-      {/* Deliberately not "most installed": the ordering does use install counts,
-          but it leads with a curated seed and penalises publishers who ship
-          twenty-five near-identical skills, so the label would claim a measurement
-          the list does not follow. */}
-      {catalogSkills.length > 0 && !query && (
-        <Text fz={12} fw={600} c="dimmed" tt="uppercase" mb="xs" style={{ letterSpacing: 0.5 }}>
-          Suggested skills
-        </Text>
-      )}
-
-      {catalogSkills.length === 0 ? (
-        <Center mih={200} style={{ flexDirection: 'column' }}>
-          <IconSparkles size={36} color="var(--app-text-secondary)" />
-          <Text fz={15} c="dimmed" mt="sm">
-            {query ? `No skills match “${query}”` : 'The catalog is empty'}
-          </Text>
-          {query ? (
-            <Button variant="subtle" size="xs" mt="sm" onClick={() => changeSearch('')}>
-              Show suggested skills
+            <Button size="xs" color="red" onClick={() => install(confirming)}>
+              Install anyway
             </Button>
-          ) : (
-            <Text fz={13} c="dimmed" mt={4} ta="center">
-              It fills on the next catalog sync. You can always add a skill by hand.
-            </Text>
-          )}
-        </Center>
-      ) : (
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
-          {catalogSkills.map((skill) => {
-            const installed = installedPackages.has(skill.package);
+          </Group>
+        </Modal>
+      )}
+      <Modal
+        opened={opened}
+        onClose={close}
+        title="Skills catalog"
+        size="90%"
+        closeButtonProps={{ 'aria-label': 'Close catalog' }}
+      >
+        <TextInput
+          placeholder="Search skills — try 'playwright' or 'design'"
+          aria-label="Search skills"
+          leftSection={<IconSearch size={16} />}
+          value={search}
+          onChange={(e) => changeSearch(e.currentTarget.value)}
+          rightSection={
+            searching ? (
+              <Loader size="xs" />
+            ) : (
+              search && <CloseButton size="sm" aria-label="Clear search" onClick={() => changeSearch('')} />
+            )
+          }
+          mb="md"
+        />
 
-            return (
-              <Card
-                key={skill.registryId}
-                padding="md"
-                radius="md"
-                withBorder
-                style={{
-                  borderColor: 'var(--app-border-default)',
-                  backgroundColor: installed ? 'var(--app-bg-deep)' : 'var(--app-bg-paper)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  minHeight: 150,
-                }}
-              >
-                <Group justify="space-between" align="flex-start" wrap="nowrap" mb={6}>
-                  <Group gap={8} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
-                    <Avatar src={skill.iconUrl} alt="" size={26} radius="sm" color="gray">
-                      {monogram(skill)}
-                    </Avatar>
-                    <Text fz={14} fw={600} c="var(--app-text-primary)" truncate style={{ minWidth: 0 }}>
-                      {skill.pickerName}
+        {/* Deliberately not "most installed": the ordering does use install counts,
+            but it leads with a curated seed and penalises publishers who ship
+            twenty-five near-identical skills, so the label would claim a measurement
+            the list does not follow. */}
+        {catalogSkills.length > 0 && !query && (
+          <Text fz={12} fw={600} c="dimmed" tt="uppercase" mb="xs" style={{ letterSpacing: 0.5 }}>
+            Suggested skills
+          </Text>
+        )}
+
+        {catalogSkills.length === 0 ? (
+          <Center mih={200} style={{ flexDirection: 'column' }}>
+            <IconSparkles size={36} color="var(--app-text-secondary)" />
+            <Text fz={15} c="dimmed" mt="sm">
+              {query ? `No skills match “${query}”` : 'The catalog is empty'}
+            </Text>
+            {query ? (
+              <Button variant="subtle" size="xs" mt="sm" onClick={() => changeSearch('')}>
+                Show suggested skills
+              </Button>
+            ) : (
+              <Text fz={13} c="dimmed" mt={4} ta="center">
+                It fills on the next catalog sync. You can always add a skill by hand.
+              </Text>
+            )}
+          </Center>
+        ) : (
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
+            {catalogSkills.map((skill) => {
+              const installed = installedPackages.has(skill.package);
+
+              return (
+                <Card
+                  key={skill.registryId}
+                  padding="md"
+                  radius="md"
+                  withBorder
+                  style={{
+                    borderColor: 'var(--app-border-default)',
+                    backgroundColor: installed ? 'var(--app-bg-deep)' : 'var(--app-bg-paper)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    minHeight: 150,
+                  }}
+                >
+                  <Group justify="space-between" align="flex-start" wrap="nowrap" mb={6}>
+                    <Group gap={8} wrap="nowrap" style={{ minWidth: 0, flex: 1 }}>
+                      <Avatar src={skill.iconUrl} alt="" size={26} radius="sm" color="gray">
+                        {monogram(skill)}
+                      </Avatar>
+                      <Text fz={14} fw={600} c="var(--app-text-primary)" truncate style={{ minWidth: 0 }}>
+                        {skill.pickerName}
+                      </Text>
+                    </Group>
+                    {skill.installs > 0 && (
+                      <Badge size="xs" variant="light" color="gray" style={{ flexShrink: 0 }}>
+                        {formatInstalls(skill.installs)} installs
+                      </Badge>
+                    )}
+                  </Group>
+
+                  <Group gap={6} wrap="nowrap" mb={4}>
+                    {skill.featured && (
+                      <Badge size="xs" variant="light" color="blue" title="Curated pick">
+                        featured
+                      </Badge>
+                    )}
+                    {skill.auditRisk && (
+                      <Tooltip label={auditSummary(skill)} multiline w={260} withArrow>
+                        <Badge size="xs" variant="light" color={RISK_COLORS[skill.auditRisk] ?? 'gray'}>
+                          {skill.auditRisk === 'safe' ? 'audited' : `risk: ${skill.auditRisk}`}
+                        </Badge>
+                      </Tooltip>
+                    )}
+                    <Text fz={11} c="dimmed" ff="JetBrains Mono, monospace" truncate>
+                      {skill.source}
                     </Text>
                   </Group>
-                  {skill.installs > 0 && (
-                    <Badge size="xs" variant="light" color="gray" style={{ flexShrink: 0 }}>
-                      {formatInstalls(skill.installs)} installs
-                    </Badge>
-                  )}
-                </Group>
 
-                <Group gap={6} wrap="nowrap" mb={4}>
-                  {skill.featured && (
-                    <Badge size="xs" variant="light" color="blue" title="Curated pick">
-                      featured
-                    </Badge>
-                  )}
-                  {skill.auditRisk && (
-                    <Tooltip label={auditSummary(skill)} multiline w={260} withArrow>
-                      <Badge size="xs" variant="light" color={RISK_COLORS[skill.auditRisk] ?? 'gray'}>
-                        {skill.auditRisk === 'safe' ? 'audited' : `risk: ${skill.auditRisk}`}
-                      </Badge>
-                    </Tooltip>
-                  )}
-                  <Text fz={11} c="dimmed" ff="JetBrains Mono, monospace" truncate>
-                    {skill.source}
+                  <Text fz={12} c="dimmed" lineClamp={3} style={{ flex: 1 }}>
+                    {skill.description || 'No description available'}
                   </Text>
-                </Group>
 
-                <Text fz={12} c="dimmed" lineClamp={3} style={{ flex: 1 }}>
-                  {skill.description || 'No description available'}
-                </Text>
+                  <Group justify="flex-end" mt="sm">
+                    {installed ? (
+                      <Badge color="green" size="md" variant="light">
+                        Installed
+                      </Badge>
+                    ) : (
+                      <Button
+                        size="xs"
+                        variant="light"
+                        color={needsConfirmation(skill) ? 'red' : undefined}
+                        loading={installing === skill.registryId}
+                        onClick={() => requestInstall(skill)}
+                      >
+                        Install
+                      </Button>
+                    )}
+                  </Group>
+                </Card>
+              );
+            })}
+          </SimpleGrid>
+        )}
 
-                <Group justify="flex-end" mt="sm">
-                  {installed ? (
-                    <Badge color="green" size="md" variant="light">
-                      Installed
-                    </Badge>
-                  ) : (
-                    <Button
-                      size="xs"
-                      variant="light"
-                      color={needsConfirmation(skill) ? 'red' : undefined}
-                      loading={installing === skill.registryId}
-                      onClick={() => requestInstall(skill)}
-                    >
-                      Install
-                    </Button>
-                  )}
-                </Group>
-              </Card>
-            );
-          })}
-        </SimpleGrid>
-      )}
-
-      {catalogSyncedAt && (
-        <Text fz={11} c="dimmed" mt="md">
-          Catalog last synced {new Date(catalogSyncedAt).toLocaleString()}
-        </Text>
-      )}
-    </Modal>
+        {catalogSyncedAt && (
+          <Text fz={11} c="dimmed" mt="md">
+            Catalog last synced {new Date(catalogSyncedAt).toLocaleString()}
+          </Text>
+        )}
+      </Modal>
+    </>
   );
 };

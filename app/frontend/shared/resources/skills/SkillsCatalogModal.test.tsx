@@ -223,6 +223,19 @@ describe('SkillsCatalogModal — flagged installs', () => {
     expect(screen.getByText(/flagged as critical risk/i)).toBeInTheDocument();
   });
 
+  // Regression: the warning used to be a banner pinned above the search field. On a
+  // scrolled grid it rendered off-screen, so clicking Install on a flagged card looked
+  // like a dead button. Its own dialog cannot land outside the viewport.
+  it('raises the warning in its own dialog rather than inside the catalog', async () => {
+    renderPage(<SkillsCatalogModal {...baseProps} catalogSkills={[flagged()]} query="pdf" />);
+
+    await userEvent.click(screen.getByRole('button', { name: /^install$/i }));
+
+    const warning = screen.getByRole('dialog', { name: /flagged as critical risk/i });
+    expect(warning).toBeInTheDocument();
+    expect(warning).not.toContainElement(screen.getByRole('textbox', { name: 'Search skills' }));
+  });
+
   it('installs once the warning is acknowledged', async () => {
     renderPage(<SkillsCatalogModal {...baseProps} catalogSkills={[flagged()]} query="pdf" />);
 
