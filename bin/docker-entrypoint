@@ -29,5 +29,8 @@ bundle check || bundle install
 corepack install
 yarn install
 bundle exec rails db:prepare
+# Curated MCP connectors and skills, so the catalogs are browsable before the first
+# sweep ever runs. Idempotent, inserts only what is missing — see Catalog::FeaturedSeed.
+bundle exec rails catalog:featured:load
 
 exec "$@"

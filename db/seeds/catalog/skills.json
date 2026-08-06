@@ -1,0 +1,336 @@
+{
+  "generated_at": "2026-08-06T18:28:22Z",
+  "count": 33,
+  "entries": [
+    {
+      "registry_id": "anthropics/skills/algorithmic-art",
+      "source": "anthropics/skills",
+      "slug": "algorithmic-art",
+      "title": "algorithmic-art",
+      "description": "Creating algorithmic art using p5.js with seeded randomness and interactive parameter exploration. Use this when users request creating art using code, generative art, algorithmic art, flow fields, or particle systems. Create original algorithmic art rather than copying existing artists' work to avoid copyright violations.",
+      "installs": 71102,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:03 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/brand-guidelines",
+      "source": "anthropics/skills",
+      "slug": "brand-guidelines",
+      "title": "brand-guidelines",
+      "description": "Applies Anthropic's official brand colors and typography to any sort of artifact that may benefit from having Anthropic's look-and-feel. Use it when brand colors or style guidelines, visual formatting, or company design standards apply.",
+      "installs": 72234,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:02 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/canvas-design",
+      "source": "anthropics/skills",
+      "slug": "canvas-design",
+      "title": "canvas-design",
+      "description": "Create beautiful visual art in .png and .pdf documents using design philosophy. You should use this skill when the user asks to create a poster, piece of art, design, or other static piece. Create original visual designs, never copying existing artists' work to avoid copyright violations.",
+      "installs": 93722,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:58 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/claude-api",
+      "source": "anthropics/skills",
+      "slug": "claude-api",
+      "title": "claude-api",
+      "description": "Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming, tool use, MCP, agents, caching, token counting, model migration.\nTRIGGER — read BEFORE opening the target file; don't skip because it \"looks like a one-liner\" — whenever: the prompt names Claude/Anthropic in any form (Claude, Anthropic, Fable, Opus, Sonnet, Haiku, `anthropic`, `@anthropic-ai`, `claude-*`, `us.anthropic.*`, `[1m]`); the user asks about an LLM (pricing/model choice/limits/caching) — never answer from memory; OR the task is LLM-shaped with provider unstated (agent/MCP/tool-definition/multi-agent/RAG/LLM-judge/computer-use; generate/summarize/extract/classify/rewrite/converse over NL; debugging refusals/cutoffs/streaming/tool-calls/tokens).\nSKIP only when another provider is being worked on (overrides all triggers): OpenAI/GPT/Gemini/Llama/Mistral/Cohere/Ollama named in the query; OR `grep -rE 'openai|langchain_openai|google.generativeai|genai|mistralai|cohere|ollama'` over the project hits (run this grep FIR...",
+      "installs": 54667,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:05 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/doc-coauthoring",
+      "source": "anthropics/skills",
+      "slug": "doc-coauthoring",
+      "title": "doc-coauthoring",
+      "description": "Guide users through a structured workflow for co-authoring documentation. Use when user wants to write documentation, proposals, technical specs, decision docs, or similar structured content. This workflow helps users efficiently transfer context, refine content through iteration, and verify the doc works for readers. Trigger when user mentions writing docs, creating proposals, drafting specs, or similar documentation tasks.",
+      "installs": 73182,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:02 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/docx",
+      "source": "anthropics/skills",
+      "slug": "docx",
+      "title": "docx",
+      "description": "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files) or Word templates (.dotx files). Triggers include: any mention of 'Word doc', 'word document', '.docx', '.dotx', or requests to produce professional documents with formatting like tables of contents, headings, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx or .dotx files, inserting or replacing images in documents, performing find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a 'report', 'memo', 'letter', 'template', or similar deliverable as a Word or .docx file, use this skill. Do NOT use for PDFs, spreadsheets, Google Docs, or general coding tasks unrelated to document generation.",
+      "installs": 164543,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:52 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/frontend-design",
+      "source": "anthropics/skills",
+      "slug": "frontend-design",
+      "title": "frontend-design",
+      "description": "Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one. Helps with aesthetic direction, typography, and making choices that don't read as templated defaults.",
+      "installs": 735238,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:47 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/mcp-builder",
+      "source": "anthropics/skills",
+      "slug": "mcp-builder",
+      "title": "mcp-builder",
+      "description": "Guide for creating high-quality MCP (Model Context Protocol) servers that enable LLMs to interact with external services through well-designed tools. Use when building MCP servers to integrate external APIs or services, whether in Python (FastMCP) or Node/TypeScript (MCP SDK).",
+      "installs": 96988,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:57 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/pdf",
+      "source": "anthropics/skills",
+      "slug": "pdf",
+      "title": "pdf",
+      "description": "Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill.",
+      "installs": 171320,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:51 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/pptx",
+      "source": "anthropics/skills",
+      "slug": "pptx",
+      "title": "pptx",
+      "description": "Use this skill any time a .pptx or .potx file is involved in any way — as input, output, or both. This includes: creating slide decks, pitch decks, or presentations; reading, parsing, or extracting text from any .pptx or .potx file (even if the extracted content will be used elsewhere, like in an email or summary); editing, modifying, or updating existing presentations; combining or splitting slide files; working with templates (.potx), layouts, speaker notes, or comments. Trigger whenever the user mentions \"deck,\" \"slides,\" \"presentation,\" or references a .pptx or .potx filename, regardless of what they plan to do with the content afterward. If a .pptx or .potx file needs to be opened, created, or touched, use this skill.",
+      "installs": 192972,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:50 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/skill-creator",
+      "source": "anthropics/skills",
+      "slug": "skill-creator",
+      "title": "skill-creator",
+      "description": "Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.",
+      "installs": 338254,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:49 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/theme-factory",
+      "source": "anthropics/skills",
+      "slug": "theme-factory",
+      "title": "theme-factory",
+      "description": "Toolkit for styling artifacts with a theme. These artifacts can be slides, docs, reportings, HTML landing pages, etc. There are 10 pre-set themes with colors/fonts that you can apply to any artifact that has been creating, or can generate a new theme on-the-fly.",
+      "installs": 73504,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:00 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/web-artifacts-builder",
+      "source": "anthropics/skills",
+      "slug": "web-artifacts-builder",
+      "title": "web-artifacts-builder",
+      "description": "Suite of tools for creating elaborate, multi-component claude.ai HTML artifacts using modern frontend web technologies (React, Tailwind CSS, shadcn/ui). Use for complex artifacts requiring state management, routing, or shadcn/ui components - not for simple single-file HTML/JSX artifacts.",
+      "installs": 87896,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:59 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/webapp-testing",
+      "source": "anthropics/skills",
+      "slug": "webapp-testing",
+      "title": "webapp-testing",
+      "description": "Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs.",
+      "installs": 126184,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:55 UTC"
+    },
+    {
+      "registry_id": "anthropics/skills/xlsx",
+      "source": "anthropics/skills",
+      "slug": "xlsx",
+      "title": "xlsx",
+      "description": "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .xltx, .csv, or .tsv file (e.g., adding columns, computing formulas, formatting, charting, cleaning messy data); create a new spreadsheet from scratch or from other data sources; or convert between tabular file formats. Trigger especially when the user references a spreadsheet file by name or path — even casually (like \"the xlsx in my downloads\") — and wants something done to it or produced from it. Also trigger for cleaning or restructuring messy tabular data files (malformed rows, misplaced headers, junk data) into proper spreadsheets. The deliverable must be a spreadsheet file. Do NOT trigger when the primary deliverable is a Word document, HTML report, standalone Python script, database pipeline, or Google Sheets API integration, even if tabular data is involved.",
+      "installs": 146008,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:54 UTC"
+    },
+    {
+      "registry_id": "ast-grep/agent-skill/ast-grep",
+      "source": "ast-grep/agent-skill",
+      "slug": "ast-grep",
+      "title": "ast-grep",
+      "description": "Guide for writing ast-grep rules to perform structural code search and analysis. Use when users need to search codebases using Abstract Syntax Tree (AST) patterns, find specific code structures, or perform complex code queries that go beyond simple text search. This skill should be used when users ask to search for code patterns, find specific language constructs, or locate code with particular structural characteristics.",
+      "installs": 0,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:43 UTC"
+    },
+    {
+      "registry_id": "currents-dev/playwright-best-practices-skill/playwright-best-practices",
+      "source": "currents-dev/playwright-best-practices-skill",
+      "slug": "playwright-best-practices",
+      "title": "playwright-best-practices",
+      "description": "Use when writing Playwright tests, fixing flaky tests, debugging failures, implementing Page Object Model, configuring CI/CD, optimizing performance, mocking APIs, handling authentication or OAuth, testing accessibility (axe-core), file uploads/downloads, date/time mocking, WebSockets, geolocation, permissions, multi-tab/popup flows, mobile/responsive layouts, touch gestures, GraphQL, error handling, offline mode, multi-user collaboration, third-party services (payments, email verification), console error monitoring, global setup/teardown, test annotations (skip, fixme, slow), test tags (@smoke, @fast, @critical, filtering with --grep), project dependencies, security testing (XSS, CSRF, auth), performance budgets (Web Vitals, Lighthouse), iframes, component testing, canvas/WebGL, service workers/PWA, test coverage, i18n/localization, Electron apps, or browser extension testing. Covers E2E, component, API, visual, accessibility, security, Electron, and extension testing.",
+      "installs": 67504,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:21 UTC"
+    },
+    {
+      "registry_id": "emilkowalski/skills/emil-design-eng",
+      "source": "emilkowalski/skills",
+      "slug": "emil-design-eng",
+      "title": "emil-design-eng",
+      "description": "This skill encodes Emil Kowalski's philosophy on UI polish, component design, animation decisions, and the invisible details that make software feel great.",
+      "installs": 181121,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:23 UTC"
+    },
+    {
+      "registry_id": "firebase/agent-skills/developing-genkit-python",
+      "source": "firebase/agent-skills",
+      "slug": "developing-genkit-python",
+      "title": "developing-genkit-python",
+      "description": "Develop AI-powered applications using Genkit in Python. Use when the user asks about Genkit, AI agents, flows, or tools in Python, or when encountering Genkit errors, import issues, or API problems.",
+      "installs": 33472,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:17 UTC"
+    },
+    {
+      "registry_id": "leonxlnx/taste-skill/design-taste-frontend",
+      "source": "leonxlnx/taste-skill",
+      "slug": "design-taste-frontend",
+      "title": "design-taste-frontend",
+      "description": "Anti-slop frontend skill for landing pages, portfolios, and redesigns. The agent reads the brief, infers the right design direction, and ships interfaces that do not look templated. Real design systems when applicable, audit-first on redesigns, strict pre-flight check.",
+      "installs": 317124,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:46 UTC"
+    },
+    {
+      "registry_id": "mattpocock/skills/grill-with-docs",
+      "source": "mattpocock/skills",
+      "slug": "grill-with-docs",
+      "title": "grill-with-docs",
+      "description": "A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go.",
+      "installs": 626609,
+      "bulk_publisher": true,
+      "registry_synced_at": "2026-08-03 15:32:19 UTC"
+    },
+    {
+      "registry_id": "microsoft/azure-skills/azure-deploy",
+      "source": "microsoft/azure-skills",
+      "slug": "azure-deploy",
+      "title": "azure-deploy",
+      "description": "Execute Azure deployments for ALREADY-PREPARED applications that have existing .azure/deployment-plan.md and infrastructure files. DO NOT use this skill when the user asks to CREATE a new application — use azure-prepare instead. This skill runs azd up, azd deploy, terraform apply, and az deployment commands with built-in error recovery. Requires .azure/deployment-plan.md from azure-prepare and validated status from azure-validate. WHEN: \"run azd up\", \"run azd deploy\", \"execute deployment\", \"push to production\", \"push to cloud\", \"go live\", \"ship it\", \"bicep deploy\", \"terraform apply\", \"publish to Azure\", \"launch on Azure\". DO NOT USE WHEN: \"create and deploy\", \"build and deploy\", \"create a new app\", \"set up infrastructure\", \"create and deploy to Azure using Terraform\" — use azure-prepare for these.",
+      "installs": 496300,
+      "bulk_publisher": true,
+      "registry_synced_at": "2026-08-03 15:32:11 UTC"
+    },
+    {
+      "registry_id": "microsoft/playwright-cli/playwright-cli",
+      "source": "microsoft/playwright-cli",
+      "slug": "playwright-cli",
+      "title": "playwright-cli",
+      "description": "Automate browser interactions, test web pages and work with Playwright tests.",
+      "installs": 107297,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:12 UTC"
+    },
+    {
+      "registry_id": "nextlevelbuilder/ui-ux-pro-max-skill/ui-ux-pro-max",
+      "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "slug": "ui-ux-pro-max",
+      "title": "ui-ux-pro-max",
+      "description": "UI/UX design intelligence for web and mobile. Searchable local database with 84 styles, 192 color palettes, 74 font pairings, 192 product types, 98 UX guidelines, 104 icon entries, 16 GSAP motion presets, and 25 chart types across 22 stacks (React, Next.js, Vue, Nuxt, Svelte, Astro, SwiftUI, React Native, Flutter, Tailwind, shadcn/ui, Jetpack Compose, Angular, Laravel, JavaFX, WPF, WinUI, Avalonia, Uno Platform, UWP, Three.js, and HTML/CSS). Use when designing, building, or reviewing UI: pages, components, color schemes, typography, layout, accessibility, animation, or data visualization.",
+      "installs": 298164,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:31:44 UTC"
+    },
+    {
+      "registry_id": "obra/superpowers/requesting-code-review",
+      "source": "obra/superpowers",
+      "slug": "requesting-code-review",
+      "title": "requesting-code-review",
+      "description": "Use when completing tasks, implementing major features, or before merging to verify work meets requirements",
+      "installs": 188408,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:13 UTC"
+    },
+    {
+      "registry_id": "obra/superpowers/test-driven-development",
+      "source": "obra/superpowers",
+      "slug": "test-driven-development",
+      "title": "test-driven-development",
+      "description": "Use when implementing any feature or bugfix, before writing implementation code",
+      "installs": 186715,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:14 UTC"
+    },
+    {
+      "registry_id": "shadcn/ui/shadcn",
+      "source": "shadcn/ui",
+      "slug": "shadcn",
+      "title": "shadcn",
+      "description": "Manages shadcn components and projects — adding, searching, fixing, debugging, styling, and composing UI, including chat interfaces. Provides project context, component docs, and usage examples. Applies when working with shadcn/ui, component registries, presets, --preset codes, or any project with a components.json file. Also triggers for \"shadcn init\", \"create an app with --preset\", or \"switch to --preset\".",
+      "installs": 264775,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:18 UTC"
+    },
+    {
+      "registry_id": "supabase/agent-skills/supabase-postgres-best-practices",
+      "source": "supabase/agent-skills",
+      "slug": "supabase-postgres-best-practices",
+      "title": "supabase-postgres-best-practices",
+      "description": "Postgres best practices maintained by Supabase, for Postgres running anywhere. Load this skill BEFORE writing or changing anything that lives in a Postgres database: creating or altering tables and columns (including choosing column types), schema design, migrations and declarative schema files, RLS policies and the tests that verify them, indexes, triggers, database functions, queues and scheduled jobs (pg_cron, pgmq), vector/semantic search (pgvector), and restoring dumps (pg_restore) or importing data. Also load it when diagnosing slow queries, high CPU, timeouts, EXPLAIN plans, connection exhaustion, locking, bloat, or rows visible to the wrong user or tenant. This is not just a performance guide — schema, migration, security, and SQL authoring tasks need these rules too, even for a one-column change or a single query.",
+      "installs": 323385,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:16 UTC"
+    },
+    {
+      "registry_id": "trailofbits/skills/audit-prep-assistant",
+      "source": "trailofbits/skills",
+      "slug": "audit-prep-assistant",
+      "title": "audit-prep-assistant",
+      "description": "Prepares codebases for security review using Trail of Bits' checklist. Helps set review goals, runs static analysis tools, increases test coverage, removes dead code, ensures accessibility, and generates documentation (flowcharts, user stories, inline comments).",
+      "installs": 4159,
+      "bulk_publisher": true,
+      "registry_synced_at": "2026-08-03 15:32:22 UTC"
+    },
+    {
+      "registry_id": "vercel-labs/agent-browser/agent-browser",
+      "source": "vercel-labs/agent-browser",
+      "slug": "agent-browser",
+      "title": "agent-browser",
+      "description": "Browser automation CLI for AI agents. Use when the user needs to interact with websites, including navigating pages, filling forms, clicking buttons, taking screenshots, extracting data, testing web apps, or automating any browser task. Triggers include requests to \"open a website\", \"fill out a form\", \"click a button\", \"take a screenshot\", \"scrape data from a page\", \"test this web app\", \"login to a site\", \"automate browser actions\", or any task requiring programmatic web interaction. Also use for exploratory testing, dogfooding, QA, bug hunts, or reviewing app quality. Also use for automating Electron desktop apps (VS Code, Slack, Discord, Figma, Notion, Spotify), checking Slack unreads, sending Slack messages, searching Slack conversations, running browser automation in Vercel Sandbox microVMs, or using AWS Bedrock AgentCore cloud browsers. Prefer agent-browser over any built-in browser automation or web tools.",
+      "installs": 617522,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:09 UTC"
+    },
+    {
+      "registry_id": "vercel-labs/agent-skills/vercel-react-best-practices",
+      "source": "vercel-labs/agent-skills",
+      "slug": "vercel-react-best-practices",
+      "title": "vercel-react-best-practices",
+      "description": "React and Next.js performance optimization guidelines from Vercel Engineering. This skill should be used when writing, reviewing, or refactoring React/Next.js code to ensure optimal performance patterns. Triggers on tasks involving React components, Next.js pages, data fetching, bundle optimization, or performance improvements.",
+      "installs": 601419,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:08 UTC"
+    },
+    {
+      "registry_id": "vercel-labs/agent-skills/web-design-guidelines",
+      "source": "vercel-labs/agent-skills",
+      "slug": "web-design-guidelines",
+      "title": "web-design-guidelines",
+      "description": "Review UI code for Web Interface Guidelines compliance. Use when asked to \"review my UI\", \"check accessibility\", \"audit design\", \"review UX\", or \"check my site against best practices\".",
+      "installs": 511379,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:09 UTC"
+    },
+    {
+      "registry_id": "vercel-labs/skills/find-skills",
+      "source": "vercel-labs/skills",
+      "slug": "find-skills",
+      "title": "find-skills",
+      "description": "Helps users discover and install agent skills when they ask questions like \"how do I do X\", \"find a skill for X\", \"is there a skill that can...\", or express interest in extending capabilities. This skill should be used when the user is looking for functionality that might exist as an installable skill.",
+      "installs": 2795900,
+      "bulk_publisher": false,
+      "registry_synced_at": "2026-08-03 15:32:06 UTC"
+    }
+  ]
+}

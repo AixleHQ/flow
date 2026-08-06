@@ -180,3 +180,21 @@ an env var.
 
 The Skills.sh registry needs no key: its v1 API authenticates with Vercel OIDC
 only, so the catalog is browsed through the local mirror instead.
+
+## Catalog seed
+
+Both catalogs are local mirrors filled by weekly sweeps, so a deployment that has
+never run one would open the Connectors and Skills pages on an empty grid. To avoid
+that, the curated entries (`Connector::FEATURED`, `CatalogSkill::FEATURED`) are
+committed to the repo as `db/seeds/catalog/*.json` and loaded at boot — no network,
+no token, no Temporal worker. The sweeps fill in the rest of the catalog later, and
+never overwrite a mirrored row with the committed copy.
+
+- `bin/docker-entrypoint` (the Compose entrypoint) runs `rails catalog:featured:load`
+  after `db:prepare`. Nothing to configure.
+- A deployment that does **not** use that entrypoint — Kubernetes, or any image
+  started straight on `bundle exec puma` — should run `rails catalog:featured:load`
+  wherever it runs migrations. The task is idempotent and safe to run on every deploy.
+- After editing either `FEATURED` list, regenerate the files with
+  `rails catalog:featured:dump` against a database whose mirror is already synced,
+  and commit the result. A test fails if the two drift apart.
