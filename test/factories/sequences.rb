@@ -122,8 +122,4 @@ FactoryBot.define do
   sequence :otp_secret do
     ROTP::Base32.random
   end
-
-  sequence :mermaid_content do
-    Faker::Lorem.paragraph
-  end
 end

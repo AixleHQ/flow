@@ -153,7 +153,6 @@ Ruby-licensed.
 | emoji-mart | 5.6.0 | MIT |
 | lodash | 4.17.21 | MIT |
 | mantine-form-zod-resolver | 1.3.0 | MIT |
-| mermaid | 11.14.0 | MIT |
 | nanoid | 5.1.5 | MIT |
 | nuqs | 2.8.9 | MIT |
 | react | 19.x | MIT |
@@ -175,8 +174,7 @@ Ruby-licensed.
 |---|---|---|
 | @codemirror/*, @lezer/* | MIT | |
 | @bufbuild/protobuf | Apache-2.0 AND BSD-3-Clause | |
-| cytoscape, d3 | MIT / ISC | via mermaid / recharts |
-| dompurify | MPL-2.0 OR Apache-2.0 | Apache-2.0 selected |
+| d3-* (scale, shape, time, …) | ISC | via recharts / victory-vendor |
 
 All other transitive npm packages are MIT, Apache-2.0, ISC, or BSD-licensed.
 
