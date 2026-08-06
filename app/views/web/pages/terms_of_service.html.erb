@@ -1,89 +1,112 @@
 <% content_for(:title, "Terms of Service") %>
 
-<h1>Terms of Service</h1>
-<p class="legal-meta">Last updated: March 14, 2026</p>
+<h1>Aixle Flow Terms of Service</h1>
+<p class="legal-meta">Last updated: August 6, 2026 · Effective: August 6, 2026</p>
 
-<p>These Terms of Service ("Terms") govern your access to and use of the Aixle platform (the "Service") operated by Aixle ("we," "us," or "our"). By accessing or using the Service, you agree to be bound by these Terms.</p>
+<h2>1. Agreement and Parties</h2>
+<p>These Terms of Service ("Terms") govern access to and use of the hosted Aixle Flow service ("Service") provided by Dualboot Partners, LLC ("Dualboot," "we," "us"), 5540 Centerview Dr., Ste. 204, #24754, Raleigh, NC 27606.</p>
+<p>By creating an account, accessing the Service, or agreeing to these Terms on behalf of an organization, you accept them. If you accept on behalf of an organization, you represent that you are authorized to bind it, and "you" and "Customer" refer to that organization.</p>
 
-<h2>1. Acceptance of Terms</h2>
-<p>By creating an account or using the Service, you agree to these Terms and our <a href="/privacy-policy">Privacy Policy</a>. If you are using the Service on behalf of an organization, you represent that you have the authority to bind that organization to these Terms.</p>
+<h2>2. Relationship to the Open-Source License</h2>
+<p>The software underlying the Service is made available separately under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License, Version 2.0</a>. These Terms govern only our provision of the hosted Service.</p>
+<p>Nothing in these Terms limits any right granted to you under the Apache License 2.0 in respect of the source code, including the rights to use, modify, and redistribute it, and to operate your own deployment for any purpose. Our trademarks are not licensed by the Apache License or by these Terms; their use is governed by our trademark policy.</p>
+<p>If you obtained the software directly (for example, via a public repository) rather than through the hosted Service, your use of that software is governed solely by the Apache License and any accompanying NOTICE file, not by these Terms.</p>
 
-<h2>2. Description of Service</h2>
-<p>Aixle is an agentic software development lifecycle (SDLC) platform that enables AI agents to execute stages of the software development process. The Service includes agent session management, workflow orchestration, code execution in isolated containers, and related tools.</p>
+<h2>3. Accounts and Access</h2>
+<p><strong>3.1</strong> Access requires authentication through a supported identity provider (we support Google OpenID Connect) or, where we have enabled it for your organization, a password credential issued through your organization account. You are responsible for your users' credentials and for all activity under your organization's account.</p>
+<p><strong>3.2</strong> You control who you invite to your organization and what role each user holds. Roles are Employee and Admin, with different privileges.</p>
+<p><strong>3.3</strong> Your organization account is associated with an email domain. Where automatic acceptance is enabled for your organization, any person who authenticates with an email address in that domain joins your organization without individual approval, and thereby obtains the access described in Section 6.1. You are responsible for deciding whether that configuration is appropriate for your organization and for control of your email domain.</p>
+<p><strong>3.4</strong> You must notify us promptly of any suspected unauthorized access.</p>
+<p><strong>3.5</strong> Our operational staff may access your account, sessions, and session records where necessary to provide, secure, support, or troubleshoot the Service. Such access is subject to Section 10 (Confidentiality) and to our <a href="/privacy-policy">Privacy Policy</a>.</p>
 
-<h2>3. Account Registration</h2>
+<h2>4. Customer Data</h2>
+<p><strong>4.1 Definition.</strong> "Customer Data" means all data you or your users submit to, or that the Service generates, collects, or captures on your behalf in the course of providing the Service — including instructions and prompts submitted to agents; source code and repository contents retrieved from your connected source-control systems; files, artifacts, and assets created, modified, or uploaded during a session; agent session transcripts and container logs, including logs of traffic between an agent and the AI provider it is configured to use; board, task, workflow, and comment content; payloads received from your connected systems by webhook; usage and cost records; and user records. The categories are described in the <a href="/privacy-policy">Privacy Policy</a>.</p>
+<p><strong>4.2 Ownership.</strong> You retain all right, title, and interest in Customer Data. We claim no ownership.</p>
+<p><strong>4.3 Our license.</strong> You grant us a limited, non-exclusive license to host, store, process, and transmit Customer Data solely to provide, secure, and support the Service, and as instructed by you. We do not use Customer Data for any other purpose.</p>
+<p><strong>4.4 No use for model training.</strong> We do not use Customer Data — including instructions, source code, or session transcripts — to train machine-learning models, and we do not disclose it to third parties for that purpose.</p>
+<p><strong>4.5 Your responsibilities.</strong> You are responsible for ensuring you have the legal right and any necessary basis, notices, and permissions to submit Customer Data to the Service and to grant us access to the systems you connect, including the right to submit any source code or third-party material processed in a session, and including as set forth in Section 6 with respect to visibility of individual usage by your personnel.</p>
+<p><strong>4.6 Sensitive data.</strong> The Service is not designed for, and you must not knowingly submit, special-category personal data, payment-card data, regulated health data, or any other regulated data class. You acknowledge that instructions, repository contents, and session transcripts are captured as submitted by your users or as produced by an agent, and that we cannot filter them.</p>
+
+<h2>5. Agent Execution, Connected Credentials, and Customer Environments</h2>
+<p><strong>5.1 What the Service does.</strong> The Service launches AI coding agents in isolated containers that we operate, injects the context you configure (repositories, MCP servers, tools, skills, assets, and configuration), and runs those agents on your instructions. Depending on how you configure a session or workflow, an agent may operate autonomously, without step-by-step human confirmation of individual actions.</p>
+<p><strong>5.2 Credentials and systems you connect.</strong> You may connect source-control accounts and installations, issue trackers, messaging and infrastructure providers, MCP servers, and AI-assistant accounts. You determine what you connect and the scope of the permissions you grant, which may include write access to your repositories. We store connected credentials in encrypted form and use them only to operate sessions you or your users initiate. You are responsible for the scope of access you grant, for keeping it current, and for revoking it when it is no longer required.</p>
+<p><strong>5.3 AI-assistant accounts and provider terms.</strong> A session authenticates to the AI provider using credentials your user onboards through the Service — typically that user's own account with, or API key for, that provider. The provider's own terms and privacy practices govern the provider's processing of anything the agent sends to it. You and your users are responsible for holding the rights necessary to use those accounts in an automated, server-hosted environment and for compliance with any applicable provider limits or restrictions. We are not a party to that relationship, do not resell provider capacity, and make no representation about a provider's processing of that content.</p>
+<p><strong>5.4 Actions taken by agents.</strong> Within the permissions you grant, an agent may read, create, modify, and delete files in its container; execute commands and install dependencies; make outbound network requests; invoke MCP tools and connected integrations; and read from and write to your connected source-control systems. Actions taken using credentials you connected are treated as taken by you, whether or not a user directed the specific action. We do not review agent actions before they occur and do not control what an agent decides to do in response to your instructions.</p>
+<p><strong>5.5 Human review.</strong> You are responsible for reviewing agent output before merging, deploying, or otherwise relying on it. The Service provides approval gates in workflows and artifact review; whether you use them is your decision.</p>
+<p><strong>5.6 No warranty as to output.</strong> Output produced by an agent may be inaccurate, incomplete, insecure, non-functional, or substantially similar to third-party material. We make no representation or warranty that output is correct, original, fit for any purpose, or free of third-party rights, and you are responsible for any testing, security review, and license-compliance review before using it. This Section 5.6 is without limitation to Section 11.</p>
+<p><strong>5.7 Containers are ephemeral.</strong> A session's container and its filesystem are destroyed when the session ends. Only artifacts that the Service collects and stores persist. You are responsible for ensuring that work you wish to keep is committed to a connected repository or exported before a session ends.</p>
+
+<h2>6. Visibility of Individual Usage and Personnel Monitoring</h2>
+<p><strong>6.1 What the Service records and who can see it.</strong> The Service records, for each session, the user who initiated it, the instruction submitted, the agent and model used, token counts, computed cost, duration, and the artifacts produced. Any member of your organization account can view sessions and usage records for your organization, including sessions initiated by other users and the instructions submitted with them. Complete session transcripts and container logs are retained by the Service as described in the <a href="/privacy-policy">Privacy Policy</a>.</p>
+<p><strong>6.2 Customer's Sole Responsibility.</strong> The Service allows Customer to monitor, log, or review individual usage by Customer's personnel, including instructions and session content attributable to specific individuals. As between the parties, Customer is solely responsible for determining whether such monitoring is lawful in each jurisdiction in which Customer's personnel are located, and for obtaining and maintaining any legal basis, notice, consent, works council or employee-representative consultation, or regulatory approval that Applicable Law requires before enabling or using such functionality.</p>
+<p><strong>6.3 Representation and Warranty.</strong> Customer represents and warrants that, before enabling monitoring of any individual's usage of the Service, Customer has completed any notice, consultation, or approval process required by Applicable Law in the relevant jurisdiction, including any consultation with or approval from a works council, employee representative body, or similar entity where such consultation or approval is a legal prerequisite to implementing the monitoring. Customer will promptly notify Company if it becomes aware that this representation is or becomes inaccurate.</p>
+<p><strong>6.4 No Assumption of Customer's Obligations.</strong> Company provides the Service, including any monitoring functionality, on Customer's instructions as controller. Nothing in this Section or these Terms shifts to Company any obligation to provide notice to, or obtain consent, consultation, or approval from, Customer's personnel or their representatives, and Company makes no independent determination as to the legality of Customer's use of monitoring functionality in any jurisdiction.</p>
+<p><strong>6.5 Indemnification.</strong> Without limiting Section 13, Customer will indemnify, defend, and hold harmless Company from and against any claims, damages, liabilities, fines, regulatory actions, or expenses (including reasonable attorneys' fees) arising from or relating to Customer's failure to satisfy any notice, consent, consultation, or approval requirement described in this Section, including any claim brought by an employee, employee representative body, works council, or regulator arising from Customer's use of the Service in violation of Applicable Law.</p>
+<p><strong>6.6 Available Controls.</strong> Company makes available controls over organization membership, automatic acceptance of users by email domain, project membership, and which users may initiate sessions. Customer is responsible for configuring the Service consistent with the outcome of its own legal assessment under this Section.</p>
+
+<h2>7. Free Tier and Quotas</h2>
+<p>The Service is currently provided free of charge. Company may establish, modify, or remove usage limits, rate limits, compute and storage quotas, or session concurrency limits for the free tier at any time, with such changes taking effect upon posting or by other reasonable notice. We reserve the right to introduce paid tiers or modify the scope of the free offering in the future, with reasonable advance notice for material changes affecting existing Customers.</p>
+
+<h2>8. Acceptable Use</h2>
+<p>You must not, and must not permit your users to:</p>
 <ul>
-  <li>You must provide accurate and complete information when creating an account.</li>
-  <li>You are responsible for maintaining the security of your account credentials.</li>
-  <li>You must notify us immediately of any unauthorized access to your account.</li>
-  <li>You are responsible for all activities that occur under your account.</li>
+  <li>(a) access the Service other than through the interfaces we provide, or circumvent rate limits, quotas, or access controls;</li>
+  <li>(b) use the Service to store or transmit unlawful, infringing, or malicious content;</li>
+  <li>(c) attempt to gain unauthorized access to the Service, other customers' data, or our infrastructure;</li>
+  <li>(d) interfere with or disrupt the integrity or performance of the Service;</li>
+  <li>(e) resell, sublicense, or offer the hosted Service (as distinct from the underlying open-source software, which may be freely used, modified, and hosted by anyone under the Apache License 2.0) to third parties as a competing hosted or managed offering, or use our trademarks in connection with any such offering, except as separately agreed with us in writing;</li>
+  <li>(f) use the container execution capabilities of the Service to mine cryptocurrency, to run workloads unrelated to the operation of agents on your own projects, or otherwise to consume compute, storage, or network resources abusively;</li>
+  <li>(g) use a session, its network access, or a connected integration to scan, probe, attack, or send unsolicited communications to any system you are not authorized to access;</li>
+  <li>(h) attempt to escape, disable, or circumvent the isolation of a container, or to access the containers, namespaces, credentials, or data of another user or customer;</li>
+  <li>(i) submit source code or other content you do not have the right to submit, or use the Service in a manner that breaches the terms of an AI provider or other third-party system you connect to it.</li>
 </ul>
 
-<h2>4. Acceptable Use</h2>
-<p>You agree not to use the Service to:</p>
-<ul>
-  <li>Violate any applicable law, regulation, or third-party rights</li>
-  <li>Upload or transmit malicious code, viruses, or harmful content</li>
-  <li>Attempt to gain unauthorized access to the Service or its infrastructure</li>
-  <li>Interfere with the security or integrity of the Service</li>
-  <li>Use the Service for cryptocurrency mining or other resource-abusive activities</li>
-  <li>Reverse-engineer, decompile, or disassemble any part of the Service</li>
-  <li>Use the Service to build a competing product or service</li>
-  <li>Share your account credentials with unauthorized parties</li>
-</ul>
+<h2>9. Availability and Support</h2>
+<p>As of the Effective Date, we do not offer a service-level agreement or uptime commitment for the Service. Sessions and their containers are ephemeral, and we make no commitment to preserve the state of a running session; see Section 5.7.</p>
+<p>Community support for the open-source project (for example, GitHub issues and discussions) is provided on a best-efforts, volunteer basis and is not a contractual support commitment for the hosted Service.</p>
 
-<h2>5. Intellectual Property</h2>
+<h2>10. Confidentiality</h2>
+<p><strong>10.1</strong> Each party may receive from the other information that is designated confidential or that reasonably should be understood to be confidential given the nature of the information and the circumstances of disclosure ("Confidential Information"). Confidential Information does not include Customer Data, which is addressed exclusively in Section 4.</p>
+<p><strong>10.2</strong> Each party will use the other party's Confidential Information solely to exercise its rights and perform its obligations under these Terms, will protect it using at least the same degree of care it uses for its own confidential information of a similar nature (and in no event less than a reasonable degree of care), and will not disclose it to any third party except to employees, contractors, and advisors who need to know it and are bound by confidentiality obligations at least as protective as those in this Section.</p>
+<p><strong>10.3</strong> These obligations do not apply to information that: (a) is or becomes publicly available through no fault of the receiving party; (b) was rightfully known to the receiving party before disclosure; (c) is rightfully received from a third party without a duty of confidentiality; or (d) is independently developed without use of the disclosing party's Confidential Information.</p>
+<p><strong>10.4</strong> A party may disclose Confidential Information to the extent required by Applicable Law or legal process, provided it gives the other party prompt notice of the requirement (where legally permitted) so that the other party may seek a protective order or other appropriate remedy.</p>
 
-<h3>Your Content</h3>
-<p>You retain ownership of all code, files, and content you upload or create through the Service ("Your Content"). By using the Service, you grant us a limited license to process Your Content solely for the purpose of providing the Service to you.</p>
+<h2>11. Warranties and Disclaimers</h2>
+<p><strong>11.1</strong> THE SERVICE AND ANY ASSOCIATED SOFTWARE ARE PROVIDED "AS IS" AND "AS AVAILABLE," WITHOUT WARRANTIES OF ANY KIND, WHETHER EXPRESS, IMPLIED, OR STATUTORY, INCLUDING WITHOUT LIMITATION ANY IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT, AND ANY WARRANTIES ARISING OUT OF COURSE OF DEALING OR USAGE OF TRADE. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR SECURE.</p>
+<p><strong>11.2</strong> This Section 11 governs only the hosted Service. It does not apply to, limit, or expand the warranty disclaimer in Section 7 of the Apache License, Version 2.0, which applies independently and solely to the underlying source code licensed thereunder.</p>
+<p><strong>11.3</strong> Without limiting Section 11.1, we give no warranty as to output produced by an agent, or as to the actions an agent takes in your systems; see Sections 5.4 and 5.6.</p>
 
-<h3>Our Service</h3>
-<p>The Service, including its design, features, and underlying technology, is owned by Aixle and protected by intellectual property laws. These Terms do not grant you any rights to our trademarks, logos, or brand features.</p>
+<h2>12. Limitation of Liability</h2>
+<p><strong>12.1</strong> EXCEPT FOR DAMAGES RESULTING FROM A PARTY'S GROSS NEGLIGENCE, WILLFUL MISCONDUCT, OR FRAUD, OR AS OTHERWISE PROVIDED IN AN AGREEMENT BETWEEN DUALBOOT AND YOU, TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, DUALBOOT SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, OR ANY LOSS OF PROFITS, REVENUE, DATA, OR GOODWILL, ARISING OUT OF OR RELATED TO THESE TERMS OR THE SERVICE, REGARDLESS OF THE THEORY OF LIABILITY, EVEN IF SUCH PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</p>
+<p><strong>12.2</strong> This Section 12 governs only liability arising from the hosted Service under these Terms. It does not apply to, limit, or expand the limitation of liability in Section 8 of the Apache License, Version 2.0, which applies independently and solely to claims relating to the licensed source code.</p>
 
-<h2>6. AI Agent Sessions</h2>
-<ul>
-  <li>AI agent sessions run in isolated containers for security and reproducibility.</li>
-  <li>You are responsible for reviewing and approving the output of AI agent sessions before deploying to production.</li>
-  <li>We do not guarantee the accuracy, completeness, or suitability of AI-generated code or outputs.</li>
-  <li>AI agent outputs may be subject to the terms and licenses of the underlying AI model providers.</li>
-</ul>
+<h2>13. Indemnification</h2>
+<p><strong>13.1 By Customer.</strong> Customer will indemnify, defend, and hold harmless Company from and against any claims, damages, liabilities, and expenses (including reasonable attorneys' fees) arising from: (a) Customer Data, including any claim that our receipt, storage, or processing of Customer Data in accordance with these Terms infringes, misappropriates, or violates the rights of any third party; (b) Customer's or its users' use of the Service in violation of these Terms or Applicable Law; (c) Customer's breach of Section 4 (Customer Data) or Section 5 (Agent Execution, Connected Credentials, and Customer Environments); (d) any action taken by an agent using credentials or access Customer or its users connected to the Service, and Customer's use of, deployment of, or reliance on output produced by an agent, including any claim that such output infringes or misappropriates the rights of any third party; or (e) any claim by an AI provider or other third party arising from the use of an account or credential Customer or its users connected to the Service.</p>
+<p><strong>13.2</strong> The indemnified party will provide prompt written notice of any claim, allow the indemnifying party to control the defense and settlement (provided any settlement imposing liability or obligations on the indemnified party requires its prior written consent, not to be unreasonably withheld), and provide reasonable cooperation at the indemnifying party's expense.</p>
 
-<h2>7. Third-Party Services</h2>
-<p>The Service may integrate with third-party platforms and services (e.g., GitHub, AI model providers, container registries). Your use of such integrations is subject to the respective third-party terms and policies. We are not responsible for third-party services.</p>
+<h2>14. Term and Termination</h2>
+<p><strong>14.1</strong> These Terms remain in effect for as long as you maintain an account or otherwise access the Service, unless earlier terminated as set out below.</p>
+<p><strong>14.2</strong> Either party may terminate these Terms for convenience upon notice.</p>
+<p><strong>14.3</strong> We may suspend or terminate your access to the Service at any time, with or without cause, where not prohibited by Applicable Law. Upon termination: (a) your right to access the Service ends; (b) Company has no obligation to retain, and may immediately and without notice delete, any data, content, or information associated with your account, including session records, transcripts, and artifacts. You are solely responsible for exporting or backing up any data you wish to retain prior to termination. Company disclaims all liability for any data unavailability or deletion following termination; and (c) termination of the hosted Service does not affect any rights previously granted to you under the Apache License 2.0 with respect to source code you have already obtained.</p>
+<p><strong>14.4</strong> Sections 4 (solely as to Customer Data not yet deleted or returned), 5, 6, 10–13, and 17–18 survive termination.</p>
 
-<h2>8. Fees and Payment</h2>
-<p>Certain features of the Service may require payment. Pricing details, billing terms, and payment conditions will be communicated through the Service or a separate agreement. We reserve the right to modify pricing with reasonable notice.</p>
+<h2>15. Suspension</h2>
+<p><strong>15.1</strong> We may suspend your (or any user's) access to all or part of the Service, without liability, if: (a) we reasonably believe your use presents a security risk to the Service or other customers; (b) your use violates Section 8 (Acceptable Use); (c) suspension is required to comply with Applicable Law or a governmental request; or (d) continued provision of the Service to you would, in our reasonable judgment, expose us to material legal or regulatory risk.</p>
+<p><strong>15.2</strong> Where reasonably practicable and not prohibited by Applicable Law, we will provide advance notice of a suspension and the reason for it. We will restore access promptly once the circumstance giving rise to the suspension is resolved.</p>
+<p><strong>15.3</strong> Suspension under this Section does not itself terminate these Terms, and Sections 4, 5, 6, and 10–19 continue to apply during any period of suspension.</p>
 
-<h2>9. Service Availability</h2>
-<p>We strive to maintain high availability but do not guarantee uninterrupted access to the Service. We may perform scheduled maintenance, updates, or experience downtime. We are not liable for any loss or damage resulting from service interruptions.</p>
+<h2>16. Changes to the Service or Terms</h2>
+<p>We may modify the Service or these Terms at any time. We will provide reasonable advance notice of material changes to these Terms (for example, by email or an in-app notice) before they take effect. Continued use of the Service after a change takes effect constitutes acceptance of the revised Terms; if you do not agree, you must stop using the Service and may terminate your account in accordance with Section 14.</p>
 
-<h2>10. Limitation of Liability</h2>
-<p>To the maximum extent permitted by applicable law:</p>
-<ul>
-  <li>The Service is provided "as is" and "as available" without warranties of any kind.</li>
-  <li>We disclaim all warranties, whether express, implied, or statutory, including warranties of merchantability, fitness for a particular purpose, and non-infringement.</li>
-  <li>We are not liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Service.</li>
-  <li>Our total liability shall not exceed the amount you paid for the Service in the 12 months preceding the claim.</li>
-</ul>
+<h2>17. Governing Law and Disputes</h2>
+<p>These Terms are governed by the laws of North Carolina, without regard to its conflict-of-laws principles. Any dispute arising out of or relating to these Terms or the Service will be resolved exclusively in the state or federal courts located in North Carolina, and each party consents to the exclusive jurisdiction of such forum.</p>
 
-<h2>11. Indemnification</h2>
-<p>You agree to indemnify and hold harmless Aixle, its officers, directors, employees, and agents from any claims, damages, losses, or expenses (including legal fees) arising from your use of the Service, your violation of these Terms, or your violation of any third-party rights.</p>
+<h2>18. General</h2>
+<p><strong>18.1 Severability.</strong> If any provision of these Terms is found unenforceable, the remaining provisions remain in full force and effect.</p>
+<p><strong>18.2 Entire agreement.</strong> These Terms, together with the Apache License 2.0 (as applicable to the licensed source code) and our <a href="/privacy-policy">Privacy Policy</a>, constitute the entire agreement between you and us regarding the Service, and supersede any prior agreements regarding the Service.</p>
+<p><strong>18.3 No waiver.</strong> Failure to enforce any provision is not a waiver of that provision.</p>
+<p><strong>18.4 Assignment.</strong> You may not assign or transfer these Terms without our prior written consent; we may assign these Terms without restriction, including in connection with a merger, acquisition, or sale of assets.</p>
+<p><strong>18.5 Relationship of the parties.</strong> Nothing in these Terms creates a partnership, joint venture, agency, or employment relationship between the parties.</p>
 
-<h2>12. Termination</h2>
-<ul>
-  <li>You may terminate your account at any time by contacting us.</li>
-  <li>We may suspend or terminate your access if you violate these Terms or for any other reason with reasonable notice.</li>
-  <li>Upon termination, your right to use the Service ceases immediately. We may delete your data after a reasonable retention period.</li>
-</ul>
-
-<h2>13. Governing Law</h2>
-<p>These Terms are governed by and construed in accordance with applicable laws, without regard to conflict of law principles. Any disputes arising from these Terms or the Service shall be resolved through binding arbitration or in the courts of competent jurisdiction.</p>
-
-<h2>14. Changes to These Terms</h2>
-<p>We may update these Terms from time to time. We will notify you of material changes by posting the updated Terms on this page and updating the "Last updated" date. Your continued use of the Service after changes constitutes acceptance of the revised Terms.</p>
-
-<h2>15. Contact Us</h2>
-<p>If you have questions about these Terms of Service, please contact us at:</p>
-<ul>
-  <li>Email: <a href="mailto:legal@aixle.com">legal@aixle.com</a></li>
-</ul>
+<h2>19. Contact</h2>
+<p>Questions about these Terms should be directed to Dualboot Partners, LLC, 5540 Centerview Dr., Ste. 204, #24754, Raleigh, NC 27606, or by email to <a href="mailto:legal@aixle.com">legal@aixle.com</a>.</p>
