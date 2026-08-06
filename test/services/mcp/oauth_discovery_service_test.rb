@@ -399,6 +399,59 @@ module MCP
       assert_match(/did not advertise/, error.user_message)
     end
 
+    # ======================== MANUAL CLIENT ========================
+    # The way out for an authorization server that will not register us: an operator
+    # registers the OAuth app themselves and pastes its credentials.
+
+    test "a manual client is used instead of registering, and gets its endpoints from discovery" do
+      server = create(:mcp_server, :custom, auth_type: :oauth, url: MCP_URL)
+      manual = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "operator-cid",
+                                   mcp_server: server, client_secret: "operator-secret")
+      stub_probe
+      stub_prm
+      stub_asm
+      # Deliberately NO stub_registration: registering is what this server refuses.
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL, manual_client: manual)
+
+      client = result.oauth_client
+      assert_equal manual.id, client.id
+      assert_equal "operator-cid", client.client_id
+      assert_equal ISSUER, client.issuer
+      assert_equal AUTH_EP, client.authorization_endpoint
+      assert_equal TOKEN_EP, client.token_endpoint
+      assert client.confidential?, "an operator-supplied secret must survive discovery"
+      assert_not_requested :post, REG_EP
+    end
+
+    test "a manual client is preferred over an already-registered dcr client for the same issuer" do
+      server = create(:mcp_server, :custom, auth_type: :oauth, url: MCP_URL)
+      manual = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "operator-cid",
+                                   mcp_server: server)
+      OauthClient.create!(source: "dcr", issuer: ISSUER, client_id: "old-dcr-cid",
+                          authorization_endpoint: AUTH_EP, token_endpoint: TOKEN_EP)
+      stub_probe
+      stub_prm
+      stub_asm
+
+      client = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL, manual_client: manual).oauth_client
+
+      assert_equal "operator-cid", client.client_id
+    end
+
+    test "a manual client with no scopes of its own takes the ones discovery advertises" do
+      server = create(:mcp_server, :custom, auth_type: :oauth, url: MCP_URL)
+      manual = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "operator-cid",
+                                   mcp_server: server)
+      stub_probe
+      stub_prm
+      stub_asm
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL, manual_client: manual)
+
+      assert_equal "read write", manual.reload.scopes
+    end
+
     # ==================== REGISTRATION FAILURE DIAGNOSIS ====================
     # "Couldn't connect" is a lie when the server answered perfectly well and simply
     # refused to register us. These assert the WHY survives, and only via the allowlist.

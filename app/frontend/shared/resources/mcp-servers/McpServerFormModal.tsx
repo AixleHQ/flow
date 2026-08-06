@@ -8,6 +8,7 @@ import {
   Group,
   Modal,
   NativeSelect,
+  PasswordInput,
   Stack,
   Switch,
   Text,
@@ -48,6 +49,8 @@ const schema = z
     enabled: z.boolean().default(true),
     authType: z.enum(['none', 'static', 'oauth']).default('none'),
     credentialScope: z.enum(['shared', 'per_user']).default('shared'),
+    oauthClientId: z.string().default(''),
+    oauthClientSecret: z.string().default(''),
   })
   .superRefine((data, ctx) => {
     if (data.transport === 'stdio') {
@@ -73,6 +76,10 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
+// Stands in for a stored client secret the browser is never sent, and is resubmitted verbatim when
+// the field is left alone. Must match SECRET_MASK in Web::Company::Projects::MCPServersController.
+const SECRET_MASK = '\u2022'.repeat(6);
+
 interface KVPair {
   key: string;
   value: string;
@@ -93,6 +100,10 @@ interface McpServer {
   authType?: 'none' | 'static' | 'oauth';
   credentialScope?: 'shared' | 'per_user';
   oauthStatus?: OauthStatus | null;
+  // An OAuth client the operator registered themselves, for a server whose authorization server
+  // refuses to register us. The id round-trips; the secret never does — only whether one is stored.
+  oauthClientId?: string | null;
+  oauthClientSecretPresent?: boolean;
 }
 
 interface McpServerFormModalProps {
@@ -116,6 +127,9 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
   // Credential scope defaults to project-wide (shared); the per-user option is tucked behind an
   // "Advanced" disclosure. Auto-expanded when editing a server that already uses per_user.
   const [showScopeOptions, setShowScopeOptions] = useState(false);
+  // Hand-entered OAuth client credentials, hidden until asked for: they are the exception, needed
+  // only when the authorization server refuses to register us.
+  const [showClientOptions, setShowClientOptions] = useState(false);
   const isEdit = !!editServer;
 
   const form = useForm<FormData>({
@@ -129,6 +143,8 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
       enabled: true,
       authType: 'none',
       credentialScope: 'shared',
+      oauthClientId: '',
+      oauthClientSecret: '',
     },
   });
 
@@ -138,6 +154,8 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
   // oauth_status is read-only (never a form value); read it straight off the edited server. A saved
   // oauth server with no credential yet reports "pending".
   const oauthStatus: OauthStatus = editServer?.oauthStatus ?? 'pending';
+  // The one callback URL this deployment uses; the operator has to register exactly this.
+  const callbackUrl = `${window.location.origin}/oauth/callback`;
   const statusMeta = OAUTH_STATUS_META[oauthStatus] ?? OAUTH_STATUS_META.pending;
 
   useEffect(() => {
@@ -156,13 +174,17 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
           enabled: editServer.enabled,
           authType: editServer.authType ?? 'none',
           credentialScope: editServer.credentialScope ?? 'shared',
+          oauthClientId: editServer.oauthClientId ?? '',
+          oauthClientSecret: editServer.oauthClientSecretPresent ? SECRET_MASK : '',
         });
         // Reveal the advanced scope control up-front only when it's already non-default.
         setShowScopeOptions(editServer.credentialScope === 'per_user');
+        setShowClientOptions(!!editServer.oauthClientId);
       } else {
         setHeadersList([]);
         setEnvList([]);
         setShowScopeOptions(false);
+        setShowClientOptions(false);
         form.reset();
       }
     }
@@ -296,7 +318,34 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
 
               {isOauth && (
                 <Box>
-                  <Text fz={14} fw={500} c="dimmed" mb={4}>
+                  <Group gap={6} align="baseline">
+                    <Text fz={13} c="dimmed">
+                      Registers with the server automatically.
+                    </Text>
+                    <Anchor component="button" type="button" fz={13} onClick={() => setShowClientOptions((v) => !v)}>
+                      {showClientOptions ? 'Hide client ID' : 'Set a client ID'}
+                    </Anchor>
+                  </Group>
+                  {showClientOptions && (
+                    <Stack gap="xs" mt="xs">
+                      {/* Some authorization servers refuse to register an app for a hosted
+                          deployment (Vercel approves loopback callbacks only). For those, an
+                          operator registers the app themselves and pastes its credentials here;
+                          the endpoints still come from discovery. */}
+                      <TextInput
+                        label="OAuth Client ID"
+                        placeholder="Only if this server refuses to register apps automatically"
+                        {...form.getInputProps('oauthClientId')}
+                        description={`Register an app at the provider with the callback URL ${callbackUrl}, then paste its client ID. Leave empty to register automatically.`}
+                      />
+                      <PasswordInput
+                        label="OAuth Client Secret"
+                        {...form.getInputProps('oauthClientSecret')}
+                        description="Leave empty for a public (PKCE-only) client."
+                      />
+                    </Stack>
+                  )}
+                  <Text fz={14} fw={500} c="dimmed" mb={4} mt="md">
                     Connection
                   </Text>
                   {/* Connecting is not an edit — it is a top-level redirect off-site and back.

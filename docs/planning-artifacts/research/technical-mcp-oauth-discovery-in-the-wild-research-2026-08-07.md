@@ -168,7 +168,7 @@ work. 22 remain genuine transport failures (dead hosts, stale registry urls).
 ## Proposed follow-ups
 
 1. **A manual client per MCP server** for the servers that will never accept DCR (Vercel,
-   Atlassian) — **decided 2026-08-07, to build.** A `client_id` is bound to a `redirect_uri`,
+   Atlassian) — **decided and built, 2026-08-07.** A `client_id` is bound to a `redirect_uri`,
    hence to one deployment's domain, so no shared client can ever be shipped: every operator
    needs their own OAuth app at the provider. The existing `Oauth::Providers` registry does
    this for Sentry and Railway, but it is hard-coded per provider and configured through
@@ -178,7 +178,11 @@ work. 22 remain genuine transport failures (dead hosts, stale registry urls).
    fields — client ID and secret — against that MCP server, persisted as an
    `OauthClient(source: "manual")`. Endpoints still come from discovery; only the credentials
    are hand-entered. One implementation covers Vercel, Atlassian and every future refusenik,
-   with no code per provider.
+   with no code per provider. Shipped as `OauthClient(source: "manual")` scoped to one
+   `mcp_server` — a tenancy rule, not a preference: those credentials belong to whoever pasted
+   them, and another tenant's users must never authorize into that OAuth app. The callback
+   enforces the same thing, refusing a manual client whose server does not match the signed
+   state.
 2. **Device flow** only if a named provider justifies it; the data does not support building
    it as a general fallback.
 
