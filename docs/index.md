@@ -53,6 +53,11 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
 
 - **[strategy/](./strategy/)** — Business / open-source strategy documents
 
+## Legal
+
+- **[legal/TERMS_OF_SERVICE.md](./legal/TERMS_OF_SERVICE.md)** — Aixle Flow Terms of Service; published verbatim at `/terms-of-service` (`app/views/web/pages/terms_of_service.html.erb`)
+- **[legal/PRIVACY_POLICY.md](./legal/PRIVACY_POLICY.md)** — Aixle Flow Privacy Policy; published verbatim at `/privacy-policy` (`app/views/web/pages/privacy_policy.html.erb`)
+
 ## Related documentation elsewhere
 
 - `references/aixle-system-reference.md` — agent-facing platform reference (domain model, runtimes, container layout)
