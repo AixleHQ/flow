@@ -326,6 +326,31 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
                  "exactly one RFC 8707 resource indicator, naming the MCP server and not the auth server"
   end
 
+  # Regression: Railway advertises `offline_access` in its protected-resource
+  # metadata, we requested it, and its OIDC provider dropped the scope and issued no
+  # refresh_token (OIDC Core §11 — offline_access is ignored without consent). The
+  # credential then had nothing to refresh from and the connection lapsed at the
+  # 1-hour access-token TTL.
+  test "mcp_connect prompts for consent when it requests offline_access (else no refresh_token is issued)" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    stub_discovery!(client: build_dcr_client, scopes: "openid offline_access workspace:member")
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id)
+
+    q = query_params(@response.headers["Location"])
+    assert_equal "openid offline_access workspace:member", q["scope"]
+    assert_equal "consent", q["prompt"]
+  end
+
+  test "mcp_connect omits prompt when offline_access is not requested (an OIDC-only parameter)" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    stub_discovery!(client: build_dcr_client, scopes: "mcp:read")
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id)
+
+    refute query_params(@response.headers["Location"]).key?("prompt")
+  end
+
   test "mcp_connect omits scope entirely when neither discovery nor the client advertises one" do
     server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
     stub_discovery!(client: build_dcr_client(scopes: nil), scopes: nil)
