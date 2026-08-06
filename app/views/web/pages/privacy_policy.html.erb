@@ -1,86 +1,125 @@
 <% content_for(:title, "Privacy Policy") %>
 
-<h1>Privacy Policy</h1>
-<p class="legal-meta">Last updated: March 14, 2026</p>
+<h1>Privacy Policy — Aixle Flow</h1>
+<p class="legal-meta">Last updated: August 6, 2026 · Effective: August 6, 2026</p>
 
-<p>Aixle ("we," "us," or "our") operates the Aixle platform (the "Service"). This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our Service.</p>
+<h2>1. Who We Are</h2>
+<p>Aixle Flow ("the Service") is provided by Dualboot Partners, LLC ("Dualboot," "we," "us"), 5540 Centerview Dr., Ste. 204, #24754, Raleigh, NC 27606.</p>
 
-<h2>1. Information We Collect</h2>
+<h2>2. Two Deployment Models</h2>
+<p>The Service is available in two forms, and our role differs between them. This distinction determines most of what follows.</p>
+<p><strong>Hosted (we operate it):</strong> We run the infrastructure. Our role under GDPR is Processor on behalf of the customer organization, which is the controller. We are an independent controller only for account and billing data. What we can see is everything described in Section 3. This policy applies in full.</p>
+<p><strong>Self-hosted (you operate it):</strong> You run the infrastructure, on your own systems. We are neither controller nor processor — we do not receive, access, or store your data. This policy applies only to Sections 1, 9, and 10.</p>
+<p>The Service's source code is available under the <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>. If you deploy it yourself, we have no visibility into your data and no ability to access it, and you are the controller for all data you process with it.</p>
 
-<h3>Information You Provide</h3>
+<h2>3. What We Collect (Hosted Deployments)</h2>
+<p><strong>3.1 Account and identity data.</strong> Collected when a user signs in through a supported identity provider (we support Google OpenID Connect, and request only the user's email address and basic profile) or, where enabled for an organization, through a password credential issued in the product: email address, display name, profile picture URL, job title, identity-provider identifiers and access tokens, password hash where password sign-in is used, role within the organization, organization membership, invitation records, interface language preference, and timestamps of account creation, invitation, onboarding, and sign-in.</p>
+<p><strong>3.2 Organization and project configuration.</strong> Organization name, identifier, email domain, branding, and settings; projects and project membership; repository names, URLs, descriptions, and default branches; connected integrations (source-control, issue-tracker, messaging, and infrastructure providers) and their credentials in encrypted form; MCP server definitions and their configuration values; agent, skill, tool, workflow, and board definitions; and resource quotas.</p>
+<p><strong>3.3 Credentials for your AI-assistant accounts.</strong> When a user onboards an AI coding assistant (for example Claude Code, Codex, Cursor CLI, or Gemini CLI), the Service captures and stores, in encrypted form, the authentication artifacts that the assistant's own client produces — an OAuth token set or an API key for that user's account with the AI provider — together with metadata such as expiry, the model selected, and when the credential was last used. These credentials are injected into the container at the start of a session so the agent can authenticate to the provider, and are used for no other purpose.</p>
+<p><strong>3.4 Session inputs and repository content.</strong> For each session: the instruction or prompt submitted; the session configuration and injected context; the source code and repository contents retrieved from your connected source-control systems into the session's container; files the agent creates or modifies; artifacts collected at the end of a session; files and assets your users upload; and the text of board tasks and comments, whether written by a person or by an agent.</p>
+<p><strong>3.5 Session transcripts and captured provider traffic.</strong> The Service retains, as files:</p>
 <ul>
-  <li><strong>Account Information:</strong> When you create an account, we collect your name, email address, and authentication credentials (via Google OAuth or other identity providers).</li>
-  <li><strong>Company Information:</strong> Organization name, team member details, and project configuration data.</li>
-  <li><strong>Content:</strong> Code, files, workflow configurations, and other content you upload or create through the Service.</li>
-  <li><strong>Communications:</strong> Information you provide when contacting us through support or contact forms.</li>
+  <li>A complete capture of the session terminal — everything submitted by the user and everything produced by the agent during the session, including source-code contents, command output, and file paths.</li>
+  <li>A log of the agent's network traffic to its AI provider, recorded by a proxy inside the container. For agents where this is enabled, it contains the complete body of each request and response — that is, the prompts and any file content sent with them, and the model's replies — together with the request and response headers.</li>
 </ul>
+<p>This content is stored as submitted or as produced. It is not redacted, filtered, or reduced. Because it is whatever a developer instructed an agent to do and whatever the agent did in response, it may contain information we cannot anticipate — including source code, credentials, your customers' data, and personal data relating to people who are not our users. We do not seek this data and cannot control what appears in it.</p>
+<p>Our <a href="/terms-of-service">Terms of Service</a> require customers not to knowingly submit special-category personal data (as defined under Article 9 of the GDPR), payment-card data, or regulated health data to the Service. Because session content is captured as submitted or produced, we cannot verify or enforce compliance with that restriction at the point of submission, and this section describes what may occur in practice notwithstanding that contractual restriction.</p>
+<p><strong>3.6 Usage and cost records.</strong> For each session: the agent and models used, input, output, and cached token counts, computed cost, event counts and the underlying usage events, session duration and state, the associated project and repositories, and the identity of the user who initiated it. These are collected from telemetry the agent emits and from the traffic described in Section 3.5.</p>
+<p><strong>3.7 Data received from your connected systems.</strong> Where you connect a source-control, issue-tracker, or messaging provider, we receive and store the payloads those systems send us, which typically include commit, branch, and pull-request metadata and the names and email addresses of the people who authored them. Those people may not be users of the Service.</p>
+<p><strong>3.8 Technical and diagnostic data.</strong> Server logs, IP addresses, request metadata, and error reports (including stack traces and request context). Retained for security, debugging, and abuse prevention.</p>
+<p><strong>3.9 What we do not collect.</strong> We do not collect payment-card data. We do not use advertising or cross-site tracking technologies. We do not sell personal data. We do not request access to your email, calendar, files, or other data held by your identity provider.</p>
 
-<h3>Information Collected Automatically</h3>
-<ul>
-  <li><strong>Usage Data:</strong> We collect information about how you interact with the Service, including features used, actions performed, and session duration.</li>
-  <li><strong>Device Information:</strong> Browser type, operating system, device identifiers, and IP address.</li>
-  <li><strong>Log Data:</strong> Server logs that record requests made to our Service, including timestamps, URLs, and response codes.</li>
-</ul>
+<h2>4. Why We Process It; Legal Basis</h2>
+<div class="legal-table">
+<table>
+  <thead>
+    <tr><th>Purpose</th><th>Data</th><th>Legal basis (GDPR)</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Providing the Service to the customer organization — running agent sessions and workflows on its instructions</td>
+      <td>Sections 3.1–3.7</td>
+      <td>Performance of a contract (Art. 6(1)(b)); for individual developers, the customer's legitimate interest (Art. 6(1)(f)), subject to Section 6 of our <a href="/terms-of-service">Terms of Service</a></td>
+    </tr>
+    <tr>
+      <td>Authentication and access control</td>
+      <td>Sections 3.1, 3.3</td>
+      <td>Contract; legitimate interest (Art. 6(1)(f))</td>
+    </tr>
+    <tr>
+      <td>Cost and usage reporting to the customer organization</td>
+      <td>Sections 3.2, 3.6</td>
+      <td>Performance of a contract (Art. 6(1)(b))</td>
+    </tr>
+    <tr>
+      <td>Security, abuse prevention, and debugging</td>
+      <td>Sections 3.1, 3.8</td>
+      <td>Legitimate interest (Art. 6(1)(f))</td>
+    </tr>
+    <tr>
+      <td>Improving the Service</td>
+      <td>Aggregated and de-identified data only</td>
+      <td>Legitimate interest (Art. 6(1)(f))</td>
+    </tr>
+    <tr>
+      <td>Legal and regulatory compliance</td>
+      <td>As required</td>
+      <td>Legal obligation (Art. 6(1)(c))</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+<p>We do not rely on any legal basis for using session content or source code to train machine-learning models, because we do not do so. Section 4.4 of our <a href="/terms-of-service">Terms of Service</a> commits us not to.</p>
 
-<h2>2. How We Use Your Information</h2>
-<p>We use the collected information to:</p>
-<ul>
-  <li>Provide, maintain, and improve the Service</li>
-  <li>Process and manage your account</li>
-  <li>Execute AI agent sessions and workflows on your behalf</li>
-  <li>Monitor and analyze usage patterns and trends</li>
-  <li>Detect, prevent, and address technical issues and security threats</li>
-  <li>Communicate with you about the Service, including updates and support</li>
-  <li>Comply with legal obligations</li>
-</ul>
+<h2>5. Sub-processors and Third Parties</h2>
+<p>Company may engage third-party service providers, contractors, and subprocessors ("Subprocessors") to perform functions and provide services to Company in connection with the Service.</p>
+<p>Company may add, remove, or replace Subprocessors from time to time as necessary to operate and improve the Service. Where Company processes personal data on behalf of a customer as a data processor under applicable data protection law, the specific terms governing Subprocessor engagement, notice, and objection rights are set forth in the applicable Data Processing Addendum, which shall control over this Section in the event of any conflict.</p>
+<p>Separately from our Subprocessors, the AI providers your users connect to the Service necessarily receive the content an agent sends to them, authenticated with the credentials described in Section 3.3. Those providers process that content under their own terms, as described in Section 5.3 of our <a href="/terms-of-service">Terms of Service</a>. The providers the Service supports today are Anthropic, OpenAI, Cursor, and Google.</p>
 
-<h2>3. Data Storage and Security</h2>
-<p>We implement industry-standard security measures to protect your data:</p>
-<ul>
-  <li>All data is encrypted in transit using TLS/SSL</li>
-  <li>Sensitive credentials and secrets are encrypted at rest</li>
-  <li>Agent sessions run in isolated containers with no shared state</li>
-  <li>Access controls and authentication protect all API endpoints</li>
-  <li>Regular security audits and monitoring are conducted</li>
-</ul>
-
-<h2>4. Data Sharing and Disclosure</h2>
-<p>We do not sell your personal information. We may share information in the following circumstances:</p>
-<ul>
-  <li><strong>Service Providers:</strong> With third-party vendors who assist us in operating the Service (e.g., cloud hosting, analytics, AI model providers).</li>
-  <li><strong>AI Model Providers:</strong> Code and prompts may be sent to AI model providers (such as Anthropic, OpenAI, Google) to execute agent sessions. We do not control these providers' data practices.</li>
-  <li><strong>Legal Requirements:</strong> When required by law, regulation, or legal process.</li>
-  <li><strong>Business Transfers:</strong> In connection with a merger, acquisition, or sale of assets.</li>
-  <li><strong>With Your Consent:</strong> When you have given us explicit permission.</li>
-</ul>
-
-<h2>5. Third-Party Integrations</h2>
-<p>The Service integrates with third-party platforms (e.g., GitHub, container registries). When you connect these integrations, the respective third-party privacy policies also apply. We encourage you to review those policies.</p>
-
-<h2>6. Data Retention</h2>
-<p>We retain your information for as long as your account is active or as needed to provide the Service. You may request deletion of your account and associated data at any time by contacting us. Some data may be retained as required by law or for legitimate business purposes.</p>
+<h2>6. Retention</h2>
+<p>We retain the data described in Section 3 for as long as your organization maintains an account, except where a shorter period is stated below.</p>
+<div class="legal-table">
+<table>
+  <thead>
+    <tr><th>Data</th><th>Retention</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Account and organization data (Sections 3.1–3.2)</td><td>For the life of the account, and up to 30 days after its deletion</td></tr>
+    <tr><td>Credentials for AI-assistant accounts (Section 3.3)</td><td>Until the user replaces them, deletes them, or the account is deleted</td></tr>
+    <tr><td>Session inputs, artifacts, and assets (Section 3.4)</td><td>For the life of the account, unless you delete them earlier</td></tr>
+    <tr><td>Session transcripts and captured provider traffic (Section 3.5)</td><td>For the life of the account, unless you delete them earlier</td></tr>
+    <tr><td>Usage and cost records (Section 3.6)</td><td>For the life of the account, and as required for billing and financial records</td></tr>
+    <tr><td>Payloads from connected systems (Section 3.7)</td><td>For the life of the account, unless you delete them earlier</td></tr>
+    <tr><td>Tool execution results</td><td>30 days</td></tr>
+    <tr><td>Technical and diagnostic data (Section 3.8)</td><td>Per the retention period of our error-monitoring provider</td></tr>
+  </tbody>
+</table>
+</div>
+<p>You may ask us to delete session records, transcripts, artifacts, or your account at any time using the contact details in Section 13, and we will do so except where we are required to retain data by law. On termination, our retention obligations are as set out in Section 14.3 of our <a href="/terms-of-service">Terms of Service</a>.</p>
 
 <h2>7. Your Rights</h2>
-<p>Depending on your jurisdiction, you may have the right to:</p>
-<ul>
-  <li>Access, correct, or delete your personal data</li>
-  <li>Object to or restrict certain processing activities</li>
-  <li>Export your data in a portable format</li>
-  <li>Withdraw consent where processing is based on consent</li>
-</ul>
-<p>To exercise these rights, contact us at <a href="mailto:privacy@aixle.com">privacy@aixle.com</a>.</p>
+<p>Depending on your location you may have rights to access, correct, delete, port, restrict, or object to the processing of your personal data, and to withdraw consent where processing relies on it.</p>
+<p><strong>If you are a developer using the Service through your employer's organization account:</strong> that organization is the controller of the data described in Section 3. Requests should ordinarily be directed to your employer. We will assist them and will not respond directly except where required by law or instructed by the controller. Contact us using the details in Section 13 if you cannot reach the controller.</p>
+<p>The customer organization's obligations to its personnel regarding notice, consultation, and legal basis — including any works council or employee-representative consultation required by Applicable Law — are addressed in Section 6 (Visibility of Individual Usage and Personnel Monitoring) of our <a href="/terms-of-service">Terms of Service</a>, which the customer organization agrees to as a condition of using the Service.</p>
+<p>Complaints may be lodged with your local supervisory authority.</p>
 
-<h2>8. Children's Privacy</h2>
-<p>The Service is not intended for individuals under the age of 16. We do not knowingly collect personal information from children. If we become aware that we have collected data from a child, we will take steps to delete it.</p>
+<h2>8. Reserved.</h2>
 
-<h2>9. International Data Transfers</h2>
-<p>Your information may be transferred to and processed in countries other than your country of residence. We ensure appropriate safeguards are in place for such transfers in compliance with applicable data protection laws.</p>
+<h2>9. International Transfers</h2>
+<p>We are a US-based company. If you access the Service from outside the United States, your personal data will be transferred to, stored, and processed in the United States, and may be transferred to other jurisdictions where our sub-processors operate (see Section 5).</p>
+<p>Where a transfer involves personal data originating in the European Economic Area, the United Kingdom, or Switzerland to a country not recognized as providing an adequate level of data protection, we will implement an appropriate transfer mechanism recognized under Applicable Law — such as the European Commission's Standard Contractual Clauses, the UK International Data Transfer Addendum, or a valid EU-U.S. Data Privacy Framework self-certification — before making such transfer.</p>
 
-<h2>10. Changes to This Policy</h2>
-<p>We may update this Privacy Policy from time to time. We will notify you of material changes by posting the updated policy on this page and updating the "Last updated" date. Your continued use of the Service after changes constitutes acceptance of the revised policy.</p>
+<h2>10. Security</h2>
+<p>We maintain technical and organizational measures designed to protect the data described in Section 3, including encryption of data in transit, isolation of each agent session in its own container, separation of compute by project and by user, encryption of connected credentials at rest, access controls limiting internal access to personal data on a need-to-know basis, and network security controls appropriate to a hosted service.</p>
+<p>Providing the Service inherently requires processing the content of your sessions — the instructions you give an agent, the source code it works on, and the traffic it exchanges with its AI provider (see Section 3.5). This is a necessary consequence of the Service's core function of running agents on your code on your behalf, not a byproduct of how we handle security. We do not currently redact or filter that content before it is stored. As a result, session records may contain information you or your personnel did not intend to retain, including credentials and information relating to third parties. We describe this here so that customers and their personnel can make an informed decision about what to submit to the Service. We may introduce redaction capabilities in the future; until then, this section reflects current practice.</p>
+<p>Our operational staff can access account, session, and session-record data through an internal administrative console where necessary to provide, secure, support, or troubleshoot the Service. Complete session transcripts and captured provider traffic (Section 3.5) are reachable in that way; they are not exposed in the customer-facing interface. Within your organization account, session records and usage — including the instruction submitted with each session — are visible to every member of that account, not only to administrators; the controls available to you are described in Section 6.6 of our <a href="/terms-of-service">Terms of Service</a>.</p>
+<p>No method of transmission or storage is completely secure, and we cannot guarantee the absolute security of your data.</p>
 
-<h2>11. Contact Us</h2>
-<p>If you have questions about this Privacy Policy, please contact us at:</p>
-<ul>
-  <li>Email: <a href="mailto:privacy@aixle.com">privacy@aixle.com</a></li>
-</ul>
+<h2>11. Children</h2>
+<p>The Service is not directed to individuals under the age of 18, and we do not knowingly collect personal data from children. If you believe a child has provided us with personal data, please contact us using the details in Section 13 and we will take steps to investigate and, where appropriate, delete it.</p>
+
+<h2>12. Changes</h2>
+<p>We may update this Privacy Policy from time to time. If we make material changes, we will provide reasonable notice (for example, by email to the account administrator or an in-app notice) before the changes take effect. The "Last updated" date above indicates when this Policy was last revised.</p>
+
+<h2>13. Contact</h2>
+<p>Questions about this Privacy Policy, or requests relating to your personal data, should be directed to Dualboot Partners, LLC, 5540 Centerview Dr., Ste. 204, #24754, Raleigh, NC 27606, or by email to <a href="mailto:privacy@aixle.com">privacy@aixle.com</a>.</p>
