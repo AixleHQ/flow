@@ -31,8 +31,19 @@ class OauthCredential < ApplicationRecord
   scope :for_owner,      ->(owner) { where(owner: owner) }
   scope :for_mcp_server, ->(server) { where(mcp_server_id: server.id) }
   # Sweep scope (Phase 2 consumes this; index [:status, :expires_at] backs it).
+  #
+  # Deliberately NOT filtered to credentials that have a refresh token. One without
+  # one cannot be refreshed, but that is exactly the case worth surfacing: an
+  # authorization server may issue a token set with no refresh_token at all (Railway
+  # does when offline access is not consented to), and while such a row was excluded
+  # here it sat :active with a failure count of 0 until its access token quietly
+  # lapsed — the owner learned about it from a dead connection, never from us.
+  # Oauth::TokenService.fresh records the failure for these, so the ordinary
+  # escalation path (status:error + reconnect notification) applies. Once escalated
+  # they leave this scope via with_status(:active), so the sweep does not loop on
+  # them forever.
   scope :refresh_due, ->(within = 15.minutes) {
-    with_status(:active).where.not(encrypted_refresh_token: nil).where(expires_at: ..within.from_now)
+    with_status(:active).where(expires_at: ..within.from_now)
   }
 
   # --- Encrypted accessors (Encryptable) ---

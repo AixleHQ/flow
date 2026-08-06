@@ -98,12 +98,29 @@ module Oauth
     # == fresh: reauth-required paths ==
 
     test "raises ReauthRequired without a network call when the credential is unrefreshable" do
-      build_credential(owner: @user, access_token: "old-token",
-                       refresh_token: nil, expires_at: 1.minute.ago)
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: nil, expires_at: 1.minute.ago)
 
       assert_raises(Oauth::ReauthRequired) do
         Oauth::TokenService.access_token_for(owner: @user, provider: "sentry", user: @user)
       end
+      assert_not_requested :post, TOKEN_ENDPOINT
+      # Recorded like any other refresh failure: an authorization server that issues no
+      # refresh_token (Railway, without consented offline access) otherwise leaves the
+      # credential :active with a 0 failure count until its access token lapses.
+      assert_equal 1, cred.reload.refresh_failure_count
+      assert cred.refresh_error.present?
+    end
+
+    test "escalates an unrefreshable credential to error after MAX_REFRESH_FAILURES sweeps" do
+      cred = build_credential(owner: @user, access_token: "old-token",
+                              refresh_token: nil, expires_at: 1.minute.ago)
+
+      OauthCredential::MAX_REFRESH_FAILURES.times do
+        assert_equal :error, Oauth::TokenService.refresh_credential(cred)
+      end
+
+      assert cred.reload.error?, "the sweep must surface a Reconnect state, not wait for a dead connection"
       assert_not_requested :post, TOKEN_ENDPOINT
     end
 
