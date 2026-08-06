@@ -336,6 +336,28 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     refute q.key?("scope"), "an empty scope= is a request error at some authorization servers"
   end
 
+  test "mcp_connect tells the user WHY discovery failed when the failure is diagnosable" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    error = MCP::RegistrationError.new("unexpected status=400", code: "invalid_redirect_uri")
+    MCP::OauthDiscoveryService.stubs(:prepare).raises(error)
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
+
+    assert_redirected_to "/company/projects"
+    assert_equal error.user_message, flash[:alert]
+    assert_match(/operator/, flash[:alert])
+  end
+
+  test "mcp_connect stays vague when the failure really is a connection problem" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    MCP::OauthDiscoveryService.stubs(:prepare).raises(MCP::DiscoveryError, "connection reset")
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id)
+
+    assert_equal MCP::DiscoveryError::GENERIC, flash[:alert]
+    assert_no_match(/connection reset/, flash[:alert], "an exception message is not a user message")
+  end
+
   test "mcp_connect pins the connecting identity to the current user for a per_user server" do
     server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :per_user,
                     url: "https://mcp.acme.test/v1")

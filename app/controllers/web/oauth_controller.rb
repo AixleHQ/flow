@@ -192,9 +192,12 @@ class Web::OauthController < Web::ApplicationController
                               code_challenge_method: "S256"),
                 allow_other_host: true
   rescue MCP::DiscoveryError => e
-    # (7) token-free logging: class + server id only, never discovered metadata.
-    Rails.logger.warn("[Oauth] MCP discovery failed for server=#{params[:mcp_server_id]}: #{e.class.name}")
-    redirect_to safe_return_to(params[:return_to]), alert: "Couldn't connect to this MCP server"
+    # (7) token-free logging: class + an allowlisted code + server id only, never
+    # discovered metadata. #user_message is likewise one of our own sentences —
+    # see MCP::DiscoveryError.
+    Rails.logger.warn("[Oauth] MCP discovery failed for server=#{params[:mcp_server_id]}: " \
+                      "#{e.class.name}#{" code=#{e.code}" if e.code}")
+    redirect_to safe_return_to(params[:return_to]), alert: e.user_message
   end
 
   private

@@ -320,6 +320,76 @@ module MCP
       assert_not_requested :get, %r{169\.254\.169\.254}
     end
 
+    # ==================== REGISTRATION FAILURE DIAGNOSIS ====================
+    # "Couldn't connect" is a lie when the server answered perfectly well and simply
+    # refused to register us. These assert the WHY survives, and only via the allowlist.
+
+    test "a registration refused for an unapproved callback says an operator must configure a client" do
+      stub_probe
+      stub_prm
+      stub_asm
+      # Vercel's real answer: its authorization server approves loopback callbacks
+      # only, so no hosted deployment can ever register itself.
+      stub_registration(status: 400, body: { error: "invalid_redirect_uri",
+                                             error_description: "The provided redirect URIs are not approved." })
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_equal "invalid_redirect_uri", error.code
+      assert_match(/callback URL/, error.user_message)
+      assert_match(/operator/, error.user_message)
+    end
+
+    test "an authorization server with no registration endpoint says so" do
+      stub_probe
+      stub_prm
+      stub_asm(body: default_asm_body.except("registration_endpoint"))
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_equal MCP::RegistrationError::NO_ENDPOINT, error.code
+      assert_match(/does not support automatic app registration/, error.user_message)
+    end
+
+    test "an unrecognised error code, and its prose, never reach the user" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration(status: 400, body: { error: "im_a_teapot",
+                                             error_description: "<script>alert(1)</script>" })
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_nil error.code
+      assert_equal MCP::DiscoveryError::GENERIC, error.user_message
+      assert_no_match(/script/, error.user_message)
+      assert_no_match(/script/, error.message)
+    end
+
+    test "a registration failure that is not JSON falls back to the generic message" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_request(:post, REG_EP).to_return(status: 502, body: "<html>bad gateway</html>")
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_nil error.code
+      assert_equal MCP::DiscoveryError::GENERIC, error.user_message
+    end
+
+    test "a transport failure stays generic — it really is a connection problem" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_request(:post, REG_EP).to_timeout
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_nil error.code
+      assert_equal MCP::DiscoveryError::GENERIC, error.user_message
+    end
+
     test "rejects a loopback registration_endpoint" do
       stub_probe
       stub_prm

@@ -37,7 +37,8 @@ module MCP
   #      (that check lives in WIRING, not here).
   #   4. Response limits: TIMEOUT connect/read timeout; MAX_BYTES body cap read
   #      capped (Content-Length is not trusted); non-2xx rejected except the
-  #      deliberate probe in step (a).
+  #      deliberate probe in step (a) and the DCR POST in step (c), whose failure
+  #      body is read for an allowlisted RFC 7591 error code and nothing else.
   #   5. No secrets/metadata in logs. Discovered metadata may embed tokens/urls;
   #      exceptions carry only a host + status, never a body or a full url.
   #   6. DNS pinning caveat (TOCTOU): errors_for resolves, then the HTTP client
@@ -229,7 +230,8 @@ module MCP
 
       registration_endpoint = asm[:registration_endpoint]
       if registration_endpoint.blank?
-        raise RegistrationError, "authorization server does not support dynamic client registration"
+        raise RegistrationError.new("authorization server does not support dynamic client registration",
+                                    code: RegistrationError::NO_ENDPOINT)
       end
 
       # A loopback/private registration_endpoint raises UnsafeUrlError here (NOT
@@ -270,13 +272,33 @@ module MCP
     end
 
     def post_registration(registration_endpoint)
-      response = safe_fetch(registration_endpoint, method: :post, json: registration_body)
+      # The second deliberate exception to "reject non-2xx" (doctrine rule 4), and
+      # the reason is diagnosis: RFC 7591 puts the WHY in a 400 body, and the most
+      # common why — the AS approves only loopback callbacks, so a hosted deployment
+      # can never self-register — is indistinguishable from a network fault once it
+      # has been flattened to "unexpected status=400". The body is still capped by
+      # MAX_BYTES, and only an allowlisted code survives #registration_error_code.
+      response = safe_fetch(registration_endpoint, method: :post, json: registration_body,
+                            allow_statuses: :any)
+      unless response.success?
+        raise RegistrationError.new("unexpected status=#{response.status}",
+                                    code: registration_error_code(response))
+      end
+
       parse_json!(response, RegistrationError)
     rescue FetchError => e
-      # Non-2xx / oversize / network from the DCR POST → RegistrationError.
-      # UnsafeUrlError (a guard/redirect rejection) is NOT a FetchError, so it
-      # propagates unchanged.
+      # Oversize / network from the DCR POST → RegistrationError. UnsafeUrlError (a
+      # guard/redirect rejection) is NOT a FetchError, so it propagates unchanged.
       raise RegistrationError, e.message
+    end
+
+    # The RFC 7591 error code, or nil for anything the allowlist does not know —
+    # including a body that is not JSON, or JSON that is not an object.
+    def registration_error_code(response)
+      body = optional_json(response.body)
+      return nil unless body.is_a?(Hash)
+
+      RegistrationError.known_code(body["error"])
     end
 
     def registration_body
