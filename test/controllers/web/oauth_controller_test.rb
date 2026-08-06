@@ -302,6 +302,40 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_equal @project.id, payload["owner_id"]
   end
 
+  # Regression: Railway's discovered authorization_endpoint is
+  # ".../oauth/auth?resource=https%3A%2F%2Fbackboard.railway.com". Appending a
+  # second "?" folded `response_type=code` into that `resource` value, so Railway
+  # answered `error=invalid_request` / "missing required parameter 'response_type'".
+  test "mcp_connect merges its parameters into an authorization_endpoint that already carries a query" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared,
+                    url: "https://mcp.acme.test/v1")
+    client = build_dcr_client
+    client.update!(authorization_endpoint: "https://auth.mcp.test/authorize?resource=https%3A%2F%2Fauth.mcp.test&prompt=consent")
+    stub_discovery!(client: client)
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id)
+
+    assert_response :redirect
+    location = @response.headers["Location"]
+    assert_equal 1, location.count("?"), "a second '?' folds our first parameter into the endpoint's own value"
+
+    pairs = URI.decode_www_form(URI(location).query.to_s)
+    assert_equal "code", pairs.to_h["response_type"]
+    assert_equal "consent", pairs.to_h["prompt"], "the endpoint's own parameters survive the merge"
+    assert_equal [ "https://mcp.acme.test/v1" ], pairs.select { |k, _| k == "resource" }.map(&:last),
+                 "exactly one RFC 8707 resource indicator, naming the MCP server and not the auth server"
+  end
+
+  test "mcp_connect omits scope entirely when neither discovery nor the client advertises one" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    stub_discovery!(client: build_dcr_client(scopes: nil), scopes: nil)
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id)
+
+    q = query_params(@response.headers["Location"])
+    refute q.key?("scope"), "an empty scope= is a request error at some authorization servers"
+  end
+
   test "mcp_connect pins the connecting identity to the current user for a per_user server" do
     server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :per_user,
                     url: "https://mcp.acme.test/v1")

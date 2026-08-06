@@ -65,16 +65,15 @@ class Web::OauthController < Web::ApplicationController
       code_verifier: code_verifier
     )
 
-    query = URI.encode_www_form(
-      response_type: "code",
-      client_id: client.client_id,
-      redirect_uri: redirect_uri,
-      scope: client.scopes,
-      state: state,
-      code_challenge: code_challenge,
-      code_challenge_method: "S256"
-    )
-    redirect_to "#{client.authorization_endpoint}?#{query}", allow_other_host: true
+    redirect_to authorize_url(client.authorization_endpoint,
+                              response_type: "code",
+                              client_id: client.client_id,
+                              redirect_uri: redirect_uri,
+                              scope: client.scopes,
+                              state: state,
+                              code_challenge: code_challenge,
+                              code_challenge_method: "S256"),
+                allow_other_host: true
   rescue Oauth::MissingClientConfig
     redirect_to root_path, alert: "This provider is not configured"
   end
@@ -182,17 +181,16 @@ class Web::OauthController < Web::ApplicationController
       oauth_client_id: result.oauth_client.id
     )
 
-    query = URI.encode_www_form(
-      response_type: "code",
-      client_id: result.oauth_client.client_id,
-      redirect_uri: redirect_uri,
-      scope: result.scopes || result.oauth_client.scopes,
-      resource: result.resource, # RFC 8707 resource indicator
-      state: state,
-      code_challenge: code_challenge,
-      code_challenge_method: "S256"
-    )
-    redirect_to "#{result.oauth_client.authorization_endpoint}?#{query}", allow_other_host: true
+    redirect_to authorize_url(result.oauth_client.authorization_endpoint,
+                              response_type: "code",
+                              client_id: result.oauth_client.client_id,
+                              redirect_uri: redirect_uri,
+                              scope: result.scopes || result.oauth_client.scopes,
+                              resource: result.resource, # RFC 8707 resource indicator
+                              state: state,
+                              code_challenge: code_challenge,
+                              code_challenge_method: "S256"),
+                allow_other_host: true
   rescue MCP::DiscoveryError => e
     # (7) token-free logging: class + server id only, never discovered metadata.
     Rails.logger.warn("[Oauth] MCP discovery failed for server=#{params[:mcp_server_id]}: #{e.class.name}")
@@ -207,6 +205,31 @@ class Web::OauthController < Web::ApplicationController
 
   def redirect_uri
     "#{Settings.protocol}://#{Settings.domain}/oauth/callback"
+  end
+
+  # Build the consent URL by MERGING our parameters into whatever query the
+  # authorization_endpoint already carries — never by concatenating "?#{query}".
+  #
+  # An authorization_endpoint is allowed to ship with its own query string, and
+  # discovered ones do: Railway's RFC 8414 metadata advertises
+  # `https://backboard.railway.com/oauth/auth?resource=https%3A%2F%2Fbackboard.railway.com`.
+  # Appending a second "?" makes everything up to the first "&" part of the
+  # PRECEDING parameter's value, so `response_type=code` was swallowed into
+  # `resource` and Railway bounced the user straight back to /oauth/callback with
+  # `error=invalid_request&error_description=missing required parameter 'response_type'`
+  # — which the callback reports as "Connection was cancelled".
+  #
+  # Our values win on conflict: the endpoint's baked-in `resource` names the
+  # authorization server itself, while RFC 8707 requires the resource indicator to
+  # name the MCP server we want the token audience bound to. Blank values are
+  # dropped rather than sent as `scope=` (an empty scope is a request error at some
+  # authorization servers).
+  def authorize_url(endpoint, params)
+    uri = URI.parse(endpoint)
+    existing = URI.decode_www_form(uri.query.to_s).to_h
+    merged = existing.merge(params.stringify_keys).reject { |_k, v| v.blank? }
+    uri.query = URI.encode_www_form(merged)
+    uri.to_s
   end
 
   # Open-redirect guard: accept only same-site absolute paths ("/..."). Rejects
