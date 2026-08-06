@@ -72,6 +72,30 @@ module MCP
     # in the plaintext metadata jsonb (client_secret is stored encrypted instead).
     SENSITIVE_DCR_KEYS = %w[client_secret registration_access_token].freeze
     METADATA_CACHE_TTL = 1.hour
+    # What an MCP client sends: the transport is streamable HTTP, which may answer
+    # either as JSON or as an SSE stream, and servers reject a request that does not
+    # say it accepts both.
+    MCP_ACCEPT = "application/json, text/event-stream"
+    # Metadata documents (RFC 9728 / 8414) are plain JSON, and asking for a stream
+    # there would be noise.
+    DEFAULT_ACCEPT = "application/json"
+    # Statuses that mean "not like that" rather than "no": worth one retry with a
+    # real MCP request before giving up on getting a challenge out of the server.
+    PROBE_RETRY_STATUSES = [ 400, 404, 405, 406 ].freeze
+    # The MCP handshake, used purely as a probe: it is the one request every server
+    # answers, it needs no authentication, and it changes nothing server-side. The
+    # version is the floor we speak, not a requirement — a server that only supports
+    # a newer revision still answers, which is all a probe needs.
+    INITIALIZE_REQUEST = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: CLIENT_NAME, version: "1" }
+      }
+    }.freeze
 
     # Entry point WIRING calls from the connect action. Runs steps a→c and returns
     # a persisted source:"dcr" OauthClient + the RFC 8707 resource indicator
@@ -104,13 +128,10 @@ module MCP
     # ---- Step (a): probe MCP url → RFC 9728 protected-resource metadata --------
     def probe_protected_resource
       guard!(@mcp_url)
-      # The probe is unauthenticated; a 401 (or anything else) is fine — we only
-      # want the WWW-Authenticate hint. Redirects are still followed + re-guarded.
-      probe = safe_fetch(@mcp_url, allow_statuses: :any)
+      probe = probe_challenge
 
-      prm_url = resource_metadata_url(probe) || default_prm_url
-      guard!(prm_url)
-      prm = parse_json!(safe_fetch(prm_url), NoAuthServerError)
+      prm = first_usable_prm(prm_candidates(probe))
+      raise NoAuthServerError, "no protected-resource metadata" if prm.nil?
 
       servers = Array(prm["authorization_servers"]).map { |s| s.to_s.strip }.reject(&:blank?)
       raise NoAuthServerError, "protected-resource metadata lists no authorization_servers" if servers.empty?
@@ -118,6 +139,53 @@ module MCP
       servers.each { |server| guard!(server) }
 
       { authorization_servers: servers, scopes: scope_string(prm["scopes_supported"]), raw: prm }
+    end
+
+    # The response we hope carries a WWW-Authenticate challenge. Unauthenticated, and
+    # any status is fine — the header is the whole point, not the body.
+    #
+    # SHAPE MATTERS. A bare GET is not an MCP request, and a lot of servers say so:
+    # in a survey of 178 catalog hosts, 23 answered it with 405 and 13 with 406, and
+    # Grafana 302s it while answering the SAME url with a 401 + resource_metadata
+    # once the streamable-HTTP Accept header is present. So the probe asks the way a
+    # client would, and when the server refuses the shape outright it is asked again
+    # with the one request every MCP server must answer.
+    def probe_challenge
+      probe = safe_fetch(@mcp_url, allow_statuses: :any, accept: MCP_ACCEPT)
+      return probe if resource_metadata_url(probe).present?
+      return probe if PROBE_RETRY_STATUSES.exclude?(probe.status)
+
+      retried = safe_fetch(@mcp_url, method: :post, json: INITIALIZE_REQUEST,
+                           allow_statuses: :any, accept: MCP_ACCEPT)
+      resource_metadata_url(retried).present? ? retried : probe
+    rescue FetchError
+      # The retry is best-effort: if it cannot complete, the first probe's answer (or
+      # the well-known fallbacks) still stands.
+      probe || raise
+    end
+
+    # In order: what the server told us, then the two well-known locations.
+    def prm_candidates(probe)
+      [ resource_metadata_url(probe), path_aware_prm_url, origin_prm_url ].compact_blank.uniq
+    end
+
+    # First candidate that answers with usable metadata wins. A 404, a non-2xx or a
+    # body that is not a JSON object moves on to the next; an UnsafeUrlError does NOT
+    # — a hint pointing somewhere we must not go is a security signal, not a miss.
+    def first_usable_prm(candidates)
+      candidates.each do |url|
+        guard!(url)
+
+        begin
+          body = JSON.parse(safe_fetch(url).body)
+        rescue FetchError, JSON::ParserError
+          next
+        end
+
+        return body if body.is_a?(Hash)
+      end
+
+      nil
     end
 
     # Parse `resource_metadata="https://..."` (quoted or bare) out of a
@@ -130,7 +198,20 @@ module MCP
       match && match[1]
     end
 
-    def default_prm_url
+    # RFC 9728 §3.1 inserts the well-known segment BEFORE the resource path, so a
+    # server at /mcp publishes its metadata at
+    # `/.well-known/oauth-protected-resource/mcp`. Only the origin-level form used to
+    # be tried, which is why a server like Grafana — which publishes exclusively at
+    # the path-aware url and 404s the other — could never be discovered from the
+    # fallback. nil for a url with no path of its own.
+    def path_aware_prm_url
+      path = URI.parse(@mcp_url).path.to_s.chomp("/")
+      return nil if path.blank?
+
+      "#{origin(@mcp_url)}/.well-known/oauth-protected-resource#{path}"
+    end
+
+    def origin_prm_url
       "#{origin(@mcp_url)}/.well-known/oauth-protected-resource"
     end
 
@@ -413,7 +494,7 @@ module MCP
     # per-hop re-guard, capped at MAX_REDIRECTS), TIMEOUT timeouts, MAX_BYTES body
     # cap, status-only errors. Every network call in this file routes through here;
     # there is no un-guarded Net::HTTP.
-    def safe_fetch(url, method: :get, json: nil, allow_statuses: nil)
+    def safe_fetch(url, method: :get, json: nil, allow_statuses: nil, accept: DEFAULT_ACCEPT)
       current_url = url
       current_method = method
       current_json = json
@@ -421,7 +502,7 @@ module MCP
 
       loop do
         guard!(current_url)
-        response = raw_request(current_url, current_method, current_json)
+        response = raw_request(current_url, current_method, current_json, accept)
         return validate_status!(response, allow_statuses) unless redirect?(response.status)
 
         hops += 1
@@ -438,10 +519,10 @@ module MCP
       end
     end
 
-    def raw_request(url, method, json)
+    def raw_request(url, method, json, accept)
       uri = URI.parse(url)
       http = build_http(uri)
-      request = build_request(uri, method, json)
+      request = build_request(uri, method, json, accept)
 
       net_response = nil
       body = +""
@@ -489,10 +570,10 @@ module MCP
       nil
     end
 
-    def build_request(uri, method, json)
+    def build_request(uri, method, json, accept)
       klass = method == :post ? Net::HTTP::Post : Net::HTTP::Get
       request = klass.new(uri)
-      request["Accept"] = "application/json"
+      request["Accept"] = accept
       request["User-Agent"] = "AixleFlow-MCP-OAuth"
       if json
         request["Content-Type"] = "application/json"

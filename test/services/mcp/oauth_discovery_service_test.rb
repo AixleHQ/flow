@@ -14,6 +14,8 @@ module MCP
   class OauthDiscoveryServiceTest < ActiveSupport::TestCase
     MCP_URL   = "https://mcp.example.com/v1"
     PRM_URL   = "https://mcp.example.com/.well-known/oauth-protected-resource"
+    # RFC 9728 §3.1: the well-known segment goes BEFORE the resource path.
+    PATH_PRM_URL = "https://mcp.example.com/.well-known/oauth-protected-resource/v1"
     ISSUER    = "https://auth.example.com"
     ASM_URL   = "https://auth.example.com/.well-known/oauth-authorization-server"
     OIDC_URL  = "https://auth.example.com/.well-known/openid-configuration"
@@ -117,6 +119,7 @@ module MCP
 
     test "falls back to the well-known PRM path when WWW-Authenticate has no hint" do
       stub_request(:get, MCP_URL).to_return(status: 401, body: "")
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
       stub_prm
       stub_asm
       stub_registration(body: { client_id: "dcr-client-id" })
@@ -320,6 +323,82 @@ module MCP
       assert_not_requested :get, %r{169\.254\.169\.254}
     end
 
+    # ======================== PROBE SHAPE + PRM FALLBACK ========================
+    # A bare GET is not an MCP request. Surveyed against the catalog, 23 of 178 hosts
+    # answer one with 405 and 13 with 406, and the challenge we need rides on the
+    # response we thereby never get.
+
+    test "the probe announces the streamable-HTTP transport" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_requested :get, MCP_URL, headers: { "Accept" => "application/json, text/event-stream" }
+    end
+
+    test "a server that refuses a bare GET is asked again with an MCP initialize" do
+      stub_request(:get, MCP_URL).to_return(status: 405)
+      stub_request(:post, MCP_URL).to_return(status: 401,
+                                             headers: { "WWW-Authenticate" => default_www_authenticate })
+      stub_prm
+      stub_asm
+      stub_registration
+
+      client = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL).oauth_client
+
+      assert_requested :post, MCP_URL, body: hash_including("method" => "initialize")
+      assert_equal "dcr-client-id", client.client_id
+    end
+
+    test "a server that answers the bare GET is not asked twice" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_not_requested :post, MCP_URL
+    end
+
+    test "falls back to the path-aware metadata url before the origin-level one" do
+      stub_probe(www_authenticate: 'Bearer realm="OAuth"') # no resource_metadata hint
+      stub_request(:get, PATH_PRM_URL).to_return(status: 200, headers: json_headers,
+                                                 body: default_prm_body.to_json)
+      stub_asm
+      stub_registration
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_requested :get, PATH_PRM_URL
+      assert_not_requested :get, PRM_URL
+    end
+
+    test "falls back to the origin-level metadata url when the path-aware one is absent" do
+      stub_probe(www_authenticate: 'Bearer realm="OAuth"')
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
+      stub_prm
+      stub_asm
+      stub_registration
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_requested :get, PRM_URL
+    end
+
+    test "says the server advertises no authorization server when no candidate answers" do
+      stub_probe(www_authenticate: 'Bearer realm="OAuth"')
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
+      stub_request(:get, PRM_URL).to_return(status: 404)
+
+      error = assert_raises(MCP::NoAuthServerError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_match(/did not advertise/, error.user_message)
+    end
+
     # ==================== REGISTRATION FAILURE DIAGNOSIS ====================
     # "Couldn't connect" is a lie when the server answered perfectly well and simply
     # refused to register us. These assert the WHY survives, and only via the allowlist.
@@ -464,6 +543,7 @@ module MCP
     test "aborts a redirect chain that exceeds the hop cap" do
       stub_probe
       stub_request(:get, PRM_URL).to_return(status: 302, headers: { "Location" => "https://a.example.com/1" })
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
       stub_request(:get, "https://a.example.com/1").to_return(status: 302, headers: { "Location" => "https://b.example.com/2" })
       stub_request(:get, "https://b.example.com/2").to_return(status: 302, headers: { "Location" => "https://c.example.com/3" })
       stub_request(:get, "https://c.example.com/3").to_return(status: 302, headers: { "Location" => "https://d.example.com/4" })
@@ -479,6 +559,7 @@ module MCP
       stub_request(:get, PRM_URL).to_return(
         status: 200, headers: json_headers, body: "x" * (300 * 1024)
       )
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
 
       assert_raises(MCP::DiscoveryError) do
         MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
@@ -488,6 +569,7 @@ module MCP
     test "rejects a non-JSON PRM body" do
       stub_probe
       stub_request(:get, PRM_URL).to_return(status: 200, body: "<html>not json</html>")
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
 
       assert_raises(MCP::DiscoveryError) do
         MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
