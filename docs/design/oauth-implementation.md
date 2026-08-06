@@ -124,12 +124,18 @@ never clobber a fresher token):
 - **On-demand** at use time (`TokenService.fresh`, under `with_lock`).
 - **Proactive** — `Workflows::OauthTokenRefreshWorkflow` (`*/5`, `overlap: skip`) runs
   `Activities::Oauth::RefreshExpiringTokensActivity`, sweeping `OauthCredential.refresh_due` (active +
-  refresh_token present + expiring within 15 min) via `TokenService.refresh_credential`.
+  expiring within 15 min) via `TokenService.refresh_credential`.
 
 **Failure escalation**: `mark_refresh_error!` increments `refresh_failure_count`; a single blip keeps the
 credential `active` (the sweep retries). After `MAX_REFRESH_FAILURES = 3` consecutive failures it escalates
 to `status:error` and — for `User` owners — sends `OauthMailer#refresh_failed` (reconnect link). Any success
 resets the counter.
+
+A credential with **no refresh_token at all** goes down the same path: `refresh_due` deliberately does not
+filter on the refresh token, and `TokenService.fresh` records the failure before raising `ReauthRequired`, so
+the row escalates to `status:error` and notifies instead of sitting `active` until its access token lapses.
+That is not a hypothetical — an authorization server may grant `offline_access` silently as "no", which is why
+`Web::OauthController` sends `prompt=consent` whenever it requests that scope (OIDC Core §11).
 
 ---
 

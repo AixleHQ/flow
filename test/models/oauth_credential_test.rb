@@ -300,7 +300,7 @@ class OauthCredentialTest < ActiveSupport::TestCase
     assert_not_includes OauthCredential.for_mcp_server(server), detached
   end
 
-  test "refresh_due returns only active, refreshable credentials expiring inside the window" do
+  test "refresh_due returns active credentials expiring inside the window, refreshable or not" do
     due = build_credential(provider: "due", status: :active, refresh_token: "rt", expires_at: 5.minutes.from_now)
     due.save!
     far = build_credential(provider: "far", status: :active, refresh_token: "rt", expires_at: 1.hour.from_now)
@@ -317,7 +317,10 @@ class OauthCredentialTest < ActiveSupport::TestCase
     result = OauthCredential.refresh_due
     assert_includes result, due
     assert_not_includes result, far
-    assert_not_includes result, no_refresh
+    # A credential with no refresh token is swept precisely so the sweep can escalate
+    # it (Oauth::TokenService.fresh records the failure); excluding it left the row
+    # :active until its access token silently lapsed.
+    assert_includes result, no_refresh
     assert_not_includes result, not_active
     assert_not_includes result, null_expiry
   end

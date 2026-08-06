@@ -70,6 +70,7 @@ class Web::OauthController < Web::ApplicationController
                               client_id: client.client_id,
                               redirect_uri: redirect_uri,
                               scope: client.scopes,
+                              prompt: consent_prompt_for(client.scopes),
                               state: state,
                               code_challenge: code_challenge,
                               code_challenge_method: "S256"),
@@ -181,11 +182,14 @@ class Web::OauthController < Web::ApplicationController
       oauth_client_id: result.oauth_client.id
     )
 
+    scope = result.scopes || result.oauth_client.scopes
+
     redirect_to authorize_url(result.oauth_client.authorization_endpoint,
                               response_type: "code",
                               client_id: result.oauth_client.client_id,
                               redirect_uri: redirect_uri,
-                              scope: result.scopes || result.oauth_client.scopes,
+                              scope: scope,
+                              prompt: consent_prompt_for(scope),
                               resource: result.resource, # RFC 8707 resource indicator
                               state: state,
                               code_challenge: code_challenge,
@@ -221,15 +225,34 @@ class Web::OauthController < Web::ApplicationController
   #
   # Our values win on conflict: the endpoint's baked-in `resource` names the
   # authorization server itself, while RFC 8707 requires the resource indicator to
-  # name the MCP server we want the token audience bound to. Blank values are
-  # dropped rather than sent as `scope=` (an empty scope is a request error at some
-  # authorization servers).
+  # name the MCP server we want the token audience bound to. Our blank values are
+  # dropped BEFORE the merge — both so nothing is sent as `scope=` (an empty scope
+  # is a request error at some authorization servers) and so a parameter we are not
+  # supplying leaves whatever the endpoint carries for it intact.
   def authorize_url(endpoint, params)
     uri = URI.parse(endpoint)
     existing = URI.decode_www_form(uri.query.to_s).to_h
-    merged = existing.merge(params.stringify_keys).reject { |_k, v| v.blank? }
-    uri.query = URI.encode_www_form(merged)
+    ours = params.stringify_keys.reject { |_k, v| v.blank? }
+    uri.query = URI.encode_www_form(existing.merge(ours))
     uri.to_s
+  end
+
+  # `prompt=consent` for an authorization request that asks for `offline_access`,
+  # and only then.
+  #
+  # OIDC Core §11 says an authorization server MUST ignore an `offline_access`
+  # request unless it obtains explicit consent, so asking for the scope without
+  # `prompt=consent` yields a token set with NO refresh_token — silently, since the
+  # granted `scope` simply comes back missing that one entry. Railway's OIDC
+  # provider behaves exactly this way (its docs require the pair): the MCP
+  # credential then had nothing to refresh from, `OauthCredential.refresh_due`
+  # skipped it for want of a refresh_token, and the connection reverted to a
+  # Connect button every time the 1-hour access token lapsed.
+  #
+  # Gated on the requested scope so a plain OAuth 2.1 server, which has no notion
+  # of `prompt`, is never sent an OIDC-only parameter.
+  def consent_prompt_for(scope)
+    "consent" if scope.to_s.split.include?("offline_access")
   end
 
   # Open-redirect guard: accept only same-site absolute paths ("/..."). Rejects

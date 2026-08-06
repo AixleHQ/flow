@@ -65,7 +65,17 @@ module Oauth
     # Ensure `cred` yields a fresh token; refresh under lock if near expiry.
     def fresh(cred)
       return cred.access_token unless cred.expired?(REFRESH_SKEW)
-      raise ReauthRequired.new(cred) unless cred.refreshable?
+
+      # Nothing to refresh from. Record it like any other refresh failure so the
+      # credential escalates to status:error (and notifies the owner to reconnect)
+      # through the ONE existing path, instead of sitting :active until its access
+      # token lapses. The sweep sees these rows too — OauthCredential.refresh_due is
+      # not filtered on refresh_token — so escalation does not wait for a session to
+      # happen to use the credential.
+      unless cred.refreshable?
+        cred.mark_refresh_error!("no refresh token — reconnect required")
+        raise ReauthRequired.new(cred)
+      end
 
       cred.with_lock do
         cred.reload
