@@ -649,13 +649,10 @@ describe('Projects/Board/BoardPage', () => {
   const epicProps = { ...populatedProps, tasks: [epic, story] };
 
   it('attaches the new task to an epic chosen in the create-task form', async () => {
+    const created = makeTask({ id: 99, title: 'Child of epic', boardColumnId: 100, parentTaskId: 50 });
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        new Response(JSON.stringify(makeTask({ id: 99, title: 'Child of epic', boardColumnId: 100, parentTaskId: 50 })), {
-          status: 200,
-        }),
-      );
+      .mockResolvedValue(new Response(JSON.stringify(created), { status: 200 }));
 
     renderAuthedPage(<BoardPage />, { props: epicProps });
 
