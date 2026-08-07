@@ -41,9 +41,11 @@ class BmadMethodInjector
 
   # Pinned to match _bmad/_config/manifest.yaml; bumping requires re-validating
   # skill target directories (cursor/codex/gemini moved to .agents/skills in 6.6.0).
-  BMAD_METHOD_VERSION = "6.6.0"
+  # Since 6.10.0 bmb/cis/wds are external modules fetched from GitHub during
+  # install, so the container needs outbound access to github.com.
+  BMAD_METHOD_VERSION = "6.10.0"
 
-  INSTALL_TIMEOUT = 180
+  INSTALL_TIMEOUT = 300
 
   class InstallError < StandardError; end
 

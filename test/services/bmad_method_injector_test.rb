@@ -474,8 +474,8 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   # INSTALL_TIMEOUT constant
   # ====================================================================
 
-  test "INSTALL_TIMEOUT is 180 seconds" do
-    assert_equal 180, BmadMethodInjector::INSTALL_TIMEOUT
+  test "INSTALL_TIMEOUT is 300 seconds" do
+    assert_equal 300, BmadMethodInjector::INSTALL_TIMEOUT
   end
 
   private

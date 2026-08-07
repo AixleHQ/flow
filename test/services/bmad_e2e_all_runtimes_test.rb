@@ -8,7 +8,7 @@ require "shellwords"
 # Validates the full BMAD pipeline for each of the 4 agent runtimes:
 #   session create → BmadMethodInjector.inject! → context assembly → filesystem verification
 #
-# Agent type → BMAD tool flag → skill directory mapping (bmad-method 6.6.0):
+# Agent type → BMAD tool flag → skill directory mapping (bmad-method 6.10.0):
 #   cursor_cli  → --tools cursor       → /workspace/.agents/skills/
 #   claude_code → --tools claude-code  → /workspace/.claude/skills/
 #   codex       → --tools codex        → /workspace/.agents/skills/
