@@ -75,7 +75,7 @@ class BmadMethodInjector
 
   def run_bmad_install
     cmd = build_install_command
-    result = runtime.exec(container_id, [ "sh", "-c", cmd ])
+    result = runtime.exec(container_id, [ "sh", "-c", cmd ], timeout: INSTALL_TIMEOUT)
     exit_code = result[2].to_i
 
     if exit_code.zero?
