@@ -120,14 +120,30 @@ module ContainerRuntime
       tar_io
     end
 
-    def extract_from_tar(tar_data, filename)
+    # Both runtimes tar up ONE path per read_file, so the first regular-file entry
+    # is the answer; `filename` is only a preference for a multi-entry tar, never a
+    # filter. Filtering on it silently lost every file whose header name overflowed
+    # tar's 100-byte name field: GNU/busybox tar (k8s `tar -cf -`, which tars the
+    # full path) then emits a `././@LongLink` entry and truncates the real entry's
+    # name, while Docker's Go writer emits a PAX `x` header and garbles it — either
+    # way the basename stopped matching and read_file returned nil. Cyrillic names
+    # (2 bytes/char) overflow at ~40 characters, so human-titled outputs vanished.
+    def extract_from_tar(tar_data, filename = nil)
+      first_file = nil
+
       io = StringIO.new(tar_data)
       Gem::Package::TarReader.new(io) do |tar|
         tar.each do |entry|
-          return entry.read if entry.file? && File.basename(entry.full_name) == filename
+          # Long-name (`L`) and PAX (`x`, `g`) headers are metadata, not content.
+          next unless entry.file?
+
+          return entry.read if filename.present? && File.basename(entry.full_name) == filename
+
+          first_file ||= entry.read
         end
       end
-      nil
+
+      first_file
     rescue StandardError => e
       Rails.logger.warn("[#{self.class.name}] extract_from_tar failed: #{e.message}")
       nil

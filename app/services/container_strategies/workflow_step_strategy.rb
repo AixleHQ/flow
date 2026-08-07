@@ -110,7 +110,10 @@ module ContainerStrategies
       files.each do |file_path|
         relative = file_path.sub("#{output_dir}/", "")
         content = read_file_from_container(container, file_path)
-        next if content.blank?
+        if content.blank?
+          Rails.logger.warn("[WorkflowStepStrategy] Skipped output #{file_path}: #{content.nil? ? 'unreadable' : 'empty'}")
+          next
+        end
 
         tmpfile = Tempfile.new([ "wf_output_", File.extname(relative) ])
         tmpfile.binmode
