@@ -22,6 +22,10 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     response.parsed_body
   end
 
+  def prompt_text(name)
+    rpc("prompts/get", { name: name, arguments: {} }).dig("result", "messages").first.dig("content", "text")
+  end
+
   test "token lifecycle: regenerate rotates, disable revokes" do
     old_token = @token
     new_token = @user.regenerate_mcp_token!
@@ -68,20 +72,46 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     assert_equal [ @project.id ], projects.map { |p| p["id"] }
   end
 
-  test "the build_workflow and author_step prompts are served" do
+  test "the guidance prompts are served" do
     names = rpc("prompts/list").dig("result", "prompts").map { |p| p["name"] }
-    assert_includes names, "build_workflow"
-    assert_includes names, "author_step"
+    assert_equal %w[author_step build_workflow setup_project tool_catalog], names.sort
 
-    wf = rpc("prompts/get", { name: "build_workflow", arguments: {} })
-                   .dig("result", "messages").first.dig("content", "text")
+    wf = prompt_text("build_workflow")
     assert_match(/create_workflow/, wf)
     assert_match(/trigger_workflow/, wf)
 
-    step = rpc("prompts/get", { name: "author_step", arguments: {} })
-                     .dig("result", "messages").first.dig("content", "text")
+    step = prompt_text("author_step")
     assert_match(/instructions/i, step)
     assert_match(/depends_on_step_ids/, step)
+
+    setup = prompt_text("setup_project")
+    assert_match(/create_project/, setup)
+    # The from-scratch path only works because the board can be created here.
+    assert_match(/setup_board/, setup)
+    assert_match(/get_integration_setup_url/, setup)
+
+    catalog = prompt_text("tool_catalog")
+    served = rpc("tools/list").dig("result", "tools").map { |t| t["name"] }
+    missing = served.reject { |name| catalog.include?("`#{name}`") }
+    assert_empty missing, "tool catalog prompt is missing: #{missing.join(', ')}"
+  end
+
+  test "the server introduces itself with instructions on initialize" do
+    result = rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {},
+                                 clientInfo: { name: "test-client", version: "1" } })["result"]
+
+    assert_match(/project_id/, result["instructions"])
+    assert_match(/list_companies/, result["instructions"])
+    assert_match(/setup_project/, result["instructions"])
+  end
+
+  test "the platform reference is served as a resource" do
+    listed = rpc("resources/list").dig("result", "resources")
+    assert_equal [ "aixle://reference/system" ], listed.map { |r| r["uri"] }
+
+    contents = rpc("resources/read", { uri: "aixle://reference/system" }).dig("result", "contents").first
+    assert_equal "text/markdown", contents["mimeType"]
+    assert_match(/Aixle Platform/, contents["text"])
   end
 
   test "the last-used timestamp is touched on requests" do

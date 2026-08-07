@@ -62,6 +62,40 @@ Custom HTTP/SSE servers are validated against SSRF: the URL must be
 endpoints, or private / loopback / link-local addresses (including
 hostnames that resolve to them).
 
+## Aixle as an MCP server (your personal token)
+
+The same `/mcp` endpoint also serves a **personal** server: not a
+session's tools, but your own Aixle account, so an outside client
+(Claude Code, Claude Desktop, any MCP client) can drive the platform for
+you — list projects, build workflows, run them, work the board.
+
+Enable it under **Profile → Personal MCP**, which hands you an `amcp_`
+token and the ready-made command:
+
+```
+claude mcp add aixle --transport http $MCP_SERVER_URL --header "Authorization: Bearer amcp_…"
+```
+
+The token carries **exactly your own access level** — every call runs
+through the same Pundit policies as the UI, across every company you are
+an active member of. There is no "current project": tools take an
+explicit `project_id`. Regenerating the token revokes the old one.
+
+Beyond its ~85 tools, the server ships its own documentation:
+
+| Surface | Name | What it carries |
+| --- | --- | --- |
+| `instructions` | — | Returned on `initialize`, so it is in the client's context from the start: the entity model, the rules that prevent damage (read before write, id lists are replaced wholesale, confirm destructive calls), and where the rest lives. |
+| prompt | `setup_project` | A project from nothing to a running workflow: company, integrations, repositories, config items, tools/skills/MCP servers, agents, board, workflow, trigger. |
+| prompt | `build_workflow` | Workflow concepts and the order to call the workflow tools. |
+| prompt | `author_step` | How to write a step an agent can actually run. |
+| prompt | `tool_catalog` | Every tool on the server, grouped by area — generated from the live registry, so it cannot drift. |
+| resource | `aixle://reference/system` | `references/aixle-system-reference.md`: the full domain model. |
+
+Implementation: `Tools::PersonalMCPRequestHandler` wires the server,
+`Tools::PersonalMCPGuides` holds the text, and the tools are the
+registry's `audience :user` definitions (`app/services/personal_tools/`).
+
 ## See also
 
 - [Tools](tools.md) — what the tools themselves are and how they execute.

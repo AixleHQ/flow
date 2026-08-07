@@ -19,7 +19,7 @@ module PersonalTools
       project = find_project!
       authorize!(project.board, :create?, policy: Web::Company::Projects::Board::ColumnsPolicy, project: project)
       board = project.board
-      return error("This project has no board") unless board
+      return error("This project has no board — create one with setup_board") unless board
 
       column = ActiveRecord::Base.transaction { insert_column(board) }
       success(id: column.id, name: column.name, position: column.position)

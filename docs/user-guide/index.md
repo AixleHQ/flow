@@ -19,7 +19,8 @@ Read in any order:
 - **[Tools](tools.md)** — tool kinds, execution modes, the built-in board
   tools, and resource resolution.
 - **[MCP servers](mcp.md)** — transports, the internal `aixle-tools` server,
-  and Config Items credentials.
+  Config Items credentials, and the personal token that turns Aixle itself
+  into an MCP server.
 - **[Integrations](integrations.md)** — GitHub, GitLab, Linear,
   Google OAuth, and webhooks.
 - **[Configuration](configuration.md)** — env vars, OAuth, agent

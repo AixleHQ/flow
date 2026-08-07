@@ -52,8 +52,21 @@ so you can only do in a project what you could do by hand. It exposes the
 things you do in the app: list your companies and projects, manage board
 tasks, columns and gates, build and run workflows (steps, sub-steps,
 triggers, runs), manage agents, custom tools, skills, MCP servers, config
-items and repositories, and update project settings. Two built-in prompts,
-`build_workflow` and `author_step`, guide multi-step construction.
+items and repositories, and update project settings.
+
+The server also documents itself, so a client does not have to guess. Its
+`instructions` — in your agent's context from the moment it connects —
+explain the entity model and the rules that keep it from doing damage.
+Four prompts go deeper on demand: `setup_project` (a project from nothing
+to a running workflow), `build_workflow`, `author_step`, and
+`tool_catalog` (every tool grouped by area, generated from the live
+registry). The full platform reference is served as the resource
+`aixle://reference/system`.
+
+Starting from an empty project works end to end: a new project has no
+board until `setup_board` creates one from a preset (`simple_kanban`,
+`dev_team`, `full_sdlc`), and everything else on the board follows from
+there.
 
 A workflow built this way can be wired up end to end: `create_workflow_trigger`
 attaches a board column, a Slack message, a cron schedule or an inbound
