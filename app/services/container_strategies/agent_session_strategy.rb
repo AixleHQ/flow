@@ -225,7 +225,12 @@ module ContainerStrategies
         relative = file_path.sub("#{output_dir}/", "")
         filename = File.basename(relative)
         content = read_file_from_container(container, file_path)
-        next if content.blank?
+        if content.blank?
+          # A dropped output used to leave no trace at all — the asset simply never
+          # appeared. Log it, so an unreadable file is distinguishable from an empty one.
+          Rails.logger.warn("[AgentSession] Skipped output #{file_path}: #{content.nil? ? 'unreadable' : 'empty'}")
+          next
+        end
 
         tmpfile = Tempfile.new([ "output-", File.extname(filename) ])
         tmpfile.binmode

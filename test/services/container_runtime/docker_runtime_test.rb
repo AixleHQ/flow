@@ -184,10 +184,21 @@ module ContainerRuntime
       assert_equal "file body", @runtime.read_file("cid", "/tmp/hello.txt")
     end
 
-    test "read_file returns nil when the requested file is absent from the tar" do
-      tar_bytes = build_test_tar("tmp/other.txt", "unrelated")
+    # archive_out tars the requested path, so its single file entry IS the answer even
+    # when the header name doesn't match: past 100 bytes tar truncates that name (see
+    # BaseRuntime#extract_from_tar), and trusting it dropped long-named session outputs.
+    test "read_file returns the archive's file entry even when the header name differs" do
+      tar_bytes = build_test_tar("tmp/truncated-by-tar", "file body")
       container_mock = mock("container")
       container_mock.stubs(:archive_out).with("/tmp/hello.txt").yields(tar_bytes)
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      assert_equal "file body", @runtime.read_file("cid", "/tmp/hello.txt")
+    end
+
+    test "read_file returns nil when the tar carries no file entry" do
+      container_mock = mock("container")
+      container_mock.stubs(:archive_out).with("/tmp/hello.txt").yields(build_empty_tar)
       Docker::Container.stubs(:get).with("cid").returns(container_mock)
 
       assert_nil @runtime.read_file("cid", "/tmp/hello.txt")
@@ -282,6 +293,13 @@ module ContainerRuntime
       Gem::Package::TarWriter.new(io) do |tar|
         tar.add_file_simple(filename, 0o644, content.bytesize) { |f| f.write(content) }
       end
+      io.string
+    end
+
+    def build_empty_tar
+      io = StringIO.new
+      io.binmode
+      Gem::Package::TarWriter.new(io) { |tar| tar.mkdir("tmp", 0o755) }
       io.string
     end
 
