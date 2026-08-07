@@ -27,6 +27,7 @@ a document is added, removed, or moved here, update this index in the same chang
 - **[design/tool-execution.md](./design/tool-execution.md)** — Tool execution strategy framework
 - **[design/meta-workflow.md](./design/meta-workflow.md)** — Meta-workflow / Aixle Builder design
 - **[design/session-config-and-context.md](./design/session-config-and-context.md)** — Session config cascade + context constructor pipeline
+- **[design/session-from-board-task.md](./design/session-from-board-task.md)** — Draft design: starting an agent session directly from a board task (no workflow). Why the task→session link only exists via `StepRun → WorkflowRun`, the proposed `TerminalSession.board_task` edge, resource prefill from the column-bound workflow, board-tool injection/execution gates, and the task-drawer entry point
 - **[design/bmad.md](./design/bmad.md)** — BMAD integration: implemented toggle, system-workflow RFC, and framework reference
 - **[design/oauth-unification.md](./design/oauth-unification.md)** — RFC: unified OAuth lifecycle (token broker, MCP OAuth 2.1 discovery/DCR, Temporal refresh sweep, 1MCP evaluation)
 - **[design/cloud-connection-security.md](./design/cloud-connection-security.md)** — Customer-facing security notes for connecting an organisation's own Amazon Bedrock account: what the grant allows, where prompts go, the three connect paths and the trust each creates (including the device-code phishing posture), attribution, and what is stored where
