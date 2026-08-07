@@ -13,8 +13,12 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         )
       },
       configured_agents: current_project_membership&.configured_agents || [],
+      # Company-scoped assets are shared with every project in the company and are
+      # already offered by the assets page, the session form and the Aixle Builder.
+      # `current_project.assets` walks the has_many and sees project-owned rows only,
+      # so the workflow builder was the one picker that could not reach them.
       assets: InertiaRails.defer(group: "resources") {
-        current_project.assets.active.map { |r| PickerResource.new(r).to_h }
+        Asset.accessible_from_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
       repositories: InertiaRails.defer(group: "resources") {
         Repository.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
@@ -56,8 +60,12 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       mcp_servers: InertiaRails.defer(group: "resources") {
         MCPServer.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
+      # Company-scoped assets are shared with every project in the company and are
+      # already offered by the assets page, the session form and the Aixle Builder.
+      # `current_project.assets` walks the has_many and sees project-owned rows only,
+      # so the workflow builder was the one picker that could not reach them.
       assets: InertiaRails.defer(group: "resources") {
-        current_project.assets.active.map { |r| PickerResource.new(r).to_h }
+        Asset.accessible_from_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
       repositories: InertiaRails.defer(group: "resources") {
         Repository.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
