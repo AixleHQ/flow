@@ -61,8 +61,15 @@ module ContainerRuntime
 
     # -- Execution ------------------------------------------------------------
 
+    # `timeout:` is the runtime-agnostic option (KubernetesRuntime reads it
+    # directly). docker-api spells it `wait:`, which it forwards to Excon as the
+    # read timeout; without it long execs die on Excon's 60s default with
+    # "read timeout reached".
     def exec(id, cmd, opts = {})
       container = resolve_container(id)
+      opts = opts.dup
+      timeout = opts.delete(:timeout)
+      opts[:wait] = timeout if timeout.present?
       container.exec(cmd, opts)
     end
 

@@ -178,6 +178,23 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
   end
 
+  # The install pulls external modules over the network and routinely outruns
+  # the runtime's default exec read timeout, which surfaced as a bogus
+  # "read timeout reached" failure mid-install.
+  test "passes INSTALL_TIMEOUT to the runtime so the exec is not cut short" do
+    session = build_bmad_session(agent_type: "claude_code")
+
+    captured_opts = nil
+    @runtime.expects(:exec).with do |_cid, _cmd, opts|
+      captured_opts = opts
+      true
+    end.returns([ [], [], 0 ])
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+
+    assert_equal BmadMethodInjector::INSTALL_TIMEOUT, captured_opts[:timeout]
+  end
+
   # ====================================================================
   # AC 1: Install fails with non-zero exit → warn logged, session proceeds
   # ====================================================================

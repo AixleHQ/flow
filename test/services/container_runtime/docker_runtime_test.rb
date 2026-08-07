@@ -175,6 +175,27 @@ module ContainerRuntime
       assert_equal [ [ "hi\n" ], [], 0 ], result
     end
 
+    test "exec translates the runtime-agnostic timeout option into docker-api's wait" do
+      container_mock = mock("container")
+      container_mock.expects(:exec)
+        .with([ "sleep", "120" ], { wait: 300 })
+        .returns([ [], [], 0 ])
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      @runtime.exec("cid", [ "sleep", "120" ], timeout: 300)
+    end
+
+    test "exec leaves the caller's options hash untouched" do
+      container_mock = mock("container")
+      container_mock.stubs(:exec).returns([ [], [], 0 ])
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      opts = { timeout: 300 }
+      @runtime.exec("cid", [ "echo", "hi" ], opts)
+
+      assert_equal({ timeout: 300 }, opts)
+    end
+
     test "read_file extracts the file body matching basename from the tar archive" do
       tar_bytes = build_test_tar("tmp/hello.txt", "file body")
       container_mock = mock("container")
