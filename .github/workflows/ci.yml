@@ -84,6 +84,85 @@ jobs:
       run-coverage: ${{ github.event_name == 'push' && '1' || '0' }}
       timeout: 30
 
+  coverage-badges:
+    name: Coverage Badges
+    needs: [ be-checks, fe-checks ]
+    # Only develop pushes measure coverage (see run-coverage above), and develop
+    # is the branch the README advertises.
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Writes the rendered endpoints to the orphan `badges` branch.
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Publish shields.io endpoints
+        env:
+          BACKEND: ${{ needs.be-checks.outputs.line-coverage }}
+          FRONTEND: ${{ needs.fe-checks.outputs.line-coverage }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$BACKEND" ] && [ -z "$FRONTEND" ]; then
+            echo "::warning::no coverage numbers were produced, nothing to publish"
+            exit 0
+          fi
+
+          # The badges live on an orphan branch: the README's badge URLs then
+          # point at a ref that CI rewrites on every develop push, without a
+          # bot commit landing in develop's history on each run. A worktree
+          # keeps that branch out of the checked-out tree entirely.
+          if git ls-remote --exit-code --heads origin badges >/dev/null 2>&1; then
+            # Fetched in full, unlike the shallow checkout above: the branch is
+            # two JSON files deep, and a complete history keeps the push simple.
+            git fetch origin badges:badges
+            git worktree add ../badges badges
+          else
+            git worktree add --detach ../badges
+            git -C ../badges switch --orphan badges
+          fi
+
+          render() {
+            percent="$1"
+            label="$2"
+            file="$3"
+
+            [ -n "$percent" ] || return 0
+
+            color=$(awk -v p="$percent" 'BEGIN {
+              if      (p >= 90) print "brightgreen"
+              else if (p >= 80) print "green"
+              else if (p >= 70) print "yellowgreen"
+              else if (p >= 60) print "yellow"
+              else if (p >= 50) print "orange"
+              else              print "red"
+            }')
+
+            jq -n \
+              --arg label "$label" \
+              --arg message "${percent}%" \
+              --arg color "$color" \
+              '{schemaVersion: 1, label: $label, message: $message, color: $color}' \
+              > "../badges/$file"
+          }
+
+          render "$BACKEND"  "backend coverage"  backend-coverage.json
+          render "$FRONTEND" "frontend coverage" frontend-coverage.json
+
+          cd ../badges
+          git add --all
+          if git diff --cached --quiet; then
+            echo "Coverage unchanged, nothing to commit"
+            exit 0
+          fi
+
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "chore(ci): coverage badges for ${GITHUB_SHA:0:7}"
+          git push origin badges
+
   secret-scan:
     name: Secret Scan
     runs-on: ubuntu-latest
