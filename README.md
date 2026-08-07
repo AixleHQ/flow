@@ -10,6 +10,10 @@ opening a terminal.
 [![React 19](https://img.shields.io/badge/react-19-61dafb)](https://react.dev/)
 [![Status: Pre-1.0](https://img.shields.io/badge/status-pre--1.0-orange)](ROADMAP.md)
 
+[![CI](https://github.com/AixleHQ/flow/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/AixleHQ/flow/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![Backend coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAixleHQ%2Fflow%2Fbadges%2Fbackend-coverage.json)](https://github.com/AixleHQ/flow/actions/workflows/ci.yml?query=branch%3Adevelop)
+[![Frontend coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FAixleHQ%2Fflow%2Fbadges%2Ffrontend-coverage.json)](https://github.com/AixleHQ/flow/actions/workflows/ci.yml?query=branch%3Adevelop)
+
 ![Aixle Flow — a card is dragged into an automated column; the bound workflow runs Plan, Implement, Run tests and Open PR across Claude Code, Codex and Cursor CLI, each in its own container, and the sessions table shows the tokens and cost each step spent](docs/assets/demo.gif)
 
 ## Why Aixle Flow

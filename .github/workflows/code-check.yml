@@ -28,6 +28,12 @@ on:
         required: false
         type: string
         default: "check-artifacts"
+    outputs:
+      line-coverage:
+        description: >-
+          Line coverage percentage this run measured, as a bare number
+          ("90.6"). Empty unless run-coverage was "1".
+        value: ${{ jobs.check.outputs.line-coverage }}
 
 permissions:
   contents: read
@@ -45,6 +51,8 @@ jobs:
     timeout-minutes: ${{ inputs.timeout }}
     env:
       RAILS_ENV: test
+    outputs:
+      line-coverage: ${{ steps.line-coverage.outputs.percent }}
     steps:
       - uses: actions/checkout@v7
 
@@ -96,6 +104,8 @@ jobs:
           # Forwarded into the container by docker-compose.ci.yml (RUN_COVERAGE).
           RUN_COVERAGE: ${{ inputs.run-coverage }}
         run: |
+          mounts=()
+
           ARTIFACT_PATH="${{ inputs.artifact-path }}"
           if [ -n "$ARTIFACT_PATH" ]; then
             mkdir -p "$ARTIFACT_PATH"
@@ -103,12 +113,40 @@ jobs:
             # the runner's uid that owns this freshly-created host directory.
             # Ephemeral, single-job runner — world-writable is fine here.
             chmod 777 "$ARTIFACT_PATH"
-            docker compose -f "$COMPOSE_FILE" run --rm --no-deps \
-              -v "$GITHUB_WORKSPACE/$ARTIFACT_PATH:/app/$ARTIFACT_PATH" \
-              web make ${{ inputs.command }}
-          else
-            docker compose -f "$COMPOSE_FILE" run --rm --no-deps web make ${{ inputs.command }}
+            mounts+=(-v "$GITHUB_WORKSPACE/$ARTIFACT_PATH:/app/$ARTIFACT_PATH")
           fi
+
+          # SimpleCov and Vitest write their summaries inside the container, and
+          # `docker compose run` leaves nothing behind. Mount the directory out
+          # so the next step can read the percentage for the coverage badges.
+          if [ "$RUN_COVERAGE" = "1" ]; then
+            mkdir -p coverage
+            chmod 777 coverage
+            mounts+=(-v "$GITHUB_WORKSPACE/coverage:/app/coverage")
+          fi
+
+          docker compose -f "$COMPOSE_FILE" run --rm --no-deps \
+            "${mounts[@]}" web make ${{ inputs.command }}
+
+      - name: Read line coverage
+        id: line-coverage
+        # Runs even when the check failed: a red suite still measured coverage,
+        # and the badge job only publishes on green develop pushes anyway.
+        if: ${{ always() && inputs.run-coverage == '1' }}
+        run: |
+          # A job runs either the backend suite or the frontend one, never both,
+          # so exactly one of these summaries exists.
+          if [ -f coverage/.last_run.json ]; then
+            percent=$(jq -r '.result.line' coverage/.last_run.json)
+          elif [ -f coverage/frontend/coverage-summary.json ]; then
+            percent=$(jq -r '.total.lines.pct' coverage/frontend/coverage-summary.json)
+          else
+            echo "::warning::coverage was requested but no summary file was produced"
+            exit 0
+          fi
+
+          echo "Line coverage: $percent%"
+          echo "percent=$percent" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifacts
         if: ${{ inputs.artifact-path != '' }}
