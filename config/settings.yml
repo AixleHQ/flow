@@ -28,7 +28,12 @@ database:
   name: <%= ENV['DB_NAME'] %>
   host: <%= ENV['DB_HOST'] || "127.0.0.1" %>
   port: <%= ENV['DB_PORT'] || 5432 %>
-  pool: <%= ENV['RAILS_MAX_THREADS'] || 5 %>
+  # One request thread checks out one connection, so the pool must cover the
+  # whole Puma thread budget (RAILS_MAX_THREADS, see config/puma.rb and
+  # config/puma_mcp.rb) plus headroom for checkouts that are not request-bound
+  # — an equal pool leaves none, and the overflow waits out the 5s checkout
+  # timeout and raises ConnectionTimeoutError. DB_POOL overrides outright.
+  pool: <%= ENV['DB_POOL'] || (ENV['RAILS_MAX_THREADS'] || 5).to_i + 3 %>
   username: <%= ENV['DB_USERNAME'] || "postgres" %>
   password: <%= ENV['DB_PASSWORD'] || "" %>
 
