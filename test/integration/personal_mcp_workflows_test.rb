@@ -23,6 +23,7 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
 
   def payload(body) = JSON.parse(body.dig("result", "content").first["text"])
   def error?(body) = body.dig("result", "isError")
+  def text(body) = body.dig("result", "content").map { |c| c["text"] }.join(" ")
 
   test "list_workflows lists project-visible workflows" do
     names = payload(call_tool("list_workflows", { project_id: @project.id }))["workflows"].map { |w| w["name"] }
@@ -41,6 +42,134 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     detail = payload(call_tool("get_workflow", { project_id: @project.id, workflow_id: wf_id }))
     assert_equal 1, detail["steps_count"]
     assert_equal "Step 1", detail["steps"].first["name"]
+  end
+
+  test "update_workflow edits name, description and base resources, and get_workflow reports them" do
+    tool = create(:tool, scope: @project)
+    skill = create(:skill, scope: @project)
+    server = create(:mcp_server, scope: @project)
+
+    updated = payload(call_tool("update_workflow",
+                                { project_id: @project.id, workflow_id: @workflow.id,
+                                  name: "Renamed", description: "new description",
+                                  base_tool_ids: [ tool.id ], base_skill_ids: [ skill.id ],
+                                  base_mcp_server_ids: [ server.id ] }))
+    assert_equal "Renamed", updated["name"]
+    assert_includes updated["updated_fields"], "base_tool_ids"
+
+    detail = payload(call_tool("get_workflow", { project_id: @project.id, workflow_id: @workflow.id }))
+    assert_equal "Renamed", detail["name"]
+    assert_equal "new description", detail["description"]
+    assert_equal [ tool.id ], detail["base_tool_ids"]
+    assert_equal [ skill.id ], detail["base_skill_ids"]
+    assert_equal [ server.id ], detail["base_mcp_server_ids"]
+    assert_nil detail["published_at"]
+
+    nothing = call_tool("update_workflow", { project_id: @project.id, workflow_id: @workflow.id })
+    assert error?(nothing)
+    assert_match(/no fields/i, text(nothing))
+  end
+
+  test "get_workflow_step returns full instructions and wiring while get_workflow truncates and flags" do
+    long = "x" * 900
+    agent = create(:agent, scope: @project)
+    tool = create(:tool, scope: @project)
+    step = create(:step, workflow: @workflow, instructions: long, agent: agent,
+                         tool_ids: [ tool.id ], bmad_enabled: true, mount_repositories: false, max_retries: 2)
+    create(:sub_step, step: step, name: "check A", instructions: long)
+
+    listed = payload(call_tool("get_workflow", { project_id: @project.id, workflow_id: @workflow.id }))["steps"].first
+    assert_equal 500, listed["instructions"].length
+    assert listed["instructions_truncated"]
+    assert listed["sub_steps"].first["instructions_truncated"]
+
+    full = payload(call_tool("get_workflow_step",
+                             { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id }))
+    assert_equal long, full["instructions"]
+    assert_equal long, full["sub_steps"].first["instructions"]
+    assert_equal agent.id, full.dig("agent", "id")
+    assert_equal [ tool.id ], full["tool_ids"]
+    assert full["bmad_enabled"]
+    assert_equal false, full["mount_repositories"] # rubocop:disable Minitest/RefuteFalse
+    assert_equal 2, full["max_retries"]
+    assert_equal "fail", full["on_failure"]
+    assert_equal "never", full["skip_policy"]
+  end
+
+  test "create_workflow_step wires agent, tools, skills, servers, deps and flags in one call" do
+    first = payload(call_tool("create_workflow_step",
+                              { project_id: @project.id, workflow_id: @workflow.id, name: "S1" }))
+    agent = create(:agent, scope: @project)
+    tool = create(:tool, scope: @project)
+    skill = create(:skill, scope: @project)
+    server = create(:mcp_server, scope: @project)
+
+    created = payload(call_tool("create_workflow_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, name: "S2",
+                                  instructions: "do it", agent_id: agent.id,
+                                  tool_ids: [ tool.id ], skill_ids: [ skill.id ],
+                                  mcp_server_ids: [ server.id ], depends_on_step_ids: [ first["id"] ],
+                                  bmad_enabled: true, allow_non_interactive: true }))
+
+    step = Step.find(created["id"])
+    assert_equal agent.id, step.agent_id
+    assert_equal [ tool.id ], step.tool_ids
+    assert_equal [ skill.id ], step.skill_ids
+    assert_equal [ server.id ], step.mcp_server_ids
+    assert_equal [ first["id"] ], step.depends_on_step_ids
+    assert step.bmad_enabled
+    assert step.allow_non_interactive
+  end
+
+  test "update_workflow_step toggles bmad_enabled and allow_non_interactive" do
+    step = create(:step, workflow: @workflow)
+
+    body = call_tool("update_workflow_step",
+                     { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                       bmad_enabled: true, allow_non_interactive: true })
+    assert_not error?(body)
+    assert_includes payload(body)["updated_fields"], "bmad_enabled"
+
+    step.reload
+    assert step.bmad_enabled
+    assert step.allow_non_interactive
+  end
+
+  test "duplicate_workflow copies steps and reports what needs manual setup" do
+    step = create(:step, workflow: @workflow, name: "S1", instructions: "work")
+    create(:sub_step, step: step, name: "check A")
+
+    copy = payload(call_tool("duplicate_workflow",
+                             { project_id: @project.id, workflow_id: @workflow.id, name: "Copy of it" }))
+    assert_not_equal @workflow.id, copy["id"]
+    assert_equal "Copy of it", copy["name"]
+    assert_equal @project.id, copy["project_id"]
+    assert_equal @workflow.id, copy["source_workflow_id"]
+    assert_equal 1, copy["steps_count"]
+    assert copy["needs_setup"].any? { |m| m.match?(/not copied/i) }
+
+    duplicated_step = Workflow.find(copy["id"]).steps.not_deleted.first
+    assert_equal "S1", duplicated_step.name
+    assert_equal [ "check A" ], duplicated_step.sub_steps.active.map(&:name)
+  end
+
+  test "duplicate_workflow copies into another reachable project and refuses an unreachable one" do
+    create(:step, workflow: @workflow, name: "S1")
+    target = create(:project, company: @company, owner: @user)
+
+    copied = payload(call_tool("duplicate_workflow",
+                               { project_id: @project.id, workflow_id: @workflow.id,
+                                 target_project_id: target.id }))
+    assert_equal target.id, copied["project_id"]
+    assert_equal target.id, Workflow.find(copied["id"]).scope_id
+
+    outsider = create(:user, :with_company)
+    outsider_project = create(:project, company: outsider.companies.first, owner: outsider)
+    denied = call_tool("duplicate_workflow",
+                       { project_id: @project.id, workflow_id: @workflow.id,
+                         target_project_id: outsider_project.id })
+    assert error?(denied)
+    assert_match(/not found/i, text(denied))
   end
 
   test "trigger_workflow starts a run and list/get_workflow_run report it" do
