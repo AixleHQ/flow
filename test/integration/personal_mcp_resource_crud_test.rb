@@ -190,6 +190,34 @@ class PersonalMCPResourceCrudTest < ActionDispatch::IntegrationTest
     assert_match(/no known runtime for mcpb/i, text(body))
   end
 
+  test "search_skill_registry carries the audit verdict a mirrored entry has" do
+    create(:catalog_skill, registry_id: "org/skills/risky", source: "org/skills", slug: "risky",
+                           description: "Mirrored description", audit_risk: "high",
+                           audit: { "socket" => { "risk" => "high" } })
+    Skills::RegistryClient.stubs(:search)
+                          .returns([ Skills::RegistryClient::Entry.new(id: "org/skills/risky", slug: "risky",
+                                                                       name: "risky", source: "org/skills",
+                                                                       installs: 12) ])
+
+    body = payload(call_tool("search_skill_registry", { project_id: @project.id, query: "risky" }))
+
+    entry = body["results"].sole
+    assert_equal "risky", body["query"]
+    assert_equal "Mirrored description", entry["description"]
+    assert_equal "high", entry["audit_risk"]
+    assert_equal "socket", entry["audit_providers"].first["provider"]
+  end
+
+  test "search_skill_registry browses when the query is too short to reach upstream" do
+    create(:catalog_skill, registry_id: "org/skills/fmt", source: "org/skills", slug: "fmt")
+    Skills::RegistryClient.expects(:search).never
+
+    body = payload(call_tool("search_skill_registry", { project_id: @project.id, query: "a" }))
+
+    assert_nil body["query"]
+    assert_equal "org/skills/fmt", body["results"].sole["registry_id"]
+  end
+
   test "get_registry_skill returns the SKILL.md plus the catalog audit verdict" do
     entry = create(:catalog_skill, source: "test-org/skills", slug: "fmt",
                                    audit_risk: "high", audit: { "socket" => { "risk" => "high", "score" => 0.2 } })
@@ -225,9 +253,12 @@ class PersonalMCPResourceCrudTest < ActionDispatch::IntegrationTest
   end
 
   test "skill search / install / uninstall" do
-    SkillsRegistryService.stubs(:search).returns([ { "id" => "s1", "name" => "fmt" } ])
+    Skills::RegistryClient.stubs(:search)
+                          .returns([ Skills::RegistryClient::Entry.new(id: "test-org/skills/fmt", slug: "fmt",
+                                                                       name: "fmt", source: "test-org/skills",
+                                                                       installs: 3) ])
     results = payload(call_tool("search_skill_registry", { project_id: @project.id, query: "fmt" }))["results"]
-    assert_equal "s1", results.first["id"]
+    assert_equal "test-org/skills/fmt", results.first["registry_id"]
 
     skill = create(:skill, scope: @project)
     SkillsRegistryService.stubs(:install).returns(skill)

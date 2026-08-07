@@ -1,12 +1,6 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::SkillsController < Web::Company::Projects::ApplicationController
-  CATALOG_PAGE_SIZE = 60
-  # Upstream is rate-limited per IP with no published number, and every debounced
-  # keystroke from every member arrives here. Short-lived caching keeps a room full of
-  # people typing from spending the whole deployment's budget on the same queries.
-  SEARCH_CACHE_TTL = 5.minutes
-
   def index
     skills = Skill.visible_for_project(current_project).order(created_at: :desc)
 
@@ -14,7 +8,7 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
       project: project_props,
       skills: skills.map { |s| SkillResource.new(s).to_h },
       catalogQuery: catalog_query,
-      catalogSkills: catalog_entries.map { |c| CatalogSkillResource.new(c).to_h },
+      catalogSkills: Skills::CatalogSearch.call(catalog_query).map { |c| CatalogSkillResource.new(c).to_h },
       catalogSyncedAt: CatalogSkill.maximum(:registry_synced_at)
     }
 
@@ -131,70 +125,6 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
 
   def catalog_query
     params[:catalog_q].to_s.strip
-  end
-
-  # Blank (or too-short) query → the default browse view, served from the mirror.
-  # A real query → upstream, because skills.sh's fuzzy search beats anything the
-  # mirror can do and the mirror is incomplete by construction.
-  #
-  # NOTHING IS PERSISTED HERE. `index` authorizes as a project READ, so a viewer who
-  # is denied `create?` must not be able to write rows into a table shared by every
-  # tenant, or trigger an outbound request per keystroke, just by loading a URL.
-  # Upstream hits are rendered from unsaved records; the weekly sweep owns the mirror.
-  def catalog_entries
-    return default_catalog_entries if catalog_query.length < Skills::RegistryClient::MIN_QUERY_LENGTH
-
-    entries = cached_search(catalog_query)
-    # Upstream unreachable, or nothing matched: fall back to full-text over whatever
-    # is mirrored rather than showing an empty catalog.
-    return CatalogSkill.search(catalog_query).limit(CATALOG_PAGE_SIZE) if entries.empty?
-
-    merge_with_mirror(entries)
-  end
-
-  def default_catalog_entries
-    CatalogSkill.one_per_source.popular.limit(CATALOG_PAGE_SIZE)
-  end
-
-  # Recording happens inside the cache-miss block on purpose: a debounced field would
-  # otherwise write once per keystroke, and with the 5-minute cache a term is recorded
-  # at most once per window no matter how many people are typing it. The term steers a
-  # later sweep and is stored unattributed — see CatalogSearchQuery.
-  def cached_search(query)
-    Rails.cache.fetch([ "skills-catalog-search", query ], expires_in: SEARCH_CACHE_TTL) do
-      CatalogSearchQuery.record(query)
-      Skills::RegistryClient.search(query, limit: CATALOG_PAGE_SIZE)
-    end
-  end
-
-  # Upstream relevance order is preserved: the endpoint ranks by fuzzy match, and
-  # re-sorting by popularity would push the exact-name hit below a tangential match
-  # with more installs. Mirrored rows are reused where they exist so a result keeps
-  # its description and audit verdicts; anything unmirrored renders from the search
-  # payload alone.
-  def merge_with_mirror(entries)
-    mirrored = CatalogSkill.where(registry_id: entries.map(&:id).compact).index_by(&:registry_id)
-
-    entries.map { |entry| mirrored[entry.id] || transient_catalog_skill(entry) }
-  end
-
-  def transient_catalog_skill(entry)
-    source, slug = split_registry_id(entry)
-
-    CatalogSkill.new(
-      registry_id: entry.id.presence || "#{source}/#{slug}",
-      source: source,
-      slug: slug,
-      title: (entry.name if entry.name.present? && entry.name != slug),
-      installs: entry.installs.to_i
-    )
-  end
-
-  def split_registry_id(entry)
-    parts = entry.id.to_s.split("/").reject(&:blank?)
-    return [ entry.source, entry.slug ] if parts.size < 2
-
-    [ parts[0..-2].join("/"), parts.last ]
   end
 
   # The download endpoint reports no install count, so the figure comes from the

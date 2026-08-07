@@ -28,7 +28,9 @@ module PersonalTools
       assert_equal 0, result[:exit_code]
       payload = JSON.parse(result[:stdout])
       assert_nil payload["query"]
-      assert_equal "anthropics/skills/pdf", payload["results"].sole["id"]
+      # Identity travels as the registry id: a live upstream hit has no mirror row
+      # behind it, so a database id would be null exactly when the entry is newest.
+      assert_equal "anthropics/skills/pdf", payload["results"].sole["registry_id"]
       assert_equal "Fill PDF forms", payload["results"].sole["description"]
     end
 
@@ -48,13 +50,15 @@ module PersonalTools
     end
 
     test "a query searches upstream" do
-      SkillsRegistryService.stubs(:search).returns([ { id: "org/skills/rails", slug: "rails", name: "rails",
-                                                       source: "org/skills", installs: 42 } ])
+      Skills::RegistryClient.stubs(:search)
+                            .returns([ Skills::RegistryClient::Entry.new(id: "org/skills/rails", slug: "rails",
+                                                                         name: "rails", source: "org/skills",
+                                                                         installs: 42) ])
 
       payload = JSON.parse(execute(query: "rails")[:stdout])
 
       assert_equal "rails", payload["query"]
-      assert_equal "org/skills/rails", payload["results"].sole["id"]
+      assert_equal "org/skills/rails", payload["results"].sole["registry_id"]
     end
   end
 end
