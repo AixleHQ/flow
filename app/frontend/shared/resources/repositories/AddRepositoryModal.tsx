@@ -1,22 +1,12 @@
 import { router, usePage } from '@inertiajs/react';
-import {
-  Alert,
-  Button,
-  Group,
-  Loader,
-  Modal,
-  SegmentedControl,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-  Textarea,
-} from '@mantine/core';
+import { Alert, Button, Loader, SegmentedControl, Select, Stack, Text, TextInput, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { IconAlertCircle } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useMemo, useState, type FC } from 'react';
 import { z } from 'zod';
+
+import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const schema = z
   .object({
@@ -201,8 +191,17 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
   };
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="Add Repository" centered>
-      <form onSubmit={form.onSubmit(handleSubmit)}>
+    <ResourceDrawer
+      opened={opened}
+      onClose={handleClose}
+      title="Add Repository"
+      footer={
+        <Button type="submit" form="add-repository-form" fullWidth loading={loading}>
+          Add Repository
+        </Button>
+      }
+    >
+      <form id="add-repository-form" onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
           {serverErrors && (
             <Alert icon={<IconAlertCircle size={16} />} color="red" variant="light">
@@ -288,16 +287,8 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
             minRows={2}
             autosize
           />
-          <Group justify="flex-end" mt="sm">
-            <Button variant="default" onClick={handleClose} disabled={loading}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={loading}>
-              Add Repository
-            </Button>
-          </Group>
         </Stack>
       </form>
-    </Modal>
+    </ResourceDrawer>
   );
 };

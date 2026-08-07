@@ -1,21 +1,34 @@
 import { router } from '@inertiajs/react';
-import { Badge, Box, Button, Card, Divider, Group, Menu, Stack, Text, ThemeIcon } from '@mantine/core';
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Group,
+  SegmentedControl,
+  Table,
+  Text,
+  TextInput,
+  Tooltip,
+} from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
-  IconDotsVertical,
   IconEdit,
   IconFolder,
   IconGitBranch,
   IconLock,
   IconPlus,
+  IconSearch,
   IconTrash,
   IconWorld,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
+import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 
 import { AddRepositoryModal } from './AddRepositoryModal';
 import { EditRepositoryModal } from './EditRepositoryModal';
@@ -41,93 +54,43 @@ interface RepositoriesContentProps {
   editBranches?: string[];
 }
 
-const RepoCard = ({
-  repo,
-  readOnly,
-  canExecute,
-  onEdit,
-  onDelete,
-  showScope,
-}: {
-  repo: Repository;
-  readOnly?: boolean;
-  canExecute: boolean;
-  onEdit: (r: Repository) => void;
-  onDelete: (r: Repository) => void;
-  showScope?: boolean;
-}) => (
-  <Card withBorder p="md" radius="md">
-    <Group justify="space-between" wrap="nowrap">
-      <Group gap="md" wrap="nowrap">
-        <ThemeIcon variant="light" size="lg" radius="md" color={repo.isPrivate ? 'yellow' : 'teal'}>
-          {repo.isPrivate ? <IconLock size={18} /> : <IconWorld size={18} />}
-        </ThemeIcon>
-        <Box style={{ minWidth: 0 }}>
-          <Group gap="xs" wrap="nowrap">
-            <Text fw={600} size="sm" truncate>
-              {repo.fullName}
-            </Text>
-            <Badge size="xs" variant="light" leftSection={<IconGitBranch size={10} />}>
-              {repo.sourceBranch}
-            </Badge>
-            {showScope && (
-              <Badge size="xs" variant="light" color={repo.scopeIndicator === 'project' ? 'green' : 'gray'}>
-                {repo.scopeIndicator}
-              </Badge>
-            )}
-            {repo.publicSource && (
-              <Badge size="xs" variant="light" color="blue" title="Cloned without credentials — read-only">
-                public read-only
-              </Badge>
-            )}
-          </Group>
-          <Text size="xs" c="dimmed" truncate>
-            {repo.integration?.name ?? 'No integration'}
-            {repo.description && ` · ${repo.description}`}
-          </Text>
-          {repo.purpose && (
-            <Text size="xs" c="dimmed" fs="italic" mt={2} lineClamp={1}>
-              {repo.purpose}
-            </Text>
-          )}
-        </Box>
-      </Group>
-
-      {!readOnly && canExecute && (
-        <Menu position="bottom-end" withArrow>
-          <Menu.Target>
-            <Button variant="subtle" size="xs" p={4} color="gray">
-              <IconDotsVertical size={16} />
-            </Button>
-          </Menu.Target>
-          <Menu.Dropdown>
-            <Menu.Item leftSection={<IconEdit size={14} />} onClick={() => onEdit(repo)}>
-              Edit
-            </Menu.Item>
-            <Menu.Item color="red" leftSection={<IconTrash size={14} />} onClick={() => onDelete(repo)}>
-              Remove
-            </Menu.Item>
-          </Menu.Dropdown>
-        </Menu>
-      )}
-    </Group>
-  </Card>
-);
+const SCOPE_COLORS: Record<string, string> = {
+  company: 'gray',
+  project: 'green',
+};
 
 export const RepositoriesContent = ({ repositories, basePath, title, editBranches }: RepositoriesContentProps) => {
   const { canExecute } = useProjectPermissions();
+  const [search, setSearch] = useState('');
+  const [scopeFilter, setScopeFilter] = useState('all');
   const [editRepo, setEditRepo] = useState<Repository | null>(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
+
+  const isProjectContext = basePath.includes('projects');
+
+  const filtered = useMemo(() => {
+    let result = repositories;
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((r) => r.fullName.toLowerCase().includes(q));
+    }
+
+    if (scopeFilter !== 'all') {
+      result = result.filter((r) => r.scopeIndicator === scopeFilter);
+    }
+
+    return result;
+  }, [repositories, search, scopeFilter]);
+
+  const hasFilters = !!search || scopeFilter !== 'all';
+
+  const canEdit = (repo: Repository) => !isProjectContext || repo.scopeIndicator === 'project';
 
   const handleEdit = (repo: Repository) => {
     setEditRepo(repo);
     router.reload({ data: { edit_repo_id: repo.id }, only: ['editBranches'] });
   };
-
-  const isProjectContext = basePath.includes('projects');
-
-  const projectRepos = useMemo(() => repositories.filter((r) => r.scopeIndicator === 'project'), [repositories]);
-  const companyRepos = useMemo(() => repositories.filter((r) => r.scopeIndicator === 'company'), [repositories]);
 
   const handleDelete = (repo: Repository) => {
     modals.openConfirmModal({
@@ -150,44 +113,6 @@ export const RepositoriesContent = ({ repositories, basePath, title, editBranche
     });
   };
 
-  const canEdit = (repo: Repository) => !isProjectContext || repo.scopeIndicator === 'project';
-
-  const renderRepoList = (repos: Repository[], readOnly = false) => (
-    <Stack gap="sm">
-      {repos.map((repo) => (
-        <RepoCard
-          key={repo.id}
-          repo={repo}
-          readOnly={readOnly || !canEdit(repo)}
-          canExecute={canExecute}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-          showScope={!isProjectContext}
-        />
-      ))}
-    </Stack>
-  );
-
-  const renderSection = (label: string, repos: Repository[], readOnly = false) => (
-    <Box>
-      <Group gap="xs" mb="sm">
-        <Text fw={600} size="sm" tt="uppercase" c="dimmed" lts={0.5}>
-          {label}
-        </Text>
-        <Badge size="xs" variant="light" color="gray">
-          {repos.length}
-        </Badge>
-      </Group>
-      {repos.length === 0 ? (
-        <Text c="dimmed" size="sm" mb="md">
-          {readOnly ? 'No company-wide repositories available.' : 'No repositories in this scope.'}
-        </Text>
-      ) : (
-        <Box mb="md">{renderRepoList(repos, readOnly)}</Box>
-      )}
-    </Box>
-  );
-
   return (
     <Box>
       <PageHeader
@@ -202,39 +127,162 @@ export const RepositoriesContent = ({ repositories, basePath, title, editBranche
         }
       />
 
-      {repositories.length === 0 ? (
-        <Card p="xl" withBorder radius="md">
-          <Stack align="center" gap="md" py="lg">
-            <ThemeIcon size={56} radius="xl" variant="light" color="gray">
-              <IconFolder size={28} />
-            </ThemeIcon>
-            <Box ta="center">
-              <Text fw={500} size="lg">
-                No repositories added
-              </Text>
-              <Text size="sm" c="dimmed" mt={4} maw={400}>
-                Add repositories to use as code context in agent sessions. Connect a GitHub or GitLab integration first.
-              </Text>
-            </Box>
-            {canExecute && (
-              <Button variant="light" leftSection={<IconPlus size={16} />} onClick={() => setAddModalOpen(true)}>
-                Add Repository
-              </Button>
-            )}
-          </Stack>
-        </Card>
-      ) : isProjectContext ? (
-        <Stack gap="lg">
-          {renderSection('This Project', projectRepos)}
-          {companyRepos.length > 0 && (
-            <>
-              <Divider />
-              {renderSection('Company-wide', companyRepos, true)}
-            </>
-          )}
-        </Stack>
+      <Group gap="md" mb="lg">
+        <TextInput
+          placeholder="Search repositories..."
+          leftSection={<IconSearch size={16} />}
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          maw={300}
+        />
+        {isProjectContext && (
+          <SegmentedControl
+            value={scopeFilter}
+            onChange={setScopeFilter}
+            data={[
+              { label: 'All', value: 'all' },
+              { label: 'Project', value: 'project' },
+              { label: 'Company', value: 'company' },
+            ]}
+            size="sm"
+          />
+        )}
+        <ResourceCount>
+          {filtered.length} {filtered.length === 1 ? 'repository' : 'repositories'}
+        </ResourceCount>
+      </Group>
+
+      {filtered.length === 0 ? (
+        <Box
+          style={{
+            border: '1px solid var(--app-border-default)',
+            borderRadius: 'var(--mantine-radius-md)',
+            backgroundColor: 'var(--app-bg-paper)',
+          }}
+        >
+          <EmptyState
+            icon={<IconFolder size={22} />}
+            title={
+              hasFilters
+                ? scopeFilter !== 'all' && !search
+                  ? 'No repositories in this scope'
+                  : 'No repositories match your filters'
+                : 'No repositories added'
+            }
+            description={
+              hasFilters
+                ? undefined
+                : 'Add repositories to use as code context in agent sessions. Connect a GitHub or GitLab integration first.'
+            }
+            action={
+              !hasFilters &&
+              canExecute && (
+                <Button variant="outline" onClick={() => setAddModalOpen(true)}>
+                  Add Repository
+                </Button>
+              )
+            }
+          />
+        </Box>
       ) : (
-        renderRepoList(repositories)
+        <ResourceTableShell>
+          <Table highlightOnHover>
+            <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
+              <Table.Tr>
+                <ResourceTh>Repository</ResourceTh>
+                <ResourceTh>Source</ResourceTh>
+                {isProjectContext && <ResourceTh>Scope</ResourceTh>}
+                <ResourceTh align="right" w={90}>
+                  Actions
+                </ResourceTh>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {filtered.map((repo) => {
+                const readOnly = !canEdit(repo);
+                return (
+                  <Table.Tr key={repo.id}>
+                    <Table.Td>
+                      <Group gap="sm" wrap="nowrap">
+                        <Box
+                          w={36}
+                          h={36}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: 'var(--app-bg-deep)',
+                            borderRadius: 'var(--mantine-radius-sm)',
+                            color: repo.isPrivate ? 'var(--app-warning-fg)' : 'var(--app-text-secondary)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {repo.isPrivate ? <IconLock size={16} /> : <IconWorld size={16} />}
+                        </Box>
+                        <Box style={{ minWidth: 0 }}>
+                          <Group gap={6} wrap="nowrap">
+                            <Text fz={14} fw={500} c="var(--app-text-primary)" truncate>
+                              {repo.fullName}
+                            </Text>
+                            <Badge size="xs" variant="light" leftSection={<IconGitBranch size={10} />}>
+                              {repo.sourceBranch}
+                            </Badge>
+                          </Group>
+                          {repo.purpose && (
+                            <Text fz={12} c="dimmed" truncate maw={340}>
+                              {repo.purpose}
+                            </Text>
+                          )}
+                        </Box>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text fz={13} c="dimmed">
+                        {repo.integration?.name ?? (repo.publicSource ? 'Public (read-only)' : 'No integration')}
+                      </Text>
+                    </Table.Td>
+                    {isProjectContext && (
+                      <Table.Td>
+                        <Badge color={SCOPE_COLORS[repo.scopeIndicator] ?? 'gray'} size="sm" variant="light">
+                          {repo.scopeIndicator}
+                        </Badge>
+                      </Table.Td>
+                    )}
+                    <Table.Td>
+                      {canExecute && (
+                        <Group gap={4} justify="flex-end">
+                          <Tooltip label={readOnly ? 'Company-managed' : 'Edit'}>
+                            <ActionIcon
+                              aria-label="Edit"
+                              variant="subtle"
+                              size="sm"
+                              disabled={readOnly}
+                              onClick={() => handleEdit(repo)}
+                            >
+                              <IconEdit size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label={readOnly ? 'Company-managed' : 'Remove'}>
+                            <ActionIcon
+                              aria-label="Remove"
+                              variant="subtle"
+                              size="sm"
+                              color="red"
+                              disabled={readOnly}
+                              onClick={() => handleDelete(repo)}
+                            >
+                              <IconTrash size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </Group>
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </ResourceTableShell>
       )}
 
       <AddRepositoryModal

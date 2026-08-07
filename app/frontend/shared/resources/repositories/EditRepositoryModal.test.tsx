@@ -61,7 +61,7 @@ describe('EditRepositoryModal', () => {
     expect(router.patch).not.toHaveBeenCalled();
   });
 
-  it('clicking Cancel calls onClose without hitting the backend', async () => {
+  it('clicking the drawer close button calls onClose without hitting the backend', async () => {
     const onClose = vi.fn();
     renderPage(
       <EditRepositoryModal
@@ -72,7 +72,7 @@ describe('EditRepositoryModal', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(router.patch).not.toHaveBeenCalled();

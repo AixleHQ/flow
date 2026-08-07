@@ -72,11 +72,11 @@ describe('AgentFormModal', () => {
     expect(router.post).not.toHaveBeenCalled();
   });
 
-  it('calls onClose when Cancel is clicked', async () => {
+  it('calls onClose when the drawer close button is clicked', async () => {
     const onClose = vi.fn();
     renderPage(<AgentFormModal opened onClose={onClose} basePath="/projects/1/agents" />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(onClose).toHaveBeenCalled();
   });

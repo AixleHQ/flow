@@ -16,6 +16,7 @@ import { useMemo, useState } from 'react';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
+import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 
 import { DeleteToolModal } from './DeleteToolModal';
 import { ToolFormModal } from './ToolFormModal';
@@ -145,6 +146,9 @@ export function ToolsContent({
           ]}
           size="sm"
         />
+        <ResourceCount>
+          {filtered.length} {filtered.length === 1 ? 'wrapper' : 'wrappers'}
+        </ResourceCount>
       </Group>
 
       {filtered.length === 0 ? (
@@ -174,41 +178,17 @@ export function ToolsContent({
           />
         </Box>
       ) : (
-        <Box
-          style={{
-            border: '1px solid var(--app-border-default)',
-            borderRadius: 'var(--mantine-radius-md)',
-            overflow: 'hidden',
-          }}
-        >
+        <ResourceTableShell>
           <Table highlightOnHover>
             <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
               <Table.Tr>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Tool
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Scope
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Docker Image
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Files
-                  </Text>
-                </Table.Th>
-                <Table.Th w={100}>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" ta="right" style={{ letterSpacing: 0.5 }}>
-                    Actions
-                  </Text>
-                </Table.Th>
+                <ResourceTh>Tool</ResourceTh>
+                <ResourceTh>Scope</ResourceTh>
+                <ResourceTh>Docker Image</ResourceTh>
+                <ResourceTh>Files</ResourceTh>
+                <ResourceTh align="right" w={100}>
+                  Actions
+                </ResourceTh>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -287,7 +267,7 @@ export function ToolsContent({
               })}
             </Table.Tbody>
           </Table>
-        </Box>
+        </ResourceTableShell>
       )}
 
       <ToolFormModal

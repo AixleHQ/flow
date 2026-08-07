@@ -56,11 +56,11 @@ describe('ToolFormModal', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
-  it('clicking Cancel calls onClose', async () => {
+  it('clicking the drawer close button calls onClose', async () => {
     const onClose = vi.fn();
     renderPage(<ToolFormModal opened onClose={onClose} configItemNames={[]} basePath="/projects/1/tools" />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalled();
   });
 

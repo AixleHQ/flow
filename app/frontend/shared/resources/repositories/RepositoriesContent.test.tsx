@@ -32,7 +32,7 @@ describe('RepositoriesContent', () => {
     );
 
     expect(screen.getByText('rails/rails')).toBeInTheDocument();
-    expect(screen.getByText('public read-only')).toBeInTheDocument();
+    expect(screen.getByText('Public (read-only)')).toBeInTheDocument();
   });
 
   it('renders the title and a row per seeded repository', () => {
@@ -52,6 +52,7 @@ describe('RepositoriesContent', () => {
     expect(screen.getByText('acme/frontend')).toBeInTheDocument();
     // branch badge rendered for the row
     expect(screen.getByText('develop')).toBeInTheDocument();
+    expect(screen.getByText('2 repositories')).toBeInTheDocument();
   });
 
   it('shows the empty state when there are no repositories', () => {
@@ -64,7 +65,7 @@ describe('RepositoriesContent', () => {
     expect(screen.getAllByRole('button', { name: /add repository/i }).length).toBeGreaterThanOrEqual(2);
   });
 
-  it('splits repos into project + company sections in a project context', () => {
+  it('filters by scope in a project context', async () => {
     renderPage(
       <RepositoriesContent
         title="Project Repositories"
@@ -76,10 +77,13 @@ describe('RepositoriesContent', () => {
       />,
     );
 
-    expect(screen.getByText('This Project')).toBeInTheDocument();
-    expect(screen.getByText('Company-wide')).toBeInTheDocument();
     expect(screen.getByText('acme/service')).toBeInTheDocument();
     expect(screen.getByText('acme/shared-lib')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Project' }));
+
+    expect(screen.getByText('acme/service')).toBeInTheDocument();
+    expect(screen.queryByText('acme/shared-lib')).not.toBeInTheDocument();
   });
 
   it('opens the Add Repository modal when the header button is clicked', async () => {
@@ -111,13 +115,11 @@ describe('RepositoriesContent', () => {
       />,
     );
 
-    // Open the row menu (the only icon button before the modal opens).
-    await userEvent.click(screen.getByRole('button', { name: '' }));
-    await userEvent.click(await screen.findByRole('menuitem', { name: /remove/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     // Confirm modal from @mantine/modals; click its Remove button.
-    const confirmBtn = await screen.findByRole('button', { name: 'Remove' });
-    await userEvent.click(confirmBtn);
+    const confirmDialog = await screen.findByRole('dialog', { name: /Remove Repository/i });
+    await userEvent.click(within(confirmDialog).getByRole('button', { name: 'Remove' }));
 
     await waitFor(() =>
       expect(router.delete).toHaveBeenCalledWith(

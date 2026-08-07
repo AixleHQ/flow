@@ -5,7 +5,6 @@ import {
   Box,
   Button,
   Group,
-  Modal,
   MultiSelect,
   SegmentedControl,
   Stack,
@@ -19,6 +18,8 @@ import { IconCode, IconDownload, IconFile, IconPlus, IconTrash, IconUpload } fro
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useCallback, useEffect, useRef, useState, type FC } from 'react';
 import { z } from 'zod';
+
+import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 import { ToolFileEditor } from './ToolFileEditor';
 
@@ -289,8 +290,17 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
   const visibleFiles = files.filter((f) => !f._destroy);
 
   return (
-    <Modal opened={opened} onClose={onClose} title={isEditMode ? 'Edit Tool' : 'Create Tool'} size="lg" centered>
-      <form onSubmit={form.onSubmit(handleSubmit)}>
+    <ResourceDrawer
+      opened={opened}
+      onClose={onClose}
+      title={isEditMode ? 'Edit Tool' : 'Create Tool'}
+      footer={
+        <Button type="submit" form="tool-form" fullWidth loading={submitting}>
+          {isEditMode ? 'Save' : 'Create'}
+        </Button>
+      }
+    >
+      <form id="tool-form" onSubmit={form.onSubmit(handleSubmit)}>
         <Tabs value={activeTab} onChange={setActiveTab} mb="md">
           <Tabs.List>
             <Tabs.Tab value="basic">Basic Info</Tabs.Tab>
@@ -306,6 +316,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
                 label="Name"
                 placeholder="my_tool"
                 description="Unique identifier (lowercase, underscores)"
+                withAsterisk
                 autoFocus
                 disabled={isEditMode}
                 styles={{ input: { fontFamily: '"JetBrains Mono", monospace' } }}
@@ -316,6 +327,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
                 label="Display Name"
                 placeholder="My Custom Tool"
                 description="Human-readable name"
+                withAsterisk
               />
 
               <Textarea
@@ -331,6 +343,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
                 label="Docker Image"
                 placeholder="python:3.11-slim"
                 description="Docker image to run"
+                withAsterisk
                 styles={{ input: { fontFamily: '"JetBrains Mono", monospace' } }}
               />
 
@@ -564,16 +577,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
             </Box>
           </Tabs.Panel>
         </Tabs>
-
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" onClick={onClose} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={submitting}>
-            {isEditMode ? 'Save' : 'Create'}
-          </Button>
-        </Group>
       </form>
-    </Modal>
+    </ResourceDrawer>
   );
 };
