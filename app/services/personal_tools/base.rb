@@ -87,6 +87,13 @@ module PersonalTools
       step
     end
 
+    def find_sub_step!(step, id = params[:sub_step_id])
+      sub_step = step.sub_steps.active.find_by(id: id)
+      raise NotFoundError, "Sub-step #{id} not found in this step" unless sub_step
+
+      sub_step
+    end
+
     # Ambiguity is an error, never a silent pick: a multi-company user writing
     # into the wrong company is not recoverable from the agent's side.
     def sole_membership!(memberships)

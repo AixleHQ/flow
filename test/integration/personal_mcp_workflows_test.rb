@@ -195,6 +195,24 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
                     { project_id: @project.id, workflow_id: @workflow.id, step_id: s1["id"], name: "check A" })
     assert_not error?(sub)
 
+    sub_edited = payload(call_tool("update_sub_step",
+                                   { project_id: @project.id, workflow_id: @workflow.id, step_id: s1["id"],
+                                     sub_step_id: payload(sub)["id"], name: "check A (edited)",
+                                     instructions: "do A", required: false }))
+    assert_equal "check A (edited)", sub_edited["name"]
+    assert_equal [ "name", "instructions", "required" ], sub_edited["updated_fields"]
+
+    read_back = payload(call_tool("get_workflow_step",
+                                  { project_id: @project.id, workflow_id: @workflow.id, step_id: s1["id"] }))
+    assert_equal [ { "id" => payload(sub)["id"], "name" => "check A (edited)", "position" => 1,
+                     "required" => false, "instructions" => "do A" } ], read_back["sub_steps"]
+
+    dropped = payload(call_tool("delete_sub_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, step_id: s1["id"],
+                                  sub_step_id: payload(sub)["id"] }))
+    refute dropped["soft_deleted"]
+    assert_not SubStep.exists?(payload(sub)["id"])
+
     upd = call_tool("update_workflow_step",
                     { project_id: @project.id, workflow_id: @workflow.id, step_id: s2["id"],
                       depends_on_step_ids: [ s1["id"] ] })
@@ -211,6 +229,68 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
 
     ok = call_tool("delete_workflow_step", { project_id: @project.id, workflow_id: @workflow.id, step_id: s2["id"] })
     assert_not error?(ok)
+  end
+
+  test "reorder_sub_steps rewrites positions and rejects a partial id list" do
+    step = @workflow.steps.create!(name: "S", position: 1)
+    a = create(:sub_step, step: step, name: "A", position: 1)
+    b = create(:sub_step, step: step, name: "B", position: 2)
+
+    partial = call_tool("reorder_sub_steps", { project_id: @project.id, workflow_id: @workflow.id,
+                                               step_id: step.id, sub_step_ids: [ b.id ] })
+    assert error?(partial)
+    assert_match(/missing sub-step ids/i, text(partial))
+
+    ok = payload(call_tool("reorder_sub_steps", { project_id: @project.id, workflow_id: @workflow.id,
+                                                  step_id: step.id, sub_step_ids: [ b.id, a.id ] }))
+    assert_equal [ b.id, a.id ], ok["new_order"]
+
+    read_back = payload(call_tool("get_workflow_step",
+                                  { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id }))
+    assert_equal %w[B A], read_back["sub_steps"].map { |ss| ss["name"] }
+  end
+
+  test "delete_sub_step soft-deletes a sub-step that already ran, keeping run history" do
+    step = @workflow.steps.create!(name: "S", position: 1)
+    sub = create(:sub_step, step: step)
+    run = @workflow.runs.create!(project: @project, user: @user, state: "running")
+    ssr = create(:sub_step_run, sub_step: sub, step_run: run.step_runs.create!(step: step, state: "running"))
+
+    body = payload(call_tool("delete_sub_step",
+                             { project_id: @project.id, workflow_id: @workflow.id,
+                               step_id: step.id, sub_step_id: sub.id }))
+    assert body["soft_deleted"]
+    assert sub.reload.deleted?
+    assert SubStepRun.exists?(ssr.id)
+
+    read_back = payload(call_tool("get_workflow_step",
+                                  { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id }))
+    assert_empty read_back["sub_steps"]
+  end
+
+  test "sub-step authoring tools reject a sub_step_id from another step" do
+    mine = @workflow.steps.create!(name: "Mine", position: 1)
+    other = @workflow.steps.create!(name: "Other", position: 2)
+    foreign = create(:sub_step, step: other)
+
+    %w[update_sub_step delete_sub_step].each do |tool|
+      body = call_tool(tool, { project_id: @project.id, workflow_id: @workflow.id,
+                               step_id: mine.id, sub_step_id: foreign.id, name: "hijacked" })
+      assert error?(body), "#{tool} accepted a foreign sub_step_id"
+      assert_match(/not found/i, text(body))
+    end
+    assert_not_equal "hijacked", foreign.reload.name
+    assert_not foreign.deleted?
+  end
+
+  test "update_sub_step with no updatable field is an error" do
+    step = @workflow.steps.create!(name: "S", position: 1)
+    sub = create(:sub_step, step: step)
+
+    body = call_tool("update_sub_step", { project_id: @project.id, workflow_id: @workflow.id,
+                                          step_id: step.id, sub_step_id: sub.id })
+    assert error?(body)
+    assert_match(/no fields to update/i, text(body))
   end
 
   test "cancel_workflow_run delegates to WorkflowService.cancel" do

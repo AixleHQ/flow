@@ -100,7 +100,7 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     # demand — no pre-seeded rows required.
     attached = Tool.where(id: captured[:params][:tool_ids])
     assert_equal Tools::Registry.tagged(:builder).map(&:name).sort, attached.pluck(:name).sort
-    assert_equal 28, attached.count
+    assert_equal 30, attached.count
   end
 
   test "start redirects back with flash alert when session save fails" do

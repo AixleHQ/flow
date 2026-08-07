@@ -74,6 +74,8 @@ const ACTION_LABELS: Record<string, string> = {
   deleted_workflow: 'Deleted workflow',
   created_step: 'Created step',
   created_sub_step: 'Created sub-step',
+  updated_sub_step: 'Updated sub-step',
+  deleted_sub_step: 'Deleted sub-step',
   updated_step: 'Updated step',
   deleted_step: 'Deleted step',
   reordered_steps: 'Reordered steps',

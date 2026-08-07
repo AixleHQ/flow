@@ -140,8 +140,10 @@ module Tools
            the steps they point at first (or set them later with
            `update_workflow_step`).
         6. `create_sub_step` — break a step into a checklist when it has several
-           distinct deliverables. See the `author_step` prompt for how to write
-           a good step.
+           distinct deliverables. `update_sub_step` / `delete_sub_step` /
+           `reorder_sub_steps` edit, remove and reorder them; all take the
+           `sub_step_id`s reported by `get_workflow_step`. See the `author_step`
+           prompt for how to write a good step.
         7. `reorder_workflow_steps` — fix execution order by passing step ids.
         8. Connect a trigger, or the workflow only ever starts by hand:
            `create_workflow_trigger` with a `kind` —
@@ -157,7 +159,7 @@ module Tools
 
         Rules:
         - Ask the user before destructive actions (`delete_workflow`,
-          `delete_workflow_step`, `delete_workflow_trigger`).
+          `delete_workflow_step`, `delete_sub_step`, `delete_workflow_trigger`).
         - `get_workflow` truncates step instructions. Read a step with
           `get_workflow_step` before editing it, or you will overwrite text you
           never saw. The same applies to every id list (`tool_ids`, `skill_ids`,
@@ -218,6 +220,10 @@ module Tools
         - One `create_sub_step` per distinct, checkable deliverable.
         - `required: false` for optional work.
         - The running agent marks them off, giving progress visibility.
+        - `get_workflow_step` reports each sub-step's id; edit one with
+          `update_sub_step` (name, instructions, position, required), drop one with
+          `delete_sub_step`, and fix the order with `reorder_sub_steps` (which
+          takes every sub-step id of the step).
 
         Prefer `get_workflow` to inspect the current shape and `get_workflow_step`
         to read a step in full before editing, and make one focused change per
