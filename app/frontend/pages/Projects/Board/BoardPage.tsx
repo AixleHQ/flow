@@ -198,6 +198,9 @@ interface Task {
   boardColumnId: number;
   position: number;
   parentTaskId: number | null;
+  // Serialized only on the task detail payload (TaskDetailResource), so the drawer can name the
+  // parent epic even when the epic is archived and therefore absent from the board's task list.
+  parentTaskTitle?: string | null;
   tags: string[];
   archived: boolean;
   commentsCount: number;
@@ -333,6 +336,7 @@ const taskSchema = z.object({
   taskType: z.string().optional(),
   priority: z.string().optional(),
   assigneeId: z.string().nullable().optional(),
+  parentTaskId: z.string().nullable().optional(),
   boardColumnId: z.string().min(1, 'Column is required'),
 });
 
@@ -1526,6 +1530,21 @@ function TaskDetailSidebar({
     [allTasks, task?.parentTaskId],
   );
 
+  // The board only loads active tasks, so an archived parent epic is absent from `allTasks`.
+  // The serialized parentTaskTitle keeps the link visible (and the select's current value
+  // selectable) even when the epic itself was never loaded onto the board.
+  const parentTaskTitle = parentTask?.title ?? task?.parentTaskTitle ?? null;
+
+  // Options for the Parent Epic select: every epic on the board, plus the current parent when
+  // it is not among them — without it Mantine has no option matching `value` and renders blank.
+  const parentEpicOptions = useMemo(() => {
+    const options = epicTasks.map((e) => ({ value: String(e.id), label: e.title }));
+    if (task?.parentTaskId && !options.some((o) => o.value === String(task.parentTaskId))) {
+      options.unshift({ value: String(task.parentTaskId), label: parentTaskTitle ?? `#${task.parentTaskId}` });
+    }
+    return options;
+  }, [epicTasks, task?.parentTaskId, parentTaskTitle]);
+
   useEffect(() => {
     if (task) {
       setTitleValue(task.title);
@@ -2123,15 +2142,16 @@ function TaskDetailSidebar({
               />
 
               {/* Parent epic — for non-epic tasks */}
-              {task.taskType !== 'epic' && epicTasks.length > 0 && (
+              {task.taskType !== 'epic' && parentEpicOptions.length > 0 && (
                 <>
                   <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
                     Parent Epic
                   </Text>
                   <Select
-                    data={epicTasks.map((e) => ({ value: String(e.id), label: e.title }))}
+                    data={parentEpicOptions}
                     value={task.parentTaskId ? String(task.parentTaskId) : null}
                     onChange={(v) => saveField('parentTaskId', v)}
+                    aria-label="Parent Epic"
                     clearable
                     searchable
                     size="xs"
@@ -2213,26 +2233,32 @@ function TaskDetailSidebar({
           )}
 
           {/* Parent epic link — for non-epic tasks with parent */}
-          {task.taskType !== 'epic' && parentTask && (
+          {task.taskType !== 'epic' && task.parentTaskId && (
             <Box>
               <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
                 Parent Epic
               </Text>
-              <UnstyledButton onClick={() => onOpenTask(parentTask)}>
-                <Text
-                  size="sm"
-                  c="brand"
-                  style={{ textDecoration: 'none' }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
-                    e.currentTarget.style.textDecoration = 'underline';
-                  }}
-                  onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
-                    e.currentTarget.style.textDecoration = 'none';
-                  }}
-                >
-                  {parentTask.title}
-                </Text>
-              </UnstyledButton>
+              {parentTask ? (
+                <UnstyledButton onClick={() => onOpenTask(parentTask)}>
+                  <Text
+                    size="sm"
+                    c="brand"
+                    style={{ textDecoration: 'none' }}
+                    onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
+                      e.currentTarget.style.textDecoration = 'underline';
+                    }}
+                    onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
+                      e.currentTarget.style.textDecoration = 'none';
+                    }}
+                  >
+                    {parentTask.title}
+                  </Text>
+                </UnstyledButton>
+              ) : (
+                // Archived (or otherwise not-loaded) epic: still name it, but there is no
+                // board card to open, so it is plain text rather than a dead link.
+                <Text size="sm">{parentTaskTitle ?? `#${task.parentTaskId}`}</Text>
+              )}
             </Box>
           )}
 
@@ -4112,15 +4138,24 @@ const BoardPage = () => {
       taskType: 'not_specified',
       priority: '',
       assigneeId: null,
+      parentTaskId: null,
       boardColumnId: '',
     },
   });
+
+  // Epics available as a parent in the create drawer. Nesting is one level deep, so an epic
+  // itself never gets a parent — the field is hidden when Type is Epic (see below).
+  const epicOptions = useMemo(
+    () => localTasks.filter((t) => t.taskType === 'epic').map((t) => ({ value: String(t.id), label: t.title })),
+    [localTasks],
+  );
 
   const handleCreateTask = useCallback(
     async (values: TaskFormValues) => {
       if (!board) return;
       setLoading(true);
       try {
+        const isEpic = (values.taskType || 'not_specified') === 'epic';
         const res = await apiFetch(apiV1ProjectTasksPath(project.id), {
           method: 'POST',
           headers: jsonHeaders,
@@ -4131,6 +4166,7 @@ const BoardPage = () => {
               taskType: values.taskType || 'not_specified',
               priority: values.priority || null,
               assigneeId: values.assigneeId ? Number(values.assigneeId) : null,
+              parentTaskId: !isEpic && values.parentTaskId ? Number(values.parentTaskId) : null,
               boardColumnId: Number(values.boardColumnId),
             },
           }),
@@ -4976,10 +5012,16 @@ const BoardPage = () => {
                     { value: 'story', label: 'Story' },
                     { value: 'bug', label: 'Bug' },
                   ]}
+                  aria-label="Type"
                   size="xs"
                   variant="unstyled"
                   styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
                   {...form.getInputProps('taskType')}
+                  onChange={(v) => {
+                    form.setFieldValue('taskType', v ?? 'not_specified');
+                    // Nesting is one level deep, so an epic can never have a parent epic.
+                    if (v === 'epic') form.setFieldValue('parentTaskId', null);
+                  }}
                 />
 
                 <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
@@ -5012,6 +5054,27 @@ const BoardPage = () => {
                   styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
                   {...form.getInputProps('assigneeId')}
                 />
+
+                {/* Parent epic — a new task can be attached to an epic on creation. Hidden when
+                    the new task is itself an epic (one level of nesting only). */}
+                {form.values.taskType !== 'epic' && epicOptions.length > 0 && (
+                  <>
+                    <Text size="xs" c="dimmed" style={{ lineHeight: '24px' }}>
+                      Parent Epic
+                    </Text>
+                    <Select
+                      data={epicOptions}
+                      aria-label="Parent Epic"
+                      placeholder="No epic"
+                      clearable
+                      searchable
+                      size="xs"
+                      variant="unstyled"
+                      styles={{ input: { fontSize: 13, padding: '6px 9px', marginLeft: -9 } }}
+                      {...form.getInputProps('parentTaskId')}
+                    />
+                  </>
+                )}
               </Box>
 
               {/* Automation note (AC-17) */}

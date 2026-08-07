@@ -642,6 +642,120 @@ describe('Projects/Board/BoardPage', () => {
     fetchSpy.mockRestore();
   });
 
+  // --- epic linking (create form, task view, epic view) ---
+
+  const epic = makeTask({ id: 50, title: 'Checkout revamp', taskType: 'epic', boardColumnId: 100, position: 0 });
+  const story = makeTask({ id: 51, title: 'Add card form', boardColumnId: 100, position: 1, parentTaskId: 50 });
+  const epicProps = { ...populatedProps, tasks: [epic, story] };
+
+  it('attaches the new task to an epic chosen in the create-task form', async () => {
+    const created = makeTask({ id: 99, title: 'Child of epic', boardColumnId: 100, parentTaskId: 50 });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify(created), { status: 200 }));
+
+    renderAuthedPage(<BoardPage />, { props: epicProps });
+
+    const plus = screen.getAllByRole('button').find((b) => b.querySelector('svg.tabler-icon-plus'));
+    await userEvent.click(plus!);
+
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.type(within(dialog).getByPlaceholderText('Task title'), 'Child of epic');
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Parent Epic' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Checkout revamp' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create task' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/tasks');
+      expect(call).toBeTruthy();
+      const body = JSON.parse((call![1] as RequestInit).body as string);
+      expect(body.boardTask.parentTaskId).toBe(50);
+    });
+
+    fetchSpy.mockRestore();
+  });
+
+  it('offers no Parent Epic field in the create-task form when the new task is itself an epic', async () => {
+    renderAuthedPage(<BoardPage />, { props: epicProps });
+
+    await userEvent.keyboard('n');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('combobox', { name: 'Parent Epic' })).toBeInTheDocument();
+
+    // An epic cannot itself be nested (one level of nesting only), so the field goes away.
+    await userEvent.click(within(dialog).getByRole('combobox', { name: 'Type' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Epic' }));
+
+    await waitFor(() =>
+      expect(within(dialog).queryByRole('combobox', { name: 'Parent Epic' })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('shows the parent epic on the task detail view and links back to it', async () => {
+    renderAuthedPage(<BoardPage />, { props: { ...epicProps, selectedTask: story } });
+
+    const drawer = screen.getAllByRole('dialog')[0];
+    // The epic is offered as a link back to its own card…
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Checkout revamp' }));
+    expect(router.get).toHaveBeenCalledWith(
+      '/company/projects/7/board',
+      { task: 50 },
+      expect.objectContaining({ preserveState: true }),
+    );
+    // …and the select carries the current parent, addressable by its own label.
+    expect(within(drawer).getByRole('combobox', { name: 'Parent Epic' })).toHaveValue('Checkout revamp');
+  });
+
+  it('names the parent epic on the task detail view when the epic is archived and off the board', () => {
+    // Archived epics are excluded from the board load, so the client cannot resolve the parent
+    // from `tasks` — the detail payload's parentTaskTitle is what keeps the link visible.
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...epicProps,
+        tasks: [story],
+        selectedTask: { ...story, parentTaskTitle: 'Checkout revamp' },
+      },
+    });
+
+    const drawer = screen.getAllByRole('dialog')[0];
+    expect(within(drawer).getAllByText('Checkout revamp').length).toBeGreaterThan(0);
+    // There is no board card to open, so the epic is named as static text, not a dead link.
+    expect(within(drawer).queryByRole('button', { name: 'Checkout revamp' })).not.toBeInTheDocument();
+    expect(within(drawer).getByRole('combobox', { name: 'Parent Epic' })).toHaveValue('Checkout revamp');
+  });
+
+  it('saves the epic picked in the task detail Parent Epic select', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
+    const unparented = makeTask({ id: 51, title: 'Add card form', boardColumnId: 100, position: 1 });
+
+    renderAuthedPage(<BoardPage />, {
+      props: { ...epicProps, tasks: [epic, unparented], selectedTask: unparented },
+    });
+
+    const drawer = screen.getAllByRole('dialog')[0];
+    await userEvent.click(within(drawer).getByRole('combobox', { name: 'Parent Epic' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Checkout revamp' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/tasks/51');
+      expect(call).toBeTruthy();
+      expect((call![1] as RequestInit).method).toBe('PATCH');
+      expect(JSON.parse((call![1] as RequestInit).body as string).boardTask.parentTaskId).toBe('50');
+    });
+
+    fetchSpy.mockRestore();
+  });
+
+  it('lists the linked stories on the epic detail view', () => {
+    renderAuthedPage(<BoardPage />, { props: { ...epicProps, selectedTask: epic } });
+
+    const drawer = screen.getAllByRole('dialog')[0];
+    expect(within(drawer).getByText('Child Tasks (1)')).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: /Add card form/ })).toBeInTheDocument();
+    // An epic is never nested under another epic, so it gets no Parent Epic field.
+    expect(within(drawer).queryByRole('combobox', { name: 'Parent Epic' })).not.toBeInTheDocument();
+  });
+
   it('shows a validation error and does not POST when the title is empty', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 

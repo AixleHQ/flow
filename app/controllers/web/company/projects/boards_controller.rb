@@ -97,8 +97,9 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
 
   def find_task(board)
     board.board_tasks
-         .includes(:assignee, :child_tasks, :task_comments, :task_assets, :workflow_runs, :pending_gates)
+         .includes(:assignee, :parent_task, :child_tasks, :task_comments, :task_assets, :workflow_runs, :pending_gates)
          .find_by(id: params[:task])
-    # note: task_assets included here so TaskDetailResource.assets_count avoids N+1
+    # note: task_assets included here so TaskDetailResource.assets_count avoids N+1;
+    # parent_task so TaskDetailResource.parent_task_title does not fire an extra query
   end
 end
