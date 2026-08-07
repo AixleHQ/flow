@@ -40,6 +40,31 @@ module Api
           assert_response :created
         end
 
+        test "create attaches the new task to an epic" do
+          epic = create(:board_task, board: @board, board_column: @col1, task_type: :epic)
+
+          post :create, params: {
+            project_id: @project.id,
+            board_task: { title: "Child story", board_column_id: @col1.id, task_type: "story", parent_task_id: epic.id }
+          }
+
+          assert_response :created
+          assert_equal epic.id, JSON.parse(response.body)["parentTaskId"]
+          assert_equal epic.id, BoardTask.find_by(title: "Child story").parent_task_id
+        end
+
+        test "create with a non-epic parent returns unprocessable entity" do
+          non_epic = create(:board_task, board: @board, board_column: @col1, task_type: :bug)
+
+          post :create, params: {
+            project_id: @project.id,
+            board_task: { title: "Child story", board_column_id: @col1.id, parent_task_id: non_epic.id }
+          }
+
+          assert_response :unprocessable_entity
+          assert_nil BoardTask.find_by(title: "Child story")
+        end
+
         test "update returns task json" do
           patch :update, params: {
             project_id: @project.id,

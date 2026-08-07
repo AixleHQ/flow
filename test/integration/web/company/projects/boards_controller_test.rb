@@ -50,6 +50,28 @@ class Web::Company::Projects::BoardsControllerTest < ActionDispatch::Integration
     end
   end
 
+  test "show names the selected task's parent epic even when the epic is archived" do
+    board = create(:board, project: @project)
+    col = create(:board_column, board: board)
+    epic = create(:board_task, board: board, board_column: col, task_type: :epic,
+      title: "Checkout revamp", archived_at: Time.current)
+    task = create(:board_task, board: board, board_column: col, parent_task: epic)
+
+    Bullet.enable = false
+    get company_project_board_path(@project, task: task.id)
+    assert_inertia_page "Projects/Board/BoardPage"
+
+    # The archived epic is absent from the board's task list, so the detail payload has to
+    # carry its title — otherwise the task view cannot show which epic the task belongs to.
+    assert_inertia_props do |props|
+      props[:tasks].map { |t| t[:id] }.exclude?(epic.id) &&
+        props[:selectedTask][:parentTaskId] == epic.id &&
+        props[:selectedTask][:parentTaskTitle] == "Checkout revamp"
+    end
+  ensure
+    Bullet.enable = true
+  end
+
   test "show includes assets_count for each task without N+1 queries" do
     board = create(:board, project: @project)
     col = create(:board_column, board: board)
