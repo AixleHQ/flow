@@ -131,8 +131,15 @@ module Tools
            `update_workflow` renames it and sets the base resources.
            `duplicate_workflow` copies an existing one, into this project or another.
         4. Inspect what you can wire in: `list_project_tools`, `list_skills`,
-           `list_mcp_servers`, `list_agents`. `get_agent` and `get_skill` return the
-           full persona / skill content when the list entry isn't enough to decide.
+           `list_mcp_servers`, `list_agents`. `get_agent`, `get_skill` and
+           `get_mcp_server` return the full persona / skill content / server wiring
+           when the list entry isn't enough to decide. Nothing suitable in the
+           project yet? Add it from the public catalogs first:
+           `search_connector_catalog` → `get_connector` → `install_connector` for
+           MCP servers, `search_skill_registry` → `get_registry_skill` →
+           `install_skill` for skills. Read the entry before installing — a
+           connector's install target decides what runs, and a skill's SKILL.md is
+           prompt text your agents will follow.
         5. For each step: `create_workflow_step` takes the wiring in one call —
            name, instructions, agent_id, position, plus `tool_ids`, `skill_ids`,
            `mcp_server_ids`, `depends_on_step_ids`, `bmad_enabled` and
