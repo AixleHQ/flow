@@ -492,7 +492,11 @@ class SessionContextService
       ids = session.repository_ids
       return if ids.blank?
 
-      repos = Repository.where(id: ids).includes(:integration).to_a
+      # Ordered: an unordered `where` lets Postgres hand back rows in whatever order
+      # it likes, which reshuffles the `repositories:` list sent to GitHub for the
+      # group token and the order repositories clone in — a difference that shows up
+      # as a test failing only on some runs.
+      repos = Repository.where(id: ids).order(:id).includes(:integration).to_a
       return if repos.empty?
 
       adapter = adapter_for(session)
