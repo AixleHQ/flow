@@ -184,15 +184,17 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   test "passes INSTALL_TIMEOUT to the runtime so the exec is not cut short" do
     session = build_bmad_session(agent_type: "claude_code")
 
+    # Match on the install command rather than on call order: inject! also execs
+    # `cat` for the VS Code settings, and only the install carries the timeout.
     captured_opts = nil
-    @runtime.expects(:exec).with do |_cid, _cmd, opts|
-      captured_opts = opts
+    @runtime.stubs(:exec).with do |_cid, cmd, opts|
+      captured_opts = opts if cmd.is_a?(Array) && cmd[2].to_s.include?("bmad-method@")
       true
     end.returns([ [], [], 0 ])
 
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
 
-    assert_equal BmadMethodInjector::INSTALL_TIMEOUT, captured_opts[:timeout]
+    assert_equal BmadMethodInjector::INSTALL_TIMEOUT, captured_opts&.dig(:timeout)
   end
 
   # ====================================================================
