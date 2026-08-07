@@ -656,6 +656,7 @@ const BuilderPage = () => {
                       toolGroups={toolGroups}
                       skills={skills}
                       mcpServers={mcpServers}
+                      assets={assets}
                       repositories={repositories}
                       readOnly={readOnly}
                       onFieldChange={(field, value, immediate) =>

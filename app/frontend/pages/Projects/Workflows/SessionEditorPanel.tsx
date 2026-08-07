@@ -163,6 +163,7 @@ interface SessionEditorPanelProps {
   toolGroups: ToolGroup[];
   skills: NamedItem[];
   mcpServers: NamedItem[];
+  assets: NamedItem[];
   repositories: NamedItem[];
   readOnly: boolean;
   onFieldChange: (field: string, value: unknown, immediate?: boolean) => void;
@@ -177,6 +178,7 @@ export function SessionEditorPanel({
   toolGroups,
   skills,
   mcpServers,
+  assets,
   repositories,
   readOnly,
   onFieldChange,
@@ -412,6 +414,24 @@ export function SessionEditorPanel({
             searchable
             placeholder="None added"
             aria-label="Skills"
+            styles={{
+              input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+            }}
+          />
+        </div>
+
+        <div className={classes.resGroup}>
+          <div className={classes.resType}>
+            Assets <span className={classes.resTypeSub}>— files loaded into /workspace/input</span>
+          </div>
+          <MultiSelect
+            data={toSelectData(assets)}
+            value={toStringArr(step.assetIds)}
+            onChange={(v) => onFieldChange('assetIds', toNumberArr(v), true)}
+            disabled={readOnly}
+            searchable
+            placeholder="None added"
+            aria-label="Assets"
             styles={{
               input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
             }}

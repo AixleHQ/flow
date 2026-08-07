@@ -24,6 +24,7 @@ const makeStep = (overrides: Record<string, unknown> = {}) => ({
   toolIds: [] as number[],
   mcpServerIds: [] as number[],
   skillIds: [] as number[],
+  assetIds: [] as number[],
   repositoryIds: [] as number[],
   inputAssetSpecs: [] as { name: string; assetType: string; required: boolean; namePattern?: string | null }[],
   outputAssetSpecs: [] as { name: string; assetType: string; required: boolean; namePattern?: string | null }[],
@@ -618,6 +619,32 @@ describe('Projects/Workflows/BuilderPage', () => {
     const call = fetchSpy.mock.calls.find(([url]) => String(url).includes('/steps/1'));
     const body = JSON.parse((call![1] as RequestInit).body as string);
     expect(body.step.repositoryIds).toEqual([21]);
+  });
+
+  // step.asset_ids has always been a real column the API and MCP tools accept —
+  // the session panel just never rendered a control for it.
+  it('selecting an asset on a session PATCHes the step assetIds', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        assets: [{ id: 31, name: 'brand-guide.pdf' }],
+        steps: [makeStep({ id: 1, name: 'Implement' })],
+      }),
+    });
+
+    await userEvent.click(await screen.findByText('Implement'));
+    await userEvent.click((await screen.findAllByLabelText('Assets'))[0]);
+    await userEvent.click((await screen.findAllByRole('option', { name: 'brand-guide.pdf' }))[0]);
+
+    await waitFor(() => expect(fetchSpy.mock.calls.find(([url]) => String(url).includes('/steps/1'))).toBeTruthy(), {
+      timeout: 2000,
+    });
+    const call = fetchSpy.mock.calls.find(([url]) => String(url).includes('/steps/1'));
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.assetIds).toEqual([31]);
   });
 
   it('toggling "Auto-run available" immediately PATCHes the step and surfaces the "Auto" badge', async () => {

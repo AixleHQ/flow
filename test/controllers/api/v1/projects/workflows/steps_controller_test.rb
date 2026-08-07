@@ -53,6 +53,26 @@ module Api
             assert_response :success
           end
 
+          # The builder's resource pickers PATCH these two lists and nothing else
+          # writes them, so an id dropped from the permit list would fail silently:
+          # the request still succeeds and the selection just never persists.
+          test "update persists the repository and asset selections the builder sends" do
+            repository = create(:repository, scope: @project)
+            asset = create(:asset, scope: @project)
+
+            patch :update, params: {
+              project_id: @project.id,
+              workflow_id: @workflow.id,
+              id: @step.id,
+              step: { repository_ids: [ repository.id ], asset_ids: [ asset.id ] }
+            }, as: :json
+
+            assert_response :success
+            @step.reload
+            assert_equal [ repository.id ], @step.repository_ids
+            assert_equal [ asset.id ], @step.asset_ids
+          end
+
           test "destroy removes step" do
             delete :destroy, params: {
               project_id: @project.id,
