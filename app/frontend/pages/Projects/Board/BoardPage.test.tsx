@@ -718,7 +718,9 @@ describe('Projects/Board/BoardPage', () => {
     });
 
     const drawer = screen.getAllByRole('dialog')[0];
-    expect(within(drawer).getByText('Checkout revamp')).toBeInTheDocument();
+    expect(within(drawer).getAllByText('Checkout revamp').length).toBeGreaterThan(0);
+    // There is no board card to open, so the epic is named as static text, not a dead link.
+    expect(within(drawer).queryByRole('button', { name: 'Checkout revamp' })).not.toBeInTheDocument();
     expect(within(drawer).getByRole('combobox', { name: 'Parent Epic' })).toHaveValue('Checkout revamp');
   });
 
