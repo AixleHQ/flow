@@ -156,6 +156,7 @@ module Seeds
              - meta_create_workflow — creates the workflow
              - meta_create_step — for each step (write focused, task-specific instructions)
              - meta_create_sub_step — for progress tracking within steps
+               (meta_update_sub_step / meta_delete_sub_step to edit or drop one)
              - meta_link_resource_to_step — attach tools, skills, MCP servers
 
           6. **Configure Board (if requested)** — Set up automation:
@@ -189,7 +190,8 @@ module Seeds
     def self.tool_names
       %w[
         meta_create_workflow meta_create_agent meta_create_step
-        meta_create_sub_step meta_get_workflow meta_list_workflows
+        meta_create_sub_step meta_update_sub_step meta_delete_sub_step
+        meta_get_workflow meta_list_workflows
         meta_finalize_workflow meta_update_step meta_delete_step
         meta_reorder_steps meta_create_tool meta_install_skill
         meta_search_skills meta_create_mcp_server meta_link_resource_to_step

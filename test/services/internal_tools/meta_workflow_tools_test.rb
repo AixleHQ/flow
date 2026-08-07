@@ -146,6 +146,65 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
     assert_equal step.id, data["step_id"]
   end
 
+  # ── meta_update_sub_step / meta_delete_sub_step ──
+
+  test "meta_update_sub_step edits the named fields only" do
+    sub = create(:sub_step, step: create(:step, workflow: create(:workflow, scope: @project)),
+                            name: "Old", instructions: "old text", required: true)
+
+    result = InternalTools::MetaUpdateSubStep.new(
+      params: { sub_step_id: sub.id, name: "New", required: false },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    data = JSON.parse(result[:stdout])
+    assert_equal %w[name required], data["updated_fields"]
+    sub.reload
+    assert_equal "New", sub.name
+    assert_not sub.required
+    assert_equal "old text", sub.instructions
+  end
+
+  test "meta_update_sub_step without fields is an error" do
+    sub = create(:sub_step, step: create(:step, workflow: create(:workflow, scope: @project)))
+
+    result = InternalTools::MetaUpdateSubStep.new(params: { sub_step_id: sub.id }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "No fields to update"
+  end
+
+  test "meta_update_sub_step reports a missing sub-step" do
+    result = InternalTools::MetaUpdateSubStep.new(params: { sub_step_id: 0, name: "X" }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "Sub-step not found"
+  end
+
+  test "meta_delete_sub_step destroys a sub-step that never ran" do
+    sub = create(:sub_step, step: create(:step, workflow: create(:workflow, scope: @project)), name: "Doomed")
+
+    result = InternalTools::MetaDeleteSubStep.new(params: { sub_step_id: sub.id }, session: @session).execute
+
+    assert_equal 0, result[:exit_code]
+    data = JSON.parse(result[:stdout])
+    assert_equal "Doomed", data["sub_step_name"]
+    assert_not data["soft_deleted"]
+    assert_not SubStep.exists?(sub.id)
+  end
+
+  test "meta_delete_sub_step soft-deletes a sub-step that already ran" do
+    sub = create(:sub_step, step: @step_run.step)
+    create(:sub_step_run, sub_step: sub, step_run: @step_run)
+
+    result = InternalTools::MetaDeleteSubStep.new(params: { sub_step_id: sub.id }, session: @session).execute
+
+    assert_equal 0, result[:exit_code]
+    assert JSON.parse(result[:stdout])["soft_deleted"]
+    assert sub.reload.deleted?
+  end
+
   # ── meta_get_workflow ──
 
   test "meta_get_workflow returns full workflow structure" do

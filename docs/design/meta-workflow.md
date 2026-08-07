@@ -218,6 +218,8 @@ All the tools below are **internal tools** (like `mark_sub_step`), available onl
 | `meta_create_workflow` | Create the target workflow | `workflow:created` |
 | `meta_create_step` | Add a step to the target workflow | `workflow:step_created` |
 | `meta_create_sub_step` | Add a sub-step to a step | `workflow:sub_step_created` |
+| `meta_update_sub_step` | Update a sub-step (name, instructions, position, required) | `workflow:sub_step_updated` |
+| `meta_delete_sub_step` | Delete a sub-step (soft-deleted once it has runs) | `workflow:sub_step_deleted` |
 | `meta_update_step` | Update a step (instructions, config) | `workflow:step_updated` |
 | `meta_delete_step` | Delete a step | `workflow:step_deleted` |
 | `meta_reorder_steps` | Change the order of steps | `workflow:steps_reordered` |
