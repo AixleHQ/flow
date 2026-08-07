@@ -45,6 +45,6 @@ Every step runs in a fresh Docker container. The agent finds:
 - `/workspace/outputs/` — where it writes deliverables.
 - `/workspace/assets/` — pre-loaded input files (task attachments,
   workflow assets).
-- `/workspace/repo/` — Git repository clone (if `mount_repositories: true`).
+- `/workspace/repo/` — clones of the repositories the step selected.
 
 > **tip** **Open source and self-hosted.** Aixle Flow runs entirely in your own infrastructure via Docker Compose. No cloud dependency, no vendor lock-in.

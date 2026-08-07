@@ -3,8 +3,13 @@
 class StepResource < ApplicationResource
   attributes :id, :name, :instructions, :position,
              :allow_non_interactive, :skip_policy, :on_failure, :max_retries,
-             :mount_repositories, :bmad_enabled, :preferred_model,
+             :bmad_enabled, :preferred_model,
              :created_at, :updated_at
+
+  typelize "number[]"
+  attribute :repository_ids do |step|
+    step.repository_ids || []
+  end
 
   typelize "number[]"
   attribute :depends_on_step_ids do |step|

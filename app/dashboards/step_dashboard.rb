@@ -17,7 +17,7 @@ class StepDashboard < Administrate::BaseDashboard
     on_failure: Field::String,
     max_retries: Field::Number,
     allow_non_interactive: Field::Boolean,
-    mount_repositories: Field::Boolean,
+    repository_ids: Field::JSONB,
     required_agent_runtime: Field::String,
     depends_on_step_ids: Field::JSONB,
     input_asset_specs: Field::JSONB,
@@ -52,7 +52,7 @@ class StepDashboard < Administrate::BaseDashboard
     on_failure
     max_retries
     allow_non_interactive
-    mount_repositories
+    repository_ids
     required_agent_runtime
     depends_on_step_ids
     input_asset_specs

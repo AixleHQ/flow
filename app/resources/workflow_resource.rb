@@ -60,6 +60,11 @@ class WorkflowResource < ApplicationResource
   end
 
   typelize "number[]"
+  attribute :base_repository_ids do |workflow|
+    workflow.base_repository_ids
+  end
+
+  typelize "number[]"
   attribute :base_asset_ids do |workflow|
     workflow.base_asset_ids
   end

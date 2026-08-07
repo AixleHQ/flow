@@ -339,8 +339,8 @@ export function RunWorkflowModal({
 
         <MultiSelect
           label="Repositories"
-          description='Selected repos will be available to steps that have "Mount repositories" enabled'
-          placeholder="Select repositories to mount..."
+          description="Overrides the repositories chosen on the workflow, for this run only"
+          placeholder="Leave empty to use the workflow's repositories..."
           value={selectedRepoIds}
           onChange={setSelectedRepoIds}
           data={repositories.map((r) => ({

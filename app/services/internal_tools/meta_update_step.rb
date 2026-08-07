@@ -59,8 +59,11 @@ module InternalTools
               type: "integer"
             }
           },
-          mount_repositories: {
-            type: "boolean"
+          repository_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            }
           },
           depends_on_step_ids: {
             type: "array",
@@ -84,7 +87,7 @@ module InternalTools
 
       updatable = %i[name instructions agent_id allow_non_interactive
                      skip_policy on_failure max_retries tool_ids skill_ids mcp_server_ids asset_ids
-                     mount_repositories preferred_model bmad_enabled
+                     repository_ids preferred_model bmad_enabled
                      input_asset_specs output_asset_specs depends_on_step_ids]
 
       attrs = {}

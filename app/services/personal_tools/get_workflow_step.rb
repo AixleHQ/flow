@@ -30,7 +30,7 @@ module PersonalTools
               max_retries: step.max_retries, on_failure: step.on_failure.to_s,
               skip_policy: step.skip_policy.to_s, preferred_model: step.preferred_model,
               required_agent_runtime: step.required_agent_runtime,
-              mount_repositories: step.mount_repositories,
+              repository_ids: step.repository_ids,
               input_asset_specs: step.input_asset_specs, output_asset_specs: step.output_asset_specs,
               asset_ids: step.asset_ids,
               sub_steps: sub_steps(step))

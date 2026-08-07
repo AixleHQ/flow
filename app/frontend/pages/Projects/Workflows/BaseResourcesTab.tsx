@@ -17,6 +17,7 @@ interface Workflow {
   baseSkillIds: number[];
   baseMCPServerIds: number[];
   baseAssetIds: number[];
+  baseRepositoryIds: number[];
 }
 
 interface BaseResourcesTabProps {
@@ -26,6 +27,7 @@ interface BaseResourcesTabProps {
   skills: NamedItem[];
   mcpServers: NamedItem[];
   assets: NamedItem[];
+  repositories: NamedItem[];
   readOnly: boolean;
   onWorkflowChange: (field: string, value: unknown) => void;
 }
@@ -39,6 +41,7 @@ export function BaseResourcesTab({
   skills,
   mcpServers,
   assets,
+  repositories,
   readOnly,
   onWorkflowChange,
 }: BaseResourcesTabProps) {
@@ -122,7 +125,8 @@ export function BaseResourcesTab({
           <div>
             <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)' }}>Inherit all project resources</div>
             <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2 }}>
-              Tools, skills, MCP servers, and assets from the project level are included automatically.
+              Tools, skills, MCP servers, and assets from the project level are included automatically. Project
+              repositories are used only while nothing below selects one.
             </div>
           </div>
         </div>
@@ -138,6 +142,8 @@ export function BaseResourcesTab({
                 value: toToolValue(workflow.baseToolIds),
                 onChange: (v: string[]) => onWorkflowChange('baseToolIds', fromToolValue(v)),
                 isEmpty: workflow.baseToolIds.length === 0,
+                supersededByInherit: true,
+                emptyHint: 'None added',
               },
               {
                 label: 'Skills',
@@ -146,6 +152,8 @@ export function BaseResourcesTab({
                 value: toStringArr(workflow.baseSkillIds),
                 onChange: (v: string[]) => onWorkflowChange('baseSkillIds', toNumberArr(v)),
                 isEmpty: workflow.baseSkillIds.length === 0,
+                supersededByInherit: true,
+                emptyHint: 'None added',
               },
               {
                 label: 'MCP Servers',
@@ -154,6 +162,8 @@ export function BaseResourcesTab({
                 value: toStringArr(workflow.baseMCPServerIds),
                 onChange: (v: string[]) => onWorkflowChange('baseMCPServerIds', toNumberArr(v)),
                 isEmpty: workflow.baseMCPServerIds.length === 0,
+                supersededByInherit: true,
+                emptyHint: 'None added',
               },
               {
                 label: 'Assets',
@@ -162,9 +172,27 @@ export function BaseResourcesTab({
                 value: toStringArr(workflow.baseAssetIds),
                 onChange: (v: string[]) => onWorkflowChange('baseAssetIds', toNumberArr(v)),
                 isEmpty: workflow.baseAssetIds.length === 0,
+                supersededByInherit: true,
+                emptyHint: 'None added',
+              },
+              {
+                // Repositories stay selectable while "inherit all" is on: unlike the
+                // resources above, they are not added on top of the project-wide set —
+                // choosing one replaces it. Disabling this would remove the only way to
+                // narrow a workflow down to a single repository.
+                label: 'Repositories',
+                placeholder: 'Select repositories…',
+                data: toSelectData(repositories),
+                value: toStringArr(workflow.baseRepositoryIds),
+                onChange: (v: string[]) => onWorkflowChange('baseRepositoryIds', toNumberArr(v)),
+                isEmpty: workflow.baseRepositoryIds.length === 0,
+                supersededByInherit: false,
+                emptyHint: workflow.inheritAllProjectResources
+                  ? 'All project repositories — select to narrow'
+                  : 'None added — steps get code only from their own selection',
               },
             ] as const
-          ).map(({ label, placeholder, data, value, onChange, isEmpty }) => (
+          ).map(({ label, placeholder, data, value, onChange, isEmpty, supersededByInherit, emptyHint }) => (
             <div key={label}>
               <div
                 style={{
@@ -180,7 +208,7 @@ export function BaseResourcesTab({
                 data={data}
                 value={[...value]}
                 onChange={onChange}
-                disabled={readOnly || workflow.inheritAllProjectResources}
+                disabled={readOnly || (supersededByInherit && workflow.inheritAllProjectResources)}
                 searchable
                 placeholder={placeholder}
                 styles={{
@@ -193,7 +221,7 @@ export function BaseResourcesTab({
                   },
                 }}
               />
-              {isEmpty && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>None added</div>}
+              {isEmpty && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>{emptyHint}</div>}
             </div>
           ))}
         </div>

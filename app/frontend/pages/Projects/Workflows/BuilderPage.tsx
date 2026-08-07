@@ -66,7 +66,7 @@ interface Step {
   skipPolicy: string;
   onFailure: string;
   maxRetries: number;
-  mountRepositories: boolean;
+  repositoryIds: number[];
   bmadEnabled: boolean;
   dependsOnStepIds: number[];
   toolIds: number[];
@@ -88,6 +88,7 @@ interface Workflow {
   baseSkillIds: number[];
   baseMCPServerIds: number[];
   baseAssetIds: number[];
+  baseRepositoryIds: number[];
 }
 interface AgentModel {
   modelId: string;
@@ -121,6 +122,7 @@ const CONFIG_FIELDS = new Set([
   'baseSkillIds',
   'baseMCPServerIds',
   'baseAssetIds',
+  'baseRepositoryIds',
 ]);
 
 const requireProjectId = (projectId: number | null): number => {
@@ -654,6 +656,8 @@ const BuilderPage = () => {
                       toolGroups={toolGroups}
                       skills={skills}
                       mcpServers={mcpServers}
+                      assets={assets}
+                      repositories={repositories}
                       readOnly={readOnly}
                       onFieldChange={(field, value, immediate) =>
                         updateStepField(selectedSession.id, field, value, immediate)
@@ -707,6 +711,7 @@ const BuilderPage = () => {
               skills={skills}
               mcpServers={mcpServers}
               assets={assets}
+              repositories={repositories}
               readOnly={readOnly}
               onWorkflowChange={updateWorkflowField}
             />

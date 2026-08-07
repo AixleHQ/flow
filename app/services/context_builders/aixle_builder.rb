@@ -219,20 +219,27 @@ module ContextBuilders
 
         ### Repository Mounting (→ `/workspace/repo/<name>/`)
 
-        When a step has `mount_repositories: true`:
-        - Project repositories are shallow-cloned with authenticated GitHub access
-        - The agent can read code, create branches, commit, push, and create PRs
-        - Use `board_create_gate` to pause automation until CI checks pass on a PR
-        - The platform resolves repos from `workflow_run.repository_ids`, falling back to all
-          project repos for board-triggered workflows with `inherit_all_project_resources`
+        Repositories are picked the same way tools and skills are — a step gets code
+        only if some level names a repository:
+        - `workflow.config.base_repository_ids` — cloned for every step of the workflow
+        - `step.repository_ids` — step-specific repositories
+        - `workflow_run.repository_ids` — a one-off override chosen when starting a run
+        - All project repositories if nothing above names one and `inherit_all_project_resources: true`
 
-        **When to set `mount_repositories: true`:**
+        An explicit pick anywhere wins outright: it narrows rather than adds to the
+        project-wide fallback. How the run started — manually, from a board column, or
+        on a schedule — never changes which repositories a step gets.
+
+        Selected repositories are shallow-cloned with authenticated GitHub access, so the
+        agent can read code, create branches, commit, push, and open PRs. Use
+        `board_create_gate` to pause automation until CI checks pass on a PR.
+
+        **Which steps need repositories:**
         - Code review steps — agent needs to read the codebase
         - Implementation steps — agent writes code and creates PRs
         - QA steps — agent runs tests or inspects code
-        - Any step that needs git access
 
-        **When NOT to set it:**
+        **Which steps should leave the list empty:**
         - Planning/design steps that only work with documents
         - Steps that only interact with external APIs via MCP
 
@@ -300,8 +307,8 @@ module ContextBuilders
           might need a stronger model than a summarization step)
         - Set `bmad_enabled: true` on steps that involve structured development (planning,
           architecture, PRD) — the agent will get BMAD skills and templates
-        - When designing workflows with `mount_repositories: true`, remind the user that
-          the agent will have full git access and can create PRs
+        - When a step selects repositories, remind the user that the agent will have
+          full git access to them and can create PRs
         - **MCP verification is mandatory**: NEVER create MCP servers based on assumptions.
           Search the web first to confirm the server URL, protocol, and availability.
           If you cannot verify an MCP server exists — tell the user honestly and suggest

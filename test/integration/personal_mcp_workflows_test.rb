@@ -74,8 +74,10 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     long = "x" * 900
     agent = create(:agent, scope: @project)
     tool = create(:tool, scope: @project)
+    repository = create(:repository, scope: @project)
     step = create(:step, workflow: @workflow, instructions: long, agent: agent,
-                         tool_ids: [ tool.id ], bmad_enabled: true, mount_repositories: false, max_retries: 2)
+                         tool_ids: [ tool.id ], bmad_enabled: true,
+                         repository_ids: [ repository.id ], max_retries: 2)
     create(:sub_step, step: step, name: "check A", instructions: long)
 
     listed = payload(call_tool("get_workflow", { project_id: @project.id, workflow_id: @workflow.id }))["steps"].first
@@ -90,7 +92,7 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_equal agent.id, full.dig("agent", "id")
     assert_equal [ tool.id ], full["tool_ids"]
     assert full["bmad_enabled"]
-    assert_equal false, full["mount_repositories"] # rubocop:disable Minitest/RefuteFalse
+    assert_equal [ repository.id ], full["repository_ids"]
     assert_equal 2, full["max_retries"]
     assert_equal "fail", full["on_failure"]
     assert_equal "never", full["skip_policy"]

@@ -16,6 +16,7 @@ FactoryBot.define do
     skill_ids { [] }
     mcp_server_ids { [] }
     asset_ids { [] }
+    repository_ids { [] }
     agent { nil }
 
     trait :with_agent do

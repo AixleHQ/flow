@@ -62,8 +62,23 @@ class WorkflowDuplicator
     config["base_tool_ids"]       = @dep_copier.map_tool_ids(config["base_tool_ids"])             if config["base_tool_ids"]
     config["base_skill_ids"]      = @dep_copier.map_skill_ids(config["base_skill_ids"])           if config["base_skill_ids"]
     config["base_mcp_server_ids"] = @dep_copier.map_mcp_server_ids(config["base_mcp_server_ids"]) if config["base_mcp_server_ids"]
+    config["base_repository_ids"] = carried_repository_ids(config["base_repository_ids"])         if config["base_repository_ids"]
     # base_asset_ids intentionally NOT remapped — assets are out of scope (D5).
     config
+  end
+
+  # Repositories are project-scoped and there is nothing to remap them onto: the
+  # target project has its own repositories, or none. Carrying the ids across would
+  # point the copy at another project's code, so anything but a same-project
+  # duplicate starts with an empty selection.
+  def carried_repository_ids(ids)
+    return [] if ids.blank?
+
+    duplicating_within_source_project? ? ids : []
+  end
+
+  def duplicating_within_source_project?
+    target_project.present? && @source.scope_type == "Project" && @source.scope_id == target_project.id
   end
 
   def available_name
@@ -97,7 +112,7 @@ class WorkflowDuplicator
       mcp_server_ids: @dep_copier.map_mcp_server_ids(step.mcp_server_ids),
       skill_ids: @dep_copier.map_skill_ids(step.skill_ids),
       asset_ids: step.asset_ids, # unchanged — assets are out of scope (D5)
-      mount_repositories: step.mount_repositories,
+      repository_ids: carried_repository_ids(step.repository_ids),
       depends_on_step_ids: []
     )
 
