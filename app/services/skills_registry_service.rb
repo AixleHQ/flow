@@ -271,8 +271,11 @@ class SkillsRegistryService
     http.request(request)
   end
 
+  # `unresolved_message` stays public: `install` is no longer the only caller that
+  # has to explain an id that resolved to nothing (see PersonalTools::GetRegistrySkill),
+  # and two callers inventing their own wording is how "not found" starts hiding
+  # "that publisher has no index".
   private_class_method :time_left?, :parse_skill_id, :github_source?,
                        :fetch_skill_md_from_github, :fetch_raw_skill_md,
-                       :list_github_skill_directories, :source_url_for, :http_get,
-                       :unresolved_message
+                       :list_github_skill_directories, :source_url_for, :http_get
 end
