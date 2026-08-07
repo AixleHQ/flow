@@ -50,10 +50,17 @@ This server is **session-less** and grants **exactly your own access
 level** — every action runs through the same permission checks as the UI,
 so you can only do in a project what you could do by hand. It exposes the
 things you do in the app: list your companies and projects, manage board
-tasks and columns, build and run workflows (steps, sub-steps, triggers,
-runs), manage agents, custom tools, skills, MCP servers, config items and
-repositories, and update project settings. Two built-in prompts,
+tasks, columns and gates, build and run workflows (steps, sub-steps,
+triggers, runs), manage agents, custom tools, skills, MCP servers, config
+items and repositories, and update project settings. Two built-in prompts,
 `build_workflow` and `author_step`, guide multi-step construction.
+
+A workflow built this way can be wired up end to end: `create_workflow_trigger`
+attaches a board column, a Slack message, a cron schedule or an inbound
+webhook, so the workflow launches on its own rather than only on a button.
+When a run misbehaves, `get_step_run` returns that step's error, retry
+history and container-session diagnostics — the same detail the run page
+shows.
 
 The token is shown once — regenerate or disable it any time from your
 profile. Regenerating immediately invalidates the old token.

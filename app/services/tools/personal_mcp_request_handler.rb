@@ -125,21 +125,51 @@ module Tools
 
         1. `list_projects` — pick the project; every workflow tool takes its `project_id`.
         2. `list_workflows` / `get_workflow` — see what already exists before adding.
+           `get_workflow` also reports the workflow's base resources (tools, skills
+           and MCP servers every step gets) — read them before wiring per-step ones.
         3. `create_workflow` — name + description. Returns the `workflow_id`.
-        4. For each step: `list_agents` to choose an agent, then `create_workflow_step`
-           (name, instructions, agent_id, position). Set `depends_on_step_ids`
-           later with `update_workflow_step` once the steps it needs exist.
-        5. `create_sub_step` — break a step into a checklist when it has several
+           `update_workflow` renames it and sets the base resources.
+           `duplicate_workflow` copies an existing one, into this project or another.
+        4. Inspect what you can wire in: `list_project_tools`, `list_skills`,
+           `list_mcp_servers`, `list_agents`. `get_agent` and `get_skill` return the
+           full persona / skill content when the list entry isn't enough to decide.
+        5. For each step: `create_workflow_step` takes the wiring in one call —
+           name, instructions, agent_id, position, plus `tool_ids`, `skill_ids`,
+           `mcp_server_ids`, `depends_on_step_ids`, `bmad_enabled` and
+           `allow_non_interactive`. Dependencies must already exist, so create
+           the steps they point at first (or set them later with
+           `update_workflow_step`).
+        6. `create_sub_step` — break a step into a checklist when it has several
            distinct deliverables. See the `author_step` prompt for how to write
            a good step.
-        6. `reorder_workflow_steps` — fix execution order by passing step ids.
-        7. `trigger_workflow` — start a run (interactive or non_interactive).
-           Track it with `list_workflow_runs` / `get_workflow_run`; stop one with
-           `cancel_workflow_run`.
+        7. `reorder_workflow_steps` — fix execution order by passing step ids.
+        8. Connect a trigger, or the workflow only ever starts by hand:
+           `create_workflow_trigger` with a `kind` —
+           `column` (a card entering a board column), `slack` (an inbound message),
+           `schedule` (cron), `webhook` (an inbound HTTP call, which also returns the
+           endpoint URL and secret), or `event` (a custom platform event).
+           `list_workflow_triggers` / `update_workflow_trigger` /
+           `delete_workflow_trigger` manage them.
+        9. `trigger_workflow` — start a run by hand (interactive or non_interactive).
+           Track it with `list_workflow_runs` / `get_workflow_run`; read a single
+           step run's error, retries and session diagnostics with `get_step_run`;
+           stop a run with `cancel_workflow_run`.
 
         Rules:
         - Ask the user before destructive actions (`delete_workflow`,
-          `delete_workflow_step`).
+          `delete_workflow_step`, `delete_workflow_trigger`).
+        - `get_workflow` truncates step instructions. Read a step with
+          `get_workflow_step` before editing it, or you will overwrite text you
+          never saw. The same applies to every id list (`tool_ids`, `skill_ids`,
+          `mcp_server_ids`, `depends_on_step_ids`, and the workflow's `base_*`
+          lists): an update REPLACES the list, so read the current value first.
+        - The off-board trigger kinds (slack, schedule, webhook, event) fire with
+          nobody watching, so every step must have `allow_non_interactive` set.
+          A trigger whose workflow still has a human-gated step is rejected on
+          save, and the error names the steps.
+        - A `schedule` trigger needs a cron expression AND an explicit timezone —
+          leave the timezone out and Temporal schedules in UTC, which drifts by an
+          hour under daylight saving.
         - Everything is scoped to what your account can access — a tool that
           returns "not allowed" means your role can't do that in this project.
 
@@ -169,20 +199,29 @@ module Tools
           to later steps that depend on them.
 
         Wiring:
-        - `agent_id` (from `list_agents`) picks who runs the step.
+        - `agent_id` (from `list_agents`) picks who runs the step. `get_agent`
+          returns that agent's full persona when the title isn't enough.
         - `tool_ids` / `skill_ids` / `mcp_server_ids` grant capabilities — attach
           only what the step needs (list them with list_project_tools / list_skills /
-          list_mcp_servers).
+          list_mcp_servers, and read a skill's content with `get_skill` before
+          deciding). Check the workflow's `base_*` lists in `get_workflow` first:
+          those already apply to every step, so don't re-attach them here.
         - `depends_on_step_ids` builds the DAG: a step runs after every step it
           depends on. A step can't be deleted while others depend on it.
+        - `allow_non_interactive` lets the step run unattended. Every step needs it
+          before a slack / schedule / webhook trigger can be attached to the
+          workflow.
+        - Each of those id lists is REPLACED wholesale by an update — read the
+          current value with `get_workflow_step` before changing one.
 
         Sub-steps:
         - One `create_sub_step` per distinct, checkable deliverable.
         - `required: false` for optional work.
         - The running agent marks them off, giving progress visibility.
 
-        Prefer `get_workflow` to inspect the current shape before editing, and
-        make one focused change per tool call.
+        Prefer `get_workflow` to inspect the current shape and `get_workflow_step`
+        to read a step in full before editing, and make one focused change per
+        tool call.
       GUIDE
     end
   end

@@ -41,7 +41,7 @@ Company
     │   │   ├── TaskComments (threaded, with tags)
     │   │   ├── TaskAssets (file attachments)
     │   │   ├── ColumnTransitions (movement history)
-    │   │   ├── TaskWaits (external blockers: CI/CD)
+    │   │   ├── Gates (external blockers: CI/CD)
     │   │   └── WorkflowRuns (triggered by column bindings)
     │   ├── BoardActivities (immutable event log)
     │   └── BoardViewPresets (saved filters)
@@ -106,7 +106,7 @@ Each Project has exactly ONE Board. A Board contains ordered **BoardColumns** (s
 | parent_task_id | Epic-story nesting (1 level max) |
 | assignee_id | Assigned user |
 
-Tasks have: **TaskComments** (with tags like `tech_design`, `code_review`, `qa_report`), **TaskAssets** (file attachments), **ColumnTransitions** (movement history with actor_type: human/agent/auto_trigger), **TaskWaits** (external process blockers for GitHub/GitLab CI).
+Tasks have: **TaskComments** (with tags like `tech_design`, `code_review`, `qa_report`), **TaskAssets** (file attachments), **ColumnTransitions** (movement history with actor_type: human/agent/auto_trigger), **Gates** (external process blockers for GitHub/GitLab CI).
 
 ### BoardActivity
 
@@ -179,9 +179,12 @@ Steps execute based on `depends_on_step_ids` (DAG). Steps with no dependencies c
 
 ---
 
-## 6. Automation: Column → Workflow Binding
+## 6. Automation: Triggers
 
-### ColumnWorkflowBinding
+A workflow never starts by itself — something has to launch it. There are two
+trigger records, and every launch path goes through one of them.
+
+### ColumnWorkflowBinding (board columns)
 
 Connects a BoardColumn to a Workflow. When a task enters the column, the workflow triggers.
 
@@ -192,12 +195,49 @@ Connects a BoardColumn to a Workflow. When a task enters the column, the workflo
 | trigger_mode | **manual** (button in UI) or **auto** (triggers on task entry) |
 | cooldown_seconds | Minimum gap between auto-triggers (default: 5) |
 
+### TriggerBinding (everything else)
+
+The general "events matching X launch workflow Y" rule: Slack messages, inbound
+webhooks, cron schedules, and custom events. A TriggerEvent is matched against
+bindings by (project, event_type, enabled), then by JSONB containment of
+`filter_predicate` in the event data.
+
+| Field | Description |
+|-------|-------------|
+| event_type | `slack.message`, `webhook.<token>`, `schedule.fired`, or a custom event name |
+| workflow_id | Workflow to launch (must be visible from the binding's project) |
+| filter_predicate | JSONB conditions the event data must satisfy; empty ⇒ every event of this type. Supports equality, `{"op","value"}` operators, and dot-paths |
+| schedule_config | `schedule.fired` only: `{"cron": "...", "timezone": "..."}` |
+| subject_policy | `none` / `existing_task` / `create_task` — what board task the run is about |
+| subject_column_id | Required when `subject_policy` is `create_task`: where the new card lands |
+| subject_title_template | Title for the card a `create_task` policy creates |
+| trigger_mode | `auto` or `manual` |
+| cooldown_seconds | Minimum gap between launches — without it a busy Slack thread starts a run per message |
+| enabled | Off switch that keeps the binding |
+
+Rules that reject a binding at save time:
+
+- **`schedule.fired` requires a non-empty `cron`.** Always set `timezone`
+  explicitly too: an empty timezone makes Temporal schedule in UTC, so anything
+  tied to local working hours drifts by an hour across DST.
+- **`create_task` requires `subject_column_id`.** If the agent should create the
+  card itself, use `subject_policy: none` — otherwise the platform creates one
+  first, in the column named here.
+- **Off-board triggers (slack / webhook / schedule) require every step of the
+  workflow to allow non-interactive runs.** They fire unattended, and a step that
+  needs a human is silently skipped at fire time. Set `allow_non_interactive` on
+  each step before wiring the trigger.
+
+Schedule bindings are reconciled onto a Temporal Schedule synchronously on save
+(`ScheduleReconciler`), so a scheduling failure surfaces on the save instead of
+disappearing into a background job. Worker boot re-reconciles as the backstop.
+
 ### Automation Flow
 
 ```
 Task moves to column
   → Has binding? → Auto mode?
-    → No pending TaskWaits? → No active WorkflowRun?
+    → No pending Gates? → No active WorkflowRun?
       → START non_interactive WorkflowRun
         → Agent reads task context → Produces artifacts → Can move task to next column
 ```

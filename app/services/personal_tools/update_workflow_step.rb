@@ -4,7 +4,8 @@ module PersonalTools
   class UpdateWorkflowStep < Base
     tool do
       display_name "Update Workflow Step"
-      description "Update a workflow step's fields (name, instructions, agent, tools, skills, deps)."
+      description "Update a workflow step's fields (name, instructions, agent, tools, skills, deps, BMAD). " \
+                  "Read the step with get_workflow_step first — every id list here replaces the current one."
       audience :user
       tags :workflows
       param :project_id, type: :integer, description: "Project id.", required: true
@@ -13,13 +14,30 @@ module PersonalTools
       param :name, type: :string, description: "Updated name."
       param :instructions, type: :string, description: "Updated instructions (markdown)."
       param :agent_id, type: :integer, description: "Agent id to run this step."
-      param :tool_ids, type: :array, description: "Tool ids available in this step.", items: { type: "integer" }
-      param :skill_ids, type: :array, description: "Skill ids injected into context.", items: { type: "integer" }
-      param :mcp_server_ids, type: :array, description: "MCP server ids.", items: { type: "integer" }
-      param :depends_on_step_ids, type: :array, description: "Step ids this step depends on.", items: { type: "integer" }
+      param :tool_ids, type: :array,
+            description: "Tool ids available in this step. Replaces the whole list — read the current value " \
+                         "with get_workflow_step first.",
+            items: { type: "integer" }
+      param :skill_ids, type: :array,
+            description: "Skill ids injected into context. Replaces the whole list — read the current value " \
+                         "with get_workflow_step first.",
+            items: { type: "integer" }
+      param :mcp_server_ids, type: :array,
+            description: "MCP server ids. Replaces the whole list — read the current value with " \
+                         "get_workflow_step first.",
+            items: { type: "integer" }
+      param :depends_on_step_ids, type: :array,
+            description: "Step ids this step depends on. Replaces the whole list — read the current value " \
+                         "with get_workflow_step first.",
+            items: { type: "integer" }
+      param :bmad_enabled, type: :boolean, description: "Run this step with the BMAD method enabled."
+      param :allow_non_interactive, type: :boolean, description: "Allow this step to run without a human in the loop."
     end
 
-    UPDATABLE = %i[name instructions agent_id tool_ids skill_ids mcp_server_ids depends_on_step_ids].freeze
+    UPDATABLE = %i[
+      name instructions agent_id tool_ids skill_ids mcp_server_ids depends_on_step_ids
+      bmad_enabled allow_non_interactive
+    ].freeze
 
     def execute
       project = find_project!

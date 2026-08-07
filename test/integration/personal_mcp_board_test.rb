@@ -32,6 +32,15 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
 
   def tool_error?(body) = body.dig("result", "isError")
 
+  # A task on a board in a company @user has nothing to do with.
+  def foreign_task
+    owner = create(:user, :with_company)
+    project = create(:project, company: owner.companies.first, owner: owner)
+    board = create(:board, project: project)
+    column = create(:board_column, board: board, name: "To Do", position: 1)
+    create(:board_task, board: board, board_column: column, title: "Not yours", assignee: owner)
+  end
+
   test "list_board_columns returns the project's columns" do
     cols = payload(call_tool("list_board_columns", { project_id: @project.id }))["columns"]
     assert_equal %w[To\ Do Done], cols.map { |c| c["name"] }
@@ -130,6 +139,35 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_equal member.id, @task.reload.assignee_id
   end
 
+  test "archive_board_task round-trips and the state shows in get_board_task" do
+    archived = call_tool("archive_board_task", { project_id: @project.id, task_id: @task.id })
+    assert_not tool_error?(archived)
+    assert payload(archived)["archived"]
+    assert @task.reload.archived_at.present?
+
+    detail = payload(call_tool("get_board_task", { project_id: @project.id, task_id: @task.id }))
+    assert detail["archived"]
+
+    restored = call_tool("archive_board_task", { project_id: @project.id, task_id: @task.id, archived: false })
+    assert_not tool_error?(restored)
+    assert_equal false, payload(restored)["archived"] # rubocop:disable Minitest/RefuteFalse
+    assert_nil @task.reload.archived_at
+
+    back = payload(call_tool("get_board_task", { project_id: @project.id, task_id: @task.id }))
+    assert_equal false, back["archived"] # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "archive_board_task requires write access" do
+    viewer = create(:user, :viewer, company: @company)
+    @project.add_collaborator(viewer)
+    vtoken = viewer.regenerate_mcp_token!
+
+    body = call_tool("archive_board_task", { project_id: @project.id, task_id: @task.id }, token: vtoken)
+    assert tool_error?(body)
+    assert_match(/not allowed/i, body.dig("result", "content").first["text"])
+    assert_nil @task.reload.archived_at
+  end
+
   test "list_project_members returns assignable users with roles" do
     member = create(:user, company: @company)
     @project.add_collaborator(member)
@@ -179,6 +217,24 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_not BoardColumn.exists?(cid)
   end
 
+  test "create_board_column inserts at an occupied position instead of failing" do
+    inserted = call_tool("create_board_column", { project_id: @project.id, name: "Review", position: 2 })
+    assert_not tool_error?(inserted)
+    assert_equal 2, payload(inserted)["position"]
+    assert_equal [ [ "To Do", 1 ], [ "Review", 2 ], [ "Done", 3 ] ],
+                 @board.board_columns.order(:position).pluck(:name, :position)
+
+    # Inserting at the head shifts every existing column, exercising the
+    # multi-row walk against the (board_id, position) unique index.
+    head = call_tool("create_board_column", { project_id: @project.id, name: "Backlog", position: 1 })
+    assert_not tool_error?(head)
+    assert_equal [ [ "Backlog", 1 ], [ "To Do", 2 ], [ "Review", 3 ], [ "Done", 4 ] ],
+                 @board.board_columns.order(:position).pluck(:name, :position)
+
+    appended = call_tool("create_board_column", { project_id: @project.id, name: "Archive" })
+    assert_equal 5, payload(appended)["position"]
+  end
+
   test "delete_board_column is rejected when the column has tasks" do
     body = call_tool("delete_board_column", { project_id: @project.id, column_id: @todo.id })
     assert tool_error?(body)
@@ -193,6 +249,45 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     body = call_tool("create_board_column", { project_id: @project.id, name: "X" }, token: mtoken)
     assert tool_error?(body)
     assert_match(/not allowed/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+  end
+
+  test "list_gates exposes a task's gates and delete_gate clears one" do
+    gate = @task.gates.create!(gate_type: "github_checks_completed", creator: @user,
+                               metadata: { "repo_full_name" => "acme/app", "pr_number" => 7 })
+
+    gates = payload(call_tool("list_gates", { project_id: @project.id, task_id: @task.id }))["gates"]
+    assert_equal [ gate.id ], gates.map { |g| g["id"] }
+    assert_equal "github_checks_completed", gates.first["gate_type"]
+    assert_equal "pending", gates.first["status"]
+    assert_equal 7, gates.first["metadata"]["pr_number"]
+    assert_equal @user.name, gates.first["creator"]
+
+    detail = payload(call_tool("get_board_task", { project_id: @project.id, task_id: @task.id }))
+    assert_equal [ gate.id ], detail["pending_gates"].map { |g| g["id"] }
+
+    deleted = call_tool("delete_gate", { project_id: @project.id, gate_id: gate.id })
+    assert_not tool_error?(deleted)
+    assert_equal gate.id, payload(deleted)["deleted_gate_id"]
+    assert_not Gate.exists?(gate.id)
+    assert_empty payload(call_tool("list_gates", { project_id: @project.id, task_id: @task.id }))["gates"]
+  end
+
+  test "gate tools cannot reach another company's board" do
+    other_task = foreign_task
+    other_gate = other_task.gates.create!(gate_type: "github_workflow_completed", creator: other_task.assignee)
+
+    stolen = call_tool("delete_gate", { project_id: @project.id, gate_id: other_gate.id })
+    assert tool_error?(stolen)
+    assert_match(/not found/i, stolen.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert Gate.exists?(other_gate.id)
+
+    listed = call_tool("list_gates", { project_id: other_task.board.project.id, task_id: other_task.id })
+    assert tool_error?(listed)
+
+    archived = call_tool("archive_board_task",
+                         { project_id: other_task.board.project.id, task_id: other_task.id })
+    assert tool_error?(archived)
+    assert_nil other_task.reload.archived_at
   end
 
   test "unknown / inaccessible project is not found" do
