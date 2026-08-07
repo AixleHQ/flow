@@ -460,6 +460,64 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Unknown OAuth client", flash[:alert]
   end
 
+  # --- manual clients -------------------------------------------------------
+
+  test "mcp_connect hands the server's operator-registered client to discovery" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth,
+                    url: "https://mcp.acme.test/v1")
+    manual = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "operator-cid",
+                                 mcp_server: server, issuer: "https://auth.mcp.test",
+                                 authorization_endpoint: "https://auth.mcp.test/authorize",
+                                 token_endpoint: "https://auth.mcp.test/token")
+    MCP::OauthDiscoveryService.expects(:prepare)
+                              .with(mcp_url: server.url, manual_client: manual)
+                              .returns(OpenStruct.new(oauth_client: manual, resource: server.url, scopes: nil))
+
+    get oauth_mcp_connect_path(mcp_server_id: server.id)
+
+    assert_equal "operator-cid", query_params(@response.headers["Location"])["client_id"]
+  end
+
+  test "callback (mcp) accepts a manual client for the server it belongs to" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared,
+                    url: "https://mcp.acme.test/v1")
+    manual = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "operator-cid",
+                                 mcp_server: server, issuer: "https://auth.mcp.test",
+                                 authorization_endpoint: "https://auth.mcp.test/authorize",
+                                 token_endpoint: "https://auth.mcp.test/token")
+    stub_mcp_token_success!("https://auth.mcp.test/token")
+    state = build_state(owner: @company, provider: "mcp:mcp.acme.test", mcp_server_id: server.id,
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: manual.id,
+                        return_to: "/company/projects")
+
+    assert_difference("OauthCredential.count", 1) do
+      get oauth_callback_path, params: { code: "mcp-code-1", state: state }
+    end
+
+    assert_equal manual.id, OauthCredential.last.oauth_client_id
+  end
+
+  # Signed or not, one tenant's hand-registered OAuth app must not be spent on
+  # another server's connection.
+  test "callback (mcp) refuses a manual client belonging to a different server" do
+    other_server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth,
+                          url: "https://mcp.other.test/v1")
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth,
+                    url: "https://mcp.acme.test/v1")
+    manual = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "operator-cid",
+                                 mcp_server: other_server, issuer: "https://auth.mcp.test",
+                                 authorization_endpoint: "https://auth.mcp.test/authorize",
+                                 token_endpoint: "https://auth.mcp.test/token")
+    state = build_state(owner: @company, provider: "mcp:mcp.acme.test", mcp_server_id: server.id,
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: manual.id,
+                        return_to: "/company/projects")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "mcp-code-1", state: state }
+    end
+    assert_equal "Unknown OAuth client", flash[:alert]
+  end
+
   # --- CIMD client-metadata document ---------------------------------------
 
   test "client-metadata.json is publicly fetchable and is a valid CIMD document" do

@@ -102,12 +102,17 @@ module MCP
     # (canonical MCP url) + discovered default scopes. Raises MCP::DiscoveryError
     # (or a subclass) on ANY failure including every SSRF rejection. NEVER returns
     # a partially-validated client.
-    def self.prepare(mcp_url:)
-      new(mcp_url).prepare
+    # @param manual_client [OauthClient, nil] credentials an operator registered by
+    #   hand for this server. When present, discovery still runs — the endpoints are
+    #   still the authorization server's own — but registration is skipped, because
+    #   registering is exactly what that server refuses to allow.
+    def self.prepare(mcp_url:, manual_client: nil)
+      new(mcp_url, manual_client: manual_client).prepare
     end
 
-    def initialize(mcp_url)
+    def initialize(mcp_url, manual_client: nil)
       @mcp_url = mcp_url.to_s
+      @manual_client = manual_client
     end
 
     def prepare
@@ -289,6 +294,10 @@ module MCP
     def register_client(asm, prm)
       cache_metadata(asm[:issuer], prm[:raw], asm[:raw])
 
+      # An operator who has already registered an OAuth app by hand outranks every
+      # automatic path: they are here precisely because the automatic paths failed.
+      return adopt_manual_client(asm) if @manual_client
+
       existing = OauthClient.find_by(source: OauthClient::DISCOVERED_SOURCES, issuer: asm[:issuer])
       if existing
         return reuse_client(existing, asm) unless redirect_drifted?(existing)
@@ -321,6 +330,21 @@ module MCP
       registration = post_registration(registration_endpoint)
       guard_echoed_uris!(registration)
       persist_dcr_client(asm, prm, registration)
+    end
+
+    # Complete a hand-entered client with what discovery just found. The operator
+    # supplies only what the provider gave them — a client id, sometimes a secret —
+    # so the endpoints, the issuer and the default scopes still come from the
+    # authorization server's own metadata, freshly fetched and guarded.
+    def adopt_manual_client(asm)
+      @manual_client.update!(
+        issuer: asm[:issuer],
+        authorization_endpoint: asm[:authorization_endpoint],
+        token_endpoint: asm[:token_endpoint],
+        registration_endpoint: asm[:registration_endpoint],
+        scopes: @manual_client.scopes.presence || asm[:scopes]
+      )
+      @manual_client
     end
 
     # Reuse a previously-registered client to avoid re-registering on every

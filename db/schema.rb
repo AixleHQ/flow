@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_06_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_06_204847) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -423,18 +423,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_06_000003) do
   end
 
   create_table "oauth_clients", force: :cascade do |t|
-    t.string "authorization_endpoint", null: false
+    t.string "authorization_endpoint"
     t.string "client_id", null: false
     t.datetime "created_at", null: false
     t.text "encrypted_client_secret"
-    t.string "issuer", null: false
+    t.string "issuer"
+    t.bigint "mcp_server_id"
     t.jsonb "metadata", default: {}, null: false
     t.string "registration_endpoint"
     t.string "scopes"
     t.string "source", null: false
-    t.string "token_endpoint", null: false
+    t.string "token_endpoint"
     t.datetime "updated_at", null: false
-    t.index ["issuer", "client_id"], name: "index_oauth_clients_on_issuer_and_client_id", unique: true
+    t.index ["issuer", "client_id"], name: "index_oauth_clients_on_issuer_and_client_id", unique: true, where: "(mcp_server_id IS NULL)"
+    t.index ["mcp_server_id"], name: "index_oauth_clients_on_mcp_server_id", unique: true, where: "(mcp_server_id IS NOT NULL)"
     t.index ["source"], name: "index_oauth_clients_on_source"
   end
 
@@ -1139,6 +1141,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_06_000003) do
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects"
   add_foreign_key "integrations", "users", column: "connected_by_id"
+  add_foreign_key "oauth_clients", "mcp_servers"
   add_foreign_key "oauth_credentials", "mcp_servers"
   add_foreign_key "oauth_credentials", "oauth_clients"
   add_foreign_key "project_collaborators", "projects"
