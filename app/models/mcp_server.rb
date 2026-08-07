@@ -30,6 +30,12 @@ class MCPServer < ApplicationRecord
   # them (avoids an N+1 in MCPServerResource#oauth_status).
   has_many :oauth_credentials, dependent: :destroy
 
+  # Set only for a server whose authorization server refuses dynamic registration:
+  # the operator registers an OAuth app themselves and pastes its credentials here.
+  # Discovery still supplies the endpoints — see MCP::OauthDiscoveryService.
+  has_one :manual_oauth_client, -> { where(source: OauthClient::SOURCE_MANUAL) },
+          class_name: "OauthClient", dependent: :destroy, inverse_of: :mcp_server
+
   # `name` is a free-form human label — no format constraint. The lowercase
   # protocol identifier is derived from it at config-generation time (config_key),
   # NOT stored, so the name is kept verbatim as the user typed it.

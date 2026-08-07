@@ -37,7 +37,8 @@ module MCP
   #      (that check lives in WIRING, not here).
   #   4. Response limits: TIMEOUT connect/read timeout; MAX_BYTES body cap read
   #      capped (Content-Length is not trusted); non-2xx rejected except the
-  #      deliberate probe in step (a).
+  #      deliberate probe in step (a) and the DCR POST in step (c), whose failure
+  #      body is read for an allowlisted RFC 7591 error code and nothing else.
   #   5. No secrets/metadata in logs. Discovered metadata may embed tokens/urls;
   #      exceptions carry only a host + status, never a body or a full url.
   #   6. DNS pinning caveat (TOCTOU): errors_for resolves, then the HTTP client
@@ -71,18 +72,47 @@ module MCP
     # in the plaintext metadata jsonb (client_secret is stored encrypted instead).
     SENSITIVE_DCR_KEYS = %w[client_secret registration_access_token].freeze
     METADATA_CACHE_TTL = 1.hour
+    # What an MCP client sends: the transport is streamable HTTP, which may answer
+    # either as JSON or as an SSE stream, and servers reject a request that does not
+    # say it accepts both.
+    MCP_ACCEPT = "application/json, text/event-stream"
+    # Metadata documents (RFC 9728 / 8414) are plain JSON, and asking for a stream
+    # there would be noise.
+    DEFAULT_ACCEPT = "application/json"
+    # Statuses that mean "not like that" rather than "no": worth one retry with a
+    # real MCP request before giving up on getting a challenge out of the server.
+    PROBE_RETRY_STATUSES = [ 400, 404, 405, 406 ].freeze
+    # The MCP handshake, used purely as a probe: it is the one request every server
+    # answers, it needs no authentication, and it changes nothing server-side. The
+    # version is the floor we speak, not a requirement — a server that only supports
+    # a newer revision still answers, which is all a probe needs.
+    INITIALIZE_REQUEST = {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: { name: CLIENT_NAME, version: "1" }
+      }
+    }.freeze
 
     # Entry point WIRING calls from the connect action. Runs steps a→c and returns
     # a persisted source:"dcr" OauthClient + the RFC 8707 resource indicator
     # (canonical MCP url) + discovered default scopes. Raises MCP::DiscoveryError
     # (or a subclass) on ANY failure including every SSRF rejection. NEVER returns
     # a partially-validated client.
-    def self.prepare(mcp_url:)
-      new(mcp_url).prepare
+    # @param manual_client [OauthClient, nil] credentials an operator registered by
+    #   hand for this server. When present, discovery still runs — the endpoints are
+    #   still the authorization server's own — but registration is skipped, because
+    #   registering is exactly what that server refuses to allow.
+    def self.prepare(mcp_url:, manual_client: nil)
+      new(mcp_url, manual_client: manual_client).prepare
     end
 
-    def initialize(mcp_url)
+    def initialize(mcp_url, manual_client: nil)
       @mcp_url = mcp_url.to_s
+      @manual_client = manual_client
     end
 
     def prepare
@@ -103,13 +133,10 @@ module MCP
     # ---- Step (a): probe MCP url → RFC 9728 protected-resource metadata --------
     def probe_protected_resource
       guard!(@mcp_url)
-      # The probe is unauthenticated; a 401 (or anything else) is fine — we only
-      # want the WWW-Authenticate hint. Redirects are still followed + re-guarded.
-      probe = safe_fetch(@mcp_url, allow_statuses: :any)
+      probe = probe_challenge
 
-      prm_url = resource_metadata_url(probe) || default_prm_url
-      guard!(prm_url)
-      prm = parse_json!(safe_fetch(prm_url), NoAuthServerError)
+      prm = first_usable_prm(prm_candidates(probe))
+      raise NoAuthServerError, "no protected-resource metadata" if prm.nil?
 
       servers = Array(prm["authorization_servers"]).map { |s| s.to_s.strip }.reject(&:blank?)
       raise NoAuthServerError, "protected-resource metadata lists no authorization_servers" if servers.empty?
@@ -117,6 +144,53 @@ module MCP
       servers.each { |server| guard!(server) }
 
       { authorization_servers: servers, scopes: scope_string(prm["scopes_supported"]), raw: prm }
+    end
+
+    # The response we hope carries a WWW-Authenticate challenge. Unauthenticated, and
+    # any status is fine — the header is the whole point, not the body.
+    #
+    # SHAPE MATTERS. A bare GET is not an MCP request, and a lot of servers say so:
+    # in a survey of 178 catalog hosts, 23 answered it with 405 and 13 with 406, and
+    # Grafana 302s it while answering the SAME url with a 401 + resource_metadata
+    # once the streamable-HTTP Accept header is present. So the probe asks the way a
+    # client would, and when the server refuses the shape outright it is asked again
+    # with the one request every MCP server must answer.
+    def probe_challenge
+      probe = safe_fetch(@mcp_url, allow_statuses: :any, accept: MCP_ACCEPT)
+      return probe if resource_metadata_url(probe).present?
+      return probe if PROBE_RETRY_STATUSES.exclude?(probe.status)
+
+      retried = safe_fetch(@mcp_url, method: :post, json: INITIALIZE_REQUEST,
+                           allow_statuses: :any, accept: MCP_ACCEPT)
+      resource_metadata_url(retried).present? ? retried : probe
+    rescue FetchError
+      # The retry is best-effort: if it cannot complete, the first probe's answer (or
+      # the well-known fallbacks) still stands.
+      probe || raise
+    end
+
+    # In order: what the server told us, then the two well-known locations.
+    def prm_candidates(probe)
+      [ resource_metadata_url(probe), path_aware_prm_url, origin_prm_url ].compact_blank.uniq
+    end
+
+    # First candidate that answers with usable metadata wins. A 404, a non-2xx or a
+    # body that is not a JSON object moves on to the next; an UnsafeUrlError does NOT
+    # — a hint pointing somewhere we must not go is a security signal, not a miss.
+    def first_usable_prm(candidates)
+      candidates.each do |url|
+        guard!(url)
+
+        begin
+          body = JSON.parse(safe_fetch(url).body)
+        rescue FetchError, JSON::ParserError
+          next
+        end
+
+        return body if body.is_a?(Hash)
+      end
+
+      nil
     end
 
     # Parse `resource_metadata="https://..."` (quoted or bare) out of a
@@ -129,7 +203,20 @@ module MCP
       match && match[1]
     end
 
-    def default_prm_url
+    # RFC 9728 §3.1 inserts the well-known segment BEFORE the resource path, so a
+    # server at /mcp publishes its metadata at
+    # `/.well-known/oauth-protected-resource/mcp`. Only the origin-level form used to
+    # be tried, which is why a server like Grafana — which publishes exclusively at
+    # the path-aware url and 404s the other — could never be discovered from the
+    # fallback. nil for a url with no path of its own.
+    def path_aware_prm_url
+      path = URI.parse(@mcp_url).path.to_s.chomp("/")
+      return nil if path.blank?
+
+      "#{origin(@mcp_url)}/.well-known/oauth-protected-resource#{path}"
+    end
+
+    def origin_prm_url
       "#{origin(@mcp_url)}/.well-known/oauth-protected-resource"
     end
 
@@ -207,6 +294,10 @@ module MCP
     def register_client(asm, prm)
       cache_metadata(asm[:issuer], prm[:raw], asm[:raw])
 
+      # An operator who has already registered an OAuth app by hand outranks every
+      # automatic path: they are here precisely because the automatic paths failed.
+      return adopt_manual_client(asm) if @manual_client
+
       existing = OauthClient.find_by(source: OauthClient::DISCOVERED_SOURCES, issuer: asm[:issuer])
       if existing
         return reuse_client(existing, asm) unless redirect_drifted?(existing)
@@ -229,7 +320,8 @@ module MCP
 
       registration_endpoint = asm[:registration_endpoint]
       if registration_endpoint.blank?
-        raise RegistrationError, "authorization server does not support dynamic client registration"
+        raise RegistrationError.new("authorization server does not support dynamic client registration",
+                                    code: RegistrationError::NO_ENDPOINT)
       end
 
       # A loopback/private registration_endpoint raises UnsafeUrlError here (NOT
@@ -238,6 +330,21 @@ module MCP
       registration = post_registration(registration_endpoint)
       guard_echoed_uris!(registration)
       persist_dcr_client(asm, prm, registration)
+    end
+
+    # Complete a hand-entered client with what discovery just found. The operator
+    # supplies only what the provider gave them — a client id, sometimes a secret —
+    # so the endpoints, the issuer and the default scopes still come from the
+    # authorization server's own metadata, freshly fetched and guarded.
+    def adopt_manual_client(asm)
+      @manual_client.update!(
+        issuer: asm[:issuer],
+        authorization_endpoint: asm[:authorization_endpoint],
+        token_endpoint: asm[:token_endpoint],
+        registration_endpoint: asm[:registration_endpoint],
+        scopes: @manual_client.scopes.presence || asm[:scopes]
+      )
+      @manual_client
     end
 
     # Reuse a previously-registered client to avoid re-registering on every
@@ -270,13 +377,33 @@ module MCP
     end
 
     def post_registration(registration_endpoint)
-      response = safe_fetch(registration_endpoint, method: :post, json: registration_body)
+      # The second deliberate exception to "reject non-2xx" (doctrine rule 4), and
+      # the reason is diagnosis: RFC 7591 puts the WHY in a 400 body, and the most
+      # common why — the AS approves only loopback callbacks, so a hosted deployment
+      # can never self-register — is indistinguishable from a network fault once it
+      # has been flattened to "unexpected status=400". The body is still capped by
+      # MAX_BYTES, and only an allowlisted code survives #registration_error_code.
+      response = safe_fetch(registration_endpoint, method: :post, json: registration_body,
+                            allow_statuses: :any)
+      unless response.success?
+        raise RegistrationError.new("unexpected status=#{response.status}",
+                                    code: registration_error_code(response))
+      end
+
       parse_json!(response, RegistrationError)
     rescue FetchError => e
-      # Non-2xx / oversize / network from the DCR POST → RegistrationError.
-      # UnsafeUrlError (a guard/redirect rejection) is NOT a FetchError, so it
-      # propagates unchanged.
+      # Oversize / network from the DCR POST → RegistrationError. UnsafeUrlError (a
+      # guard/redirect rejection) is NOT a FetchError, so it propagates unchanged.
       raise RegistrationError, e.message
+    end
+
+    # The RFC 7591 error code, or nil for anything the allowlist does not know —
+    # including a body that is not JSON, or JSON that is not an object.
+    def registration_error_code(response)
+      body = optional_json(response.body)
+      return nil unless body.is_a?(Hash)
+
+      RegistrationError.known_code(body["error"])
     end
 
     def registration_body
@@ -391,7 +518,7 @@ module MCP
     # per-hop re-guard, capped at MAX_REDIRECTS), TIMEOUT timeouts, MAX_BYTES body
     # cap, status-only errors. Every network call in this file routes through here;
     # there is no un-guarded Net::HTTP.
-    def safe_fetch(url, method: :get, json: nil, allow_statuses: nil)
+    def safe_fetch(url, method: :get, json: nil, allow_statuses: nil, accept: DEFAULT_ACCEPT)
       current_url = url
       current_method = method
       current_json = json
@@ -399,7 +526,7 @@ module MCP
 
       loop do
         guard!(current_url)
-        response = raw_request(current_url, current_method, current_json)
+        response = raw_request(current_url, current_method, current_json, accept)
         return validate_status!(response, allow_statuses) unless redirect?(response.status)
 
         hops += 1
@@ -416,10 +543,10 @@ module MCP
       end
     end
 
-    def raw_request(url, method, json)
+    def raw_request(url, method, json, accept)
       uri = URI.parse(url)
       http = build_http(uri)
-      request = build_request(uri, method, json)
+      request = build_request(uri, method, json, accept)
 
       net_response = nil
       body = +""
@@ -467,10 +594,10 @@ module MCP
       nil
     end
 
-    def build_request(uri, method, json)
+    def build_request(uri, method, json, accept)
       klass = method == :post ? Net::HTTP::Post : Net::HTTP::Get
       request = klass.new(uri)
-      request["Accept"] = "application/json"
+      request["Accept"] = accept
       request["User-Agent"] = "AixleFlow-MCP-OAuth"
       if json
         request["Content-Type"] = "application/json"

@@ -114,6 +114,22 @@ class MCPServerResource < ApplicationResource
     server.credential_scope.to_s
   end
 
+  # An operator-registered OAuth client, for a server whose authorization server
+  # refuses to let us register ourselves. The client id is an identifier, not a
+  # secret, so it round-trips; the secret never leaves the server — the UI learns
+  # only that one is stored, and resubmits the mask when it is left alone.
+  # Spelled out rather than `:string?`: the key is always sent, and it is null for a
+  # server with no manual client (`:string?` would render it OPTIONAL instead).
+  typelize "string | null"
+  attribute :oauth_client_id do |server|
+    server.manual_oauth_client&.client_id
+  end
+
+  typelize :boolean
+  attribute :oauth_client_secret_present do |server|
+    server.manual_oauth_client&.confidential? || false
+  end
+
   # Connection status for the CURRENT viewer: nil (non-oauth) | "pending" (no
   # credential yet) | "active" | "expiring" (near expiry) | "error". For per_user
   # servers the identity is the viewer (passed as params[:user]); for shared servers

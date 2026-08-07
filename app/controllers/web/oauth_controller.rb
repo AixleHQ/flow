@@ -113,8 +113,14 @@ class Web::OauthController < Web::ApplicationController
     # is signed, but still CONSTRAINED to source:"dcr" so a static client id can't be
     # smuggled through the mcp: branch.
     if provider.start_with?("mcp:")
-      client = OauthClient.where(source: OauthClient::DISCOVERED_SOURCES).find_by(id: payload["oauth_client_id"])
+      client = OauthClient.where(source: OauthClient::MCP_SOURCES).find_by(id: payload["oauth_client_id"])
       return redirect_to(return_to, alert: "Unknown OAuth client") if client.nil?
+      # A manual client belongs to ONE server, and its credentials belong to whoever
+      # pasted them. Even with a signed state, it must not be spent on another
+      # server's connection — that would authorize a tenant into someone else's app.
+      if client.mcp_server_id.present? && client.mcp_server_id != payload["mcp_server_id"]
+        return redirect_to(return_to, alert: "Unknown OAuth client")
+      end
     else
       return redirect_to(return_to, alert: "Unknown OAuth provider") unless Oauth::Providers.known?(provider)
 
@@ -159,7 +165,8 @@ class Web::OauthController < Web::ApplicationController
 
     # Discovery + DCR. Every URL touched here is validated by the SSRF guard inside
     # the service; any failure (incl. an unsafe URL) raises MCP::DiscoveryError.
-    result = MCP::OauthDiscoveryService.prepare(mcp_url: server.url)
+    result = MCP::OauthDiscoveryService.prepare(mcp_url: server.url,
+                                                manual_client: server.manual_oauth_client)
 
     # credential_scope decides WHOSE identity connects: per_user => the acting user;
     # shared => the server's scope owner (shared service identity for the tenant).
@@ -196,9 +203,12 @@ class Web::OauthController < Web::ApplicationController
                               code_challenge_method: "S256"),
                 allow_other_host: true
   rescue MCP::DiscoveryError => e
-    # (7) token-free logging: class + server id only, never discovered metadata.
-    Rails.logger.warn("[Oauth] MCP discovery failed for server=#{params[:mcp_server_id]}: #{e.class.name}")
-    redirect_to safe_return_to(params[:return_to]), alert: "Couldn't connect to this MCP server"
+    # (7) token-free logging: class + an allowlisted code + server id only, never
+    # discovered metadata. #user_message is likewise one of our own sentences —
+    # see MCP::DiscoveryError.
+    Rails.logger.warn("[Oauth] MCP discovery failed for server=#{params[:mcp_server_id]}: " \
+                      "#{e.class.name}#{" code=#{e.code}" if e.code}")
+    redirect_to safe_return_to(params[:return_to]), alert: e.user_message
   end
 
   private

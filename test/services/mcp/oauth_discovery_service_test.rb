@@ -14,6 +14,8 @@ module MCP
   class OauthDiscoveryServiceTest < ActiveSupport::TestCase
     MCP_URL   = "https://mcp.example.com/v1"
     PRM_URL   = "https://mcp.example.com/.well-known/oauth-protected-resource"
+    # RFC 9728 §3.1: the well-known segment goes BEFORE the resource path.
+    PATH_PRM_URL = "https://mcp.example.com/.well-known/oauth-protected-resource/v1"
     ISSUER    = "https://auth.example.com"
     ASM_URL   = "https://auth.example.com/.well-known/oauth-authorization-server"
     OIDC_URL  = "https://auth.example.com/.well-known/openid-configuration"
@@ -117,6 +119,7 @@ module MCP
 
     test "falls back to the well-known PRM path when WWW-Authenticate has no hint" do
       stub_request(:get, MCP_URL).to_return(status: 401, body: "")
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
       stub_prm
       stub_asm
       stub_registration(body: { client_id: "dcr-client-id" })
@@ -320,6 +323,205 @@ module MCP
       assert_not_requested :get, %r{169\.254\.169\.254}
     end
 
+    # ======================== PROBE SHAPE + PRM FALLBACK ========================
+    # A bare GET is not an MCP request. Surveyed against the catalog, 23 of 178 hosts
+    # answer one with 405 and 13 with 406, and the challenge we need rides on the
+    # response we thereby never get.
+
+    test "the probe announces the streamable-HTTP transport" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_requested :get, MCP_URL, headers: { "Accept" => "application/json, text/event-stream" }
+    end
+
+    test "a server that refuses a bare GET is asked again with an MCP initialize" do
+      stub_request(:get, MCP_URL).to_return(status: 405)
+      stub_request(:post, MCP_URL).to_return(status: 401,
+                                             headers: { "WWW-Authenticate" => default_www_authenticate })
+      stub_prm
+      stub_asm
+      stub_registration
+
+      client = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL).oauth_client
+
+      assert_requested :post, MCP_URL, body: hash_including("method" => "initialize")
+      assert_equal "dcr-client-id", client.client_id
+    end
+
+    test "a server that answers the bare GET is not asked twice" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_not_requested :post, MCP_URL
+    end
+
+    test "falls back to the path-aware metadata url before the origin-level one" do
+      stub_probe(www_authenticate: 'Bearer realm="OAuth"') # no resource_metadata hint
+      stub_request(:get, PATH_PRM_URL).to_return(status: 200, headers: json_headers,
+                                                 body: default_prm_body.to_json)
+      stub_asm
+      stub_registration
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_requested :get, PATH_PRM_URL
+      assert_not_requested :get, PRM_URL
+    end
+
+    test "falls back to the origin-level metadata url when the path-aware one is absent" do
+      stub_probe(www_authenticate: 'Bearer realm="OAuth"')
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
+      stub_prm
+      stub_asm
+      stub_registration
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
+
+      assert_requested :get, PRM_URL
+    end
+
+    test "says the server advertises no authorization server when no candidate answers" do
+      stub_probe(www_authenticate: 'Bearer realm="OAuth"')
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
+      stub_request(:get, PRM_URL).to_return(status: 404)
+
+      error = assert_raises(MCP::NoAuthServerError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_match(/did not advertise/, error.user_message)
+    end
+
+    # ======================== MANUAL CLIENT ========================
+    # The way out for an authorization server that will not register us: an operator
+    # registers the OAuth app themselves and pastes its credentials.
+
+    test "a manual client is used instead of registering, and gets its endpoints from discovery" do
+      server = create(:mcp_server, :custom, auth_type: :oauth, url: MCP_URL)
+      manual = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "operator-cid",
+                                   mcp_server: server, client_secret: "operator-secret")
+      stub_probe
+      stub_prm
+      stub_asm
+      # Deliberately NO stub_registration: registering is what this server refuses.
+
+      result = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL, manual_client: manual)
+
+      client = result.oauth_client
+      assert_equal manual.id, client.id
+      assert_equal "operator-cid", client.client_id
+      assert_equal ISSUER, client.issuer
+      assert_equal AUTH_EP, client.authorization_endpoint
+      assert_equal TOKEN_EP, client.token_endpoint
+      assert client.confidential?, "an operator-supplied secret must survive discovery"
+      assert_not_requested :post, REG_EP
+    end
+
+    test "a manual client is preferred over an already-registered dcr client for the same issuer" do
+      server = create(:mcp_server, :custom, auth_type: :oauth, url: MCP_URL)
+      manual = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "operator-cid",
+                                   mcp_server: server)
+      OauthClient.create!(source: "dcr", issuer: ISSUER, client_id: "old-dcr-cid",
+                          authorization_endpoint: AUTH_EP, token_endpoint: TOKEN_EP)
+      stub_probe
+      stub_prm
+      stub_asm
+
+      client = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL, manual_client: manual).oauth_client
+
+      assert_equal "operator-cid", client.client_id
+    end
+
+    test "a manual client with no scopes of its own takes the ones discovery advertises" do
+      server = create(:mcp_server, :custom, auth_type: :oauth, url: MCP_URL)
+      manual = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "operator-cid",
+                                   mcp_server: server)
+      stub_probe
+      stub_prm
+      stub_asm
+
+      MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL, manual_client: manual)
+
+      assert_equal "read write", manual.reload.scopes
+    end
+
+    # ==================== REGISTRATION FAILURE DIAGNOSIS ====================
+    # "Couldn't connect" is a lie when the server answered perfectly well and simply
+    # refused to register us. These assert the WHY survives, and only via the allowlist.
+
+    test "a registration refused for an unapproved callback says an operator must configure a client" do
+      stub_probe
+      stub_prm
+      stub_asm
+      # Vercel's real answer: its authorization server approves loopback callbacks
+      # only, so no hosted deployment can ever register itself.
+      stub_registration(status: 400, body: { error: "invalid_redirect_uri",
+                                             error_description: "The provided redirect URIs are not approved." })
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_equal "invalid_redirect_uri", error.code
+      assert_match(/callback URL/, error.user_message)
+      assert_match(/operator/, error.user_message)
+    end
+
+    test "an authorization server with no registration endpoint says so" do
+      stub_probe
+      stub_prm
+      stub_asm(body: default_asm_body.except("registration_endpoint"))
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_equal MCP::RegistrationError::NO_ENDPOINT, error.code
+      assert_match(/does not support automatic app registration/, error.user_message)
+    end
+
+    test "an unrecognised error code, and its prose, never reach the user" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_registration(status: 400, body: { error: "im_a_teapot",
+                                             error_description: "<script>alert(1)</script>" })
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_nil error.code
+      assert_equal MCP::DiscoveryError::GENERIC, error.user_message
+      assert_no_match(/script/, error.user_message)
+      assert_no_match(/script/, error.message)
+    end
+
+    test "a registration failure that is not JSON falls back to the generic message" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_request(:post, REG_EP).to_return(status: 502, body: "<html>bad gateway</html>")
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_nil error.code
+      assert_equal MCP::DiscoveryError::GENERIC, error.user_message
+    end
+
+    test "a transport failure stays generic — it really is a connection problem" do
+      stub_probe
+      stub_prm
+      stub_asm
+      stub_request(:post, REG_EP).to_timeout
+
+      error = assert_raises(MCP::RegistrationError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+
+      assert_nil error.code
+      assert_equal MCP::DiscoveryError::GENERIC, error.user_message
+    end
+
     test "rejects a loopback registration_endpoint" do
       stub_probe
       stub_prm
@@ -394,6 +596,7 @@ module MCP
     test "aborts a redirect chain that exceeds the hop cap" do
       stub_probe
       stub_request(:get, PRM_URL).to_return(status: 302, headers: { "Location" => "https://a.example.com/1" })
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
       stub_request(:get, "https://a.example.com/1").to_return(status: 302, headers: { "Location" => "https://b.example.com/2" })
       stub_request(:get, "https://b.example.com/2").to_return(status: 302, headers: { "Location" => "https://c.example.com/3" })
       stub_request(:get, "https://c.example.com/3").to_return(status: 302, headers: { "Location" => "https://d.example.com/4" })
@@ -409,6 +612,7 @@ module MCP
       stub_request(:get, PRM_URL).to_return(
         status: 200, headers: json_headers, body: "x" * (300 * 1024)
       )
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
 
       assert_raises(MCP::DiscoveryError) do
         MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)
@@ -418,6 +622,7 @@ module MCP
     test "rejects a non-JSON PRM body" do
       stub_probe
       stub_request(:get, PRM_URL).to_return(status: 200, body: "<html>not json</html>")
+      stub_request(:get, PATH_PRM_URL).to_return(status: 404)
 
       assert_raises(MCP::DiscoveryError) do
         MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL)

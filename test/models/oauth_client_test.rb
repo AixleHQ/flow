@@ -86,4 +86,54 @@ class OauthClientTest < ActiveSupport::TestCase
       client.destroy
     end
   end
+
+  # --- manual clients ---
+  # Credentials an operator registered by hand, for an authorization server that
+  # refuses to let us register ourselves.
+
+  test "a manual client is valid with only a client id and a server" do
+    server = create(:mcp_server, :custom, auth_type: :oauth)
+
+    client = OauthClient.new(source: OauthClient::SOURCE_MANUAL, client_id: "cl_1", mcp_server: server)
+
+    assert client.valid?, client.errors.full_messages.to_sentence
+  end
+
+  test "a manual client without a server is refused" do
+    client = OauthClient.new(source: OauthClient::SOURCE_MANUAL, client_id: "cl_1")
+
+    assert_not client.valid?
+    assert_includes client.errors.attribute_names, :mcp_server_id
+  end
+
+  test "a discovered client may not be scoped to a server" do
+    server = create(:mcp_server, :custom, auth_type: :oauth)
+
+    client = OauthClient.new(valid_attrs(source: "dcr", mcp_server: server))
+
+    assert_not client.valid?
+    assert_includes client.errors.attribute_names, :mcp_server_id
+  end
+
+  # The tenancy case this scoping exists for: two projects registering the SAME
+  # OAuth app at the same provider must not collide.
+  test "two servers may hold the same client id for the same issuer" do
+    attrs = { source: OauthClient::SOURCE_MANUAL, client_id: "cl_shared", issuer: "https://vercel.com" }
+    OauthClient.create!(attrs.merge(mcp_server: create(:mcp_server, :custom, auth_type: :oauth)))
+
+    second = OauthClient.new(attrs.merge(mcp_server: create(:mcp_server, :custom, auth_type: :oauth)))
+
+    assert second.valid?, second.errors.full_messages.to_sentence
+    assert second.save
+  end
+
+  test "deleting the server takes its manual client, and the credentials it issued, with it" do
+    server = create(:mcp_server, :custom, auth_type: :oauth)
+    client = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, client_id: "cl_1", mcp_server: server)
+    client.oauth_credentials.create!(owner: create(:company), provider: "mcp:mcp.example.com")
+
+    assert_difference [ "OauthClient.count", "OauthCredential.count" ], -1 do
+      server.destroy
+    end
+  end
 end
