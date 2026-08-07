@@ -52,9 +52,15 @@ module Tools
     end
 
     def tool_classes
-      entitled = session.available_tools(ctx: ctx)
-      available = entitled.select { |t| t.available?(ctx) && digest_intact?(t) }.sort_by(&:name)
+      available = entitled_tools.select { |t| t.available?(ctx) && digest_intact?(t) }.sort_by(&:name)
       available.map { |row| define_tool(row) }
+    end
+
+    # Memoized per request: a tools/call resolves the entitlement twice (the
+    # shim, then the server build), and holding a pooled connection for a
+    # duplicate query is what tips a busy MCP pod into checkout timeouts.
+    def entitled_tools
+      @entitled_tools ||= session.available_tools(ctx: ctx)
     end
 
     # Fail closed on tampered custom definitions: a tools row written past the
@@ -116,7 +122,7 @@ module Tools
       return nil unless body.is_a?(Hash) && body["method"] == "tools/call"
 
       requested = body.dig("params", "name").to_s
-      tool = session.available_tools(ctx: ctx).detect { |t| t.name == requested }
+      tool = entitled_tools.detect { |t| t.name == requested }
       return nil if tool.nil? || tool.available?(ctx)
 
       result = { exit_code: 1, stdout: "", stderr: tool.unavailable_message }
