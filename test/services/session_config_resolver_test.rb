@@ -150,22 +150,69 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_equal "interactive", result[:mode]
   end
 
-  test "workflow session resolves repositories when mount_repositories true" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    repo = create(:repository, scope: @project, integration: integration)
-    session = build_workflow_session(mount_repositories: true, run_repository_ids: [ repo.id ])
+  test "workflow session resolves repositories chosen on the run" do
+    repo = create_project_repository
+    session = build_workflow_session(run_repository_ids: [ repo.id ])
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_includes result[:repository_ids], repo.id
+    assert_equal [ repo.id ], result[:repository_ids]
   end
 
-  test "board_triggered session falls back to project repositories when run repositories are empty" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    repo = create(:repository, scope: @project, integration: integration)
-    session = build_board_triggered_session(
-      mount_repositories: true,
-      run_repository_ids: [],
+  test "workflow session resolves repositories chosen on the workflow" do
+    repo = create_project_repository
+    session = build_workflow_session(workflow_config: { "base_repository_ids" => [ repo.id ] })
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [ repo.id ], result[:repository_ids]
+  end
+
+  test "workflow session resolves repositories chosen on the step" do
+    repo = create_project_repository
+    session = build_workflow_session(step_repository_ids: [ repo.id ])
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [ repo.id ], result[:repository_ids]
+  end
+
+  test "workflow session unions the repositories chosen at every level" do
+    run_repo = create_project_repository
+    base_repo = create_project_repository
+    step_repo = create_project_repository
+    session = build_workflow_session(
+      run_repository_ids: [ run_repo.id ],
+      workflow_config: { "base_repository_ids" => [ base_repo.id ] },
+      step_repository_ids: [ step_repo.id ]
+    )
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [ run_repo.id, base_repo.id, step_repo.id ].sort, result[:repository_ids].sort
+  end
+
+  # The whole point of choosing a repository is to get THAT repository. Adding the
+  # project's other repositories on top would make the choice meaningless.
+  test "an explicit choice narrows instead of adding to the project-wide fallback" do
+    chosen = create_project_repository
+    create_project_repository # also in the project, must not be mounted
+
+    session = build_workflow_session(
+      step_repository_ids: [ chosen.id ],
+      workflow_config: { "inherit_all_project_resources" => true }
+    )
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [ chosen.id ], result[:repository_ids]
+  end
+
+  # A scheduled run has no board task. It used to get nothing at all, which is the
+  # bug this replaces: what a step needs does not depend on what started the run.
+  test "a run with no board task still falls back to the project repositories" do
+    repo = create_project_repository
+    session = build_workflow_session(
       workflow_config: { "inherit_all_project_resources" => true }
     )
 
@@ -174,12 +221,9 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_includes result[:repository_ids], repo.id
   end
 
-  test "board_triggered session fallback includes company repositories visible to project" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    repo = create(:repository, scope: @project, integration: integration)
+  test "board_triggered session falls back to project repositories when nothing is chosen" do
+    repo = create_project_repository
     session = build_board_triggered_session(
-      mount_repositories: true,
-      run_repository_ids: [],
       workflow_config: { "inherit_all_project_resources" => true }
     )
 
@@ -188,46 +232,28 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_includes result[:repository_ids], repo.id
   end
 
-  test "board_triggered session does not fallback to project repositories when inherit_all_project_resources false" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    create(:repository, scope: @project, integration: integration)
-    session = build_board_triggered_session(
-      mount_repositories: true,
-      run_repository_ids: [],
-      workflow_config: { "inherit_all_project_resources" => false }
+  test "workflow session mounts nothing when no level chooses and inherit_all is off" do
+    create_project_repository
+    session = build_workflow_session(workflow_config: { "inherit_all_project_resources" => false })
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [], result[:repository_ids]
+  end
+
+  test "repository breakdown records which level supplied the repositories" do
+    base_repo = create_project_repository
+    step_repo = create_project_repository
+    session = build_workflow_session(
+      workflow_config: { "base_repository_ids" => [ base_repo.id ] },
+      step_repository_ids: [ step_repo.id ]
     )
 
-    result = SessionConfigResolver.resolve(session)
+    breakdown = SessionConfigResolver.resolve_with_breakdown(session)[:repositories]
 
-    assert_equal [], result[:repository_ids]
-  end
-
-  test "non-board workflow session does not fallback to project repositories when run repositories are empty" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    create(:repository, scope: @project, integration: integration)
-    session = build_workflow_session(mount_repositories: true, run_repository_ids: [])
-
-    result = SessionConfigResolver.resolve(session)
-
-    assert_equal [], result[:repository_ids]
-  end
-
-  test "workflow session returns empty repositories when mount_repositories false" do
-    session = build_workflow_session(mount_repositories: false)
-
-    result = SessionConfigResolver.resolve(session)
-
-    assert_equal [], result[:repository_ids]
-  end
-
-  test "board_triggered session does not fallback when mount_repositories false" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    create(:repository, scope: @project, integration: integration)
-    session = build_board_triggered_session(mount_repositories: false, run_repository_ids: [])
-
-    result = SessionConfigResolver.resolve(session)
-
-    assert_equal [], result[:repository_ids]
+    assert_equal [ base_repo.id ], breakdown[:from_workflow_base]
+    assert_equal [ step_repo.id ], breakdown[:from_step]
+    assert_equal [], breakdown[:from_project_fallback]
   end
 
   test "workflow session returns input_asset_ids from workflow_run" do
@@ -504,10 +530,8 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "resolve_with_breakdown returns repository project fallback for board_triggered sessions" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    repo = create(:repository, scope: @project, integration: integration)
+    repo = create_project_repository
     session = build_board_triggered_session(
-      mount_repositories: true,
       run_repository_ids: [],
       workflow_config: { "inherit_all_project_resources" => true }
     )
@@ -520,10 +544,8 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "resolve_with_breakdown repository fallback includes company repositories visible to project" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    repo = create(:repository, scope: @project, integration: integration)
+    repo = create_project_repository
     session = build_board_triggered_session(
-      mount_repositories: true,
       run_repository_ids: [],
       workflow_config: { "inherit_all_project_resources" => true }
     )
@@ -536,10 +558,8 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "resolve_with_breakdown omits project repository fallback when inherit_all_project_resources false" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    create(:repository, scope: @project, integration: integration)
+    create_project_repository
     session = build_board_triggered_session(
-      mount_repositories: true,
       run_repository_ids: [],
       workflow_config: { "inherit_all_project_resources" => false }
     )
@@ -551,16 +571,20 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_equal [], result[:repositories][:resolved]
   end
 
-  test "resolve_with_breakdown returns empty repositories when mount_repositories false even for board_triggered" do
-    integration = create(:integration, :github, company: @company, connected_by: @user)
-    create(:repository, scope: @project, integration: integration)
-    session = build_board_triggered_session(mount_repositories: false, run_repository_ids: [])
+  test "resolve_with_breakdown omits the project fallback once a level chooses a repository" do
+    chosen = create_project_repository
+    create_project_repository
+
+    session = build_board_triggered_session(
+      step_repository_ids: [ chosen.id ],
+      workflow_config: { "inherit_all_project_resources" => true }
+    )
 
     result = SessionConfigResolver.resolve_with_breakdown(session)
 
-    assert_equal [], result[:repositories][:resolved]
-    refute result[:repositories].key?(:from_project_fallback)
-    refute result[:repositories].key?(:from_run)
+    assert_equal [ chosen.id ], result[:repositories][:from_step]
+    assert_equal [], result[:repositories][:from_project_fallback]
+    assert_equal [ chosen.id ], result[:repositories][:resolved]
   end
 
   test "resolve_with_breakdown returns session_direct for standalone" do
@@ -644,7 +668,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   def build_workflow_session(step_tool_ids: [], step_skill_ids: [], step_mcp_server_ids: [],
                              step_asset_ids: [],
                              agent_runtime: "claude_code", step_agent: nil,
-                             run_mode: "interactive", mount_repositories: true,
+                             run_mode: "interactive", step_repository_ids: [],
                              run_repository_ids: [], run_input_asset_ids: [],
                              board_task: nil, workflow_config: {},
                              step_required_agent_runtime: nil,
@@ -652,7 +676,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     workflow = create(:workflow, :with_project_scope, config: workflow_config)
     step = create(:step, workflow: workflow, tool_ids: step_tool_ids, skill_ids: step_skill_ids,
       mcp_server_ids: step_mcp_server_ids, asset_ids: step_asset_ids, agent: step_agent,
-      mount_repositories: mount_repositories,
+      repository_ids: step_repository_ids,
       required_agent_runtime: step_required_agent_runtime, bmad_enabled: step_bmad_enabled)
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user,
       agent_runtime: agent_runtime, mode: run_mode, repository_ids: run_repository_ids,
@@ -665,6 +689,11 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     session.reload
 
     session
+  end
+
+  def create_project_repository
+    integration = create(:integration, :github, company: @company, connected_by: @user)
+    create(:repository, scope: @project, integration: integration)
   end
 
   def build_board_triggered_session(**opts)

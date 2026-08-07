@@ -19,12 +19,12 @@ const makeStep = (overrides: Record<string, unknown> = {}) => ({
   skipPolicy: 'never',
   onFailure: 'fail',
   maxRetries: 0,
-  mountRepositories: false,
   bmadEnabled: false,
   dependsOnStepIds: [] as number[],
   toolIds: [] as number[],
   mcpServerIds: [] as number[],
   skillIds: [] as number[],
+  repositoryIds: [] as number[],
   inputAssetSpecs: [] as { name: string; assetType: string; required: boolean; namePattern?: string | null }[],
   outputAssetSpecs: [] as { name: string; assetType: string; required: boolean; namePattern?: string | null }[],
   subSteps: [] as {
@@ -48,6 +48,7 @@ const makeWorkflow = (overrides: Record<string, unknown> = {}) => ({
   baseSkillIds: [] as number[],
   baseMCPServerIds: [] as number[],
   baseAssetIds: [] as number[],
+  baseRepositoryIds: [] as number[],
   ...overrides,
 });
 
@@ -508,9 +509,7 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     // Observable state change: the helper text is always shown (it's static, not conditional).
     expect(
-      await screen.findByText(
-        'Tools, skills, MCP servers, and assets from the project level are included automatically.',
-      ),
+      await screen.findByText(/Tools, skills, MCP servers, and assets from the project level are included/),
     ).toBeInTheDocument();
 
     // Config-backed field must be sent nested under `config`.
@@ -553,6 +552,72 @@ describe('Projects/Workflows/BuilderPage', () => {
     const body = JSON.parse((call![1] as RequestInit).body as string);
     // The single group token expands to every member tool id.
     expect(body.workflow.config.baseToolIds).toEqual([10, 11]);
+  });
+
+  it('selecting a base repository PATCHes config.baseRepositoryIds', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        repositories: [{ id: 21, name: 'acme/api' }],
+        workflow: makeWorkflow({ inheritAllProjectResources: false }),
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+    await userEvent.click(await screen.findByPlaceholderText('Select repositories…'));
+    await userEvent.click((await screen.findAllByRole('option', { name: 'acme/api' }))[0]);
+
+    await waitFor(
+      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
+      { timeout: 2000 },
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.workflow.config.baseRepositoryIds).toEqual([21]);
+  });
+
+  // Repositories narrow the project-wide set rather than adding to it, so this
+  // picker must stay usable when the other four are disabled by "inherit all".
+  it('keeps the base repository picker enabled while "inherit all project resources" is on', async () => {
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        repositories: [{ id: 21, name: 'acme/api' }],
+        workflow: makeWorkflow({ inheritAllProjectResources: true }),
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+
+    expect(await screen.findByPlaceholderText('Select repositories…')).toBeEnabled();
+    expect(screen.getByPlaceholderText('Select tools…')).toBeDisabled();
+  });
+
+  it('selecting a repository on a session PATCHes the step repositoryIds', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        repositories: [{ id: 21, name: 'acme/api' }],
+        steps: [makeStep({ id: 1, name: 'Implement' })],
+      }),
+    });
+
+    await userEvent.click(await screen.findByText('Implement'));
+    // Mantine puts the aria-label on both the search input and the hidden value input.
+    await userEvent.click((await screen.findAllByLabelText('Repositories'))[0]);
+    await userEvent.click((await screen.findAllByRole('option', { name: 'acme/api' }))[0]);
+
+    await waitFor(() => expect(fetchSpy.mock.calls.find(([url]) => String(url).includes('/steps/1'))).toBeTruthy(), {
+      timeout: 2000,
+    });
+    const call = fetchSpy.mock.calls.find(([url]) => String(url).includes('/steps/1'));
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.repositoryIds).toEqual([21]);
   });
 
   it('toggling "Auto-run available" immediately PATCHes the step and surfaces the "Auto" badge', async () => {

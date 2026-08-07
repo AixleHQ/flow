@@ -77,9 +77,12 @@ module InternalTools
             type: "array",
             description: "Required input files"
           },
-          mount_repositories: {
-            type: "boolean",
-            description: "Mount Git repos in /workspace"
+          repository_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "Repository IDs cloned into /workspace/repo for this step (in addition to workflow base repositories). Leave empty for steps that do not need code."
           },
           output_asset_specs: {
             type: "array",
@@ -121,7 +124,7 @@ module InternalTools
         skill_ids: params[:skill_ids] || [],
         mcp_server_ids: params[:mcp_server_ids] || [],
         asset_ids: params[:asset_ids] || [],
-        mount_repositories: params.fetch(:mount_repositories, false),
+        repository_ids: params[:repository_ids] || [],
         preferred_model: params[:preferred_model],
         bmad_enabled: params.fetch(:bmad_enabled, false),
         input_asset_specs: params[:input_asset_specs] || [],

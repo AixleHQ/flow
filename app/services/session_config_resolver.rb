@@ -246,35 +246,43 @@ class SessionConfigResolver
       return { from_session_direct: ids, resolved: ids }
     end
 
-    return { resolved: [] } unless repository_mount_enabled?
-
     from_run = workflow_run&.repository_ids || []
-    from_project_fallback = if board_triggered? && from_run.blank? && workflow_inherits_project_resources?
-      project_repository_ids
-    else
-      []
-    end
-    resolved = from_run.presence || from_project_fallback
+    from_base = workflow&.base_repository_ids || []
+    from_step = step&.repository_ids || []
+    explicit = (from_run + from_base + from_step).uniq
+    from_project_fallback = explicit.any? || !workflow_inherits_project_resources? ? [] : project_repository_ids
 
     {
       from_run: from_run,
+      from_workflow_base: from_base,
+      from_step: from_step,
       from_project_fallback: from_project_fallback,
-      resolved: resolved
+      resolved: explicit.presence || from_project_fallback
     }
   end
 
+  # Repositories are chosen, not inherited-by-default: an explicit pick at ANY
+  # level is the whole answer. Unlike tools and skills, which are additive, adding
+  # the project's repositories on top of a deliberate choice would widen it — pick
+  # one repository and get all four. `inherit_all_project_resources` therefore acts
+  # as a fallback for workflows that chose nothing, not as another summand.
+  #
+  # Nothing here asks how the run was triggered. A step needs the same code whether
+  # a person pressed Run, a board column moved, or a cron fired.
   def workflow_session_repository_ids
-    return [] unless repository_mount_enabled?
-
-    from_run = workflow_run&.repository_ids.presence || []
-    return from_run if from_run.any?
-    return project_repository_ids if board_triggered? && workflow_inherits_project_resources?
+    explicit = explicit_repository_ids
+    return explicit if explicit.any?
+    return project_repository_ids if workflow_inherits_project_resources?
 
     []
   end
 
-  def repository_mount_enabled?
-    step&.mount_repositories == true
+  def explicit_repository_ids
+    ids = []
+    ids += workflow_run&.repository_ids || []
+    ids += workflow&.base_repository_ids || []
+    ids += step&.repository_ids || []
+    ids.uniq
   end
 
   def workflow_inherits_project_resources?

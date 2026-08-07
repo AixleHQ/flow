@@ -43,14 +43,13 @@ layout:
 │   ├── <workflow base assets>
 │   ├── <run-time assets>
 │   └── <task assets, if board-triggered>
-├── repo/               ← Git repositories (if mount_repositories: true)
+├── repo/               ← Git repositories the step selected
 │   └── <repo_name>/    ← shallow clone, default branch, full .git
 └── references/         ← reference docs (only in Aixle Builder sessions)
 ```
 
-If `mount_repositories: true` and a project repository is configured,
-the platform also injects an authenticated GitHub installation token —
-the agent can `git push`, open PRs, and trigger CI.
+When a step selects repositories, the platform also injects an authenticated
+GitHub installation token — the agent can `git push`, open PRs, and trigger CI.
 
 ## How context is built
 
@@ -88,7 +87,7 @@ build narrowly and add up.
 | Symptom                                                       | Likely cause                                                                                |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
 | Step starts then immediately fails with "no credentials"      | The runtime's credentials aren't configured for the user who triggered the run.             |
-| Agent has no access to the codebase                           | `mount_repositories: true` but no project repository is configured.                         |
+| Agent has no access to the codebase                           | No repository is selected on the step, the workflow, or the run.                            |
 | Agent can't reach an MCP server                               | MCP server credentials missing in **Config Items**, or wrong `transport`.                   |
 | Container hangs in "pulling image"                            | Run `make build-agents` to rebuild the runtime images locally.                              |
 | `cost_cents` is `null` on a finished session                  | The runtime didn't emit usage events. Check the session logs in **Admin → Session Logs**.   |

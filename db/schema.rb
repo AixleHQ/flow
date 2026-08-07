@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_06_204847) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_07_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -742,12 +742,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_06_204847) do
     t.text "instructions"
     t.integer "max_retries", default: 0, null: false
     t.jsonb "mcp_server_ids", default: [], null: false
-    t.boolean "mount_repositories", default: true, null: false
     t.string "name", null: false
     t.string "on_failure", default: "fail", null: false
     t.jsonb "output_asset_specs", default: [], null: false
     t.integer "position", null: false
     t.string "preferred_model"
+    t.jsonb "repository_ids", default: [], null: false
     t.string "required_agent_runtime"
     t.jsonb "skill_ids", default: [], null: false
     t.string "skip_policy", default: "never", null: false

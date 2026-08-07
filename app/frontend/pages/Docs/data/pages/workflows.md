@@ -34,7 +34,7 @@ One Step = one agent session = one container = one major deliverable.
 | `tool_ids`             | Tools available in this step (merged with workflow base).                |
 | `skill_ids`            | Skills injected (merged with workflow base).                             |
 | `mcp_server_ids`       | MCP servers connected (merged with workflow base).                       |
-| `mount_repositories`   | Mount the project's Git repos under `/workspace/repo/`.                  |
+| `repository_ids`       | Repos cloned under `/workspace/repo/` (merged with workflow base).       |
 | `depends_on_step_ids`  | DAG dependencies — enables parallel execution.                           |
 | `preferred_model`      | LLM model override for this step.                                        |
 | `input_asset_specs`    | Documented expected inputs (informational).                              |
@@ -123,9 +123,11 @@ links for you. Open it from the project sidebar (Workflows → "Build with AI").
 
 ## Gotchas
 
-- **A step that needs the codebase needs both** `mount_repositories: true`
-  *and* a project with at least one repository configured. The flag
-  alone does nothing if no repo is configured.
+- **A step gets code only if some level names a repository** — the step's
+  own `repository_ids`, the workflow's `base_repository_ids`, or the run's
+  one-off override. An explicit pick anywhere wins outright; the project's
+  full set is used only when nothing names one and the workflow has
+  `inherit_all_project_resources`. How the run started never matters.
 - **`if_outputs_exist`** skip policy compares asset filenames against
   `output_asset_specs`. Rename a spec and previously-skipped steps will
   re-run.

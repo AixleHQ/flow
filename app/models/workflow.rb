@@ -14,7 +14,7 @@ class Workflow < ApplicationRecord
 
   ALLOWED_CONFIG_KEYS = %w[
     base_tool_ids base_skill_ids base_mcp_server_ids
-    base_asset_ids inherit_all_project_resources
+    base_asset_ids base_repository_ids inherit_all_project_resources
   ].freeze
 
   validates :name, presence: true
@@ -95,6 +95,10 @@ class Workflow < ApplicationRecord
 
   def base_asset_ids
     config&.dig("base_asset_ids") || []
+  end
+
+  def base_repository_ids
+    config&.dig("base_repository_ids") || []
   end
 
   def inherit_all_project_resources

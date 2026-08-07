@@ -27,6 +27,7 @@ module PersonalTools
               published_at: workflow.published_at,
               base_tool_ids: workflow.base_tool_ids, base_skill_ids: workflow.base_skill_ids,
               base_mcp_server_ids: workflow.base_mcp_server_ids,
+              base_repository_ids: workflow.base_repository_ids,
               steps_count: steps.size, steps: steps)
     end
 
@@ -38,6 +39,7 @@ module PersonalTools
         instructions_truncated: truncated?(step.instructions),
         agent: step.agent && { id: step.agent.id, title: step.agent.title },
         tool_ids: step.tool_ids, skill_ids: step.skill_ids, mcp_server_ids: step.mcp_server_ids,
+        repository_ids: step.repository_ids,
         depends_on_step_ids: step.depends_on_step_ids,
         sub_steps: step.sub_steps.active.order(:position).map { |ss|
           { id: ss.id, name: ss.name, position: ss.position, required: ss.required,

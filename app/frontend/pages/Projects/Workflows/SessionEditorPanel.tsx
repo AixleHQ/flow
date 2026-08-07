@@ -43,13 +43,13 @@ interface Step {
   allowNonInteractive: boolean;
   skipPolicy: string;
   onFailure: string;
-  mountRepositories: boolean;
   bmadEnabled: boolean;
   dependsOnStepIds: number[];
   toolIds: number[];
   mcpServerIds: number[];
   skillIds: number[];
   assetIds: number[];
+  repositoryIds: number[];
   inputAssetSpecs: AssetSpec[];
   outputAssetSpecs: AssetSpec[];
 }
@@ -163,6 +163,7 @@ interface SessionEditorPanelProps {
   toolGroups: ToolGroup[];
   skills: NamedItem[];
   mcpServers: NamedItem[];
+  repositories: NamedItem[];
   readOnly: boolean;
   onFieldChange: (field: string, value: unknown, immediate?: boolean) => void;
   onAssetSpecsChange: (field: 'inputAssetSpecs' | 'outputAssetSpecs', specs: AssetSpec[]) => void;
@@ -176,6 +177,7 @@ export function SessionEditorPanel({
   toolGroups,
   skills,
   mcpServers,
+  repositories,
   readOnly,
   onFieldChange,
   onAssetSpecsChange,
@@ -415,6 +417,24 @@ export function SessionEditorPanel({
             }}
           />
         </div>
+
+        <div className={classes.resGroup}>
+          <div className={classes.resType}>
+            Repositories <span className={classes.resTypeSub}>— cloned into /workspace/repo</span>
+          </div>
+          <MultiSelect
+            data={toSelectData(repositories)}
+            value={toStringArr(step.repositoryIds)}
+            onChange={(v) => onFieldChange('repositoryIds', toNumberArr(v), true)}
+            disabled={readOnly}
+            searchable
+            placeholder="None added"
+            aria-label="Repositories"
+            styles={{
+              input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+            }}
+          />
+        </div>
       </div>
 
       {/* ── DEPENDENCIES ───────────────────────────────────────────────────── */}
@@ -564,20 +584,6 @@ export function SessionEditorPanel({
           <div className={classes.behSub}>Environment</div>
 
           <div className={classes.togRow}>
-            <div>
-              <div className={classes.togLbl}>Mount repositories</div>
-              <div className={classes.togDesc}>
-                Makes project repositories available to the agent during this session.
-              </div>
-            </div>
-            <Switch
-              checked={step.mountRepositories}
-              onChange={(e) => onFieldChange('mountRepositories', e.currentTarget.checked, true)}
-              disabled={readOnly}
-            />
-          </div>
-
-          <div className={classes.togRow} style={{ marginTop: 8 }}>
             <div>
               <div className={classes.togLbl}>BMAD Method</div>
               <div className={classes.togDesc}>
