@@ -1,20 +1,21 @@
 import { router } from '@inertiajs/react';
 import {
+  ActionIcon,
   Badge,
   Box,
   Button,
-  Card,
   CopyButton,
-  Divider,
   Group,
   Menu,
   Modal,
   NumberInput,
   PasswordInput,
+  SegmentedControl,
   Stack,
+  Table,
   Text,
   TextInput,
-  ThemeIcon,
+  Tooltip,
   UnstyledButton,
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
@@ -28,6 +29,7 @@ import {
   IconCopy,
   IconLink,
   IconPlus,
+  IconSearch,
   IconSettings,
   IconTrash,
 } from '@tabler/icons-react';
@@ -35,7 +37,9 @@ import { useCallback, useMemo, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
+import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
+import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 export interface Integration {
@@ -66,7 +70,7 @@ const CoderIcon = ({ size = 20 }: { size?: number } = {}) => (
   <img src="/images/coder.svg" alt="Coder" width={size} height={size} />
 );
 
-const ProviderIcon = ({ provider, size = 20 }: { provider: string; size?: number }) => {
+const ProviderIcon = ({ provider, size = 18 }: { provider: string; size?: number }) => {
   if (provider === 'github') return <IconBrandGithub size={size} />;
   if (provider === 'gitlab') return <img src="/images/gitlab.svg" alt="GitLab" width={size} height={size} />;
   if (provider === 'coder') return <img src="/images/coder.svg" alt="Coder" width={size} height={size} />;
@@ -74,114 +78,28 @@ const ProviderIcon = ({ provider, size = 20 }: { provider: string; size?: number
   return <IconLink size={size} />;
 };
 
-const PROVIDER_ICON_COLORS: Record<string, string> = {
-  github: 'dark',
-  gitlab: 'orange',
-  coder: 'blue',
-  slack: 'grape',
+const PROVIDER_LABELS: Record<string, string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  coder: 'Coder',
+  slack: 'Slack',
+};
+
+const SCOPE_COLORS: Record<string, string> = {
+  company: 'gray',
+  project: 'green',
 };
 
 const formatDate = (d: string) =>
   new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
-const IntegrationCard = ({
-  integration,
-  readOnly,
-  canExecute,
-  onDelete,
-  onLink,
-}: {
-  integration: Integration;
-  readOnly?: boolean;
-  canExecute: boolean;
-  onDelete: (i: Integration) => void;
-  onLink?: (i: Integration) => void;
-}) => (
-  <Card withBorder p="md" radius="md">
-    <Group justify="space-between" wrap="nowrap">
-      <Group gap="md" wrap="nowrap">
-        <ThemeIcon variant="light" size="lg" radius="md" color={PROVIDER_ICON_COLORS[integration.provider] ?? 'gray'}>
-          <ProviderIcon provider={integration.provider} size={18} />
-        </ThemeIcon>
-        <Box>
-          <Group gap="xs">
-            <Text fw={600} size="sm">
-              {integration.name}
-            </Text>
-            <StatusBadge state={integration.status} size="sm" />
-            {readOnly && (
-              <Badge size="xs" variant="outline" color="gray">
-                company
-              </Badge>
-            )}
-          </Group>
-          <Text size="xs" c="dimmed">
-            Connected by {integration.connectedBy.name} on {formatDate(integration.createdAt)}
-          </Text>
-          {integration.provider === 'slack' && integration.slackRequestUrl && (
-            <Group gap={6} mt={4} wrap="nowrap">
-              <Text size="xs" c="dimmed" ff="monospace" truncate maw={280}>
-                {integration.slackRequestUrl}
-              </Text>
-              <CopyButton value={integration.slackRequestUrl}>
-                {({ copied, copy }) => (
-                  <Button
-                    variant="subtle"
-                    size="compact-xs"
-                    onClick={copy}
-                    leftSection={copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                  >
-                    {copied ? 'Copied' : 'Request URL'}
-                  </Button>
-                )}
-              </CopyButton>
-            </Group>
-          )}
-          {integration.provider === 'coder' && integration.coderUrl && (
-            <Text size="xs" c="dimmed" mt={2}>
-              {integration.coderUrl}
-            </Text>
-          )}
-        </Box>
-      </Group>
-
-      <Group gap="xs">
-        {canExecute && onLink && integration.status === 'active' && (
-          <Button variant="light" size="xs" leftSection={<IconLink size={14} />} onClick={() => onLink(integration)}>
-            Link to project
-          </Button>
-        )}
-        {integration.githubUrl && !readOnly && (
-          <Button
-            variant="subtle"
-            size="xs"
-            leftSection={<IconSettings size={14} />}
-            component="a"
-            href={integration.githubUrl}
-            target="_blank"
-          >
-            Settings
-          </Button>
-        )}
-        {canExecute && !readOnly && (
-          <Button
-            variant="subtle"
-            color="red"
-            size="xs"
-            leftSection={<IconTrash size={14} />}
-            onClick={() => onDelete(integration)}
-          >
-            Remove
-          </Button>
-        )}
-      </Group>
-    </Group>
-  </Card>
-);
-
 export const IntegrationsContent = ({ integrations, basePath, title }: IntegrationsContentProps) => {
   const { canExecute } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
+  const [search, setSearch] = useState('');
+  const [scopeFilter, setScopeFilter] = useState('all');
+  const [connectMenuOpened, setConnectMenuOpened] = useState(false);
+
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
   const [gitlabLoading, setGitlabLoading] = useState(false);
@@ -211,8 +129,30 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
     resetCoderForm();
   }, [resetCoderForm]);
 
-  const projectIntegrations = useMemo(() => integrations.filter((i) => i.scopeIndicator === 'project'), [integrations]);
-  const companyIntegrations = useMemo(() => integrations.filter((i) => i.scopeIndicator === 'company'), [integrations]);
+  const filtered = useMemo(() => {
+    let result = integrations;
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((i) => i.name.toLowerCase().includes(q));
+    }
+
+    if (scopeFilter !== 'all') {
+      result = result.filter((i) => i.scopeIndicator === scopeFilter);
+    }
+
+    return result;
+  }, [integrations, search, scopeFilter]);
+
+  const hasFilters = !!search || scopeFilter !== 'all';
+
+  const alreadyLinkedInstallationIds = useMemo(
+    () =>
+      new Set(
+        integrations.filter((i) => i.scopeIndicator === 'project' && i.installationId).map((i) => i.installationId),
+      ),
+    [integrations],
+  );
 
   const handleDelete = useCallback(
     (integration: Integration) => {
@@ -327,50 +267,6 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
     window.location.href = `${basePath}/slack_oauth_start`;
   }, [basePath]);
 
-  const alreadyLinkedInstallationIds = useMemo(
-    () => new Set(projectIntegrations.filter((i) => i.installationId).map((i) => i.installationId)),
-    [projectIntegrations],
-  );
-
-  const renderSection = (
-    label: string,
-    items: Integration[],
-    options: { readOnly?: boolean; showLink?: boolean } = {},
-  ) => (
-    <Box>
-      <Group gap="xs" mb="sm">
-        <Text fw={600} size="sm" tt="uppercase" c="dimmed" lts={0.5}>
-          {label}
-        </Text>
-        <Badge size="xs" variant="light" color="gray">
-          {items.length}
-        </Badge>
-      </Group>
-      {items.length === 0 ? (
-        <Text c="dimmed" size="sm" mb="md">
-          {options.readOnly ? 'No company-wide integrations available.' : 'No integrations in this scope.'}
-        </Text>
-      ) : (
-        <Stack gap="sm" mb="md">
-          {items.map((integration) => (
-            <IntegrationCard
-              key={integration.id}
-              integration={integration}
-              readOnly={options.readOnly}
-              canExecute={canExecute}
-              onDelete={handleDelete}
-              onLink={
-                options.showLink && !alreadyLinkedInstallationIds.has(integration.installationId)
-                  ? handleLinkToProject
-                  : undefined
-              }
-            />
-          ))}
-        </Stack>
-      )}
-    </Box>
-  );
-
   return (
     <Box>
       <PageHeader
@@ -382,9 +278,22 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
         }
         actions={
           canExecute && (
-            <Menu position="bottom-end" withArrow>
+            <Menu position="bottom-end" withArrow opened={connectMenuOpened} onChange={setConnectMenuOpened}>
               <Menu.Target>
-                <Button leftSection={<IconPlus size={16} />}>Connect</Button>
+                <Button
+                  leftSection={<IconPlus size={16} />}
+                  rightSection={
+                    <IconChevronDown
+                      size={14}
+                      style={{
+                        transition: 'transform 150ms ease',
+                        transform: connectMenuOpened ? 'rotate(180deg)' : 'none',
+                      }}
+                    />
+                  }
+                >
+                  Connect
+                </Button>
               </Menu.Target>
               <Menu.Dropdown>
                 <Menu.Item leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
@@ -407,58 +316,223 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
         }
       />
 
-      {integrations.length === 0 ? (
-        <Card p="xl" withBorder radius="md">
-          <Stack align="center" gap="md" py="lg">
-            <ThemeIcon size={56} radius="xl" variant="light" color="gray">
-              <IconLink size={28} />
-            </ThemeIcon>
-            <Box ta="center">
-              <Text fw={500} size="lg">
-                No integrations connected
-              </Text>
-              <Text size="sm" c="dimmed" mt={4} maw={440}>
-                Connect GitHub or GitLab for repositories, Coder for workspaces, or Slack to trigger workflows from
-                messages.
-              </Text>
-            </Box>
-            {canExecute && (
-              <Group gap="sm" justify="center" wrap="wrap">
-                <Button variant="outline" leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
-                  GitHub
-                </Button>
-                <Button variant="outline" leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
-                  GitLab
-                </Button>
-                <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
-                  Coder
-                </Button>
-                {isProjectContext && (
-                  <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
-                    Slack
-                  </Button>
-                )}
-              </Group>
-            )}
-          </Stack>
-        </Card>
-      ) : isProjectContext ? (
-        <Stack gap="lg">
-          {renderSection('This Project', projectIntegrations)}
-          <Divider />
-          {renderSection('Company-wide', companyIntegrations, { readOnly: true, showLink: true })}
-        </Stack>
-      ) : (
-        <Stack gap="sm">
-          {integrations.map((integration) => (
-            <IntegrationCard
-              key={integration.id}
-              integration={integration}
-              canExecute={canExecute}
-              onDelete={handleDelete}
+      <Group gap="md" mb="lg">
+        <TextInput
+          placeholder="Search by name..."
+          leftSection={<IconSearch size={16} />}
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          maw={300}
+        />
+        {isProjectContext && (
+          <SegmentedControl
+            value={scopeFilter}
+            onChange={setScopeFilter}
+            data={[
+              { label: 'All', value: 'all' },
+              { label: 'Project', value: 'project' },
+              { label: 'Company', value: 'company' },
+            ]}
+            size="sm"
+          />
+        )}
+        <ResourceCount>
+          {filtered.length} {filtered.length === 1 ? 'integration' : 'integrations'}
+        </ResourceCount>
+      </Group>
+
+      {filtered.length === 0 ? (
+        <Box
+          style={{
+            border: '1px solid var(--app-border-default)',
+            borderRadius: 'var(--mantine-radius-md)',
+            backgroundColor: 'var(--app-bg-paper)',
+          }}
+        >
+          {hasFilters ? (
+            <EmptyState
+              icon={<IconLink size={22} />}
+              title={
+                scopeFilter !== 'all' && !search
+                  ? 'No integrations in this scope.'
+                  : 'No integrations match your search'
+              }
             />
-          ))}
-        </Stack>
+          ) : (
+            <EmptyState
+              icon={<IconLink size={22} />}
+              title="No integrations connected"
+              description="Connect GitHub or GitLab for repositories, Coder for workspaces, or Slack to trigger workflows from messages."
+              action={
+                canExecute && (
+                  <Group gap="sm" justify="center" wrap="wrap">
+                    <Button variant="outline" leftSection={<IconBrandGithub size={16} />} onClick={handleConnectGithub}>
+                      GitHub
+                    </Button>
+                    <Button variant="outline" leftSection={<GitlabIcon />} onClick={() => setGitlabOpen(true)}>
+                      GitLab
+                    </Button>
+                    <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
+                      Coder
+                    </Button>
+                    {isProjectContext && (
+                      <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
+                        Slack
+                      </Button>
+                    )}
+                  </Group>
+                )
+              }
+            />
+          )}
+        </Box>
+      ) : (
+        <ResourceTableShell>
+          <Table highlightOnHover>
+            <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
+              <Table.Tr>
+                <ResourceTh>Name</ResourceTh>
+                <ResourceTh>Provider</ResourceTh>
+                {isProjectContext && <ResourceTh>Scope</ResourceTh>}
+                <ResourceTh>Status</ResourceTh>
+                <ResourceTh>Connected by</ResourceTh>
+                <ResourceTh align="right" w={150}>
+                  Actions
+                </ResourceTh>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {filtered.map((integration) => {
+                const readOnly = isProjectContext && integration.scopeIndicator === 'company';
+                const canLink =
+                  isProjectContext &&
+                  readOnly &&
+                  integration.status === 'active' &&
+                  integration.installationId &&
+                  !alreadyLinkedInstallationIds.has(integration.installationId);
+
+                return (
+                  <Table.Tr key={integration.id}>
+                    <Table.Td>
+                      <Group gap="sm" wrap="nowrap">
+                        <Box
+                          w={30}
+                          h={30}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: 'var(--app-bg-deep)',
+                            borderRadius: 'var(--mantine-radius-sm)',
+                            color: 'var(--app-text-secondary)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <ProviderIcon provider={integration.provider} />
+                        </Box>
+                        <Box style={{ minWidth: 0 }}>
+                          <Text fz={14} fw={500} c="var(--app-text-primary)" truncate>
+                            {integration.name}
+                          </Text>
+                          {integration.provider === 'slack' && integration.slackRequestUrl && (
+                            <Group gap={4} wrap="nowrap">
+                              <Text fz={11} c="dimmed" ff="JetBrains Mono, monospace" truncate maw={180}>
+                                {integration.slackRequestUrl}
+                              </Text>
+                              <CopyButton value={integration.slackRequestUrl}>
+                                {({ copied, copy }) => (
+                                  <Tooltip label={copied ? 'Copied' : 'Copy request URL'}>
+                                    <ActionIcon
+                                      aria-label="Request URL"
+                                      variant="subtle"
+                                      size="xs"
+                                      color="gray"
+                                      onClick={copy}
+                                    >
+                                      {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                                    </ActionIcon>
+                                  </Tooltip>
+                                )}
+                              </CopyButton>
+                            </Group>
+                          )}
+                          {integration.provider === 'coder' && integration.coderUrl && (
+                            <Text fz={11} c="dimmed" truncate maw={200}>
+                              {integration.coderUrl}
+                            </Text>
+                          )}
+                        </Box>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text fz={13} c="dimmed">
+                        {PROVIDER_LABELS[integration.provider] ?? integration.provider}
+                      </Text>
+                    </Table.Td>
+                    {isProjectContext && (
+                      <Table.Td>
+                        <Badge color={SCOPE_COLORS[integration.scopeIndicator] ?? 'gray'} size="sm" variant="light">
+                          {integration.scopeIndicator}
+                        </Badge>
+                      </Table.Td>
+                    )}
+                    <Table.Td>
+                      <StatusBadge state={integration.status} size="sm" />
+                    </Table.Td>
+                    <Table.Td>
+                      <Text fz={13} c="dimmed">
+                        {integration.connectedBy.name} · {formatDate(integration.createdAt)}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Group gap={4} justify="flex-end">
+                        {canExecute && canLink && (
+                          <Tooltip label="Link to project">
+                            <ActionIcon
+                              aria-label="Link to project"
+                              variant="subtle"
+                              size="sm"
+                              onClick={() => handleLinkToProject(integration)}
+                            >
+                              <IconLink size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {integration.githubUrl && !readOnly && (
+                          <Tooltip label="Settings">
+                            <ActionIcon
+                              aria-label="Settings"
+                              variant="subtle"
+                              size="sm"
+                              component="a"
+                              href={integration.githubUrl}
+                              target="_blank"
+                            >
+                              <IconSettings size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {canExecute && !readOnly && (
+                          <Tooltip label="Remove">
+                            <ActionIcon
+                              aria-label="Remove"
+                              variant="subtle"
+                              size="sm"
+                              color="red"
+                              onClick={() => handleDelete(integration)}
+                            >
+                              <IconTrash size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                      </Group>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </ResourceTableShell>
       )}
 
       <Modal
@@ -514,14 +588,12 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
             onChange={(e) => setCoderUrl(e.currentTarget.value)}
             error={coderUrl.trim() && !isValidHttpUrl(coderUrl) ? 'Must be a valid http or https URL' : undefined}
             autoFocus
-            required
           />
           <PasswordInput
             label="Session Token"
             placeholder="vFVrbTLdls-..."
             value={coderToken}
             onChange={(e) => setCoderToken(e.currentTarget.value)}
-            required
           />
 
           <UnstyledButton onClick={() => setCoderAdvancedOpen((open) => !open)}>
@@ -553,7 +625,6 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                 max={1440}
                 value={coderLockTtlMinutes}
                 onChange={(value) => setCoderLockTtlMinutes(value)}
-                required
                 error={typeof coderLockTtlMinutes === 'number' && coderLockTtlMinutes > 0 ? undefined : 'Required'}
               />
             </Stack>

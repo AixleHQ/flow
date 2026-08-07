@@ -1,9 +1,11 @@
 import { router } from '@inertiajs/react';
-import { Button, Group, Modal, Select, Stack, TextInput, Textarea } from '@mantine/core';
+import { Button, Select, Stack, TextInput, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState, type FC } from 'react';
 import { z } from 'zod';
+
+import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const schema = z.object({
   sourceBranch: z.string().min(1, 'Branch is required'),
@@ -70,8 +72,17 @@ export const EditRepositoryModal: FC<Props> = ({ repo, branches = [], basePath, 
   };
 
   return (
-    <Modal opened={!!repo} onClose={onClose} title={`Edit ${repo?.fullName ?? 'Repository'}`} centered>
-      <form onSubmit={form.onSubmit(handleSubmit)}>
+    <ResourceDrawer
+      opened={!!repo}
+      onClose={onClose}
+      title={`Edit ${repo?.fullName ?? 'Repository'}`}
+      footer={
+        <Button type="submit" form="edit-repository-form" fullWidth loading={loading}>
+          Update
+        </Button>
+      }
+    >
+      <form id="edit-repository-form" onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
           {/* Branch lists come from the integration's API; public repositories
               have none to list, so the branch stays free text there. */}
@@ -96,16 +107,8 @@ export const EditRepositoryModal: FC<Props> = ({ repo, branches = [], basePath, 
             autosize
           />
           <Textarea label="Description" placeholder="Optional description..." {...form.getInputProps('description')} />
-          <Group justify="flex-end" mt="sm">
-            <Button variant="default" onClick={onClose} disabled={loading}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={loading}>
-              Update
-            </Button>
-          </Group>
         </Stack>
       </form>
-    </Modal>
+    </ResourceDrawer>
   );
 };

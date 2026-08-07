@@ -22,7 +22,7 @@ const makeIntegration = (overrides: Partial<Integration> = {}): Integration => (
 });
 
 describe('IntegrationsContent', () => {
-  it('renders the title and a card for each seeded integration', () => {
+  it('renders the title and a row for each seeded integration', () => {
     renderPage(
       <IntegrationsContent
         title="Company Integrations"
@@ -38,8 +38,8 @@ describe('IntegrationsContent', () => {
     expect(screen.getByRole('heading', { name: 'Company Integrations' })).toBeInTheDocument();
     expect(screen.getByText('Acme GitHub')).toBeInTheDocument();
     expect(screen.getByText('Acme GitLab')).toBeInTheDocument();
-    // Both cards share the same connecting user, so the line appears once per card.
-    expect(screen.getAllByText(/Connected by Jane Doe/)).toHaveLength(2);
+    expect(screen.getAllByText(/Jane Doe/)).toHaveLength(2);
+    expect(screen.getByText('2 integrations')).toBeInTheDocument();
   });
 
   it('shows the empty state when there are no integrations', () => {
@@ -203,8 +203,8 @@ describe('IntegrationsContent', () => {
     expect(settingsLink).toHaveAttribute('target', '_blank');
   });
 
-  describe('project context sections', () => {
-    it('splits integrations into "This Project" and "Company-wide" sections', () => {
+  describe('project context scope filter', () => {
+    it('shows both project- and company-scoped integrations by default, with a scope badge', () => {
       renderPage(
         <IntegrationsContent
           title="Project Integrations"
@@ -217,29 +217,13 @@ describe('IntegrationsContent', () => {
         { props: settingsProps },
       );
 
-      expect(screen.getByText('This Project')).toBeInTheDocument();
-      expect(screen.getByText('Company-wide')).toBeInTheDocument();
       expect(screen.getByText('Project Scoped')).toBeInTheDocument();
       expect(screen.getByText('Org Wide')).toBeInTheDocument();
-    });
-
-    it('marks company-wide integrations read-only: a company badge but no Remove button', () => {
-      renderPage(
-        <IntegrationsContent
-          title="Project Integrations"
-          basePath="/projects/42/integrations"
-          integrations={[makeIntegration({ id: 2, name: 'Org Wide', scopeIndicator: 'company' })]}
-        />,
-        { props: settingsProps },
-      );
-
-      // The read-only "company" badge is present for a company-scoped integration in a project view.
       expect(screen.getByText('company')).toBeInTheDocument();
-      // Read-only cards hide the Remove action.
-      expect(screen.queryByRole('button', { name: /Remove/i })).not.toBeInTheDocument();
+      expect(screen.getByText('project')).toBeInTheDocument();
     });
 
-    it('shows an empty-scope message when the project has no project-scoped integrations', () => {
+    it('filtering to Project scope hides company-wide integrations and their Remove action stays hidden either way', async () => {
       renderPage(
         <IntegrationsContent
           title="Project Integrations"
@@ -249,6 +233,12 @@ describe('IntegrationsContent', () => {
         { props: settingsProps },
       );
 
+      // Company-scoped integrations in a project context are read-only: no Remove action.
+      expect(screen.queryByRole('button', { name: /Remove/i })).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('radio', { name: 'Project' }));
+
+      expect(screen.queryByText('Org Wide')).not.toBeInTheDocument();
       expect(screen.getByText('No integrations in this scope.')).toBeInTheDocument();
     });
 
@@ -319,15 +309,14 @@ describe('IntegrationsContent', () => {
               name: 'Org Wide',
               scopeIndicator: 'company',
               status: 'active',
-              // No installationId: the button still renders, but handleLinkToProject bails early.
+              // No installationId: the Link action does not render at all.
             }),
           ]}
         />,
         { props: settingsProps },
       );
 
-      await userEvent.click(screen.getByRole('button', { name: /Link to project/i }));
-
+      expect(screen.queryByRole('button', { name: /Link to project/i })).not.toBeInTheDocument();
       expect(router.post).not.toHaveBeenCalled();
     });
   });
@@ -597,7 +586,7 @@ describe('IntegrationsContent', () => {
       expect(screen.queryByRole('button', { name: 'GitHub' })).not.toBeInTheDocument();
     });
 
-    it('hides the Remove action on integration cards', () => {
+    it('hides the Remove action on integration rows', () => {
       renderPage(
         <IntegrationsContent
           title="Company Integrations"
@@ -607,14 +596,14 @@ describe('IntegrationsContent', () => {
         { props: readOnlyProps },
       );
 
-      // The card still renders, but its mutating controls are gone for a read-only viewer.
+      // The row still renders, but its mutating controls are gone for a read-only viewer.
       expect(screen.getByText('Acme GitHub')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Remove/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
     });
   });
 
-  describe('connected integration card details', () => {
+  describe('connected integration row details', () => {
     it('shows the Slack request URL and a copy button for a Slack integration', () => {
       renderPage(
         <IntegrationsContent
@@ -636,7 +625,7 @@ describe('IntegrationsContent', () => {
       expect(screen.getByRole('button', { name: /Request URL/i })).toBeInTheDocument();
     });
 
-    it('shows the Coder instance URL on a Coder integration card', () => {
+    it('shows the Coder instance URL on a Coder integration row', () => {
       renderPage(
         <IntegrationsContent
           title="Company Integrations"

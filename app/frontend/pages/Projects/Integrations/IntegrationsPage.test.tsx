@@ -33,7 +33,7 @@ describe('Projects/Integrations/IntegrationsPage', () => {
     expect(screen.getByRole('button', { name: /GitLab/ })).toBeInTheDocument();
   });
 
-  it('lists project and company integrations in their scoped sections', () => {
+  it('lists project and company integrations in the unified table with a Scope badge', () => {
     renderAuthedPage(<IntegrationsPage />, {
       props: {
         project,
@@ -44,10 +44,10 @@ describe('Projects/Integrations/IntegrationsPage', () => {
       },
     });
 
-    expect(screen.getByText('This Project')).toBeInTheDocument();
-    expect(screen.getByText('Company-wide')).toBeInTheDocument();
     expect(screen.getByText('project-repo')).toBeInTheDocument();
     expect(screen.getByText('company-repo')).toBeInTheDocument();
+    expect(screen.getByText('project')).toBeInTheDocument();
+    expect(screen.getByText('company')).toBeInTheDocument();
   });
 
   it('opens the GitLab connect modal from the Connect menu and blocks submit with an empty token', async () => {

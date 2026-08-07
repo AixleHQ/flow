@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
+import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 
 import { AgentFormModal } from './AgentFormModal';
 import { DeleteAgentModal } from './DeleteAgentModal';
@@ -87,14 +88,18 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
         }
       />
 
-      <TextInput
-        placeholder="Search by name or title..."
-        leftSection={<IconSearch size={16} />}
-        value={search}
-        onChange={(e) => setSearch(e.currentTarget.value)}
-        mb="lg"
-        maw={300}
-      />
+      <Group gap="md" mb="lg">
+        <TextInput
+          placeholder="Search by name or title..."
+          leftSection={<IconSearch size={16} />}
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          maw={300}
+        />
+        <ResourceCount>
+          {agents.length} {agents.length === 1 ? 'agent' : 'agents'}
+        </ResourceCount>
+      </Group>
 
       {filtered.length === 0 ? (
         <Box
@@ -123,38 +128,16 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
           />
         </Box>
       ) : (
-        <Box
-          style={{
-            border: '1px solid var(--app-border-default)',
-            borderRadius: 'var(--mantine-radius-md)',
-            overflow: 'hidden',
-          }}
-        >
+        <ResourceTableShell>
           <Table highlightOnHover>
             <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
               <Table.Tr>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Agent
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Persona
-                  </Text>
-                </Table.Th>
-                {isProjectContext && (
-                  <Table.Th>
-                    <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                      Scope
-                    </Text>
-                  </Table.Th>
-                )}
-                <Table.Th w={120}>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" ta="right" style={{ letterSpacing: 0.5 }}>
-                    Actions
-                  </Text>
-                </Table.Th>
+                <ResourceTh>Agent</ResourceTh>
+                <ResourceTh>Persona</ResourceTh>
+                {isProjectContext && <ResourceTh>Scope</ResourceTh>}
+                <ResourceTh align="right" w={120}>
+                  Actions
+                </ResourceTh>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -221,7 +204,7 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
                         </Tooltip>
                         <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Edit'}>
                           <ActionIcon
-                            aria-label="Duplicate"
+                            aria-label="Edit"
                             variant="subtle"
                             size="sm"
                             disabled={isReadOnly(agent)}
@@ -232,7 +215,7 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
                         </Tooltip>
                         <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Delete'}>
                           <ActionIcon
-                            aria-label="Duplicate"
+                            aria-label="Delete"
                             variant="subtle"
                             size="sm"
                             color="red"
@@ -249,7 +232,7 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
               ))}
             </Table.Tbody>
           </Table>
-        </Box>
+        </ResourceTableShell>
       )}
 
       <AgentFormModal

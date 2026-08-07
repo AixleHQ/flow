@@ -1,11 +1,12 @@
 import { router } from '@inertiajs/react';
-import { Button, Group, Modal, Stack, TextInput, Textarea } from '@mantine/core';
+import { Button, Group, Stack, TextInput, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState, type FC } from 'react';
 import { z } from 'zod';
 
 import { EmojiPicker } from 'shared/ui/EmojiPicker';
+import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const agentSchema = z.object({
   name: z
@@ -122,16 +123,24 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
   };
 
   return (
-    <Modal
+    <ResourceDrawer
       opened={opened}
       onClose={onClose}
       title={isEditMode ? 'Edit Agent' : duplicateAgent ? 'Duplicate Agent' : 'Create Agent'}
-      size="lg"
-      centered
+      footer={
+        <Button type="submit" form="agent-form" fullWidth loading={submitting}>
+          {isEditMode ? 'Save' : 'Create'}
+        </Button>
+      }
     >
-      <form onSubmit={form.onSubmit(handleSubmit)}>
+      <form id="agent-form" onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
           <Group align="flex-start" gap="md">
+            <EmojiPicker
+              value={form.values.icon}
+              onChange={(emoji) => form.setFieldValue('icon', emoji)}
+              disabled={submitting}
+            />
             <TextInput
               {...form.getInputProps('name')}
               onChange={(e) => handleNameChange(e.currentTarget.value)}
@@ -139,16 +148,12 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
               placeholder="my_agent"
               description="Unique identifier (lowercase, underscores)"
               style={{ flex: 1 }}
+              withAsterisk
               autoFocus
               disabled={isEditMode}
               styles={{
                 input: { fontFamily: '"JetBrains Mono", monospace' },
               }}
-            />
-            <EmojiPicker
-              value={form.values.icon}
-              onChange={(emoji) => form.setFieldValue('icon', emoji)}
-              disabled={submitting}
             />
           </Group>
 
@@ -157,6 +162,7 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
             label="Title"
             placeholder="Business Analyst"
             description="Display name for the agent"
+            withAsterisk
           />
 
           <Textarea
@@ -166,6 +172,7 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
             description="Who the agent is, their role and identity"
             minRows={4}
             autosize
+            withAsterisk
           />
 
           <Textarea
@@ -185,17 +192,8 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
             minRows={2}
             autosize
           />
-
-          <Group justify="flex-end" mt="md">
-            <Button variant="default" onClick={onClose} disabled={submitting}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={submitting}>
-              {isEditMode ? 'Save' : 'Create'}
-            </Button>
-          </Group>
         </Stack>
       </form>
-    </Modal>
+    </ResourceDrawer>
   );
 };

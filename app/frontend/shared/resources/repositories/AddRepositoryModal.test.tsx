@@ -99,7 +99,7 @@ describe('AddRepositoryModal', () => {
     expect(router.post).not.toHaveBeenCalled();
   });
 
-  it('Cancel calls onClose', async () => {
+  it('the drawer close button calls onClose', async () => {
     const onClose = vi.fn();
     renderPage(
       <AddRepositoryModal
@@ -111,7 +111,7 @@ describe('AddRepositoryModal', () => {
       { props: { integrations: [] } },
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(onClose).toHaveBeenCalled();
   });

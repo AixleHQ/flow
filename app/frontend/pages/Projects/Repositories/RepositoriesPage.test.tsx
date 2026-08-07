@@ -44,10 +44,10 @@ describe('Projects/Repositories/RepositoriesPage', () => {
 
     expect(screen.getByText('octo/hangar')).toBeInTheDocument();
     expect(screen.getByText('main')).toBeInTheDocument();
-    expect(screen.getByText('This Project')).toBeInTheDocument();
+    expect(screen.getByText('project')).toBeInTheDocument();
   });
 
-  it('shows company-wide repositories as a separate read-only section', () => {
+  it('shows company-wide repositories in the unified table with a Scope badge', () => {
     renderAuthedPage(<RepositoriesPage />, {
       props: {
         project,
@@ -59,7 +59,7 @@ describe('Projects/Repositories/RepositoriesPage', () => {
     });
 
     expect(screen.getByText('octo/shared-lib')).toBeInTheDocument();
-    expect(screen.getByText('Company-wide')).toBeInTheDocument();
+    expect(screen.getByText('company')).toBeInTheDocument();
   });
 
   it('reloads edit branches when editing a project repository', async () => {
@@ -70,8 +70,7 @@ describe('Projects/Repositories/RepositoriesPage', () => {
       },
     });
 
-    await userEvent.click(screen.getByRole('button', { name: '' }));
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Edit' }));
 
     expect(router.reload).toHaveBeenCalledWith({ data: { edit_repo_id: 7 }, only: ['editBranches'] });
   });
@@ -84,8 +83,7 @@ describe('Projects/Repositories/RepositoriesPage', () => {
       },
     });
 
-    await userEvent.click(screen.getByRole('button', { name: '' }));
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'Remove' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Remove Repository')).toBeInTheDocument();
