@@ -385,4 +385,66 @@ describe('McpServerFormModal', () => {
       expect(await screen.findByText(label)).toBeInTheDocument();
     });
   });
+
+  // A hand-registered OAuth client, for an authorization server that refuses to register a hosted
+  // app itself (Vercel approves loopback callbacks only). The fields stay out of the way until
+  // asked for, because needing them is the exception.
+  describe('operator-registered OAuth client', () => {
+    const vercelServer = {
+      ...oauthServer,
+      id: 21,
+      name: 'vercel',
+      url: 'https://mcp.vercel.com',
+      credentialScope: 'shared' as const,
+      oauthClientId: 'cl_operator',
+      oauthClientSecretPresent: true,
+    };
+
+    it('hides the client fields until they are asked for', async () => {
+      renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={oauthServer} {...baseProps} />);
+
+      expect(await screen.findByDisplayValue('linear')).toBeInTheDocument();
+      expect(screen.queryByLabelText('OAuth Client ID')).not.toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Set a client ID' }));
+
+      expect(screen.getByLabelText('OAuth Client ID')).toBeInTheDocument();
+    });
+
+    it('shows a configured client id up-front, with the secret masked', async () => {
+      renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={vercelServer} {...baseProps} />);
+
+      expect(await screen.findByDisplayValue('cl_operator')).toBeInTheDocument();
+      expect(screen.getByLabelText('OAuth Client Secret')).toHaveValue(MASK);
+    });
+
+    it('resubmits the masked secret untouched, so the stored one survives an edit', async () => {
+      renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={vercelServer} {...baseProps} />);
+      expect(await screen.findByDisplayValue('cl_operator')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => expect(router.patch).toHaveBeenCalled());
+      const [, payload] = vi.mocked(router.patch).mock.calls.at(-1)!;
+      expect(payload).toMatchObject({
+        mcpServer: { oauthClientId: 'cl_operator', oauthClientSecret: MASK },
+      });
+    });
+
+    it('sends freshly entered credentials', async () => {
+      renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={oauthServer} {...baseProps} />);
+      expect(await screen.findByDisplayValue('linear')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Set a client ID' }));
+      await userEvent.type(screen.getByLabelText('OAuth Client ID'), 'cl_new');
+      await userEvent.type(screen.getByLabelText('OAuth Client Secret'), 'sh_new');
+      await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+      await waitFor(() => expect(router.patch).toHaveBeenCalled());
+      const [, payload] = vi.mocked(router.patch).mock.calls.at(-1)!;
+      expect(payload).toMatchObject({
+        mcpServer: { oauthClientId: 'cl_new', oauthClientSecret: 'sh_new' },
+      });
+    });
+  });
 });

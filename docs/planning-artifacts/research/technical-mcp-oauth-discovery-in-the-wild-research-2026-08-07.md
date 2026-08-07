@@ -143,19 +143,47 @@ server can never put its own prose in front of a user or into our logs. The Verc
 reads: *"This server's authorization server does not accept this deployment's callback URL, so
 an operator has to register a client ID for it."*
 
+## Follow-ups 1 and 2, done — and measured
+
+Both landed right after this report: the probe now sends the streamable-HTTP `Accept` header
+and retries with an MCP `initialize` when a server refuses the shape (400/404/405/406), and
+the protected-resource fallback tries the RFC 9728 path-aware url before the origin-level one.
+
+**Re-running all 93 previously-failing hosts against the fixed code: 2 now reach
+authorization-server metadata** — one of them `mcp.grafana.com`, a featured connector.
+
+That is far less than the "a fifth of the catalog" this report first projected from the
+405/406 count, and the correction matters more than the fix does. Those hosts were not
+gated servers we were probing wrongly; **most of them want no OAuth at all**. The evidence
+was already in the second-pass data and was misread: 14 answered the probe with a plain 200,
+and `docs.mcp.cloudflare.com` answers a POST `initialize` with 200. A 405 to a bare GET was
+a transport-shape complaint from an open server, not a hidden auth challenge.
+
+What the fix genuinely buys, then, is **accuracy**: 69 hosts moved from
+`FetchError` ("couldn't connect") to `NoAuthServerError` ("this server did not advertise an
+OAuth authorization server"), which is both true and actionable, and Grafana-class servers —
+ones that really are gated and really do publish a challenge, just not to a bare GET — now
+work. 22 remain genuine transport failures (dead hosts, stale registry urls).
+
 ## Proposed follow-ups
 
-1. **Fix the probe shape** (finding 2). Send `Accept: application/json, text/event-stream`,
-   and do not let a redirect discard a 401 that carries `WWW-Authenticate`. Cheapest item
-   here, and it plausibly unblocks a fifth of the remote catalog.
-2. **Add the RFC 9728 path-aware fallback** (finding 3), keeping the origin-level URL as the
-   second attempt.
-3. **A manual/static client per MCP server** for the servers that will never accept DCR
-   (Vercel, Atlassian). The machinery exists — `Oauth::Providers` + `OauthClient(source:
-   "static")` — but it is a hard-coded registry, so as it stands every self-hoster would need
-   their own entry plus their own OAuth app at the provider. Deciding that shape is a product
-   question, not a mechanical one.
-4. **Device flow** only if a named provider justifies it; the data does not support building
+1. **A manual client per MCP server** for the servers that will never accept DCR (Vercel,
+   Atlassian) — **decided and built, 2026-08-07.** A `client_id` is bound to a `redirect_uri`,
+   hence to one deployment's domain, so no shared client can ever be shipped: every operator
+   needs their own OAuth app at the provider. The existing `Oauth::Providers` registry does
+   this for Sentry and Railway, but it is hard-coded per provider and configured through
+   Settings, which makes every self-hoster wait on us to add an entry. Chosen shape instead:
+   when discovery fails with a code that means "an operator must configure this"
+   (`invalid_redirect_uri`, `no_registration_endpoint`), say so on the spot and offer the
+   fields — client ID and secret — against that MCP server, persisted as an
+   `OauthClient(source: "manual")`. Endpoints still come from discovery; only the credentials
+   are hand-entered. One implementation covers Vercel, Atlassian and every future refusenik,
+   with no code per provider. Shipped as `OauthClient(source: "manual")` scoped to one
+   `mcp_server` — a tenancy rule, not a preference: those credentials belong to whoever pasted
+   them, and another tenant's users must never authorize into that OAuth app. The callback
+   enforces the same thing, refusing a manual client whose server does not match the signed
+   state.
+2. **Device flow** only if a named provider justifies it; the data does not support building
    it as a general fallback.
 
 ## Open question

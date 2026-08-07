@@ -181,4 +181,63 @@ class Web::Company::Projects::MCPServersControllerTest < ActionDispatch::Integra
       assert_not input.key?(:value), "declarations only — no values travel to the browser"
     end
   end
+
+  # --- operator-registered OAuth client ---
+  # For an authorization server that refuses to register us (Vercel's DCR approves
+  # loopback callbacks only). Only the credentials are hand-entered; the endpoints
+  # still arrive from discovery on the next connect, which is why a row can be saved
+  # here with neither.
+
+  test "create stores an operator-registered OAuth client for the server" do
+    post company_project_mcp_servers_path(@project), params: {
+      mcp_server: { name: "vercel", url: "https://mcp.vercel.com", auth_type: "oauth",
+                    oauth_client_id: "cl_operator", oauth_client_secret: "sh_operator" }
+    }
+
+    client = MCPServer.find_by(name: "vercel").manual_oauth_client
+    assert_equal "cl_operator", client.client_id
+    assert_equal "sh_operator", client.client_secret
+    assert_equal OauthClient::SOURCE_MANUAL, client.source
+    assert_nil client.issuer, "endpoints belong to discovery, not to this form"
+  end
+
+  test "resubmitting the masked secret leaves the stored one alone" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.vercel.com")
+    OauthClient.create!(source: OauthClient::SOURCE_MANUAL, mcp_server: server,
+                        client_id: "cl_operator", client_secret: "sh_operator")
+
+    patch company_project_mcp_server_path(@project, server), params: {
+      mcp_server: { name: server.name, url: server.url, auth_type: "oauth",
+                    oauth_client_id: "cl_operator", oauth_client_secret: SECRET_MASK }
+    }
+
+    assert_equal "sh_operator", server.reload.manual_oauth_client.client_secret
+  end
+
+  test "clearing the client id removes the client and the credentials it issued" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.vercel.com")
+    client = OauthClient.create!(source: OauthClient::SOURCE_MANUAL, mcp_server: server, client_id: "cl_operator")
+    client.oauth_credentials.create!(owner: @company, provider: "mcp:mcp.vercel.com", mcp_server: server)
+
+    assert_difference [ "OauthClient.count", "OauthCredential.count" ], -1 do
+      patch company_project_mcp_server_path(@project, server), params: {
+        mcp_server: { name: server.name, url: server.url, auth_type: "oauth", oauth_client_id: "" }
+      }
+    end
+  end
+
+  test "the client id is served back to the form but the secret never is" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.vercel.com")
+    OauthClient.create!(source: OauthClient::SOURCE_MANUAL, mcp_server: server,
+                        client_id: "cl_operator", client_secret: "sh_operator")
+
+    get company_project_mcp_servers_path(@project)
+
+    assert_inertia_props do |props|
+      row = (props[:mcp_servers] || props[:mcpServers]).find { |s| s[:id] == server.id }
+      (row[:oauth_client_id] || row[:oauthClientId]) == "cl_operator" &&
+        (row[:oauth_client_secret_present] || row[:oauthClientSecretPresent]) == true
+    end
+    assert_no_match(/sh_operator/, @response.body)
+  end
 end

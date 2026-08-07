@@ -4,8 +4,10 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
   def index
     # includes(:oauth_credentials): MCPServerResource#oauth_status reads the loaded
     # association in memory, so the status column is not an N+1 across the list.
+    # :manual_oauth_client for the same reason — the form needs to know whether one
+    # is configured, on every row.
     servers = MCPServer.visible_for_project(current_project)
-                       .includes(:oauth_credentials)
+                       .includes(:oauth_credentials, :manual_oauth_client)
                        .order(kind: :asc, created_at: :desc)
     config_items = ConfigItem.visible_for_project(current_project).pluck(:name)
 
@@ -34,6 +36,7 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
     server = current_project.mcp_servers.new(server_params)
 
     if server.save
+      sync_manual_oauth_client(server)
       redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server created"
     else
       redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
@@ -44,6 +47,7 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
     server = current_project.mcp_servers.find(params[:id])
 
     if server.update(server_params(existing: server))
+      sync_manual_oauth_client(server)
       redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server updated"
     else
       redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
@@ -160,6 +164,27 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
 
     unmask_secrets!(permitted, existing)
     permitted
+  end
+
+  # Credentials for an authorization server that will not let us register ourselves
+  # (see MCP::RegistrationError). Only the client id and secret are hand-entered —
+  # the endpoints still come from discovery on the next connect, which is why a row
+  # is saved here with neither.
+  #
+  # Clearing the client id deletes the client, and with it (dependent: :destroy) the
+  # credentials obtained through it: they were issued to that OAuth app and are worth
+  # nothing without it.
+  def sync_manual_oauth_client(server)
+    return unless params[:mcp_server].key?(:oauth_client_id)
+
+    client_id = params[:mcp_server][:oauth_client_id].to_s.strip
+    return server.manual_oauth_client&.destroy if client_id.blank?
+
+    client = server.manual_oauth_client || server.build_manual_oauth_client(source: OauthClient::SOURCE_MANUAL)
+    client.client_id = client_id
+    secret = params[:mcp_server][:oauth_client_secret].to_s
+    client.client_secret = secret.presence unless secret == SECRET_MASK
+    client.save!
   end
 
   # Restore untouched secrets on edit: the UI resubmits unchanged header/env
