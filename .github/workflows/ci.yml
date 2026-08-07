@@ -16,7 +16,14 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Superseding a pull request's run is free — only the tip of a branch under
+  # review is worth a verdict. Superseding a develop push is not: that run is
+  # the record of whether an integrated commit was green, and it publishes the
+  # coverage badges. Three merges inside fifteen minutes cancelled all three
+  # runs and left the README claiming a failing build with no badges behind it.
+  # Pushes therefore queue on this group instead, which also serialises the
+  # badge job's writes to the `badges` branch.
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
   build-image:
