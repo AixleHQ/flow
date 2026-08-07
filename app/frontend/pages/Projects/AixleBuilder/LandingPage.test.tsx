@@ -54,6 +54,20 @@ describe('Projects/AixleBuilder/LandingPage', () => {
     );
   });
 
+  it("starts with the member's default agent runtime rather than the first configured one", async () => {
+    renderAuthedPage(<LandingPage />, {
+      props: { ...baseProps, configuredAgents: ['cursor_cli', 'claude_code'], defaultAgentRuntime: 'claude_code' },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Start Builder/i }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/aixle_builder/start',
+      expect.objectContaining({ agentRuntime: 'claude_code' }),
+      expect.any(Object),
+    );
+  });
+
   it('posts the chosen model and project assets with the start request', async () => {
     const user = userEvent.setup();
     renderAuthedPage(<LandingPage />, {

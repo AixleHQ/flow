@@ -125,6 +125,38 @@ describe('RunWorkflowModal', () => {
     });
   });
 
+  it("preselects the member's default agent runtime rather than the first configured one", async () => {
+    renderModal({ configuredAgents: ['cursor_cli', 'claude_code'], defaultAgentRuntime: 'claude_code' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run Workflow' }));
+
+    await waitFor(() =>
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/projects/7/workflow_runs',
+        expect.objectContaining({
+          workflowRun: expect.objectContaining({ agentRuntime: 'claude_code' }),
+        }),
+        expect.any(Object),
+      ),
+    );
+  });
+
+  it('falls back to the first configured agent when the default runtime has no credential here', async () => {
+    renderModal({ configuredAgents: ['cursor_cli'], defaultAgentRuntime: 'gemini_cli' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run Workflow' }));
+
+    await waitFor(() =>
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/projects/7/workflow_runs',
+        expect.objectContaining({
+          workflowRun: expect.objectContaining({ agentRuntime: 'cursor_cli' }),
+        }),
+        expect.any(Object),
+      ),
+    );
+  });
+
   it('shows the empty fallback and disables Run when there are no configured agents', () => {
     renderModal({ configuredAgents: [] });
 

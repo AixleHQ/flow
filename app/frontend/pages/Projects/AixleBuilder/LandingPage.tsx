@@ -57,6 +57,7 @@ interface Props {
   sessions: Session[];
   activeSessionId: number | null;
   configuredAgents: string[];
+  defaultAgentRuntime?: string | null;
   assets: AssetOption[];
   agentModels?: AgentModelsEntry[];
 }
@@ -74,12 +75,19 @@ const LandingPage = () => {
     sessions,
     activeSessionId,
     configuredAgents,
+    defaultAgentRuntime,
     assets,
     agentModels = [],
   } = usePage<{ props: Props }>().props as unknown as Props;
   const { canExecute } = useProjectPermissions();
 
-  const [runtime, setRuntime] = useState<string | null>(configuredAgents[0] ?? null);
+  // The member's default agent for this company wins; the first configured
+  // credential is only a fallback (its order is whatever Postgres returns).
+  const [runtime, setRuntime] = useState<string | null>(
+    defaultAgentRuntime && configuredAgents.includes(defaultAgentRuntime)
+      ? defaultAgentRuntime
+      : (configuredAgents[0] ?? null),
+  );
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
   const [starting, setStarting] = useState(false);

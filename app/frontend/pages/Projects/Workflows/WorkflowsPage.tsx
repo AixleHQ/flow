@@ -74,6 +74,7 @@ interface Props {
   assets?: NamedItem[];
   repositories?: NamedItem[];
   configuredAgents: string[];
+  defaultAgentRuntime?: string | null;
   agentModels?: AgentModelsEntry[];
 }
 
@@ -91,6 +92,7 @@ const WorkflowsPage = () => {
     assets: rawAssets,
     repositories: rawRepositories,
     configuredAgents,
+    defaultAgentRuntime,
     agentModels,
   } = usePage<{ props: Props }>().props as unknown as Props;
   const { canExecute } = useProjectPermissions();
@@ -553,6 +555,7 @@ const WorkflowsPage = () => {
           steps={runWorkflow.steps}
           projectId={project.id}
           configuredAgents={configuredAgents}
+          defaultAgentRuntime={defaultAgentRuntime}
           agentModels={agentModels}
           repositories={repositories}
           assets={assets}

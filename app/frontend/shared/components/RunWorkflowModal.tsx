@@ -44,6 +44,7 @@ interface RunWorkflowModalProps {
   steps: RunWorkflowStep[];
   projectId: number;
   configuredAgents: string[];
+  defaultAgentRuntime?: string | null;
   agentModels?: AgentModelsEntry[];
   repositories: NamedItem[];
   assets: NamedItem[];
@@ -117,12 +118,19 @@ export function RunWorkflowModal({
   steps,
   projectId,
   configuredAgents,
+  defaultAgentRuntime,
   agentModels = [],
   repositories,
   assets,
 }: RunWorkflowModalProps) {
   const [mode, setMode] = useState<ExecutionMode>('automatic');
-  const [agentRuntime, setAgentRuntime] = useState<string | null>(configuredAgents[0] ?? null);
+  // The member's default agent for this company wins; the first configured
+  // credential is only a fallback (its order is whatever Postgres returns).
+  const [agentRuntime, setAgentRuntime] = useState<string | null>(
+    defaultAgentRuntime && configuredAgents.includes(defaultAgentRuntime)
+      ? defaultAgentRuntime
+      : (configuredAgents[0] ?? null),
+  );
   const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [customAutoRun, setCustomAutoRun] = useState<Record<number, boolean>>(() =>

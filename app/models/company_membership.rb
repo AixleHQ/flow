@@ -93,8 +93,12 @@ class CompanyMembership < ApplicationRecord
   # loading" gate rejects — while eager-loading it unconditionally trips the
   # opposite "AVOID eager loading" gate on every request that needs no
   # credentials. See User#active_memberships_with_company for the same tension.
+  # Newest first, id breaking ties: without an ORDER BY Postgres returns these
+  # in whatever order it likes, and #configured_agents drives which agent the
+  # run/session forms preselect when the member has no default credential.
   def credentials_scope
     AgentCredential.where(user_id: user_id, company_id: company_id)
+                   .order(created_at: :desc, id: :desc)
   end
 
   # Loaded once per instance: the current-user props serialise the credentials,
