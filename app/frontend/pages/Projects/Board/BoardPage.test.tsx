@@ -698,15 +698,15 @@ describe('Projects/Board/BoardPage', () => {
     renderAuthedPage(<BoardPage />, { props: { ...epicProps, selectedTask: story } });
 
     const drawer = screen.getAllByRole('dialog')[0];
-    // The select carries the current parent…
-    expect(within(drawer).getByRole('combobox', { name: 'Parent Epic' })).toHaveValue('Checkout revamp');
-    // …and the epic is offered as a link back to its own card.
+    // The epic is offered as a link back to its own card…
     await userEvent.click(within(drawer).getByRole('button', { name: 'Checkout revamp' }));
     expect(router.get).toHaveBeenCalledWith(
       '/company/projects/7/board',
       { task: 50 },
       expect.objectContaining({ preserveState: true }),
     );
+    // …and the select carries the current parent, addressable by its own label.
+    expect(within(drawer).getByRole('combobox', { name: 'Parent Epic' })).toHaveValue('Checkout revamp');
   });
 
   it('names the parent epic on the task detail view when the epic is archived and off the board', () => {
@@ -721,8 +721,8 @@ describe('Projects/Board/BoardPage', () => {
     });
 
     const drawer = screen.getAllByRole('dialog')[0];
+    expect(within(drawer).getByText('Checkout revamp')).toBeInTheDocument();
     expect(within(drawer).getByRole('combobox', { name: 'Parent Epic' })).toHaveValue('Checkout revamp');
-    expect(within(drawer).getAllByText('Checkout revamp').length).toBeGreaterThan(0);
   });
 
   it('saves the epic picked in the task detail Parent Epic select', async () => {

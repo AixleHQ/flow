@@ -22,6 +22,7 @@ type TaskDetail = {
   assetsCount: number;
   recentWorkflowRuns: Array<{ id: number; state: string; created_at: string }>;
   pendingGates: Array<{ id: number; gate_type: string; metadata: Record<string, unknown>; created_at: string }>;
+  parentTaskTitle?: string;
 }
 
 export default TaskDetail;
