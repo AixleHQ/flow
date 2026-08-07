@@ -24,6 +24,46 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_inertia_page "Projects/Workflows/BuilderPage"
   end
 
+  # The picker is the only way to put an asset on a workflow step, so a company
+  # asset missing here is invisible even though every other surface offers it and
+  # the step would happily mount it.
+  test "builder offers company assets alongside the project's own" do
+    wf = create(:workflow, scope: @project)
+    project_asset = create(:asset, scope: @project)
+    company_asset = create(:asset, scope: @company)
+
+    names = deferred_prop(builder_company_project_workflow_path(@project, wf),
+                          component: "Projects/Workflows/BuilderPage", key: "assets")
+             .map { |a| a["name"] }
+
+    assert_includes names, project_asset.name
+    assert_includes names, company_asset.name
+  end
+
+  test "index offers company assets alongside the project's own" do
+    project_asset = create(:asset, scope: @project)
+    company_asset = create(:asset, scope: @company)
+
+    names = deferred_prop(company_project_workflows_path(@project),
+                          component: "Projects/Workflows/WorkflowsPage", key: "assets")
+             .map { |a| a["name"] }
+
+    assert_includes names, project_asset.name
+    assert_includes names, company_asset.name
+  end
+
+  test "builder does not offer assets from another company" do
+    wf = create(:workflow, scope: @project)
+    other_company = create(:company)
+    outsider = create(:asset, scope: other_company)
+
+    names = deferred_prop(builder_company_project_workflow_path(@project, wf),
+                          component: "Projects/Workflows/BuilderPage", key: "assets")
+             .map { |a| a["name"] }
+
+    assert_not_includes names, outsider.name
+  end
+
   test "create redirects on success" do
     post company_project_workflows_path(@project), params: { workflow: { name: "Proj WF", description: "D" } }
     assert_response :redirect
@@ -55,5 +95,21 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     end
 
     assert_response :redirect
+  end
+
+  private
+
+  # Resource pickers are deferred props: the first render omits them and the client
+  # asks again for that group alone. Fetching one means replaying that second
+  # request, headers and all — a plain GET returns a page where the key is absent.
+  def deferred_prop(path, component:, key:)
+    get path, headers: {
+      "X-Inertia" => "true",
+      "X-Inertia-Partial-Component" => component,
+      "X-Inertia-Partial-Data" => key
+    }
+
+    assert_response :success
+    JSON.parse(response.body).dig("props", key)
   end
 end
