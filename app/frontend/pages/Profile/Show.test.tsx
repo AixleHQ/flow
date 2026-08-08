@@ -32,6 +32,8 @@ const buildProfile = (overrides: Partial<SharedUser> = {}): SharedUser => ({
   configuredAgents: [],
   needsAgentSetup: false,
   agentCredentials: [],
+  shareActiveSessions: false,
+  shareCompletedSessions: true,
   currentRole: 'admin',
   currentCompany: acmeCompany,
   memberships: [{ id: 5, role: 'admin', state: 'active', company: acmeCompany }],
@@ -63,7 +65,7 @@ const baseProps = (profile: SharedUser) => ({
 // satisfies both ProfilePage (data.profile.*) and CreateProjectModal (data.name/description).
 const pinForm = (name: string, preferredAgentLanguage = 'en') => {
   const form = makeFormStub({
-    profile: { name, preferredAgentLanguage },
+    profile: { name, preferredAgentLanguage, shareActiveSessions: false, shareCompletedSessions: true },
     name: '',
     description: '',
   });
@@ -292,10 +294,33 @@ describe('Profile/Show', () => {
     expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(3);
   });
 
+  it('shows the session visibility switches in the state the profile reports', () => {
+    const profile = buildProfile({ shareActiveSessions: true, shareCompletedSessions: false });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByRole('switch', { name: /Show my active sessions/ })).toBeChecked();
+    expect(screen.getByRole('switch', { name: /Show my finished sessions/ })).not.toBeChecked();
+  });
+
+  it('records a flipped visibility switch on the form', async () => {
+    const profile = buildProfile();
+    const form = pinForm('Maria Sokolova');
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile), form });
+
+    await userEvent.click(screen.getByRole('switch', { name: /Show my active sessions/ }));
+
+    expect(form.setData).toHaveBeenCalledWith('profile', expect.objectContaining({ shareActiveSessions: true }));
+  });
+
   it('keeps Save disabled when the form is not dirty even though data is valid', () => {
     // pinForm sets isDirty=true; here we want a clean (non-dirty) but valid form.
     const form = makeFormStub({
-      profile: { name: 'Maria Sokolova', preferredAgentLanguage: 'en' },
+      profile: {
+        name: 'Maria Sokolova',
+        preferredAgentLanguage: 'en',
+        shareActiveSessions: false,
+        shareCompletedSessions: true,
+      },
       name: '',
       description: '',
     });

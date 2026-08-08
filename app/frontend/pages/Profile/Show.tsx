@@ -14,6 +14,7 @@ import {
   Modal,
   Select,
   Stack,
+  Switch,
   Tabs,
   Text,
   TextInput,
@@ -135,6 +136,8 @@ const profileSchema = z.object({
     .min(2, 'Name must be at least 2 characters')
     .max(100, 'Name must be less than 100 characters'),
   preferredAgentLanguage: z.string().min(1, 'Language is required'),
+  shareActiveSessions: z.boolean(),
+  shareCompletedSessions: z.boolean(),
 });
 
 type ProfileFormErrors = Partial<Record<keyof z.infer<typeof profileSchema>, string>>;
@@ -1096,6 +1099,8 @@ function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mc
     profile: {
       name: profile.name,
       preferredAgentLanguage: profile.preferredAgentLanguage || 'en',
+      shareActiveSessions: profile.shareActiveSessions,
+      shareCompletedSessions: profile.shareCompletedSessions,
     },
   });
 
@@ -1209,6 +1214,40 @@ function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mc
                 disabled={processing}
                 error={clientErrors.preferredAgentLanguage || errors['profile.preferredAgentLanguage']}
               />
+            </Box>
+
+            {/* Sharing is per lifecycle phase because the two are not the same
+                favour: a finished log is a record someone can read later, while
+                a running session is an interactive shell in the container the
+                agent is working in. Unchecked means nobody else can open it —
+                admins included. */}
+            <Box mb="lg">
+              <Text size="sm" fw={500} mb={4}>
+                Session visibility
+              </Text>
+              <Text size="xs" c="dimmed" mb="sm">
+                Controls what other members of your projects can open. Your own sessions are always visible to you.
+              </Text>
+              <Stack gap="sm">
+                <Switch
+                  label="Show my active sessions"
+                  description="Project members can watch a running session — live terminal and editor"
+                  checked={data.profile.shareActiveSessions}
+                  onChange={(e) =>
+                    setData('profile', { ...data.profile, shareActiveSessions: e.currentTarget.checked })
+                  }
+                  disabled={processing}
+                />
+                <Switch
+                  label="Show my finished sessions"
+                  description="Project members can open a finished session and replay its log"
+                  checked={data.profile.shareCompletedSessions}
+                  onChange={(e) =>
+                    setData('profile', { ...data.profile, shareCompletedSessions: e.currentTarget.checked })
+                  }
+                  disabled={processing}
+                />
+              </Stack>
             </Box>
 
             <Button type="submit" disabled={!isDirty || !isFormValid || processing} loading={processing}>

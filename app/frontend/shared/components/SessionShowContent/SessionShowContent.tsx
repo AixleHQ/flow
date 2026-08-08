@@ -2,7 +2,7 @@ import { router } from '@inertiajs/react';
 import { ActionIcon, Badge, Box, Button, Card, Center, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
 import { useHotkeys } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconArrowLeft, IconChevronLeft, IconChevronRight, IconCopy, IconPlus } from '@tabler/icons-react';
+import { IconArrowLeft, IconChevronLeft, IconChevronRight, IconCopy, IconEye, IconPlus } from '@tabler/icons-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels';
 
@@ -100,7 +100,16 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
     return s.websocketUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace('/ws', '');
   }, [s.websocketUrl]);
 
-  const hasIde = !!s.ideUrl;
+  // Someone else's session, shared with this viewer. They get to watch: the
+  // terminal renders behind a shield that swallows clicks (so the iframe never
+  // takes focus and keystrokes go nowhere), the editor is not offered at all —
+  // an overlay on VS Code is just a broken editor — and Finish is hidden,
+  // because the API scopes that action to the owner anyway.
+  //
+  // This is presentation, not enforcement: ttyd runs writable and the viewer
+  // has the route token, so opening it directly still yields a live shell.
+  const isOwner = s.ownedByViewer;
+  const hasIde = !!s.ideUrl && isOwner;
   const canShowEditor = hasIde && !editorCollapsed;
   const canShowTerminal = !!ttydUrl;
 
@@ -179,6 +188,13 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
             <IconCopy size={14} />
           </ActionIcon>
         </Tooltip>
+        {!isOwner && (
+          <Tooltip label={`${s.userName ?? 'Someone else'} is running this session — you can watch, not type`}>
+            <Badge size="xs" variant="outline" leftSection={<IconEye size={11} />}>
+              View only
+            </Badge>
+          </Tooltip>
+        )}
         {isActive && (
           <Text size="xs" c="dimmed" ff="monospace" className={classes.elapsed}>
             {formatElapsed(s.startedAt, null, now)}
@@ -186,7 +202,9 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         )}
       </div>
       <div className={classes.headerRight}>
-        {canExecute && !isTerminal && !isFinishing && (
+        {/* Finish is owner-only at the API (`current_user.terminal_sessions`),
+            so offering it to a viewer would only produce a failed request. */}
+        {canExecute && isOwner && !isTerminal && !isFinishing && (
           <Button size="xs" variant="outline" color="red" onClick={handleFinish} loading={finishRequested}>
             Finish
           </Button>
@@ -345,6 +363,19 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
     </div>
   );
 
+  const renderTerminalFrame = () => (
+    <>
+      {!termLoaded && renderLoadingOverlay('Connecting to terminal...')}
+      {!isOwner && <div className={classes.viewOnlyShield} aria-label="Read-only view of another user's session" />}
+      <iframe
+        src={ttydUrl!}
+        title="Terminal"
+        allow="clipboard-read; clipboard-write"
+        onLoad={() => setTermLoaded(true)}
+      />
+    </>
+  );
+
   const renderWaiting = () => (
     <Box className={classes.panelContainer}>
       <Center h="100%">
@@ -366,15 +397,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
     if (!hasIde) {
       return (
         <Box className={classes.panelContainer}>
-          <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>
-            {!termLoaded && renderLoadingOverlay('Connecting to terminal...')}
-            <iframe
-              src={ttydUrl!}
-              title="Terminal"
-              allow="clipboard-read; clipboard-write"
-              onLoad={() => setTermLoaded(true)}
-            />
-          </div>
+          <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>{renderTerminalFrame()}</div>
         </Box>
       );
     }
@@ -392,13 +415,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
             </div>
           )}
           <div style={{ flex: 1 }} className={`${classes.panelFrame} ${classes.terminalFrame}`}>
-            {!termLoaded && renderLoadingOverlay('Connecting to terminal...')}
-            <iframe
-              src={ttydUrl!}
-              title="Terminal"
-              allow="clipboard-read; clipboard-write"
-              onLoad={() => setTermLoaded(true)}
-            />
+            {renderTerminalFrame()}
           </div>
         </Box>
       );
@@ -436,15 +453,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
           </ActionIcon>
         </PanelResizeHandle>
         <Panel defaultSize={50} minSize={20}>
-          <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>
-            {!termLoaded && renderLoadingOverlay('Connecting to terminal...')}
-            <iframe
-              src={ttydUrl!}
-              title="Terminal"
-              allow="clipboard-read; clipboard-write"
-              onLoad={() => setTermLoaded(true)}
-            />
-          </div>
+          <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>{renderTerminalFrame()}</div>
         </Panel>
       </PanelGroup>
     );

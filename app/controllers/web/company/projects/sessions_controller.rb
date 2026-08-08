@@ -14,7 +14,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
 
     render inertia: "Projects/Sessions/SessionsPage", props: {
       sessions: inertia_scroll(scope) { |records|
-        records.map { |s| TerminalSessionResource.new(s).to_h }
+        records.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
       },
       filters: q_params,
       per_page: per_page
@@ -50,10 +50,11 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
     session = current_project.terminal_sessions
                       .includes(:user, :output_assets)
                       .find(params[:id])
+    authorize_session_visibility!(session)
 
     render inertia: "Projects/Sessions/ShowPage", props: {
       project: project_props,
-      session: TerminalSessionResource.new(session).to_h,
+      session: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h,
       cable_stream: inertia_cable_stream(session)
     }
   end

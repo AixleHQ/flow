@@ -250,6 +250,99 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_nil session.configured_agent_id
   end
 
+  # == visibility to other people (#visible_to?) ==
+
+  test "the owner sees their own session whatever their preferences say" do
+    owner = create(:user, company: @company, share_active_sessions: false, share_completed_sessions: false)
+    session = create(:terminal_session, :agent_session, :running, user: owner, project: @project)
+
+    assert session.visible_to?(owner)
+  end
+
+  test "a running session is visible to others only while share_active_sessions is on" do
+    owner = create(:user, company: @company, share_active_sessions: true, share_completed_sessions: false)
+    other = create(:user, company: @company)
+    session = create(:terminal_session, :agent_session, :running, user: owner, project: @project)
+
+    assert session.visible_to?(other)
+
+    owner.update!(share_active_sessions: false)
+
+    assert_equal false, session.reload.visible_to?(other) # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "a finished session is visible to others only while share_completed_sessions is on" do
+    owner = create(:user, company: @company, share_active_sessions: false, share_completed_sessions: true)
+    other = create(:user, company: @company)
+    session = create(:terminal_session, :agent_session, :collected, user: owner, project: @project)
+
+    assert session.visible_to?(other)
+
+    owner.update!(share_completed_sessions: false)
+
+    assert_equal false, session.reload.visible_to?(other) # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "a finishing session is still governed by the ACTIVE preference" do
+    owner = create(:user, company: @company, share_active_sessions: false, share_completed_sessions: true)
+    other = create(:user, company: @company)
+    session = create(:terminal_session, :agent_session, :finishing, user: owner, project: @project)
+
+    assert_equal false, session.visible_to?(other) # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "a failed session is governed by the COMPLETED preference" do
+    owner = create(:user, company: @company, share_active_sessions: false, share_completed_sessions: true)
+    other = create(:user, company: @company)
+    session = create(:terminal_session, :agent_session, :failed, user: owner, project: @project)
+
+    assert session.visible_to?(other)
+  end
+
+  test "workflow-step sessions are team automation and ignore the preferences" do
+    owner = create(:user, company: @company, share_active_sessions: false, share_completed_sessions: false)
+    other = create(:user, company: @company)
+    session = create(:terminal_session, :running, session_type: "workflow_step", user: owner, project: @project)
+
+    assert session.visible_to?(other)
+  end
+
+  test "auth_setup sessions stay owner-only even with both preferences on" do
+    owner = create(:user, company: @company, share_active_sessions: true, share_completed_sessions: true)
+    other = create(:user, company: @company)
+    session = create(:terminal_session, :auth_setup, :running, user: owner)
+
+    assert session.visible_to?(owner)
+    assert_equal false, session.visible_to?(other) # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "container access needs BOTH project reachability and the owner's sharing" do
+    owner = create(:user, company: @company, share_active_sessions: true)
+    collaborator = create(:user, company: @company)
+    @project.add_collaborator(collaborator)
+    outsider = create(:user, company: @company) # same company, not on the project
+    session = create(:terminal_session, :agent_session, :running, user: owner, project: @project)
+
+    assert session.container_accessible_by?(collaborator)
+    # visible_to? passes for the outsider — the owner shares — but the proxy has
+    # no scoped query behind it, so reachability has to be checked here too.
+    assert session.visible_to?(outsider)
+    assert_equal false, session.container_accessible_by?(outsider) # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "the owner reaches their own container, including a project-less session" do
+    owner = create(:user, company: @company, share_active_sessions: false, share_completed_sessions: false)
+    session = create(:terminal_session, :auth_setup, :running, user: owner)
+
+    assert session.container_accessible_by?(owner)
+  end
+
+  test "nobody is not a viewer" do
+    session = create(:terminal_session, :agent_session, :collected, user: @user, project: @project)
+
+    assert_equal false, session.visible_to?(nil) # rubocop:disable Minitest/RefuteFalse
+  end
+
   # == backwards compatibility ==
 
   # == strategy resolution ==
@@ -324,6 +417,27 @@ class TerminalSessionTest < ActiveSupport::TestCase
     ActionCable.server.expects(:broadcast).with("session_list:project:#{@project.id}", anything)
 
     session.send(:broadcast_session_list_update)
+  end
+
+  test "session-list broadcasts carry no prompt or metadata" do
+    session = create(:terminal_session, :agent_session, :running, user: @user, project: @project,
+                                                                  initial_prompt: "refactor the billing module")
+    payloads = []
+    ActionCable.server.stubs(:broadcast).with { |_stream, payload| payloads << payload }
+
+    session.send(:broadcast_session_list_update)
+
+    assert payloads.any?
+    payloads.each do |payload|
+      # One payload reaches every subscriber on the company/project channel and
+      # cannot be redacted per viewer, so what the person is working on does not
+      # travel on it at all. The route token does — it is gated at the proxy.
+      assert_equal session.id, payload[:session]["id"]
+      %w[initialPrompt metadata contextMetadata].each do |key|
+        assert_not payload[:session].key?(key), "#{key} must not be broadcast"
+      end
+      assert_equal session.route_token, payload[:session]["routeToken"]
+    end
   end
 
   test "project-less session updates broadcast to EVERY company with an active membership" do

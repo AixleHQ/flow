@@ -43,6 +43,11 @@ export interface SharedUser {
   defaultAgentRuntime: AgentType | null;
   configuredAgents: AgentType[];
   agentCredentials: AgentCredential[];
+  // Who may open this person's sessions besides themselves: while a session runs
+  // (live terminal + editor) and once it is over (replayed log). Global, not
+  // per-company — see TerminalSession#visible_to?.
+  shareActiveSessions: boolean;
+  shareCompletedSessions: boolean;
   // True when onboarding skipped the agent step (viewer everywhere) but the user
   // has since gained a role that can run things — drives the sidebar nudge.
   needsAgentSetup: boolean;

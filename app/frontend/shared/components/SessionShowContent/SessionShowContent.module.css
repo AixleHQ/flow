@@ -73,6 +73,16 @@
   background-color: var(--app-bg-deep);
 }
 
+/* Sits over another user's terminal: transparent, but it takes every click, so
+   the iframe never receives focus and typing never reaches the shell. A UI
+   guardrail — the route is still writable if opened directly. */
+.viewOnlyShield {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  cursor: not-allowed;
+}
+
 .loadingOverlay {
   position: absolute;
   inset: 0;

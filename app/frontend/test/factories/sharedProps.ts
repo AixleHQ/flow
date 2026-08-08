@@ -45,6 +45,8 @@ export const buildSharedUser = (overrides: Partial<SharedUser> = {}): SharedUser
   defaultAgentRuntime: null,
   configuredAgents: [],
   agentCredentials: [],
+  shareActiveSessions: false,
+  shareCompletedSessions: true,
   needsAgentSetup: false,
   currentRole: 'admin',
   currentCompany: buildSharedCompany(),

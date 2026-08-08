@@ -30,6 +30,20 @@ class Web::ProfileControllerTest < ActionDispatch::IntegrationTest
     assert_equal "ru", @user.company_memberships.find_by!(company: @company).preferred_agent_language
   end
 
+  # Session sharing is global, not per-membership: it says what this person is
+  # willing to let colleagues watch, which does not change with the company they
+  # happen to be acting for.
+  test "update saves the session visibility preferences onto the user" do
+    patch profile_path, params: { profile: { name: @user.name,
+                                             share_active_sessions: "1",
+                                             share_completed_sessions: "0" } }
+
+    assert_response :redirect
+    @user.reload
+    assert @user.share_active_sessions
+    assert_equal false, @user.share_completed_sessions # rubocop:disable Minitest/RefuteFalse
+  end
+
   test "update leaves the OTHER company's language alone" do
     other = create(:company)
     other_membership = create(:company_membership, user: @user, company: other,

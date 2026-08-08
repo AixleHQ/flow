@@ -33,6 +33,7 @@ function makeSession(overrides: Partial<Session> = {}): Session {
     artifactsReviewed: true,
     pendingArtifactsCount: 0,
     initialPrompt: 'Refactor the importer',
+    viewable: true,
     ...overrides,
   };
 }
@@ -97,6 +98,26 @@ describe('Projects/Sessions/SessionsPage', () => {
     await userEvent.click(within(row).getByText('Dana Vega'));
 
     expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/99');
+  });
+
+  it('keeps a private session listed but refuses to open it', async () => {
+    const sessions = [makeSession({ id: 77, state: 'finished', userName: 'Dana Vega', viewable: false })];
+
+    renderAuthedPage(<SessionsPage sessions={sessions} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    const row = (screen.getByText('#77').closest('tr') as HTMLElement) ?? document.body;
+
+    // The row stays — cost and tokens are how the team sees what the project
+    // spends — but there is no way in and no link to follow.
+    expect(within(row).getByText('$2.50')).toBeInTheDocument();
+    expect(within(row).getByLabelText('Session #77 is private')).toBeInTheDocument();
+    expect(within(row).queryByRole('link', { name: 'Open session #77' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(row).getByText('Dana Vega'));
+
+    expect(router.visit).not.toHaveBeenCalled();
   });
 
   // --- toolbar filters ---
