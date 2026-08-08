@@ -31,20 +31,17 @@ module InternalTools
       workspace_name = params[:workspace_name].to_s
       return error("workspace_name is required") if workspace_name.empty?
 
-      lock_service = Coder::LockService.new(coder_integration)
-      held_by_self = lock_service.held_by_session?(
+      # DD-13: only the lock holder may release. The ownership check lives in
+      # the delete statement itself, so a lock that expired and was reclaimed
+      # by another session between check and delete cannot be dropped here.
+      released = Coder::LockService.new(coder_integration).release_owned(
         workspace_name:      workspace_name,
         terminal_session_id: session.id
       )
 
-      # DD-13: only the lock holder may release. Without this gate any session
-      # could delete another session's row (LockService#release is a scoped
-      # delete_all on the workspace key).
-      lock_service.release(workspace_name: workspace_name) if held_by_self
-
       success({
         workspace_name: workspace_name,
-        released:       held_by_self
+        released:       released
       }.to_json)
     rescue Concerns::CoderResolver::NotConfiguredError => e
       error(e.message)

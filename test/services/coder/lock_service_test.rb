@@ -73,6 +73,33 @@ module Coder
       assert     @service.held?(workspace_name: "ws-3")
     end
 
+    test "release_owned deletes the row only for the holding session" do
+      @service.acquire(**lock_args(terminal_session_id: "sess-A"))
+
+      assert_not @service.release_owned(workspace_name: "ws-1", terminal_session_id: "sess-B")
+      assert @service.held?(workspace_name: "ws-1"), "another session must not be able to release the lock"
+
+      assert @service.release_owned(workspace_name: "ws-1", terminal_session_id: "sess-A")
+      assert_not @service.held?(workspace_name: "ws-1")
+    end
+
+    test "release_owned keeps a lock that another session reclaimed after expiry" do
+      create(
+        :integration_data, :expired,
+        integration: @integration,
+        key:         "coder:workspace_lock:ws-1",
+        value:       { terminal_session_id: "sess-A", workspace_id: "u1" }
+      )
+      @service.acquire(**lock_args(terminal_session_id: "sess-B"))
+
+      assert_not @service.release_owned(workspace_name: "ws-1", terminal_session_id: "sess-A")
+      assert @service.held_by_session?(workspace_name: "ws-1", terminal_session_id: "sess-B")
+    end
+
+    test "release_owned is idempotent on missing rows" do
+      assert_not @service.release_owned(workspace_name: "missing", terminal_session_id: "sess-A")
+    end
+
     test "held_by_session? returns true only for the holder" do
       @service.acquire(**lock_args(terminal_session_id: "sess-A"))
 

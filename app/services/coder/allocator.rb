@@ -35,6 +35,9 @@ module Coder
         [ status, w["name"].to_s ]
       end
 
+      held           = []
+      start_failures = []
+
       candidates.each do |ws|
         ws_name = ws["name"].to_s
         ws_id   = ws["id"].to_s
@@ -49,10 +52,26 @@ module Coder
             acquired_by:         acquired_by
           )
         rescue Coder::LockService::LockNotAcquired
+          held << ws_name
           next
         end
 
-        status = ensure_started(ws)
+        begin
+          status = ensure_started(ws)
+        rescue Coder::WorkspaceService::OperationError => e
+          # A lock is only worth holding while the workspace is usable. Handing
+          # it back keeps a failed start (spot capacity, build timeout) from
+          # stranding the machine for the whole lock TTL, which is what turned
+          # a transient EC2 hiccup into an exhausted pool. Holder-scoped, so a
+          # session that reclaimed an expired lock underneath us keeps it.
+          @lock_service.release_owned(
+            workspace_name:      ws_name,
+            terminal_session_id: @terminal_session.id
+          )
+          start_failures << "#{ws_name} (#{e.message})"
+          next
+        end
+
         return build_result(workspace_id: ws_id, workspace_name: ws_name, status: status, lock: lock)
       end
 
@@ -70,10 +89,31 @@ module Coder
         return build_result(workspace_id: ws_id, workspace_name: ws_name, status: "starting", lock: lock)
       end
 
-      raise ExhaustedError, "no Coder workspaces available and no default template configured"
+      raise ExhaustedError, exhausted_message(
+        candidates: candidates, held: held, start_failures: start_failures
+      )
     end
 
     private
+
+    # Reaching this point means every candidate was unusable AND no default
+    # template is configured (a configured one either returns a workspace or
+    # raises its own `OperationError`). The old single sentence claimed "no
+    # workspaces available" for all of those, which read as an empty pool even
+    # when the pool was full and merely locked — so spell out which it was.
+    def exhausted_message(candidates:, held:, start_failures:)
+      pool =
+        if candidates.empty?
+          prefix ? "no workspaces match prefix #{prefix.inspect}" : "the Coder account has no workspaces"
+        else
+          reasons = []
+          reasons << "#{held.size} held by other sessions (#{held.join(', ')})" if held.any?
+          reasons << "#{start_failures.size} failed to start: #{start_failures.join('; ')}" if start_failures.any?
+          "none of the #{candidates.size} workspaces in the pool could be allocated — #{reasons.join('; ')}"
+        end
+
+      "#{pool}; no default_template configured on the integration, so the pool cannot grow"
+    end
 
     def prefix
       @integration.coder_machine_prefix.presence
