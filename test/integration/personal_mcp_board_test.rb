@@ -168,6 +168,45 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_nil @task.reload.archived_at
   end
 
+  test "delete_board_task destroys the task and its comments" do
+    create(:task_comment, board_task: @task, author: @user)
+
+    body = call_tool("delete_board_task", { project_id: @project.id, task_id: @task.id })
+    assert_not tool_error?(body)
+    assert_equal @task.id, payload(body)["deleted_task_id"]
+    assert_not BoardTask.exists?(@task.id)
+    assert_empty TaskComment.where(board_task_id: @task.id)
+  end
+
+  test "delete_board_task is rejected while the task has an active workflow run" do
+    create(:workflow_run, :running, project: @project, board_task: @task, user: @user)
+
+    body = call_tool("delete_board_task", { project_id: @project.id, task_id: @task.id })
+    assert tool_error?(body)
+    assert_match(/active workflow runs/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert BoardTask.exists?(@task.id)
+  end
+
+  test "delete_board_task requires write access" do
+    viewer = create(:user, :viewer, company: @company)
+    @project.add_collaborator(viewer)
+    vtoken = viewer.regenerate_mcp_token!
+
+    body = call_tool("delete_board_task", { project_id: @project.id, task_id: @task.id }, token: vtoken)
+    assert tool_error?(body)
+    assert_match(/not allowed/i, body.dig("result", "content").first["text"])
+    assert BoardTask.exists?(@task.id)
+  end
+
+  test "delete_board_task cannot reach another company's task" do
+    other = foreign_task
+
+    body = call_tool("delete_board_task",
+                     { project_id: other.board.project.id, task_id: other.id })
+    assert tool_error?(body)
+    assert BoardTask.exists?(other.id)
+  end
+
   test "list_project_members returns assignable users with roles" do
     member = create(:user, company: @company)
     @project.add_collaborator(member)

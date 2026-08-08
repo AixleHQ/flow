@@ -14,6 +14,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # Buildx layer cache for the test image. Its own package rather than a tag on
+  # the runtime image's, so the other images published by images.yml can add
+  # their own tags beside `:web` later.
+  BUILD_CACHE: ghcr.io/aixlehq/flow-buildcache:web
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   # Superseding a pull request's run is free — only the tip of a branch under
@@ -26,25 +32,40 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
-  build-image:
-    name: Build Test Image
-    # Builds the test image once per run to populate the buildx layer cache, which
-    # the two check jobs then read instead of each compiling gems and assets from
-    # scratch. Measured on 31041703132, before this job existed: the same image was
-    # built twice in parallel, 638s in the backend job and 473s in the frontend one
-    # — 18 of the run's 24 machine-minutes. Two concurrent builds writing one
-    # `type=gha` scope cannot warm each other, and `mode=max` on an 18-layer,
-    # 1.45 GB image also churns against the repository's 10 GB cache limit.
+  build-cache:
+    name: Refresh Layer Cache
+    # Maintains the layer cache that the check jobs read, and nothing declares
+    # `needs:` on it. That is the point: the check jobs read whatever the last
+    # develop push published and rebuild only the layers below `COPY . /app`,
+    # which is seconds of work. Gating both of them on a fresh build instead
+    # cost 2m36s of pure wall clock on every run (31254450213), to save a
+    # rebuild that was never expensive.
     #
-    # Deliberately not sharing the image itself. Pushing it to GHCR under a
-    # run-scoped tag would be faster, but pull requests from forks get a read-only
-    # token and no package write, so external contributions — the point of a public
-    # repository — would need a second, untested code path. A `docker save`
-    # artifact moves 1.45 GB twice and gives most of the saving back.
+    # Only develop pushes write. A pull request's own layers are read by nothing
+    # else, and two check jobs writing one cache in parallel is what made the
+    # cache useless in the first place.
+    #
+    # The cache lives in GHCR, not the Actions cache. The Actions cache is
+    # capped at 10 GB per repository and this image alone filled it — measured
+    # 10.6 GB across 255 entries on 2026-08-08 — and past the ceiling GitHub
+    # evicts by least-recent use, which reaches entries a running job still
+    # depends on. GHCR is unmetered for public repositories, and a public
+    # package is readable anonymously, so a fork's pull request reads the same
+    # cache we do without holding any token.
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      packages: write
     steps:
       - uses: actions/checkout@v7
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -53,7 +74,7 @@ jobs:
             [registry."docker.io"]
               mirrors = ["mirror.gcr.io"]
 
-      - name: Warm the layer cache
+      - name: Publish the layer cache
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -64,12 +85,13 @@ jobs:
             APP_VERSION=ci
             AUTHOR_NAME=github-actions
             AUTHOR_EMAIL=github-actions@users.noreply.github.com
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=registry,ref=${{ env.BUILD_CACHE }}
+          # image-manifest + oci-mediatypes: GHCR rejects the default cache
+          # manifest shape and only accepts one written as an OCI image manifest.
+          cache-to: type=registry,ref=${{ env.BUILD_CACHE }},mode=max,image-manifest=true,oci-mediatypes=true
 
   be-checks:
     name: Backend Checks
-    needs: build-image
     uses: ./.github/workflows/code-check.yml
     with:
       # rails-test + rubocop + brakeman (Ruby). Needs the DB for the Rails test suite.
@@ -82,7 +104,6 @@ jobs:
 
   fe-checks:
     name: Frontend Checks
-    needs: build-image
     uses: ./.github/workflows/code-check.yml
     with:
       # eslint + tsc, then Vitest on its own (backendless, no DB needed).
