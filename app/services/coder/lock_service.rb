@@ -125,7 +125,7 @@ module Coder
 
     def ttl_minutes
       ttl = @integration.coder_lock_ttl_minutes
-      ttl.present? && ttl.positive? ? ttl : 60
+      ttl.present? && ttl.positive? ? ttl : 120
     end
 
     def lock_key(workspace_name)
