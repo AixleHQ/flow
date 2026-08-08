@@ -131,10 +131,11 @@ class MCPServerResource < ApplicationResource
   end
 
   # Connection status for the CURRENT viewer: nil (non-oauth) | "pending" (no
-  # credential yet) | "active" | "expiring" (near expiry) | "error". For per_user
-  # servers the identity is the viewer (passed as params[:user]); for shared servers
-  # it is the server's scope owner. When no user is supplied a per_user server reads
-  # as "pending" (the viewer must connect).
+  # credential yet) | "active" | "expiring" (near expiry with no refresh token, so
+  # only a manual re-connect can save it) | "error". For per_user servers the
+  # identity is the viewer (passed as params[:user]); for shared servers it is the
+  # server's scope owner. When no user is supplied a per_user server reads as
+  # "pending" (the viewer must connect).
   typelize :string?
   attribute :oauth_status do |server|
     next nil unless server.auth_type_oauth?
@@ -151,6 +152,15 @@ class MCPServerResource < ApplicationResource
                  .max_by(&:updated_at)
     next "pending" if cred.nil?
     next "error" if cred.error?
+
+    # A refreshable credential never needs the viewer's attention: the */5 sweep and
+    # the session-start injection both renew it (Oauth::TokenService), and a refresh
+    # that keeps failing escalates to "error" above. Reporting near-expiry for those
+    # made every 1h-token provider (Railway) read "Connect" for the last ~20 minutes
+    # of each token's life — a healthy connection that looked permanently broken.
+    # "expiring" is reserved for a credential with nothing to refresh from, where the
+    # viewer genuinely must re-connect before the access token lapses.
+    next "active" if cred.refreshable?
 
     cred.expired?(30.minutes) ? "expiring" : "active"
   end

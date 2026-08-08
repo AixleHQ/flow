@@ -45,6 +45,43 @@ class MCPServerResourceTest < ActiveSupport::TestCase
     assert_equal "pending", without["oauthStatus"]
   end
 
+  # Near-expiry with a refresh token is the sweep's problem, not the viewer's — the
+  # badge stays "active". The old behavior surfaced "expiring" here, which on a
+  # 1h-token provider (Railway) read as a dead connection for the last ~20 minutes
+  # of every token's life.
+  test "oauth_status stays active near expiry while the credential can be refreshed" do
+    server = create(:mcp_server, scope: @project, kind: :custom, transport: :sse,
+                    auth_type: :oauth)
+    OauthCredential.create!(
+      owner: @project, oauth_client: @client, mcp_server: server, provider: "mcp:sentry",
+      status: :active, access_token: "tok", refresh_token: "rt", expires_at: 5.minutes.from_now
+    )
+
+    assert_equal "active", MCPServerResource.new(server, params: { user: @user }).to_h["oauthStatus"]
+  end
+
+  test "oauth_status is expiring near expiry when there is nothing to refresh from" do
+    server = create(:mcp_server, scope: @project, kind: :custom, transport: :sse,
+                    auth_type: :oauth)
+    OauthCredential.create!(
+      owner: @project, oauth_client: @client, mcp_server: server, provider: "mcp:sentry",
+      status: :active, access_token: "tok", expires_at: 5.minutes.from_now
+    )
+
+    assert_equal "expiring", MCPServerResource.new(server, params: { user: @user }).to_h["oauthStatus"]
+  end
+
+  test "oauth_status is error once the credential is escalated" do
+    server = create(:mcp_server, scope: @project, kind: :custom, transport: :sse,
+                    auth_type: :oauth)
+    OauthCredential.create!(
+      owner: @project, oauth_client: @client, mcp_server: server, provider: "mcp:sentry",
+      status: :error, access_token: "tok", refresh_token: "rt", expires_at: 1.hour.ago
+    )
+
+    assert_equal "error", MCPServerResource.new(server, params: { user: @user }).to_h["oauthStatus"]
+  end
+
   test "oauth_status is nil for non-oauth servers" do
     server = create(:mcp_server, scope: @project, kind: :custom, transport: :sse)
     hash = MCPServerResource.new(server, params: { user: @user }).to_h

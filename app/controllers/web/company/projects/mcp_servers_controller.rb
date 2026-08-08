@@ -2,12 +2,13 @@
 
 class Web::Company::Projects::MCPServersController < Web::Company::Projects::ApplicationController
   def index
-    # includes(:oauth_credentials): MCPServerResource#oauth_status reads the loaded
-    # association in memory, so the status column is not an N+1 across the list.
-    # :manual_oauth_client for the same reason — the form needs to know whether one
-    # is configured, on every row.
+    # includes(oauth_credentials: :oauth_client): MCPServerResource#oauth_status
+    # reads the loaded association in memory — and asks each credential whether it
+    # is refreshable, which touches its oauth_client — so the status column is not
+    # an N+1 across the list. :manual_oauth_client for the same reason — the form
+    # needs to know whether one is configured, on every row.
     servers = MCPServer.visible_for_project(current_project)
-                       .includes(:oauth_credentials, :manual_oauth_client)
+                       .includes({ oauth_credentials: :oauth_client }, :manual_oauth_client)
                        .order(kind: :asc, created_at: :desc)
     config_items = ConfigItem.visible_for_project(current_project).pluck(:name)
 
