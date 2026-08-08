@@ -8185,6 +8185,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "root-workspace-0b6124@workspace:."
   dependencies:
+    "@codemirror/view": "npm:^6.0.0"
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
@@ -8251,6 +8252,7 @@ __metadata:
     prettier-plugin-packagejson: "npm:^3.0.0"
     react: "npm:^19.2.8"
     react-dom: "npm:^19.2.8"
+    react-is: "npm:^16.13.1"
     react-markdown: "npm:^10.1.0"
     react-resizable-panels: "npm:^4.12.2"
     react-syntax-highlighter: "npm:^16.1.1"
