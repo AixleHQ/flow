@@ -14,7 +14,13 @@ module Tools
       non_interactive_session: ->(ctx) { ctx.mode == "non_interactive" },
       # coder_* tools — surface through aixle-tools whenever the project has an
       # active Coder integration (mirrors how slack_post_message is gated).
-      coder_integration_connected: ->(ctx) { ctx.connected?(:coder) }
+      coder_integration_connected: ->(ctx) { ctx.connected?(:coder) },
+      # refresh_github_token — only sessions holding a GitHub clone carry the
+      # one-hour installation token that can expire mid-run.
+      github_repositories_attached: lambda { |ctx|
+        ctx.session.present? &&
+          ctx.session.repositories.includes(:integration).any? { |repo| repo.integration&.github? }
+      }
     }.freeze
 
     def self.fetch(rule)

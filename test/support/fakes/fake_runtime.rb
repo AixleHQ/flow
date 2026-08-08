@@ -30,6 +30,14 @@ module ContainerRuntime
       @agent_type = agent_type
       @fs = filesystem || build_filesystem(agent_type)
       @execs = []
+      @exec_failures = []
+    end
+
+    # Command failure injection: register a substring of the command line and
+    # the failure to answer it with. Everything else keeps succeeding, so the
+    # default behavior is unchanged for callers that never call this.
+    def fail_exec(substring, stderr: "", exit_code: 1)
+      @exec_failures << { substring: substring, stderr: stderr, exit_code: exit_code }
     end
 
     # -- Lifecycle ------------------------------------------------------------
@@ -70,6 +78,9 @@ module ContainerRuntime
 
     def exec(_id, cmd, _opts = {})
       @execs << cmd
+      failure = @exec_failures.find { |f| command_string(cmd).include?(f[:substring]) }
+      return [ [ "" ], [ failure[:stderr] ], failure[:exit_code] ] if failure
+
       [ [ resolve_command(cmd) ], [ "" ], 0 ]
     end
 
@@ -111,8 +122,12 @@ module ContainerRuntime
 
     # Command router — maps the handful of shell commands the strategies run to
     # deterministic output backed by the virtual FS (ports StubSupport.resolve_command).
+    def command_string(cmd)
+      cmd.is_a?(Array) ? cmd.join(" ") : cmd.to_s
+    end
+
     def resolve_command(cmd)
-      cmd_str = cmd.is_a?(Array) ? cmd.join(" ") : cmd.to_s
+      cmd_str = command_string(cmd)
 
       return "open\n" if cmd_str.include?("echo 'open'")
       return "0\n" if cmd_str.include?(".agent_done")

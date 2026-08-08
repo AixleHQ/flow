@@ -8,7 +8,7 @@ class Tools::TagCatalogTest < ActiveSupport::TestCase
     assert Tools::TagCatalog.group?(:board)
     assert_equal "Board management", Tools::TagCatalog.label(:board)
 
-    %i[workflow_control async_results session_lifecycle builder slack coder].each do |tag|
+    %i[workflow_control async_results session_lifecycle repositories builder slack coder].each do |tag|
       assert_not Tools::TagCatalog.ui_visible?(tag), "#{tag} must stay out of the picker"
     end
   end
