@@ -6,6 +6,7 @@ module Web
       class IntegrationsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
         def create? = manage_integrations?
+        def update? = manage_integrations?
         def destroy? = manage_integrations?
         def slack_oauth_start? = manage_integrations?
         def github_app_install? = manage_integrations?

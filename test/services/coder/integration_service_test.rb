@@ -191,5 +191,63 @@ module Coder
       assert second.persisted?
       assert_not_equal first.id, second.id
     end
+
+    test "update_settings edits the allocator settings and leaves credentials alone" do
+      integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+      credentials_before = integration.credentials_data
+
+      Coder::IntegrationService.new(company: @company, connected_by: @user).update_settings(
+        integration: integration, default_template: "aws-ec2-spot-v1",
+        machine_prefix: "aixle-prod", lock_ttl_minutes: "90"
+      )
+
+      integration.reload
+      assert_equal "aws-ec2-spot-v1", integration.coder_default_template
+      assert_equal "aixle-prod", integration.coder_machine_prefix
+      assert_equal 90, integration.coder_lock_ttl_minutes
+      assert_equal credentials_before, integration.credentials_data
+      # Identity written at connect time survives an edit.
+      assert_equal "test-user", integration.settings["coder_username"]
+    end
+
+    test "update_settings treats a blank template or prefix as a removal" do
+      integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+      integration.update!(
+        settings: integration.settings.merge("default_template" => "tpl", "machine_prefix" => "aixle-prod")
+      )
+
+      Coder::IntegrationService.new(company: @company, connected_by: @user).update_settings(
+        integration: integration, default_template: "  ", machine_prefix: nil, lock_ttl_minutes: 120
+      )
+
+      integration.reload
+      assert_nil integration.coder_default_template
+      assert_nil integration.coder_machine_prefix
+    end
+
+    test "update_settings rejects a non-positive or missing lock TTL" do
+      integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
+      service = Coder::IntegrationService.new(company: @company, connected_by: @user)
+
+      [ "0", "-5", "abc", nil, "" ].each do |bad|
+        error = assert_raises(Coder::IntegrationService::ConfigurationError) do
+          service.update_settings(integration: integration, lock_ttl_minutes: bad)
+        end
+        assert_match(/Lock TTL minutes must be a positive number/, error.message)
+      end
+
+      assert_equal 60, integration.reload.coder_lock_ttl_minutes
+    end
+
+    test "update_settings refuses a non-Coder integration" do
+      integration = create(:integration, :gitlab, company: @company, connected_by: @user)
+
+      error = assert_raises(Coder::IntegrationService::ConfigurationError) do
+        Coder::IntegrationService.new(company: @company, connected_by: @user).update_settings(
+          integration: integration, lock_ttl_minutes: 120
+        )
+      end
+      assert_match(/Only Coder integrations have editable settings/, error.message)
+    end
   end
 end

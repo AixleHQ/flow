@@ -305,7 +305,10 @@ Rails.application.routes.draw do
           resources :assets, only: %i[index]
           resources :analytics, only: :index
           resources :repositories, only: %i[index create update destroy]
-          resources :integrations, only: %i[index create destroy] do
+          # `update` edits provider settings only (Coder's template / prefix /
+          # lock TTL) — credentials are replaced by reconnecting, which has to
+          # re-verify them against the provider.
+          resources :integrations, only: %i[index create update destroy] do
             collection do
               get :slack_oauth_start
               get :github_app_install

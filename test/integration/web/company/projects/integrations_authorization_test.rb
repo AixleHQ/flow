@@ -62,6 +62,15 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
     end
   end
 
+  # update carries a non-authz alert for a provider without editable settings
+  # (the seeded integration is a GitHub one), which proves the allowed role got
+  # past the policy — same shape as the #create case above.
+  test "update is admin-or-owner (collaborator/viewer denied)" do
+    assert_role_matrix(MANAGE, transport: :web, allowed_status: :redirect) do
+      patch company_project_integration_path(@project, @integration), params: { lockTtlMinutes: "120" }
+    end
+  end
+
   # destroy mutates, so build a throwaway integration per allowed-role iteration.
   test "destroy is admin-or-owner (collaborator/viewer denied)" do
     assert_role_matrix(MANAGE, transport: :web) do
