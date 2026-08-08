@@ -192,6 +192,10 @@ module Tools
             project-admin). A column with tasks cannot be deleted.
           - `create_board_task` puts work on it; `move_board_task` between
             columns is what a column trigger reacts to.
+          - `archive_board_task` takes a card off the board reversibly (and
+            puts it back with `archived: false`); `delete_board_task` destroys
+            it with its comments, assets and gates. Archive unless the user
+            asked to delete.
 
           ## 8. The workflow
           - Read the `build_workflow` prompt for the full sequence and
