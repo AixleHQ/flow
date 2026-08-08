@@ -27,6 +27,7 @@ module Tools
       Entry.new(tag: :workflow_control, label: "Workflow control", ui_visible: false, presentation: :individual),
       Entry.new(tag: :async_results, label: "Async results", ui_visible: false, presentation: :individual),
       Entry.new(tag: :session_lifecycle, label: "Session lifecycle", ui_visible: false, presentation: :individual),
+      Entry.new(tag: :repositories, label: "Repositories", ui_visible: false, presentation: :individual),
       Entry.new(tag: :builder, label: "Aixle Builder", ui_visible: false, presentation: :individual)
     ].freeze
 

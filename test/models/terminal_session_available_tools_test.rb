@@ -73,6 +73,24 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     refute_includes names, "mark_sub_step"
   end
 
+  # == refresh_github_token: auto-injected when a GitHub clone is attached ==
+
+  test "refresh_github_token is injected for a session holding a GitHub repository" do
+    integration = create(:integration, company: @company, connected_by: @user, status: :active)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.repositories << create(:repository, integration: integration, scope: @project)
+
+    assert_includes session.available_tools.map(&:name), "refresh_github_token"
+  end
+
+  test "refresh_github_token is NOT injected without a GitHub repository" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.repositories << create(:repository, :public_source, full_name: "torvalds/linux",
+      scope: @project, clone_url: "https://github.com/torvalds/linux.git")
+
+    refute_includes session.available_tools.map(&:name), "refresh_github_token"
+  end
+
   # == System tools: explicitly attached ==
 
   test "system tool is NOT included unless explicitly selected" do
