@@ -13,6 +13,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         )
       },
       configured_agents: current_project_membership&.configured_agents || [],
+      default_agent_runtime: current_project_membership&.default_agent_runtime,
       # Company-scoped assets are shared with every project in the company and are
       # already offered by the assets page, the session form and the Aixle Builder.
       # `current_project.assets` walks the has_many and sees project-owned rows only,
@@ -43,6 +44,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
         { id: c.id, name: c.name, bound_workflow_name: c.column_workflow_binding&.workflow&.name }
       } || [],
       configured_agents: current_project_membership&.configured_agents || [],
+      default_agent_runtime: current_project_membership&.default_agent_runtime,
       agents: InertiaRails.defer(group: "resources") {
         Agent.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
       },

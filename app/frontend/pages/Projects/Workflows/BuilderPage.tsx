@@ -113,6 +113,7 @@ interface Props {
   agentModels?: AgentModelsEntry[];
   readOnly: boolean;
   configuredAgents: string[];
+  defaultAgentRuntime?: string | null;
   boardColumns?: { id: number; name: string; boundWorkflowName?: string | null }[];
 }
 
@@ -159,6 +160,7 @@ const BuilderPage = () => {
     agentModels: rawAgentModels,
     readOnly,
     configuredAgents,
+    defaultAgentRuntime,
     boardColumns,
   } = usePage<{ props: Props }>().props as unknown as Props;
 
@@ -755,6 +757,7 @@ const BuilderPage = () => {
           }))}
           projectId={project.id}
           configuredAgents={configuredAgents}
+          defaultAgentRuntime={defaultAgentRuntime}
           agentModels={agentModels}
           repositories={repositories}
           assets={assets}

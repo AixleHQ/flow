@@ -72,7 +72,7 @@ class SessionService
                 workflow_run.agent_runtime.presence ||
                 run_membership(workflow_run)&.default_agent_runtime.presence ||
                 run_credentials(workflow_run).order(created_at: :desc).first&.agent_type ||
-                "cursor_cli"
+                "claude_code"
 
       run_model = workflow_run.shared_context&.dig("requested_model")
 

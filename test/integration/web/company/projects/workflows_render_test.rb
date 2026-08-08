@@ -34,4 +34,30 @@ class Web::Company::Projects::WorkflowsRenderTest < ActionDispatch::IntegrationT
     assert_response :success
     assert_inertia_page "Projects/Workflows/BuilderPage"
   end
+
+  # The run modal preselects this runtime. Without it the modal fell back to the
+  # first configured credential — an arbitrary row order, so a member whose
+  # default is Claude could get a Cursor run.
+  test "index carries the membership's default agent runtime for the run modal" do
+    create(:agent_credential, user: @user, company: @company, agent_type: "cursor_cli")
+    claude = create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+    @user.company_memberships.sole.update!(default_agent_credential: claude)
+
+    get company_project_workflows_path(@project)
+
+    assert_inertia_page "Projects/Workflows/WorkflowsPage"
+    assert_inertia_props defaultAgentRuntime: "claude_code"
+  end
+
+  test "builder carries the membership's default agent runtime for the run modal" do
+    workflow = create(:workflow, scope: @project)
+    create(:agent_credential, user: @user, company: @company, agent_type: "cursor_cli")
+    claude = create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+    @user.company_memberships.sole.update!(default_agent_credential: claude)
+
+    get builder_company_project_workflow_path(@project, workflow)
+
+    assert_inertia_page "Projects/Workflows/BuilderPage"
+    assert_inertia_props defaultAgentRuntime: "claude_code"
+  end
 end

@@ -135,6 +135,20 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert_equal [ legacy, oldest, newest ], @user.company_memberships.default_order.to_a
   end
 
+  # === configured_agents ordering ===
+
+  # The run/session forms preselect configured_agents.first when the member has
+  # no default credential, so an unordered scope made the choice a coin flip.
+  test "configured_agents lists this company's credentials newest first" do
+    membership = create(:company_membership, user: @user, company: @company)
+    travel_to 2.days.ago do
+      create(:agent_credential, user: @user, company: @company, agent_type: "cursor_cli")
+    end
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+
+    assert_equal %w[claude_code cursor_cli], membership.configured_agents
+  end
+
   # === cable disconnect on revoke ===
 
   test "revoking a membership disconnects the user's cable connections" do
