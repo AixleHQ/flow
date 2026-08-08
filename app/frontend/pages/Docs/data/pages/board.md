@@ -50,6 +50,9 @@ Each preset column has a `purpose` field — a short description that
 gets injected into the agent's context so it knows what "Code Review"
 means in your team.
 
+Over the personal MCP server the same choice is the `setup_board` tool —
+a project created there has no board until it runs.
+
 ## Tasks and agents — what context the agent sees
 
 When a board-triggered workflow run starts, the agent receives:

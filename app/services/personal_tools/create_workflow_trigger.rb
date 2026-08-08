@@ -62,7 +62,7 @@ module PersonalTools
 
       success(build_trigger(project, workflow, kind))
     rescue BoardMissingError
-      error("This project has no board. Create a board before adding a column trigger.")
+      error("This project has no board — create one with setup_board before adding a column trigger.")
     rescue ActiveRecord::RecordInvalid => e
       error(e.record.errors.full_messages.join(", "))
     rescue Temporalio::Error => e

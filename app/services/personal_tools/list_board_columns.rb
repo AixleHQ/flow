@@ -15,7 +15,7 @@ module PersonalTools
       project = find_project!
       authorize!(project.board, :index?, policy: board_columns_policy, project: project)
       board = project.board
-      return error("This project has no board") unless board
+      return error("This project has no board — create one with setup_board") unless board
 
       columns = board.board_columns.order(:position).map do |c|
         { id: c.id, name: c.name, position: c.position, purpose: c.purpose }

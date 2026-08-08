@@ -200,6 +200,47 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_equal "human", comments.first["author_type"]
   end
 
+  test "setup_board builds the board a fresh project does not have" do
+    fresh = create(:project, company: @company, owner: @user)
+    assert_nil fresh.board
+
+    created = payload(call_tool("setup_board", { project_id: fresh.id, preset: "simple_kanban" }))
+    assert_equal %w[Backlog In\ Progress Done], created["columns"].map { |c| c["name"] }
+    assert_equal [ 1, 2, 3 ], created["columns"].map { |c| c["position"] }
+    assert_equal created["board_id"], fresh.reload.board.id
+
+    # The rest of the board surface only works once the board exists.
+    task = call_tool("create_board_task",
+                     { project_id: fresh.id, column_id: created["columns"].first["id"], title: "First" })
+    assert_not tool_error?(task)
+  end
+
+  test "setup_board refuses a second board and an unknown preset" do
+    existing = call_tool("setup_board", { project_id: @project.id, preset: "dev_team" })
+    assert tool_error?(existing)
+    assert_match(/already has a board/i, existing.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert_equal @board.id, @project.reload.board.id
+
+    # An unknown preset never reaches the handler: the declared enum is
+    # enforced by the MCP SDK before dispatch.
+    fresh = create(:project, company: @company, owner: @user)
+    unknown = call_tool("setup_board", { project_id: fresh.id, preset: "kanban_deluxe" })
+    assert_match(/not one of/i, unknown.to_json)
+    assert_nil fresh.reload.board
+  end
+
+  test "setup_board requires project admin (owner)" do
+    fresh = create(:project, company: @company, owner: @user)
+    member = create(:user, company: @company)
+    fresh.add_collaborator(member)
+
+    body = call_tool("setup_board", { project_id: fresh.id, preset: "simple_kanban" },
+                     token: member.regenerate_mcp_token!)
+    assert tool_error?(body)
+    assert_match(/not allowed/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
+    assert_nil fresh.reload.board
+  end
+
   test "board column create / update / reorder / delete" do
     created = payload(call_tool("create_board_column", { project_id: @project.id, name: "Review", purpose: "PRs" }))
     cid = created["id"]

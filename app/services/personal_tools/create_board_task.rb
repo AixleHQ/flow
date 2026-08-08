@@ -22,7 +22,7 @@ module PersonalTools
       project = find_project!
       authorize!(project.board, :create?, policy: Web::Company::Projects::Board::TasksPolicy, project: project)
       board = project.board
-      return error("This project has no board") unless board
+      return error("This project has no board — create one with setup_board") unless board
 
       column = board.board_columns.find_by(id: params[:column_id])
       return error("Column #{params[:column_id]} not found on this board") unless column

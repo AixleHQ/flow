@@ -15,7 +15,7 @@ module PersonalTools
       project = find_project!
       authorize!(project.board, :reorder?, policy: Web::Company::Projects::Board::ColumnsPolicy, project: project)
       board = project.board
-      return error("This project has no board") unless board
+      return error("This project has no board — create one with setup_board") unless board
 
       ids = params[:column_ids]
       return error("column_ids must be a non-empty array") unless ids.is_a?(Array) && ids.any?

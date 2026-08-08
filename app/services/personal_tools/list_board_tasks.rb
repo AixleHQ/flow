@@ -19,7 +19,7 @@ module PersonalTools
       project = find_project!
       authorize!(project.board, :index?, policy: Web::Company::Projects::Board::TasksPolicy, project: project)
       board = project.board
-      return error("This project has no board") unless board
+      return error("This project has no board — create one with setup_board") unless board
 
       tasks = board.board_tasks.includes(:board_column, :assignee)
       tasks = tasks.where(board_column_id: params[:column_id]) if params[:column_id].present?
