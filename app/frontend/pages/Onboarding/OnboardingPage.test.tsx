@@ -34,6 +34,8 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   errorMessage: null,
   containerId: null,
   projectId: null,
+  viewable: true,
+  ownedByViewer: true,
   routeToken: null,
   configuredAgentId: null,
   contextMetadata: null,

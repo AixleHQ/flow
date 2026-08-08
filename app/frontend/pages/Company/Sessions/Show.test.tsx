@@ -31,6 +31,8 @@ function buildSession(overrides: Partial<TerminalSession> = {}): TerminalSession
     errorMessage: null,
     containerId: null,
     projectId: null,
+    viewable: true,
+    ownedByViewer: true,
     routeToken: null,
     configuredAgentId: null,
     contextMetadata: null,

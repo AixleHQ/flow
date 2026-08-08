@@ -13,7 +13,7 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
 
     render inertia: "Company/Sessions/Index", props: {
       sessions: inertia_scroll(scope) { |records|
-        records.map { |s| TerminalSessionResource.new(s).to_h }
+        records.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
       },
       filters: q_params,
       per_page: per_page
@@ -26,8 +26,9 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
                           :tools, :skills, :mcp_servers,
                           :input_assets, :repositories)
                 .find(params[:id])
+    authorize_session_visibility!(session)
 
-    session_props = TerminalSessionResource.new(session).to_h
+    session_props = TerminalSessionResource.new(session, params: { viewer: current_user }).to_h
 
     render inertia: "Company/Sessions/Show", props: {
       session: session_props,

@@ -69,7 +69,7 @@ module Api
 
       # @summary Stream a finished session's captured terminal log (raw ANSI bytes)
       def terminal_log
-        session = find_session(params[:id])
+        session = find_readable_session(params[:id])
         return head :not_found unless session.state.in?(%w[finished failed])
 
         log = session.session_logs.find_by(name: "terminal_output.log")
@@ -136,6 +136,27 @@ module Api
         else
           current_user.terminal_sessions.find_by!(route_token: id)
         end
+      end
+
+      # Read-only lookup for the log replay: the user's own sessions PLUS
+      # sessions in projects they can reach, the latter only while the owner
+      # shares them (TerminalSession#visible_to?). Everything else here stays
+      # owner-scoped through #find_session — replaying someone's log is a share
+      # the owner opted into; finishing or deleting their session is not.
+      # 404 rather than 403: a session the owner keeps private should not be
+      # distinguishable from one that does not exist.
+      def find_readable_session(id)
+        scope = TerminalSession.where(user_id: current_user.id)
+                               .or(TerminalSession.where(project_id: Project.for_user(current_user).select(:id)))
+        session = if id.to_s.match?(/^\d+$/)
+          scope.find(id)
+        else
+          scope.find_by!(route_token: id)
+        end
+
+        raise ActiveRecord::RecordNotFound unless session.visible_to?(current_user)
+
+        session
       end
 
       def find_accessible_agent(id, project)

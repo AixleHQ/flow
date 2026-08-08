@@ -23,6 +23,12 @@ class Web::Company::Projects::Sessions::ArtifactsAuthorizationTest < ActionDispa
 
   setup do
     setup_project_authz_personas
+    # The owner shares both phases so this file keeps measuring the POLICY. Who
+    # may open someone else's session is a separate, owner-controlled gate
+    # (TerminalSession#visible_to?, covered in sessions_visibility_test.rb);
+    # leaving it at the default would deny every non-owner persona here for a
+    # reason that has nothing to do with project roles.
+    @owner.update!(share_active_sessions: true, share_completed_sessions: true)
     @session = create(:terminal_session, :agent_session, project: @project, user: @owner)
   end
 

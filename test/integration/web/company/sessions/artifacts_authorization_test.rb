@@ -20,7 +20,11 @@ class Web::Company::Sessions::ArtifactsAuthorizationTest < ActionDispatch::Integ
   setup do
     setup_company_authz_personas
     # A session owned by a company user: visible to every member of @company,
-    # and scoped out (404) for the foreign-company admin.
+    # and scoped out (404) for the foreign-company admin. The owner shares both
+    # phases so this file keeps measuring the POLICY — who may open someone
+    # else's session is a separate, owner-controlled gate
+    # (TerminalSession#visible_to?, covered in sessions_visibility_test.rb).
+    @owner.update!(share_active_sessions: true, share_completed_sessions: true)
     @session = create(:terminal_session, :agent_session, user: @owner)
     # created_by must be a company user: the :asset factory otherwise builds a
     # company-less user, which fails the "company must be present" validation.

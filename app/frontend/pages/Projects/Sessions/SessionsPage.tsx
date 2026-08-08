@@ -1,6 +1,6 @@
 import { Head, InfiniteScroll, router, usePage } from '@inertiajs/react';
 import { Badge, Box, Button, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
-import { IconExternalLink, IconPlus } from '@tabler/icons-react';
+import { IconExternalLink, IconLock, IconPlus } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -34,6 +34,9 @@ interface Session {
   artifactsReviewed: boolean | null;
   pendingArtifactsCount: number;
   initialPrompt: string | null;
+  // False when the owner's profile keeps this phase of their sessions private —
+  // the row still reports what it cost, but it cannot be opened.
+  viewable: boolean;
 }
 
 type Filters = Record<string, string | undefined>;
@@ -319,7 +322,8 @@ function SessionRow({ session: s, projectId }: { session: Session; projectId: nu
     .filter(Boolean)
     .join(', ');
 
-  const isClickable = CLICKABLE_STATES.has(s.state);
+  const isClickable = CLICKABLE_STATES.has(s.state) && s.viewable;
+  const isPrivate = !s.viewable;
   const sessionUrl = `/company/projects/${projectId}/sessions/${s.id}`;
 
   return (
@@ -415,6 +419,11 @@ function SessionRow({ session: s, projectId }: { session: Session; projectId: nu
             <a href={sessionUrl} aria-label={`Open session #${s.id}`} onClick={(e) => e.stopPropagation()}>
               <IconExternalLink size={16} />
             </a>
+          </Tooltip>
+        )}
+        {isPrivate && (
+          <Tooltip label={`${s.userName ?? 'The owner'} keeps this session private`}>
+            <IconLock size={16} aria-label={`Session #${s.id} is private`} color="var(--app-text-tertiary)" />
           </Tooltip>
         )}
       </Table.Td>

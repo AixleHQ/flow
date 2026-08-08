@@ -8,6 +8,10 @@ class TerminalSession < ApplicationRecord
   WORKFLOW_TIMEOUT = 86_400 # 24 hours
   BMAD_DEFAULT_MODULES = %w[bmm bmb cis wds].freeze
 
+  # Serialized keys (camelCase, as ApplicationResource emits them) stripped from
+  # the session-list broadcast — see #broadcast_session_list_update.
+  BROADCAST_REDACTED_KEYS = %w[initialPrompt metadata contextMetadata].freeze
+
   # Associations
   belongs_to :user
   belongs_to :project, optional: true
@@ -81,6 +85,51 @@ class TerminalSession < ApplicationRecord
 
   def finishing?
     state == "finishing"
+  end
+
+  # May `viewer` open this session — its live terminal/editor while it runs, or
+  # its replayed log once it is over?
+  #
+  # This is a SECOND gate, on top of the project/company scoping every session
+  # screen already applies: reaching the record is not the same as being allowed
+  # to watch the person work. The owner always passes; for everyone else the
+  # owner's profile preferences decide, per lifecycle phase, and no role
+  # overrides them — a company admin reads the same two booleans, because the
+  # setting exists precisely to keep other people out of a live shell.
+  #
+  # Two session types are not personal work and are exempt:
+  #   - workflow_step — team automation, watched from the workflow run screen;
+  #     gating it would hide a shared pipeline behind whoever happened to
+  #     trigger it.
+  #   - auth_setup — the owner's credential login, never anyone else's business,
+  #     so it is owner-only regardless of preferences.
+  def visible_to?(viewer)
+    return false if viewer.nil?
+    return true if user_id == viewer.id
+    return true if session_type == "workflow_step"
+    return false if session_type == "auth_setup"
+    return false if user.nil?
+
+    active? || finishing? ? user.share_active_sessions? : user.share_completed_sessions?
+  end
+
+  # May `viewer` reach the CONTAINER's routes (ttyd, the IDE, the file server)?
+  #
+  # Asked by the Traefik ForwardAuth endpoint (Api::V1::Internal::WsAuth), which
+  # sees only a route token and a session cookie — it has no scoped query behind
+  # it, so the reachability half that a web screen gets for free from
+  # `current_project.terminal_sessions` has to be stated here. Both halves must
+  # hold: the viewer can reach the session's project, AND the owner shares this
+  # phase of it.
+  #
+  # NOTE: ttyd runs writable (`-W`) and the IDE is a full VS Code, so passing
+  # this grants the viewer an interactive shell in the container, not a
+  # read-only window.
+  def container_accessible_by?(viewer)
+    return false unless visible_to?(viewer)
+    return true if user_id == viewer.id
+
+    project.present? && project.accessible_by?(viewer)
   end
 
   # Idempotently runs the `start_finishing! → finish!` chain that fires at the
@@ -242,7 +291,14 @@ class TerminalSession < ApplicationRecord
     end
     return if company_ids.empty?
 
-    payload = { type: "session_update", session: TerminalSessionResource.new(self).to_h }
+    # One payload fans out to every listener on the company/project channel, so
+    # it cannot be redacted per viewer the way a page render can. What the list
+    # rows never display — the prompt and the metadata blobs, i.e. what the
+    # person is working on — is therefore dropped outright rather than pushed at
+    # everyone in the company. The route token and its URLs stay: they are gated
+    # at the proxy (Api::V1::Internal::WsAuth), not by being kept quiet.
+    session_payload = TerminalSessionResource.new(self).to_h.except(*BROADCAST_REDACTED_KEYS)
+    payload = { type: "session_update", session: session_payload }
     company_ids.each { |cid| ActionCable.server.broadcast("session_list:company:#{cid}", payload) }
     ActionCable.server.broadcast("session_list:project:#{project_id}", payload) if project_id.present?
   end

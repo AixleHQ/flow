@@ -8,8 +8,14 @@ module Api
       # Traefik calls this endpoint before proxying WebSocket connections to containers.
       # We verify that:
       #   1. User is authenticated (via session cookie)
-      #   2. User owns the requested terminal session
+      #   2. User may reach the session's container — they own it, or they can
+      #      reach its project AND its owner shares this phase of their sessions
+      #      (TerminalSession#container_accessible_by?)
       #   3. Terminal session is in a valid state (running)
+      #
+      # This is the gate that actually protects the container: the route token in
+      # the URL is not a secret Traefik checks anything against, so a token that
+      # leaked once would otherwise be a permanent key.
       #
       # Request headers from Traefik:
       #   X-Forwarded-Uri: /t/{route_token}/tty/ws (original request path)
@@ -40,7 +46,7 @@ module Api
             return head :unauthorized
           end
 
-          unless terminal_session.user_id == current_user.id
+          unless terminal_session.container_accessible_by?(current_user)
             Rails.logger.warn("[WsAuth] User #{current_user.id} tried to access session #{terminal_session.id} owned by #{terminal_session.user_id}")
             return head :forbidden
           end

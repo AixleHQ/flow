@@ -5,13 +5,14 @@ class Web::Company::Projects::Sessions::ArtifactsController < Web::Company::Proj
     session = current_project.terminal_sessions
                              .includes(:output_assets)
                              .find(params[:session_id])
+    authorize_session_visibility!(session)
 
     artifacts = session.output_assets
                        .where(status: %w[pending_review active])
                        .order(:name)
 
     render inertia: "Projects/Sessions/ArtifactsPage", props: {
-      session: TerminalSessionResource.new(session).to_h,
+      session: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h,
       artifacts: artifacts.map { |a| SessionArtifactResource.new(a).to_h },
       already_reviewed: session.artifacts_reviewed?
     }
@@ -19,6 +20,7 @@ class Web::Company::Projects::Sessions::ArtifactsController < Web::Company::Proj
 
   def review
     session = current_project.terminal_sessions.find(params[:session_id])
+    authorize_session_visibility!(session)
 
     asset_ids = session.output_assets.pluck(:id).map(&:to_s)
     decisions = params.require(:decisions).permit(*asset_ids).to_h.select { |_, v| %w[save dismiss].include?(v) }

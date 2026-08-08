@@ -32,6 +32,8 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     errorMessage: null,
     containerId: null,
     projectId: 7,
+    viewable: true,
+    ownedByViewer: true,
     routeToken: null,
     configuredAgentId: null,
     contextMetadata: null,

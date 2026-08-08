@@ -31,6 +31,7 @@ function makeSession(overrides: Partial<SessionFixture> = {}): SessionFixture {
     artifactsReviewed: null,
     pendingArtifactsCount: 0,
     initialPrompt: null,
+    viewable: true,
     ...overrides,
   };
 }

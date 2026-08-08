@@ -8,21 +8,58 @@ class TerminalSessionResource < ApplicationResource
              :total_tokens, :input_tokens, :output_tokens,
              :cache_read_tokens, :cache_write_tokens,
              :cost_cents, :models, :requested_model,
-             :artifacts_reviewed, :initial_prompt,
+             :artifacts_reviewed,
              :error_message, :container_id,
              :project_id, :route_token, :configured_agent_id,
              :collected_at, :updated_at
+
+  # Whether the REQUESTING user may open this session — see
+  # TerminalSession#visible_to?. Screens that can list other people's sessions
+  # pass `params: { viewer: current_user }`; without the param the payload is
+  # unredacted, which is what the owner-scoped surfaces (API, Aixle Builder,
+  # profile usage) want.
+  #
+  # What this redacts is CONTENT — the prompt and the metadata blobs, which say
+  # what the person was working on. The route token and the URLs built from it
+  # are deliberately NOT redacted: the container routes are gated at the proxy
+  # (Api::V1::Internal::WsAuth, which re-reads the owner's preference on every
+  # connection), and the log endpoint scopes its own lookup. Blanking them here
+  # too would put the same rule in two places, with nothing to say which one is
+  # authoritative when they drift.
+  typelize :boolean
+  attribute :viewable do |session|
+    viewable_for?(session)
+  end
+
+  # Whether the REQUESTING user is the person whose session this is. Drives the
+  # look-don't-touch presentation: a shared session renders the terminal behind
+  # a click-blocking overlay, drops the editor, and hides the Finish button.
+  #
+  # A UI guardrail, not an access control — ttyd runs writable and the viewer
+  # holds the route token, so opening it directly still gives a live shell.
+  # Making that impossible needs a second, non-writable ttyd (or a restriction
+  # at the proxy), not a frontend change.
+  typelize :boolean
+  attribute :owned_by_viewer do |session|
+    viewer = params[:viewer]
+    params.key?(:viewer) ? (viewer.present? && session.user_id == viewer.id) : true
+  end
+
+  typelize "string | null"
+  attribute :initial_prompt do |session|
+    viewable_for?(session) ? session.initial_prompt : nil
+  end
 
   # Free-form jsonb columns — column inference only sees `unknown`. Expose as explicit attributes so
   # the keyless typelize applies (matches IntegrationResource#settings).
   typelize "Record<string, unknown> | null"
   attribute :context_metadata do |session|
-    session.context_metadata
+    viewable_for?(session) ? session.context_metadata : nil
   end
 
   typelize "Record<string, unknown> | null"
   attribute :metadata do |session|
-    session.metadata
+    viewable_for?(session) ? session.metadata : nil
   end
 
   typelize :string?
@@ -144,5 +181,21 @@ class TerminalSessionResource < ApplicationResource
     else
       session.session_logs.size
     end
+  end
+
+  private
+
+  # No `viewer` param at all means "not a shared surface" — the caller already
+  # scoped the query to the acting user (or to a screen that has no other
+  # viewer), so nothing is redacted. Memoized per session id because every
+  # redacted attribute asks again, once per row.
+  def viewable_for?(session)
+    return true unless params.key?(:viewer)
+
+    @viewable ||= {}
+    key = session.id
+    return @viewable[key] if @viewable.key?(key)
+
+    @viewable[key] = session.visible_to?(params[:viewer])
   end
 end

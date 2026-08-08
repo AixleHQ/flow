@@ -155,8 +155,11 @@ class Web::ProfileController < Web::ApplicationController
     current_company.users.merge(CompanyMembership.active).find(params[:user_id])
   end
 
+  # Session sharing is a GLOBAL user preference, not a per-company one: it says
+  # what the person is willing to let colleagues watch, which does not change
+  # when they switch company.
   def profile_params
-    params.require(:profile).permit(:name)
+    params.require(:profile).permit(:name, :share_active_sessions, :share_completed_sessions)
   end
 
   # Per-company answers editable from the profile. Super admins have no

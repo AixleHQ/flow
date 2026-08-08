@@ -31,6 +31,8 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     errorMessage: null,
     containerId: null,
     projectId: null,
+    viewable: true,
+    ownedByViewer: true,
     routeToken: null,
     configuredAgentId: null,
     contextMetadata: null,
@@ -217,5 +219,45 @@ describe('SessionShowContent', () => {
     const iframe = screen.getByTitle('Terminal') as HTMLIFrameElement;
     // ttydUrl rewrites the wss:// ws endpoint to an https:// base, stripping the trailing /ws.
     expect(iframe.getAttribute('src')).toBe('https://host.test/sess');
+  });
+
+  it("presents someone else's shared session as watch-only", () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({
+          state: 'ready',
+          ownedByViewer: false,
+          userName: 'Dana Vega',
+          websocketUrl: 'wss://host.test/sess/ws',
+          ideUrl: 'https://host.test/ide',
+        })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+
+    // The terminal is still shown — watching is the point — but behind a shield
+    // that takes the clicks, so the iframe never gets focus.
+    expect(screen.getByTitle('Terminal')).toBeInTheDocument();
+    expect(screen.getByLabelText("Read-only view of another user's session")).toBeInTheDocument();
+    expect(screen.getByText('View only')).toBeInTheDocument();
+    // No editor: an overlay on VS Code is just a broken editor.
+    expect(screen.queryByTitle('VS Code Editor')).not.toBeInTheDocument();
+    // Finish is owner-only at the API, so it is not offered here.
+    expect(screen.queryByRole('button', { name: /^finish$/i })).not.toBeInTheDocument();
+  });
+
+  it('leaves the owner able to type and to finish their own session', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ state: 'ready', ownedByViewer: true, websocketUrl: 'wss://host.test/sess/ws' })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Read-only view of another user's session")).not.toBeInTheDocument();
+    expect(screen.queryByText('View only')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^finish$/i })).toBeInTheDocument();
   });
 });

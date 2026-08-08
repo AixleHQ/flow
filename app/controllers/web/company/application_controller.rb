@@ -53,6 +53,18 @@ class Web::Company::ApplicationController < Web::ApplicationController
     head :forbidden unless current_membership&.admin?
   end
 
+  # Second gate on top of the company/project scoping every session screen
+  # already applies: reaching a session record is not the same as being allowed
+  # to watch someone work. TerminalSession#visible_to? reads the OWNER's profile
+  # preferences, and no role overrides them (see the model). Raising Pundit's
+  # error keeps the refusal identical to a policy denial — the same redirect,
+  # the same flash — instead of inventing a second "not authorized" shape.
+  def authorize_session_visibility!(session)
+    raise Pundit::NotAuthorizedError unless session.visible_to?(current_user)
+
+    session
+  end
+
   # All sessions belonging to the current company: sessions in the company's
   # projects, plus project-less sessions (e.g. auth_setup) of active members.
   # The user_id branch is restricted to project-less rows so a dual-membership
