@@ -40,6 +40,9 @@ permissions:
 
 env:
   COMPOSE_FILE: docker-compose.ci.yml
+  # Written by ci.yml's build-cache job on develop pushes; read here, read-only,
+  # by every run including forks'. Kept in step with the ref in that workflow.
+  BUILD_CACHE: ghcr.io/aixlehq/flow-buildcache:web
 
 jobs:
   check:
@@ -95,14 +98,16 @@ jobs:
               mirrors = ["mirror.gcr.io"]
 
       - name: Build test image
-        # Materialised here rather than pulled from a registry: the image must be
-        # available to fork pull requests, which get no registry credentials. The
-        # layers themselves come from the cache that ci.yml's build-image job wrote
-        # earlier in this run, so this is a load rather than a real build.
+        # Materialised here rather than pulled whole from a registry: the image
+        # has to be available to fork pull requests, which get a read-only token
+        # and so cannot be handed a run-scoped tag someone pushed for them. Its
+        # layers do come from a registry — everything up to `COPY . /app` is
+        # imported from the cache the last develop push wrote, leaving this job
+        # to build only the handful of layers that changed with the commit.
         #
-        # Read-only on purpose — no cache-to. Two check jobs writing the same
-        # `type=gha` scope in parallel is what made the cache useless before, and it
-        # churns the repository's 10 GB cache budget for no gain.
+        # Read-only on purpose, no cache-to. Two check jobs writing one cache in
+        # parallel cannot warm each other, and ci.yml's build-cache job already
+        # owns the write.
         uses: docker/build-push-action@v7
         with:
           context: .
@@ -112,7 +117,11 @@ jobs:
             APP_VERSION=ci
             AUTHOR_NAME=github-actions
             AUTHOR_EMAIL=github-actions@users.noreply.github.com
-          cache-from: type=gha
+          # No login step: the package is public, so this reads anonymously and
+          # a fork's run gets the same cache. Until the package is made public
+          # after its first push, or if it is ever unreachable, buildx warns and
+          # builds from scratch — a cache miss here is slow, never fatal.
+          cache-from: type=registry,ref=${{ env.BUILD_CACHE }}
 
       - name: Start database
         if: ${{ inputs.needs-db }}
