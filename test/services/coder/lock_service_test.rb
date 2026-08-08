@@ -97,12 +97,12 @@ module Coder
       assert other_service.held?(workspace_name: "ws-1")
     end
 
-    test "uses default 60-minute TTL when integration has no override" do
+    test "uses default 120-minute TTL when integration has no override" do
       @integration.settings = (@integration.settings || {}).merge("lock_ttl_minutes" => nil)
       @integration.save!
 
       row = @service.acquire(**lock_args)
-      assert_in_delta 60.minutes.from_now.to_i, row.expires_at.to_i, 5
+      assert_in_delta 120.minutes.from_now.to_i, row.expires_at.to_i, 5
     end
 
     test "release_all_for_session iterates every active Coder integration in scope" do
