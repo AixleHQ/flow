@@ -28,6 +28,7 @@ import {
   IconChevronRight,
   IconCopy,
   IconLink,
+  IconPencil,
   IconPlus,
   IconSearch,
   IconSettings,
@@ -90,6 +91,9 @@ const SCOPE_COLORS: Record<string, string> = {
   project: 'green',
 };
 
+// Mirrors the server-side fallback in Coder::LockService#ttl_minutes.
+const DEFAULT_CODER_LOCK_TTL = 120;
+
 const formatDate = (d: string) =>
   new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
@@ -109,17 +113,23 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
   const [coderToken, setCoderToken] = useState('');
   const [coderDefaultTemplate, setCoderDefaultTemplate] = useState('');
   const [coderMachinePrefix, setCoderMachinePrefix] = useState('');
-  const [coderLockTtlMinutes, setCoderLockTtlMinutes] = useState<number | string>(120);
+  const [coderLockTtlMinutes, setCoderLockTtlMinutes] = useState<number | string>(DEFAULT_CODER_LOCK_TTL);
   const [coderAdvancedOpen, setCoderAdvancedOpen] = useState(false);
   const [coderLoading, setCoderLoading] = useState(false);
   const [coderError, setCoderError] = useState<string | null>(null);
+
+  const [coderEditTarget, setCoderEditTarget] = useState<Integration | null>(null);
+  const [coderEditTemplate, setCoderEditTemplate] = useState('');
+  const [coderEditPrefix, setCoderEditPrefix] = useState('');
+  const [coderEditTtl, setCoderEditTtl] = useState<number | string>(DEFAULT_CODER_LOCK_TTL);
+  const [coderEditLoading, setCoderEditLoading] = useState(false);
 
   const resetCoderForm = useCallback(() => {
     setCoderUrl('');
     setCoderToken('');
     setCoderDefaultTemplate('');
     setCoderMachinePrefix('');
-    setCoderLockTtlMinutes(60);
+    setCoderLockTtlMinutes(DEFAULT_CODER_LOCK_TTL);
     setCoderAdvancedOpen(false);
     setCoderError(null);
   }, []);
@@ -260,6 +270,33 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
       onFinish: () => setCoderLoading(false),
     });
   }, [basePath, closeCoderModal, coderDefaultTemplate, coderLockTtlMinutes, coderMachinePrefix, coderToken, coderUrl]);
+
+  const openCoderSettings = useCallback((integration: Integration) => {
+    setCoderEditTarget(integration);
+    setCoderEditTemplate(integration.coderDefaultTemplate ?? '');
+    setCoderEditPrefix(integration.coderMachinePrefix ?? '');
+    setCoderEditTtl(integration.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL);
+  }, []);
+
+  const handleSaveCoderSettings = useCallback(() => {
+    if (!coderEditTarget) return;
+    const ttl = typeof coderEditTtl === 'number' ? coderEditTtl : Number(coderEditTtl);
+    if (Number.isNaN(ttl) || ttl <= 0) return;
+
+    setCoderEditLoading(true);
+    // Template and prefix go out even when empty — a blank value clears the
+    // setting, which is how you stop the allocator from creating machines.
+    router.patch(
+      `${basePath}/${coderEditTarget.id}`,
+      { defaultTemplate: coderEditTemplate.trim(), machinePrefix: coderEditPrefix.trim(), lockTtlMinutes: ttl },
+      {
+        preserveScroll: true,
+        onSuccess: () => setCoderEditTarget(null),
+        onError: () => notifications.show({ message: 'Failed to save Coder settings', color: 'red' }),
+        onFinish: () => setCoderEditLoading(false),
+      },
+    );
+  }, [basePath, coderEditPrefix, coderEditTarget, coderEditTemplate, coderEditTtl]);
 
   // Slack connects via OAuth: redirect to the project-scoped start action, which
   // bounces to Slack's consent screen. The install binds to this project.
@@ -461,6 +498,21 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                               {integration.coderUrl}
                             </Text>
                           )}
+                          {/* The allocator reads these three, and a missing template is
+                              why it can never create a machine — so show them here
+                              instead of only inside the connect form. */}
+                          {integration.provider === 'coder' && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {integration.coderDefaultTemplate
+                                ? `template ${integration.coderDefaultTemplate}`
+                                : 'no default template'}
+                              {' · '}
+                              {integration.coderMachinePrefix
+                                ? `prefix ${integration.coderMachinePrefix}`
+                                : 'no prefix'}
+                              {` · lock ${integration.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL}m`}
+                            </Text>
+                          )}
                         </Box>
                       </Group>
                     </Table.Td>
@@ -509,6 +561,18 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                               target="_blank"
                             >
                               <IconSettings size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {integration.provider === 'coder' && canExecute && !readOnly && (
+                          <Tooltip label="Edit settings">
+                            <ActionIcon
+                              aria-label={`Edit settings for ${integration.name}`}
+                              variant="subtle"
+                              size="sm"
+                              onClick={() => openCoderSettings(integration)}
+                            >
+                              <IconPencil size={16} />
                             </ActionIcon>
                           </Tooltip>
                         )}
@@ -651,6 +715,54 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
               }
             >
               Connect
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal
+        opened={!!coderEditTarget}
+        onClose={() => setCoderEditTarget(null)}
+        title="Coder settings"
+        centered
+        size="sm"
+      >
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Without a default template the allocator can only hand out workspaces that already exist — it never creates
+            one. Leave it blank to cap the pool at its current size.
+          </Text>
+          <TextInput
+            label="Default template"
+            placeholder="aws-ec2-spot-v1"
+            value={coderEditTemplate}
+            onChange={(e) => setCoderEditTemplate(e.currentTarget.value)}
+            autoFocus
+          />
+          <TextInput
+            label="Machine name prefix"
+            placeholder="aixle-prod"
+            value={coderEditPrefix}
+            onChange={(e) => setCoderEditPrefix(e.currentTarget.value)}
+          />
+          <NumberInput
+            label="Lock TTL (minutes)"
+            min={1}
+            max={1440}
+            value={coderEditTtl}
+            onChange={(value) => setCoderEditTtl(value)}
+            error={typeof coderEditTtl === 'number' && coderEditTtl > 0 ? undefined : 'Required'}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setCoderEditTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveCoderSettings}
+              loading={coderEditLoading}
+              disabled={!(typeof coderEditTtl === 'number' && coderEditTtl > 0)}
+            >
+              Save
             </Button>
           </Group>
         </Stack>

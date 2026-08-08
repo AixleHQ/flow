@@ -7,11 +7,12 @@ module Coder
     class FakeWorkspaceService
       attr_accessor :workspaces, :started_ids, :awaited_ids, :created
 
-      def initialize(workspaces: [], created: nil)
-        @workspaces  = workspaces
-        @started_ids = []
-        @awaited_ids = []
-        @created     = created
+      def initialize(workspaces: [], created: nil, failing_start_ids: [])
+        @workspaces        = workspaces
+        @started_ids       = []
+        @awaited_ids       = []
+        @created           = created
+        @failing_start_ids = failing_start_ids
       end
 
       def list(prefix: nil)
@@ -21,6 +22,11 @@ module Coder
 
       def start(workspace_id)
         @started_ids << workspace_id
+        if @failing_start_ids.include?(workspace_id)
+          raise Coder::WorkspaceService::OperationError,
+                "build (start) failed: HTTP 500 spot capacity unavailable"
+        end
+
         { "id" => "build-#{workspace_id}", "job" => { "status" => "succeeded" } }
       end
 
@@ -152,13 +158,68 @@ module Coder
       assert_equal "starting", result[:status]
     end
 
+    test "hands the lock back when a workspace fails to start and tries the next candidate" do
+      ws = FakeWorkspaceService.new(
+        workspaces: [
+          { "id" => "u1", "name" => "aixle-prod-1",
+            "latest_build" => { "transition" => "stop", "job" => { "status" => "succeeded" } } },
+          { "id" => "u2", "name" => "aixle-prod-2",
+            "latest_build" => { "transition" => "stop", "job" => { "status" => "succeeded" } } }
+        ],
+        failing_start_ids: [ "u1" ]
+      )
+
+      result = build_allocator(workspace_service: ws).allocate
+
+      assert_equal "aixle-prod-2", result[:workspace_name]
+      assert_nil @integration.integration_data.find_by(key: "coder:workspace_lock:aixle-prod-1"),
+                 "a workspace that failed to start must not stay locked for the whole TTL"
+      assert @integration.integration_data.find_by(key: "coder:workspace_lock:aixle-prod-2")
+    end
+
     test "raises ExhaustedError when pool is empty and no default template configured" do
       ws = FakeWorkspaceService.new(workspaces: [])
       @integration.update!(settings: (@integration.settings || {}).merge("default_template" => nil))
 
-      assert_raises(Coder::Allocator::ExhaustedError) do
+      error = assert_raises(Coder::Allocator::ExhaustedError) do
         build_allocator(workspace_service: ws).allocate
       end
+      assert_match(/no workspaces match prefix "aixle-prod"/, error.message)
+      assert_match(/no default_template configured/, error.message)
+    end
+
+    test "ExhaustedError names the sessions-held workspaces instead of claiming the pool is empty" do
+      ws = FakeWorkspaceService.new(workspaces: [
+        { "id" => "u1", "name" => "aixle-prod-1",
+          "latest_build" => { "transition" => "start", "job" => { "status" => "succeeded" } } },
+        { "id" => "u2", "name" => "aixle-prod-2",
+          "latest_build" => { "transition" => "start", "job" => { "status" => "succeeded" } } }
+      ])
+      lock_service = Coder::LockService.new(@integration)
+      lock_service.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", terminal_session_id: "sess-OTHER")
+      lock_service.acquire(workspace_name: "aixle-prod-2", workspace_id: "u2", terminal_session_id: "sess-OTHER")
+
+      error = assert_raises(Coder::Allocator::ExhaustedError) do
+        build_allocator(workspace_service: ws).allocate
+      end
+      assert_match(/none of the 2 workspaces in the pool could be allocated/, error.message)
+      assert_match(/2 held by other sessions \(aixle-prod-1, aixle-prod-2\)/, error.message)
+    end
+
+    test "ExhaustedError carries the reason a workspace failed to start" do
+      ws = FakeWorkspaceService.new(
+        workspaces: [
+          { "id" => "u1", "name" => "aixle-prod-1",
+            "latest_build" => { "transition" => "stop", "job" => { "status" => "succeeded" } } }
+        ],
+        failing_start_ids: [ "u1" ]
+      )
+
+      error = assert_raises(Coder::Allocator::ExhaustedError) do
+        build_allocator(workspace_service: ws).allocate
+      end
+      assert_match(/1 failed to start: aixle-prod-1 \(build \(start\) failed: HTTP 500 spot capacity unavailable\)/,
+                   error.message)
     end
 
     test "lock value records terminal_session_id and never task_id / step_run_id" do

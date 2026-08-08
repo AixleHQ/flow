@@ -85,11 +85,24 @@ module Coder
       row
     end
 
-    # Idempotent — deletes the lock row if present.
+    # Idempotent — deletes the lock row if present. Not scoped to a holder:
+    # callers that act on behalf of a session must use `release_owned`.
     def release(workspace_name:)
       @integration.integration_data
                   .where(key: lock_key(workspace_name))
                   .delete_all
+    end
+
+    # Holder-scoped release. Deletes the row only while `terminal_session_id`
+    # still owns it, in a single statement — so a lock that expired mid-flight
+    # and was reclaimed by another session is left alone (a read-then-delete
+    # pair would race that reclaim). Returns whether a row was deleted.
+    def release_owned(workspace_name:, terminal_session_id:)
+      @integration.integration_data
+                  .where(key: lock_key(workspace_name))
+                  .where("value ->> 'terminal_session_id' = ?", terminal_session_id.to_s)
+                  .delete_all
+                  .positive?
     end
 
     # Release every live lock currently held by the given terminal session,

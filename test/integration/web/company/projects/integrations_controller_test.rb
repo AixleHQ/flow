@@ -134,4 +134,71 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_equal "http://coder.example.com", integration.credentials_data["coder_url"]
     assert_response :redirect
   end
+
+  # The :coder factory trait rewrites `settings` in an after(:build) hook, so a
+  # test that needs specific settings has to merge them after create.
+  def create_coder_integration(project: @project, **settings)
+    integration = create(:integration, :coder, :active, company: @company, project: project, connected_by: @user)
+    integration.update!(settings: integration.settings.merge(settings)) if settings.any?
+    integration
+  end
+
+  test "update saves coder settings without touching credentials" do
+    integration = create_coder_integration("machine_prefix" => "old-prefix")
+    credentials_before = integration.credentials_data
+
+    patch company_project_integration_path(@project, integration), params: {
+      defaultTemplate: "aws-ec2-spot-v1",
+      machinePrefix:   "aixle-prod",
+      lockTtlMinutes:  "120"
+    }
+
+    assert_response :redirect
+    integration.reload
+    assert_equal "aws-ec2-spot-v1", integration.coder_default_template
+    assert_equal "aixle-prod", integration.coder_machine_prefix
+    assert_equal 120, integration.coder_lock_ttl_minutes
+    assert_equal credentials_before, integration.credentials_data
+  end
+
+  test "update clears a blank template so the pool stops growing" do
+    integration = create_coder_integration("default_template" => "aws-ec2-spot-v1")
+
+    patch company_project_integration_path(@project, integration), params: {
+      defaultTemplate: "", machinePrefix: "", lockTtlMinutes: "120"
+    }
+
+    assert_response :redirect
+    assert_nil integration.reload.coder_default_template
+  end
+
+  test "update rejects a non-positive lock TTL and keeps the stored settings" do
+    integration = create_coder_integration("machine_prefix" => "aixle-prod")
+
+    patch company_project_integration_path(@project, integration), params: {
+      machinePrefix: "changed", lockTtlMinutes: "0"
+    }
+
+    assert_response :redirect
+    assert_match(/Lock TTL minutes must be a positive number/, flash[:alert])
+    assert_equal "aixle-prod", integration.reload.coder_machine_prefix
+  end
+
+  test "update refuses a provider that has no editable settings" do
+    integration = create(:integration, company: @company, project: @project, connected_by: @user)
+
+    patch company_project_integration_path(@project, integration), params: { lockTtlMinutes: "120" }
+
+    assert_response :redirect
+    assert_match(/Only Coder integrations have editable settings/, flash[:alert])
+  end
+
+  test "update does not reach a company-wide integration from a project page" do
+    integration = create_coder_integration(project: nil)
+
+    patch company_project_integration_path(@project, integration), params: { lockTtlMinutes: "5" }
+
+    assert_response :not_found
+    assert_equal 60, integration.reload.coder_lock_ttl_minutes
+  end
 end

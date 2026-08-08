@@ -60,13 +60,11 @@ module Coder
         )
       end
 
+      # Raises like every other call here. Collapsing failures to `[]` made an
+      # expired token or a 403 indistinguishable from "the template isn't
+      # there", and callers reported the latter.
       def list_templates(coder_url:, session_token:)
-        response = request(:get, "/api/v2/templates", coder_url: coder_url, session_token: session_token)
-        return [] unless response.status == 200
-
-        Array(parse_json(response, op: "list_templates"))
-      rescue ApiError
-        []
+        Array(json_get("/api/v2/templates", coder_url: coder_url, session_token: session_token, op: "list_templates"))
       end
 
       def create_workspace(coder_url:, session_token:, user_id:, name:, template_id:)

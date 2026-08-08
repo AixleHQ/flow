@@ -77,6 +77,31 @@ module Coder
       integration
     end
 
+    # Edit the operational settings of a connected integration in place. Only
+    # these three are editable: they change how the allocator behaves, carry no
+    # secret, and need no round-trip to Coder to validate. URL and token are
+    # deliberately excluded — replacing credentials has to re-verify them, which
+    # is what `create` (reconnect) already does.
+    #
+    # A blank `default_template` or `machine_prefix` clears the setting; blank
+    # or non-positive `lock_ttl_minutes` is rejected, since the lock TTL has no
+    # sane "unset" (the allocator would silently fall back to its own default).
+    def update_settings(integration:, default_template: nil, machine_prefix: nil, lock_ttl_minutes: nil)
+      raise ConfigurationError, "Only Coder integrations have editable settings" unless integration.coder?
+
+      ttl_value = parse_positive_int(lock_ttl_minutes)
+      raise ConfigurationError, "Lock TTL minutes must be a positive number" if ttl_value.nil?
+
+      integration.update!(
+        settings: (integration.settings || {}).merge(
+          "default_template" => default_template.presence,
+          "machine_prefix"   => machine_prefix.presence,
+          "lock_ttl_minutes" => ttl_value
+        ).compact
+      )
+      integration
+    end
+
     private
 
     def build_integration

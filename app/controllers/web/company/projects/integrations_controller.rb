@@ -54,6 +54,28 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     end
   end
 
+  # Edits provider settings on an already-connected integration. Scoped with
+  # `for_project` like #destroy: a company-wide integration is shared by every
+  # project, so it is not editable from one project's page.
+  def update
+    integration = Integration.for_project(current_project).find(params[:id])
+
+    Coder::IntegrationService.new(
+      company: current_company,
+      connected_by: current_user,
+      project: current_project
+    ).update_settings(
+      integration:      integration,
+      default_template: params[:default_template],
+      machine_prefix:   params[:machine_prefix],
+      lock_ttl_minutes: params[:lock_ttl_minutes]
+    )
+
+    redirect_to company_project_integrations_path(current_project), notice: "Integration settings saved"
+  rescue Coder::IntegrationService::ConfigurationError => e
+    redirect_to company_project_integrations_path(current_project), alert: e.message
+  end
+
   def destroy
     integration = Integration.for_project(current_project).find(params[:id])
     integration.destroy

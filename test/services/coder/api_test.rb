@@ -55,9 +55,25 @@ module Coder
       assert_equal "build-1", build["id"]
     end
 
-    test "list_templates returns [] on non-200 without raising" do
-      stub_request(:get, "#{BASE}/api/v2/templates").to_return(status: 500)
-      assert_equal [], Coder::Api.list_templates(coder_url: BASE, session_token: TOKEN)
+    test "list_templates returns the parsed template list" do
+      stub_request(:get, "#{BASE}/api/v2/templates").to_return(
+        status: 200,
+        body: [ { id: "t1", name: "aws-ec2-spot-v1" } ].to_json,
+        headers: { "Content-Type" => "application/json" }
+      )
+
+      templates = Coder::Api.list_templates(coder_url: BASE, session_token: TOKEN)
+      assert_equal [ "aws-ec2-spot-v1" ], templates.map { |t| t["name"] }
+    end
+
+    test "list_templates raises on non-200 instead of reporting an empty catalog" do
+      stub_request(:get, "#{BASE}/api/v2/templates").to_return(status: 401)
+
+      error = assert_raises(Coder::Api::HTTPError) do
+        Coder::Api.list_templates(coder_url: BASE, session_token: TOKEN)
+      end
+      assert_equal 401, error.status
+      assert_match(/list_templates failed: HTTP 401/, error.message)
     end
 
     test "ParseError raised on invalid JSON" do

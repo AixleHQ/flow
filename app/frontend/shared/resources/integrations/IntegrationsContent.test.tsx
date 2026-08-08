@@ -645,4 +645,107 @@ describe('IntegrationsContent', () => {
       expect(screen.getByText('https://coder.aixle.dev')).toBeInTheDocument();
     });
   });
+
+  describe('Coder settings', () => {
+    const coderIntegration = (overrides: Partial<Integration> = {}) =>
+      makeIntegration({
+        id: 9,
+        name: 'Acme Coder',
+        provider: 'coder',
+        scopeIndicator: 'project',
+        coderUrl: 'https://coder.aixle.dev',
+        coderDefaultTemplate: 'aws-ec2-spot-v1',
+        coderMachinePrefix: 'aixle-prod',
+        coderLockTtlMinutes: 120,
+        ...overrides,
+      });
+
+    it('shows the allocator settings on the row', () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      expect(screen.getByText('template aws-ec2-spot-v1 · prefix aixle-prod · lock 120m')).toBeInTheDocument();
+    });
+
+    it('calls out a missing default template, which is what stops the pool from growing', () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration({ coderDefaultTemplate: null, coderMachinePrefix: null })]}
+        />,
+        { props: settingsProps },
+      );
+
+      expect(screen.getByText('no default template · no prefix · lock 120m')).toBeInTheDocument();
+    });
+
+    it('saving the edit form patches the integration with the changed settings', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration({ coderDefaultTemplate: null })]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit settings for Acme Coder' }));
+      const dialog = await screen.findByRole('dialog', { name: /Coder settings/i });
+
+      // Prefilled from the row, so an edit never silently drops the other fields.
+      expect(within(dialog).getByLabelText('Machine name prefix')).toHaveValue('aixle-prod');
+
+      await userEvent.type(within(dialog).getByLabelText('Default template'), 'aws-ec2-spot-v1');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/projects/42/integrations/9',
+        { defaultTemplate: 'aws-ec2-spot-v1', machinePrefix: 'aixle-prod', lockTtlMinutes: 120 },
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
+    it('sends a blank template when it is cleared, so the pool can be capped', async () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration()]}
+        />,
+        { props: settingsProps },
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Edit settings for Acme Coder' }));
+      const dialog = await screen.findByRole('dialog', { name: /Coder settings/i });
+
+      await userEvent.clear(within(dialog).getByLabelText('Default template'));
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/projects/42/integrations/9',
+        expect.objectContaining({ defaultTemplate: '' }),
+        expect.any(Object),
+      );
+    });
+
+    it('hides the edit action for a company-wide integration in a project context', () => {
+      renderPage(
+        <IntegrationsContent
+          title="Project Integrations"
+          basePath="/projects/42/integrations"
+          integrations={[coderIntegration({ scopeIndicator: 'company' })]}
+        />,
+        { props: settingsProps },
+      );
+
+      expect(screen.queryByRole('button', { name: /Edit settings/i })).not.toBeInTheDocument();
+    });
+  });
 });
