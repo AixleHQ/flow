@@ -1,0 +1,76 @@
+name: Cache Cleanup
+
+# Every CI run writes the test image's layers to the Actions cache under the ref
+# it ran on, and GitHub never reclaims them on its own. A pull request's layers
+# are dead the moment it closes — nothing will ever read `refs/pull/N/merge`
+# again — but they keep counting against the repository's 10 GB budget, and
+# once that budget is exceeded GitHub evicts by least-recent use, which reaches
+# entries a live run is still depending on.
+#
+# Measured 2026-08-08 before the first sweep: 10.6 GB across 255 entries, of
+# which 5.1 GB / 137 entries belonged to 27 closed pull requests. Deleting them
+# brought the repository back to 4.8 GB.
+
+on:
+  pull_request_target:
+    types: [ closed ]
+  workflow_dispatch:
+
+# pull_request_target, not pull_request: a fork's pull request runs with a
+# read-only token, which cannot delete caches. This workflow never checks out
+# or executes the pull request's code — it only calls the caches API for a ref
+# it computes itself — so the elevated token is not exposed to it.
+permissions:
+  actions: write
+
+concurrency:
+  group: cache-cleanup-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Delete caches for closed pull requests
+        run: |
+          set -euo pipefail
+
+          refs=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual sweep: every closed pull request, for catching up after a
+            # stretch where this workflow did not exist or did not run.
+            while read -r number; do
+              refs+=("refs/pull/$number/merge")
+            done < <(gh pr list --repo "$REPO" --state closed --limit 200 --json number --jq '.[].number')
+          else
+            refs=("refs/pull/${{ github.event.pull_request.number }}/merge")
+          fi
+
+          freed=0
+          deleted=0
+
+          for ref in "${refs[@]}"; do
+            # The caches API pages, and deleting shifts the pages under us, so
+            # drain one ref at a time until a page comes back empty.
+            while :; do
+              page=$(gh api "repos/$REPO/actions/caches?ref=$ref&per_page=100")
+              count=$(jq '.actions_caches | length' <<<"$page")
+              [ "$count" -gt 0 ] || break
+
+              freed=$(( freed + $(jq '[.actions_caches[].size_in_bytes] | add' <<<"$page") ))
+              deleted=$(( deleted + count ))
+
+              jq -r '.actions_caches[].id' <<<"$page" | while read -r id; do
+                gh api -X DELETE "repos/$REPO/actions/caches/$id" >/dev/null
+              done
+            done
+          done
+
+          awk -v n="$deleted" -v b="$freed" \
+            'BEGIN { printf "Deleted %d cache entries, freeing %.2f GB\n", n, b / 1073741824 }' \
+            >> "$GITHUB_STEP_SUMMARY"
