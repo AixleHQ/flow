@@ -59,11 +59,11 @@ jobs:
       - name: Enable the containerd image store
         # `load: true` below is the single most expensive thing in this job, and
         # none of it is compilation. With the runner's stock daemon every layer
-        # resolves from cache in seconds and then buildx spends ~100s
-        # ("exporting to docker image format" on 31254450213: 97.8s backend,
-        # 102.8s frontend) serialising the 1.45 GB image into a tarball for
-        # `docker load` to unpack again. The containerd image store lets buildx
-        # write into the daemon's store directly and skip that round trip.
+        # resolves from cache in seconds, and then handing the 1.45 GB image to
+        # the daemon costs ~100s (31254450213: 97.8s backend, 102.8s frontend) —
+        # a tarball serialised out of buildkit and unpacked layer by layer back
+        # in. Writing OCI mediatypes into the containerd store drops the unpack
+        # stage entirely and halves what remains: 69.6s and 60.4s on 31258372193.
         #
         # Patching the daemon rather than reinstalling it with
         # docker/setup-docker-action: the runner image already ships Docker with
