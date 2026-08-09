@@ -30,7 +30,7 @@ class PlatformToolsReconcileTest < ActiveSupport::TestCase
   test "seed creates the Coder MCP system tools" do
     Tools::Reconciler.run!
 
-    %w[coder_allocate_machine coder_ssh_exec coder_release_machine coder_job_status].each do |tool_name|
+    %w[coder_allocate_machine coder_ssh_exec coder_release_machine coder_job_status coder_prepare_repo].each do |tool_name|
       tool = Tool.find_by(name: tool_name)
       assert_not_nil tool, "expected #{tool_name} to be seeded"
       assert_equal "code", tool.source

@@ -238,6 +238,73 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     assert_match(/does not hold the lock/, result[:stderr])
   end
 
+  # ---------- coder_prepare_repo ----------
+
+  class FakeRepoBootstrap
+    class << self
+      attr_accessor :last_call
+    end
+
+    def initialize(_integration) = nil
+
+    def prepare(workspace_name:, repository:, path: nil)
+      self.class.last_call = { workspace_name: workspace_name, repository: repository, path: path }
+      { job_id: "j9", job_dir: "/var/lib/aixle-jobs", log_path: "/var/lib/aixle-jobs/j9.log",
+        repository: repository.full_name, path: path || "/root/#{repository.repo_name}" }
+    end
+  end
+
+  def hold_lock(workspace_name = "ws-1")
+    Coder::LockService.new(@integration).acquire(
+      workspace_name: workspace_name, workspace_id: "u1", terminal_session_id: @session.id
+    )
+  end
+
+  test "prepare_repo: starts the bootstrap for the session's only repository" do
+    github = create(:integration, :github, :active, company: @company, connected_by: @user)
+    repo   = create(:repository, full_name: "acme/app", integration: github, scope: @project)
+    @session.define_singleton_method(:repositories) { Repository.where(id: repo.id) }
+    hold_lock
+
+    result = Coder::RepoBootstrap.stub(:new, ->(integration) { FakeRepoBootstrap.new(integration) }) do
+      InternalTools::CoderPrepareRepo.new(
+        params: { workspace_name: "ws-1", path: "/root/app" }, session: @session
+      ).execute
+    end
+
+    assert_equal 0, result[:exit_code]
+    payload = JSON.parse(result[:stdout])
+    assert_equal "j9", payload["job_id"]
+    assert_equal "/root/app", payload["path"]
+    assert_match(/coder_job_status/, payload["next_step"])
+    assert_equal "acme/app", FakeRepoBootstrap.last_call[:repository].full_name
+  end
+
+  test "prepare_repo: asks which repository when the session has several" do
+    github = create(:integration, :github, :active, company: @company, connected_by: @user)
+    one    = create(:repository, full_name: "acme/one", integration: github, scope: @project)
+    two    = create(:repository, full_name: "acme/two", integration: github, scope: @project)
+    @session.define_singleton_method(:repositories) { Repository.where(id: [ one.id, two.id ]) }
+    hold_lock
+
+    result = InternalTools::CoderPrepareRepo.new(
+      params: { workspace_name: "ws-1" }, session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/pass `repository` to pick one/, result[:stderr])
+    assert_match(/acme\/one/, result[:stderr])
+  end
+
+  test "prepare_repo: rejects a session that does not hold the workspace lock" do
+    result = InternalTools::CoderPrepareRepo.new(
+      params: { workspace_name: "ws-1" }, session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/does not hold the lock/, result[:stderr])
+  end
+
   # ---------- coder_release_machine ----------
 
   test "release: idempotently releases the workspace lock" do

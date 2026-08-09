@@ -282,6 +282,39 @@ module Coder
       assert_match(%r{TMPDIR:-/tmp}, script, "expected a fallback job dir when /var/lib is not writable")
     end
 
+    # A secret belongs in the launcher, which travels over SSH and is never
+    # written down — not in the `<job_id>.cmd` file, which stays on a workspace
+    # that outlives the session.
+    test "detached start exports env in the launcher, never into the command file" do
+      captured_args = nil
+      stub = popen3_stub(out: "aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs\n") do |_env, argv|
+        captured_args = argv
+      end
+
+      Open3.stub(:popen3, stub) do
+        Coder::SshRunner.new(@integration).exec_detached(
+          workspace_name: "ws-1",
+          command:        'git clone "$URL"',
+          job_id:         "j1",
+          env:            { "AIXLE_GH_TOKEN" => "ghs_secret" }
+        )
+      end
+
+      script = captured_args.last
+      launcher, _, command_file = script.partition("cat > \"$BASE.cmd\"")
+
+      assert_match(/AIXLE_GH_TOKEN='ghs_secret'; export AIXLE_GH_TOKEN/, launcher)
+      assert_no_match(/ghs_secret/, command_file, "the secret must not reach the job's command file")
+    end
+
+    test "detached start rejects an env name that is not a shell identifier" do
+      assert_raises(Coder::SshRunner::CommandError) do
+        Coder::SshRunner.new(@integration).exec_detached(
+          workspace_name: "ws-1", command: "true", env: { "TOKEN; rm -rf /" => "x" }
+        )
+      end
+    end
+
     test "detached start reports the fallback job dir chosen by the workspace" do
       stub = popen3_stub(out: "aixle_job job_id=j1 job_dir=/tmp/aixle-jobs\n")
 

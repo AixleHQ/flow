@@ -277,12 +277,19 @@ Removes RC-5.1 for all integrations immediately, without waiting for an image or
 release, and stays correct after the template fix lands (where `HOME` is already set, the
 prefix is a no-op).
 
-**D-10 — Platform owns repo bootstrap, not the image.**
+**D-10 — Platform owns repo bootstrap, not the image.** *(shipped)*
 The credentials for cloning a private product repo (GitHub App installation token) live
-in the platform, not in the AMI. A `coder_prepare_repo` step — full clone (no
-`--filter`), all branches, tokenised `remote.origin.url` rewritten on each allocation
-because the token is short-lived, `GIT_TERMINAL_PROMPT=0` — belongs on the platform side
-and fixes RC-5.2–5.3 for every project rather than one template.
+in the platform, not in the AMI. `coder_prepare_repo` + `Coder::RepoBootstrap` clone what
+is missing and repair what is there — widen the refspec, drop the promisor/partial-clone
+config whose fetches hang, unshallow, `GIT_TERMINAL_PROMPT=0` — fixing RC-5.2–5.3 for
+every project rather than one template.
+
+The credential is **not** written into `remote.origin.url`, and not into the detached
+job's command file either: the workspace is shared and long-lived, so anything on its
+disk outlives the session that minted it. It travels in the launcher's environment (the
+launcher goes over SSH and is never written down) and is read by a `credential.helper`
+shell function. The bootstrap runs detached for the same reason a gate does — a cold
+clone of a real repository outlives any single MCP call.
 
 ### Infrastructure — `aixle-infra`
 
