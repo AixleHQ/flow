@@ -133,7 +133,13 @@ module Coder
     #
     # The remote script provisions what it needs (job directory, `setsid`
     # fallback), so a workspace from an older template works unchanged.
-    def exec_detached(workspace_name:, command:, job_id: nil)
+    #
+    # `env` is exported by the launcher, which travels over SSH and is never
+    # written anywhere, so a secret passed this way reaches the job's process
+    # environment without landing in the `<job_id>.cmd` file — the workspace is
+    # long-lived and shared between sessions, and a credential left on its disk
+    # outlives the session that minted it.
+    def exec_detached(workspace_name:, command:, job_id: nil, env: {})
       raise CommandError, "command must be a non-empty string" if command.to_s.strip.empty?
 
       job_id = (job_id.presence || SecureRandom.hex(6)).to_s
@@ -141,7 +147,7 @@ module Coder
 
       result = exec(
         workspace_name: workspace_name,
-        command:        detach_script(job_id: job_id, command: command.to_s),
+        command:        detach_script(job_id: job_id, command: command.to_s, env: env),
         timeout:        DETACH_TIMEOUT
       )
 
@@ -193,11 +199,11 @@ module Coder
     # Written as a script rather than an inline one-liner so the caller's
     # command lands in a file verbatim through a quoted heredoc — no escaping,
     # no quoting damage, multi-line commands intact.
-    def detach_script(job_id:, command:)
+    def detach_script(job_id:, command:, env: {})
       delimiter = "AIXLE_JOB_EOF_#{SecureRandom.hex(4)}"
 
       <<~SH
-        JOB_DIR="${AIXLE_JOB_DIR:-#{DEFAULT_JOB_DIR}}"
+        #{env_exports(env)}JOB_DIR="${AIXLE_JOB_DIR:-#{DEFAULT_JOB_DIR}}"
         mkdir -p "$JOB_DIR" 2>/dev/null || JOB_DIR="${TMPDIR:-/tmp}/aixle-jobs"
         mkdir -p "$JOB_DIR" || { echo "cannot create a job directory" >&2; exit 1; }
         BASE="$JOB_DIR/#{job_id}"
@@ -220,6 +226,19 @@ module Coder
         fi
         echo "#{JOB_MARKER} job_id=#{job_id} job_dir=$JOB_DIR"
       SH
+    end
+
+    # Single-quoted with the standard `'\''` escape, so a value cannot break out
+    # of its quoting and become shell.
+    def env_exports(env)
+      return "" if env.blank?
+
+      env.map do |key, value|
+        name = key.to_s
+        raise CommandError, "invalid env name: #{name}" unless name.match?(/\A[A-Za-z_][A-Za-z0-9_]*\z/)
+
+        "#{name}='#{value.to_s.gsub("'", "'\\\\''")}'; export #{name}\n"
+      end.join
     end
 
     def status_script(job_id:, tail_lines:)
