@@ -117,6 +117,7 @@ import { z } from 'zod';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
+import { formatElapsedTime } from 'shared/lib/formatElapsedTime';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useLocalStorageSet } from 'shared/lib/hooks/useLocalStorage';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
@@ -387,11 +388,46 @@ function SortableTaskCard({
   );
 }
 
+// Status a collapsed ticket chip advertises: the bar colour and the hover tooltip both come
+// from here, so the folded strip still tells you which tickets are running, failed or waiting
+// without unfolding the column.
+function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean; tooltipLabel: string } {
+  const latestRun = task.recentWorkflowRuns?.[0];
+  const hasPendingGates = (task.pendingGates?.length ?? 0) > 0;
+
+  let color = 'var(--app-text-tertiary)';
+  let hasActiveRun = false;
+  if (latestRun) {
+    color = workflowStatusColor(latestRun.state);
+    hasActiveRun = WORKFLOW_ACTIVE_STATES.has(latestRun.state);
+  }
+  // A pending gate outranks the run state: the ticket is parked, so it must not read as active.
+  if (hasPendingGates) {
+    color = 'var(--app-warning-fg)';
+    hasActiveRun = false;
+  }
+
+  const tooltipParts: string[] = [task.title];
+  if (latestRun) {
+    if (latestRun.state === 'running' && latestRun.createdAt) {
+      tooltipParts.push(`Running — ${formatElapsedTime(latestRun.createdAt)}`);
+    } else {
+      tooltipParts.push(`Status: ${latestRun.state}`);
+    }
+  }
+  if (hasPendingGates) {
+    const oldestGate = task.pendingGates.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+    tooltipParts.push(`Waiting — ${formatElapsedTime(oldestGate.createdAt)}`);
+  }
+
+  return { color, hasActiveRun, tooltipLabel: tooltipParts.join(' · ') };
+}
+
 // A compact, draggable stand-in for a task shown inside a collapsed column strip.
 // It keeps the ticket present in the DOM as a sortable item so a drag can still be
 // initiated from a collapsed source column (board requirement 3). It renders no task
-// title text — only a small grab bar — so a collapsed column stays lightweight and does
-// not reveal card content while folded.
+// title text — only a small status bar — so a collapsed column stays lightweight and does
+// not reveal card content while folded; the title and run status live in the tooltip.
 function CollapsedTaskChip({ task }: { task: Task }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `task-${task.id}`,
@@ -404,24 +440,28 @@ function CollapsedTaskChip({ task }: { task: Task }) {
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const { color, hasActiveRun, tooltipLabel } = collapsedTaskStatus(task);
+
   return (
-    <Box
-      ref={setNodeRef}
-      aria-label={`Drag ${task.title}`}
-      title={task.title}
-      style={{
-        ...style,
-        width: 30,
-        height: 12,
-        borderRadius: 3,
-        backgroundColor: 'var(--app-border-default)',
-        cursor: 'grab',
-        touchAction: 'none',
-        flexShrink: 0,
-      }}
-      {...attributes}
-      {...listeners}
-    />
+    <Tooltip label={tooltipLabel} position="right" withArrow color="dark">
+      <Box
+        ref={setNodeRef}
+        aria-label={`Drag ${task.title}`}
+        style={{
+          ...style,
+          width: 30,
+          height: 12,
+          borderRadius: 3,
+          backgroundColor: color,
+          cursor: 'grab',
+          touchAction: 'none',
+          flexShrink: 0,
+          animation: hasActiveRun ? 'priorityBarPulse 2s ease-in-out infinite' : undefined,
+        }}
+        {...attributes}
+        {...listeners}
+      />
+    </Tooltip>
   );
 }
 
@@ -522,29 +562,32 @@ function TaskCardUI({
         </Text>
       </Group>
 
-      {/* Workflow status chip — filled colored badge (AC-11) */}
+      {/* Workflow status chip — filled colored badge (AC-11). The chip names only the latest run,
+          so the tooltip keeps listing every recent run's state as it did before the board redesign. */}
       {latestRun && dotColor && runLabel && (
-        <Group gap={4} mt={6} align="center">
-          <ActionIcon size="xs" variant="subtle" color="orange" style={{ cursor: 'default', flexShrink: 0 }}>
-            <IconBolt size={11} />
-          </ActionIcon>
-          <Badge
-            size="xs"
-            variant="filled"
-            color={isFailed ? 'red' : isRunning ? 'orange' : 'green'}
-            leftSection={
-              <Box
-                w={5}
-                h={5}
-                className={isRunning ? styles.workflowDotActive : undefined}
-                style={{ borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.7)', flexShrink: 0 }}
-              />
-            }
-            style={{ fontSize: 10, cursor: 'default', textTransform: 'uppercase', letterSpacing: 0.3 }}
-          >
-            {isFailed ? 'Failed' : isRunning ? 'Running' : 'Succeeded'}
-          </Badge>
-        </Group>
+        <Tooltip label={(task.recentWorkflowRuns ?? []).map((r) => r.state).join(', ')}>
+          <Group gap={4} mt={6} align="center">
+            <ActionIcon size="xs" variant="subtle" color="orange" style={{ cursor: 'default', flexShrink: 0 }}>
+              <IconBolt size={11} />
+            </ActionIcon>
+            <Badge
+              size="xs"
+              variant="filled"
+              color={isFailed ? 'red' : isRunning ? 'orange' : 'green'}
+              leftSection={
+                <Box
+                  w={5}
+                  h={5}
+                  className={isRunning ? styles.workflowDotActive : undefined}
+                  style={{ borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.7)', flexShrink: 0 }}
+                />
+              }
+              style={{ fontSize: 10, cursor: 'default', textTransform: 'uppercase', letterSpacing: 0.3 }}
+            >
+              {isFailed ? 'Failed' : isRunning ? 'Running' : 'Succeeded'}
+            </Badge>
+          </Group>
+        </Tooltip>
       )}
 
       {/* Type chip + tags */}
@@ -943,22 +986,26 @@ function BoardColumn({
               styles={{ input: { fontSize: 13, fontWeight: 600, padding: '0 0 0 4px' } }}
             />
           ) : (
-            <Text
-              {...colListeners}
-              fw={600}
-              title="Drag to reorder column"
-              style={{
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                fontSize: 13,
-                color: 'var(--mantine-color-text)',
-                cursor: 'grab',
-                touchAction: 'none',
-              }}
-            >
-              {column.name}
-            </Text>
+            // A column that declares a purpose explains it on hover, as it did before the board
+            // redesign. Without a purpose the name keeps the plain drag-affordance title.
+            <Tooltip label={column.purpose} multiline w={200} disabled={!column.purpose}>
+              <Text
+                {...colListeners}
+                fw={600}
+                title={column.purpose ? undefined : 'Drag to reorder column'}
+                style={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  fontSize: 13,
+                  color: 'var(--mantine-color-text)',
+                  cursor: 'grab',
+                  touchAction: 'none',
+                }}
+              >
+                {column.name}
+              </Text>
+            </Tooltip>
           )}
           <Text fw={500} c="dimmed" style={{ flexShrink: 0, fontSize: 12 }}>
             {tasks.length}
@@ -4722,6 +4769,15 @@ const BoardPage = () => {
           >
             Activity
           </Button>
+
+          {/* Board settings — the only entry point to BoardSettingsDialog */}
+          {canExecute && (
+            <Tooltip label="Board settings">
+              <ActionIcon variant="subtle" size="sm" aria-label="Board settings" onClick={() => setSettingsOpen(true)}>
+                <IconSettings size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
         </Group>
 
         {/* Board area */}
