@@ -44,6 +44,29 @@ module Coder
       end
     end
 
+    # Stands in for Coder::HealthCheck's active tier (its own decision logic is
+    # covered in health_check_test). Verdicts are keyed by workspace name;
+    # anything unlisted comes back with the default.
+    class FakeHealthCheck
+      attr_reader :probed
+
+      def initialize(verdicts = {}, default: :healthy)
+        @verdicts = verdicts
+        @default  = default
+        @probed   = []
+      end
+
+      def probe(workspace_name:)
+        @probed << workspace_name
+        state = @verdicts.fetch(workspace_name, @default)
+        Coder::HealthCheck::Result.new(
+          state:  state,
+          reason: "fake #{state}",
+          load:   @verdicts.dig(:loads, workspace_name)
+        )
+      end
+    end
+
     setup do
       @company     = create(:company)
       @user        = create(:user, :admin, company: @company)
@@ -52,13 +75,21 @@ module Coder
       @session     = OpenStruct.new(id: "sess-1")
     end
 
-    def build_allocator(workspace_service:, lock_service: Coder::LockService.new(@integration))
+    def build_allocator(workspace_service:, lock_service: Coder::LockService.new(@integration),
+                        health_check: FakeHealthCheck.new, quarantine_service: nil)
       Coder::Allocator.new(
-        integration:       @integration,
-        terminal_session:  @session,
-        workspace_service: workspace_service,
-        lock_service:      lock_service
+        integration:        @integration,
+        terminal_session:   @session,
+        workspace_service:  workspace_service,
+        lock_service:       lock_service,
+        health_check:       health_check,
+        quarantine_service: quarantine_service || Coder::QuarantineService.new(@integration)
       )
+    end
+
+    def running(name, id)
+      { "id" => id, "name" => name,
+        "latest_build" => { "transition" => "start", "job" => { "status" => "succeeded" } } }
     end
 
     test "picks a running workspace first and locks it" do
@@ -220,6 +251,135 @@ module Coder
       end
       assert_match(/1 failed to start: aixle-prod-1 \(build \(start\) failed: HTTP 500 spot capacity unavailable\)/,
                    error.message)
+    end
+
+    # ---------- health gating ----------
+
+    test "probes the workspace it locked and hands it over when healthy" do
+      ws     = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
+      health = FakeHealthCheck.new
+
+      result = build_allocator(workspace_service: ws, health_check: health).allocate
+
+      assert_equal "aixle-prod-1", result[:workspace_name]
+      assert_equal [ "aixle-prod-1" ], health.probed
+      assert_nil result[:health_warning]
+    end
+
+    test "quarantines a workspace that fails the probe, releases it, and allocates the next one" do
+      ws     = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1"), running("aixle-prod-2", "u2") ])
+      health = FakeHealthCheck.new({ "aixle-prod-1" => :sick })
+
+      result = build_allocator(workspace_service: ws, health_check: health).allocate
+
+      assert_equal "aixle-prod-2", result[:workspace_name]
+      assert Coder::QuarantineService.new(@integration).quarantined?(workspace_name: "aixle-prod-1")
+      assert_nil @integration.integration_data.find_by(key: "coder:workspace_lock:aixle-prod-1"),
+                 "a workspace that failed its probe must not stay locked"
+    end
+
+    test "skips a quarantined workspace without probing it" do
+      ws = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1"), running("aixle-prod-2", "u2") ])
+      Coder::QuarantineService.new(@integration).quarantine(workspace_name: "aixle-prod-1", reason: "load 84")
+      health = FakeHealthCheck.new
+
+      result = build_allocator(workspace_service: ws, health_check: health).allocate
+
+      assert_equal "aixle-prod-2", result[:workspace_name]
+      assert_equal [ "aixle-prod-2" ], health.probed
+    end
+
+    test "skips a workspace whose coder agent reports it unhealthy" do
+      unhealthy = running("aixle-prod-1", "u1").merge(
+        "latest_build" => running("aixle-prod-1", "u1")["latest_build"].merge(
+          "resources" => [ { "agents" => [ { "status" => "disconnected" } ] } ]
+        )
+      )
+      ws = FakeWorkspaceService.new(workspaces: [ unhealthy, running("aixle-prod-2", "u2") ])
+
+      result = build_allocator(workspace_service: ws).allocate
+
+      assert_equal "aixle-prod-2", result[:workspace_name]
+    end
+
+    test "excludes the workspaces the caller refuses" do
+      ws = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1"), running("aixle-prod-2", "u2") ])
+
+      result = build_allocator(workspace_service: ws).allocate(exclude: [ "aixle-prod-1" ])
+
+      assert_equal "aixle-prod-2", result[:workspace_name]
+    end
+
+    # D-0: allocation must never be worse than it was before health gating. A
+    # pool where everything looks sick still yields a workspace — with a
+    # warning, not an exception.
+    test "falls back to the least-bad workspace when every candidate fails its probe" do
+      ws     = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1"), running("aixle-prod-2", "u2") ])
+      health = FakeHealthCheck.new(
+        { "aixle-prod-1" => :sick, "aixle-prod-2" => :sick,
+          loads: { "aixle-prod-1" => 90.0, "aixle-prod-2" => 12.0 } }
+      )
+
+      result = build_allocator(workspace_service: ws, health_check: health).allocate
+
+      assert_equal "aixle-prod-2", result[:workspace_name], "expected the lower-load box"
+      assert_match(/no healthy workspace was available/, result[:health_warning])
+      assert Coder::LockService.new(@integration).held_by_session?(
+        workspace_name: "aixle-prod-2", terminal_session_id: @session.id
+      )
+    end
+
+    test "allocates normally when the probe cannot run at all" do
+      ws     = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
+      health = FakeHealthCheck.new({}, default: :unknown)
+
+      result = build_allocator(workspace_service: ws, health_check: health).allocate
+
+      assert_equal "aixle-prod-1", result[:workspace_name]
+      assert_nil result[:health_warning]
+      assert_not Coder::QuarantineService.new(@integration).quarantined?(workspace_name: "aixle-prod-1")
+    end
+
+    test "prefers creating a workspace over reusing an unhealthy one" do
+      ws     = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
+      health = FakeHealthCheck.new({ "aixle-prod-1" => :sick })
+      @integration.update!(settings: @integration.settings.merge("default_template" => "tpl-x"))
+
+      result = build_allocator(workspace_service: ws, health_check: health).allocate
+
+      assert_match(/\Aaixle-prod-[0-9a-f]+\z/, result[:workspace_name])
+      assert_equal "starting", result[:status]
+    end
+
+    test "a successful probe clears a stale quarantine row" do
+      ws = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
+      quarantine = Coder::QuarantineService.new(@integration)
+      quarantine.quarantine(workspace_name: "aixle-prod-1", reason: "old", minutes: -1)
+
+      build_allocator(workspace_service: ws).allocate
+
+      assert_nil @integration.integration_data.find_by(key: "coder:workspace_health:aixle-prod-1"),
+                 "a workspace that passes its probe must not keep an old quarantine row"
+    end
+
+    test "ExhaustedError explains the unhealthy candidates it could not fall back to" do
+      ws = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
+      health = FakeHealthCheck.new({ "aixle-prod-1" => :sick })
+      lock_service = Coder::LockService.new(@integration)
+
+      allocator = build_allocator(workspace_service: ws, health_check: health, lock_service: lock_service)
+
+      # The probe releases the lock; another session grabs it before the
+      # fallback can, so there is genuinely nothing left to hand over.
+      lock_service.define_singleton_method(:acquire) do |**kwargs|
+        raise Coder::LockService::LockNotAcquired, "taken" if @seen_once
+
+        @seen_once = true
+        super(**kwargs)
+      end
+
+      error = assert_raises(Coder::Allocator::ExhaustedError) { allocator.allocate }
+      assert_match(/unhealthy and unlockable: aixle-prod-1/, error.message)
     end
 
     test "lock value records terminal_session_id and never task_id / step_run_id" do

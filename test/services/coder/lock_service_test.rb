@@ -152,5 +152,32 @@ module Coder
         Coder::LockService.release_all_for_session(OpenStruct.new(id: "s", project: nil))
       end
     end
+
+    # The TTL has to measure silence, not time since allocation: a step that
+    # dies hard used to hold its workspace for the full window, which is how an
+    # eight-machine pool presented as a one-machine pool.
+    test "touch pushes the expiry forward for the holding session" do
+      row = @service.acquire(**lock_args)
+      original = row.expires_at
+
+      travel 10.minutes do
+        assert @service.touch(workspace_name: "ws-1", terminal_session_id: lock_args[:terminal_session_id])
+      end
+
+      assert_operator @integration.integration_data.find_by(key: "coder:workspace_lock:ws-1").expires_at,
+                      :>, original
+    end
+
+    test "touch does not renew a lock held by another session" do
+      row = @service.acquire(**lock_args(terminal_session_id: "sess-OWNER"))
+
+      assert_not @service.touch(workspace_name: "ws-1", terminal_session_id: "sess-OTHER")
+      assert_equal row.expires_at.to_i,
+                   @integration.integration_data.find_by(key: "coder:workspace_lock:ws-1").expires_at.to_i
+    end
+
+    test "touch on a workspace nobody holds reports false" do
+      assert_not @service.touch(workspace_name: "ws-missing", terminal_session_id: "sess-1")
+    end
   end
 end

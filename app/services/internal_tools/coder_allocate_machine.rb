@@ -8,7 +8,11 @@ module InternalTools
   class CoderAllocateMachine < Base
     tool do
       display_name "Coder: Allocate Machine"
-      description "Allocate a Coder workspace for the current terminal session. Picks an available workspace from the integration's pool (or creates one if a default template is configured), locks it to the current terminal session, and returns the workspace identity (name, id, ssh command, lock expiry)."
+      description "Allocate a Coder workspace for the current terminal session. Picks a healthy available workspace from the integration's pool " \
+                  "(or creates one if a default template is configured), locks it to the current terminal session, and returns the workspace " \
+                  "identity (name, id, ssh command, lock expiry). Workspaces are health-checked before hand-over; if none is healthy the least-bad " \
+                  "one is returned with a `health_warning`. If the allocated workspace turns out to be unusable, call this again with `exclude` " \
+                  "set to its name instead of releasing and retrying — a plain retry returns the same workspace."
       tags :coder
       inject_when :coder_integration_connected
       requires_integration :coder
@@ -19,6 +23,11 @@ module InternalTools
           note: {
             type: "string",
             description: "Optional free-form note recorded on the workspace lock (audit / debug aid). Do NOT include the task id or task link — task context is derived server-side."
+          },
+          exclude: {
+            type: "array",
+            items: { type: "string" },
+            description: "Workspace names this session will not accept — e.g. one that just failed to run anything. Skipped before locking."
           }
         }
       })
@@ -34,7 +43,8 @@ module InternalTools
         terminal_session: session
       ).allocate(
         note:        params[:note],
-        acquired_by: acquired_by_label
+        acquired_by: acquired_by_label,
+        exclude:     Array(params[:exclude])
       )
 
       success(result.to_json)

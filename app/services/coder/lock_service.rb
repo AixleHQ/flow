@@ -85,6 +85,25 @@ module Coder
       row
     end
 
+    # Push the lock's expiry forward, holder-scoped. Called on every tool use
+    # against the workspace, which turns the TTL from "time since the lock was
+    # taken" into "time since the session last did anything" — the property the
+    # pool actually needs. A step that dies hard frees its box after one idle
+    # TTL instead of holding it for the full window from acquisition, while a
+    # long-running gate never has its lock expire underneath it.
+    #
+    # Single statement, scoped to the holder, so a lock that expired mid-flight
+    # and was reclaimed by another session is left alone. Returns whether a row
+    # was renewed.
+    def touch(workspace_name:, terminal_session_id:)
+      now = Time.current
+      @integration.integration_data
+                  .where(key: lock_key(workspace_name))
+                  .where("value ->> 'terminal_session_id' = ?", terminal_session_id.to_s)
+                  .update_all([ "expires_at = ?, updated_at = ?", now + ttl_minutes.minutes, now ])
+                  .positive?
+    end
+
     # Idempotent — deletes the lock row if present. Not scoped to a holder:
     # callers that act on behalf of a session must use `release_owned`.
     def release(workspace_name:)

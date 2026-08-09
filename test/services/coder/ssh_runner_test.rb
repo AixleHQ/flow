@@ -91,9 +91,27 @@ module Coder
       ws_idx = captured_args.index("ws-x")
       assert ws_idx, "expected workspace name to appear in argv"
       assert_equal "--", captured_args[ws_idx + 1], "expected `--` immediately after workspace name"
-      assert_equal command, captured_args[ws_idx + 2], "expected the command verbatim as one token after `--`"
+      remote = captured_args[ws_idx + 2]
+      assert remote.end_with?(command), "expected the command verbatim at the end of the single remote token"
       assert_equal ws_idx + 3, captured_args.length, "expected no extra tokens (no `sh`/`-c`) after the command"
       assert_not_includes captured_args, "sh", "command must not be wrapped in `sh -c`"
+    end
+
+    # `coder ssh <ws> -- <cmd>` inherits almost no environment; without HOME
+    # every git call on the workspace dies with `fatal: $HOME not set`, which
+    # sessions were working around by hand-prefixing each command.
+    test "exports a HOME fallback ahead of the command" do
+      captured_args = nil
+      stub = popen3_stub { |_env, argv| captured_args = argv }
+
+      Open3.stub(:popen3, stub) do
+        Coder::SshRunner.new(@integration).exec(workspace_name: "ws-1", command: "git status")
+      end
+
+      remote = captured_args.last
+      assert_match(/\Aexport HOME=/, remote)
+      assert_match(%r{/tmp}, remote, "expected a fallback for an agent that cannot write to /root")
+      assert remote.end_with?("git status")
     end
 
     # Regression guard: protect the well-known popen3 + Timeout anti-pattern by
@@ -237,6 +255,142 @@ module Coder
       runner = Coder::SshRunner.new(@integration)
       assert_raises(Coder::SshRunner::CommandError) { runner.exec(workspace_name: "", command: "x") }
       assert_raises(Coder::SshRunner::CommandError) { runner.exec(workspace_name: "ws", command: "  ") }
+    end
+
+    # ---------- detached execution ----------
+
+    test "detached start writes the command through a quoted heredoc and returns a job id" do
+      captured_args = nil
+      stub = popen3_stub(out: "aixle_job job_id=abc123 job_dir=/var/lib/aixle-jobs\n") do |_env, argv|
+        captured_args = argv
+      end
+
+      result = Open3.stub(:popen3, stub) do
+        Coder::SshRunner.new(@integration).exec_detached(
+          workspace_name: "ws-1", command: "make check_all", job_id: "abc123"
+        )
+      end
+
+      assert_equal "abc123", result[:job_id]
+      assert_equal "/var/lib/aixle-jobs", result[:job_dir]
+      assert_equal "/var/lib/aixle-jobs/abc123.log", result[:log_path]
+
+      script = captured_args.last
+      assert_match(/make check_all/, script, "expected the command to reach the remote script verbatim")
+      assert_match(/setsid/, script)
+      assert_match(/nohup/, script, "expected a fallback for a workspace without setsid")
+      assert_match(%r{TMPDIR:-/tmp}, script, "expected a fallback job dir when /var/lib is not writable")
+    end
+
+    test "detached start reports the fallback job dir chosen by the workspace" do
+      stub = popen3_stub(out: "aixle_job job_id=j1 job_dir=/tmp/aixle-jobs\n")
+
+      result = Open3.stub(:popen3, stub) do
+        Coder::SshRunner.new(@integration).exec_detached(workspace_name: "ws-1", command: "true", job_id: "j1")
+      end
+
+      assert_equal "/tmp/aixle-jobs/j1.log", result[:log_path]
+    end
+
+    test "detached start raises when the workspace could not launch the job" do
+      stub = popen3_stub(err: "cannot create a job directory", exit_code: 1)
+
+      Open3.stub(:popen3, stub) do
+        error = assert_raises(Coder::SshRunner::CommandError) do
+          Coder::SshRunner.new(@integration).exec_detached(workspace_name: "ws-1", command: "true")
+        end
+        assert_match(/cannot create a job directory/, error.message)
+      end
+    end
+
+    test "job status parses state, exit code and log tail" do
+      out = "aixle_job state=exited exit_code=2\n---aixle_job_log---\nline one\nline two\n"
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal "exited", status[:state]
+      assert_equal 2, status[:exit_code]
+      assert_equal "line one\nline two\n", status[:tail]
+    end
+
+    test "job status reports unknown for a job the workspace has no trace of" do
+      status = Open3.stub(:popen3, popen3_stub(out: "aixle_job state=unknown exit_code=\n")) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "gone")
+      end
+
+      assert_equal "unknown", status[:state]
+      assert_nil status[:exit_code]
+    end
+
+    test "job id must be a safe token" do
+      runner = Coder::SshRunner.new(@integration)
+      assert_raises(Coder::SshRunner::CommandError) do
+        runner.job_status(workspace_name: "ws-1", job_id: "j1; rm -rf /")
+      end
+      assert_raises(Coder::SshRunner::CommandError) do
+        runner.exec_detached(workspace_name: "ws-1", command: "true", job_id: "../../etc/passwd")
+      end
+    end
+
+    # ---------- honest timeouts ----------
+
+    test "clamps the requested timeout to the transport ceiling it can actually reach" do
+      slow = lambda { |_env, *_argv, **_opts, &blk|
+        in_r  = StringIO.new
+        out_r = Object.new
+        def out_r.read(*) = sleep(5)
+        err_r = StringIO.new("")
+        wait  = StubWaitThr.new(exitstatus: 0, pid: 4242, alive: true)
+        blk.call(in_r, out_r, err_r, wait)
+      }
+
+      with_settings_ceiling(1) do
+        Process.stub(:kill, ->(*_args) { 1 }) do
+          Open3.stub(:popen3, slow) do
+            result = Coder::SshRunner.new(@integration).exec(
+              workspace_name: "ws-1", command: "sleep 999", timeout: 600
+            )
+
+            assert_equal 124, result[:exit_code]
+            assert_match(/timed out after 1s/, result[:stderr],
+                         "expected the ceiling to win over the requested 600s")
+          end
+        end
+      end
+    end
+
+    test "a timeout says the remote work may still be running and must not be re-issued" do
+      slow = lambda { |_env, *_argv, **_opts, &blk|
+        in_r  = StringIO.new
+        out_r = Object.new
+        def out_r.read(*) = sleep(5)
+        err_r = StringIO.new("")
+        wait  = StubWaitThr.new(exitstatus: 0, pid: 4242, alive: true)
+        blk.call(in_r, out_r, err_r, wait)
+      }
+
+      Process.stub(:kill, ->(*_args) { 1 }) do
+        Open3.stub(:popen3, slow) do
+          result = Coder::SshRunner.new(@integration).exec(
+            workspace_name: "ws-1", command: "make check_all", timeout: 1
+          )
+
+          assert_match(/still be RUNNING/, result[:stderr])
+          assert_match(/detach: true/, result[:stderr])
+        end
+      end
+    end
+
+    private
+
+    def with_settings_ceiling(seconds)
+      original = Settings.coder.ssh_exec_ceiling_seconds
+      Settings.coder.ssh_exec_ceiling_seconds = seconds
+      yield
+    ensure
+      Settings.coder.ssh_exec_ceiling_seconds = original
     end
   end
 end
