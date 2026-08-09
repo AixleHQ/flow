@@ -320,6 +320,71 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_equal "failed", session.state
   end
 
+  # == fail_session ==
+
+  test "fail_session records the error, fails the session and signals its container workflow" do
+    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: "wf-dead")
+
+    # The container workflow ("agent-session-<id>") is the execution that owns the
+    # pod: without this signal it waits out its 23-hour `container_finished`
+    # timeout, its cleanup phase never runs, and the pod, Service, IngressRoute and
+    # Middlewares leak for a day.
+    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
+
+    SessionService.fail_session(session: session, error_message: "Agent container vanished")
+
+    session.reload
+    assert_equal "failed", session.state
+    assert_equal "Agent container vanished", session.error_message
+    assert_not_nil session.finished_at
+  end
+
+  test "fail_session signals the container workflow as well as the parent workflow run" do
+    workflow_run = create(:workflow_run, project: @project, user: @user)
+    step = create(:step, workflow: workflow_run.workflow)
+    step_run = create(:step_run, workflow_run: workflow_run, step: step)
+    session = create(:terminal_session, :running, user: @user, session_type: "workflow_step",
+                     project: @project, temporal_workflow_id: "wf-step")
+    step_run.update!(terminal_session: session)
+
+    # TerminalSession#on_failed only reaches the parent run, which completes the
+    # step. That is not enough on its own — both executions must hear about it.
+    TemporalService.expects(:send_signal)
+      .with("workflow-execution-#{workflow_run.id}", :container_finished, step_run.id).once
+    TemporalService.expects(:send_signal)
+      .with(session.workflow_id, :container_finished, step_run.id).once
+
+    SessionService.fail_session(session: session, error_message: "Agent container vanished")
+
+    assert_equal "failed", session.reload.state
+  end
+
+  test "fail_session fails a session that has no temporal workflow without signalling" do
+    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: nil)
+
+    TemporalService.expects(:send_signal).never
+
+    SessionService.fail_session(session: session, error_message: "Agent container vanished")
+
+    session.reload
+    assert_equal "failed", session.state
+    assert_equal "Agent container vanished", session.error_message
+  end
+
+  test "fail_session on an already failed session keeps its original error and still signals" do
+    session = create(:terminal_session, :failed, user: @user, temporal_workflow_id: "wf-dead")
+
+    # A second sweep must still be able to nudge a container workflow that is
+    # somehow still running — the state transition is what is idempotent here.
+    TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
+
+    SessionService.fail_session(session: session)
+
+    session.reload
+    assert_equal "failed", session.state
+    assert_equal "Container failed to start", session.error_message
+  end
+
   # == create_for_workflow_step ==
 
   test "create_for_workflow_step creates session bound to step_run" do

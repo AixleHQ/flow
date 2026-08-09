@@ -213,6 +213,51 @@ module ContainerRuntime
       assert_equal "aixle-project-77", result.namespace
     end
 
+    # -- container_status: is this pod still alive? --
+    #
+    # Pods run with restartPolicy: Never and no owning controller, so a dead agent
+    # either leaves a terminated pod behind or — when its node is gone — no pod at
+    # all. Both must read as "gone"; a pod that has simply not been scheduled yet
+    # must not.
+
+    test "container_status reports a running pod as running" do
+      stub_pod_phase("Running")
+
+      assert_equal :running, @runtime.container_status(pod_handle)
+    end
+
+    test "container_status reports a pending pod as starting" do
+      stub_pod_phase("Pending")
+
+      assert_equal :starting, @runtime.container_status(pod_handle)
+    end
+
+    test "container_status reports a pod that left the Running phase as terminated" do
+      stub_pod_phase("Failed")
+      assert_equal :terminated, @runtime.container_status(pod_handle)
+
+      stub_pod_phase("Succeeded")
+      assert_equal :terminated, @runtime.container_status(pod_handle)
+    end
+
+    test "container_status reports a pod the API no longer knows as missing" do
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).raises(Kubeclient::ResourceNotFoundError.new(404, "pods 'my-pod' not found", nil))
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      assert_equal :missing, @runtime.container_status(pod_handle)
+    end
+
+    test "container_status reports unknown rather than dead when the API cannot answer" do
+      # An unreachable control plane is not a dead pod: callers only fail sessions
+      # on :missing/:terminated.
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).raises(StandardError.new("connection refused"))
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      assert_equal :unknown, @runtime.container_status(pod_handle)
+    end
+
     test "stop_container deletes pod" do
       handle = OpenStruct.new(pod_name: "my-pod", namespace: "default")
       core_mock = mock("core_client")
@@ -479,6 +524,20 @@ module ContainerRuntime
     end
 
     private
+
+    # A resolved handle, so the status lookup is the only API call under test.
+    def pod_handle
+      OpenStruct.new(pod_name: "my-pod", namespace: "default")
+    end
+
+    def stub_pod_phase(phase)
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).with("my-pod", "default").returns(
+        OpenStruct.new(status: OpenStruct.new(phase: phase))
+      )
+      @runtime.stubs(:core_client).returns(core_mock)
+      core_mock
+    end
 
     def build_test_tar(filename, content)
       io = StringIO.new

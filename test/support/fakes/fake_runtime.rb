@@ -31,6 +31,22 @@ module ContainerRuntime
       @fs = filesystem || build_filesystem(agent_type)
       @execs = []
       @exec_failures = []
+      @default_container_status = :running
+      @container_statuses = {}
+    end
+
+    # Liveness injection: answer #container_status with `status` for one container
+    # id, or for every container when `container_id:` is omitted. Mirrors the
+    # vocabulary documented on BaseRuntime#container_status. Passing an exception
+    # instance makes the lookup raise instead (both real runtimes swallow control
+    # plane errors into :unknown, so this models a caller-visible failure).
+    def set_container_status(status, container_id: nil)
+      if container_id.nil?
+        @default_container_status = status
+      else
+        @container_statuses[container_id.to_s] = status
+      end
+      self
     end
 
     # Command failure injection: register a substring of the command line and
@@ -108,6 +124,14 @@ module ContainerRuntime
       return container if container.is_a?(String)
 
       container.respond_to?(:id) ? container.id.to_s[0..11] : container.to_s
+    end
+
+    def container_status(id)
+      key = id.respond_to?(:id) ? id.id.to_s : id.to_s
+      status = @container_statuses.fetch(key, @default_container_status)
+      raise status if status.is_a?(Exception)
+
+      status
     end
 
     def wait_container(_id, _timeout = nil)

@@ -107,6 +107,42 @@ module ContainerRuntime
       assert_nil result
     end
 
+    # -- container_status: is this container still alive? --
+
+    test "container_status reports a live container as running" do
+      stub_container_state("Running" => true, "Status" => "running")
+
+      assert_equal :running, @runtime.container_status("cid")
+    end
+
+    test "container_status reports a container that has not started yet as starting" do
+      stub_container_state("Running" => false, "Status" => "created")
+
+      assert_equal :starting, @runtime.container_status("cid")
+    end
+
+    test "container_status reports an exited container as terminated" do
+      stub_container_state("Running" => false, "Status" => "exited", "ExitCode" => 137)
+
+      assert_equal :terminated, @runtime.container_status("cid")
+    end
+
+    test "container_status reports a container the daemon has never heard of as missing" do
+      Docker::Container.stubs(:get).with("gone").raises(Docker::Error::NotFoundError)
+
+      assert_equal :missing, @runtime.container_status("gone")
+    end
+
+    test "container_status reports unknown rather than dead when the daemon errors" do
+      # A daemon that cannot answer is not evidence a container died — callers key
+      # session failure off :missing/:terminated only.
+      container_mock = mock("container")
+      container_mock.stubs(:json).raises(Docker::Error::ServerError.new("boom"))
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      assert_equal :unknown, @runtime.container_status("cid")
+    end
+
     test "container_identifier returns nil for blank" do
       assert_nil @runtime.container_identifier(nil)
       assert_nil @runtime.container_identifier("")
@@ -307,6 +343,13 @@ module ContainerRuntime
     end
 
     private
+
+    def stub_container_state(state)
+      container_mock = mock("container")
+      container_mock.stubs(:json).returns("State" => state)
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+      container_mock
+    end
 
     def build_test_tar(filename, content)
       io = StringIO.new

@@ -163,6 +163,30 @@ module ContainerRuntime
       container.to_s
     end
 
+    # Pods are created with `restartPolicy: Never` (see #build_pod), so a container
+    # that dies is NOT restarted: the pod leaves the Running phase and stays around
+    # as Succeeded/Failed. When the node itself dies the pod object is eventually
+    # garbage-collected instead and the lookup 404s. Both mean the agent is gone.
+    #
+    # Pending is deliberately :starting — a pod waiting on scheduling or an image
+    # pull has simply not run yet.
+    def container_status(id)
+      handle = resolve_handle(id)
+      pod = core_client.get_pod(handle.pod_name, handle.namespace)
+
+      case pod&.status&.phase.to_s
+      when "Running" then :running
+      when "Pending" then :starting
+      when "Succeeded", "Failed" then :terminated
+      else :unknown
+      end
+    rescue Kubeclient::ResourceNotFoundError
+      :missing
+    rescue StandardError => e
+      Rails.logger.warn("[KubernetesRuntime] container_status failed for #{id}: #{e.message}")
+      :unknown
+    end
+
     private
 
     def copy_from(id, path)

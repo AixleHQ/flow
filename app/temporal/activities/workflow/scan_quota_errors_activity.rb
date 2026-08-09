@@ -2,8 +2,10 @@
 
 # ScanQuotaErrorsActivity
 # Finds active workflow_step sessions and checks for quota error patterns in
-# error_message and live terminal output. When detected, transitions the session
-# to "failed" which triggers container_finished → CompleteStepActivity.
+# error_message and live terminal output. When detected, fails the session through
+# SessionService.fail_session, which both completes the step (container_finished →
+# CompleteStepActivity) and lets the session's own container workflow reach its
+# cleanup phase instead of waiting out its 23-hour signal timeout.
 module Activities
   module Workflow
     class ScanQuotaErrorsActivity < ::Activities::Base
@@ -18,8 +20,12 @@ module Activities
           detection = QuotaErrorDetector.detect(detection_text_for(session))
           next unless detection.quota_error?
 
-          session.update!(error_message: detection.message)
-          session.fail! if session.may_fail?
+          # Through SessionService, not `fail!` directly: failing the row alone
+          # leaves this session's own container workflow parked on its
+          # `container_finished` await for 23 hours, so its cleanup phase never
+          # runs and the pod/Service/IngressRoute leak. See
+          # SessionService.fail_session.
+          SessionService.fail_session(session: session, error_message: detection.message)
           cleaned += 1
         rescue StandardError => e
           log(:warn, "Failed to process session #{session.id}: #{e.message}")

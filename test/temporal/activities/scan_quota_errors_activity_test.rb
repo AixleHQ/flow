@@ -119,6 +119,27 @@ module Activities
         assert_equal "Error: You've reached your normal usage limit.", session.error_message
       end
 
+      test "signals the failed session's own container workflow so its cleanup runs" do
+        session = create(:terminal_session,
+          user: @user,
+          session_type: :workflow_step,
+          state: "ready",
+          container_id: "container-quota",
+          started_at: 3.minutes.ago,
+          temporal_workflow_id: "wf-quota",
+          error_message: "Credit balance too low · Add funds: https://platform.claude.com/settings/billing")
+
+        # Failing the row alone left this execution parked on its `container_finished`
+        # await for 23 hours, so the pod, Service and IngressRoute were never
+        # reclaimed. It is the same leak the dead-container watchdog had to avoid.
+        TemporalService.expects(:send_signal).with(session.workflow_id, :container_finished, nil).once
+
+        result = run_activity(ScanQuotaErrorsActivity)
+
+        assert_equal 1, result[:cleaned]
+        assert_equal "failed", session.reload.state
+      end
+
       test "does not touch sessions without quota error text" do
         session = create(:terminal_session, :running,
           user: @user,

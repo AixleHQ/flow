@@ -23,6 +23,12 @@ workflows:
       - name: session_cleanup_stale_activity
         task_queue: aixle_ruby
 
+  - name: dead_container_scan_workflow
+    owner: aixle_ruby
+    activities:
+      - name: session_scan_dead_containers_activity
+        task_queue: aixle_ruby
+
   - name: dismissed_asset_cleanup_workflow
     owner: aixle_ruby
     activities:

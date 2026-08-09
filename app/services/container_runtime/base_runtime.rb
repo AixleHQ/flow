@@ -25,6 +25,7 @@ module ContainerRuntime
   # == Introspection
   #   resolve_container(id)                      → container handle
   #   container_identifier(container)            → String
+  #   container_status(id)                       → Symbol (see #container_status)
   #   wait_container(id, timeout=nil)            → Hash { "StatusCode" => int }
   #   container_logs(id, opts={})                → Hash { stdout:, stderr: }
   #
@@ -92,6 +93,23 @@ module ContainerRuntime
 
     def container_identifier(_container)
       raise NotImplementedError, "#{self.class.name} must implement #container_identifier"
+    end
+
+    # Liveness of a container as the runtime sees it *right now*. One of:
+    #
+    #   :running    — the workload is up
+    #   :starting   — accepted by the runtime but not up yet (k8s Pending,
+    #                 docker "created"/"restarting") — NOT a dead container
+    #   :terminated — it ran and is over (k8s Succeeded/Failed, docker exited/dead)
+    #   :missing    — the runtime has no record of it at all
+    #   :unknown    — the runtime could not answer (control-plane error, state
+    #                 string we don't recognize)
+    #
+    # Callers may treat :terminated and :missing as "the agent is gone". They must
+    # NOT treat :unknown that way: an unreachable control plane is not a dead pod,
+    # and a scheduling backlog (:starting) is not one either.
+    def container_status(_id)
+      raise NotImplementedError, "#{self.class.name} must implement #container_status"
     end
 
     def wait_container(_id, _timeout = nil)

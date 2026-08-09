@@ -182,6 +182,32 @@ module ContainerRuntime
       container.to_s
     end
 
+    # `resolve_container` answers nil for a container the daemon has never heard of
+    # (or has already pruned), which is the docker equivalent of a vanished pod.
+    # A container that ran and stopped stays in the daemon's list as
+    # exited/dead — that is the "agent died, nothing restarted it" case, since
+    # agent containers are never started with a restart policy.
+    def container_status(id)
+      container = resolve_container(id)
+      return :missing if container.nil?
+
+      state = container.json["State"] || {}
+      # Paused containers report Running=true; they have not exited, so they are
+      # not dead.
+      return :running if state["Running"]
+
+      case state["Status"].to_s
+      when "created", "restarting" then :starting
+      when "exited", "dead", "removing" then :terminated
+      else :unknown
+      end
+    rescue Docker::Error::NotFoundError
+      :missing
+    rescue StandardError => e
+      Rails.logger.warn("[DockerRuntime] container_status failed for #{id}: #{e.message}")
+      :unknown
+    end
+
     private
 
     def wait_for_traffic_route(container)
