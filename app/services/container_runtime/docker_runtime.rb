@@ -14,6 +14,11 @@ module ContainerRuntime
     TRAEFIK_ROUTE_TIMEOUT = 30
     TRAEFIK_ROUTE_INTERVAL = 1
 
+    # Set by ContainerStrategies::AgentBaseStrategy#base_labels on every agent
+    # session's container (and by no tool strategy); its presence is what makes a
+    # container reapable as a session object rather than part of the stack.
+    SESSION_LABEL = "aixle.session_id"
+
     # -- Lifecycle ------------------------------------------------------------
 
     def pull_image(image)
@@ -182,7 +187,90 @@ module ContainerRuntime
       container.to_s
     end
 
+    # `resolve_container` answers nil for a container the daemon has never heard of
+    # (or has already pruned), which is the docker equivalent of a vanished pod.
+    # A container that ran and stopped stays in the daemon's list as
+    # exited/dead — that is the "agent died, nothing restarted it" case, since
+    # agent containers are never started with a restart policy.
+    def container_status(id)
+      container = resolve_container(id)
+      return :missing if container.nil?
+
+      state = container.json["State"] || {}
+      # Paused containers report Running=true; they have not exited, so they are
+      # not dead.
+      return :running if state["Running"]
+
+      case state["Status"].to_s
+      when "created", "restarting" then :starting
+      when "exited", "dead", "removing" then :terminated
+      else :unknown
+      end
+    rescue Docker::Error::NotFoundError
+      :missing
+    rescue StandardError => e
+      Rails.logger.warn("[DockerRuntime] container_status failed for #{id}: #{e.message}")
+      :unknown
+    end
+
+    # -- Garbage collection ---------------------------------------------------
+
+    # Docker has no Service/IngressRoute equivalent — Traefik reads its routes
+    # from the container's own labels — so a session owns exactly one object and
+    # the deletion order is trivially satisfied.
+    #
+    # `all: true` on purpose: an exited container still holds its name and its
+    # Traefik labels, which is precisely the leak this sweeps.
+    def list_session_resources
+      Docker::Container.all(all: true, filters: { label: [ SESSION_LABEL ] }.to_json)
+                       .filter_map { |container| build_session_resource(container) }
+    rescue StandardError => e
+      Rails.logger.warn("[DockerRuntime] Failed to list session containers: #{e.message}")
+      []
+    end
+
+    def delete_session_resource(resource)
+      return false if resource.blank? || resource.name.blank?
+
+      Docker::Container.get(resource.name).remove(force: true)
+      true
+    rescue Docker::Error::NotFoundError
+      # Already gone — the goal state, not a failure.
+      true
+    rescue StandardError => e
+      Rails.logger.warn("[DockerRuntime] Failed to delete #{resource}: #{e.message}")
+      false
+    end
+
     private
+
+    def build_session_resource(container)
+      info = container.info || {}
+      names = Array(info["Names"]).map { |name| name.to_s.delete_prefix("/") }
+      name = names.first.presence || info["Id"].presence || container.id
+      return nil if name.blank?
+
+      created = info["Created"]
+
+      ContainerRuntime::SessionResource.new(
+        kind: "Container",
+        name: name,
+        namespace: nil,
+        # nil for anything not named `terminal-<route_token>` — an unprovable
+        # owner, which the sweeper keeps.
+        route_token: names.filter_map { |candidate| route_token_from_name(candidate) }.first,
+        created_at: created.present? ? Time.zone.at(created.to_i) : nil
+      )
+    rescue StandardError => e
+      Rails.logger.warn("[DockerRuntime] Failed to describe session container: #{e.message}")
+      nil
+    end
+
+    def route_token_from_name(name)
+      return nil unless name.to_s.start_with?("terminal-")
+
+      name.delete_prefix("terminal-").presence
+    end
 
     def wait_for_traffic_route(container)
       route_token = route_token_from_container(container)

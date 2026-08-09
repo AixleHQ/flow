@@ -23,6 +23,12 @@ workflows:
       - name: session_cleanup_stale_activity
         task_queue: aixle_ruby
 
+  - name: dead_container_scan_workflow
+    owner: aixle_ruby
+    activities:
+      - name: session_scan_dead_containers_activity
+        task_queue: aixle_ruby
+
   - name: dismissed_asset_cleanup_workflow
     owner: aixle_ruby
     activities:
@@ -45,6 +51,12 @@ workflows:
     owner: aixle_ruby
     activities:
       - name: coder_sweep_expired_locks_activity
+        task_queue: aixle_ruby
+
+  - name: container_sweep_orphaned_resources_workflow
+    owner: aixle_ruby
+    activities:
+      - name: container_sweep_orphaned_resources_activity
         task_queue: aixle_ruby
 
   - name: mcp_connector_catalog_sync_workflow

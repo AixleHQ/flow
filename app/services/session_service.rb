@@ -63,6 +63,33 @@ class SessionService
       session.fail! if session.may_fail?
     end
 
+    # Fail a session AND wake its container workflow, so the container's cleanup
+    # phase actually runs. THE blessed way to fail a session from outside the
+    # container workflow (watchdogs, scanners) — do not hand-roll
+    # `update!(error_message:) + fail!`.
+    #
+    # Why the signal is not optional: `TerminalSession#on_failed` only notifies the
+    # PARENT workflow run ("workflow-execution-<id>", via WorkflowService), which
+    # completes the step. The session's own container workflow is a different
+    # execution ("agent-session-<id>") and it is parked in its `exec` phase
+    # awaiting `container_finished` with a 23-hour signal timeout (see
+    # WorkflowStepStrategy#phase_config). Failing the row without signalling that
+    # execution leaves it spinning until the timeout, and its cleanup phase — the
+    # only thing that deletes the pod, Service, IngressRoute and Middlewares —
+    # never runs. Every such failure leaked its Kubernetes objects for a day.
+    #
+    # Ordering mirrors `finish`: transition first, signal second. The cleanup phase
+    # decides the step's outcome from `session.state` (CompleteStepActivity), so it
+    # must already read `failed`. Clearing `container_id` in `on_failed` is safe —
+    # the cleanup phase takes its container reference from the workflow's own
+    # accumulated state, not from the row.
+    def fail_session(session:, error_message: nil)
+      session.update!(error_message: error_message) if error_message.present?
+      session.fail! if session.may_fail?
+      signal_container_finished(session) if session.temporal_workflow_id.present?
+      session
+    end
+
     def create_for_workflow_step(step_run:)
       workflow_run = step_run.workflow_run
       step = step_run.step

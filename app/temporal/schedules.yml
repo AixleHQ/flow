@@ -14,6 +14,24 @@ schedules:
     cron: "* * * * *"
     enabled: true
 
+  # Watchdog for agent containers that died without telling anyone (node failure,
+  # eviction, OOM kill). The pods are bare pods with restartPolicy: Never, so
+  # nothing else notices: the session stays `ready` and its container workflow
+  # waits 23 hours for a signal that will never arrive.
+  #
+  # Every minute, because the cost of a miss is a workflow step wedged for a day,
+  # while the scan is one runtime lookup per active session. Nothing is failed on a
+  # single sighting — the activity requires two, two minutes apart — so the cadence
+  # sets detection latency (~3 minutes), not sensitivity.
+  #
+  # SKIP overlap: a slow sweep must not be joined by the next one re-checking the
+  # same sessions, which would confirm a session dead against its own first
+  # sighting.
+  - workflow: dead_container_scan_workflow
+    cron: "* * * * *"
+    overlap: skip
+    enabled: true
+
   # Transactional-outbox safety net: re-dispatches trigger events a producer
   # committed but crashed before dispatching. Every minute is the finest cron
   # granularity; the happy path dispatches inline, so this only recovers crashes.
@@ -25,6 +43,20 @@ schedules:
 
   - workflow: coder_sweep_expired_locks_workflow
     cron: "0 * * * *"
+    enabled: true
+
+  # Reclaims the Kubernetes objects of agent sessions that ended without the
+  # happy-path teardown running — the node-died case, which otherwise leaves an
+  # IngressRoute and an endpoint-less Service answering 503 on the session URL
+  # forever.
+  #
+  # Every 10 minutes against a 15-minute minimum object age: an orphan is gone
+  # within ~25 minutes, while nothing created inside the last quarter hour can
+  # be looked at. SKIP overlap: two sweeps would enumerate the same objects and
+  # race each other's deletes, turning a benign 404 into log noise.
+  - workflow: container_sweep_orphaned_resources_workflow
+    cron: "*/10 * * * *"
+    overlap: skip
     enabled: true
 
   # Mirrors the Official MCP Registry into the local connector catalog.

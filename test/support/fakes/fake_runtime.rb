@@ -16,6 +16,11 @@ module ContainerRuntime
   class FakeRuntime < BaseRuntime
     FULL_ID = "abcdef1234567890abcdef"
 
+    # Mirrors ContainerRuntime::KubernetesRuntime::SESSION_RESOURCE_KINDS — the
+    # object kinds one session owns, in the deletion order the BaseRuntime
+    # garbage-collection contract promises.
+    SESSION_RESOURCE_KINDS = %w[IngressRoute Middleware Service Pod].freeze
+
     # Lightweight container handle: create_container returns this; the runtime's
     # own methods key off the in-memory FS, not the handle, so it only carries id.
     Handle = Struct.new(:id) do
@@ -24,13 +29,32 @@ module ContainerRuntime
       end
     end
 
-    attr_reader :fs, :execs, :agent_type
+    attr_reader :fs, :execs, :agent_type, :deleted_session_resources
 
     def initialize(agent_type: "claude_code", filesystem: nil)
       @agent_type = agent_type
       @fs = filesystem || build_filesystem(agent_type)
       @execs = []
       @exec_failures = []
+      @default_container_status = :running
+      @container_statuses = {}
+      @session_resources = []
+      @deleted_session_resources = []
+      @undeletable_resource_names = []
+    end
+
+    # Liveness injection: answer #container_status with `status` for one container
+    # id, or for every container when `container_id:` is omitted. Mirrors the
+    # vocabulary documented on BaseRuntime#container_status. Passing an exception
+    # instance makes the lookup raise instead (both real runtimes swallow control
+    # plane errors into :unknown, so this models a caller-visible failure).
+    def set_container_status(status, container_id: nil)
+      if container_id.nil?
+        @default_container_status = status
+      else
+        @container_statuses[container_id.to_s] = status
+      end
+      self
     end
 
     # Command failure injection: register a substring of the command line and
@@ -110,12 +134,60 @@ module ContainerRuntime
       container.respond_to?(:id) ? container.id.to_s[0..11] : container.to_s
     end
 
+    def container_status(id)
+      key = id.respond_to?(:id) ? id.id.to_s : id.to_s
+      status = @container_statuses.fetch(key, @default_container_status)
+      raise status if status.is_a?(Exception)
+
+      status
+    end
+
     def wait_container(_id, _timeout = nil)
       { "StatusCode" => 0 }
     end
 
     def container_logs(_id, stdout: true, stderr: true)
       { stdout: "", stderr: "" }
+    end
+
+    # -- Garbage collection ---------------------------------------------------
+
+    # Seed the objects the runtime is holding. `route_token:` is the key the
+    # sweeper reconciles against TerminalSession; `created_at:` is what its
+    # minimum-age guard reads. Kinds are handed back in the deletion order the
+    # BaseRuntime contract promises.
+    def seed_session_resources(route_token:, created_at:, kinds: SESSION_RESOURCE_KINDS, namespace: "aixle-project-1", name_prefix: nil)
+      prefix = name_prefix || (route_token.present? ? "terminal-#{route_token}" : "aixle-tool")
+
+      Array(kinds).map do |kind|
+        resource = ContainerRuntime::SessionResource.new(
+          kind: kind,
+          name: "#{prefix}-#{kind.downcase}",
+          namespace: namespace,
+          route_token: route_token,
+          created_at: created_at
+        )
+        @session_resources << resource
+        resource
+      end
+    end
+
+    # Make one object refuse to be deleted, so callers can exercise the
+    # failure-counting path without stubbing the runtime.
+    def fail_session_resource_delete(name)
+      @undeletable_resource_names << name
+    end
+
+    def list_session_resources
+      @session_resources.dup
+    end
+
+    def delete_session_resource(resource)
+      return false if @undeletable_resource_names.include?(resource.name)
+
+      @session_resources.delete(resource)
+      @deleted_session_resources << resource
+      true
     end
 
     private
