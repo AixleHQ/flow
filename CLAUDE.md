@@ -36,11 +36,21 @@ on the host). If the container isn't running: `docker compose up -d`.
 - Full suite before push: `docker compose exec -T web make check_all`
 
 **Never run two backend test invocations at the same time** (including from another
-agent session or a git worktree — worktrees share the same Postgres and the same
-`aixle_test` database, so overlapping runs corrupt each other). `make`-driven runs
-are flock-serialized; direct `bin/rails test` runs are not — check nothing else is
-running first. Test parallelization is deliberately off — see the note in
-`test/test_helper.rb` before re-enabling.
+agent session or a git worktree that shares a Postgres — overlapping runs corrupt
+each other's `aixle_test` and the per-worker databases). `make`-driven runs are
+flock-serialized; direct `bin/rails test` runs are not — check nothing else is
+running first.
+
+### Test parallelization
+
+Parallelization is **on** (task #288, `parallelize(workers: :number_of_processors)` in
+`test/test_helper.rb`). Rails forks one worker per core, each with its own database
+(`aixle_test-0`, `aixle_test-1`, …), and skips forking for runs under its threshold
+(50 cases) — so a single-file `bin/rails test <file>` stays serial while the full suite
+does not. The flock is what keeps that safe: concurrent `make` runs never fight over the
+shared per-worker databases.
+
+`PARALLEL_WORKERS=1` forces a serial run when one is needed.
 
 ## Writing commit messages
 
