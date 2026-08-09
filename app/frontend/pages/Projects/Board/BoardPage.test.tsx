@@ -33,6 +33,18 @@ const columns = [
 const makeTask = (overrides: Partial<BoardTask> = {}): BoardTask =>
   buildBoardTask({ title: 'Untitled', taskType: 'story', commentsCount: 0, assigneeName: undefined, ...overrides });
 
+// Typelizer spells BoardTask's nested run/gate keys snake_case (`created_at`, `gate_type`), but the
+// real payload — and therefore BoardPage — reads them camelCase. These two bridge that mismatch so
+// the casts live in one place instead of being repeated inline at every call site.
+type BoardTaskRun = BoardTask['recentWorkflowRuns'][number];
+type BoardTaskGate = BoardTask['pendingGates'][number];
+
+const runOf = (overrides: Parameters<typeof buildTaskWorkflowRun>[0] = {}): BoardTaskRun =>
+  buildTaskWorkflowRun(overrides) as unknown as BoardTaskRun;
+
+const gatesOf = (...gates: Array<{ id: number; gateType: string; createdAt: string }>): BoardTaskGate[] =>
+  gates.map((g) => ({ metadata: {}, ...g }) as unknown as BoardTaskGate);
+
 const populatedProps = {
   project,
   board,
@@ -606,6 +618,139 @@ describe('Projects/Board/BoardPage', () => {
     // …but the ticket stays in the DOM as a draggable chip, so a drag can still be initiated from
     // the collapsed source column (board requirement 3 / QA TC-07).
     expect(screen.getByLabelText('Drag Wire up authentication')).toBeInTheDocument();
+  });
+
+  // --- board tooltips + status indicators ---
+  //
+  // These were dropped as a side effect of the "Task Board UX Redesign" refactor, not deliberately
+  // deprecated. They are pinned here so a future refactor cannot silently drop them again.
+
+  // Collapsing Backlog and returning its lone ticket chip, which is all the assertions below need.
+  const collapseBacklogAndGetChip = async (task: BoardTask) => {
+    renderAuthedPage(<BoardPage />, { props: { ...populatedProps, tasks: [task] } });
+
+    const toggles = screen.getAllByRole('button', { name: 'Collapse column' });
+    await userEvent.click(toggles[0]);
+    await waitFor(() => expect(screen.queryByText(task.title)).not.toBeInTheDocument());
+
+    return screen.getByLabelText(`Drag ${task.title}`);
+  };
+
+  it('names the ticket and its latest run state in a collapsed column chip tooltip', async () => {
+    const chip = await collapseBacklogAndGetChip(
+      makeTask({
+        id: 1,
+        title: 'Wire up authentication',
+        boardColumnId: 100,
+        recentWorkflowRuns: [runOf({ state: 'failed' })],
+      }),
+    );
+
+    await userEvent.hover(chip);
+
+    // A folded column still reports what happened to each ticket, without unfolding it.
+    expect(await screen.findByText('Wire up authentication · Status: failed')).toBeInTheDocument();
+  });
+
+  it('reports elapsed time instead of a bare state for a running ticket in a collapsed column', async () => {
+    const chip = await collapseBacklogAndGetChip(
+      makeTask({
+        id: 1,
+        title: 'Wire up authentication',
+        boardColumnId: 100,
+        recentWorkflowRuns: [runOf({ state: 'running' })],
+      }),
+    );
+
+    await userEvent.hover(chip);
+
+    expect(await screen.findByText(/^Wire up authentication · Running — /)).toBeInTheDocument();
+  });
+
+  it('reports a pending gate as "Waiting" in a collapsed column chip tooltip', async () => {
+    const chip = await collapseBacklogAndGetChip(
+      makeTask({
+        id: 1,
+        title: 'Wire up authentication',
+        boardColumnId: 100,
+        recentWorkflowRuns: [runOf({ state: 'paused' })],
+        pendingGates: gatesOf({ id: 9, gateType: 'github_checks_completed', createdAt: '2026-01-02T00:00:00Z' }),
+      }),
+    );
+
+    await userEvent.hover(chip);
+
+    expect(await screen.findByText(/Wire up authentication · Status: paused · Waiting — /)).toBeInTheDocument();
+  });
+
+  it('colors a collapsed column chip by the ticket’s latest run state', async () => {
+    const chip = await collapseBacklogAndGetChip(
+      makeTask({ id: 1, title: 'Failing task', boardColumnId: 100, recentWorkflowRuns: [runOf({ state: 'failed' })] }),
+    );
+
+    expect(chip).toHaveStyle({ backgroundColor: 'var(--app-danger-fg)' });
+  });
+
+  it('colors a gated collapsed column chip as waiting rather than as its running run', async () => {
+    // A pending gate outranks the run state — the ticket is parked, so it must not read as active.
+    const chip = await collapseBacklogAndGetChip(
+      makeTask({
+        id: 1,
+        title: 'Parked task',
+        boardColumnId: 100,
+        recentWorkflowRuns: [runOf({ state: 'running' })],
+        pendingGates: gatesOf({ id: 9, gateType: 'github_checks_completed', createdAt: '2026-01-02T00:00:00Z' }),
+      }),
+    );
+
+    expect(chip).toHaveStyle({ backgroundColor: 'var(--app-warning-fg)' });
+  });
+
+  it('lists every recent run state in the card status chip tooltip', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        tasks: [
+          makeTask({
+            id: 1,
+            title: 'Wire up authentication',
+            boardColumnId: 100,
+            // The chip itself only names the latest run; the tooltip is what covers the rest.
+            recentWorkflowRuns: [runOf({ id: 1, state: 'failed' }), runOf({ id: 2, state: 'completed' })],
+          }),
+        ],
+      },
+    });
+
+    await userEvent.hover(screen.getByText('Failed'));
+
+    expect(await screen.findByText('failed, completed')).toBeInTheDocument();
+  });
+
+  it('shows a column’s purpose in a tooltip on its header name', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        columns: [
+          buildBoardColumn({ id: 100, name: 'Backlog', position: 0, purpose: 'Anything not yet scheduled' }),
+          buildBoardColumn({ id: 200, name: 'In Progress', position: 1 }),
+        ],
+      },
+    });
+
+    expect(screen.queryByText('Anything not yet scheduled')).not.toBeInTheDocument();
+
+    await userEvent.hover(screen.getByText('Backlog'));
+
+    expect(await screen.findByText('Anything not yet scheduled')).toBeInTheDocument();
+  });
+
+  it('opens the board settings dialog from the toolbar settings button', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Board settings' }));
+
+    expect(await screen.findByRole('heading', { name: 'Board Settings' })).toBeInTheDocument();
   });
 
   // --- create-task modal submit + validation ---
