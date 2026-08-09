@@ -21,6 +21,27 @@ module Coder
     DEFAULT_RESPONSE_BYTES = (Settings.coder&.ssh_exec_inline_bytes || 256 * 1024).to_i
     READ_CHUNK_BYTES       = 16 * 1024
 
+    # `coder ssh <ws> -- <cmd>` runs a non-interactive shell that inherits
+    # almost nothing. Without HOME every git call dies with `fatal: $HOME not
+    # set`, which each session then works around by hand. Fixed here rather
+    # than only in the workspace template so it also holds for boxes created
+    # before that template exists. Falls back through the passwd entry to /tmp
+    # because an agent running as a non-root user cannot write to /root.
+    HOME_PREFIX = 'export HOME="${HOME:-$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6)}"; ' \
+                  'export HOME="${HOME:-/tmp}"; '
+
+    # Where detached jobs keep their command, log, pid and exit code. The
+    # remote side falls back to $TMPDIR when this is not writable, so a
+    # workspace whose template never created it still works.
+    DEFAULT_JOB_DIR   = "/var/lib/aixle-jobs"
+    JOB_MARKER        = "aixle_job"
+    JOB_LOG_SEPARATOR = "---aixle_job_log---"
+
+    # Launching a detached job is a handful of file writes; it must not inherit
+    # the caller's (possibly long) timeout.
+    DETACH_TIMEOUT = 30
+    STATUS_TIMEOUT = 30
+
     # Grace window between SIGTERM and SIGKILL when killing the orphaned
     # `coder ssh` process group on timeout. Overridable so test stubs don't
     # have to wait a full grace cycle.
@@ -58,7 +79,7 @@ module Coder
       # and destroys any quoting inside the command (e.g. `echo "a b"` would run
       # as the empty `echo` plus stray tokens). Keeping the command as one argv
       # element preserves it verbatim. See task #284 / issue-coder-ssh-exec.md.
-      argv = [ "coder", "ssh", workspace_name.to_s, "--", command.to_s ]
+      argv = [ "coder", "ssh", workspace_name.to_s, "--", "#{HOME_PREFIX}#{command}" ]
 
       begin
         Open3.popen3(env, *argv, pgroup: true) do |stdin, sout, serr, wait_thr|
@@ -77,7 +98,7 @@ module Coder
         return {
           exit_code: 124,
           stdout:    "",
-          stderr:    "coder ssh: timed out after #{timeout}s",
+          stderr:    timeout_message(timeout),
           truncated: false
         }
       rescue Errno::ENOENT
@@ -97,7 +118,138 @@ module Coder
       )
     end
 
+    # Start `command` on the workspace detached from this SSH call and return
+    # immediately. `docker compose run` is a client of the Docker daemon, so the
+    # work it starts is NOT a child of the SSH session: killing the call on
+    # timeout leaves the work running, and a caller who reads the timeout as
+    # "it died" and re-issues ends up with two gates on one box. Detaching
+    # removes the ambiguity — nothing to re-issue, poll `job_status` instead.
+    #
+    # The remote script provisions what it needs (job directory, `setsid`
+    # fallback), so a workspace from an older template works unchanged.
+    def exec_detached(workspace_name:, command:, job_id: nil)
+      raise CommandError, "command must be a non-empty string" if command.to_s.strip.empty?
+
+      job_id = (job_id.presence || SecureRandom.hex(6)).to_s
+      raise CommandError, "job_id must be alphanumeric" unless job_id.match?(/\A[A-Za-z0-9_-]{1,64}\z/)
+
+      result = exec(
+        workspace_name: workspace_name,
+        command:        detach_script(job_id: job_id, command: command.to_s),
+        timeout:        DETACH_TIMEOUT
+      )
+
+      unless result[:exit_code].to_i.zero?
+        raise CommandError, "could not start detached job: #{result[:stderr].presence || result[:stdout]}"
+      end
+
+      job_dir = result[:stdout].to_s[/job_dir=(\S+)/, 1] || DEFAULT_JOB_DIR
+
+      {
+        job_id:   job_id,
+        job_dir:  job_dir,
+        log_path: "#{job_dir}/#{job_id}.log",
+        detached: true
+      }
+    end
+
+    # Poll a job started by `exec_detached`. States:
+    #
+    #   running — the runner process is alive (or has just been launched)
+    #   exited  — finished; `exit_code` is the command's own status
+    #   died    — the runner is gone without writing an exit code (workspace
+    #             rebooted, spot interruption, OOM kill)
+    #   unknown — no trace of this job id on this workspace
+    def job_status(workspace_name:, job_id:, tail_lines: nil)
+      raise CommandError, "job_id must be alphanumeric" unless job_id.to_s.match?(/\A[A-Za-z0-9_-]{1,64}\z/)
+
+      lines  = tail_lines.to_i
+      lines  = (Settings.coder&.job_status_tail_lines || 40).to_i unless lines.positive?
+      result = exec(
+        workspace_name: workspace_name,
+        command:        status_script(job_id: job_id.to_s, tail_lines: lines),
+        timeout:        STATUS_TIMEOUT
+      )
+
+      raise CommandError, "job status failed: #{result[:stderr].presence || result[:stdout]}" unless result[:exit_code].to_i.zero?
+
+      parse_status(result[:stdout].to_s, job_id: job_id.to_s)
+    end
+
     private
+
+    def timeout_message(timeout)
+      base = "coder ssh: timed out after #{timeout}s"
+      "#{base}. The remote command may still be RUNNING — the SSH channel was killed, not the work. " \
+        "Do not re-issue it; re-run with detach: true and poll coder_job_status."
+    end
+
+    # Written as a script rather than an inline one-liner so the caller's
+    # command lands in a file verbatim through a quoted heredoc — no escaping,
+    # no quoting damage, multi-line commands intact.
+    def detach_script(job_id:, command:)
+      delimiter = "AIXLE_JOB_EOF_#{SecureRandom.hex(4)}"
+
+      <<~SH
+        JOB_DIR="${AIXLE_JOB_DIR:-#{DEFAULT_JOB_DIR}}"
+        mkdir -p "$JOB_DIR" 2>/dev/null || JOB_DIR="${TMPDIR:-/tmp}/aixle-jobs"
+        mkdir -p "$JOB_DIR" || { echo "cannot create a job directory" >&2; exit 1; }
+        BASE="$JOB_DIR/#{job_id}"
+        cat > "$BASE.cmd" <<'#{delimiter}'
+        #{command}
+        #{delimiter}
+        : > "$BASE.log"
+        rm -f "$BASE.exit" "$BASE.pid"
+        cat > "$BASE.run" <<'#{delimiter}_RUN'
+        #!/bin/sh
+        echo $$ > "$1.pid"
+        sh "$1.cmd" >> "$1.log" 2>&1
+        echo $? > "$1.exit"
+        #{delimiter}_RUN
+        chmod +x "$BASE.run"
+        if command -v setsid >/dev/null 2>&1; then
+          setsid "$BASE.run" "$BASE" >/dev/null 2>&1 &
+        else
+          nohup "$BASE.run" "$BASE" >/dev/null 2>&1 &
+        fi
+        echo "#{JOB_MARKER} job_id=#{job_id} job_dir=$JOB_DIR"
+      SH
+    end
+
+    def status_script(job_id:, tail_lines:)
+      <<~SH
+        BASE=""
+        for dir in "${AIXLE_JOB_DIR:-#{DEFAULT_JOB_DIR}}" "${TMPDIR:-/tmp}/aixle-jobs"; do
+          if [ -e "$dir/#{job_id}.log" ] || [ -e "$dir/#{job_id}.exit" ]; then BASE="$dir/#{job_id}"; break; fi
+        done
+        if [ -z "$BASE" ]; then echo "#{JOB_MARKER} state=unknown exit_code="; exit 0; fi
+        STATE=running
+        CODE=""
+        if [ -f "$BASE.exit" ]; then
+          STATE=exited
+          CODE=$(cat "$BASE.exit" 2>/dev/null)
+        elif [ -f "$BASE.pid" ]; then
+          PID=$(cat "$BASE.pid" 2>/dev/null)
+          if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then STATE=running; else STATE=died; fi
+        fi
+        echo "#{JOB_MARKER} state=$STATE exit_code=$CODE"
+        echo "#{JOB_LOG_SEPARATOR}"
+        tail -n #{tail_lines} "$BASE.log" 2>/dev/null || true
+      SH
+    end
+
+    def parse_status(stdout, job_id:)
+      header, _, log = stdout.partition("#{JOB_LOG_SEPARATOR}\n")
+      state = header[/state=(\w+)/, 1] || "unknown"
+      code  = header[/exit_code=(-?\d+)/, 1]
+
+      {
+        job_id:    job_id,
+        state:     state,
+        exit_code: code&.to_i,
+        tail:      log.to_s
+      }
+    end
 
     # Bounded chunked reader for the child's stdout/stderr. Reader threads
     # stop pulling from each pipe once they have accumulated `max_bytes + 1`,
@@ -165,10 +317,19 @@ module Coder
       Process.clock_gettime(Process::CLOCK_MONOTONIC)
     end
 
+    # `timeout_seconds` used to advertise 600 while the MCP transport gave up
+    # on the call long before that, so a caller asking for 330 saw a timeout at
+    # ~150 and had no way to know which layer produced it. Clamp to the ceiling
+    # we can actually reach; anything longer belongs in a detached job.
     def clamp_timeout(timeout)
       t = timeout.to_i
-      return DEFAULT_TIMEOUT if t <= 0
-      [ t, MAX_TIMEOUT ].min
+      return [ DEFAULT_TIMEOUT, ceiling_seconds ].min if t <= 0
+      [ t, MAX_TIMEOUT, ceiling_seconds ].min
+    end
+
+    def ceiling_seconds
+      value = (Settings.coder&.ssh_exec_ceiling_seconds || MAX_TIMEOUT).to_i
+      value.positive? ? value : MAX_TIMEOUT
     end
 
     def session_token

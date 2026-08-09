@@ -12,7 +12,12 @@ module InternalTools
   class CoderSshExec < Base
     tool do
       display_name "Coder: Run Command (SSH)"
-      description "Run a shell command on a Coder workspace previously allocated by this step. Returns the exit code, stdout, stderr, and a `truncated` marker if the response exceeded the inline budget."
+      description "Run a shell command on a Coder workspace previously allocated by this step. " \
+                  "Returns the exit code, stdout, stderr, and a `truncated` marker if the response exceeded the inline budget. " \
+                  "A foreground call cannot outlive the MCP transport ceiling (about 2 minutes) no matter what `timeout_seconds` says, " \
+                  "and a timeout kills the SSH channel, NOT the remote work — a test suite or build started by `docker compose` keeps running. " \
+                  "For anything long (test suites, builds, full check runs) pass `detach: true`: it returns a `job_id` in seconds, " \
+                  "then poll `coder_job_status`. Never re-issue a command that timed out."
       tags :coder
       inject_when :coder_integration_connected
       requires_integration :coder
@@ -30,7 +35,13 @@ module InternalTools
           },
           timeout_seconds: {
             type: "integer",
-            description: "Per-call timeout in seconds. Default 60, max 600."
+            description: "Per-call timeout in seconds for a foreground run. Default 60. " \
+                         "Values above the transport ceiling (about 120s) cannot be honoured — use `detach` instead."
+          },
+          detach: {
+            type: "boolean",
+            description: "Start the command detached from this call and return immediately with a `job_id` " \
+                         "(poll it with coder_job_status). Use for anything that can run longer than a minute."
           }
         }
       })
@@ -53,7 +64,15 @@ module InternalTools
         return error("session does not hold the lock for workspace #{workspace_name}")
       end
 
+      # Renew on use: the lock's TTL then measures silence rather than time
+      # since allocation, so a session that dies hard frees the workspace after
+      # one idle window instead of holding it for the whole TTL, and a long
+      # gate never loses its box mid-run.
+      lock_service.touch(workspace_name: workspace_name, terminal_session_id: session.id)
+
       runner = Coder::SshRunner.new(coder_integration)
+      return detach(runner, workspace_name, command) if detach?
+
       result = runner.exec(
         workspace_name: workspace_name,
         command:        command,
@@ -74,6 +93,20 @@ module InternalTools
       error(e.message)
     rescue Coder::SshRunner::CommandError => e
       error("coder_ssh_exec: #{e.message}")
+    end
+
+    private
+
+    def detach?
+      ActiveModel::Type::Boolean.new.cast(params[:detach]) == true
+    end
+
+    def detach(runner, workspace_name, command)
+      started = runner.exec_detached(workspace_name: workspace_name, command: command)
+
+      success(started.merge(
+        next_step: "poll coder_job_status with this job_id; do not re-run the command"
+      ).to_json)
     end
   end
 end

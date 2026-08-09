@@ -165,6 +165,27 @@ coder:
   ssh_exec_inline_bytes:     <%= (ENV['CODER_SSH_EXEC_INLINE_BYTES'] || 262144).to_i %>
   # `await_build` polling budget in seconds (DD-14 / OQ-6).
   await_build_timeout:       <%= (ENV['CODER_AWAIT_BUILD_TIMEOUT'] || 240).to_i %>
+  # Health gating (D-1/D-2). The active SSH probe runs after the lock is taken
+  # and only ever rejects on positive evidence that the workspace is sick — a
+  # probe that cannot run (no coder CLI, auth failure) leaves the candidate in
+  # the pool. Set `health_probe_enabled: false` to fall back to passive
+  # (agent-reported) filtering alone.
+  health_probe_enabled:      <%= ENV.fetch('CODER_HEALTH_PROBE_ENABLED', 'true') == 'true' %>
+  health_probe_timeout:      <%= (ENV['CODER_HEALTH_PROBE_TIMEOUT'] || 15).to_i %>
+  # Reject when 1-minute load average exceeds `cores * this`.
+  health_load_factor:        <%= (ENV['CODER_HEALTH_LOAD_FACTOR'] || 2.0).to_f %>
+  # How long a workspace stays out of the pool after failing a probe. Bounded
+  # and self-healing: the allocator still falls back to a quarantined box when
+  # nothing better exists.
+  unhealthy_cooldown_minutes: <%= (ENV['CODER_UNHEALTHY_COOLDOWN_MINUTES'] || 30).to_i %>
+  # Wall-clock ceiling a single `coder_ssh_exec` call can actually reach before
+  # the MCP transport gives up on it, regardless of `timeout_seconds`. Work
+  # that outlives this must run detached (`detach: true`) and be polled with
+  # `coder_job_status`.
+  ssh_exec_ceiling_seconds:  <%= (ENV['CODER_SSH_EXEC_CEILING_SECONDS'] || 120).to_i %>
+  # Log tail returned by `coder_job_status` when the caller does not ask for a
+  # specific size.
+  job_status_tail_lines:     <%= (ENV['CODER_JOB_STATUS_TAIL_LINES'] || 40).to_i %>
 
 url_safety:
   # Public hostnames that may resolve to a private IP via split-horizon DNS

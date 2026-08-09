@@ -30,12 +30,38 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
   class FakeAllocator
     attr_reader :integration
 
+    class << self
+      attr_accessor :last_options
+    end
+
     def initialize(integration:, terminal_session:)
       @integration = integration
     end
 
-    def allocate(**_opts)
+    def allocate(**opts)
+      self.class.last_options = opts
       { workspace_name: "ws-1", workspace_id: "u1", status: "running" }
+    end
+  end
+
+  # Stands in for the app-owned Coder::SshRunner adapter through the
+  # `SshRunner.new` seam.
+  class FakeSshRunner
+    attr_reader :detached, :status_calls
+
+    def initialize(exec: nil, detached: nil, status: nil)
+      @exec         = exec || { exit_code: 0, stdout: "ok", stderr: "", truncated: false }
+      @detached     = detached || { job_id: "j1", job_dir: "/var/lib/aixle-jobs", log_path: "/var/lib/aixle-jobs/j1.log", detached: true }
+      @status       = status || { job_id: "j1", state: "running", exit_code: nil, tail: "compiling\n" }
+      @status_calls = []
+    end
+
+    def exec(**) = @exec
+    def exec_detached(**) = @detached
+
+    def job_status(**kwargs)
+      @status_calls << kwargs
+      @status
     end
   end
 
@@ -130,6 +156,86 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     payload = JSON.parse(result[:stdout])
     assert_equal 0, payload["exit_code"]
     assert_equal "hello", payload["stdout"]
+  end
+
+  test "allocate: passes the caller's exclude list through to the allocator" do
+    Coder::Allocator.stub(:new, ->(integration:, terminal_session:) {
+      FakeAllocator.new(integration: integration, terminal_session: terminal_session)
+    }) do
+      InternalTools::CoderAllocateMachine.new(
+        params: { exclude: [ "ws-dead" ] }, session: @session
+      ).execute
+    end
+
+    assert_equal [ "ws-dead" ], FakeAllocator.last_options[:exclude]
+  end
+
+  # The lock TTL has to measure silence rather than time since allocation, so
+  # every use of the workspace renews it.
+  test "ssh_exec: renews the lock it just used" do
+    lock_service = Coder::LockService.new(@integration)
+    lock_service.acquire(workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @session.id)
+    original = @integration.integration_data.find_by(key: "coder:workspace_lock:ws-1").expires_at
+
+    travel 5.minutes do
+      Coder::SshRunner.stub(:new, ->(_integration) { FakeSshRunner.new }) do
+        InternalTools::CoderSshExec.new(
+          params: { workspace_name: "ws-1", command: "true" }, session: @session
+        ).execute
+      end
+    end
+
+    assert_operator @integration.integration_data.find_by(key: "coder:workspace_lock:ws-1").expires_at,
+                    :>, original
+  end
+
+  test "ssh_exec: detach returns a job id and points the caller at coder_job_status" do
+    Coder::LockService.new(@integration).acquire(
+      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @session.id
+    )
+
+    result = Coder::SshRunner.stub(:new, ->(_integration) { FakeSshRunner.new }) do
+      InternalTools::CoderSshExec.new(
+        params: { workspace_name: "ws-1", command: "make check_all", detach: true },
+        session: @session
+      ).execute
+    end
+
+    assert_equal 0, result[:exit_code]
+    payload = JSON.parse(result[:stdout])
+    assert_equal "j1", payload["job_id"]
+    assert_equal "/var/lib/aixle-jobs/j1.log", payload["log_path"]
+    assert_match(/coder_job_status/, payload["next_step"])
+  end
+
+  # ---------- coder_job_status ----------
+
+  test "job_status: returns the state and log tail of a detached job" do
+    Coder::LockService.new(@integration).acquire(
+      workspace_name: "ws-1", workspace_id: "u1", terminal_session_id: @session.id
+    )
+    runner = FakeSshRunner.new
+
+    result = Coder::SshRunner.stub(:new, ->(_integration) { runner }) do
+      InternalTools::CoderJobStatus.new(
+        params: { workspace_name: "ws-1", job_id: "j1", tail_lines: 10 }, session: @session
+      ).execute
+    end
+
+    assert_equal 0, result[:exit_code]
+    payload = JSON.parse(result[:stdout])
+    assert_equal "running", payload["state"]
+    assert_equal "compiling\n", payload["tail"]
+    assert_equal 10, runner.status_calls.first[:tail_lines]
+  end
+
+  test "job_status: rejects a session that does not hold the workspace lock" do
+    result = InternalTools::CoderJobStatus.new(
+      params: { workspace_name: "ws-1", job_id: "j1" }, session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/does not hold the lock/, result[:stderr])
   end
 
   # ---------- coder_release_machine ----------

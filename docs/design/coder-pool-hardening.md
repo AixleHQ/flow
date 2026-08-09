@@ -214,10 +214,13 @@ are skipped before locking, and the response reports which ones were skipped.
 
 **D-4 — Locks age from last activity.**
 Add `LockService#touch(workspace_name:, terminal_session_id:)` that pushes `expires_at`
-forward by the TTL, and call it from `coder_ssh_exec` on every successful ownership
-check. Lower the default TTL from 60 to 30 minutes. Net effect: an abandoned lock frees
-the box in ~30 minutes of true silence instead of 60 minutes of wall clock, while an
-active 90-minute session never loses its box. Renewal is a single indexed `UPDATE` on a
+forward by the TTL, and call it from `coder_ssh_exec` and `coder_job_status` on every
+successful ownership check. The TTL default stays where PR #70 put it (120 minutes) —
+what changes is what it measures: silence rather than time since acquisition. An
+abandoned lock now frees its box after one idle window instead of holding it for the
+full window from acquisition, and an active multi-hour session never loses its box
+mid-run, which is the reason the default was raised in the first place. Operators can
+lower it again now that renewal exists. Renewal is a single holder-scoped `UPDATE` on a
 row the tool already loaded.
 
 **D-5 — Detached execution as a tool affordance.**
