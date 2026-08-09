@@ -2,6 +2,7 @@
 
 require "test_helper"
 require "rubygems/package"
+require "socket"
 
 module ContainerRuntime
   class KubernetesRuntimeTest < ActiveSupport::TestCase
@@ -478,7 +479,142 @@ module ContainerRuntime
       assert_equal :pod_deleted, result
     end
 
+    # -- Refused exec upgrade (pod gone) --------------------------------------
+
+    test "handshake_status_code reads the HTTP status out of a refused upgrade" do
+      handshake = ::WebSocket::Handshake::Client.new(url: "http://127.0.0.1:1/api/v1/pods/x/exec")
+
+      begin
+        handshake << "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\r\n#{POD_NOT_FOUND_BODY}"
+      rescue ::WebSocket::Error::Handshake::InvalidStatusCode
+        # Whether the gem raises here depends on the global WebSocket.should_raise
+        # flag; either way the raw response is now buffered on the handshake,
+        # which is the only place the status code survives.
+      end
+
+      assert_equal 404, @runtime.send(:handshake_status_code, handshake)
+    end
+
+    test "handshake_status_code returns nil when there is nothing to read" do
+      assert_nil @runtime.send(:handshake_status_code, nil)
+
+      handshake = ::WebSocket::Handshake::Client.new(url: "http://127.0.0.1:1/api/v1/pods/x/exec")
+      assert_nil @runtime.send(:handshake_status_code, handshake)
+    end
+
+    test "handshake_error? separates a refused upgrade from a mid-stream failure" do
+      assert @runtime.send(:handshake_error?, ::WebSocket::Error::Handshake::InvalidStatusCode.new)
+      assert_not @runtime.send(:handshake_error?, IOError.new("closed stream"))
+      assert_not @runtime.send(:handshake_error?, "exec timeout after 30s")
+    end
+
+    test "exec logs the refused upgrade exactly once and reports a generic failure" do
+      handle = OpenStruct.new(pod_name: "terminal-gone", namespace: "aixle-user-1", container_name: "main")
+
+      logs = with_refused_exec_endpoint("404 Not Found") do
+        stdout, stderr, exit_code = @runtime.exec(handle, [ "sh", "-c", "true" ], timeout: 5)
+
+        assert_equal [], stdout
+        assert_equal [], stderr
+        assert_equal 1, exit_code
+      end
+
+      # The gem re-raises a failed handshake once per byte left in the HTTP
+      # response (~190 lines for this body before the fix); the connection must
+      # now be torn down after the first one.
+      assert_equal 1, logs.scan("WebSocket handshake failed").size
+      assert_equal 0, logs.scan("WebSocket error:").size
+      assert_match(%r{aixle-user-1/terminal-gone is unreachable \(exec handshake returned HTTP 404\)}, logs)
+    end
+
+    test "exec! raises ContainerUnreachableError carrying the handshake status" do
+      handle = OpenStruct.new(pod_name: "terminal-gone", namespace: "aixle-user-1", container_name: "main")
+
+      error = nil
+      logs = with_refused_exec_endpoint("404 Not Found") do
+        error = assert_raises(ContainerRuntime::ContainerUnreachableError) do
+          @runtime.exec!(handle, [ "sh", "-c", "true" ], timeout: 5)
+        end
+      end
+
+      assert_equal 404, error.status_code
+      assert_equal "aixle-user-1/terminal-gone", error.container_identifier
+      assert_match(/unreachable/, error.message)
+      assert_equal 1, logs.scan("WebSocket handshake failed").size
+    end
+
+    test "exec! reports the status of any refused upgrade, not just 404" do
+      handle = OpenStruct.new(pod_name: "terminal-gone", namespace: "aixle-user-1", container_name: "main")
+
+      error = nil
+      with_refused_exec_endpoint("503 Service Unavailable") do
+        error = assert_raises(ContainerRuntime::ContainerUnreachableError) do
+          @runtime.exec!(handle, [ "sh", "-c", "true" ], timeout: 5)
+        end
+      end
+
+      assert_equal 503, error.status_code
+    end
+
     private
+
+    POD_NOT_FOUND_BODY = {
+      kind: "Status",
+      apiVersion: "v1",
+      metadata: {},
+      status: "Failure",
+      message: 'pods "terminal-gone" not found',
+      reason: "NotFound",
+      details: { name: "terminal-gone", kind: "pods" },
+      code: 404
+    }.to_json.freeze
+
+    # Stands in for the Kubernetes API server refusing the exec upgrade: a real
+    # TCP listener answering with a non-101 status, driven through the real
+    # websocket gem. Nothing vendor-owned is stubbed (docs/testing.md R2) — the
+    # runtime's own k8s client is pointed at the listener instead.
+    def with_refused_exec_endpoint(status_line)
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.addr[1]
+
+      acceptor = Thread.new do
+        Thread.current.report_on_exception = false
+        socket = server.accept
+        loop do
+          line = socket.gets
+          break if line.nil? || line == "\r\n"
+        end
+        socket.write(
+          "HTTP/1.1 #{status_line}\r\n" \
+          "Content-Type: application/json\r\n" \
+          "Content-Length: #{POD_NOT_FOUND_BODY.bytesize}\r\n" \
+          "\r\n#{POD_NOT_FOUND_BODY}"
+        )
+        socket.flush
+        # Hold the connection open so the client, not the server, decides when
+        # the exchange ends — that is the behaviour under test.
+        socket.read
+      rescue StandardError
+        nil # the client hung up; nothing left for this listener to do
+      end
+
+      @runtime.stubs(:core_client).returns(Kubeclient::Client.new("http://127.0.0.1:#{port}/api", "v1"))
+
+      capture_rails_log { yield }
+    ensure
+      acceptor&.kill
+      server&.close
+    end
+
+    def capture_rails_log
+      buffer = StringIO.new
+      previous = Rails.logger
+      Rails.logger = ActiveSupport::Logger.new(buffer)
+      yield
+      buffer.string
+    ensure
+      Rails.logger = previous
+    end
 
     def build_test_tar(filename, content)
       io = StringIO.new

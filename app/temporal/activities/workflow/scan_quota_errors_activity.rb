@@ -13,6 +13,7 @@ module Activities
 
       def run(_input = nil)
         cleaned = 0
+        unreachable = 0
 
         candidate_sessions.find_each do |session|
           detection = QuotaErrorDetector.detect(detection_text_for(session))
@@ -21,11 +22,19 @@ module Activities
           session.update!(error_message: detection.message)
           session.fail! if session.may_fail?
           cleaned += 1
+        rescue ContainerRuntime::ContainerUnreachableError => e
+          # The pod behind this session is gone (node died, pod evicted). Its
+          # tmux is not coming back, so re-running capture-pane against it every
+          # sweep only burns CPU — that spin is what pinned worker-ruby to its
+          # HPA ceiling. Skip the session and leave its fate to the session
+          # watchdog; one line per session, not one per exec attempt.
+          log(:warn, "Skipping session #{session.id}: #{e.message}")
+          unreachable += 1
         rescue StandardError => e
           log(:warn, "Failed to process session #{session.id}: #{e.message}")
         end
 
-        { cleaned: cleaned }
+        { cleaned: cleaned, unreachable: unreachable }
       end
 
       private
@@ -48,11 +57,15 @@ module Activities
         container = runtime.resolve_container(session.container_id)
         return "" unless container
 
-        runtime.exec(
+        # exec! (not exec) so a destroyed pod arrives as ContainerUnreachableError
+        # instead of an exit code of 1 that looks like an ordinary command failure.
+        runtime.exec!(
           container,
           [ "sh", "-c", "tmux capture-pane -t agent -p -S -1000 2>/dev/null || true" ],
           stdout: true, stderr: true
         ).then { |stdout, _stderr, status| status.zero? ? stdout.join("\n") : "" }
+      rescue ContainerRuntime::ContainerUnreachableError
+        raise
       rescue StandardError => e
         log(:warn, "Failed to read terminal for session #{session.id}: #{e.message}")
         ""
