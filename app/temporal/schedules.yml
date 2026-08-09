@@ -45,6 +45,20 @@ schedules:
     cron: "0 * * * *"
     enabled: true
 
+  # Reclaims the Kubernetes objects of agent sessions that ended without the
+  # happy-path teardown running — the node-died case, which otherwise leaves an
+  # IngressRoute and an endpoint-less Service answering 503 on the session URL
+  # forever.
+  #
+  # Every 10 minutes against a 15-minute minimum object age: an orphan is gone
+  # within ~25 minutes, while nothing created inside the last quarter hour can
+  # be looked at. SKIP overlap: two sweeps would enumerate the same objects and
+  # race each other's deletes, turning a benign 404 into log noise.
+  - workflow: container_sweep_orphaned_resources_workflow
+    cron: "*/10 * * * *"
+    overlap: skip
+    enabled: true
+
   # Mirrors the Official MCP Registry into the local connector catalog.
   #
   # Weekly, not the hourly cadence the registry suggests to aggregators. What

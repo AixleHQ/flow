@@ -21,6 +21,30 @@ module ContainerRuntime
     READY_INTERVAL = 1
     HANDSHAKE_STATUS_LINE = %r{\AHTTP/\d(?:\.\d)?\s+(\d{3})}
 
+    RUNTIME_APP_LABEL = "aixle-runtime"
+    # Per-session identity label, carrying the pod name (`terminal-<route_token>`
+    # for agent sessions). Every object a session owns carries it, which is what
+    # makes the set reapable as a unit — and its ABSENCE is what keeps
+    # namespace-wide infrastructure (the shared `terminal-auth` middleware, the
+    # network policies) out of the sweep.
+    CONTAINER_LABEL = "aixle-container"
+
+    # The four object kinds a session owns, in deletion order: routing first, so
+    # traffic stops being aimed at a backend that is about to disappear, then the
+    # Service, then whatever pod is left. #list_session_resources returns them in
+    # this order and callers may delete front to back.
+    SESSION_RESOURCE_KINDS = [
+      [ "IngressRoute", "ingressroutes", :traefik ],
+      [ "Middleware",   "middlewares",   :traefik ],
+      [ "Service",      "services",      :core ],
+      [ "Pod",          "pods",          :core ]
+    ].freeze
+
+    # Cluster-wide selector for "objects belonging to one agent session".
+    # `aixle-container` is a presence check — every session object sets it, no
+    # shared object does.
+    SESSION_RESOURCE_SELECTOR = "app=#{RUNTIME_APP_LABEL},#{CONTAINER_LABEL}"
+
     # -- Lifecycle ------------------------------------------------------------
 
     def pull_image(image)
@@ -195,7 +219,88 @@ module ContainerRuntime
       :unknown
     end
 
+    # -- Garbage collection ---------------------------------------------------
+
+    # Every session-scoped object in the cluster, in deletion order.
+    #
+    # Cluster-wide on purpose: sessions live in per-project/per-user namespaces
+    # (`aixle-prod-project-27`) whose set is not knowable from the database once
+    # the owning rows are gone, so the label selector is the enumeration. This
+    # needs list/delete on pods, services, ingressroutes and middlewares at
+    # CLUSTER scope in the runtime's RBAC — the same ClusterRole that already
+    # grants namespace creation.
+    #
+    # A listing failure is logged and answered with an empty list for that kind:
+    # the sweeper's job is to delete garbage, and "I could not see" must never
+    # be read as "there is none of it left alive".
+    def list_session_resources
+      SESSION_RESOURCE_KINDS.flat_map do |kind, plural, client_key|
+        list_session_objects(kind, plural, client_key)
+      end
+    end
+
+    def delete_session_resource(resource)
+      return false if resource.blank? || resource.name.blank?
+
+      entry = SESSION_RESOURCE_KINDS.find { |kind, _plural, _client| kind == resource.kind }
+      return false if entry.nil?
+
+      _kind, plural, client_key = entry
+      kube_client(client_key).delete_entity(plural, resource.name, resource.namespace)
+      true
+    rescue Kubeclient::ResourceNotFoundError
+      # Already gone — the goal state, not a failure.
+      true
+    rescue StandardError => e
+      Rails.logger.warn("[KubernetesRuntime] Failed to delete #{resource}: #{e.message}")
+      false
+    end
+
     private
+
+    def list_session_objects(kind, plural, client_key)
+      body = kube_client(client_key).get_entities(
+        kind, plural,
+        label_selector: SESSION_RESOURCE_SELECTOR,
+        as: :raw
+      )
+
+      items = JSON.parse(body.to_s)["items"]
+      Array(items).filter_map { |item| build_session_resource(kind, item) }
+    rescue StandardError => e
+      Rails.logger.warn("[KubernetesRuntime] Failed to list #{kind} objects: #{e.message}")
+      []
+    end
+
+    def build_session_resource(kind, item)
+      metadata = item["metadata"] || {}
+      name = metadata["name"]
+      return nil if name.blank?
+
+      pod_name = (metadata["labels"] || {})[CONTAINER_LABEL]
+
+      SessionResource.new(
+        kind: kind,
+        name: name,
+        namespace: metadata["namespace"],
+        # nil for anything that is not an agent session (an internal-tool pod,
+        # say). A nil token is an unprovable owner, and the sweeper keeps those.
+        route_token: extract_route_token(pod_name),
+        created_at: parse_kube_timestamp(metadata["creationTimestamp"])
+      )
+    end
+
+    def parse_kube_timestamp(value)
+      return nil if value.blank?
+
+      Time.zone.parse(value.to_s)
+    rescue ArgumentError, TypeError
+      nil
+    end
+
+    def kube_client(client_key)
+      client_key == :traefik ? traefik_client : core_client
+    end
 
     def copy_from(id, path)
       return "" if path.blank?
@@ -327,7 +432,7 @@ module ContainerRuntime
       ports = handle.service_ports
       container[:ports] = ports.map { |port| { containerPort: port } } if ports.any?
 
-      labels = { "app" => "aixle-runtime", "aixle-container" => handle.pod_name }
+      labels = session_labels(handle)
       pod_spec = {
         automountServiceAccountToken: false,
         enableServiceLinks: false,
@@ -353,8 +458,6 @@ module ContainerRuntime
     end
 
     def create_service(handle)
-      labels = { "app" => "aixle-runtime", "aixle-container" => handle.pod_name }
-
       ports = handle.service_ports.map do |port|
         {
           name: "port-#{port}",
@@ -369,10 +472,14 @@ module ContainerRuntime
         kind: "Service",
         metadata: {
           name: handle.service_name,
-          namespace: handle.namespace
+          namespace: handle.namespace,
+          labels: session_labels(handle)
         },
         spec: {
-          selector: labels,
+          # Deliberately narrower than the metadata labels: the selector must
+          # keep matching pods created by older builds, so it stays the two
+          # identity labels and never grows.
+          selector: pod_selector_labels(handle),
           ports: ports
         }
       )
@@ -398,7 +505,7 @@ module ContainerRuntime
         metadata: {
           name: handle.ingress_name,
           namespace: handle.namespace,
-          labels: resource_labels(namespace: handle.namespace)
+          labels: session_labels(handle)
         },
         spec: {
           entryPoints: [ traefik_entrypoint ],
@@ -770,7 +877,7 @@ module ContainerRuntime
         metadata: {
           name: "#{handle.pod_name}-#{suffix}-strip",
           namespace: handle.namespace,
-          labels: resource_labels(namespace: handle.namespace)
+          labels: session_labels(handle)
         },
         spec: {
           stripPrefix: {
@@ -846,6 +953,22 @@ module ContainerRuntime
       {
         "aixle.com/runtime-origin" => runtime_namespace,
         "aixle.com/runtime-namespace" => namespace
+      }
+    end
+
+    # The identity every object of one session carries. Applied uniformly to the
+    # Pod, the Service, the IngressRoute and both strip Middlewares so the whole
+    # set can be found (and reaped) from the pod name alone — before this was
+    # uniform, only pods were labelled and a dead node's Service/IngressRoute
+    # could not be attributed to anything.
+    def session_labels(handle)
+      resource_labels(namespace: handle.namespace).merge(pod_selector_labels(handle))
+    end
+
+    def pod_selector_labels(handle)
+      {
+        "app" => RUNTIME_APP_LABEL,
+        CONTAINER_LABEL => handle.pod_name
       }
     end
 

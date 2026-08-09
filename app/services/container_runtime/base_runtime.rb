@@ -30,6 +30,10 @@ module ContainerRuntime
   #   wait_container(id, timeout=nil)            → Hash { "StatusCode" => int }
   #   container_logs(id, opts={})                → Hash { stdout:, stderr: }
   #
+  # == Garbage collection
+  #   list_session_resources                     → [ContainerRuntime::SessionResource]
+  #   delete_session_resource(resource)          → true/false
+  #
   class BaseRuntime
     # -- Lifecycle ------------------------------------------------------------
 
@@ -129,6 +133,43 @@ module ContainerRuntime
 
     def container_logs(_id, _opts = {})
       raise NotImplementedError, "#{self.class.name} must implement #container_logs"
+    end
+
+    # -- Garbage collection ---------------------------------------------------
+    #
+    # A session's objects normally die in `remove_container`, which only runs on
+    # the happy path. When the node holding an agent pod dies, that call never
+    # happens and everything the session's routing was made of leaks — for
+    # Kubernetes a Service with zero endpoints and the IngressRoute/Middlewares
+    # pointing at it, which is why a dead session's URL answers with Traefik's
+    # own "no available server" 503 instead of a terminal.
+    #
+    # These two primitives exist so a sweeper can reconcile what the runtime
+    # actually holds against the `TerminalSession` rows that own it, without any
+    # caller reaching into a vendor client (Kubeclient/Docker) itself.
+
+    # Every session-scoped object this runtime currently holds, across every
+    # namespace it manages.
+    #
+    # Implementations MUST return the objects in a safe deletion order — routing
+    # objects before the workload they point at — so a caller can delete the
+    # list front to back without ever leaving traffic aimed at a vanishing
+    # backend. Implementations MUST NOT return shared infrastructure (a
+    # namespace-wide auth middleware, the Traefik deployment, …): only objects
+    # created for one session.
+    #
+    # @return [Array<ContainerRuntime::SessionResource>]
+    def list_session_resources
+      raise NotImplementedError, "#{self.class.name} must implement #list_session_resources"
+    end
+
+    # Deletes one object previously returned by #list_session_resources.
+    # "Already gone" counts as success — the sweeper races real teardown by
+    # design, and a 404 means the goal state was reached.
+    #
+    # @return [Boolean] true when the object is gone
+    def delete_session_resource(_resource)
+      raise NotImplementedError, "#{self.class.name} must implement #delete_session_resource"
     end
 
     private
