@@ -17,6 +17,7 @@ module ContainerRuntime
   #
   # == Execution
   #   exec(id, cmd, opts={})                     → [stdout_lines, stderr_lines, exit_code]
+  #   exec!(id, cmd, opts={})                    → same, but raises ContainerUnreachableError
   #
   # == File I/O (tar-based, works on running containers)
   #   write_file(id, path, content, mode:, uid:, gid:) → true/false
@@ -70,6 +71,16 @@ module ContainerRuntime
 
     def exec(_id, _cmd, _opts = {})
       raise NotImplementedError, "#{self.class.name} must implement #exec"
+    end
+
+    # Same as #exec, but a container the runtime could not reach at all raises
+    # ContainerUnreachableError instead of being flattened into an exit code of
+    # 1 that is indistinguishable from a command that ran and failed. Callers
+    # that must tell "the pod is gone" from "the command failed" use this.
+    #
+    # Runtimes that cannot tell the two apart answer exactly like #exec.
+    def exec!(id, cmd, opts = {})
+      exec(id, cmd, opts)
     end
 
     # -- File I/O -------------------------------------------------------------

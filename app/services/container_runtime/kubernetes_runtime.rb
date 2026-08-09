@@ -19,6 +19,7 @@ module ContainerRuntime
     DEFAULT_TRAEFIK_PORTS = [ 7681, 4040, 8443 ].freeze
     READY_TIMEOUT = 30
     READY_INTERVAL = 1
+    HANDSHAKE_STATUS_LINE = %r{\AHTTP/\d(?:\.\d)?\s+(\d{3})}
 
     # -- Lifecycle ------------------------------------------------------------
 
@@ -65,6 +66,13 @@ module ContainerRuntime
       stderr_lines = stderr.empty? ? [] : stderr.split("\n").map { |line| "#{line}\n" }
 
       [ stdout_lines, stderr_lines, exit_code ]
+    end
+
+    # See BaseRuntime#exec!. A pod that no longer exists answers the exec
+    # upgrade with a non-101 status (404 for a deleted pod); that surfaces as
+    # ContainerUnreachableError instead of a generic [[], [], 1].
+    def exec!(id, cmd, opts = {})
+      exec(id, cmd, opts.merge(raise_on_unreachable: true))
     end
 
     # -- File I/O -------------------------------------------------------------
@@ -475,85 +483,119 @@ module ContainerRuntime
       exit_code = 0
       done = false
       error = nil
+      error_reported = false
+      unreachable = nil
       mutex = Mutex.new
       cv = ConditionVariable.new
       ws_state = { closed: false }
       runtime = self
 
-      ws = WebSocket::Client::Simple.connect(url.to_s, headers: headers)
       exit_code_parser = method(:exit_code_from_status_payload)
 
-      ws.on(:open) do
-        next unless stdin_io
+      # Register the callbacks inside the connect block: the gem yields the
+      # client *before* it opens the socket and starts its reader thread.
+      # Registering them on the returned client instead is a race the API server
+      # wins whenever it answers fast — the :error/:close events then land on a
+      # client with no listeners and the exec sits until its timeout expires.
+      ws = WebSocket::Client::Simple.connect(url.to_s, headers: headers) do |client|
+        client.on(:open) do
+          next unless stdin_io
 
-        Thread.new do
-          begin
-            stdin_io.rewind if stdin_io.respond_to?(:rewind)
-            while (chunk = stdin_io.read(16_384))
-              break if runtime.send(:websocket_closed?, ws, ws_state)
-              ws.send([ 0 ].pack("C") + chunk)
+          Thread.new do
+            begin
+              stdin_io.rewind if stdin_io.respond_to?(:rewind)
+              while (chunk = stdin_io.read(16_384))
+                break if runtime.send(:websocket_closed?, client, ws_state)
+                client.send([ 0 ].pack("C") + chunk)
+              end
+              client.close if close_on_stdin_eof && !runtime.send(:websocket_closed?, client, ws_state)
+            rescue StandardError => e
+              mutex.synchronize do
+                error = e
+                exit_code = 1
+                done = true
+                cv.broadcast
+              end
             end
-            ws.close if close_on_stdin_eof && !runtime.send(:websocket_closed?, ws, ws_state)
-          rescue StandardError => e
+          end
+        end
+
+        client.on(:message) do |msg|
+          next if msg.data.to_s.empty?
+
+          data = msg.data.bytes
+          channel = data.shift
+          payload = data.pack("C*")
+          payload.force_encoding("utf-8") unless binary
+
+          case channel
+          when 1
+            if stdout_io
+              stdout_io.write(payload)
+            else
+              stdout << payload
+            end
+          when 2
+            if stderr_io
+              stderr_io.write(payload)
+            else
+              stderr << payload
+            end
+          when 3
             mutex.synchronize do
-              error = e
-              exit_code = 1
+              exit_code = exit_code_parser.call(payload)
               done = true
               cv.broadcast
             end
           end
         end
-      end
 
-      ws.on(:message) do |msg|
-        next if msg.data.to_s.empty?
-
-        data = msg.data.bytes
-        channel = data.shift
-        payload = data.pack("C*")
-        payload.force_encoding("utf-8") unless binary
-
-        case channel
-        when 1
-          if stdout_io
-            stdout_io.write(payload)
-          else
-            stdout << payload
+        # websocket-client-simple re-raises a failed handshake once per byte
+        # still sitting in the HTTP response, so a single 404 from a deleted pod
+        # emitted ~100 :error events — all of them logged, all of them redoing
+        # the same bookkeeping. Handle only the first and tear the connection
+        # down from inside the callback so the reader loop stops immediately.
+        client.on(:error) do |msg|
+          first_error = mutex.synchronize do
+            if error_reported || runtime.send(:websocket_closed?, client, ws_state)
+              false
+            else
+              error_reported = true
+              error = msg
+              exit_code = 1
+              done = true
+              unreachable = runtime.send(:build_unreachable_error, handle, client) if runtime.send(:handshake_error?, msg)
+              cv.broadcast
+              true
+            end
           end
-        when 2
-          if stderr_io
-            stderr_io.write(payload)
+          next unless first_error
+
+          if unreachable
+            Rails.logger.warn("[KubernetesRuntime] WebSocket handshake failed: #{unreachable.message}")
           else
-            stderr << payload
+            Rails.logger.warn("[KubernetesRuntime] WebSocket error: #{msg.inspect}")
           end
-        when 3
+
+          # #close runs on this (reader) thread and ends in Thread.kill(self),
+          # so nothing may follow it here — and the mutex must already be
+          # released, because closing emits :close, whose handler takes it.
+          begin
+            client.close
+          rescue StandardError
+            nil
+          end
+        end
+
+        client.on(:close) do |_msg|
           mutex.synchronize do
-            exit_code = exit_code_parser.call(payload)
+            ws_state[:closed] = true
             done = true
             cv.broadcast
           end
         end
       end
 
-      ws.on(:error) do |msg|
-        next if runtime.send(:websocket_closed?, ws, ws_state)
-
-        Rails.logger.warn("[KubernetesRuntime] WebSocket error: #{msg.inspect}")
-        mutex.synchronize do
-          error = msg
-          exit_code = 1
-          done = true
-          cv.broadcast
-        end
-      end
-
-      ws.on(:close) do |_msg|
-        mutex.synchronize do
-          ws_state[:closed] = true
-          done = true
-          cv.broadcast
-        end
-      end
       mutex.synchronize do
         cv.wait(mutex, timeout) unless done
         unless done
@@ -568,7 +610,9 @@ module ContainerRuntime
         Rails.logger.warn("[KubernetesRuntime] Failed to close WebSocket: #{e.message}")
       end
 
-      if error.is_a?(StandardError)
+      if unreachable
+        raise unreachable
+      elsif error.is_a?(StandardError)
         raise error
       elsif error
         Rails.logger.warn("[KubernetesRuntime] Exec error: #{error}")
@@ -576,8 +620,47 @@ module ContainerRuntime
 
       [ stdout, stderr, exit_code ]
     rescue StandardError => e
-      Rails.logger.warn("[KubernetesRuntime] Exec failed: #{e.message}")
+      # Tearing the connection down from the reader thread can also break a
+      # write still in flight on this one (IOError: stream closed in another
+      # thread). The callback already recorded — and logged — the real cause, so
+      # report that and stay quiet about the fallout.
+      unreachable ||= e if e.is_a?(ContainerUnreachableError)
+
+      if unreachable
+        raise unreachable if opts[:raise_on_unreachable]
+      else
+        Rails.logger.warn("[KubernetesRuntime] Exec failed: #{e.message}")
+      end
+
       [ "", "", 1 ]
+    end
+
+    def handshake_error?(error)
+      error.is_a?(::WebSocket::Error::Handshake)
+    end
+
+    def build_unreachable_error(handle, ws)
+      handshake = ws.respond_to?(:handshake) ? ws.handshake : nil
+
+      ContainerUnreachableError.new(
+        status_code: handshake_status_code(handshake),
+        container_identifier: "#{handle.namespace}/#{handle.pod_name}"
+      )
+    end
+
+    # websocket-client-simple hands us a bare
+    # WebSocket::Error::Handshake::InvalidStatusCode with no status attached,
+    # and WebSocket::Handshake::Client raises out of #<< before it records the
+    # response (its #headers still hold *our* request headers). The raw response
+    # text it accumulated is the only place the status survives, so read it
+    # defensively and fall back to "no status" rather than fighting the gem.
+    def handshake_status_code(handshake)
+      return nil if handshake.nil?
+
+      raw = handshake.instance_variable_get(:@data).to_s
+      raw[HANDSHAKE_STATUS_LINE, 1]&.to_i
+    rescue StandardError
+      nil
     end
 
     def build_exec_params(handle, cmd, opts)
