@@ -308,6 +308,8 @@ module ContainerRuntime
         pod_spec[:imagePullSecrets] = configured_pull_secrets.map { |name| { name: name } }
       end
 
+      apply_agents_node_pool(pod_spec, handle)
+
       Kubeclient::Resource.new(
         apiVersion: "v1",
         kind: "Pod",
@@ -794,6 +796,57 @@ module ContainerRuntime
       end
 
       values.map(&:to_s).map(&:strip).reject(&:blank?).uniq
+    end
+
+    # Pins agent session pods to the dedicated agent node group, when one is
+    # configured (`kubernetes.agents_node_pool`, see config/settings.yml for the
+    # value format). Agent pods only: `route_token` is present exactly for the
+    # `terminal-*` containers an agent session creates, so internal-tool and
+    # custom-tool pods keep scheduling on the general pool.
+    #
+    # Nothing configured => neither key is written, and the pod spec stays byte
+    # for byte what it was before this existed. That default is load-bearing: an
+    # empty `nodeSelector`/`tolerations` pair, or one naming a node group that
+    # does not exist yet, leaves every agent pod Pending.
+    def apply_agents_node_pool(pod_spec, handle)
+      return if handle.route_token.blank?
+
+      entries = agents_node_pool_entries
+      return if entries.empty?
+
+      pod_spec[:nodeSelector] = entries.to_h { |entry| [ entry[:key], entry[:value] ] }
+      pod_spec[:tolerations] = entries.map do |entry|
+        {
+          key: entry[:key],
+          operator: "Equal",
+          value: entry[:value],
+          effect: entry[:effect]
+        }
+      end
+    end
+
+    # Parses `key=value[:Effect]` entries into the node label / taint toleration
+    # pairs above. One entry drives both sides, so the selector and the
+    # toleration can never drift apart. Unparseable entries are dropped rather
+    # than raised on: a typo in a ConfigMap must not take agent scheduling down.
+    def agents_node_pool_entries
+      raw = kube_setting(:agents_node_pool)
+      values = raw.is_a?(Array) ? raw : raw.to_s.split(",")
+
+      values.filter_map do |value|
+        entry = value.to_s.strip
+        next if entry.blank?
+
+        selector, effect = entry.split(":", 2)
+        label_key, label_value = selector.to_s.split("=", 2)
+        next if label_key.blank? || label_value.blank?
+
+        {
+          key: label_key.strip,
+          value: label_value.strip,
+          effect: effect.to_s.strip.presence || "NoSchedule"
+        }
+      end
     end
 
     def service_account_token_path

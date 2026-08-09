@@ -77,6 +77,7 @@ it's required.
 | `K8S_SA_TOKEN_PATH`               | `/var/run/secrets/kubernetes.io/serviceaccount/token`          | Service account token path.                                |
 | `K8S_SA_CA_PATH`                  | `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`         | Service account CA cert path.                              |
 | `K8S_AGENTS_IMAGE_PULL_SECRETS`   | unset                                                          | Comma-separated image pull secrets.                        |
+| `K8S_AGENTS_NODE_POOL`            | unset                                                          | Pin agent pods to a node group: `key=value[:Effect]`.      |
 | `K8S_IMAGE_PULL_POLICY`           | `IfNotPresent`                                                 | Pod image pull policy.                                     |
 | `K8S_READY_INTERVAL`              | a few seconds                                                  | Poll interval while waiting for a pod to become Ready.     |
 | `K8S_READY_TIMEOUT`               | a few minutes                                                  | Max wait for pod ready before failing.                     |
