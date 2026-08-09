@@ -124,15 +124,25 @@ Each session rediscovers, at cost:
    not write its output.
 5. `buildx` is 0.12.1 while compose 5.1.3 requires ≥ 0.17.
 
-**Infrastructure-as-code drift.** None of `/root/app`, the compose stack, or a git
-credential helper appears in `terraform/coder/templates/staging/aws-ec2-spot-v1` (whose
-`startup_script` is `set -euxo pipefail` and nothing else) or in the Packer image
-(`terraform/coder/packer/coder-workspace/scripts/bootstrap.sh`, which installs docker,
-compose, git, rg, jq, make, tmux and a spot-interruption watcher — no buildx, no clone).
-So either the template version live in Coder is not the one in the repo, or those
-artefacts are sediment from manual sessions on long-lived boxes. **This must be resolved
-before any template change is written** — a fix landed in Terraform that the running
-template does not derive from reaches nothing.
+**Nothing on the box is provisioned.** The template live in Coder was pulled and
+compared against `terraform/coder/templates/staging/aws-ec2-spot-v1` on 2026-08-10: they
+are identical, so there is no infrastructure-as-code drift. That is the finding. The
+template boots an EC2 spot instance and starts the Coder agent — its `startup_script` is
+`set -euxo pipefail` and nothing else. The Packer image
+(`terraform/coder/packer/coder-workspace/scripts/bootstrap.sh`) installs docker, compose,
+git, rg, jq, make, tmux and a spot-interruption watcher; no buildx (0.12.1 comes in with
+the AL2023 `docker` package), no clone, no git configuration, no service start.
+
+Therefore `/root/app`, the eight running containers, and the partial-clone remote are
+**sediment from earlier manual sessions** on boxes that are never recycled. Every item in
+RC-5 is a workaround for state no one provisions and no one owns — which is exactly why
+each session pays for it again.
+
+Latent, separate: `root_volume_size_gb` defaults to 20 while the AMI's snapshot is built
+at 30 GiB (`packer/coder-workspace/staging.auto.pkrvars.hcl.example`). EC2 refuses a root
+volume smaller than its snapshot, so either the running workspaces were created with an
+overridden value or the AMI snapshot is smaller than the example suggests. Verify against
+a live instance before trusting the number.
 
 ### RC-6 — the workspace runs eight containers when the gate needs three
 
@@ -151,15 +161,37 @@ gate lean (dedicated compose file + `--no-deps`).
 
 ### Platform — `AixleHQ/flow`
 
+**D-0 — Degradation contract (binds every decision below).**
+A workspace is rejected only on **positive evidence that it is sick**. Absence of a
+signal is never evidence: a box from a template that predates this work — no agent health
+in the API response, no `/var/lib/aixle-jobs`, an agent running as `ec2-user` instead of
+root, a Coder version that reports a different shape — must allocate exactly as it does
+today. Concretely:
+
+- Missing / unparseable agent health → candidate kept.
+- Probe error attributable to *our* side (the `coder` CLI missing from the Rails image
+  → exit 127, auth failure, integration misconfiguration) → candidate kept, nothing
+  quarantined. A platform-side fault must not empty every pool at once.
+- Probe output that does not parse (no `/proc/loadavg`, `nproc` absent, BusyBox) → the
+  load check is skipped, the reachability result still counts.
+- If every candidate is rejected by the *active* probe, allocation does not fail: it
+  falls back to the least-bad candidate (lowest observed load, then most recently
+  healthy) and returns a `health_warning` field alongside the normal payload. Raising
+  `ExhaustedError` when boxes exist would be a regression against today's behaviour.
+- The active probe is killable: `Settings.coder.health_probe_enabled` (default true),
+  overridable per integration. Passive filtering stays on — it costs nothing.
+
 **D-1 — Health-gated allocation (two tiers).**
-*Passive:* filter candidates on the agent data already present in the list response —
-require at least one agent with `status == "connected"` and `health.healthy == true`.
-Costs zero extra API calls and removes the amber box.
-*Active:* after the lock is taken, probe the box over SSH with a short deadline
-(`uptime; cat /proc/loadavg`, 15 s). Reject on non-zero exit, on timeout, or when
-1-minute load exceeds `2 × vCPU` (vCPU read from `nproc` in the same probe). On rejection
-release the lock and continue to the next candidate. `status: "running"` is never
-evidence again.
+*Passive:* when the list response carries agent data, drop candidates whose every agent
+says `status != "connected"` or `health.healthy == false`. Explicitly unhealthy only —
+`nil`, `[]` or an unknown shape leaves the candidate in. Costs zero extra API calls and
+removes the amber box.
+*Active:* after the lock is taken, probe over SSH with a short deadline
+(`uptime; cat /proc/loadavg; nproc`, 15 s). Reject on timeout (unresponsive box), on a
+non-zero exit that came from the remote shell, or when 1-minute load exceeds
+`2 × vCPU`. Distinguish that from a local `coder ssh` failure (exit 127, auth), which is
+not the workspace's fault and is handled per D-0. On rejection release the lock and
+continue to the next candidate. `status: "running"` is never evidence again.
 
 **D-2 — Quarantine, with a cooldown.**
 A rejected workspace gets an `IntegrationData` row `coder:workspace_health:<name>` with
@@ -168,6 +200,11 @@ recording the probe output and reason. The allocator skips workspaces with a liv
 quarantine row; a successful probe deletes any stale row. Reuses the existing table,
 the `live` scope and the `(integration_id, key)` isolation the lock service already
 relies on — no migration.
+
+Per D-0, a row is written only for evidence about *that workspace* (unresponsive,
+overloaded, remote command failed). Platform-side faults never write one. The cooldown is
+bounded and self-healing: worst case a healthy box is unavailable for 30 minutes, and the
+D-0 fallback still hands it out if nothing better exists.
 
 **D-3 — `exclude` on `coder_allocate_machine`.**
 `exclude: ["collectively-prod-920a776c"]` — array of names the caller will not accept.
@@ -199,6 +236,12 @@ derived four times independently ("never re-issue the gate; poll it") stops bein
 something an agent must remember and becomes the only shape the tool offers for long
 work.
 
+Per D-0 the wrapper provisions its own preconditions rather than assuming a template
+provides them: it creates the job directory itself, falls back to `$TMPDIR`/`/tmp` when
+`/var/lib/aixle-jobs` is not writable (agent not running as root), and degrades to plain
+`nohup … &` when `setsid` is absent. `coder_job_status` on an unknown or vanished job id
+returns `state: "unknown"`, never an error that reads as "the job failed".
+
 **D-6 — Truthful timeouts.**
 Measure the actual ceiling end-to-end (MCP client → ingress → Rails), clamp
 `SshRunner::MAX_TIMEOUT` to it, and state it in the tool description instead of the
@@ -220,9 +263,16 @@ quarantine state. Turns "allocation is starving" from a 40-minute investigation 
 call. Phase 3.
 
 **D-9 — Server-side `HOME`.**
-`SshRunner` prefixes every command with `export HOME="${HOME:-/root}";`. This removes
-RC-5.1 for all integrations immediately, without waiting for an image or template
-release, and stays correct after the template fix lands.
+`SshRunner` prefixes every command with a fallback chain rather than a hardcoded
+`/root`, since an agent running as `ec2-user` cannot write there:
+
+```sh
+export HOME="${HOME:-$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6)}"; export HOME="${HOME:-/tmp}";
+```
+
+Removes RC-5.1 for all integrations immediately, without waiting for an image or template
+release, and stays correct after the template fix lands (where `HOME` is already set, the
+prefix is a no-op).
 
 **D-10 — Platform owns repo bootstrap, not the image.**
 The credentials for cloning a private product repo (GitHub App installation token) live
@@ -238,25 +288,38 @@ and fixes RC-5.2–5.3 for every project rather than one template.
 `terraform/coder/templates/staging/aws-ec2-spot-v1`. Everything below assumes the repo is
 the source of truth; if it is not, that is the first fix.
 
-**D-12 — A Collectively-specific template.**
-Rather than parameterising the shared `aws-ec2-spot-v1`, derive
-`collectively-prod-v1`: its own workspace name prefix (which is what the integration's
-`machine_prefix` already filters on), its own repo pre-clone, and its own lean service
-set. Benefits: the integration's `default_template` can finally be set, so allocation
-creates a workspace on demand instead of dividing a fixed set — which is a better fix
-for RC-2 than any exclusion logic; and per-project resource sizing stops being a
-compromise across tenants. `aixle-prod-*` boxes keep the generic template.
+**D-12 — `aws-ec2-spot-v2`, published alongside v1.**
+A new template version rather than an edit of `aws-ec2-spot-v1`, and deliberately
+*not* pinned to one project: the fixes below (`HOME`, buildx, disk, log rotation) are
+generic, and per-project pinning would mean maintaining the same corrections N times.
+Publishing as v2 also keeps the blast radius small — the root-volume change forces
+instance replacement, so existing workspaces are migrated by creating new ones, not by
+mutating the template they already run.
 
-**D-13 — Template/AMI corrections** (apply to both templates):
-- `coder_agent.main.env` gains `HOME = "/root"` (RC-5.1 at the source).
-- Packer bootstrap installs `buildx` ≥ 0.17 explicitly rather than inheriting 0.12.1
-  from the AL2023 `docker` package (RC-5.5).
-- Root volume 20 → 64 GiB. Twenty gigabytes does not hold this stack's images plus a
-  build cache (RC-6).
-- `GIT_TERMINAL_PROMPT=0` and `GIT_ASKPASS=/bin/true` in `/etc/environment`; a
-  `git config --system --add safe.directory` entry for the repo path.
-- Do not start the full compose stack on boot. If anything starts, it is `db`, `redis`,
-  `web` from the lean compose file (RC-6).
+Once v2 exists, the integration's `default_template` can finally be set, so allocation
+creates a workspace on demand instead of dividing a fixed set — a better fix for RC-2
+than any exclusion logic. Existing `collectively-prod-*` and `aixle-prod-*` boxes stay on
+v1 until recycled; workspace naming (which is what `machine_prefix` filters on) is chosen
+by the platform at creation and is independent of the template.
+
+**D-13 — What v2 corrects:**
+- `coder_agent.main.env` gains `HOME`, `GIT_TERMINAL_PROMPT=0`, `GIT_ASKPASS=/bin/true`
+  (RC-5.1–5.2 at the source).
+- `buildx` pinned and installed by the agent's startup script rather than inherited at
+  0.12.1 from the AL2023 `docker` package (RC-5.5). Doing it in the startup script and
+  not in the Packer bootstrap means no AMI rebuild is on the critical path — the
+  bootstrap should still gain it later so a fresh image starts correct.
+- Root volume 20 → 64 GiB (RC-6). This forces instance replacement, which is why v2 is a
+  new template rather than an edit of v1.
+- `git config --system --add safe.directory '*'` (RC-5.4).
+- Docker json-file log rotation and a build-cache prune above 80% disk — the two ways
+  this box fills its root volume, which is the likelier reading of `load average: 84`
+  with no CPU work than swap (RC-6).
+- `/var/lib/aixle-jobs` created at start, as the landing zone for D-5's detached runs.
+  The runner still provisions it itself (D-0) so v1 boxes keep working.
+- Still does not start the product stack (RC-6).
+- Still does not clone the repo: the credential for a private clone lives in the platform
+  (D-10), and the workspace instance profile carries SSM permissions only.
 
 **D-14 — Recycle the two damaged boxes.** `collectively-prod-920a776c` and
 `collectively-prod-aa9f2995`. Operational, immediate, independent of every code change
@@ -293,6 +356,13 @@ Mirrors the field report's own "what fixed would look like":
 5. A gate started with `detach: true` survives past the transport ceiling and its exit
    code is retrievable via `coder_job_status`. *(Test: detached invocation returns a
    `job_id` without blocking; status transitions running → exited.)*
+6. **Degradation (D-0).** A workspace whose API response carries no agent health data is
+   still allocated. A probe that fails for a platform-side reason (`coder` CLI missing →
+   exit 127) allocates as before, quarantines nothing, and says so. A pool where every
+   probe rejects still returns the least-bad workspace with `health_warning` set rather
+   than `ExhaustedError`. A detached run works on a box that has no
+   `/var/lib/aixle-jobs` and no `setsid`. *(Tests: one per clause — this is the
+   regression surface, since every box in the field today predates v2.)*
 
 Backend tests live in `test/services/coder/` and
 `test/services/internal_tools/coder_tools_test.rb`; follow `docs/testing.md` — the Coder
