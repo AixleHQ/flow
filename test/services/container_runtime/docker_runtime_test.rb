@@ -107,6 +107,42 @@ module ContainerRuntime
       assert_nil result
     end
 
+    # -- container_status: is this container still alive? --
+
+    test "container_status reports a live container as running" do
+      stub_container_state("Running" => true, "Status" => "running")
+
+      assert_equal :running, @runtime.container_status("cid")
+    end
+
+    test "container_status reports a container that has not started yet as starting" do
+      stub_container_state("Running" => false, "Status" => "created")
+
+      assert_equal :starting, @runtime.container_status("cid")
+    end
+
+    test "container_status reports an exited container as terminated" do
+      stub_container_state("Running" => false, "Status" => "exited", "ExitCode" => 137)
+
+      assert_equal :terminated, @runtime.container_status("cid")
+    end
+
+    test "container_status reports a container the daemon has never heard of as missing" do
+      Docker::Container.stubs(:get).with("gone").raises(Docker::Error::NotFoundError)
+
+      assert_equal :missing, @runtime.container_status("gone")
+    end
+
+    test "container_status reports unknown rather than dead when the daemon errors" do
+      # A daemon that cannot answer is not evidence a container died — callers key
+      # session failure off :missing/:terminated only.
+      container_mock = mock("container")
+      container_mock.stubs(:json).raises(Docker::Error::ServerError.new("boom"))
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+
+      assert_equal :unknown, @runtime.container_status("cid")
+    end
+
     test "container_identifier returns nil for blank" do
       assert_nil @runtime.container_identifier(nil)
       assert_nil @runtime.container_identifier("")
@@ -306,7 +342,67 @@ module ContainerRuntime
       assert_equal "Custom#123", @runtime.container_identifier(container_mock)
     end
 
+    # == Garbage-collection primitives ==
+
+    test "list_session_resources describes session containers, exited ones included" do
+      Docker::Container.expects(:all)
+        .with(all: true, filters: { label: [ "aixle.session_id" ] }.to_json)
+        .returns([
+          session_container("terminal-abc123", created: 1_764_000_000),
+          session_container("aixle-tool-xyz", created: 1_764_000_500)
+        ])
+
+      resources = @runtime.list_session_resources
+
+      assert_equal [ "Container", "Container" ], resources.map(&:kind)
+      assert_equal [ "terminal-abc123", "aixle-tool-xyz" ], resources.map(&:name)
+      # A tool container has no route token, so it has no provable owner and the
+      # sweeper keeps it.
+      assert_equal [ "abc123", nil ], resources.map(&:route_token)
+      assert_equal Time.zone.at(1_764_000_000), resources.first.created_at
+    end
+
+    test "list_session_resources reports nothing when the daemon is unreachable" do
+      Docker::Container.stubs(:all).raises(StandardError.new("connection refused"))
+
+      assert_empty @runtime.list_session_resources
+    end
+
+    test "delete_session_resource removes the container and treats an already-gone one as success" do
+      container_mock = mock("container")
+      container_mock.expects(:remove).with(force: true)
+      Docker::Container.expects(:get).with("terminal-abc123").returns(container_mock)
+      Docker::Container.expects(:get).with("terminal-gone").raises(Docker::Error::NotFoundError)
+
+      assert @runtime.delete_session_resource(session_resource("terminal-abc123"))
+      assert @runtime.delete_session_resource(session_resource("terminal-gone"))
+      assert_not @runtime.delete_session_resource(session_resource(""))
+    end
+
+    test "delete_session_resource reports false when removal fails" do
+      Docker::Container.stubs(:get).with("terminal-stuck").raises(Docker::Error::ServerError)
+
+      assert_not @runtime.delete_session_resource(session_resource("terminal-stuck"))
+    end
+
     private
+
+    def stub_container_state(state)
+      container_mock = mock("container")
+      container_mock.stubs(:json).returns("State" => state)
+      Docker::Container.stubs(:get).with("cid").returns(container_mock)
+      container_mock
+    end
+
+    def session_container(name, created:)
+      container = mock("container")
+      container.stubs(:info).returns("Names" => [ "/#{name}" ], "Id" => "abcdef0123456789", "Created" => created)
+      container
+    end
+
+    def session_resource(name)
+      ContainerRuntime::SessionResource.new(kind: "Container", name: name, route_token: "abc123")
+    end
 
     def build_test_tar(filename, content)
       io = StringIO.new

@@ -17,6 +17,7 @@ module ContainerRuntime
   #
   # == Execution
   #   exec(id, cmd, opts={})                     → [stdout_lines, stderr_lines, exit_code]
+  #   exec!(id, cmd, opts={})                    → same, but raises ContainerUnreachableError
   #
   # == File I/O (tar-based, works on running containers)
   #   write_file(id, path, content, mode:, uid:, gid:) → true/false
@@ -25,8 +26,13 @@ module ContainerRuntime
   # == Introspection
   #   resolve_container(id)                      → container handle
   #   container_identifier(container)            → String
+  #   container_status(id)                       → Symbol (see #container_status)
   #   wait_container(id, timeout=nil)            → Hash { "StatusCode" => int }
   #   container_logs(id, opts={})                → Hash { stdout:, stderr: }
+  #
+  # == Garbage collection
+  #   list_session_resources                     → [ContainerRuntime::SessionResource]
+  #   delete_session_resource(resource)          → true/false
   #
   class BaseRuntime
     # -- Lifecycle ------------------------------------------------------------
@@ -71,6 +77,16 @@ module ContainerRuntime
       raise NotImplementedError, "#{self.class.name} must implement #exec"
     end
 
+    # Same as #exec, but a container the runtime could not reach at all raises
+    # ContainerUnreachableError instead of being flattened into an exit code of
+    # 1 that is indistinguishable from a command that ran and failed. Callers
+    # that must tell "the pod is gone" from "the command failed" use this.
+    #
+    # Runtimes that cannot tell the two apart answer exactly like #exec.
+    def exec!(id, cmd, opts = {})
+      exec(id, cmd, opts)
+    end
+
     # -- File I/O -------------------------------------------------------------
 
     # Write a single file into the container via tar stream.
@@ -94,12 +110,66 @@ module ContainerRuntime
       raise NotImplementedError, "#{self.class.name} must implement #container_identifier"
     end
 
+    # Liveness of a container as the runtime sees it *right now*. One of:
+    #
+    #   :running    — the workload is up
+    #   :starting   — accepted by the runtime but not up yet (k8s Pending,
+    #                 docker "created"/"restarting") — NOT a dead container
+    #   :terminated — it ran and is over (k8s Succeeded/Failed, docker exited/dead)
+    #   :missing    — the runtime has no record of it at all
+    #   :unknown    — the runtime could not answer (control-plane error, state
+    #                 string we don't recognize)
+    #
+    # Callers may treat :terminated and :missing as "the agent is gone". They must
+    # NOT treat :unknown that way: an unreachable control plane is not a dead pod,
+    # and a scheduling backlog (:starting) is not one either.
+    def container_status(_id)
+      raise NotImplementedError, "#{self.class.name} must implement #container_status"
+    end
+
     def wait_container(_id, _timeout = nil)
       raise NotImplementedError, "#{self.class.name} must implement #wait_container"
     end
 
     def container_logs(_id, _opts = {})
       raise NotImplementedError, "#{self.class.name} must implement #container_logs"
+    end
+
+    # -- Garbage collection ---------------------------------------------------
+    #
+    # A session's objects normally die in `remove_container`, which only runs on
+    # the happy path. When the node holding an agent pod dies, that call never
+    # happens and everything the session's routing was made of leaks — for
+    # Kubernetes a Service with zero endpoints and the IngressRoute/Middlewares
+    # pointing at it, which is why a dead session's URL answers with Traefik's
+    # own "no available server" 503 instead of a terminal.
+    #
+    # These two primitives exist so a sweeper can reconcile what the runtime
+    # actually holds against the `TerminalSession` rows that own it, without any
+    # caller reaching into a vendor client (Kubeclient/Docker) itself.
+
+    # Every session-scoped object this runtime currently holds, across every
+    # namespace it manages.
+    #
+    # Implementations MUST return the objects in a safe deletion order — routing
+    # objects before the workload they point at — so a caller can delete the
+    # list front to back without ever leaving traffic aimed at a vanishing
+    # backend. Implementations MUST NOT return shared infrastructure (a
+    # namespace-wide auth middleware, the Traefik deployment, …): only objects
+    # created for one session.
+    #
+    # @return [Array<ContainerRuntime::SessionResource>]
+    def list_session_resources
+      raise NotImplementedError, "#{self.class.name} must implement #list_session_resources"
+    end
+
+    # Deletes one object previously returned by #list_session_resources.
+    # "Already gone" counts as success — the sweeper races real teardown by
+    # design, and a 404 means the goal state was reached.
+    #
+    # @return [Boolean] true when the object is gone
+    def delete_session_resource(_resource)
+      raise NotImplementedError, "#{self.class.name} must implement #delete_session_resource"
     end
 
     private

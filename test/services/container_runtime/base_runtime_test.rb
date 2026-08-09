@@ -64,6 +64,10 @@ module ContainerRuntime
       assert_raises(NotImplementedError) { @runtime.container_identifier("container") }
     end
 
+    test "container_status raises NotImplementedError" do
+      assert_raises(NotImplementedError) { @runtime.container_status("id") }
+    end
+
     test "wait_container raises NotImplementedError" do
       assert_raises(NotImplementedError) { @runtime.wait_container("id") }
     end

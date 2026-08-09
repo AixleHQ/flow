@@ -2,6 +2,7 @@
 
 require "test_helper"
 require "rubygems/package"
+require "socket"
 
 module ContainerRuntime
   class KubernetesRuntimeTest < ActiveSupport::TestCase
@@ -211,6 +212,51 @@ module ContainerRuntime
       )
 
       assert_equal "aixle-project-77", result.namespace
+    end
+
+    # -- container_status: is this pod still alive? --
+    #
+    # Pods run with restartPolicy: Never and no owning controller, so a dead agent
+    # either leaves a terminated pod behind or — when its node is gone — no pod at
+    # all. Both must read as "gone"; a pod that has simply not been scheduled yet
+    # must not.
+
+    test "container_status reports a running pod as running" do
+      stub_pod_phase("Running")
+
+      assert_equal :running, @runtime.container_status(pod_handle)
+    end
+
+    test "container_status reports a pending pod as starting" do
+      stub_pod_phase("Pending")
+
+      assert_equal :starting, @runtime.container_status(pod_handle)
+    end
+
+    test "container_status reports a pod that left the Running phase as terminated" do
+      stub_pod_phase("Failed")
+      assert_equal :terminated, @runtime.container_status(pod_handle)
+
+      stub_pod_phase("Succeeded")
+      assert_equal :terminated, @runtime.container_status(pod_handle)
+    end
+
+    test "container_status reports a pod the API no longer knows as missing" do
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).raises(Kubeclient::ResourceNotFoundError.new(404, "pods 'my-pod' not found", nil))
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      assert_equal :missing, @runtime.container_status(pod_handle)
+    end
+
+    test "container_status reports unknown rather than dead when the API cannot answer" do
+      # An unreachable control plane is not a dead pod: callers only fail sessions
+      # on :missing/:terminated.
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).raises(StandardError.new("connection refused"))
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      assert_equal :unknown, @runtime.container_status(pod_handle)
     end
 
     test "stop_container deletes pod" do
@@ -478,7 +524,344 @@ module ContainerRuntime
       assert_equal :pod_deleted, result
     end
 
+    # -- Refused exec upgrade (pod gone) --------------------------------------
+
+    test "handshake_status_code reads the HTTP status out of a refused upgrade" do
+      handshake = ::WebSocket::Handshake::Client.new(url: "http://127.0.0.1:1/api/v1/pods/x/exec")
+
+      begin
+        handshake << "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\r\n#{POD_NOT_FOUND_BODY}"
+      rescue ::WebSocket::Error::Handshake::InvalidStatusCode
+        # Whether the gem raises here depends on the global WebSocket.should_raise
+        # flag; either way the raw response is now buffered on the handshake,
+        # which is the only place the status code survives.
+      end
+
+      assert_equal 404, @runtime.send(:handshake_status_code, handshake)
+    end
+
+    test "handshake_status_code returns nil when there is nothing to read" do
+      assert_nil @runtime.send(:handshake_status_code, nil)
+
+      handshake = ::WebSocket::Handshake::Client.new(url: "http://127.0.0.1:1/api/v1/pods/x/exec")
+      assert_nil @runtime.send(:handshake_status_code, handshake)
+    end
+
+    test "handshake_error? separates a refused upgrade from a mid-stream failure" do
+      assert @runtime.send(:handshake_error?, ::WebSocket::Error::Handshake::InvalidStatusCode.new)
+      assert_not @runtime.send(:handshake_error?, IOError.new("closed stream"))
+      assert_not @runtime.send(:handshake_error?, "exec timeout after 30s")
+    end
+
+    test "exec logs the refused upgrade exactly once and reports a generic failure" do
+      handle = OpenStruct.new(pod_name: "terminal-gone", namespace: "aixle-user-1", container_name: "main")
+
+      logs = with_refused_exec_endpoint("404 Not Found") do
+        stdout, stderr, exit_code = @runtime.exec(handle, [ "sh", "-c", "true" ], timeout: 5)
+
+        assert_equal [], stdout
+        assert_equal [], stderr
+        assert_equal 1, exit_code
+      end
+
+      # The gem re-raises a failed handshake once per byte left in the HTTP
+      # response (~190 lines for this body before the fix); the connection must
+      # now be torn down after the first one.
+      assert_equal 1, logs.scan("WebSocket handshake failed").size
+      assert_equal 0, logs.scan("WebSocket error:").size
+      assert_match(%r{aixle-user-1/terminal-gone is unreachable \(exec handshake returned HTTP 404\)}, logs)
+    end
+
+    test "exec! raises ContainerUnreachableError carrying the handshake status" do
+      handle = OpenStruct.new(pod_name: "terminal-gone", namespace: "aixle-user-1", container_name: "main")
+
+      error = nil
+      logs = with_refused_exec_endpoint("404 Not Found") do
+        error = assert_raises(ContainerRuntime::ContainerUnreachableError) do
+          @runtime.exec!(handle, [ "sh", "-c", "true" ], timeout: 5)
+        end
+      end
+
+      assert_equal 404, error.status_code
+      assert_equal "aixle-user-1/terminal-gone", error.container_identifier
+      assert_match(/unreachable/, error.message)
+      assert_equal 1, logs.scan("WebSocket handshake failed").size
+    end
+
+    test "exec! reports the status of any refused upgrade, not just 404" do
+      handle = OpenStruct.new(pod_name: "terminal-gone", namespace: "aixle-user-1", container_name: "main")
+
+      error = nil
+      with_refused_exec_endpoint("503 Service Unavailable") do
+        error = assert_raises(ContainerRuntime::ContainerUnreachableError) do
+          @runtime.exec!(handle, [ "sh", "-c", "true" ], timeout: 5)
+        end
+      end
+
+      assert_equal 503, error.status_code
+    end
+
+    # == Session-object identity labels ==
+    #
+    # The garbage collector finds a dead session's objects by label, so every
+    # object one session owns has to carry the same identity. Before this was
+    # uniform only the Pod did, and a dead node's Service/IngressRoute could not
+    # be attributed to anything.
+
+    test "every object a session owns carries the same identity labels" do
+      handle = OpenStruct.new(
+        pod_name: "terminal-abc123",
+        namespace: "aixle-project-7",
+        container_name: "main",
+        service_name: "terminal-abc123",
+        ingress_name: "terminal-abc123-ingress",
+        middleware_names: [ "terminal-abc123-tty-strip", "terminal-abc123-fs-strip" ],
+        route_token: "abc123",
+        service_ports: [ 7681, 4040 ]
+      )
+
+      created = []
+      core_mock = mock("core_client")
+      core_mock.expects(:create_service).with { |service| created << service }.returns(true)
+      traefik_mock = mock("traefik_client")
+      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "aixle-project-7").returns(true)
+      traefik_mock.expects(:create_entity).times(3).with { |_kind, _plural, resource| created << resource }.returns(true)
+
+      @runtime.stubs(:core_client).returns(core_mock)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      @runtime.start_container(handle)
+      created << @runtime.send(:build_pod, { image: "alpine", env_vars: [] }, handle)
+
+      assert_equal 5, created.size
+      created.each do |resource|
+        labels = labels_of(resource)
+        assert_equal "aixle-runtime", labels["app"],
+                     "#{resource.kind} is missing the runtime app label"
+        assert_equal "terminal-abc123", labels["aixle-container"],
+                     "#{resource.kind} is missing the per-session identity label"
+      end
+    end
+
+    test "service selector stays the two pod identity labels so it keeps matching older pods" do
+      handle = OpenStruct.new(
+        pod_name: "terminal-abc123",
+        namespace: "default",
+        service_name: "terminal-abc123",
+        route_token: nil,
+        service_ports: [ 7681 ]
+      )
+
+      created_service = nil
+      core_mock = mock("core_client")
+      core_mock.expects(:create_service).with { |service| created_service = service }.returns(true)
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      @runtime.start_container(handle)
+
+      selector = created_service.spec.to_h[:selector].to_h.transform_keys(&:to_s)
+      assert_equal({ "app" => "aixle-runtime", "aixle-container" => "terminal-abc123" }, selector)
+    end
+
+    test "the shared terminal-auth middleware carries no per-session label, so a sweep cannot select it" do
+      middleware = @runtime.send(:build_terminal_auth_middleware, "aixle-project-7")
+
+      labels = labels_of(middleware)
+      assert_equal "aixle", labels["aixle.com/runtime-origin"]
+      assert_not labels.key?("aixle-container")
+    end
+
+    # == Garbage-collection primitives ==
+
+    test "list_session_resources maps labelled objects to session resources in deletion order" do
+      core_mock = mock("core_client")
+      traefik_mock = mock("traefik_client")
+
+      traefik_mock.expects(:get_entities)
+        .with("IngressRoute", "ingressroutes", label_selector: KubernetesRuntime::SESSION_RESOURCE_SELECTOR, as: :raw)
+        .returns(items_json([ kube_item("terminal-abc123-ingress", "aixle-project-7", "terminal-abc123") ]))
+      traefik_mock.expects(:get_entities)
+        .with("Middleware", "middlewares", label_selector: KubernetesRuntime::SESSION_RESOURCE_SELECTOR, as: :raw)
+        .returns(items_json([ kube_item("terminal-abc123-tty-strip", "aixle-project-7", "terminal-abc123") ]))
+      core_mock.expects(:get_entities)
+        .with("Service", "services", label_selector: KubernetesRuntime::SESSION_RESOURCE_SELECTOR, as: :raw)
+        .returns(items_json([ kube_item("terminal-abc123", "aixle-project-7", "terminal-abc123") ]))
+      core_mock.expects(:get_entities)
+        .with("Pod", "pods", label_selector: KubernetesRuntime::SESSION_RESOURCE_SELECTOR, as: :raw)
+        .returns(items_json([ kube_item("terminal-abc123", "aixle-project-7", "terminal-abc123") ]))
+
+      @runtime.stubs(:core_client).returns(core_mock)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      resources = @runtime.list_session_resources
+
+      assert_equal %w[IngressRoute Middleware Service Pod], resources.map(&:kind)
+      assert_equal [ "abc123" ], resources.map(&:route_token).uniq
+      assert_equal [ "aixle-project-7" ], resources.map(&:namespace).uniq
+      assert_equal Time.zone.parse("2026-08-09T10:00:00Z"), resources.first.created_at
+      assert_equal "terminal-abc123-ingress", resources.first.name
+    end
+
+    test "list_session_resources leaves the route token nil for a pod that is not an agent session" do
+      resources = stub_listing([ kube_item("aixle-tool-xyz", "aixle", "aixle-tool-xyz") ])
+
+      assert_nil resources.first.route_token
+      assert_equal "aixle-tool-xyz", resources.first.name
+    end
+
+    test "list_session_resources reports nothing for a kind the API refuses to list" do
+      core_mock = mock("core_client")
+      traefik_mock = mock("traefik_client")
+      traefik_mock.stubs(:get_entities).raises(StandardError.new("forbidden"))
+      core_mock.stubs(:get_entities).raises(StandardError.new("forbidden"))
+      @runtime.stubs(:core_client).returns(core_mock)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      assert_empty @runtime.list_session_resources
+    end
+
+    test "delete_session_resource routes each kind to its client and plural" do
+      core_mock = mock("core_client")
+      traefik_mock = mock("traefik_client")
+      traefik_mock.expects(:delete_entity).with("ingressroutes", "terminal-abc123-ingress", "aixle-project-7")
+      traefik_mock.expects(:delete_entity).with("middlewares", "terminal-abc123-tty-strip", "aixle-project-7")
+      core_mock.expects(:delete_entity).with("services", "terminal-abc123", "aixle-project-7")
+      core_mock.expects(:delete_entity).with("pods", "terminal-abc123", "aixle-project-7")
+      @runtime.stubs(:core_client).returns(core_mock)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      names = {
+        "IngressRoute" => "terminal-abc123-ingress",
+        "Middleware" => "terminal-abc123-tty-strip",
+        "Service" => "terminal-abc123",
+        "Pod" => "terminal-abc123"
+      }
+
+      names.each do |kind, name|
+        resource = SessionResource.new(kind: kind, name: name, namespace: "aixle-project-7", route_token: "abc123")
+        assert @runtime.delete_session_resource(resource), "#{kind} should report deleted"
+      end
+    end
+
+    test "delete_session_resource treats an already-gone object as success and a failure as false" do
+      core_mock = mock("core_client")
+      core_mock.expects(:delete_entity).with("pods", "gone", nil)
+        .raises(Kubeclient::ResourceNotFoundError.new(404, "Not Found", nil))
+      core_mock.expects(:delete_entity).with("pods", "broken", nil).raises(StandardError.new("boom"))
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      assert @runtime.delete_session_resource(SessionResource.new(kind: "Pod", name: "gone"))
+      assert_not @runtime.delete_session_resource(SessionResource.new(kind: "Pod", name: "broken"))
+      assert_not @runtime.delete_session_resource(SessionResource.new(kind: "Pod", name: ""))
+      assert_not @runtime.delete_session_resource(SessionResource.new(kind: "Namespace", name: "aixle"))
+    end
+
     private
+
+    # A resolved handle, so the status lookup is the only API call under test.
+    def pod_handle
+      OpenStruct.new(pod_name: "my-pod", namespace: "default")
+    end
+
+    def stub_pod_phase(phase)
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).with("my-pod", "default").returns(
+        OpenStruct.new(status: OpenStruct.new(phase: phase))
+      )
+      @runtime.stubs(:core_client).returns(core_mock)
+      core_mock
+    end
+
+    POD_NOT_FOUND_BODY = {
+      kind: "Status",
+      apiVersion: "v1",
+      metadata: {},
+      status: "Failure",
+      message: 'pods "terminal-gone" not found',
+      reason: "NotFound",
+      details: { name: "terminal-gone", kind: "pods" },
+      code: 404
+    }.to_json.freeze
+
+    # Stands in for the Kubernetes API server refusing the exec upgrade: a real
+    # TCP listener answering with a non-101 status, driven through the real
+    # websocket gem. Nothing vendor-owned is stubbed (docs/testing.md R2) — the
+    # runtime's own k8s client is pointed at the listener instead.
+    def with_refused_exec_endpoint(status_line)
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.addr[1]
+
+      acceptor = Thread.new do
+        Thread.current.report_on_exception = false
+        socket = server.accept
+        loop do
+          line = socket.gets
+          break if line.nil? || line == "\r\n"
+        end
+        socket.write(
+          "HTTP/1.1 #{status_line}\r\n" \
+          "Content-Type: application/json\r\n" \
+          "Content-Length: #{POD_NOT_FOUND_BODY.bytesize}\r\n" \
+          "\r\n#{POD_NOT_FOUND_BODY}"
+        )
+        socket.flush
+        # Hold the connection open so the client, not the server, decides when
+        # the exchange ends — that is the behaviour under test.
+        socket.read
+      rescue StandardError
+        nil # the client hung up; nothing left for this listener to do
+      end
+
+      @runtime.stubs(:core_client).returns(Kubeclient::Client.new("http://127.0.0.1:#{port}/api", "v1"))
+
+      capture_rails_log { yield }
+    ensure
+      acceptor&.kill
+      server&.close
+    end
+
+    def capture_rails_log
+      buffer = StringIO.new
+      previous = Rails.logger
+      Rails.logger = ActiveSupport::Logger.new(buffer)
+      yield
+      buffer.string
+    ensure
+      Rails.logger = previous
+    end
+
+    def labels_of(resource)
+      (resource.metadata.to_h[:labels] || {}).to_h.transform_keys(&:to_s)
+    end
+
+    def stub_listing(items)
+      core_mock = mock("core_client")
+      traefik_mock = mock("traefik_client")
+      traefik_mock.stubs(:get_entities).returns(items_json([]))
+      core_mock.stubs(:get_entities).returns(items_json([]))
+      core_mock.stubs(:get_entities)
+        .with("Pod", "pods", label_selector: KubernetesRuntime::SESSION_RESOURCE_SELECTOR, as: :raw)
+        .returns(items_json(items))
+      @runtime.stubs(:core_client).returns(core_mock)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      @runtime.list_session_resources
+    end
+
+    def items_json(items)
+      { "items" => items }.to_json
+    end
+
+    def kube_item(name, namespace, container_label)
+      {
+        "metadata" => {
+          "name" => name,
+          "namespace" => namespace,
+          "creationTimestamp" => "2026-08-09T10:00:00Z",
+          "labels" => { "app" => "aixle-runtime", "aixle-container" => container_label }
+        }
+      }
+    end
 
     def build_test_tar(filename, content)
       io = StringIO.new
