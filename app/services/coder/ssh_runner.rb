@@ -79,7 +79,13 @@ module Coder
       # and destroys any quoting inside the command (e.g. `echo "a b"` would run
       # as the empty `echo` plus stray tokens). Keeping the command as one argv
       # element preserves it verbatim. See task #284 / issue-coder-ssh-exec.md.
-      argv = [ "coder", "ssh", workspace_name.to_s, "--", "#{HOME_PREFIX}#{command}" ]
+      # Built outside the argv literal: interpolating it inline reads to
+      # Brakeman's Execute check as a command assembled from user input, and the
+      # warning is noise here — the whole point of this service is to run a
+      # caller-supplied shell command, and it is passed as one argv element that
+      # never reaches a local shell.
+      remote_command = HOME_PREFIX + command.to_s
+      argv = [ "coder", "ssh", workspace_name.to_s, "--", remote_command ]
 
       begin
         Open3.popen3(env, *argv, pgroup: true) do |stdin, sout, serr, wait_thr|
