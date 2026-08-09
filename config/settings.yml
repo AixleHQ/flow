@@ -211,6 +211,24 @@ kubernetes:
   runtime_limits_cpu: <%= ENV['K8S_RUNTIME_LIMITS_CPU'] || '1000m' %>
   runtime_limits_memory: <%= ENV['K8S_RUNTIME_LIMITS_MEMORY'] || '1Gi' %>
   agents_image_pull_secrets: <%= (ENV['K8S_AGENTS_IMAGE_PULL_SECRETS'] || '').split(',').map(&:strip).reject(&:empty?) %>
+  # Dedicated node group for agent session pods (the `terminal-*` pods) — a
+  # runaway agent then only starves other agents, never a platform pod.
+  #
+  # FORMAT: comma-separated `key=value[:Effect]` entries. `Effect` is optional
+  # and defaults to NoSchedule (NoSchedule | PreferNoSchedule | NoExecute).
+  # Example ConfigMap value — this is the exact pair the prod agent node group
+  # (`palad-agents-on-demand`) labels and taints its nodes with:
+  #   K8S_AGENTS_NODE_POOL: "aixle.com/workload=agents:NoSchedule"
+  # Each entry becomes BOTH one `nodeSelector` label AND one matching
+  # toleration (operator Equal), so the node group's *label* and its *taint*
+  # must use the same key=value pair. Multiple entries = all labels required
+  # and all taints tolerated.
+  #
+  # EMPTY (the default) emits neither `nodeSelector` nor `tolerations` — not
+  # even empty ones. Any environment without such a node group (dev, staging,
+  # a cluster where the group has not been created yet) must leave it unset,
+  # otherwise every agent pod stays Pending forever.
+  agents_node_pool: <%= (ENV['K8S_AGENTS_NODE_POOL'] || '').split(',').map(&:strip).reject(&:empty?) %>
   kubeconfig_path: <%= ENV['KUBECONFIG'] || File.join(ENV.fetch('HOME', '/root'), '.kube', 'config') %>
   service_account_token_path: <%= ENV['K8S_SA_TOKEN_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/token' %>
   service_account_ca_path: <%= ENV['K8S_SA_CA_PATH'] || '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt' %>

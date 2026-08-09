@@ -214,6 +214,62 @@ module ContainerRuntime
       assert_equal "aixle-project-77", result.namespace
     end
 
+    # The agent node group is opt-in. With nothing configured the emitted pod
+    # spec must be exactly what it was before node-pool pinning existed — an
+    # empty nodeSelector/tolerations pair, or one naming a node group a cluster
+    # does not have, leaves every agent pod Pending.
+    test "build_pod emits no nodeSelector or tolerations when no agent node pool is configured" do
+      Settings.kubernetes.stubs(:agents_node_pool).returns([])
+      Settings.kubernetes.stubs(:agents_image_pull_secrets).returns([])
+
+      pod_spec = build_agent_pod_spec
+
+      assert_equal %i[automountServiceAccountToken enableServiceLinks restartPolicy containers],
+                   pod_spec.keys,
+                   "unconfigured agent pod spec gained or lost a key"
+      assert_not pod_spec.key?(:nodeSelector)
+      assert_not pod_spec.key?(:tolerations)
+    end
+
+    test "build_pod pins agent pods to the configured node pool and tolerates its matching taint" do
+      Settings.kubernetes.stubs(:agents_node_pool).returns([ "aixle.com/workload=agent:NoSchedule" ])
+
+      pod_spec = build_agent_pod_spec
+      node_selector = node_selector_from(pod_spec)
+      tolerations = tolerations_from(pod_spec)
+
+      assert_equal({ "aixle.com/workload" => "agent" }, node_selector)
+      assert_equal [ { key: "aixle.com/workload", operator: "Equal", value: "agent", effect: "NoSchedule" } ],
+                   tolerations
+      # The selector and the toleration are two views of the same entry: a pod
+      # that selects a taint it does not tolerate never schedules.
+      assert_equal node_selector, tolerations.to_h { |toleration| [ toleration[:key].to_s, toleration[:value] ] }
+    end
+
+    test "build_pod defaults the toleration effect to NoSchedule and skips unparseable node pool entries" do
+      Settings.kubernetes.stubs(:agents_node_pool).returns([ "aixle.com/workload=agent", "nonsense" ])
+
+      pod_spec = build_agent_pod_spec
+
+      assert_equal({ "aixle.com/workload" => "agent" }, node_selector_from(pod_spec))
+      assert_equal [ { key: "aixle.com/workload", operator: "Equal", value: "agent", effect: "NoSchedule" } ],
+                   tolerations_from(pod_spec)
+    end
+
+    test "build_pod leaves tool pods unpinned even when an agent node pool is configured" do
+      Settings.kubernetes.stubs(:agents_node_pool).returns([ "aixle.com/workload=agent:NoSchedule" ])
+      Settings.kubernetes.stubs(:agents_image_pull_secrets).returns([])
+
+      # Tool containers are created without a container_name, so they get no
+      # route token — the same discriminator the ingress path already uses.
+      pod_spec = build_agent_pod_spec(container_name: nil)
+
+      assert_equal %i[automountServiceAccountToken enableServiceLinks restartPolicy containers],
+                   pod_spec.keys
+      assert_not pod_spec.key?(:nodeSelector)
+      assert_not pod_spec.key?(:tolerations)
+    end
+
     # -- container_status: is this pod still alive? --
     #
     # Pods run with restartPolicy: Never and no owning controller, so a dead agent
@@ -757,6 +813,38 @@ module ContainerRuntime
     end
 
     private
+
+    # Builds the pod the way create_container does — real handle, real pod-spec
+    # builder — and hands back the pod spec as a plain Hash. No API calls: only
+    # settings are read on this path.
+    def build_agent_pod_spec(container_name: "terminal-abc123")
+      spec = {
+        image: "alpine:latest",
+        env_vars: [],
+        labels: {},
+        host_config: {},
+        container_name: container_name
+      }
+      handle = @runtime.send(:build_handle, spec)
+      pod = @runtime.send(:build_pod, spec, handle)
+
+      pod.spec.respond_to?(:to_h) ? pod.spec.to_h : pod.spec
+    end
+
+    # Kubeclient::Resource symbolizes keys on the way in; normalize back so the
+    # assertions read as the YAML Kubernetes actually receives.
+    def node_selector_from(pod_spec)
+      selector = pod_spec[:nodeSelector]
+      selector = selector.to_h if selector.respond_to?(:to_h)
+      selector.transform_keys(&:to_s)
+    end
+
+    def tolerations_from(pod_spec)
+      Array(pod_spec[:tolerations]).map do |toleration|
+        hash = toleration.respond_to?(:to_h) ? toleration.to_h : toleration
+        hash.transform_keys(&:to_sym)
+      end
+    end
 
     # A resolved handle, so the status lookup is the only API call under test.
     def pod_handle
