@@ -132,8 +132,16 @@ describe('Profile/Usage', () => {
     expect(screen.queryByText('Total Sessions')).not.toBeInTheDocument();
     expect(screen.queryByText('Per-Project Breakdown')).not.toBeInTheDocument();
     expect(screen.queryByText('Usage Breakdown by Agent Type')).not.toBeInTheDocument();
-    // Section headers (outside Deferred) remain.
-    expect(screen.getByText('Projects Overview')).toBeInTheDocument();
+    // Page chrome (outside Deferred) remains.
+    expect(screen.getByRole('heading', { name: 'My Profile' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Usage' })).toBeInTheDocument();
+  });
+
+  it('navigates back to the Account tab when Account is clicked', async () => {
+    renderAuthedPage(<UsagePage />, { props: selfProps });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Account' }));
+    expect(router.visit).toHaveBeenCalledWith('/profile');
   });
 
   it('navigates with the chosen period when the period select changes (self)', async () => {
