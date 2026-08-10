@@ -4,9 +4,11 @@ module PersonalTools
   class TriggerTaskWorkflow < Base
     tool do
       display_name "Trigger Task Workflow"
-      description "Run the workflow bound to a board task's column — the same thing the Run " \
-                  "workflow button on the task card does. A task that already has a run in " \
-                  "flight is refused; pass force to cancel that run first and start a fresh one."
+      description "Run the workflow bound to a board task's column. A task that already has a " \
+                  "run in flight is refused; pass force to cancel that run first and start a " \
+                  "fresh one. The run is attributed to the task's assignee (whose agent " \
+                  "credential it spends and whose bill it lands on) — the response says which " \
+                  "account under `runs_as`."
       audience :user
       tags :board, :workflows
       destructive
@@ -37,10 +39,12 @@ module PersonalTools
       # reclaimed and the terminal log collected before the retrigger.
       WorkflowService.cancel(run: active_run) if active_run
 
-      result = TaskService.trigger_workflow(task: task, binding: task.board_column.column_workflow_binding, actor: user)
+      actor = resolve_actor(project, task, active_run)
+      result = TaskService.trigger_workflow(task: task, binding: task.board_column.column_workflow_binding, actor: actor)
       return error(result[:error]) if result.is_a?(Hash) && result[:error]
 
-      success(task_id: task.id, run_id: result.id, state: result.state, cancelled_run_id: active_run&.id)
+      success(task_id: task.id, run_id: result.id, state: result.state,
+              runs_as: actor.email, cancelled_run_id: active_run&.id)
     end
 
     private
@@ -51,6 +55,33 @@ module PersonalTools
 
     def active_run_for(task)
       task.workflow_runs.where(state: ACTIVE_RUN_STATES).order(created_at: :desc).first
+    end
+
+    # WHO the run belongs to, which is NOT who is allowed to start it.
+    #
+    # Authorization stays the caller's — a personal token grants exactly its
+    # owner's access. Attribution follows the task, because `run.user` is what
+    # gets spent: SessionService.create_for_workflow_step reads it to pick the
+    # agent credential, the runtime and the model, so the account named here is
+    # the one that executes the work and pays for it.
+    #
+    # Every other agent-initiated board action resolves it the same way
+    # (InternalTools::BoardMoveTask#resolve_actor and friends: `task.assignee ||
+    # workflow_run&.user`), and moving a card into an automated column is the
+    # main way these runs start — so matching that rule is what makes the same
+    # task cost the same account no matter which path launched it. Attributing
+    # to the caller instead made every task an agent triggered run as whoever's
+    # personal token the project's MCP server happens to carry.
+    def resolve_actor(project, task, previous_run)
+      [ task.assignee, previous_run&.user ].compact.find { |candidate| runnable?(project, candidate) } || user
+    end
+
+    # An account with no active membership in this company holds no agent
+    # credential here, so a run attributed to it would launch a container with
+    # nothing to authenticate as and fail opaquely. Skip such a candidate rather
+    # than start work that cannot succeed.
+    def runnable?(project, candidate)
+      candidate.company_memberships.active.exists?(company_id: project.company_id)
     end
   end
 end
