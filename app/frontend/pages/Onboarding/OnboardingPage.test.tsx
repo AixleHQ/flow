@@ -337,10 +337,12 @@ describe('Onboarding/OnboardingPage', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]);
     expect(await screen.findByText('Authentication session failed to start.')).toBeInTheDocument();
 
-    // Retry POSTs a fresh session (apiFetch → mocked fetch resolves 200) then reloads authSessions.
+    // Retry POSTs a fresh session (apiFetch → mocked fetch resolves 200) then reloads auth_sessions.
+    // The partial-reload key is the SERVER prop name (snake_case): inertia_rails filters
+    // `only` before the camelCase prop transformer runs, so 'authSessions' matches nothing.
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
-    await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['authSessions'] }));
+    await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['auth_sessions'] }));
   });
 
   it('renders the ttyd terminal iframe for a ready auth session after clicking Connect', async () => {

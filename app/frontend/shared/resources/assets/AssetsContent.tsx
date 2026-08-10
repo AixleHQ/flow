@@ -137,7 +137,7 @@ export function AssetsContent({
     setHistoryLoading(true);
     router.reload({
       data: { history_asset_id: asset.id },
-      only: ['assetVersions'],
+      only: ['asset_versions'],
       onFinish: () => setHistoryLoading(false),
     });
   }, []);

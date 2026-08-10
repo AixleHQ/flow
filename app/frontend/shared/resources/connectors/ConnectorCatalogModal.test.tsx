@@ -141,7 +141,7 @@ describe('shared/resources/connectors/ConnectorCatalogModal', () => {
       expect(get).toHaveBeenCalledWith(
         '/company/projects/7/mcp_servers',
         { connector_q: 'issue' },
-        expect.objectContaining({ only: ['connectors', 'connectorQuery'] }),
+        expect.objectContaining({ only: ['connectors', 'connector_query'] }),
       ),
     );
   });
