@@ -11,6 +11,15 @@ class TaskServiceTest < ActiveSupport::TestCase
     @column = create(:board_column, board: @board)
   end
 
+  # A candidate assignee has to clear BoardTask#assignee_is_project_member, so
+  # company membership alone is not enough — the project must reach them too.
+  def project_member(role: :employee)
+    user = create(:user)
+    create(:company_membership, user: user, company: @company, role: role)
+    create(:project_collaborator, project: @project, user: user)
+    user
+  end
+
   # == create ==
 
   test "create saves task and records activity" do
@@ -198,6 +207,84 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     result = TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
     assert_not result.is_a?(Hash)
+  end
+
+  # == who a launched run belongs to ==
+  #
+  # run.user is what the run SPENDS (SessionService.create_for_workflow_step reads
+  # it for the credential, the runtime and the model), so these assert on the
+  # `user:` WorkflowService.start receives.
+
+  test "trigger_workflow gives the run to the task's assignee, not to whoever pressed Run" do
+    assignee = project_member
+    workflow = create(:workflow, scope: @project)
+    binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
+    task = create(:board_task, board: @board, board_column: @column, assignee: assignee)
+
+    WorkflowService.expects(:start).with(has_entries(user: assignee)).returns(build(:workflow_run))
+
+    TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
+  end
+
+  test "trigger_workflow records who asked, even when the run belongs to the assignee" do
+    assignee = project_member
+    workflow = create(:workflow, scope: @project)
+    binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
+    task = create(:board_task, board: @board, board_column: @column, assignee: assignee)
+    WorkflowService.stubs(:start).returns(build(:workflow_run))
+
+    TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
+
+    event = TriggerEvent.where(board_task_id: task.id).order(:created_at).last
+    assert_equal assignee.id, event.actor_id
+    assert_equal @user.id, event.data["requested_by_id"]
+  end
+
+  test "trigger_workflow falls back to the requester on an unassigned task" do
+    workflow = create(:workflow, scope: @project)
+    binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
+    task = create(:board_task, board: @board, board_column: @column)
+
+    WorkflowService.expects(:start).with(has_entries(user: @user)).returns(build(:workflow_run))
+
+    TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
+  end
+
+  test "trigger_workflow skips an assignee who cannot own runs" do
+    viewer = project_member(role: :viewer)
+    workflow = create(:workflow, scope: @project)
+    binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
+    task = create(:board_task, board: @board, board_column: @column, assignee: viewer)
+
+    # A viewer cannot launch a session at all, so a run must never be attributed
+    # to one — it would be work they could not have started themselves.
+    WorkflowService.expects(:start).with(has_entries(user: @user)).returns(build(:workflow_run))
+
+    TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
+  end
+
+  test "trigger_workflow skips an assignee whose membership was revoked" do
+    former = project_member
+    workflow = create(:workflow, scope: @project)
+    binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
+    task = create(:board_task, board: @board, board_column: @column, assignee: former)
+    former.company_memberships.find_by(company: @company).update!(state: "revoked")
+
+    WorkflowService.expects(:start).with(has_entries(user: @user)).returns(build(:workflow_run))
+
+    TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
+  end
+
+  test "an auto-trigger from a card move also belongs to the assignee, not the mover" do
+    assignee = project_member
+    workflow = create(:workflow, scope: @project)
+    auto_column = create(:board_column, board: @board)
+    ColumnWorkflowBinding.create!(board_column: auto_column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+    task = create(:board_task, board: @board, board_column: @column, assignee: assignee)
+
+    WorkflowService.expects(:start).with(has_entries(user: assignee)).returns(build(:workflow_run))
+
+    TaskService.move(task: task, to_column: auto_column, actor: @user)
   end
 
   test "trigger_workflow returns error for non-manual binding" do

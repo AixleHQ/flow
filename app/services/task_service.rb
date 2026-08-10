@@ -146,10 +146,11 @@ class TaskService
         event_type: TriggerEngine::MANUAL_EVENT_TYPE,
         source: "manual",
         subject: task.id,
-        data: { "workflow_id" => binding.workflow_id, "column_id" => task.board_column_id },
+        data: { "workflow_id" => binding.workflow_id, "column_id" => task.board_column_id,
+                "requested_by_id" => actor&.id },
         project: task.board.project,
         board_task: task,
-        actor: actor,
+        actor: run_owner_for(task, requested_by: actor),
         relay_state: "pending"
       )
 
@@ -212,10 +213,53 @@ class TaskService
       return nil if task.gates.pending.exists?
       return nil if quota_block_auto_trigger?(binding, column)
 
-      TriggerEngine.record_column_trigger(binding: binding, task: task, actor: actor)
+      TriggerEngine.record_column_trigger(
+        binding: binding, task: task,
+        actor: run_owner_for(task, requested_by: actor), requested_by: actor
+      )
     end
 
     private
+
+    # WHO a launched run belongs to — which is not the same question as who was
+    # allowed to launch it.
+    #
+    # `run.user` is what the run SPENDS: SessionService.create_for_workflow_step
+    # reads it to choose the agent credential, the agent runtime and the model,
+    # so it decides which account executes the work and which one is billed. The
+    # work on a card belongs to the person the card is assigned to, so that is
+    # who owns its runs — not whoever happened to press Run, or to drag the card
+    # into an automated column.
+    #
+    # This also has to hold because the agent side already assumes it: every
+    # session tool resolves its own actor as `task.assignee || workflow_run&.user`
+    # (InternalTools::BoardMoveTask and friends), where `workflow_run` is the run
+    # of the session doing the work. A run owned by the wrong account therefore
+    # has an agent that moves every unassigned card as that account, firing more
+    # runs owned by it, whose agents do the same — so one wrong owner does not
+    # stay one wrong run, it walks the board. Resolving ownership in ONE place is
+    # what keeps every entry point (the card's Run button, the personal MCP tool,
+    # a column auto-trigger) from having to get it right separately.
+    #
+    # `requested_by` remains the fallback for an unassigned card, and every
+    # caller records it in the event's data, so "who asked" is never lost.
+    def run_owner_for(task, requested_by:)
+      assignee = task.assignee
+      assignee && can_own_runs?(assignee, task) ? assignee : requested_by
+    end
+
+    # An account with no active membership in the task's company holds no agent
+    # credential there, so a run it owns starts a container with nothing to
+    # authenticate as and fails opaquely. A viewer is excluded for the opposite
+    # reason: the platform refuses to let a viewer launch a session at all, so
+    # attributing a run to one smuggles in work they could not have started.
+    def can_own_runs?(candidate, task)
+      company_id = task.board&.project&.company_id
+      return false if company_id.blank?
+
+      membership = candidate.company_memberships.active.find_by(company_id: company_id)
+      membership.present? && !membership.viewer?
+    end
 
     def record_activity(board, event_type, actor, task: nil, metadata: {})
       BoardActivity.create!(

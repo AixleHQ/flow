@@ -136,12 +136,18 @@ class TriggerEngine
     # Record a pending column auto-trigger event (no dispatch). Called INSIDE the
     # producer's transaction so the event commits atomically with the task move /
     # gate change. The caller dispatches it (inline) after the transaction commits.
-    def record_column_trigger(binding:, task:, actor:)
+    # `actor` is who the launched run will BELONG to (TaskService.run_owner_for
+    # decides); `requested_by` is who caused the trigger. They differ whenever a
+    # card is assigned to someone other than the person who moved it, so both are
+    # recorded — the run must be owned by the assignee, and the audit trail must
+    # still say who moved the card.
+    def record_column_trigger(binding:, task:, actor:, requested_by: nil)
       record_event(
         event_type: COLUMN_EVENT_TYPE,
         source: "column_workflow_binding:#{binding.id}",
         subject: task.id,
-        data: { "column_id" => binding.board_column_id, "workflow_id" => binding.workflow_id },
+        data: { "column_id" => binding.board_column_id, "workflow_id" => binding.workflow_id,
+                "requested_by_id" => (requested_by || actor)&.id },
         project: task.board.project,
         board_task: task,
         actor: actor,

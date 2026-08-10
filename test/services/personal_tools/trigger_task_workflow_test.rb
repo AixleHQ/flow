@@ -101,34 +101,26 @@ module PersonalTools
       assert_equal assignee.email, body["runs_as"]
     end
 
-    test "falls back to the previous run's owner when the task has no assignee" do
-      previous_owner = member
-      create(:workflow_run, workflow: @workflow, project: @project, user: previous_owner,
-             board_task_id: @task.id, state: "running")
-      expect_start_as(previous_owner)
-
-      body = payload(execute(force: true))
-
-      assert_equal previous_owner.email, body["runs_as"]
-    end
-
-    test "an assignee who left the company is skipped — they hold no credential here" do
-      former = member
-      @task.update!(assignee: former)
-      former.company_memberships.find_by(company: @company).update!(state: "revoked")
-      expect_start_as(@user)
-
-      body = payload(execute)
-
-      assert_equal @user.email, body["runs_as"]
-    end
-
     test "falls back to the caller when the task names nobody" do
       expect_start_as(@user)
 
       body = payload(execute)
 
       assert_equal @user.email, body["runs_as"]
+    end
+
+    # A task already launched under the wrong account must not have that account
+    # re-derived from its own history, or the repair reproduces the bug.
+    test "a previous run's owner is not inherited on a forced retrigger" do
+      stale_owner = member
+      create(:workflow_run, workflow: @workflow, project: @project, user: stale_owner,
+             board_task_id: @task.id, state: "running")
+      expect_start_as(@user)
+
+      body = payload(execute(force: true))
+
+      assert_equal @user.email, body["runs_as"]
+      assert_not_equal stale_owner.email, body["runs_as"]
     end
 
     test "a column with no binding is refused" do
