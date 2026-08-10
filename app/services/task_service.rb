@@ -248,17 +248,34 @@ class TaskService
       assignee && can_own_runs?(assignee, task) ? assignee : requested_by
     end
 
-    # An account with no active membership in the task's company holds no agent
-    # credential there, so a run it owns starts a container with nothing to
-    # authenticate as and fails opaquely. A viewer is excluded for the opposite
-    # reason: the platform refuses to let a viewer launch a session at all, so
-    # attributing a run to one smuggles in work they could not have started.
+    # Can this account actually carry a run here? Three ways it cannot:
+    #
+    #   - no active membership in the task's company — it is not theirs to run;
+    #   - the viewer role — the platform refuses to let a viewer launch a session
+    #     at all, so attributing a run to one smuggles in work they could not
+    #     have started themselves;
+    #   - no agent credential in that company — and this one is the reason the
+    #     check exists rather than trusting the assignee blindly. A nil
+    #     credential is not an error anywhere downstream: SessionContextService
+    #     writes credentials only `if credential.present?`, so the container
+    #     comes up with nothing to authenticate as and the step dies with
+    #     whatever the CLI says about being logged out. Handing a run to someone
+    #     who never connected an agent would trade a wrong-account run for a
+    #     silently broken one.
+    #
+    # Note the residual case this does NOT cover: a candidate who holds some
+    # credential but not the runtime the step pins (`required_agent_runtime`)
+    # still lands on a nil credential. That is pre-existing — it bites any run
+    # whose owner lacks the pinned runtime — and resolving it here would mean a
+    # second copy of SessionService's runtime cascade.
     def can_own_runs?(candidate, task)
       company_id = task.board&.project&.company_id
       return false if company_id.blank?
 
       membership = candidate.company_memberships.active.find_by(company_id: company_id)
-      membership.present? && !membership.viewer?
+      return false if membership.nil? || membership.viewer?
+
+      AgentCredential.exists?(user_id: candidate.id, company_id: company_id)
     end
 
     def record_activity(board, event_type, actor, task: nil, metadata: {})

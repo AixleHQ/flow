@@ -47,10 +47,13 @@ module PersonalTools
 
     # A candidate assignee has to clear BoardTask#assignee_is_project_member, so
     # company membership alone is not enough — the project has to reach them too.
-    def member(role: :employee)
+    # The credential is what makes them eligible to OWN a run (TaskService's
+    # can_own_runs?): without one the container has nothing to authenticate as.
+    def member(role: :employee, credential: true)
       user = create(:user)
       create(:company_membership, user: user, company: @company, role: role)
       create(:project_collaborator, project: @project, user: user)
+      create(:agent_credential, user: user, company: @company) if credential
       user
     end
 

@@ -13,10 +13,13 @@ class TaskServiceTest < ActiveSupport::TestCase
 
   # A candidate assignee has to clear BoardTask#assignee_is_project_member, so
   # company membership alone is not enough — the project must reach them too.
-  def project_member(role: :employee)
+  # `credential:` mirrors having connected an agent: without one, a run they own
+  # would launch a container with nothing to authenticate as.
+  def project_member(role: :employee, credential: true)
     user = create(:user)
     create(:company_membership, user: user, company: @company, role: role)
     create(:project_collaborator, project: @project, user: user)
+    create(:agent_credential, user: user, company: @company) if credential
     user
   end
 
@@ -258,6 +261,19 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     # A viewer cannot launch a session at all, so a run must never be attributed
     # to one — it would be work they could not have started themselves.
+    WorkflowService.expects(:start).with(has_entries(user: @user)).returns(build(:workflow_run))
+
+    TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
+  end
+
+  test "trigger_workflow skips an assignee who has never connected an agent" do
+    unconnected = project_member(credential: false)
+    workflow = create(:workflow, scope: @project)
+    binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
+    task = create(:board_task, board: @board, board_column: @column, assignee: unconnected)
+
+    # Otherwise the fix trades a run on the wrong account for one that dies with
+    # "not logged in": a nil credential is silently skipped downstream, never raised.
     WorkflowService.expects(:start).with(has_entries(user: @user)).returns(build(:workflow_run))
 
     TaskService.trigger_workflow(task: task, binding: binding, actor: @user)

@@ -194,6 +194,9 @@ module Api
         test "trigger_workflow starts the run under the task's assignee, not the caller" do
           assignee = create(:user, :onboarding_completed, company: @company)
           @project.add_collaborator(assignee)
+          # Eligible to own a run only with an agent credential in this company —
+          # see TaskService#can_own_runs?.
+          create(:agent_credential, user: assignee, company: @company)
           @task.update!(assignee: assignee)
           ColumnWorkflowBinding.create!(
             board_column: @col1, workflow: @workflow, trigger_mode: :manual, cooldown_seconds: 0
