@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { makeFormStub, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
+import { companyMembershipPath } from 'shared/routes';
 import type { AgentCredential, SharedUser } from 'shared/ui';
 
 import ProfilePage from './Show';
@@ -216,6 +217,43 @@ describe('Profile/Show', () => {
     expect(screen.getByText('Platform Administrator')).toBeInTheDocument();
   });
 
+  it('shows a monogram tile with the company initials on a membership row', () => {
+    const profile = buildProfile();
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByText('AR')).toBeInTheDocument();
+  });
+
+  it('leaves a company via the shared confirm modal after the user confirms', async () => {
+    const profile = buildProfile();
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Leave Acme Robotics' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Are you sure you want to leave Acme Robotics/)).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Leave company' }));
+
+    await waitFor(() =>
+      expect(router.delete).toHaveBeenCalledWith(
+        companyMembershipPath(5),
+        expect.objectContaining({ preserveScroll: true }),
+      ),
+    );
+  });
+
+  it('does NOT leave a company when the confirm modal is cancelled', async () => {
+    const profile = buildProfile();
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Leave Acme Robotics' }));
+
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(router.delete).not.toHaveBeenCalled();
+  });
+
   it('renders the Employee role badge on an employee membership row', () => {
     const profile = buildProfile({
       currentRole: 'employee',
@@ -244,18 +282,19 @@ describe('Profile/Show', () => {
     expect(screen.getByText("Anthropic's AI coding assistant with deep reasoning capabilities")).toBeInTheDocument();
   });
 
-  it('shows the Default Agent Runtime selector and Default Models card when credentials exist', () => {
+  it('shows the Default Runtime selector and Default Models rows when credentials exist', () => {
     const credential = buildCredential({ id: 100, agentType: 'claude_code' });
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
-    // Title appears for the runtime selector once credentials are present.
-    expect(screen.getByText('Default Agent Runtime')).toBeInTheDocument();
+    // The Agent Defaults card holds both the runtime selector and the model rows.
+    expect(screen.getByRole('heading', { name: 'Agent Defaults' })).toBeInTheDocument();
+    expect(screen.getByText('Default Runtime')).toBeInTheDocument();
     expect(
       screen.queryByText('No agent credentials configured. Complete onboarding to set up agents.'),
     ).not.toBeInTheDocument();
 
-    // Default Models card renders with one labelled row per credential.
+    // Default Models renders with one labelled row per credential.
     expect(screen.getByText('Default Models')).toBeInTheDocument();
     // The per-credential model row shows the agent's display name (in addition to the runtime card).
     expect(screen.getAllByText('Claude Code').length).toBeGreaterThan(1);
@@ -455,9 +494,9 @@ describe('Profile/Show', () => {
     });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
-    // Scope to the runtime card (two+ credentials keep the Select enabled) and pick the other agent.
-    const runtimeCard = screen.getByText('Default Agent Runtime').closest('.mantine-Card-root') as HTMLElement;
-    const select = within(runtimeCard).getByRole('combobox');
+    // Scope to the Default Runtime field (two+ credentials keep the Select enabled) and pick the other agent.
+    const runtimeField = screen.getByText('Default Runtime').closest('div') as HTMLElement;
+    const select = within(runtimeField).getByRole('combobox');
     await userEvent.click(select);
     await userEvent.click(await screen.findByRole('option', { name: 'Cursor CLI' }));
 
@@ -485,9 +524,10 @@ describe('Profile/Show', () => {
     };
     renderAuthedPage(<ProfilePage {...props} />, { props });
 
-    // The Default Models card has one row (one credential) -> a single combobox to disambiguate.
-    const modelsCard = screen.getByText('Default Models').closest('.mantine-Card-root') as HTMLElement;
-    const select = within(modelsCard).getByRole('combobox');
+    // Default Models has one row (one credential) -> a single combobox to disambiguate,
+    // scoped to the section following the "Default Models" label.
+    const modelsSection = screen.getByText('Default Models').parentElement as HTMLElement;
+    const select = within(modelsSection).getByRole('combobox');
     await userEvent.click(select);
     await userEvent.click(await screen.findByRole('option', { name: 'Claude Sonnet 4.5' }));
 

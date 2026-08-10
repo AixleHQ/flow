@@ -557,85 +557,89 @@ const UsagePage = () => {
     <AuthLayout>
       <Head title="Usage" />
 
-      <Group justify="space-between" mb="xl" wrap="wrap">
-        <Box>
-          <Text size="xl" fw={700}>
-            Usage
-          </Text>
-          <Text size="sm" c="dimmed">
-            {/* Usage is always a CURRENT-COMPANY slice (see ProfileController#usage).
-                For someone who belongs to several companies, an unlabelled total
-                reads as "everything", so name the company being shown. */}
-            Cross-project agent activity, costs, and sessions
-            {companyName ? ` in ${companyName}` : ''}
-          </Text>
-        </Box>
-        <Group gap="sm">
-          <Select value={period} onChange={(v) => navigate(v ?? '30d')} data={PERIOD_OPTIONS} size="sm" w={140} />
+      {/* Matches the Account tab's content width so the two tabs don't jump
+          width when switching between them. */}
+      <Box maw={1120} mx="auto">
+        <Group justify="space-between" mb="xl" wrap="wrap">
+          <Box>
+            <Text size="xl" fw={700}>
+              Usage
+            </Text>
+            <Text size="sm" c="dimmed">
+              {/* Usage is always a CURRENT-COMPANY slice (see ProfileController#usage).
+                  For someone who belongs to several companies, an unlabelled total
+                  reads as "everything", so name the company being shown. */}
+              Cross-project agent activity, costs, and sessions
+              {companyName ? ` in ${companyName}` : ''}
+            </Text>
+          </Box>
+          <Group gap="sm">
+            <Select value={period} onChange={(v) => navigate(v ?? '30d')} data={PERIOD_OPTIONS} size="sm" w={140} />
+          </Group>
         </Group>
-      </Group>
 
-      {!viewerIsSelf && (
-        <Alert icon={<IconInfoCircle size={16} />} color="blue" mb="xl">
-          Viewing {targetUser.name ?? targetUser.email}&apos;s usage
-        </Alert>
-      )}
+        {!viewerIsSelf && (
+          <Alert icon={<IconInfoCircle size={16} />} color="blue" mb="xl">
+            Viewing {targetUser.name ?? targetUser.email}&apos;s usage
+          </Alert>
+        )}
 
-      {/* Contribution heatmap */}
-      <Deferred data="activityHeatmap" fallback={<Skeleton height={140} radius="sm" mb="xl" />}>
-        <HeatmapPanel />
-      </Deferred>
-
-      {/* Summary stats */}
-      <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} mb="xl" spacing="md">
-        <Deferred data="summary" fallback={<SummarySkeletons />}>
-          <SummaryPanel />
+        {/* Contribution heatmap */}
+        <Deferred data="activityHeatmap" fallback={<Skeleton height={140} radius="sm" mb="xl" />}>
+          <HeatmapPanel />
         </Deferred>
-      </SimpleGrid>
 
-      {/* Per-project breakdown */}
-      <Text size="md" fw={600} mb="md" mt="xl">
-        Projects Overview
-      </Text>
-      <Deferred data="summary" fallback={<Skeleton height={200} radius="sm" mb="xl" />}>
-        <ProjectBreakdownPanel />
-      </Deferred>
+        {/* Summary stats */}
+        <SimpleGrid cols={{ base: 2, sm: 3, md: 5 }} mb="xl" spacing="md">
+          <Deferred data="summary" fallback={<SummarySkeletons />}>
+            <SummaryPanel />
+          </Deferred>
+        </SimpleGrid>
 
-      {/* Agent activity */}
-      <Text size="md" fw={600} mb="md" mt="xl">
-        Agent Activity
-      </Text>
-      <Deferred data="agentActivity" fallback={<ChartSkeleton height={200} />}>
-        <AgentActivityPanel />
-      </Deferred>
+        {/* Per-project breakdown */}
+        <Text size="md" fw={600} mb="md" mt="xl">
+          Projects Overview
+        </Text>
+        <Deferred data="summary" fallback={<Skeleton height={200} radius="sm" mb="xl" />}>
+          <ProjectBreakdownPanel />
+        </Deferred>
 
-      {/* Cost & token usage */}
-      <Text size="md" fw={600} mb="md" mt="xl">
-        Cost & Token Usage
-      </Text>
-      <Deferred
-        data="costToken"
-        fallback={
-          <Grid mb="xl" gap="md">
-            <Grid.Col span={{ base: 12, md: 6 }}>
-              <ChartSkeleton height={220} />
-            </Grid.Col>
-            <Grid.Col span={{ base: 12, md: 6 }}>
-              <ChartSkeleton height={220} />
-            </Grid.Col>
-          </Grid>
-        }
-      >
-        <CostTokenPanel tickInterval={tickInterval} />
-      </Deferred>
+        {/* Agent activity */}
+        <Text size="md" fw={600} mb="md" mt="xl">
+          Agent Activity
+        </Text>
+        <Deferred data="agentActivity" fallback={<ChartSkeleton height={200} />}>
+          <AgentActivityPanel />
+        </Deferred>
 
-      {/* Sessions list */}
-      <Text size="md" fw={600} mb="md" mt="xl">
-        Sessions
-      </Text>
-      <Deferred data="sessions" fallback={<Skeleton height={200} radius="sm" />}>
-        <SessionsPanel />
-      </Deferred>
+        {/* Cost & token usage */}
+        <Text size="md" fw={600} mb="md" mt="xl">
+          Cost & Token Usage
+        </Text>
+        <Deferred
+          data="costToken"
+          fallback={
+            <Grid mb="xl" gap="md">
+              <Grid.Col span={{ base: 12, md: 6 }}>
+                <ChartSkeleton height={220} />
+              </Grid.Col>
+              <Grid.Col span={{ base: 12, md: 6 }}>
+                <ChartSkeleton height={220} />
+              </Grid.Col>
+            </Grid>
+          }
+        >
+          <CostTokenPanel tickInterval={tickInterval} />
+        </Deferred>
+
+        {/* Sessions list */}
+        <Text size="md" fw={600} mb="md" mt="xl">
+          Sessions
+        </Text>
+        <Deferred data="sessions" fallback={<Skeleton height={200} radius="sm" />}>
+          <SessionsPanel />
+        </Deferred>
+      </Box>
     </AuthLayout>
   );
 };

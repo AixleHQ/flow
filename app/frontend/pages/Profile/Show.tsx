@@ -26,7 +26,7 @@ import { useDisclosure } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import { type Subscription } from '@rails/actioncable';
-import { IconCheck, IconCopy, IconLock, IconTrash } from '@tabler/icons-react';
+import { IconCheck, IconCopy, IconDoorExit, IconLock, IconTrash } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
@@ -190,24 +190,16 @@ function DefaultAgentSelector({ profile }: { profile: SharedUser }) {
 
   if (credentials.length === 0) {
     return (
-      <Card p={20} mt={24}>
-        <Title order={5} mb={4}>
-          Default Agent Runtime
-        </Title>
-        <Text size="sm" c="dimmed">
-          No agent credentials configured. Complete onboarding to set up agents.
-        </Text>
-      </Card>
+      <Text size="sm" c="dimmed">
+        No agent credentials configured. Complete onboarding to set up agents.
+      </Text>
     );
   }
 
   return (
-    <Card p={20} mt={24}>
-      <Title order={5} mb={4}>
-        Default Agent Runtime
-      </Title>
-      <Text size="sm" c="dimmed" mb="md">
-        Used when starting new sessions and as fallback for workflow execution.
+    <Box>
+      <Text size="sm" fw={500} mb={6}>
+        Default Runtime
       </Text>
       <Select
         value={profile.defaultAgentCredentialId?.toString() ?? ''}
@@ -218,7 +210,7 @@ function DefaultAgentSelector({ profile }: { profile: SharedUser }) {
           label: getAgentInfo(c.agentType).name,
         }))}
       />
-    </Card>
+    </Box>
   );
 }
 
@@ -297,20 +289,49 @@ function DefaultModelSelector({ profile, agentModels }: { profile: SharedUser; a
   if (credentials.length === 0) return null;
 
   return (
-    <Card p={20} mt={24}>
-      <Title order={5} mb={4}>
+    <Box>
+      <Text size="sm" fw={500} mb={2}>
         Default Models
-      </Title>
-      <Text size="sm" c="dimmed" mb="md">
-        Set a preferred model per agent runtime. Used when no model is specified in session or workflow step.
+      </Text>
+      <Text size="xs" c="dimmed" mb={10}>
+        Used when no model is specified in a session or workflow step.
       </Text>
       <Stack gap={16}>
         {credentials.map((cred) => (
           <CredentialModelRow key={cred.id} credential={cred} models={modelsMap[cred.agentType] ?? []} />
         ))}
       </Stack>
+    </Box>
+  );
+}
+
+function AgentDefaultsSection({ profile, agentModels }: { profile: SharedUser; agentModels: AgentModelsEntry[] }) {
+  return (
+    <Card p={24}>
+      <Title order={4} mb={4}>
+        Agent Defaults
+      </Title>
+      <Text fz={14} c="dimmed" mb="md">
+        Used when starting new sessions and as a fallback for workflow execution.
+      </Text>
+      <Stack gap={20}>
+        <DefaultAgentSelector profile={profile} />
+        <DefaultModelSelector profile={profile} agentModels={agentModels} />
+      </Stack>
     </Card>
   );
+}
+
+// "Acme Robotics" -> "AR". Duplicated locally rather than shared: the same
+// small helper is copy-pasted across AppSidebar/MembersContent/etc rather
+// than centralized, so this follows the existing pattern.
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return parts
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
 }
 
 function CompaniesSection({
@@ -321,30 +342,38 @@ function CompaniesSection({
   pendingInvitations: SharedMembership[];
 }) {
   const memberships = profile.memberships ?? [];
-  const [leaving, setLeaving] = useState<SharedMembership | null>(null);
-  const [processing, setProcessing] = useState(false);
+  const [leavingId, setLeavingId] = useState<number | null>(null);
 
-  const confirmLeave = () => {
-    if (!leaving) return;
-    setProcessing(true);
-    // Self-removal revokes the membership. Server-side edge cases: the
-    // last-admin guard surfaces as a flash alert; leaving the last company
-    // signs the user out and redirects to the login page.
-    router.delete(companyMembershipPath(leaving.id), {
-      preserveScroll: true,
-      onFinish: () => {
-        setProcessing(false);
-        setLeaving(null);
+  const leaveCompany = (membership: SharedMembership) => {
+    modals.openConfirmModal({
+      title: 'Leave company',
+      children: (
+        <Text size="sm">
+          Are you sure you want to leave {membership.company.name}? You will lose access to its projects and data. You
+          will need a new invitation to rejoin.
+        </Text>
+      ),
+      labels: { confirm: 'Leave company', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => {
+        setLeavingId(membership.id);
+        // Self-removal revokes the membership. Server-side edge cases: the
+        // last-admin guard surfaces as a flash alert; leaving the last company
+        // signs the user out and redirects to the login page.
+        router.delete(companyMembershipPath(membership.id), {
+          preserveScroll: true,
+          onFinish: () => setLeavingId(null),
+        });
       },
     });
   };
 
   return (
-    <Card p={24} mt={24}>
-      <Title order={5} mb={4}>
+    <Card p={24}>
+      <Title order={4} mb={4}>
         Companies
       </Title>
-      <Text size="sm" c="dimmed" mb="md">
+      <Text fz={14} c="dimmed" mb="md">
         Companies you are a member of. Company assignment is managed by administrators.
       </Text>
 
@@ -384,6 +413,7 @@ function CompaniesSection({
         {memberships.map((membership) => (
           <Group key={membership.id} justify="space-between" wrap="nowrap">
             <Group gap="sm" wrap="nowrap" miw={0}>
+              <Box className={classes.companyTile}>{getInitials(membership.company.name)}</Box>
               <Text fw={500} truncate>
                 {membership.company.name}
               </Text>
@@ -398,27 +428,21 @@ function CompaniesSection({
                 </Badge>
               )}
             </Group>
-            <Button variant="subtle" color="red" size="xs" onClick={() => setLeaving(membership)}>
-              Leave company
+            <Button
+              variant="subtle"
+              color="red"
+              size="xs"
+              leftSection={<IconDoorExit size={14} />}
+              loading={leavingId === membership.id}
+              onClick={() => leaveCompany(membership)}
+              aria-label={`Leave ${membership.company.name}`}
+              style={{ flexShrink: 0 }}
+            >
+              Leave
             </Button>
           </Group>
         ))}
       </Stack>
-
-      <Modal opened={leaving !== null} onClose={() => setLeaving(null)} title="Leave company" centered>
-        <Text size="sm" mb="md">
-          Are you sure you want to leave {leaving?.company.name}? You will lose access to its projects and data. You
-          will need a new invitation to rejoin.
-        </Text>
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={() => setLeaving(null)} disabled={processing}>
-            Cancel
-          </Button>
-          <Button color="red" onClick={confirmLeave} loading={processing}>
-            Leave company
-          </Button>
-        </Group>
-      </Modal>
     </Card>
   );
 }
@@ -883,7 +907,7 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
 
   return (
     <>
-      <Card p={24} mt={24}>
+      <Card p={24}>
         <Title order={5} mb={4}>
           Agent Runtimes
         </Title>
@@ -1007,7 +1031,7 @@ function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
     : null;
 
   return (
-    <Card p={24} mt={24}>
+    <Card p={24}>
       <Title order={4} mb={4}>
         Personal MCP
       </Title>
@@ -1015,6 +1039,11 @@ function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
         Connect your AI agent (Claude Code, Cursor, ...) to Aixle: list your projects, manage board tasks and build
         workflows — with exactly your access level.
       </Text>
+
+      <Group gap={8} mb="md">
+        <StatusBadge tone={mcp.enabled ? 'success' : 'neutral'}>{mcp.enabled ? 'Enabled' : 'Disabled'}</StatusBadge>
+        {mcp.enabled && <StatusBadge tone="neutral">{mcp.lastUsedAt ? 'In use' : 'Not used yet'}</StatusBadge>}
+      </Group>
 
       {mcp.token && (
         <Box mb="md">
@@ -1138,7 +1167,7 @@ function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mc
   return (
     <AuthLayout>
       <Head title="My Profile" />
-      <Box maw={600} mx="auto">
+      <Box maw={1120} mx="auto">
         <Title order={1} fz={28} fw={600} c="var(--app-text-primary)" mb={4}>
           My Profile
         </Title>
@@ -1165,102 +1194,110 @@ function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mc
           </Tabs.List>
         </Tabs>
 
-        <Card p={24}>
-          <Title order={4} mb={4}>
-            Personal Information
-          </Title>
-          <Divider mb="md" />
+        <Box className={classes.grid2}>
+          {/* Main column: personal information, agent runtimes, personal MCP. */}
+          <Box className={classes.colMain}>
+            <Card p={24}>
+              <Title order={4} mb={4}>
+                Personal Information
+              </Title>
+              <Divider mb="md" />
 
-          <form onSubmit={handleSubmit}>
-            <Box mb="lg">
-              <Box className={classes.fieldLabel}>
-                <Text size="sm" fw={500} c="dimmed">
-                  Email
-                </Text>
-                <Tooltip label="Email is managed by Google OAuth and cannot be changed">
-                  <IconLock size={16} color="var(--mantine-color-dimmed)" />
-                </Tooltip>
-              </Box>
-              <Text>{profile.email}</Text>
-              <Text size="xs" c="dimmed" mt={4}>
-                Email is managed by Google OAuth and cannot be changed
-              </Text>
-            </Box>
+              <form onSubmit={handleSubmit}>
+                <Box mb="lg">
+                  <Box className={classes.fieldLabel}>
+                    <Text size="sm" fw={500} c="dimmed">
+                      Email
+                    </Text>
+                    <Tooltip label="Email is managed by Google OAuth and cannot be changed">
+                      <IconLock size={16} color="var(--mantine-color-dimmed)" />
+                    </Tooltip>
+                  </Box>
+                  <Text>{profile.email}</Text>
+                  <Text size="xs" c="dimmed" mt={4}>
+                    Email is managed by Google OAuth and cannot be changed
+                  </Text>
+                </Box>
 
-            <Box mb="lg">
-              <TextInput
-                label="Display Name"
-                value={data.profile.name}
-                onChange={(e) => {
-                  setData('profile', { ...data.profile, name: e.currentTarget.value });
-                  if (clientErrors.name) setClientErrors((prev) => ({ ...prev, name: undefined }));
-                }}
-                error={clientErrors.name || errors['profile.name']}
-                disabled={processing}
-              />
-            </Box>
+                <Box mb="lg">
+                  <TextInput
+                    label="Display Name"
+                    value={data.profile.name}
+                    onChange={(e) => {
+                      setData('profile', { ...data.profile, name: e.currentTarget.value });
+                      if (clientErrors.name) setClientErrors((prev) => ({ ...prev, name: undefined }));
+                    }}
+                    error={clientErrors.name || errors['profile.name']}
+                    disabled={processing}
+                  />
+                </Box>
 
-            <Box mb="lg">
-              <Select
-                label="Agent Language"
-                description="Language AI agents will use to communicate with you in this company"
-                value={data.profile.preferredAgentLanguage}
-                onChange={(val) => {
-                  setData('profile', { ...data.profile, preferredAgentLanguage: val ?? 'en' });
-                  if (clientErrors.preferredAgentLanguage)
-                    setClientErrors((prev) => ({ ...prev, preferredAgentLanguage: undefined }));
-                }}
-                data={LANGUAGE_OPTIONS}
-                disabled={processing}
-                error={clientErrors.preferredAgentLanguage || errors['profile.preferredAgentLanguage']}
-              />
-            </Box>
+                <Box mb="lg">
+                  <Select
+                    label="Agent Language"
+                    description="Language AI agents will use to communicate with you in this company"
+                    value={data.profile.preferredAgentLanguage}
+                    onChange={(val) => {
+                      setData('profile', { ...data.profile, preferredAgentLanguage: val ?? 'en' });
+                      if (clientErrors.preferredAgentLanguage)
+                        setClientErrors((prev) => ({ ...prev, preferredAgentLanguage: undefined }));
+                    }}
+                    data={LANGUAGE_OPTIONS}
+                    disabled={processing}
+                    error={clientErrors.preferredAgentLanguage || errors['profile.preferredAgentLanguage']}
+                  />
+                </Box>
 
-            {/* Sharing is per lifecycle phase because the two are not the same
-                favour: a finished log is a record someone can read later, while
-                a running session is an interactive shell in the container the
-                agent is working in. Unchecked means nobody else can open it —
-                admins included. */}
-            <Box mb="lg">
-              <Text size="sm" fw={500} mb={4}>
-                Session visibility
-              </Text>
-              <Text size="xs" c="dimmed" mb="sm">
-                Controls what other members of your projects can open. Your own sessions are always visible to you.
-              </Text>
-              <Stack gap="sm">
-                <Switch
-                  label="Show my active sessions"
-                  description="Project members can watch a running session — live terminal and editor"
-                  checked={data.profile.shareActiveSessions}
-                  onChange={(e) =>
-                    setData('profile', { ...data.profile, shareActiveSessions: e.currentTarget.checked })
-                  }
-                  disabled={processing}
-                />
-                <Switch
-                  label="Show my finished sessions"
-                  description="Project members can open a finished session and replay its log"
-                  checked={data.profile.shareCompletedSessions}
-                  onChange={(e) =>
-                    setData('profile', { ...data.profile, shareCompletedSessions: e.currentTarget.checked })
-                  }
-                  disabled={processing}
-                />
-              </Stack>
-            </Box>
+                {/* Sharing is per lifecycle phase because the two are not the same
+                    favour: a finished log is a record someone can read later, while
+                    a running session is an interactive shell in the container the
+                    agent is working in. Unchecked means nobody else can open it —
+                    admins included. */}
+                <Box mb="lg">
+                  <Text size="sm" fw={500} mb={4}>
+                    Session visibility
+                  </Text>
+                  <Text size="xs" c="dimmed" mb="sm">
+                    Controls what other members of your projects can open. Your own sessions are always visible to you.
+                  </Text>
+                  <Stack gap="sm">
+                    <Switch
+                      label="Show my active sessions"
+                      description="Project members can watch a running session — live terminal and editor"
+                      checked={data.profile.shareActiveSessions}
+                      onChange={(e) =>
+                        setData('profile', { ...data.profile, shareActiveSessions: e.currentTarget.checked })
+                      }
+                      disabled={processing}
+                    />
+                    <Switch
+                      label="Show my finished sessions"
+                      description="Project members can open a finished session and replay its log"
+                      checked={data.profile.shareCompletedSessions}
+                      onChange={(e) =>
+                        setData('profile', { ...data.profile, shareCompletedSessions: e.currentTarget.checked })
+                      }
+                      disabled={processing}
+                    />
+                  </Stack>
+                </Box>
 
-            <Button type="submit" disabled={!isDirty || !isFormValid || processing} loading={processing}>
-              Save Changes
-            </Button>
-          </form>
-        </Card>
+                <Button type="submit" disabled={!isDirty || !isFormValid || processing} loading={processing}>
+                  Save Changes
+                </Button>
+              </form>
+            </Card>
 
-        <CompaniesSection profile={profile} pendingInvitations={pendingInvitations ?? []} />
-        <DefaultAgentSelector profile={profile} />
-        <DefaultModelSelector profile={profile} agentModels={agentModels} />
-        <AgentRuntimesSection profile={profile} />
-        <PersonalMcpSection mcp={mcp} />
+            <AgentRuntimesSection profile={profile} />
+            <PersonalMcpSection mcp={mcp} />
+          </Box>
+
+          {/* Side column: companies, agent defaults. */}
+          <Box className={classes.colSide}>
+            <CompaniesSection profile={profile} pendingInvitations={pendingInvitations ?? []} />
+            <AgentDefaultsSection profile={profile} agentModels={agentModels} />
+          </Box>
+        </Box>
       </Box>
     </AuthLayout>
   );
