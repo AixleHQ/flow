@@ -45,7 +45,14 @@ module Tools
         `depends_on_step_ids`, the workflow's `base_*` lists) REPLACES the
         current one. Read the current value first, then send the whole list.
       - Ask the user before anything destructive: every `delete_*`,
-        `uninstall_skill`, `cancel_workflow_run`, `skip_step_run`.
+        `uninstall_skill`, `cancel_workflow_run`, `skip_step_run`, `stop_session`.
+      - A run that has gone quiet: `list_sessions` finds the session, then
+        `get_session_log` shows its terminal tail, how long it has been silent
+        (`idle_seconds`) and whether it hit a provider quota. Long silence is
+        not proof of a hang — an agent thinking, or waiting on a slow tool, also
+        looks silent. To put a board task's automation back to the start:
+        `stop_session` on what is stuck, then `trigger_task_workflow` (its
+        `force` does the cancel for you).
       - Secrets never travel over this server. Config item values are
         write-only and come back masked, MCP header/env values are never
         returned, and integrations are connected by the user in the browser
@@ -83,7 +90,10 @@ module Tools
                "creates one, and moving a card is what fires a column trigger." },
       { tag: :workflows, title: "Workflows & runs",
         blurb: "Define workflows and their steps, attach triggers, then start runs and " \
-               "diagnose them." }
+               "diagnose them." },
+      { tag: :sessions, title: "Agent sessions",
+        blurb: "The containers a run actually executes in: what they are printing right now, " \
+               "how long they have been silent, and how to stop one." }
     ].freeze
 
     class << self

@@ -36,6 +36,9 @@ module ContainerRuntime
       @fs = filesystem || build_filesystem(agent_type)
       @execs = []
       @exec_failures = []
+      @unreachable_execs = []
+      @terminal_pane = ""
+      @terminal_log_mtime = nil
       @default_container_status = :running
       @container_statuses = {}
       @session_resources = []
@@ -62,6 +65,23 @@ module ContainerRuntime
     # default behavior is unchanged for callers that never call this.
     def fail_exec(substring, stderr: "", exit_code: 1)
       @exec_failures << { substring: substring, stderr: stderr, exit_code: exit_code }
+    end
+
+    # Make #exec! answer as a vanished container for commands matching
+    # `substring` — the case real runtimes signal with ContainerUnreachableError
+    # rather than an exit code (see BaseRuntime#exec!). #exec is unaffected,
+    # mirroring the two methods' documented difference.
+    def unreachable_on_exec(substring)
+      @unreachable_execs << substring
+      self
+    end
+
+    # The pane `tmux capture-pane` is asked for, and the mtime `stat` reports for
+    # the captured log. Both back Sessions::LiveLogReader's single exec.
+    def set_terminal_pane(text, last_output_at: nil)
+      @terminal_pane = text
+      @terminal_log_mtime = last_output_at
+      self
     end
 
     # -- Lifecycle ------------------------------------------------------------
@@ -106,6 +126,15 @@ module ContainerRuntime
       return [ [ "" ], [ failure[:stderr] ], failure[:exit_code] ] if failure
 
       [ [ resolve_command(cmd) ], [ "" ], 0 ]
+    end
+
+    def exec!(id, cmd, opts = {})
+      if @unreachable_execs.any? { |substring| command_string(cmd).include?(substring) }
+        @execs << cmd
+        raise ContainerRuntime::ContainerUnreachableError.new(container_identifier: container_identifier(id))
+      end
+
+      exec(id, cmd, opts)
     end
 
     # -- File I/O -------------------------------------------------------------
@@ -203,6 +232,7 @@ module ContainerRuntime
 
       return "open\n" if cmd_str.include?("echo 'open'")
       return "0\n" if cmd_str.include?(".agent_done")
+      return live_terminal_read(cmd_str) if cmd_str.include?("capture-pane")
 
       if cmd_str.include?("find") && cmd_str.include?("/workspace/outputs")
         return @fs.keys.select { |k| k.start_with?("/workspace/outputs/") }.join("\n")
@@ -213,6 +243,18 @@ module ContainerRuntime
       end
 
       ""
+    end
+
+    # Sessions::LiveLogReader asks for the log's mtime and the pane in one exec,
+    # separated by its marker. Honour the same shape here (including the marker
+    # when the reader's command carries one) so the reader's parsing is what the
+    # test exercises.
+    def live_terminal_read(cmd_str)
+      pane = @terminal_pane.to_s
+      return pane unless cmd_str.include?(::Sessions::LiveLogReader::MARKER)
+
+      mtime = @terminal_log_mtime ? "#{@terminal_log_mtime.to_i}\n" : ""
+      "#{mtime}#{::Sessions::LiveLogReader::MARKER}\n#{pane}"
     end
 
     # -- Per-agent virtual filesystem with realistic fixture data -------------

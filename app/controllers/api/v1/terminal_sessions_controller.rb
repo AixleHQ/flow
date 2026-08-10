@@ -146,8 +146,7 @@ module Api
       # 404 rather than 403: a session the owner keeps private should not be
       # distinguishable from one that does not exist.
       def find_readable_session(id)
-        scope = TerminalSession.where(user_id: current_user.id)
-                               .or(TerminalSession.where(project_id: Project.for_user(current_user).select(:id)))
+        scope = TerminalSession.readable_by(current_user)
         session = if id.to_s.match?(/^\d+$/)
           scope.find(id)
         else

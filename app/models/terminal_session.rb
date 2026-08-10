@@ -71,6 +71,14 @@ class TerminalSession < ApplicationRecord
   scope :finishing, -> { where(state: "finishing") }
   scope :completed, -> { where(state: %w[finished]) }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
+  # Sessions `user` may be shown at all: their own, plus every session in a
+  # project they can reach. This is only the REACHABILITY half of the rule —
+  # `visible_to?` still has to be applied per row, because whether a session is
+  # shared depends on its type and lifecycle phase rather than on anything SQL
+  # can select. Callers that skip the second half leak other people's shells.
+  scope :readable_by, ->(user) {
+    where(user_id: user.id).or(where(project_id: Project.for_user(user).select(:id)))
+  }
   scope :with_cached_resource_counts, -> {
     select(
       "terminal_sessions.*",

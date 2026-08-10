@@ -71,6 +71,28 @@ module PersonalTools
       Project.where(company_id: membership_company_ids).select { |p| p.accessible_by?(user) }
     end
 
+    # A session the user may look at: reachable (their own, or in a project they
+    # can reach) AND shared by its owner for this phase of its life
+    # (TerminalSession#visible_to?). Not-found rather than not-allowed, so a
+    # session someone keeps private is indistinguishable from one that does not
+    # exist — the same rule Api::V1::TerminalSessionsController applies.
+    def find_session!(id = params[:session_id])
+      session = TerminalSession.readable_by(user).find_by(id: id)
+      raise NotFoundError, "Session #{id} not found" unless session&.visible_to?(user)
+
+      session
+    end
+
+    # The acting user's OWN membership in the session's company — not
+    # SessionCompany.membership_for, which answers for the session's owner. Used
+    # to keep read-only members out of write paths.
+    def session_membership(session)
+      company_id = SessionCompany.company_id_for(session)
+      return nil if company_id.blank?
+
+      user.company_memberships.active.find_by(company_id: company_id)
+    end
+
     # A workflow scoped to the project — never a global Workflow.find, so a
     # user can't reach another project's workflow by id.
     def find_workflow!(project, id = params[:workflow_id])
