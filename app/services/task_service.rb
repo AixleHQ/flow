@@ -228,8 +228,12 @@ class TaskService
     # reads it to choose the agent credential, the agent runtime and the model,
     # so it decides which account executes the work and which one is billed. The
     # work on a card belongs to the person the card is assigned to, so that is
-    # who owns its runs — not whoever happened to press Run, or to drag the card
-    # into an automated column.
+    # who owns its runs.
+    #
+    # Which is why the person who ACTED is the wrong answer even when there is
+    # one: whoever pressed Run, or dragged the card into an automated column, may
+    # simply have been tidying the board. Moving somebody else's card is an act of
+    # housekeeping; the work it kicks off is still theirs.
     #
     # This also has to hold because the agent side already assumes it: every
     # session tool resolves its own actor as `task.assignee || workflow_run&.user`
