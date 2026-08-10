@@ -3,6 +3,7 @@ import {
   Alert,
   Badge,
   Box,
+  Divider,
   Grid,
   Group,
   Paper,
@@ -10,7 +11,9 @@ import {
   SimpleGrid,
   Skeleton,
   Table,
+  Tabs,
   Text,
+  Title,
   Tooltip,
 } from '@mantine/core';
 import { IconChartBar, IconClock, IconCoin, IconInfoCircle, IconPlayerPlay, IconRoute } from '@tabler/icons-react';
@@ -31,6 +34,7 @@ import {
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { profilePath } from 'shared/routes';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { type SharedProps } from 'shared/ui';
 import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
@@ -189,7 +193,7 @@ function HeatmapPanel() {
   if (!activityHeatmap) return null;
 
   return (
-    <Paper withBorder px={20} py={18} radius="md" bg="var(--app-bg-card)" mb="xl">
+    <Paper withBorder p={24} radius="md" bg="var(--app-bg-card)" mb="xl">
       <ContributionHeatmap days={activityHeatmap.days} />
     </Paper>
   );
@@ -239,10 +243,11 @@ function ProjectBreakdownPanel() {
   const maxCost = projectBreakdowns.length > 0 ? Math.max(...projectBreakdowns.map((p) => p.costCents)) : 1;
 
   return (
-    <Paper withBorder p="md" radius="md" mb="xl">
-      <Text size="sm" fw={600} mb="md">
+    <Paper withBorder p={24} radius="md" mb="xl">
+      <Title order={4} mb={4}>
         Per-Project Breakdown
-      </Text>
+      </Title>
+      <Divider mb="md" />
       <Box
         style={{
           display: 'grid',
@@ -310,10 +315,11 @@ function AgentActivityPanel() {
   const { sessionsByAgent } = agentActivity;
 
   return (
-    <Paper withBorder p="md" radius="md" mb="xl">
-      <Text size="sm" fw={600} mb="md">
+    <Paper withBorder p={24} radius="md" mb="xl">
+      <Title order={4} mb={4}>
         Usage Breakdown by Agent Type
-      </Text>
+      </Title>
+      <Divider mb="md" />
       <Group gap="lg" align="center">
         <Box style={{ width: '40%' }}>
           <ResponsiveContainer width="100%" height={200}>
@@ -373,10 +379,11 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
   return (
     <Grid mb="xl" gap="md">
       <Grid.Col span={{ base: 12, md: 6 }}>
-        <Paper withBorder p="md" radius="md">
-          <Text size="sm" fw={600} mb="md">
+        <Paper withBorder p={24} radius="md">
+          <Title order={4} mb={4}>
             Daily Cost
-          </Text>
+          </Title>
+          <Divider mb="md" />
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={costToken.timeSeries} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
               <defs>
@@ -406,10 +413,11 @@ function CostTokenPanel({ tickInterval }: { tickInterval: number }) {
         </Paper>
       </Grid.Col>
       <Grid.Col span={{ base: 12, md: 6 }}>
-        <Paper withBorder p="md" radius="md">
-          <Text size="sm" fw={600} mb="md">
+        <Paper withBorder p={24} radius="md">
+          <Title order={4} mb={4}>
             Daily Token Consumption
-          </Text>
+          </Title>
+          <Divider mb="md" />
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={costToken.timeSeries} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
               <defs>
@@ -451,84 +459,88 @@ function SessionsPanel() {
   const { sessions } = usePage<{ props: Props }>().props as unknown as Props;
   if (!sessions) return null;
 
-  if (sessions.length === 0) {
-    return (
-      <Box py="xl" ta="center" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
-        <Text c="dimmed">No sessions yet</Text>
-      </Box>
-    );
-  }
-
   return (
-    <Table.ScrollContainer minWidth={800}>
-      <Table striped highlightOnHover verticalSpacing={6} fz="sm">
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>ID</Table.Th>
-            <Table.Th>Agent</Table.Th>
-            <Table.Th>Type</Table.Th>
-            <Table.Th>Status</Table.Th>
-            <Table.Th>Project</Table.Th>
-            <Table.Th ta="right">Tokens</Table.Th>
-            <Table.Th ta="right">Cost</Table.Th>
-            <Table.Th>Started</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {sessions.map((s) => {
-            const agent = AGENT_LABELS[s.agentType ?? ''] ?? { label: s.agentType ?? '—', color: 'gray' };
-            const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state, color: 'gray' };
-            const typeLabel = SESSION_TYPE_LABELS[s.sessionType] ?? s.sessionType;
-            return (
-              <Table.Tr key={s.id}>
-                <Table.Td>
-                  <Text size="xs" ff="monospace" c="dimmed">
-                    #{s.id}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Badge color={agent.color} size="sm" variant="filled">
-                    {agent.label}
-                  </Badge>
-                </Table.Td>
-                <Table.Td>
-                  <Text size="xs" c="dimmed">
-                    {typeLabel}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Badge color={stateConfig.color} size="sm" variant="outline">
-                    {stateConfig.label}
-                  </Badge>
-                </Table.Td>
-                <Table.Td>
-                  <Text size="sm" truncate maw={120} c="dimmed">
-                    {s.projectName ?? '—'}
-                  </Text>
-                </Table.Td>
-                <Table.Td ta="right">
-                  <Text size="xs" ff="monospace">
-                    {sessionTokenFmt(s.totalTokens)}
-                  </Text>
-                </Table.Td>
-                <Table.Td ta="right">
-                  <Text size="xs" ff="monospace" fw={s.costCents > 0 ? 600 : 400}>
-                    {s.costCents > 0 ? `$${(s.costCents / 100).toFixed(2)}` : '—'}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <Tooltip label={s.startedAt ? new Date(s.startedAt).toLocaleString() : s.createdAt}>
-                    <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                      {formatDistanceToNow(new Date(s.startedAt ?? s.createdAt), { addSuffix: true })}
-                    </Text>
-                  </Tooltip>
-                </Table.Td>
+    <Paper withBorder p={24} radius="md">
+      <Title order={4} mb={4}>
+        Sessions
+      </Title>
+      <Divider mb="md" />
+      {sessions.length === 0 ? (
+        <Box py="xl" ta="center">
+          <Text c="dimmed">No sessions yet</Text>
+        </Box>
+      ) : (
+        <Table.ScrollContainer minWidth={800}>
+          <Table striped highlightOnHover verticalSpacing={6} fz="sm">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>ID</Table.Th>
+                <Table.Th>Agent</Table.Th>
+                <Table.Th>Type</Table.Th>
+                <Table.Th>Status</Table.Th>
+                <Table.Th>Project</Table.Th>
+                <Table.Th ta="right">Tokens</Table.Th>
+                <Table.Th ta="right">Cost</Table.Th>
+                <Table.Th>Started</Table.Th>
               </Table.Tr>
-            );
-          })}
-        </Table.Tbody>
-      </Table>
-    </Table.ScrollContainer>
+            </Table.Thead>
+            <Table.Tbody>
+              {sessions.map((s) => {
+                const agent = AGENT_LABELS[s.agentType ?? ''] ?? { label: s.agentType ?? '—', color: 'gray' };
+                const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state, color: 'gray' };
+                const typeLabel = SESSION_TYPE_LABELS[s.sessionType] ?? s.sessionType;
+                return (
+                  <Table.Tr key={s.id}>
+                    <Table.Td>
+                      <Text size="xs" ff="monospace" c="dimmed">
+                        #{s.id}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge color={agent.color} size="sm" variant="filled">
+                        {agent.label}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="xs" c="dimmed">
+                        {typeLabel}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Badge color={stateConfig.color} size="sm" variant="outline">
+                        {stateConfig.label}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" truncate maw={120} c="dimmed">
+                        {s.projectName ?? '—'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Text size="xs" ff="monospace">
+                        {sessionTokenFmt(s.totalTokens)}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td ta="right">
+                      <Text size="xs" ff="monospace" fw={s.costCents > 0 ? 600 : 400}>
+                        {s.costCents > 0 ? `$${(s.costCents / 100).toFixed(2)}` : '—'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      <Tooltip label={s.startedAt ? new Date(s.startedAt).toLocaleString() : s.createdAt}>
+                        <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                          {formatDistanceToNow(new Date(s.startedAt ?? s.createdAt), { addSuffix: true })}
+                        </Text>
+                      </Tooltip>
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      )}
+    </Paper>
   );
 }
 
@@ -560,22 +572,32 @@ const UsagePage = () => {
       {/* Matches the Account tab's content width so the two tabs don't jump
           width when switching between them. */}
       <Box maw={1120} mx="auto">
-        <Group justify="space-between" mb="xl" wrap="wrap">
-          <Box>
-            <Text size="xl" fw={700}>
-              Usage
-            </Text>
-            <Text size="sm" c="dimmed">
-              {/* Usage is always a CURRENT-COMPANY slice (see ProfileController#usage).
-                  For someone who belongs to several companies, an unlabelled total
-                  reads as "everything", so name the company being shown. */}
-              Cross-project agent activity, costs, and sessions
-              {companyName ? ` in ${companyName}` : ''}
-            </Text>
-          </Box>
-          <Group gap="sm">
-            <Select value={period} onChange={(v) => navigate(v ?? '30d')} data={PERIOD_OPTIONS} size="sm" w={140} />
-          </Group>
+        <Title order={1} fz={28} fw={600} c="var(--app-text-primary)" mb={4}>
+          My Profile
+        </Title>
+        <Text size="sm" c="dimmed" mb={24}>
+          {/* Usage is always a CURRENT-COMPANY slice (see ProfileController#usage).
+              For someone who belongs to several companies, an unlabelled total
+              reads as "everything", so name the company being shown. */}
+          Cross-project agent activity, costs, and sessions
+          {companyName ? ` in ${companyName}` : ''}.
+        </Text>
+
+        <Tabs
+          value="usage"
+          onChange={(v) => {
+            if (v === 'account') router.visit(profilePath());
+          }}
+          mb="lg"
+        >
+          <Tabs.List>
+            <Tabs.Tab value="account">Account</Tabs.Tab>
+            <Tabs.Tab value="usage">Usage</Tabs.Tab>
+          </Tabs.List>
+        </Tabs>
+
+        <Group justify="flex-end" mb="xl">
+          <Select value={period} onChange={(v) => navigate(v ?? '30d')} data={PERIOD_OPTIONS} size="sm" w={140} />
         </Group>
 
         {!viewerIsSelf && (
@@ -597,25 +619,23 @@ const UsagePage = () => {
         </SimpleGrid>
 
         {/* Per-project breakdown */}
-        <Text size="md" fw={600} mb="md" mt="xl">
-          Projects Overview
-        </Text>
         <Deferred data="summary" fallback={<Skeleton height={200} radius="sm" mb="xl" />}>
           <ProjectBreakdownPanel />
         </Deferred>
 
         {/* Agent activity */}
-        <Text size="md" fw={600} mb="md" mt="xl">
-          Agent Activity
-        </Text>
-        <Deferred data="agentActivity" fallback={<ChartSkeleton height={200} />}>
+        <Deferred
+          data="agentActivity"
+          fallback={
+            <Box mb="xl">
+              <ChartSkeleton height={200} />
+            </Box>
+          }
+        >
           <AgentActivityPanel />
         </Deferred>
 
         {/* Cost & token usage */}
-        <Text size="md" fw={600} mb="md" mt="xl">
-          Cost & Token Usage
-        </Text>
         <Deferred
           data="costToken"
           fallback={
@@ -633,9 +653,6 @@ const UsagePage = () => {
         </Deferred>
 
         {/* Sessions list */}
-        <Text size="md" fw={600} mb="md" mt="xl">
-          Sessions
-        </Text>
         <Deferred data="sessions" fallback={<Skeleton height={200} radius="sm" />}>
           <SessionsPanel />
         </Deferred>
