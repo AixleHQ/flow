@@ -4,9 +4,11 @@ module PersonalTools
   class TriggerTaskWorkflow < Base
     tool do
       display_name "Trigger Task Workflow"
-      description "Run the workflow bound to a board task's column — the same thing the Run " \
-                  "workflow button on the task card does. A task that already has a run in " \
-                  "flight is refused; pass force to cancel that run first and start a fresh one."
+      description "Run the workflow bound to a board task's column. A task that already has a " \
+                  "run in flight is refused; pass force to cancel that run first and start a " \
+                  "fresh one. The run is attributed to the task's assignee (whose agent " \
+                  "credential it spends and whose bill it lands on) — the response says which " \
+                  "account under `runs_as`."
       audience :user
       tags :board, :workflows
       destructive
@@ -40,7 +42,13 @@ module PersonalTools
       result = TaskService.trigger_workflow(task: task, binding: task.board_column.column_workflow_binding, actor: user)
       return error(result[:error]) if result.is_a?(Hash) && result[:error]
 
-      success(task_id: task.id, run_id: result.id, state: result.state, cancelled_run_id: active_run&.id)
+      # `runs_as` is read off the run rather than predicted here. TaskService owns
+      # who a run belongs to (the assignee, falling back to whoever asked), and a
+      # second copy of that rule in the caller is exactly what drifts. The account
+      # is worth reporting because it is the one whose agent credential the run
+      # spends and whose bill it lands on.
+      success(task_id: task.id, run_id: result.id, state: result.state,
+              runs_as: result.user&.email, cancelled_run_id: active_run&.id)
     end
 
     private

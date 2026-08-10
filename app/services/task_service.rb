@@ -146,10 +146,11 @@ class TaskService
         event_type: TriggerEngine::MANUAL_EVENT_TYPE,
         source: "manual",
         subject: task.id,
-        data: { "workflow_id" => binding.workflow_id, "column_id" => task.board_column_id },
+        data: { "workflow_id" => binding.workflow_id, "column_id" => task.board_column_id,
+                "requested_by_id" => actor&.id },
         project: task.board.project,
         board_task: task,
-        actor: actor,
+        actor: run_owner_for(task, requested_by: actor),
         relay_state: "pending"
       )
 
@@ -212,10 +213,74 @@ class TaskService
       return nil if task.gates.pending.exists?
       return nil if quota_block_auto_trigger?(binding, column)
 
-      TriggerEngine.record_column_trigger(binding: binding, task: task, actor: actor)
+      TriggerEngine.record_column_trigger(
+        binding: binding, task: task,
+        actor: run_owner_for(task, requested_by: actor), requested_by: actor
+      )
     end
 
     private
+
+    # WHO a launched run belongs to — which is not the same question as who was
+    # allowed to launch it.
+    #
+    # `run.user` is what the run SPENDS: SessionService.create_for_workflow_step
+    # reads it to choose the agent credential, the agent runtime and the model,
+    # so it decides which account executes the work and which one is billed. The
+    # work on a card belongs to the person the card is assigned to, so that is
+    # who owns its runs.
+    #
+    # Which is why the person who ACTED is the wrong answer even when there is
+    # one: whoever pressed Run, or dragged the card into an automated column, may
+    # simply have been tidying the board. Moving somebody else's card is an act of
+    # housekeeping; the work it kicks off is still theirs.
+    #
+    # This also has to hold because the agent side already assumes it: every
+    # session tool resolves its own actor as `task.assignee || workflow_run&.user`
+    # (InternalTools::BoardMoveTask and friends), where `workflow_run` is the run
+    # of the session doing the work. A run owned by the wrong account therefore
+    # has an agent that moves every unassigned card as that account, firing more
+    # runs owned by it, whose agents do the same — so one wrong owner does not
+    # stay one wrong run, it walks the board. Resolving ownership in ONE place is
+    # what keeps every entry point (the card's Run button, the personal MCP tool,
+    # a column auto-trigger) from having to get it right separately.
+    #
+    # `requested_by` remains the fallback for an unassigned card, and every
+    # caller records it in the event's data, so "who asked" is never lost.
+    def run_owner_for(task, requested_by:)
+      assignee = task.assignee
+      assignee && can_own_runs?(assignee, task) ? assignee : requested_by
+    end
+
+    # Can this account actually carry a run here? Three ways it cannot:
+    #
+    #   - no active membership in the task's company — it is not theirs to run;
+    #   - the viewer role — the platform refuses to let a viewer launch a session
+    #     at all, so attributing a run to one smuggles in work they could not
+    #     have started themselves;
+    #   - no agent credential in that company — and this one is the reason the
+    #     check exists rather than trusting the assignee blindly. A nil
+    #     credential is not an error anywhere downstream: SessionContextService
+    #     writes credentials only `if credential.present?`, so the container
+    #     comes up with nothing to authenticate as and the step dies with
+    #     whatever the CLI says about being logged out. Handing a run to someone
+    #     who never connected an agent would trade a wrong-account run for a
+    #     silently broken one.
+    #
+    # Note the residual case this does NOT cover: a candidate who holds some
+    # credential but not the runtime the step pins (`required_agent_runtime`)
+    # still lands on a nil credential. That is pre-existing — it bites any run
+    # whose owner lacks the pinned runtime — and resolving it here would mean a
+    # second copy of SessionService's runtime cascade.
+    def can_own_runs?(candidate, task)
+      company_id = task.board&.project&.company_id
+      return false if company_id.blank?
+
+      membership = candidate.company_memberships.active.find_by(company_id: company_id)
+      return false if membership.nil? || membership.viewer?
+
+      AgentCredential.exists?(user_id: candidate.id, company_id: company_id)
+    end
 
     def record_activity(board, event_type, actor, task: nil, metadata: {})
       BoardActivity.create!(

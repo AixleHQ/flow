@@ -188,6 +188,27 @@ module Api
           assert_response :success
         end
 
+        # The button authorizes the clicker but the run belongs to the assignee —
+        # run.user is what the container spends, and the work on the card is
+        # theirs. See TaskService#run_owner_for.
+        test "trigger_workflow starts the run under the task's assignee, not the caller" do
+          assignee = create(:user, :onboarding_completed, company: @company)
+          @project.add_collaborator(assignee)
+          # Eligible to own a run only with an agent credential in this company —
+          # see TaskService#can_own_runs?.
+          create(:agent_credential, user: assignee, company: @company)
+          @task.update!(assignee: assignee)
+          ColumnWorkflowBinding.create!(
+            board_column: @col1, workflow: @workflow, trigger_mode: :manual, cooldown_seconds: 0
+          )
+          WorkflowService.expects(:start).with(has_entries(user: assignee))
+                         .returns(create(:workflow_run, workflow: @workflow, project: @project, user: assignee))
+
+          post :trigger_workflow, params: { project_id: @project.id, id: @task.id }
+
+          assert_response :success
+        end
+
         # === viewer (read-only) enforcement ===
 
         class ViewerTest < ActionController::TestCase

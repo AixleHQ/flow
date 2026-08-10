@@ -57,7 +57,18 @@ the container captures, or adding a second log. Raising the 2 MB stored-log tail
 **Never:** Do not add a Kubernetes `pods/log` dependency — the app's RBAC grants `pods`, `pods/exec`,
 `services` only. Do not expose `auth_setup` sessions (they are owner-only by
 `visible_to?` and must stay so). Do not let a read-only (viewer) member stop a session or trigger a
-workflow. Do not create new Temporal workflows or schedules.
+workflow. Do not create new Temporal workflows or schedules. Never attribute a launched run to the
+caller just because the caller authorized it — see the attribution rule below.
+
+**Attribution (added 2026-08-10, after the first cut shipped the bug):** authorization and ownership are
+separate questions. A personal token authorizes as its owner, but `run.user` is what the container
+*spends* — `SessionService.create_for_workflow_step` reads it to pick the agent credential, the runtime
+and the model. Ownership therefore belongs to the **task**, and the rule lives in **one** place,
+`TaskService#run_owner_for`: the assignee, falling back to whoever asked, skipping a candidate with no
+active membership in the company or with the viewer role. Every entry point inherits it — the card's Run
+button, this tool, and a column auto-trigger — and `requested_by_id` is recorded in the trigger event so
+"who asked" is never lost. `trigger_task_workflow` reads the resulting account back off the run into
+`runs_as` rather than predicting it, so there is no second copy of the rule to drift.
 
 ## I/O & Edge-Case Matrix
 
@@ -97,7 +108,9 @@ workflow. Do not create new Temporal workflows or schedules.
 
 | Scenario | Input / State | Expected Output | Error Handling |
 |---|---|---|---|
-| Manual/auto binding, no active run | — | new `WorkflowRun` id + state | — |
+| Manual/auto binding, no active run | — | new `WorkflowRun` id + state, and `runs_as` naming the account it is attributed to | — |
+| Attribution | any trigger | `run.user` = `task.assignee`, else the caller — skipping a candidate with no active membership or the viewer role (`TaskService#run_owner_for`). Authorization stays the caller's; `runs_as` reports the resulting account. | — |
+| Poisoned history | task already has a run owned by the wrong account | `force` retrigger does NOT inherit that owner — a previous run's user is never a fallback, or the repair reproduces the bug | — |
 | Active run present, `force` unset | run `pending`/`running`/`paused` | in-band error naming the blocking run id | — |
 | Active run present, `force: true` | — | cancels that run (`WorkflowService.cancel`, which tears the container down through the cleanup phase), then triggers; returns `cancelled_run_id` + new `run_id` | cancel failure → error, no trigger |
 | Column has no binding | — | in-band error "No workflow binding on current column" | — |

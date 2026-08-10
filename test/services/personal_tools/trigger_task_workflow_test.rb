@@ -36,6 +36,27 @@ module PersonalTools
       run
     end
 
+    # `user:` here is the run's OWNER — the account whose agent credential the
+    # container spends (SessionService.create_for_workflow_step) — so it is the
+    # one kwarg worth an expectation rather than a stub.
+    def expect_start_as(expected_user)
+      run = create(:workflow_run, workflow: @workflow, project: @project, user: expected_user, state: "pending")
+      WorkflowService.expects(:start).with(has_entries(user: expected_user)).returns(run)
+      run
+    end
+
+    # A candidate assignee has to clear BoardTask#assignee_is_project_member, so
+    # company membership alone is not enough — the project has to reach them too.
+    # The credential is what makes them eligible to OWN a run (TaskService's
+    # can_own_runs?): without one the container has nothing to authenticate as.
+    def member(role: :employee, credential: true)
+      user = create(:user)
+      create(:company_membership, user: user, company: @company, role: role)
+      create(:project_collaborator, project: @project, user: user)
+      create(:agent_credential, user: user, company: @company) if credential
+      user
+    end
+
     test "triggers the column's workflow the way the task card's button does" do
       run = stub_started_run
 
@@ -69,6 +90,40 @@ module PersonalTools
       # The real WorkflowService ran: the blocking run is cancelled, which is also
       # what clears TaskService's own "active run already exists" guard.
       assert_equal "cancelled", blocking.reload.state
+    end
+
+    # == who the run belongs to ==
+
+    test "attributes the run to the task's assignee, not to the calling token's owner" do
+      assignee = member
+      @task.update!(assignee: assignee)
+      expect_start_as(assignee)
+
+      body = payload(execute)
+
+      assert_equal assignee.email, body["runs_as"]
+    end
+
+    test "falls back to the caller when the task names nobody" do
+      expect_start_as(@user)
+
+      body = payload(execute)
+
+      assert_equal @user.email, body["runs_as"]
+    end
+
+    # A task already launched under the wrong account must not have that account
+    # re-derived from its own history, or the repair reproduces the bug.
+    test "a previous run's owner is not inherited on a forced retrigger" do
+      stale_owner = member
+      create(:workflow_run, workflow: @workflow, project: @project, user: stale_owner,
+             board_task_id: @task.id, state: "running")
+      expect_start_as(@user)
+
+      body = payload(execute(force: true))
+
+      assert_equal @user.email, body["runs_as"]
+      assert_not_equal stale_owner.email, body["runs_as"]
     end
 
     test "a column with no binding is refused" do
