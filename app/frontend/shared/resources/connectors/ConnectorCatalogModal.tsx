@@ -85,7 +85,7 @@ export const ConnectorCatalogModal: FC<ConnectorCatalogModalProps> = ({
       {
         preserveState: true,
         replace: true,
-        only: ['connectors', 'connectorQuery'],
+        only: ['connectors', 'connector_query'],
         onFinish: () => setSearching(false),
       },
     );

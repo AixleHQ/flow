@@ -140,7 +140,7 @@ function AgentAuthTerminal({
   const ttydUrl = session?.state === 'ready' && session.websocketUrl ? ttydUrlFromWs(session.websocketUrl) : null;
 
   useInertiaCableStream(session?.cableStream, {
-    only: ['authSessions'],
+    only: ['auth_sessions'],
     enabled: !!session && !isTerminal,
   });
 
@@ -154,7 +154,7 @@ function AgentAuthTerminal({
         body: JSON.stringify({ terminalSession: { agentType, sessionType: 'auth_setup', mode: 'interactive' } }),
       });
       if (res.ok) {
-        router.reload({ only: ['authSessions'] });
+        router.reload({ only: ['auth_sessions'] });
       } else {
         creatingRef.current = false;
       }

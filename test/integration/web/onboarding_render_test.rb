@@ -35,4 +35,32 @@ class Web::OnboardingRenderTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_inertia_page "Onboarding/OnboardingPage"
   end
+
+  # The onboarding UI polls the auth session over a PARTIAL reload (the agent step
+  # asks for `auth_sessions` alone after creating a session, and again on every
+  # cable refresh). inertia_rails filters `only` against the prop names this
+  # controller declares — snake_case — BEFORE the camelCase prop transformer runs
+  # (config/initializers/inertia.rb), so a client asking for "authSessions"
+  # matches nothing and silently gets a response without the prop. That is what
+  # left the Connect panel stuck on "Starting auth session..." until a full page
+  # reload. Pin both halves: the snake_case key resolves, the camelCase one does not.
+  test "the auth_sessions prop is served for a snake_case partial reload" do
+    create(:terminal_session, user: @user)
+
+    assert_equal 1, partial_props("auth_sessions").fetch("authSessions").size
+    assert_not partial_props("authSessions").key?("authSessions")
+  end
+
+  private
+
+  def partial_props(key)
+    get onboarding_path, headers: {
+      "X-Inertia" => "true",
+      "X-Inertia-Partial-Component" => "Onboarding/OnboardingPage",
+      "X-Inertia-Partial-Data" => key
+    }
+
+    assert_response :success
+    JSON.parse(response.body).fetch("props")
+  end
 end

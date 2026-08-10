@@ -85,7 +85,7 @@ describe('Projects/Assets/AssetsPage', () => {
     await userEvent.click(historyButton);
 
     expect(router.reload).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { history_asset_id: 42 }, only: ['assetVersions'] }),
+      expect.objectContaining({ data: { history_asset_id: 42 }, only: ['asset_versions'] }),
     );
   });
 });

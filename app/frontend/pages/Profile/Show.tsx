@@ -1093,7 +1093,7 @@ function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
 
 function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mcp }: Props) {
   const currentCompanyName = profile.currentCompany?.name ?? null;
-  useInertiaCableStream(cableStream, { only: ['profile', 'agentModels'] });
+  useInertiaCableStream(cableStream, { only: ['profile', 'agent_models'] });
 
   const { data, setData, patch, processing, errors, isDirty } = useForm({
     profile: {
