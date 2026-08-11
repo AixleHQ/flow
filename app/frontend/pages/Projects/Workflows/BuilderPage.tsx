@@ -660,6 +660,7 @@ const BuilderPage = () => {
                       mcpServers={mcpServers}
                       assets={assets}
                       repositories={repositories}
+                      agentModels={agentModels}
                       readOnly={readOnly}
                       onFieldChange={(field, value, immediate) =>
                         updateStepField(selectedSession.id, field, value, immediate)
