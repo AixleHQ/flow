@@ -2,7 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { buildSharedUser } from 'test/factories/sharedProps';
+import { buildSharedProps, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { MembersContent, type MemberUser } from './MembersContent';
 
@@ -45,7 +46,7 @@ describe('MembersContent', () => {
   it('shows the empty state when there are no members', () => {
     renderPage(<MembersContent {...baseProps([])} />);
 
-    expect(screen.getByText('No members found')).toBeInTheDocument();
+    expect(screen.getByText('No members yet')).toBeInTheDocument();
     expect(screen.getByText('0 members')).toBeInTheDocument();
   });
 
@@ -66,14 +67,35 @@ describe('MembersContent', () => {
     expect(screen.getByText('1 member')).toBeInTheDocument();
   });
 
-  it('the Invite Member button opens the invite modal', async () => {
+  it('defaults the status filter to Active, hiding suspended members until "All Statuses" is picked', async () => {
+    renderPage(
+      <MembersContent
+        {...baseProps([
+          makeUser({ id: 1, name: 'Ada Lovelace', state: 'active' }),
+          makeUser({ id: 2, name: 'Grace Hopper', state: 'suspended' }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.queryByText('Grace Hopper')).not.toBeInTheDocument();
+    expect(screen.getByText('1 member')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by status' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'All Statuses' }));
+
+    expect(screen.getByText('Grace Hopper')).toBeInTheDocument();
+    expect(screen.getByText('2 members')).toBeInTheDocument();
+  });
+
+  it('the Invite Member button opens the invite drawer', async () => {
     renderPage(<MembersContent {...baseProps([makeUser()])} />);
 
     await userEvent.click(screen.getByRole('button', { name: /invite member/i }));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Invite Member')).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /send invitation/i })).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /send invite/i })).toBeInTheDocument();
   });
 
   it('confirming Remove in the row menu fires router.delete', async () => {
@@ -126,10 +148,49 @@ describe('MembersContent', () => {
     );
   });
 
+  it('a pending invite shows Invited status and a Resend Invitation action', async () => {
+    renderPage(
+      <MembersContent
+        {...baseProps([makeUser({ id: 3, name: 'Ivy Invitee', state: 'invited' })])}
+        // The status filter defaults to Active — switch to All Statuses to see the invite.
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by status' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'All Statuses' }));
+
+    const row = screen.getByText('Ivy Invitee').closest('tr') as HTMLElement;
+    expect(within(row).getByText('Invited')).toBeInTheDocument();
+
+    await userEvent.click(within(row).getByRole('button'));
+
+    expect(await screen.findByRole('menuitem', { name: /resend invitation/i })).toBeInTheDocument();
+  });
+
   it('renders a non-empty badge for a viewer member', () => {
     renderPage(<MembersContent {...baseProps([makeUser({ id: 5, name: 'Vic Viewer', role: 'viewer' })])} />);
 
     const row = screen.getByText('Vic Viewer').closest('tr') as HTMLElement;
     expect(within(row).getByText('Viewer')).toBeInTheDocument();
+  });
+
+  it('shows a "You" pill and no action menu on the current user\'s own row', () => {
+    renderPage(
+      <MembersContent
+        {...baseProps([
+          makeUser({ id: 1, name: 'Ada Lovelace' }),
+          makeUser({ id: 2, name: 'Grace Hopper', role: 'admin' }),
+        ])}
+      />,
+      { props: buildSharedProps({ currentUser: buildSharedUser({ id: 1 }) }) },
+    );
+
+    const selfRow = screen.getByText('Ada Lovelace').closest('tr') as HTMLElement;
+    expect(within(selfRow).getByText('You')).toBeInTheDocument();
+    expect(within(selfRow).queryByRole('button')).not.toBeInTheDocument();
+
+    const otherRow = screen.getByText('Grace Hopper').closest('tr') as HTMLElement;
+    expect(within(otherRow).queryByText('You')).not.toBeInTheDocument();
+    expect(within(otherRow).getByRole('button')).toBeInTheDocument();
   });
 });
