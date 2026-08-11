@@ -755,6 +755,33 @@ describe('Projects/Workflows/BuilderPage', () => {
     await waitFor(() => expect(fetchSpy).not.toHaveBeenCalled());
   });
 
+  it("choosing a Preferred Model PATCHes preferredModel, scoped to the runtime's models", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'claude_code' })],
+        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] }],
+      }),
+    });
+
+    const preferredModelCombobox = screen.getAllByLabelText('Preferred model')[0];
+    await userEvent.click(preferredModelCombobox);
+    await userEvent.click(await screen.findByRole('option', { name: 'Opus 9' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/workflows/3/steps/1',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    expect(body.step.preferredModel).toBe('opus-9');
+  });
+
   it('selecting a dependency PATCHes dependsOnStepIds and shows the "↳ AFTER" badge in the sidebar', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
