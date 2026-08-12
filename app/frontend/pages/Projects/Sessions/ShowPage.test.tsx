@@ -57,59 +57,85 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
 const project = { id: 7, name: 'Falcon Project' };
 
 describe('Projects/Sessions/ShowPage', () => {
-  it('renders the completion card for a finished session', () => {
-    renderAuthedPage(<ProjectSessionShowPage />, {
-      props: { project, session: makeSession({ state: 'finished' }), cableStream: 'stream-token' },
-    });
-
-    // Agent label and a "Completed" badge appear in the completion card.
-    expect(screen.getAllByText('Claude Code').length).toBeGreaterThan(0);
-    expect(screen.getByText('Completed')).toBeInTheDocument();
-    // Terminal-state navigation buttons.
-    expect(screen.getByRole('button', { name: 'All Sessions' })).toBeInTheDocument();
-  });
-
-  it('navigates back to all sessions when the completion card button is clicked', async () => {
-    renderAuthedPage(<ProjectSessionShowPage />, {
-      props: { project, session: makeSession({ state: 'finished' }), cableStream: 'stream-token' },
-    });
-
-    await userEvent.click(screen.getByRole('button', { name: 'All Sessions' }));
-    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions');
-  });
-
-  it('offers a Review Outputs action when there are pending artifacts', async () => {
+  it('renders the shared detail header for a finished session', () => {
     renderAuthedPage(<ProjectSessionShowPage />, {
       props: {
         project,
-        session: makeSession({ state: 'finished', pendingArtifactsCount: 3 }),
+        session: makeSession({ state: 'finished', initialPrompt: 'Refactor onboarding status chips' }),
+        workflowContext: null,
         cableStream: 'stream-token',
       },
     });
 
-    const reviewBtn = screen.getByRole('button', { name: /Review Outputs \(3 files\)/ });
-    await userEvent.click(reviewBtn);
+    expect(screen.getByRole('heading', { name: 'Refactor onboarding status chips' })).toBeInTheDocument();
+    expect(screen.getByText('Finished')).toBeInTheDocument();
+    expect(screen.getAllByText('Claude Code').length).toBeGreaterThan(0);
+    // The breadcrumb is how you get back to the list now.
+    expect(screen.getByRole('link', { name: 'Sessions & Runs' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/sessions',
+    );
+  });
+
+  it('offers a Review outputs action when there are pending artifacts', async () => {
+    renderAuthedPage(<ProjectSessionShowPage />, {
+      props: {
+        project,
+        session: makeSession({ state: 'finished', pendingArtifactsCount: 3 }),
+        workflowContext: null,
+        cableStream: 'stream-token',
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /review outputs/i }));
     expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/4242/artifacts');
   });
 
   it('shows the Finish action and starting state for a non-ready running session', () => {
     renderAuthedPage(<ProjectSessionShowPage />, {
-      props: { project, session: makeSession({ state: 'running', finishedAt: null }), cableStream: 'stream-token' },
+      props: {
+        project,
+        session: makeSession({ state: 'running', finishedAt: null }),
+        workflowContext: null,
+        cableStream: 'stream-token',
+      },
     });
 
-    // Non-terminal, non-finishing sessions expose a Finish button in the header.
-    expect(screen.getByRole('button', { name: 'Finish' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Finish session' })).toBeInTheDocument();
     // Running but not ready (no websocket terminal) shows the waiting state.
-    expect(screen.getByText('Starting session...')).toBeInTheDocument();
+    expect(screen.getByText('Starting session…')).toBeInTheDocument();
   });
 
-  it('navigates to a new session from the header New Session button', async () => {
+  it('links a workflow-step session back to its run', () => {
     renderAuthedPage(<ProjectSessionShowPage />, {
-      props: { project, session: makeSession({ state: 'running', finishedAt: null }), cableStream: 'stream-token' },
+      props: {
+        project,
+        session: makeSession({ state: 'finished' }),
+        workflowContext: {
+          runId: 1443,
+          runName: 'Weekly GA report',
+          runPath: '/company/projects/7/workflow_runs/1443',
+          stepName: 'GA report',
+          stepPosition: 1,
+          stepsTotal: 1,
+        },
+        cableStream: 'stream-token',
+      },
     });
 
-    // Running (non-terminal) state has a single "New Session" button in the header.
-    await userEvent.click(screen.getByRole('button', { name: /New Session/ }));
+    expect(screen.getByRole('link', { name: 'Weekly GA report · Run #1443' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/workflow_runs/1443',
+    );
+    expect(screen.getByText('Step 1 of 1 · Workflow step')).toBeInTheDocument();
+  });
+
+  it('offers a new session from a finished one', async () => {
+    renderAuthedPage(<ProjectSessionShowPage />, {
+      props: { project, session: makeSession({ state: 'finished' }), workflowContext: null, cableStream: 'stream' },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /new session/i }));
     expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/new');
   });
 });

@@ -3,8 +3,9 @@
 require "test_helper"
 
 # Page render-smoke: the project-scoped Sessions controller renders three
-# Inertia pages — Projects/Sessions/SessionsPage (#index),
-# Projects/Sessions/NewPage (#new) and Projects/Sessions/ShowPage (#show).
+# Inertia pages — Projects/Sessions/SessionsRunsPage (#index, the unified
+# sessions-and-runs list), Projects/Sessions/NewPage (#new) and
+# Projects/Sessions/ShowPage (#show).
 # Happy-path render contract, complementing sessions_authorization_test.rb
 # (permit/forbid matrix).
 class Web::Company::Projects::SessionsRenderTest < ActionDispatch::IntegrationTest
@@ -18,15 +19,15 @@ class Web::Company::Projects::SessionsRenderTest < ActionDispatch::IntegrationTe
 
   teardown { Bullet.enable = true }
 
-  test "index renders the sessions page with the project's sessions" do
+  test "index renders the unified sessions and runs page" do
     session = create(:terminal_session, :agent_session, project: @project, user: @user)
 
     get company_project_sessions_path(@project)
 
     assert_response :success
-    assert_inertia_page "Projects/Sessions/SessionsPage"
+    assert_inertia_page "Projects/Sessions/SessionsRunsPage"
     assert_inertia_props do |props|
-      props[:sessions].any? { |s| s[:id] == session.id }
+      props[:entries].any? { |e| e[:id] == session.id && e[:kind] == "session" }
     end
   end
 

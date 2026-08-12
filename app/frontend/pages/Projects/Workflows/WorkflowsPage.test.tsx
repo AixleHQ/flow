@@ -303,15 +303,15 @@ describe('Projects/Workflows/WorkflowsPage', () => {
     expect(router.delete).not.toHaveBeenCalled();
   });
 
-  it('opens the Run Workflow modal when Run is clicked on a card', async () => {
+  it('opens the Run Workflow drawer when Run is clicked on a card', async () => {
     renderAuthedPage(<WorkflowsPage />, {
       props: baseProps([workflow({ id: 4, name: 'Nightly Build' })]),
     });
 
     await userEvent.click(screen.getByRole('button', { name: 'Run' }));
 
-    const dialog = await screen.findByRole('dialog', { name: /Run: Nightly Build/ });
-    expect(within(dialog).getByText('Execution Mode')).toBeInTheDocument();
+    const drawer = await screen.findByRole('dialog', { name: /Run: Nightly Build/ });
+    expect(within(drawer).getByText('Execution mode')).toBeInTheDocument();
   });
 
   // --- Read-only viewer (canExecute:false) -------------------------------------------------------

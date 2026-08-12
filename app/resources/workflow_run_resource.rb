@@ -20,6 +20,18 @@ class WorkflowRunResource < ApplicationResource
     run.workflow&.name
   end
 
+  # The run header's description line — what this workflow does, which is a
+  # property of the workflow, not of this particular execution.
+  typelize :string?
+  attribute :workflow_description do |run|
+    run.workflow&.description
+  end
+
+  typelize :number
+  attribute :total_tokens do |run|
+    run.step_runs.sum { |sr| sr.terminal_session&.total_tokens.to_i }
+  end
+
   typelize :number
   attribute :steps_completed do |run|
     if run.association(:step_runs).loaded?

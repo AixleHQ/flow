@@ -50,7 +50,14 @@ const TONE_STYLES: Record<StatusTone, { color: string; background: string; borde
     background: 'var(--app-success-bg)',
     borderColor: 'var(--app-success-border)',
   },
-  running: { color: 'var(--app-info-fg)', background: 'var(--app-info-bg)', borderColor: 'var(--app-info-border)' },
+  /* Amber, not blue: the Sessions & Runs design system reserves amber for
+     "in flight" and blue for "waiting on something", and a running row that
+     read blue was indistinguishable from a pending one at badge size. */
+  running: {
+    color: 'var(--app-warning-fg)',
+    background: 'var(--app-warning-bg)',
+    borderColor: 'var(--app-warning-border)',
+  },
   info: { color: 'var(--app-info-fg)', background: 'var(--app-info-bg)', borderColor: 'var(--app-info-border)' },
   warning: {
     color: 'var(--app-warning-fg)',

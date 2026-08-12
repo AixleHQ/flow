@@ -67,35 +67,58 @@ const ctx: SessionShowContext = {
 };
 
 describe('SessionShowContent', () => {
-  it('renders the header with agent label, state badge and session id', () => {
+  it('renders the shared detail header: breadcrumb, title, status, id and runtime', () => {
     renderPage(
       <SessionShowContent
-        session={makeSession({ id: 42, agentType: 'claude_code', state: 'ready' })}
+        session={makeSession({ id: 42, state: 'ready', initialPrompt: 'Audit the GA4 property', userName: 'Ada' })}
         cableStream="signed-stream"
         context={ctx}
       />,
     );
 
-    expect(screen.getByText('Claude Code')).toBeInTheDocument();
-    expect(screen.getByText('Ready')).toBeInTheDocument();
+    // The title is the session's own first prompt line, not the runtime name —
+    // the runtime moved to the meta line where runs put it too.
+    expect(screen.getByRole('heading', { name: 'Audit the GA4 property' })).toBeInTheDocument();
+    expect(screen.getByText('Running')).toBeInTheDocument();
     expect(screen.getByText('#42')).toBeInTheDocument();
-    // Active session also shows the "New Session" action in the header.
-    expect(screen.getByRole('button', { name: /new session/i })).toBeInTheDocument();
+    expect(screen.getByText('Claude Code')).toBeInTheDocument();
+    expect(screen.getByText('Ada')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sessions & Runs' })).toHaveAttribute('href', '/sessions');
   });
 
-  it('navigates back when the back arrow is clicked', async () => {
-    renderPage(<SessionShowContent session={makeSession()} cableStream="signed-stream" context={ctx} />);
+  it('labels a standalone session as such and a workflow-step session by its position', () => {
+    const { unmount } = renderPage(
+      <SessionShowContent session={makeSession()} cableStream="signed-stream" context={ctx} />,
+    );
+    expect(screen.getByText('Standalone session')).toBeInTheDocument();
+    unmount();
 
-    // The back ActionIcon is the first button (icon-only); find via its Tabler icon SVG.
-    const backIcon = document.querySelector('svg.tabler-icon-arrow-left');
-    const backBtn = backIcon?.closest('button');
-    if (!backBtn) throw new Error('back button not found');
-    await userEvent.click(backBtn);
+    renderPage(
+      <SessionShowContent
+        session={makeSession()}
+        cableStream="signed-stream"
+        context={ctx}
+        workflowContext={{
+          runId: 1702,
+          runName: 'Release notes digest',
+          runPath: '/runs/1702',
+          stepName: 'Post to Slack',
+          stepPosition: 2,
+          stepsTotal: 2,
+        }}
+      />,
+    );
 
-    expect(router.visit).toHaveBeenCalledWith('/sessions');
+    expect(screen.getByRole('heading', { name: 'Post to Slack' })).toBeInTheDocument();
+    expect(screen.getByText('Step 2 of 2 · Workflow step')).toBeInTheDocument();
+    // The run sits between the list and the session in the breadcrumb.
+    expect(screen.getByRole('link', { name: 'Release notes digest · Run #1702' })).toHaveAttribute(
+      'href',
+      '/runs/1702',
+    );
   });
 
-  it('shows the Finish button for an active session and POSTs to finish then reloads', async () => {
+  it('shows the Finish action for an active session and POSTs to finish then reloads', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 200 }));
 
     renderPage(
@@ -106,7 +129,7 @@ describe('SessionShowContent', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: /^finish$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /finish session/i }));
 
     await waitFor(() => {
       expect(fetchSpy).toHaveBeenCalledWith(
@@ -125,16 +148,13 @@ describe('SessionShowContent', () => {
 
     renderPage(<SessionShowContent session={makeSession()} cableStream="signed-stream" context={ctx} />);
 
-    const copyIcon = document.querySelector('svg.tabler-icon-copy');
-    const copyBtn = copyIcon?.closest('button');
-    if (!copyBtn) throw new Error('copy button not found');
-    await userEvent.click(copyBtn);
+    await userEvent.click(screen.getByRole('button', { name: /copy session link/i }));
 
     expect(writeText).toHaveBeenCalledWith(window.location.href);
     expect(await screen.findByText('Session link copied')).toBeInTheDocument();
   });
 
-  it('renders the completion card with cost, duration and a Review Outputs action for a finished session', async () => {
+  it('reports cost, tokens and models in the header stats for a finished session', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({
@@ -145,27 +165,50 @@ describe('SessionShowContent', () => {
           inputTokens: 8000,
           outputTokens: 4000,
           models: ['claude-sonnet'],
-          pendingArtifactsCount: 3,
-          initialPrompt: 'Build me a feature',
         })}
         cableStream="signed-stream"
         context={ctx}
       />,
     );
 
-    // Completion summary: "Completed" badge, cost formatted, models badge, prompt text.
-    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getByText('Finished')).toBeInTheDocument();
     expect(screen.getByText('$2.50')).toBeInTheDocument();
+    expect(screen.getByText('12.0k')).toBeInTheDocument();
     expect(screen.getByText('claude-sonnet')).toBeInTheDocument();
-    expect(screen.getByText('Build me a feature')).toBeInTheDocument();
+    // The token line breaks the total down rather than hiding it in a tooltip.
+    expect(screen.getByText('8.0k')).toBeInTheDocument();
+  });
 
-    // Review Outputs button routes to the artifacts path.
-    const review = screen.getByRole('button', { name: /review outputs \(3 files\)/i });
-    await userEvent.click(review);
+  it('offers a Review outputs action when a finished session left files pending', async () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ state: 'finished', finishedAt: '2026-06-26T10:05:00Z', pendingArtifactsCount: 3 })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+
+    expect(screen.getByText('3 files are waiting for review.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /review outputs/i }));
     expect(router.visit).toHaveBeenCalledWith('/sessions/7/artifacts');
   });
 
-  it('renders the error message in the completion card for a failed session', () => {
+  it('renders a finished session in the same read-only console frame', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ state: 'finished', finishedAt: '2026-06-26T10:05:00Z', costCents: 478 })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+
+    expect(screen.getByText(/read-only/)).toBeInTheDocument();
+    // No live terminal for a terminal session.
+    expect(screen.queryByTitle('Terminal')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
+  });
+
+  it('renders the error message for a failed session', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({
@@ -180,11 +223,10 @@ describe('SessionShowContent', () => {
 
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
     expect(screen.getByText('Container exploded')).toBeInTheDocument();
-    // A failed/finished session is terminal: no Finish button.
-    expect(screen.queryByRole('button', { name: /^finish$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
   });
 
-  it('shows the starting/waiting state when the session is not yet ready', () => {
+  it('shows the starting state when the session is not yet ready', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'not_started', websocketUrl: undefined })}
@@ -193,9 +235,9 @@ describe('SessionShowContent', () => {
       />,
     );
 
-    expect(screen.getByText('Starting session...')).toBeInTheDocument();
-    // Header badge plus waiting badge both render the humanized state.
-    expect(screen.getAllByText('Not started').length).toBeGreaterThan(0);
+    expect(screen.getByText('Starting session…')).toBeInTheDocument();
+    // Header chip plus waiting chip both render the humanized state.
+    expect(screen.getAllByText('Pending').length).toBeGreaterThan(0);
   });
 
   it('renders the finishing overlay while the session is finishing', () => {
@@ -204,8 +246,7 @@ describe('SessionShowContent', () => {
     );
 
     expect(screen.getByText(/finishing session/i)).toBeInTheDocument();
-    // Finishing is non-terminal but the Finish button is hidden.
-    expect(screen.queryByRole('button', { name: /^finish$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
   });
 
   it('renders a terminal iframe when ready and a websocket url is present', () => {
@@ -245,7 +286,7 @@ describe('SessionShowContent', () => {
     // No editor: an overlay on VS Code is just a broken editor.
     expect(screen.queryByTitle('VS Code Editor')).not.toBeInTheDocument();
     // Finish is owner-only at the API, so it is not offered here.
-    expect(screen.queryByRole('button', { name: /^finish$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
   });
 
   it('leaves the owner able to type and to finish their own session', () => {
@@ -259,6 +300,6 @@ describe('SessionShowContent', () => {
 
     expect(screen.queryByLabelText("Read-only view of another user's session")).not.toBeInTheDocument();
     expect(screen.queryByText('View only')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^finish$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /finish session/i })).toBeInTheDocument();
   });
 });

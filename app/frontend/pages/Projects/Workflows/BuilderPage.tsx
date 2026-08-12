@@ -7,7 +7,7 @@ import { useDebouncedCallback } from 'use-debounce';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
-import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
+import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
 import { apiFetch } from 'shared/lib/apiFetch';
 import {
   apiV1ProjectWorkflowPath,
@@ -754,18 +754,23 @@ const BuilderPage = () => {
       </Modal>
 
       {project && (
-        <RunWorkflowModal
+        <RunWorkflowDrawer
           opened={runModalOpen}
           onClose={() => setRunModalOpen(false)}
-          workflowId={workflow.id}
-          workflowName={workflow.name}
-          steps={steps.map((s) => ({
-            id: s.id,
-            name: s.name,
-            position: s.position,
-            allowNonInteractive: s.allowNonInteractive,
-            dependsOnStepIds: s.dependsOnStepIds,
-          }))}
+          workflows={[
+            {
+              id: workflow.id,
+              name: workflow.name,
+              steps: steps.map((s) => ({
+                id: s.id,
+                name: s.name,
+                position: s.position,
+                allowNonInteractive: s.allowNonInteractive,
+                dependsOnStepIds: s.dependsOnStepIds,
+              })),
+            },
+          ]}
+          initialWorkflowId={workflow.id}
           projectId={project.id}
           configuredAgents={configuredAgents}
           defaultAgentRuntime={defaultAgentRuntime}

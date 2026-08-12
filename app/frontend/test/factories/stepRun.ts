@@ -16,6 +16,8 @@ export const buildStepRun = (overrides: Partial<StepRun> = {}): StepRun => ({
   dependsOnStepIds: [],
   dependsOnNames: [],
   subStepRuns: [],
+  totalTokens: 0,
+  costCents: 0,
   // optional (?) computed attributes — realistic values, no compile-time guarantee.
   // terminalSessionState/terminalUrl/ideUrl are `string | undefined` (not nullable): omit for "absent".
   stepName: 'Compile Specs',

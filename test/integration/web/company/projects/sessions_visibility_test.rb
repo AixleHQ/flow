@@ -93,18 +93,17 @@ class Web::Company::Projects::SessionsVisibilityTest < ActionDispatch::Integrati
     get company_project_sessions_path(@project)
 
     assert_response :success
-    rows = inertia.props[:sessions].index_by { |s| s[:id] }
+    rows = inertia.props[:entries].index_by { |e| e[:id] }
 
     # The row survives — cost and token columns are how a team sees what its
     # project spends, and hiding the row would take that with it. What goes is
-    # the content: the prompt says what the person is doing, and nothing else
-    # in the stack protects it.
+    # the content: the row's name is drawn from the prompt, which says what the
+    # person is doing, and nothing else in the stack protects it.
     assert_equal false, rows[private_session.id][:viewable] # rubocop:disable Minitest/RefuteFalse
-    assert_nil rows[private_session.id][:initialPrompt]
-    assert_nil rows[private_session.id][:metadata]
+    assert_equal "Interactive session", rows[private_session.id][:name]
 
     assert rows[own_session.id][:viewable]
-    assert_equal "fix the importer", rows[own_session.id][:initialPrompt]
+    assert_equal "fix the importer", rows[own_session.id][:name]
   end
 
   test "artifacts of a private session are refused too" do

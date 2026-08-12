@@ -1,9 +1,9 @@
 import { router } from '@inertiajs/react';
-import { ActionIcon, Badge, Box, Button, Card, Center, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
+import { ActionIcon, Badge, Box, Button, Center, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
 import { useHotkeys } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconArrowLeft, IconChevronLeft, IconChevronRight, IconCopy, IconEye, IconPlus } from '@tabler/icons-react';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { IconChevronLeft, IconChevronRight, IconCopy, IconEye, IconPlus, IconSquareCheck } from '@tabler/icons-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels';
 
 import type TerminalSession from 'types/generated/TerminalSession';
@@ -11,14 +11,27 @@ import type TerminalSession from 'types/generated/TerminalSession';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
-import { StatusBadge } from 'shared/ui/StatusBadge';
+import { ConsoleFrame, DetailHeader, StatusTag, type Crumb, type HeaderStat } from 'shared/ui/sessions';
 
 import classes from './SessionShowContent.module.css';
 import { SessionTerminalReplay } from './SessionTerminalReplay';
 
+/** Where a workflow-step session sits inside its run — null for a standalone. */
+export interface SessionWorkflowContext {
+  runId: number;
+  runName: string | null;
+  runPath: string;
+  stepName: string | null;
+  stepPosition: number | null;
+  stepsTotal: number;
+}
+
 export interface SessionShowContext {
   backPath: string;
+  /** Label of the list this session came from, for the breadcrumb. */
+  backLabel?: string;
   // Optional: company-level session creation was removed, so the company
   // session view omits this and the "New Session" buttons are hidden.
   newSessionPath?: string;
@@ -29,60 +42,38 @@ interface Props {
   session: TerminalSession;
   cableStream: string;
   context: SessionShowContext;
+  workflowContext?: SessionWorkflowContext | null;
 }
 
-const AGENT_LABELS: Record<string, string> = {
-  claude_code: 'Claude Code',
-  cursor_cli: 'Cursor CLI',
-  codex: 'Codex',
-  gemini_cli: 'Gemini CLI',
-  grok: 'Grok',
+const SESSION_STATE_LABELS: Record<string, string> = {
+  not_started: 'Pending',
+  running: 'Starting',
+  ready: 'Running',
+  finishing: 'Finishing',
+  finished: 'Finished',
+  failed: 'Failed',
 };
 
-const AGENT_COLORS: Record<string, string> = {
-  claude_code: 'orange',
-  cursor_cli: 'violet',
-  codex: 'teal',
-  gemini_cli: 'blue',
-  grok: 'gray',
-};
-
-function formatTokens(n: number): string {
-  if (!n || n === 0) return '—';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
-
-function formatCost(cents: number): string {
-  if (!cents || cents === 0) return '—';
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function formatElapsed(startedAt: string | null, finishedAt: string | null, now: Date): string {
-  if (!startedAt) return '—';
-  const start = new Date(startedAt);
-  const end = finishedAt ? new Date(finishedAt) : now;
-  const seconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-}
-
-function useElapsedTimer(active: boolean): Date {
-  const [now, setNow] = useState(() => new Date());
+function useElapsedTimer(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
-    const id = setInterval(() => setNow(new Date()), 1000);
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [active]);
   return now;
 }
 
-export function SessionShowContent({ session: s, cableStream, context: ctx }: Props) {
+/** First line of the prompt — the session's own one-line description. */
+function sessionTitle(s: TerminalSession, workflowContext?: SessionWorkflowContext | null): string {
+  if (workflowContext?.stepName) return workflowContext.stepName;
+  const firstLine = (s.initialPrompt ?? '').trim().split('\n')[0]?.trim();
+  if (firstLine) return firstLine.length > 80 ? `${firstLine.slice(0, 80)}…` : firstLine;
+  return 'Interactive session';
+}
+
+export function SessionShowContent({ session: s, cableStream, context: ctx, workflowContext = null }: Props) {
   const { canExecute } = useProjectPermissions();
-  const agentLabel = AGENT_LABELS[s.agentType ?? ''] ?? s.agentType ?? '—';
-  const agentColor = AGENT_COLORS[s.agentType ?? ''] ?? 'gray';
   const isTerminal = s.state === 'finished' || s.state === 'failed';
   const isFinishing = s.state === 'finishing';
   const isReady = s.state === 'ready';
@@ -142,232 +133,122 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
     storage: typeof window !== 'undefined' ? localStorage : undefined,
   });
 
-  const hasCacheTokens = s.cacheReadTokens > 0 || s.cacheWriteTokens > 0;
-  const hasTokens = s.totalTokens > 0 || s.costCents > 0;
+  // ── Header ───────────────────────────────────────
 
-  const renderSummaryRow = (label: string, value: ReactNode) => (
-    <div className={classes.summaryRow}>
-      <Text size="sm" c="dimmed">
-        {label}
-      </Text>
-      {typeof value === 'string' ? (
-        <Text size="sm" fw={500}>
-          {value}
-        </Text>
-      ) : (
-        value
-      )}
-    </div>
-  );
+  const crumbs: Crumb[] = [{ label: ctx.backLabel ?? 'Sessions & Runs', href: ctx.backPath }];
+  if (workflowContext) {
+    crumbs.push({
+      label: `${workflowContext.runName ?? 'Run'} · Run #${workflowContext.runId}`,
+      href: workflowContext.runPath,
+    });
+  }
+  crumbs.push({ label: `${sessionTitle(s, workflowContext)} #${s.id}` });
 
-  const renderHeader = () => (
-    <div className={classes.header}>
-      <div className={classes.headerLeft}>
-        <ActionIcon variant="subtle" size="sm" onClick={() => router.visit(ctx.backPath)}>
-          <IconArrowLeft size={16} />
-        </ActionIcon>
-        <Text fw={600} size="sm">
-          {agentLabel}
-        </Text>
-        <StatusBadge state={s.state} size="sm" />
-        <Text size="xs" c="dimmed" ff="monospace">
-          #{s.id}
-        </Text>
-        {s.containerId && (
-          <Text size="xs" c="dimmed" ff="monospace">
-            {s.containerId.slice(0, 12)}
+  const duration = formatDuration(s.startedAt, s.finishedAt, s.state, now);
+
+  const stats: HeaderStat[] = [
+    { label: 'Duration', value: duration },
+    { label: 'Cost', value: formatCost(s.costCents), color: costColor(s.costCents) },
+    { label: 'Total tokens', value: formatTokens(s.totalTokens) },
+    {
+      label: 'Models',
+      sans: true,
+      value:
+        s.models.length > 0 ? (
+          s.models.map((m) => (
+            <Tooltip key={m} label={m} multiline maw={420}>
+              <span>
+                <StatusTag plain>{shortModelName(m)}</StatusTag>
+              </span>
+            </Tooltip>
+          ))
+        ) : (
+          <Text size="sm" c="dimmed">
+            —
           </Text>
-        )}
-        {s.errorMessage && !isTerminal && (
-          <Tooltip label={s.errorMessage} maw={400} multiline>
-            <Text size="xs" c="var(--app-danger-fg)" className={classes.errorTruncated}>
-              {s.errorMessage}
-            </Text>
-          </Tooltip>
-        )}
-        <Tooltip label="Copy session link">
-          <ActionIcon aria-label="Copy session link" variant="subtle" size="xs" onClick={handleCopyLink}>
-            <IconCopy size={14} />
-          </ActionIcon>
-        </Tooltip>
-        {!isOwner && (
-          <Tooltip label={`${s.userName ?? 'Someone else'} is running this session — you can watch, not type`}>
-            <Badge size="xs" variant="outline" leftSection={<IconEye size={11} />}>
-              View only
-            </Badge>
-          </Tooltip>
-        )}
-        {isActive && (
-          <Text size="xs" c="dimmed" ff="monospace" className={classes.elapsed}>
-            {formatElapsed(s.startedAt, null, now)}
+        ),
+    },
+  ];
+
+  const label = workflowContext
+    ? `Step ${workflowContext.stepPosition ?? '?'} of ${workflowContext.stepsTotal} · Workflow step`
+    : 'Standalone session';
+
+  const header = (
+    <DetailHeader
+      crumbs={crumbs}
+      title={sessionTitle(s, workflowContext)}
+      state={s.state}
+      statusLabel={SESSION_STATE_LABELS[s.state]}
+      identifier={`#${s.id}`}
+      description={workflowContext ? null : s.initialPrompt}
+      agentType={s.agentType}
+      userName={s.userName}
+      mode={s.mode}
+      stats={stats}
+      tokens={
+        s.totalTokens > 0
+          ? {
+              inputTokens: s.inputTokens,
+              outputTokens: s.outputTokens,
+              cacheReadTokens: s.cacheReadTokens,
+              cacheWriteTokens: s.cacheWriteTokens,
+            }
+          : null
+      }
+      formatTokenValue={formatTokens}
+      actions={
+        <>
+          <Text size="sm" c="dimmed">
+            {label}
           </Text>
-        )}
-      </div>
-      <div className={classes.headerRight}>
-        {/* Finish is owner-only at the API (`current_user.terminal_sessions`),
-            so offering it to a viewer would only produce a failed request. */}
-        {canExecute && isOwner && !isTerminal && !isFinishing && (
-          <Button size="xs" variant="outline" color="red" onClick={handleFinish} loading={finishRequested}>
-            Finish
-          </Button>
-        )}
-        {canExecute && ctx.newSessionPath && (
-          <Button size="xs" leftSection={<IconPlus size={14} />} onClick={() => router.visit(ctx.newSessionPath!)}>
-            New Session
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderCompletionCard = () => (
-    <div className={classes.centeredState}>
-      <Card withBorder p="xl" className={classes.completionCard}>
-        <Stack align="center" gap="md">
-          <Group gap="sm">
-            <Badge color={agentColor} size="lg" variant="filled">
-              {agentLabel}
-            </Badge>
-            <StatusBadge state={s.state} size="lg">
-              {s.state === 'failed' ? 'Failed' : 'Completed'}
-            </StatusBadge>
-          </Group>
-
-          {s.errorMessage && (
-            <Text c="var(--app-danger-fg)" size="sm" ta="center">
-              {s.errorMessage}
-            </Text>
+          {!isOwner && (
+            <Tooltip label={`${s.userName ?? 'Someone else'} is running this session — you can watch, not type`}>
+              <Badge size="sm" variant="outline" leftSection={<IconEye size={11} />}>
+                View only
+              </Badge>
+            </Tooltip>
           )}
-
-          <Stack gap="xs" w="100%">
-            {s.mode && renderSummaryRow('Mode', s.mode === 'interactive' ? 'Interactive' : 'Automatic')}
-            {renderSummaryRow(
-              'Duration',
-              <Text size="sm" ff="monospace">
-                {formatElapsed(s.startedAt, s.finishedAt, now)}
-              </Text>,
-            )}
-            {renderSummaryRow(
-              'Cost',
-              <Text size="sm" ff="monospace" fw={600} c={s.costCents > 0 ? 'green' : undefined}>
-                {formatCost(s.costCents)}
-              </Text>,
-            )}
-            {s.models.length > 0 &&
-              renderSummaryRow(
-                'Models',
-                <Group gap={4}>
-                  {s.models.map((m) => (
-                    <Badge key={m} size="xs" variant="outline">
-                      {m}
-                    </Badge>
-                  ))}
-                </Group>,
-              )}
-            {s.pendingArtifactsCount > 0 &&
-              renderSummaryRow(
-                'Pending Outputs',
-                <Badge color="yellow" size="sm">
-                  {s.pendingArtifactsCount} files
-                </Badge>,
-              )}
-          </Stack>
-
-          {hasTokens && (
-            <Stack gap={4} w="100%">
-              <Text size="xs" fw={600} c="dimmed" tt="uppercase">
-                Token Usage
-              </Text>
-              <div className={`${classes.tokenGrid} ${hasCacheTokens ? classes.tokenGridWide : ''}`}>
-                <Text size="xs" c="dimmed">
-                  Input
-                </Text>
-                <Text size="xs" ff="monospace" ta="right">
-                  {formatTokens(s.inputTokens)}
-                </Text>
-                {hasCacheTokens && <Box />}
-                {hasCacheTokens && (
-                  <Text size="xs" c="dimmed">
-                    Cache read
-                  </Text>
-                )}
-                {hasCacheTokens && (
-                  <Text size="xs" ff="monospace" ta="right">
-                    {formatTokens(s.cacheReadTokens)}
-                  </Text>
-                )}
-                <Text size="xs" c="dimmed">
-                  Output
-                </Text>
-                <Text size="xs" ff="monospace" ta="right">
-                  {formatTokens(s.outputTokens)}
-                </Text>
-                {hasCacheTokens && <Box />}
-                {hasCacheTokens && (
-                  <Text size="xs" c="dimmed">
-                    Cache write
-                  </Text>
-                )}
-                {hasCacheTokens && (
-                  <Text size="xs" ff="monospace" ta="right">
-                    {formatTokens(s.cacheWriteTokens)}
-                  </Text>
-                )}
-              </div>
-              <div className={classes.tokenTotal}>
-                <Text size="xs" c="dimmed">
-                  Total
-                </Text>
-                <Text size="xs" ff="monospace" fw={600}>
-                  {formatTokens(s.totalTokens)} tokens
-                </Text>
-              </div>
-            </Stack>
-          )}
-
-          {s.initialPrompt && (
-            <Box w="100%">
-              <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={4}>
-                Prompt
-              </Text>
-              <Text size="xs" ff="monospace" c="dimmed" lineClamp={3} style={{ whiteSpace: 'pre-wrap' }}>
-                {s.initialPrompt}
-              </Text>
-            </Box>
-          )}
-
-          {s.terminalLogUrl && <SessionTerminalReplay logUrl={s.terminalLogUrl} />}
-
-          <Group mt="md" gap="sm">
-            {s.pendingArtifactsCount > 0 && (
-              <Button color="yellow" variant="filled" onClick={() => router.visit(ctx.artifactsPath)}>
-                Review Outputs ({s.pendingArtifactsCount} files)
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => router.visit(ctx.backPath)}>
-              All Sessions
+          <Tooltip label="Copy session link">
+            <ActionIcon aria-label="Copy session link" variant="subtle" size="sm" onClick={handleCopyLink}>
+              <IconCopy size={15} />
+            </ActionIcon>
+          </Tooltip>
+          {/* Finish is owner-only at the API (`current_user.terminal_sessions`),
+              so offering it to a viewer would only produce a failed request. */}
+          {canExecute && isOwner && !isTerminal && !isFinishing && (
+            <Button leftSection={<IconSquareCheck size={15} />} onClick={handleFinish} loading={finishRequested}>
+              Finish session
             </Button>
-            {canExecute && ctx.newSessionPath && (
-              <Button onClick={() => router.visit(ctx.newSessionPath!)}>New Session</Button>
-            )}
-          </Group>
-        </Stack>
-      </Card>
-    </div>
+          )}
+          {canExecute && isTerminal && ctx.newSessionPath && (
+            <Button
+              variant="default"
+              leftSection={<IconPlus size={14} />}
+              onClick={() => router.visit(ctx.newSessionPath!)}
+            >
+              New session
+            </Button>
+          )}
+        </>
+      }
+    />
   );
 
-  const renderLoadingOverlay = (label: string) => (
+  // ── Workspace frame ──────────────────────────────
+
+  const renderLoadingOverlay = (text: string) => (
     <div className={classes.loadingOverlay}>
       <Loader size="md" />
       <Text size="sm" c="dimmed">
-        {label}
+        {text}
       </Text>
     </div>
   );
 
   const renderTerminalFrame = () => (
     <>
-      {!termLoaded && renderLoadingOverlay('Connecting to terminal...')}
+      {!termLoaded && renderLoadingOverlay('Connecting to terminal…')}
       {!isOwner && <div className={classes.viewOnlyShield} aria-label="Read-only view of another user's session" />}
       <iframe
         src={ttydUrl!}
@@ -378,35 +259,26 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
     </>
   );
 
-  const renderWaiting = () => (
-    <Box className={classes.panelContainer}>
-      <Center h="100%">
-        <Stack align="center" gap="md">
-          <Loader size="md" />
-          <Text size="lg" fw={500}>
-            Starting session...
-          </Text>
-          <StatusBadge state={s.state} size="sm" />
-        </Stack>
-      </Center>
-    </Box>
-  );
-
-  const renderTerminalPanels = () => {
+  const renderWorkspace = () => {
     if (finishRequested || isFinishing) return null;
-    if (!isReady || !canShowTerminal) return renderWaiting();
 
-    if (!hasIde) {
+    if (!isReady || !canShowTerminal) {
       return (
-        <Box className={classes.panelContainer}>
-          <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>{renderTerminalFrame()}</div>
-        </Box>
+        <Center className={classes.workspace}>
+          <Stack align="center" gap="md">
+            <Loader size="md" />
+            <Text size="lg" fw={500}>
+              Starting session…
+            </Text>
+            <StatusTag state={s.state}>{SESSION_STATE_LABELS[s.state]}</StatusTag>
+          </Stack>
+        </Center>
       );
     }
 
-    if (!canShowEditor && canShowTerminal) {
+    if (!canShowEditor) {
       return (
-        <Box className={classes.panelContainer} style={{ display: 'flex' }}>
+        <div className={classes.workspace}>
           {editorCollapsed && hasIde && (
             <div className={classes.collapseStrip}>
               <Tooltip label="Show editor (⌘B)">
@@ -419,7 +291,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
           <div style={{ flex: 1 }} className={`${classes.panelFrame} ${classes.terminalFrame}`}>
             {renderTerminalFrame()}
           </div>
-        </Box>
+        </div>
       );
     }
 
@@ -428,11 +300,11 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
         orientation="horizontal"
         defaultLayout={savedLayout}
         onLayoutChanged={onLayoutChanged}
-        className={classes.panelContainer}
+        className={classes.workspace}
       >
         <Panel defaultSize={50} minSize={20}>
           <div className={`${classes.panelFrame} ${classes.editorFrame}`}>
-            {!ideLoaded && renderLoadingOverlay('Loading editor...')}
+            {!ideLoaded && renderLoadingOverlay('Loading editor…')}
             <iframe
               src={s.ideUrl!}
               title="VS Code Editor"
@@ -461,22 +333,88 @@ export function SessionShowContent({ session: s, cableStream, context: ctx }: Pr
     );
   };
 
+  const frameLabel = `session #${s.id} · /workspace`;
+
+  const frame = isTerminal ? (
+    <ConsoleFrame
+      className={classes.frame}
+      label={frameLabel}
+      footer={
+        s.state === 'failed'
+          ? 'Session failed · workspace is read-only'
+          : `Session finished · ${duration} · ${formatCost(s.costCents)} · read-only`
+      }
+    >
+      {s.terminalLogUrl ? (
+        <SessionTerminalReplay logUrl={s.terminalLogUrl} />
+      ) : (
+        <Center h="100%" p="xl">
+          <Text size="sm" c="dimmed">
+            This session captured no terminal output.
+          </Text>
+        </Center>
+      )}
+    </ConsoleFrame>
+  ) : (
+    <ConsoleFrame className={`${classes.frame} ${classes.frameLive}`} label={frameLabel} live={isReady}>
+      {renderWorkspace()}
+    </ConsoleFrame>
+  );
+
   return (
     <div className={classes.root}>
       {(finishRequested || isFinishing) && (
         <div className={classes.finishingOverlay}>
           <Stack align="center" gap="sm">
-            <Loader color="yellow" size="lg" />
-            <Text fw={600} c="yellow.8">
-              Finishing session…
-            </Text>
+            <Loader size="lg" />
+            <Text fw={600}>Finishing session…</Text>
           </Stack>
         </div>
       )}
 
-      {renderHeader()}
+      {header}
 
-      {isTerminal ? renderCompletionCard() : renderTerminalPanels()}
+      <div className={isTerminal ? classes.body : `${classes.body} ${classes.bodyLive}`}>
+        {frame}
+
+        {isTerminal && s.errorMessage && (
+          <section className={classes.panel}>
+            <h3 className={classes.panelTitle}>Error</h3>
+            <div className={classes.errorBox}>{s.errorMessage}</div>
+          </section>
+        )}
+
+        {isTerminal && workflowContext && s.initialPrompt && (
+          <section className={classes.panel}>
+            <h3 className={classes.panelTitle}>Prompt</h3>
+            <p className={classes.promptBody}>{s.initialPrompt}</p>
+          </section>
+        )}
+
+        {isTerminal && s.pendingArtifactsCount > 0 && (
+          <section className={classes.panel}>
+            <h3 className={classes.panelTitle}>Outputs</h3>
+            <Group justify="space-between">
+              <Text size="sm">
+                {s.pendingArtifactsCount} {s.pendingArtifactsCount === 1 ? 'file is' : 'files are'} waiting for review.
+              </Text>
+              <Button variant="light" onClick={() => router.visit(ctx.artifactsPath)}>
+                Review outputs
+              </Button>
+            </Group>
+          </section>
+        )}
+
+        {!isTerminal && s.errorMessage && (
+          <Box>
+            <Tooltip label={s.errorMessage} maw={400} multiline>
+              <Text size="xs" c="var(--app-danger-fg)" className={classes.errorTruncated}>
+                {s.errorMessage}
+              </Text>
+            </Tooltip>
+          </Box>
+        )}
+      </div>
     </div>
   );
 }

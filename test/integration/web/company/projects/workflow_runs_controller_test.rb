@@ -11,11 +11,11 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     sign_in_as(@user)
   end
 
-  test "index renders workflow runs page" do
+  test "index redirects into the unified sessions and runs list" do
     create_list(:workflow_run, 2, workflow: @workflow, project: @project, user: @user)
 
     get company_project_workflow_runs_path(@project)
-    assert_inertia_page "Projects/WorkflowRuns/WorkflowRunsPage"
+    assert_redirected_to company_project_sessions_path(@project, type: "run")
   end
 
   test "show renders workflow run page" do
@@ -78,7 +78,7 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     sign_in_as(viewer)
 
     get company_project_workflow_runs_path(@project)
-    assert_inertia_page "Projects/WorkflowRuns/WorkflowRunsPage"
+    assert_redirected_to company_project_sessions_path(@project, type: "run")
 
     post company_project_workflow_runs_path(@project), params: {
       workflow_run: { workflow_id: @workflow.id, mode: "non_interactive" }

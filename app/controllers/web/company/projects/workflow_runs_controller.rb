@@ -1,20 +1,10 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::ApplicationController
+  # Runs and sessions are one list now — this route only exists so old links and
+  # bookmarks land somewhere sensible.
   def index
-    scope = WorkflowRun.where(project: current_project)
-                       .includes(:workflow, :step_runs)
-                       .ransack(q_params)
-                       .result
-                       .order(created_at: :desc)
-
-    render inertia: "Projects/WorkflowRuns/WorkflowRunsPage", props: {
-      runs: inertia_scroll(scope) { |records|
-        records.map { |r| WorkflowRunIndexResource.new(r).to_h }
-      },
-      filters: q_params,
-      per_page: per_page
-    }
+    redirect_to company_project_sessions_path(current_project, type: "run")
   end
 
   def show

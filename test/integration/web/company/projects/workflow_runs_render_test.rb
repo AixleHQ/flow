@@ -2,10 +2,10 @@
 
 require "test_helper"
 
-# Page render-smoke: the project-scoped WorkflowRuns controller renders two
-# Inertia pages — Projects/WorkflowRuns/WorkflowRunsPage (#index) and
-# Projects/WorkflowRuns/ShowPage (#show). Happy-path render contract,
-# complementing workflow_runs_authorization_test.rb (permit/forbid matrix).
+# Page render-smoke: the project-scoped WorkflowRuns controller renders
+# Projects/WorkflowRuns/ShowPage (#show); #index now redirects into the unified
+# Sessions & Runs list. Happy-path render contract, complementing
+# workflow_runs_authorization_test.rb (permit/forbid matrix).
 class Web::Company::Projects::WorkflowRunsRenderTest < ActionDispatch::IntegrationTest
   setup do
     @company = create(:company)
@@ -18,13 +18,12 @@ class Web::Company::Projects::WorkflowRunsRenderTest < ActionDispatch::Integrati
 
   teardown { Bullet.enable = true }
 
-  test "index renders the workflow runs page with the project's runs" do
+  test "index redirects to the unified sessions and runs list, filtered to runs" do
     create_list(:workflow_run, 2, workflow: @workflow, project: @project, user: @user)
 
     get company_project_workflow_runs_path(@project)
 
-    assert_response :success
-    assert_inertia_page "Projects/WorkflowRuns/WorkflowRunsPage"
+    assert_redirected_to company_project_sessions_path(@project, type: "run")
   end
 
   test "show renders the workflow run page for a run in the project" do

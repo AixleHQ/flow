@@ -18,6 +18,7 @@ export const buildWorkflowRun = (overrides: Partial<WorkflowRun> = {}): Workflow
   stepsCompleted: 1,
   stepsTotal: 3,
   costCents: 0,
+  totalTokens: 0,
   stepRuns: [],
   // optional (?) computed attributes — realistic values, no compile-time guarantee.
   // failedAccountName is `string | undefined` (not nullable): omit for "absent".

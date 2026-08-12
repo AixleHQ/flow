@@ -294,7 +294,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getByText('Implement')).toBeInTheDocument();
   });
 
-  it('opening the Run modal shows the run dialog titled for the workflow', async () => {
+  it('opening the Run drawer shows it titled for the workflow', async () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, instructions: 'Do the thing' })],
@@ -303,12 +303,9 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Run' }));
 
-    // The Run modal title is split between "Run: " and workflowName across elements.
-    // Use the dialog container accessible name or look for the individual parts.
-    const modal = await screen.findByRole('dialog');
-    expect(modal).toBeInTheDocument();
-    expect(modal.textContent).toMatch(/Run:.*Release pipeline/);
-    expect(screen.getByText('Execution Mode')).toBeInTheDocument();
+    const drawer = await screen.findByRole('dialog');
+    expect(drawer.textContent).toMatch(/Run:.*Release pipeline/);
+    expect(screen.getByText('Execution mode')).toBeInTheDocument();
   });
 
   it('disables the Run button when no session has instructions', () => {
