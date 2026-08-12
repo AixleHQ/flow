@@ -10,8 +10,6 @@ import {
   useDroppable,
   type CollisionDetection,
   type DragEndEvent,
-  type DragOverEvent,
-  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -19,7 +17,6 @@ import {
   horizontalListSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
-  arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -146,6 +143,7 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 import styles from './BoardPage.module.css';
+import { useBoardDnd } from './useBoardDnd';
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
 const AUTHOR_TYPES = [
@@ -4110,8 +4108,6 @@ const BoardPage = () => {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
-  const [activeTask, setActiveTask] = useState<Task | null>(null);
-  const [hoverColumnId, setHoverColumnId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const collapsedColumnsStorageKey = board ? `board:${board.id}:collapsedColumns` : null;
   const [collapsedColumns, setCollapsedColumns] = useLocalStorageSet<number>(collapsedColumnsStorageKey, new Set());
@@ -4251,172 +4247,16 @@ const BoardPage = () => {
     [project.id, closeTask],
   );
 
-  const preDragSnapshotRef = useRef<Task[]>([]);
-  const draggedIdRef = useRef<number | null>(null);
-  const dragTypeRef = useRef<'task' | 'column' | null>(null);
-
-  const handleDragStart = useCallback(
-    (event: DragStartEvent) => {
-      const data = event.active.data.current;
-      if (data?.type === 'column') {
-        dragTypeRef.current = 'column';
-        setActiveTask(null);
-      } else {
-        dragTypeRef.current = 'task';
-        const taskData = data?.task as Task | undefined;
-        setActiveTask(taskData ?? null);
-        draggedIdRef.current = taskData?.id ?? null;
-        preDragSnapshotRef.current = localTasks.map((t) => ({ ...t }));
-      }
-      setHoverColumnId(null);
-    },
-    [], // no dependencies needed; only reads refs and sets state
-  );
-
-  const handleDragOver = useCallback((event: DragOverEvent) => {
-    if (dragTypeRef.current === 'column') return; // columns handled in dragEnd only
-
-    const { over } = event;
-    if (!over) {
-      setHoverColumnId(null);
-      return;
-    }
-
-    let targetColumnId: number | null = null;
-    if (over.data.current?.columnId) {
-      targetColumnId = over.data.current.columnId as number;
-    } else if (over.data.current?.task) {
-      const overTask = over.data.current.task as Task;
-      targetColumnId = overTask.boardColumnId;
-    }
-
-    setHoverColumnId(targetColumnId);
-
-    if (targetColumnId == null) return;
-    const activeId = draggedIdRef.current;
-    if (activeId == null) return;
-
-    setLocalTasks((prev) => {
-      const activeItem = prev.find((t) => t.id === activeId);
-      if (!activeItem || activeItem.boardColumnId === targetColumnId) return prev;
-
-      const targetTasks = prev.filter((t) => t.boardColumnId === targetColumnId);
-      const maxPos = targetTasks.reduce((max, t) => Math.max(max, t.position), -1);
-
-      return prev.map((t) => (t.id === activeId ? { ...t, boardColumnId: targetColumnId!, position: maxPos + 1 } : t));
-    });
-  }, []);
-
-  const handleDragEnd = useCallback(
-    async (event: DragEndEvent) => {
-      setActiveTask(null);
-      setHoverColumnId(null);
-      const { active, over } = event;
-
-      // ── Column reorder ──────────────────────────────────────────────────────
-      if (dragTypeRef.current === 'column') {
-        dragTypeRef.current = null;
-        if (!over || active.id === over.id) return;
-
-        const oldIdx = localColumns.findIndex((c) => `col-${c.id}` === active.id);
-        const newIdx = localColumns.findIndex((c) => `col-${c.id}` === over.id);
-        if (oldIdx === -1 || newIdx === -1) return;
-
-        const newOrder = arrayMove(localColumns, oldIdx, newIdx);
-        setLocalColumns(newOrder);
-
-        // persist to server with error recovery
-        apiFetch(reorderApiV1ProjectColumnsPath(project.id), {
-          method: 'PATCH',
-          headers: jsonHeaders,
-          body: JSON.stringify({ columnIds: newOrder.map((c) => c.id) }),
-        })
-          .then(() => router.reload({ only: ['columns'] }))
-          .catch(() => {
-            setLocalColumns(localColumns); // revert on error
-            // Error toast would be shown by global error handler
-          });
-        return;
-      }
-
-      // ── Task move ──────────────────────────────────────────────────────────
-      dragTypeRef.current = null;
-      if (!over || !board) {
-        draggedIdRef.current = null;
-        return;
-      }
-
-      const origTask = preDragSnapshotRef.current.find((t) => t.id === draggedIdRef.current);
-      draggedIdRef.current = null;
-      if (!origTask) return;
-
-      let targetColumnId: number;
-      let targetPosition: number | undefined;
-
-      if (over.data.current?.task) {
-        const overTask = over.data.current.task as Task;
-        targetColumnId = overTask.boardColumnId;
-        targetPosition = overTask.position;
-      } else if (over.data.current?.columnId) {
-        targetColumnId = over.data.current.columnId as number;
-      } else {
-        return;
-      }
-
-      const sameColumn = targetColumnId === origTask.boardColumnId;
-      if (sameColumn && targetPosition === undefined) return;
-      if (sameColumn && targetPosition === origTask.position) return;
-
-      const snapshot = preDragSnapshotRef.current;
-      const maxInTargetColumn = snapshot
-        .filter((t) => t.boardColumnId === targetColumnId && t.id !== origTask.id)
-        .reduce((max, t) => Math.max(max, t.position), 0);
-      const position = targetPosition ?? maxInTargetColumn + 1;
-
-      setLocalTasks((prev) => {
-        const next = prev.map((t) => ({ ...t }));
-        const dragged = next.find((t) => t.id === origTask.id);
-        if (!dragged) return prev;
-
-        for (const t of next) {
-          if (t.id === origTask.id) continue;
-          if (t.boardColumnId === targetColumnId) {
-            if (t.position >= position) t.position += 1;
-          }
-        }
-        dragged.boardColumnId = targetColumnId;
-        dragged.position = position;
-
-        const colTasks = next.filter((t) => t.boardColumnId === targetColumnId).sort((a, b) => a.position - b.position);
-        colTasks.forEach((t, i) => {
-          t.position = i;
-        });
-
-        if (!sameColumn) {
-          const oldColTasks = next
-            .filter((t) => t.boardColumnId === origTask.boardColumnId)
-            .sort((a, b) => a.position - b.position);
-          oldColTasks.forEach((t, i) => {
-            t.position = i;
-          });
-        }
-
-        return next;
-      });
-
-      try {
-        await apiFetch(moveApiV1ProjectTaskPath(project.id, origTask.id), {
-          method: 'PATCH',
-          headers: jsonHeaders,
-          body: JSON.stringify({ columnId: targetColumnId, position }),
-        });
-        // cable confirms via board.touch → broadcast_refresh_to(board) → only: ['tasks', 'columns', 'recent_activities']
-      } catch {
-        setLocalTasks(preDragSnapshotRef.current);
-      }
-    },
-    [board, project.id, localColumns],
-  );
+  // Drag-and-drop (task moves + column reorder) lives in useBoardDnd so its behaviour is
+  // testable without element geometry, which jsdom cannot provide for dnd-kit's sensors.
+  const { activeTask, hoverColumnId, handleDragStart, handleDragOver, handleDragEnd } = useBoardDnd({
+    projectId: project.id,
+    enabled: !!board,
+    tasks: localTasks,
+    setTasks: setLocalTasks,
+    columns: localColumns,
+    setColumns: setLocalColumns,
+  });
 
   const openCreateForColumn = (columnId: number) => {
     form.setFieldValue('boardColumnId', String(columnId));
