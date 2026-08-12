@@ -20,21 +20,18 @@ export function useWorkflowRunListCableUpdates({ projectId, onUpdate }: Options)
       if (cancelled) return;
 
       const consumer = getConsumer();
-      sub = consumer.subscriptions.create(
-        { channel: 'WorkflowRunListChannel', project_id: projectId },
-        {
-          connected() {},
-          disconnected() {},
-          rejected() {
-            console.warn('[WorkflowRunListChannel] rejected', { projectId });
-          },
-          received(data: { type: string; run: Record<string, unknown> }) {
-            if (data.type === 'run_update') {
-              onUpdateRef.current(data.run);
-            }
-          },
-        } as unknown as Subscription,
-      );
+      sub = consumer.subscriptions.create({ channel: 'WorkflowRunListChannel', project_id: projectId }, {
+        connected() {},
+        disconnected() {},
+        rejected() {
+          console.warn('[WorkflowRunListChannel] rejected', { projectId });
+        },
+        received(data: { type: string; run: Record<string, unknown> }) {
+          if (data.type === 'run_update') {
+            onUpdateRef.current(data.run);
+          }
+        },
+      } as unknown as Subscription);
     }, 50);
 
     return () => {
