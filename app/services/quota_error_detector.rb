@@ -8,7 +8,8 @@ class QuotaErrorDetector
       /credit balance(?:\s+is)?\s+too low/i,
       /insufficient_quota/i,
       /billing_hard_limit/i,
-      /Add funds:.*platform\.claude\.com/i
+      /Add funds:.*platform\.claude\.com/i,
+      /individual spend limit/i
     ],
     gemini: [
       /Usage limit reached/i,
