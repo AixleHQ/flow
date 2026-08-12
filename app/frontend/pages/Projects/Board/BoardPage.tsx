@@ -428,7 +428,10 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
 // initiated from a collapsed source column (board requirement 3). It renders no task
 // title text — only a small status bar — so a collapsed column stays lightweight and does
 // not reveal card content while folded; the title and run status live in the tooltip.
-function CollapsedTaskChip({ task }: { task: Task }) {
+// Clicking a chip opens the task detail sidebar, the same as clicking a full card in an
+// expanded column. The pointer sensor only starts a drag past an 8px threshold, so a plain
+// click still reaches onClick and dragging the chip out of the column is unaffected.
+function CollapsedTaskChip({ task, onClick }: { task: Task; onClick?: (t: Task) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `task-${task.id}`,
     data: { type: 'task', task },
@@ -447,6 +450,7 @@ function CollapsedTaskChip({ task }: { task: Task }) {
       <Box
         ref={setNodeRef}
         aria-label={`Drag ${task.title}`}
+        onClick={() => onClick?.(task)}
         style={{
           ...style,
           width: 30,
@@ -887,7 +891,9 @@ function BoardColumn({
         )}
 
         {/* Draggable ticket chips — keep the tickets reachable so they can be dragged out of a
-            collapsed source column (board requirement 3). No title text is rendered here. */}
+            collapsed source column (board requirement 3). No title text is rendered here.
+            A chip click opens the task detail sidebar; stopPropagation keeps it from also
+            hitting the column's expand toggle. */}
         {tasks.length > 0 && (
           <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
             <Box
@@ -903,7 +909,7 @@ function BoardColumn({
               }}
             >
               {tasks.map((task) => (
-                <CollapsedTaskChip key={task.id} task={task} />
+                <CollapsedTaskChip key={task.id} task={task} onClick={onTaskClick} />
               ))}
             </Box>
           </SortableContext>
