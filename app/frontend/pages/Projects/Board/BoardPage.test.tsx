@@ -636,8 +636,10 @@ describe('Projects/Board/BoardPage', () => {
       { task: 1 },
       expect.objectContaining({ preserveState: true }),
     );
-    // The chip click must not bubble to the column strip and unfold the column.
-    expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument();
+    // The chip click must not bubble to the column strip and unfold the column. Asserted via the
+    // absence of the full card (each card is a link to its task) — the title string itself is not
+    // usable here because clicking also hovers the chip, which renders the title in its tooltip.
+    expect(screen.queryByRole('link', { name: /Wire up authentication/ })).not.toBeInTheDocument();
   });
 
   // --- board tooltips + status indicators ---
