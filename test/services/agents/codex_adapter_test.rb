@@ -202,8 +202,9 @@ module Agents
       # The endpoint hides models whose minimal_client_version is above the version
       # we claim — the gpt-5.6 family requires 0.144.0, which is why an older
       # client_version left those models out of the model picker entirely.
-      assert Gem::Version.new(Agents::CodexAdapter::CODEX_CLIENT_VERSION) >= Gem::Version.new("0.144.0"),
-             "CODEX_CLIENT_VERSION must be at least the gpt-5.6 minimal client version"
+      assert_operator Gem::Version.new(Agents::CodexAdapter::CODEX_CLIENT_VERSION),
+                      :>=, Gem::Version.new("0.144.0"),
+                      "CODEX_CLIENT_VERSION must be at least the gpt-5.6 minimal client version"
 
       request = stub_codex_models([
         { "slug" => "gpt-5.6-sol", "display_name" => "GPT-5.6-Sol", "description" => "Fast", "visibility" => "list" },
