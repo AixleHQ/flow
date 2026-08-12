@@ -620,6 +620,28 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByLabelText('Drag Wire up authentication')).toBeInTheDocument();
   });
 
+  it('opens the task detail sidebar when a ticket chip in a collapsed column is clicked', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // Collapse the Backlog column so its ticket renders as a compact chip.
+    const toggles = screen.getAllByRole('button', { name: 'Collapse column' });
+    await userEvent.click(toggles[0]);
+    await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
+
+    await userEvent.click(screen.getByLabelText('Drag Wire up authentication'));
+
+    // Same navigation a full card click performs — the task detail sidebar opens for that ticket.
+    expect(router.get).toHaveBeenCalledWith(
+      '/company/projects/7/board',
+      { task: 1 },
+      expect.objectContaining({ preserveState: true }),
+    );
+    // The chip click must not bubble to the column strip and unfold the column. Asserted via the
+    // absence of the full card (each card is a link to its task) — the title string itself is not
+    // usable here because clicking also hovers the chip, which renders the title in its tooltip.
+    expect(screen.queryByRole('link', { name: /Wire up authentication/ })).not.toBeInTheDocument();
+  });
+
   // --- board tooltips + status indicators ---
   //
   // These were dropped as a side effect of the "Task Board UX Redesign" refactor, not deliberately
