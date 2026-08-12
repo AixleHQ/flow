@@ -18,6 +18,7 @@ class WorkflowRun < ApplicationRecord
   validates :mode, presence: true
 
   broadcasts_to ->(run) { run }, on: :update
+  after_commit :broadcast_run_list_update, on: :update
 
   scope :active, -> { where(state: %w[pending running paused]) }
   scope :for_project_in_period, ->(project, since) { where(project: project, created_at: since..) }
@@ -54,5 +55,27 @@ class WorkflowRun < ApplicationRecord
 
   def mark_quota_failed!(credential_id:)
     update!(failure_reason: "quota_exceeded", failed_agent_credential_id: credential_id)
+  end
+
+  private
+
+  def broadcast_run_list_update
+    return unless project_id.present?
+
+    ActionCable.server.broadcast("workflow_run_list:project:#{project_id}", {
+      type: "run_update",
+      run: {
+        id: id,
+        workflowId: workflow_id,
+        workflowName: workflow&.name,
+        state: state,
+        mode: mode.to_s,
+        stepsCompleted: step_runs.where(state: :completed).count,
+        stepsTotal: step_runs_count,
+        startedAt: started_at&.iso8601,
+        completedAt: completed_at&.iso8601,
+        createdAt: created_at.iso8601
+      }
+    })
   end
 end
