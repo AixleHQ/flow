@@ -16,6 +16,10 @@ module Tools
 
     # Returns a Rack response triple.
     #
+    # The offered protocol version is capped before the transport sees it — see
+    # MCPProtocol — so the handshake can only agree to a version whose result
+    # shapes this server actually produces.
+    #
     # `dns_rebinding_protection: false`: the SDK's own default only accepts a
     # loopback `Host`, which 403s every request to a deployed host. The
     # protection it provides is aimed at localhost servers a browser can reach
@@ -23,6 +27,8 @@ module Tools
     # a header, never a cookie, so a rebound browser request arrives without a
     # credential and is answered with 401.
     def call(request)
+      MCPProtocol.clamp_initialize_offer!(request)
+
       transport = MCP::Server::Transports::StreamableHTTPTransport.new(
         server, stateless: true, dns_rebinding_protection: false
       )

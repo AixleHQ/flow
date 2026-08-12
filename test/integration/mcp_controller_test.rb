@@ -14,12 +14,13 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     @session = create(:terminal_session, :agent_session, :started, user: @user, project: @project)
   end
 
-  def rpc(method, params = {}, key: @session.mcp_key, path: "/action_mcp")
+  def rpc(method, params = {}, key: @session.mcp_key, path: "/action_mcp", protocol_version: nil)
     post path,
          params: { jsonrpc: "2.0", id: 1, method: method, params: params }.to_json,
          headers: { "Content-Type" => "application/json",
                     "Accept" => "application/json, text/event-stream",
-                    "X-Session-Key" => key }.compact
+                    "X-Session-Key" => key,
+                    "MCP-Protocol-Version" => protocol_version }.compact
     response.parsed_body
   end
 
@@ -55,6 +56,22 @@ class McpControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_equal "aixle-tools", body.dig("result", "serverInfo", "name")
+    assert_equal "2025-06-18", body.dig("result", "protocolVersion")
+  end
+
+  test "initialize never agrees to a version whose result shapes the server does not serve" do
+    attach_platform_tool("board_list_tasks")
+
+    negotiated = rpc("initialize", { protocolVersion: "2026-07-28", capabilities: {},
+                                     clientInfo: { name: "claude-code", version: "1" } })
+                 .dig("result", "protocolVersion")
+
+    assert_equal Tools::MCPProtocol::MAX_NEGOTIABLE_VERSION, negotiated
+
+    tools = listed_tools(rpc("tools/list", {}, protocol_version: negotiated))
+
+    assert_response :success
+    assert_includes tools.map { |t| t["name"] }, "board_list_tasks"
   end
 
   # ── tools/list ──

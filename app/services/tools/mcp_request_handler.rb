@@ -24,11 +24,17 @@ module Tools
 
     # Returns a Rack response triple.
     #
+    # The offered protocol version is capped before the transport sees it — see
+    # MCPProtocol — so the handshake can only agree to a version whose result
+    # shapes this server actually produces.
+    #
     # `dns_rebinding_protection: false`: see PersonalMCPRequestHandler#call —
     # the SDK default accepts only a loopback `Host` and 403s every deployed
     # request, and this endpoint is header-token authenticated, so the browser
     # rebinding it defends against cannot present a credential.
     def call(request)
+      MCPProtocol.clamp_initialize_offer!(request)
+
       if (response = unavailable_tool_shim(request))
         return response
       end
