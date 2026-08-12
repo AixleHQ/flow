@@ -1,9 +1,10 @@
-import { Head, InfiniteScroll, router, usePage, usePoll } from '@inertiajs/react';
+import { Head, InfiniteScroll, router, usePage } from '@inertiajs/react';
 import { Box, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
 import { IconExternalLink } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useWorkflowRunListCableUpdates } from 'shared/lib/hooks/useWorkflowRunListCableUpdates';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
@@ -84,8 +85,34 @@ const WorkflowRunsPage = ({ runs, filters, perPage }: Props) => {
     project: { id: number; name: string };
   };
 
-  const hasActive = useMemo(() => runs.some((r) => ACTIVE_STATES.has(r.state)), [runs]);
-  usePoll(10_000, { only: ['runs'] }, { autoStart: hasActive });
+  const [runMap, setRunMap] = useState<Map<number, WorkflowRun>>(() => {
+    const m = new Map<number, WorkflowRun>();
+    runs.forEach((r) => m.set(r.id, r));
+    return m;
+  });
+
+  // Accumulate pages loaded by InfiniteScroll into the local map.
+  useEffect(() => {
+    setRunMap((prev) => {
+      const next = new Map(prev);
+      runs.forEach((r) => next.set(r.id, r));
+      return next;
+    });
+  }, [runs]);
+
+  // Live cable updates: update existing runs in-place without reloading pages.
+  const onUpdate = useCallback((run: Record<string, unknown>) => {
+    setRunMap((prev) => {
+      const id = run.id as number;
+      if (!prev.has(id)) return prev;
+      return new Map(prev).set(id, { ...prev.get(id)!, ...(run as unknown as WorkflowRun) });
+    });
+  }, []);
+
+  useWorkflowRunListCableUpdates({ projectId: project.id, onUpdate });
+
+  // Preserve insertion order: runMap is keyed by id in the order pages arrived.
+  const orderedRuns = useMemo(() => Array.from(runMap.values()), [runMap]);
 
   const runsUrl = `/company/projects/${project.id}/workflow_runs`;
 
@@ -177,7 +204,7 @@ const WorkflowRunsPage = ({ runs, filters, perPage }: Props) => {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {runs.map((run) => (
+                {orderedRuns.map((run) => (
                   <RunRow key={run.id} run={run} projectId={project.id} />
                 ))}
               </Table.Tbody>

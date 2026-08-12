@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
@@ -236,5 +236,25 @@ describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
     for (const label of ['Running', 'Completed', 'Failed', 'Cancelled', 'Pending']) {
       expect(await screen.findByRole('option', { name: label })).toBeInTheDocument();
     }
+  });
+
+  it('renders rows from accumulated runMap, not directly from runs prop (infinite scroll accumulation)', () => {
+    // This test verifies the runMap accumulation pattern: if runs prop changes (page 2 appended),
+    // previously seen runs are still rendered alongside the new ones.
+    const run1 = makeRun({ id: 300, workflowName: 'First Workflow' });
+    const run2 = makeRun({ id: 301, workflowName: 'Second Workflow' });
+
+    const { rerender } = renderAuthedPage(<WorkflowRunsPage runs={[run1]} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    expect(screen.getByText('First Workflow')).toBeInTheDocument();
+    expect(screen.queryByText('Second Workflow')).not.toBeInTheDocument();
+
+    // Simulate InfiniteScroll appending page 2: runs prop now contains both pages.
+    rerender(<WorkflowRunsPage runs={[run1, run2]} filters={{}} perPage={20} />);
+
+    expect(screen.getByText('First Workflow')).toBeInTheDocument();
+    expect(screen.getByText('Second Workflow')).toBeInTheDocument();
   });
 });
