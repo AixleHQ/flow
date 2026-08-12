@@ -125,6 +125,7 @@ class SessionService
       config = SessionConfigResolver.resolve(session)
       session.update!(agent_type: config[:agent_runtime], mode: config[:mode])
       attach_resolved_resources(session, config)
+      refresh_oauth_tokens_for_session(session)
       session.start! if session.may_start?
       start_temporal_workflow(session)
 
@@ -157,6 +158,21 @@ class SessionService
       servers = MCPServer.where(id: mcp_server_ids, enabled: true)
       missing = Oauth::Preflight.missing_connections(servers, user: user)
       raise Oauth::PreflightError, missing if missing.any?
+
+      # Proactively refresh tokens expiring within 1 hour so inject_oauth_token!
+      # (one-shot at provisioning) gets a token valid for the session's lifetime.
+      servers.each do |server|
+        next unless server.auth_type_oauth?
+
+        owner = server.credential_scope_per_user? ? user : server.scope
+        next if owner.nil?
+
+        cred = OauthCredential.for_mcp_server(server).for_owner(owner)
+                              .where.not(status: :revoked).order(updated_at: :desc).first
+        next if cred.nil?
+
+        Oauth::TokenService.refresh_if_expiring_soon(cred)
+      end
     end
 
     # Raises CloudAuth::PreflightError when the cloud connection this session would use
@@ -232,6 +248,21 @@ class SessionService
       TemporalService.cancel_workflow(session.workflow_id)
     rescue StandardError => e
       Rails.logger.error("[SessionService] Failed to cancel workflow for session #{session.id}: #{e.message}")
+    end
+
+    def refresh_oauth_tokens_for_session(session)
+      session.mcp_servers.each do |server|
+        next unless server.auth_type_oauth?
+
+        owner = server.credential_scope_per_user? ? session.user : server.scope
+        next if owner.nil?
+
+        cred = OauthCredential.for_mcp_server(server).for_owner(owner)
+                              .where.not(status: :revoked).order(updated_at: :desc).first
+        next if cred.nil?
+
+        Oauth::TokenService.refresh_if_expiring_soon(cred)
+      end
     end
 
     def attach_resolved_resources(session, config)

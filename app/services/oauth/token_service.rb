@@ -62,6 +62,21 @@ module Oauth
       :error
     end
 
+    # Pre-session token refresh: ensure the credential will not expire within `skew`.
+    # Called before session start so the one-shot MCP token injection gets a fresh token
+    # with a full TTL. Silently skips non-refreshable credentials (they are caught by the
+    # usability preflight earlier).
+    def refresh_if_expiring_soon(cred, skew: 1.hour)
+      return unless cred.expired?(skew)
+      return unless cred.refreshable?
+
+      fresh(cred)
+    rescue ReauthRequired
+      # Already caught by preflight — do not re-raise here, session start will
+      # surface it through the normal token injection path.
+      nil
+    end
+
     # Ensure `cred` yields a fresh token; refresh under lock if near expiry.
     def fresh(cred)
       return cred.access_token unless cred.expired?(REFRESH_SKEW)

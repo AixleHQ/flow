@@ -430,4 +430,41 @@ class SessionServiceTest < ActiveSupport::TestCase
     # so a step asset reaching session.input_assets is the contract that it reaches /workspace/assets/.
     assert_includes session.input_assets, asset
   end
+
+  # == preflight_oauth! with near-expiry token refresh ==
+
+  test "preflight_oauth! calls refresh_if_expiring_soon for a token expiring within 1 hour" do
+    server = create(:mcp_server, :custom, scope: @project, transport: :sse,
+                    auth_type: :oauth, credential_scope: :per_user)
+    client = OauthClient.create!(
+      issuer: "https://provider.test", authorization_endpoint: "https://provider.test/a",
+      token_endpoint: "https://provider.test/t", client_id: "c1", source: "static"
+    )
+    cred = OauthCredential.create!(owner: @user, oauth_client: client, mcp_server: server,
+                                   provider: "mcp:x", status: :active,
+                                   access_token: "tok", expires_at: 30.minutes.from_now,
+                                   refresh_token: "rt-abc")
+
+    Oauth::TokenService.expects(:refresh_if_expiring_soon).with(cred).once
+
+    SessionService.send(:preflight_oauth!, @user, [ server.id ])
+  end
+
+  test "preflight_oauth! does not refresh a token with more than 1 hour remaining" do
+    server = create(:mcp_server, :custom, scope: @project, transport: :sse,
+                    auth_type: :oauth, credential_scope: :per_user)
+    client = OauthClient.create!(
+      issuer: "https://provider.test2", authorization_endpoint: "https://provider.test2/a",
+      token_endpoint: "https://provider.test2/t", client_id: "c2", source: "static"
+    )
+    cred = OauthCredential.create!(owner: @user, oauth_client: client, mcp_server: server,
+                                   provider: "mcp:y", status: :active,
+                                   access_token: "tok2", expires_at: 2.hours.from_now,
+                                   refresh_token: "rt-xyz")
+
+    # Token has > 1h remaining — refresh_if_expiring_soon must not call fresh (no HTTP).
+    Oauth::TokenService.expects(:fresh).never
+
+    SessionService.send(:preflight_oauth!, @user, [ server.id ])
+  end
 end
