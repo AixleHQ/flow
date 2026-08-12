@@ -31,6 +31,16 @@ class InternalTools::FailSessionTest < ActiveSupport::TestCase
     assert_equal "Missing repository", @step_run.reload.error_message
   end
 
+  test "transitions session to failed state (not finished)" do
+    result = InternalTools::FailSession.new(
+      params: { reason: "Out of tokens" },
+      session: @session
+    ).execute
+
+    assert_equal 0, result[:exit_code]
+    assert_equal "failed", @session.reload.state
+  end
+
   test "uses default reason when none provided" do
     result = InternalTools::FailSession.new(
       params: {},
