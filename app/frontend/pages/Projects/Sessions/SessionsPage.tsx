@@ -361,7 +361,7 @@ function SessionRow({ session: s, projectId }: { session: Session; projectId: nu
       </Table.Td>
       <Table.Td>
         <Group gap={4}>
-          <StatusBadge state={s.state} size="sm">
+          <StatusBadge state={s.state} tone={s.state === 'ready' ? 'running' : undefined} size="sm">
             {stateConfig.label}
           </StatusBadge>
           {s.state === 'finished' && !s.artifactsReviewed && s.pendingArtifactsCount > 0 && (
