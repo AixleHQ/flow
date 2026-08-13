@@ -544,6 +544,61 @@ describe('Projects/Board/BoardPage', () => {
     expect(details.queryByText(/1m 30s ·/)).not.toBeInTheDocument();
   });
 
+  // --- run surfaces follow the runs, not the column binding (task #541, reporter feedback) ---
+
+  // Same drawer, but the task sits in a plain column with no workflowBinding — where a finished
+  // workflow leaves it once it has moved the task on.
+  const drawerWithRunsInManualColumn = (runs: ReturnType<typeof buildTaskWorkflowRun>[]) => ({
+    ...populatedProps,
+    columns,
+    selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+    taskComments: [],
+    taskAssets: [],
+    taskActivities: [],
+    taskWorkflowRuns: runs,
+  });
+
+  it('keeps the run surfaces for a task whose column has no workflow binding', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRunsInManualColumn([buildTaskWorkflowRun({ steps: [stepOf({ terminalSessionId: 91 })] })]),
+    });
+
+    // The Latest run tile — and its session shortcut — are on the Details tab, binding or not.
+    const details = within(screen.getByRole('tabpanel'));
+    expect(details.getByText(/latest run/i)).toBeInTheDocument();
+    await userEvent.click(details.getByRole('button', { name: 'Open session #91' }));
+    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/91');
+
+    // …and the Runs tab still lists the history.
+    await userEvent.click(screen.getByRole('tab', { name: 'Runs (1)' }));
+    const runsPanel = within(screen.getByRole('tabpanel'));
+    expect(runsPanel.getByRole('link', { name: /Implement Feature/ })).toBeInTheDocument();
+    expect(runsPanel.getByRole('button', { name: 'Open session #91' })).toBeInTheDocument();
+  });
+
+  it('hides Retry run without a bound workflow to retry', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRunsInManualColumn([
+        buildTaskWorkflowRun({ state: 'failed', steps: [stepOf({ terminalSessionId: 91 })] }),
+      ]),
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: /Runs/ }));
+    const runsPanel = within(screen.getByRole('tabpanel'));
+    // The run is there to open, but there is no column workflow for Retry to fire.
+    expect(runsPanel.getByRole('button', { name: 'Open session #91' })).toBeInTheDocument();
+    expect(runsPanel.queryByRole('button', { name: /Retry run/ })).not.toBeInTheDocument();
+  });
+
+  it('offers Retry run on a failed run while the task sits in an automated column', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRuns([buildTaskWorkflowRun({ state: 'failed', steps: [stepOf({ terminalSessionId: 91 })] })]),
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: /Runs/ }));
+    expect(within(screen.getByRole('tabpanel')).getByRole('button', { name: /Retry run/ })).toBeInTheDocument();
+  });
+
   it('shows the comments empty state and disables Send until text is entered', async () => {
     renderAuthedPage(<BoardPage />, {
       props: {
@@ -1517,7 +1572,7 @@ describe('Projects/Board/BoardPage', () => {
     expect(within(drawer).getByText(/GA4 Report/)).toBeInTheDocument();
   });
 
-  it('hides the Runs tab for tasks in manual columns (no workflowBinding)', () => {
+  it('hides the Runs tab for tasks in manual columns that have never run', () => {
     renderAuthedPage(<BoardPage />, {
       props: {
         ...populatedProps,

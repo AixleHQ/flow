@@ -1801,6 +1801,12 @@ function TaskDetailSidebar({
   const columnWorkflowBinding = taskColumn?.workflowBinding ?? null;
   const hasActiveRun = (task.recentWorkflowRuns ?? []).some((r) => WORKFLOW_ACTIVE_STATES.has(r.state));
   const canTriggerWorkflow = columnWorkflowBinding && !hasActiveRun;
+  // A task keeps its run history wherever it is parked — a workflow that finishes usually moves the
+  // task out of the bound column, and gating the run surfaces on the binding hid the history (and
+  // the session shortcut) exactly then. The runs themselves decide; the binding only decides whether
+  // a *new* run can be started from here (canTriggerWorkflow).
+  const hasRuns = (workflowRuns ?? []).length > 0;
+  const showRuns = !!columnWorkflowBinding || hasRuns;
   const assetsCount = (taskAssets ?? []).length || task.assetsCount || 0;
 
   return (
@@ -1894,7 +1900,7 @@ function TaskDetailSidebar({
       >
         <Tabs.List>
           <Tabs.Tab value="details">Details</Tabs.Tab>
-          {columnWorkflowBinding && <Tabs.Tab value="runs">Runs ({(workflowRuns ?? []).length})</Tabs.Tab>}
+          {showRuns && <Tabs.Tab value="runs">Runs ({(workflowRuns ?? []).length})</Tabs.Tab>}
           <Tabs.Tab value="comments">
             Comments ({(comments ?? []).length > 0 ? (comments ?? []).length : task.commentsCount})
           </Tabs.Tab>
@@ -2049,9 +2055,8 @@ function TaskDetailSidebar({
             )}
           </Box>
 
-          {/* Latest run summary (AC-19) — only for automated columns */}
-          {columnWorkflowBinding &&
-            (workflowRuns ?? []).length > 0 &&
+          {/* Latest run summary (AC-19) — whenever the task has runs, bound column or not */}
+          {hasRuns &&
             (() => {
               const latestRun = (workflowRuns ?? [])[0];
               const dur = latestRun.durationSeconds;
@@ -2402,8 +2407,8 @@ function TaskDetailSidebar({
           )}
         </Tabs.Panel>
 
-        {/* Runs tab — hidden for manual tasks (AC-22) */}
-        {columnWorkflowBinding && (
+        {/* Runs tab — hidden only for manual tasks that never ran (AC-22) */}
+        {showRuns && (
           <Tabs.Panel value="runs" p="md" style={{ flex: 1, overflow: 'auto' }}>
             <Stack gap="md">
               {(workflowRuns ?? []).length === 0 ? (
@@ -2518,8 +2523,9 @@ function TaskDetailSidebar({
                           </Box>
                         )}
 
-                        {/* Retry in Runs tab for failed run (AC-56) */}
-                        {run.state === 'failed' && canExecute && (
+                        {/* Retry in Runs tab for failed run (AC-56) — retry runs the column's bound
+                            workflow, so it stays hidden when the task's column has none */}
+                        {run.state === 'failed' && canExecute && columnWorkflowBinding && (
                           <Box mt="xs">
                             <Button
                               size="compact-xs"
