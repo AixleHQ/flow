@@ -53,6 +53,12 @@ workflows:
       - name: workflow_scan_quota_errors_activity
         task_queue: aixle_ruby
 
+  - name: no_output_scan_workflow
+    owner: aixle_ruby
+    activities:
+      - name: workflow_scan_no_output_sessions_activity
+        task_queue: aixle_ruby
+
   - name: coder_sweep_expired_locks_workflow
     owner: aixle_ruby
     activities:

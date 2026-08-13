@@ -22,6 +22,16 @@ schedules:
     cron: "* * * * *"
     enabled: true
 
+  # Terminates sessions that have been `ready` (agent working) but produced no
+  # terminal output for 30 minutes. Catches agents blocked on an interactive
+  # prompt (e.g. claude.ai spend-limit dialog) that the quota scanner misses
+  # because the blocking prompt may appear before any quota-error text.
+  # SKIP overlap: same sessions could be processed by two concurrent sweeps.
+  - workflow: no_output_scan_workflow
+    cron: "* * * * *"
+    overlap: skip
+    enabled: true
+
   # Watchdog for agent containers that died without telling anyone (node failure,
   # eviction, OOM kill). The pods are bare pods with restartPolicy: Never, so
   # nothing else notices: the session stays `ready` and its container workflow
