@@ -74,6 +74,11 @@ const getInitials = (name: string): string => {
   return ((parts[0][0] ?? 'U') + (parts[parts.length - 1][0] ?? 'U')).toUpperCase();
 };
 
+// True for the clicks the browser handles itself on a link — Cmd/Ctrl+click (new tab),
+// Shift+click (new window), Alt+click (download) and anything but the primary button.
+const isModifiedClick = (event: React.MouseEvent): boolean =>
+  event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0;
+
 const handleLogout = () => router.delete('/logout');
 
 // ─── Nav item definition ──────────────────────────────────────────────────────
@@ -401,9 +406,13 @@ function SidebarWorkspaceSwitcher({
     setPopoverOpen((v) => !v);
   };
 
-  const handleProjectClick = (projectId: string) => {
+  // Project rows are real links, so the browser owns modifier-click (Cmd/Ctrl+click opens a
+  // new tab) and the right-click "Open in new tab/window" menu; Inertia's Link leaves both
+  // alone and only intercepts a plain left click for the same-tab visit. A modifier-click
+  // leaves this tab where it is, so the popover stays open — only a plain click closes it.
+  const handleProjectClick = (event: React.MouseEvent) => {
+    if (isModifiedClick(event)) return;
     setPopoverOpen(false);
-    router.visit(companyProjectPath(projectId));
   };
 
   const handleAllProjectsClick = () => {
@@ -481,8 +490,11 @@ function SidebarWorkspaceSwitcher({
               return (
                 <UnstyledButton
                   key={project.id}
+                  component={Link}
+                  href={companyProjectPath(String(project.id))}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`${classes.dpItem} ${isActive ? classes.dpItemActive : ''}`}
-                  onClick={() => handleProjectClick(String(project.id))}
+                  onClick={handleProjectClick}
                 >
                   <div className={classes.dpIco}>
                     <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
