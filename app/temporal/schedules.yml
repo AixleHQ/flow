@@ -45,6 +45,24 @@ schedules:
     cron: "0 * * * *"
     enabled: true
 
+  # Deletes pool workspaces whose Coder agent is gone for good. The pool runs on
+  # spot: when an instance is reclaimed the agent dies with the OS, Coder keeps
+  # reporting the last build as a succeeded start, and nothing ever brought the
+  # workspace back — so the effective pool decayed with the interruption rate.
+  #
+  # Every 10 minutes against a 10-minute confirmation window: a workspace is
+  # deleted on the second sighting, so ~20 minutes after it died. Nothing is
+  # deleted on a single sighting, and a box that answers an SSH probe is never
+  # deleted at all, so the cadence sets detection latency, not sensitivity.
+  #
+  # SKIP overlap: a slow sweep (each confirmation costs one SSH probe that has
+  # to time out) must not be joined by the next one confirming a workspace dead
+  # against its own first sighting.
+  - workflow: coder_reap_dead_workspaces_workflow
+    cron: "*/10 * * * *"
+    overlap: skip
+    enabled: true
+
   # Reclaims the Kubernetes objects of agent sessions that ended without the
   # happy-path teardown running — the node-died case, which otherwise leaves an
   # IngressRoute and an endpoint-less Service answering 503 on the session URL

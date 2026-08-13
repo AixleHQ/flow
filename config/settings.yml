@@ -186,6 +186,16 @@ coder:
   # Log tail returned by `coder_job_status` when the caller does not ask for a
   # specific size.
   job_status_tail_lines:     <%= (ENV['CODER_JOB_STATUS_TAIL_LINES'] || 40).to_i %>
+  # Dead-workspace reaper (`Coder::DeadWorkspaceReaper`). Deletes a workspace
+  # only on positive evidence that its agent is gone AND an SSH probe that fails
+  # to reach it, seen twice `reap_confirmation_minutes` apart, with no live lock
+  # on it. Deletion is irreversible, so `reap_max_deletions_per_run` caps how
+  # much one sweep can remove even if the whole pool looks dead. Reaping also
+  # requires `health_probe_enabled` — without the active probe there is no way
+  # to tell a dead box from an unresponsive one.
+  reap_enabled:              <%= ENV.fetch('CODER_REAP_ENABLED', 'true') == 'true' %>
+  reap_confirmation_minutes: <%= (ENV['CODER_REAP_CONFIRMATION_MINUTES'] || 10).to_i %>
+  reap_max_deletions_per_run: <%= (ENV['CODER_REAP_MAX_DELETIONS_PER_RUN'] || 3).to_i %>
 
 url_safety:
   # Public hostnames that may resolve to a private IP via split-horizon DNS

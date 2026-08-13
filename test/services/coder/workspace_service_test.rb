@@ -46,6 +46,29 @@ module Coder
       assert_equal "build-1", build["id"]
     end
 
+    # Coder models destruction as a build transition, not an HTTP DELETE.
+    test "delete posts a delete-transition build" do
+      request = stub_request(:post, "#{@base}/api/v2/workspaces/u1/builds")
+                  .with(body: { transition: "delete" }.to_json)
+                  .to_return(
+                    status: 201,
+                    body: { id: "build-del", transition: "delete", job: { status: "pending" } }.to_json,
+                    headers: { "Content-Type" => "application/json" }
+                  )
+
+      build = @service.delete("u1")
+
+      assert_equal "build-del", build["id"]
+      assert_requested request
+    end
+
+    test "delete raises OperationError when the build is refused" do
+      stub_request(:post, "#{@base}/api/v2/workspaces/u1/builds").to_return(status: 409)
+
+      err = assert_raises(Coder::WorkspaceService::OperationError) { @service.delete("u1") }
+      assert_match(/build \(delete\) failed/, err.message)
+    end
+
     test "await_build returns when the job succeeds" do
       stub_get("/api/v2/workspacebuilds/build-1", { id: "build-1", job: { status: "succeeded" } })
       build = @service.await_build("build-1", timeout: 1, interval: 0)
