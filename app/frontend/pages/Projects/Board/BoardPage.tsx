@@ -141,11 +141,11 @@ import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
-import styles from './BoardPage.module.css';
 import { formatCostCents, formatDuration, formatTokens } from './boardFormat';
+import styles from './BoardPage.module.css';
 import { LatestRunTile } from './LatestRunTile';
-import { TaskRunsPanel } from './TaskRunsPanel';
 import { WORKFLOW_ACTIVE_STATES, type TaskWorkflowRun } from './taskRuns';
+import { TaskRunsPanel } from './TaskRunsPanel';
 import { useBoardDnd } from './useBoardDnd';
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
