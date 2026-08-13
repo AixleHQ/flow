@@ -16,6 +16,11 @@ module Tools
 
     # Returns a Rack response triple.
     #
+    # The server is configured with the newest protocol version it can serve
+    # and the offered version is capped before the transport sees it — see
+    # MCPProtocol — so the handshake can only agree to a version whose result
+    # shapes this server actually produces.
+    #
     # `dns_rebinding_protection: false`: the SDK's own default only accepts a
     # loopback `Host`, which 403s every request to a deployed host. The
     # protection it provides is aimed at localhost servers a browser can reach
@@ -23,6 +28,8 @@ module Tools
     # a header, never a cookie, so a rebound browser request arrives without a
     # credential and is answered with 401.
     def call(request)
+      MCPProtocol.clamp_initialize_offer!(request)
+
       transport = MCP::Server::Transports::StreamableHTTPTransport.new(
         server, stateless: true, dns_rebinding_protection: false
       )
@@ -36,6 +43,7 @@ module Tools
     def server
       MCP::Server.new(
         name: "aixle",
+        configuration: MCPProtocol.configuration,
         instructions: PersonalMCPGuides::INSTRUCTIONS,
         tools: Registry.for_audience(:user).sort_by(&:name).map { |defn| define_tool(defn) },
         prompts: PROMPTS.map { |spec| define_prompt(spec) },

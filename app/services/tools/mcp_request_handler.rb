@@ -24,11 +24,18 @@ module Tools
 
     # Returns a Rack response triple.
     #
+    # The server is configured with the newest protocol version it can serve
+    # and the offered version is capped before the transport sees it — see
+    # MCPProtocol — so the handshake can only agree to a version whose result
+    # shapes this server actually produces.
+    #
     # `dns_rebinding_protection: false`: see PersonalMCPRequestHandler#call —
     # the SDK default accepts only a loopback `Host` and 403s every deployed
     # request, and this endpoint is header-token authenticated, so the browser
     # rebinding it defends against cannot present a credential.
     def call(request)
+      MCPProtocol.clamp_initialize_offer!(request)
+
       if (response = unavailable_tool_shim(request))
         return response
       end
@@ -46,6 +53,7 @@ module Tools
     def server
       @server ||= MCP::Server.new(
         name: "aixle-tools",
+        configuration: MCPProtocol.configuration,
         tools: tool_classes,
         server_context: { session: session }
       )
