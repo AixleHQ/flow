@@ -32,6 +32,10 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
 
   def tool_error?(body) = body.dig("result", "isError")
 
+  def listed_titles(**args)
+    payload(call_tool("list_board_tasks", { project_id: @project.id, **args }))["tasks"].map { |t| t["title"] }
+  end
+
   # A task on a board in a company @user has nothing to do with.
   def foreign_task
     owner = create(:user, :with_company)
@@ -52,6 +56,16 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
 
     filtered = payload(call_tool("list_board_tasks", { project_id: @project.id, column_id: @done.id }))["tasks"]
     assert_empty filtered
+  end
+
+  test "list_board_tasks filters by archive state and lists both when the filter is omitted" do
+    archived = create(:board_task, board: @board, board_column: @todo,
+                      title: "Archived task", archived_at: Time.current)
+
+    assert_equal [ "First task" ], listed_titles(archived: false)
+    assert_equal [ archived.title ], listed_titles(archived: true)
+    # An existing call carries no filter and keeps seeing everything.
+    assert_equal [ "First task", archived.title ].sort, listed_titles.sort
   end
 
   test "get_board_task returns full detail with snake_case keys" do

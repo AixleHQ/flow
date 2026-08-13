@@ -4,13 +4,16 @@ module PersonalTools
   class ListBoardTasks < Base
     tool do
       display_name "List Board Tasks"
-      description "List tasks on a project's board, optionally filtered by column or tag."
+      description "List tasks on a project's board, optionally filtered by column, tag or archive state."
       audience :user
       tags :board
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
       param :column_id, type: :integer, description: "Filter to a board column id."
       param :tag, type: :string, description: "Filter by tag."
+      param :archived, type: :boolean,
+            description: "Filter by archive state: false returns only active tasks, " \
+                         "true only archived ones. Omit to return both."
     end
 
     LIMIT = 100
@@ -24,6 +27,7 @@ module PersonalTools
       tasks = board.board_tasks.includes(:board_column, :assignee)
       tasks = tasks.where(board_column_id: params[:column_id]) if params[:column_id].present?
       tasks = tasks.with_tag(params[:tag]) if params[:tag].present?
+      tasks = filter_by_archived(tasks)
 
       rows = tasks.limit(LIMIT).map do |t|
         { id: t.id, title: t.title, task_type: t.task_type, priority: t.priority,
@@ -33,6 +37,17 @@ module PersonalTools
       payload = { project_id: project.id, tasks: rows }
       payload[:truncated] = true if tasks.count > LIMIT
       success(payload)
+    end
+
+    private
+
+    # Omitting the param lists both states, which is what callers written
+    # before this filter existed already get. Only an explicit value narrows
+    # the list — `false` to the active tasks, `true` to the archived ones.
+    def filter_by_archived(scope)
+      return scope if params[:archived].nil?
+
+      ActiveModel::Type::Boolean.new.cast(params[:archived]) ? scope.archived : scope.active
     end
   end
 end
