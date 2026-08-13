@@ -172,6 +172,8 @@ class SessionService
         next if cred.nil?
 
         Oauth::TokenService.refresh_if_expiring_soon(cred)
+        cred.reload
+        raise Oauth::PreflightError, [ { mcp_server_id: server.id, reason: :credential_error } ] if cred.error?
       end
     end
 
@@ -261,7 +263,11 @@ class SessionService
                               .where.not(status: :revoked).order(updated_at: :desc).first
         next if cred.nil?
 
+        raise Oauth::PreflightError, [ { mcp_server_id: server.id, reason: :credential_error } ] if cred.error?
+
         Oauth::TokenService.refresh_if_expiring_soon(cred)
+        cred.reload
+        raise Oauth::PreflightError, [ { mcp_server_id: server.id, reason: :credential_error } ] if cred.error?
       end
     end
 

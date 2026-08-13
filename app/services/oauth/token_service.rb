@@ -66,6 +66,9 @@ module Oauth
     # Called before session start so the one-shot MCP token injection gets a fresh token
     # with a full TTL. Silently skips non-refreshable credentials (they are caught by the
     # usability preflight earlier).
+    # Concurrent calls on the same credential are safe: `fresh` acquires `with_lock`
+    # before refreshing, so a racing caller reloads and skips the HTTP call if the
+    # token was just refreshed — no stampede even with providers that rotate refresh tokens.
     def refresh_if_expiring_soon(cred, skew: 1.hour)
       return unless cred.expired?(skew)
       return unless cred.refreshable?
