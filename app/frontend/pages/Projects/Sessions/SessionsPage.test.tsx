@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -56,6 +56,12 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 }
 
 describe('Projects/Sessions/SessionsPage', () => {
+  beforeEach(() => {
+    lastCableHandlers = null;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it('shows the no-sessions empty state when the list is empty and no filters are applied', () => {
     renderAuthedPage(<SessionsPage sessions={[]} filters={{}} perPage={20} />, {
       props: { project },
@@ -450,10 +456,9 @@ describe('Projects/Sessions/SessionsPage', () => {
     const s1 = makeSession({ id: 301, state: 'finished' });
     const s2 = makeSession({ id: 302, state: 'finished' });
 
-    const { rerender } = renderAuthedPage(
-      <SessionsPage sessions={[s1, s2]} filters={{}} perPage={20} />,
-      { props: { project } },
-    );
+    const { rerender } = renderAuthedPage(<SessionsPage sessions={[s1, s2]} filters={{}} perPage={20} />, {
+      props: { project },
+    });
 
     expect(screen.getByText('#302')).toBeInTheDocument();
 
@@ -475,7 +480,9 @@ describe('Projects/Sessions/SessionsPage', () => {
       props: { project },
     });
 
-    await act(async () => { vi.advanceTimersByTime(100); });
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
 
     expect(lastCableHandlers).not.toBeNull();
 
@@ -487,7 +494,9 @@ describe('Projects/Sessions/SessionsPage', () => {
     expect(screen.getByText('#402')).toBeInTheDocument();
   });
 
-  afterEach(() => { vi.useRealTimers(); });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it('clears stale session rows when the filter prop changes', async () => {
     const sessions1 = [makeSession({ id: 201, state: 'ready' }), makeSession({ id: 202, state: 'finished' })];

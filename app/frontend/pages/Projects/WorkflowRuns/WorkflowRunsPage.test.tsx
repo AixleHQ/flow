@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type CableHandlers = {
   connected: () => void;
@@ -44,6 +44,12 @@ function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
 }
 
 describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
+  beforeEach(() => {
+    lastCableHandlers = null;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it('shows the empty state when there are no runs and no filters', () => {
     renderAuthedPage(<WorkflowRunsPage runs={[]} filters={{}} perPage={20} />, {
       props: { project },
@@ -277,10 +283,9 @@ describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
     const run1 = makeRun({ id: 400, workflowName: 'Page One Run' });
     const run2 = makeRun({ id: 401, workflowName: 'Page Two Run' });
 
-    const { rerender } = renderAuthedPage(
-      <WorkflowRunsPage runs={[run1, run2]} filters={{}} perPage={20} />,
-      { props: { project } },
-    );
+    const { rerender } = renderAuthedPage(<WorkflowRunsPage runs={[run1, run2]} filters={{}} perPage={20} />, {
+      props: { project },
+    });
 
     expect(screen.getByText('Page Two Run')).toBeInTheDocument();
 
@@ -295,10 +300,9 @@ describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
     const runs1 = [makeRun({ id: 501, state: 'running' }), makeRun({ id: 502, state: 'completed' })];
     const runs2 = [makeRun({ id: 503, state: 'failed' })];
 
-    const { rerender } = renderAuthedPage(
-      <WorkflowRunsPage runs={runs1} filters={{}} perPage={20} />,
-      { props: { project } },
-    );
+    const { rerender } = renderAuthedPage(<WorkflowRunsPage runs={runs1} filters={{}} perPage={20} />, {
+      props: { project },
+    });
 
     expect(screen.getByText('#501')).toBeInTheDocument();
     expect(screen.getByText('#502')).toBeInTheDocument();
@@ -324,7 +328,9 @@ describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
     });
 
     // Advance timers to let the cable subscription initialise (50ms debounce).
-    await act(async () => { vi.advanceTimersByTime(100); });
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
 
     expect(lastCableHandlers).not.toBeNull();
 
@@ -336,6 +342,4 @@ describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
     expect(screen.getByText('Cable Run')).toBeInTheDocument();
     expect(screen.getByText('Stable Run')).toBeInTheDocument();
   });
-
-  afterEach(() => { vi.useRealTimers(); });
 });

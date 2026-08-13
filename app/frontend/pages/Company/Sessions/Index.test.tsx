@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -54,6 +54,12 @@ function makeSession(overrides: Partial<SessionFixture> = {}): SessionFixture {
 }
 
 describe('Company/Sessions/Index', () => {
+  beforeEach(() => {
+    lastCableHandlers = null;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it('renders the page heading and subtitle when sessions exist', () => {
     renderAuthedPage(<SessionsIndex sessions={[makeSession()]} filters={{}} perPage={20} />);
 
@@ -339,9 +345,7 @@ describe('Company/Sessions/Index', () => {
     const s1 = makeSession({ id: 1201, state: 'finished' });
     const s2 = makeSession({ id: 1202, state: 'finished' });
 
-    const { rerender } = renderAuthedPage(
-      <SessionsIndex sessions={[s1, s2]} filters={{}} perPage={20} />,
-    );
+    const { rerender } = renderAuthedPage(<SessionsIndex sessions={[s1, s2]} filters={{}} perPage={20} />);
 
     expect(screen.getByText('#1202')).toBeInTheDocument();
 
@@ -355,9 +359,7 @@ describe('Company/Sessions/Index', () => {
     const sessions1 = [makeSession({ id: 1301, state: 'ready' }), makeSession({ id: 1302, state: 'finished' })];
     const sessions2 = [makeSession({ id: 1303, state: 'failed' })];
 
-    const { rerender } = renderAuthedPage(
-      <SessionsIndex sessions={sessions1} filters={{}} perPage={20} />,
-    );
+    const { rerender } = renderAuthedPage(<SessionsIndex sessions={sessions1} filters={{}} perPage={20} />);
 
     expect(screen.getByText('#1301')).toBeInTheDocument();
     expect(screen.getByText('#1302')).toBeInTheDocument();
@@ -380,7 +382,9 @@ describe('Company/Sessions/Index', () => {
 
     renderAuthedPage(<SessionsIndex sessions={[s1, s2]} filters={{}} perPage={20} />);
 
-    await act(async () => { vi.advanceTimersByTime(100); });
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
 
     expect(lastCableHandlers).not.toBeNull();
 
@@ -391,6 +395,4 @@ describe('Company/Sessions/Index', () => {
     expect(screen.getByText('#1401')).toBeInTheDocument();
     expect(screen.getByText('#1402')).toBeInTheDocument();
   });
-
-  afterEach(() => { vi.useRealTimers(); });
 });
