@@ -1,5 +1,11 @@
 # See https://git-scm.com/docs/gitattributes for more about git attribute files.
 
+# Ruby sources are always text. Without this, a single control byte in a source
+# file (an escape sequence written as a raw byte, say) trips git's binary
+# heuristic and the whole file stops diffing — the change becomes invisible in
+# `git diff` and in pull requests.
+*.rb diff
+
 # Mark the database schema as having been generated.
 db/schema.rb linguist-generated
 

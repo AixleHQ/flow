@@ -77,6 +77,7 @@ module Agents
 
     test "config_files returns auth.json and config.toml" do
       credentials = { "tokens" => { "access_token" => "abc" } }
+      stub_codex_models([])
 
       files = @adapter.config_files(credentials, { workspace: "/project" })
 
@@ -101,6 +102,197 @@ module Agents
 
       toml = files["/home/codex/.codex/config.toml"]
       assert_includes toml, "/workspace"
+    end
+
+    # =========================================================================
+    # Startup model-migration dialog suppression (task #534)
+    #
+    # Codex CLI blocks the session on the "try the new model" dialog unless
+    # notice.model_migrations[<model it is about to run>] already points at the
+    # exact upgrade target the model catalog advertises. The model it runs is the
+    # session model when one is configured and the catalog default otherwise.
+    # =========================================================================
+
+    test "config_files acknowledges the migration target the catalog advertises" do
+      stub_codex_models([
+        { "slug" => "gpt-5.6-terra", "visibility" => "list" },
+        { "slug" => "gpt-5.4", "visibility" => "hide", "upgrade" => { "model" => "gpt-5.6-terra" } }
+      ])
+
+      toml = codex_toml({ model: "gpt-5.4" })
+
+      assert_includes toml, "[notice.model_migrations]"
+      assert_includes toml, '"gpt-5.4" = "gpt-5.6-terra"'
+    end
+
+    test "config_files acknowledges migrations for models the session did not pin" do
+      # Without a configured model Codex runs the catalog default, so acknowledging
+      # only the configured model leaves the dialog armed for every other model.
+      stub_codex_models([
+        { "slug" => "gpt-5.4", "visibility" => "hide", "upgrade" => { "model" => "gpt-5.6-terra" } },
+        { "slug" => "gpt-5.4-mini", "visibility" => "hide", "upgrade" => { "model" => "gpt-5.6-luna" } }
+      ])
+
+      toml = codex_toml({})
+
+      refute toml.start_with?("model ="), "no model should be pinned when the session did not request one"
+      assert_includes toml, '"gpt-5.4" = "gpt-5.6-terra"'
+      assert_includes toml, '"gpt-5.4-mini" = "gpt-5.6-luna"'
+    end
+
+    test "config_files tracks a new catalog target instead of a hardcoded slug" do
+      stub_codex_models([
+        { "slug" => "gpt-5.4", "visibility" => "hide", "upgrade" => { "model" => "gpt-6-future" } }
+      ])
+
+      toml = codex_toml({ model: "gpt-5.4" })
+
+      assert_includes toml, '"gpt-5.4" = "gpt-6-future"'
+      refute_includes toml, '"gpt-5.4" = "gpt-5.6-terra"'
+    end
+
+    test "config_files falls back to the shipped migration map when the catalog is unreachable" do
+      stub_request(:get, codex_models_url).to_return(status: 401, body: "")
+
+      toml = codex_toml({ model: "gpt-5.4" })
+
+      # An expired token must not re-arm the dialog: the mappings the CLI ships in
+      # its bundled catalog still get acknowledged.
+      Agents::CodexAdapter::FALLBACK_MODEL_MIGRATIONS.each do |from, to|
+        assert_includes toml, "\"#{from}\" = \"#{to}\""
+      end
+    end
+
+    test "config_files skips migration entries whose slugs are not slug-shaped" do
+      stub_codex_models([
+        { "slug" => "gpt-5.4", "visibility" => "hide", "upgrade" => { "model" => "gpt-5.6-terra" } },
+        { "slug" => "evil\"\ntrust_level = \"untrusted", "upgrade" => { "model" => "gpt-5.6-terra" } }
+      ])
+
+      toml = codex_toml({ model: "gpt-5.4" })
+
+      refute_includes toml, "evil"
+      refute_includes toml, 'trust_level = "untrusted"'
+      assert_includes toml, '"gpt-5.4" = "gpt-5.6-terra"'
+    end
+
+    test "the migration map is read from the catalog on every config write" do
+      # A live MemoryStore, because the test env's :null_store would let a
+      # reintroduced cache pass unnoticed. The migration target is the one value
+      # that must not go stale: a cached map keeps acknowledging yesterday's target
+      # and the dialog comes back the moment OpenAI moves it.
+      Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+      stub_request(:get, codex_models_url).to_return(
+        codex_models_response([ { "slug" => "gpt-5.4", "upgrade" => { "model" => "gpt-5.6-terra" } } ]),
+        codex_models_response([ { "slug" => "gpt-5.4", "upgrade" => { "model" => "gpt-6-future" } } ])
+      )
+
+      first = codex_toml({ model: "gpt-5.4" })
+      second = codex_toml({ model: "gpt-5.4" })
+
+      assert_includes first, '"gpt-5.4" = "gpt-5.6-terra"'
+      assert_includes second, '"gpt-5.4" = "gpt-6-future"'
+      assert_requested :get, codex_models_url, times: 2
+    end
+
+    test "toml_string escapes control characters instead of emitting them raw" do
+      # The character class is written with \u escapes so the source file stays
+      # plain text — git treats a source file holding a raw NUL as binary and stops
+      # diffing it entirely. The escaping behaviour must be unchanged by that.
+      assert_equal '"a\u0000b"', @adapter.toml_string("a\u0000b")
+      assert_equal '"\u001f"', @adapter.toml_string("\u001F")
+      assert_equal '"\t\n\r"', @adapter.toml_string("\t\n\r")
+      assert_equal '"say \"hi\" c:\\\\tmp"', @adapter.toml_string('say "hi" c:\tmp')
+    end
+
+    test "the adapter source holds no raw control bytes" do
+      source = File.binread(Rails.root.join("app/services/agents/codex_adapter.rb"))
+
+      offenders = source.bytes.uniq.select { |b| b < 0x20 && ![ 0x09, 0x0a, 0x0d ].include?(b) }
+
+      assert_empty offenders.map { |b| format("0x%02x", b) },
+                   "control bytes in the source make git diff the whole file as binary"
+    end
+
+    test "config_files pre-acknowledges the remaining Codex startup notices" do
+      stub_codex_models([])
+
+      toml = codex_toml({})
+
+      assert_includes toml, "hide_full_access_warning = true"
+      assert_includes toml, "hide_rate_limit_model_nudge = true"
+      assert_includes toml, "hide_gpt5_1_migration_prompt = true"
+      assert_includes toml, '"hide_gpt-5.1-codex-max_migration_prompt" = true'
+      # The trust dialog stays suppressed through the project entry.
+      assert_includes toml, 'trust_level = "trusted"'
+    end
+
+    test "auth_setup_files writes config.toml without calling the models API" do
+      # Auth has not happened yet, so there is no token to fetch the catalog with —
+      # the pre-auth config must still be written (and must not raise).
+      toml = @adapter.auth_setup_files["/home/codex/.codex/config.toml"]
+
+      assert_includes toml, 'cli_auth_credentials_store = "file"'
+      assert_includes toml, "[notice.model_migrations]"
+    end
+
+    test "models are requested with a client version new enough for the current catalog" do
+      # The endpoint hides models whose minimal_client_version is above the version
+      # we claim — the gpt-5.6 family requires 0.144.0, which is why an older
+      # client_version left those models out of the model picker entirely.
+      assert_operator Gem::Version.new(Codex::Api::CLIENT_VERSION),
+                      :>=, Gem::Version.new("0.144.0"),
+                      "Codex::Api::CLIENT_VERSION must be at least the gpt-5.6 minimal client version"
+
+      request = stub_codex_models([
+        { "slug" => "gpt-5.6-sol", "display_name" => "GPT-5.6-Sol", "description" => "Fast", "visibility" => "list" },
+        { "slug" => "gpt-5.4", "display_name" => "GPT-5.4", "visibility" => "hide" }
+      ])
+
+      models = @adapter.fetch_available_models({ "tokens" => { "access_token" => "tok" } })
+
+      assert_requested request
+      assert_equal [ "gpt-5.6-sol" ], models.map { |m| m[:model_id] }
+    end
+
+    test "fetch_available_models refreshes a rejected access token and retries once" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => "stale", "refresh_token" => "r1" }
+      })
+      stub_request(:get, codex_models_url)
+        .with(headers: { "Authorization" => "Bearer stale" })
+        .to_return(status: 401, body: "")
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
+        .to_return(status: 200, body: { access_token: "fresh" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      retried = stub_request(:get, codex_models_url)
+        .with(headers: { "Authorization" => "Bearer fresh" })
+        .to_return(codex_models_response([ { "slug" => "gpt-5.6-sol", "visibility" => "list" } ]))
+
+      models = @adapter.fetch_available_models(credential.config_data, credential: credential)
+
+      assert_requested retried
+      assert_equal [ "gpt-5.6-sol" ], models.map { |m| m[:model_id] }
+      assert_equal "fresh", credential.reload.config_data.dig("tokens", "access_token")
+    end
+
+    test "fetch_available_models returns nothing when the token is rejected and cannot be refreshed" do
+      stub_request(:get, codex_models_url).to_return(status: 401, body: "")
+
+      assert_empty @adapter.fetch_available_models({ "tokens" => { "access_token" => "stale" } })
+    end
+
+    # The reviewer's layering ask (PR #92): the vendor transport belongs in
+    # Codex::Api, and the adapter is only allowed to call it. A raw HTTP call
+    # sneaking back in here is the regression this guards.
+    test "the adapter speaks to the Codex API only through Codex::Api" do
+      source = File.read(Rails.root.join("app/services/agents/codex_adapter.rb"))
+
+      assert_no_match(/Net::HTTP|Faraday|URI\(/, source,
+                      "HTTP transport belongs in Codex::Api, not in the adapter")
+      assert_no_match(%r{https://(chatgpt\.com|auth\.openai\.com)}, source,
+                      "vendor endpoints belong in Codex::Api, not in the adapter")
     end
 
     test "session_command returns codex --yolo for any mode" do
@@ -279,7 +471,7 @@ module Agents
       credential = create(:agent_credential, :codex, user: user, config_data: {
         "tokens" => { "access_token" => "old", "refresh_token" => "r1", "id_token" => "id1" }
       })
-      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL)
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
         .to_return(status: 200,
                    body: { access_token: "new", refresh_token: "r2", id_token: "id2" }.to_json,
                    headers: { "Content-Type" => "application/json" })
@@ -293,7 +485,7 @@ module Agents
       credential = create(:agent_credential, :codex, user: user, config_data: {
         "tokens" => { "access_token" => "old", "refresh_token" => "r1" }
       })
-      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL).to_return(status: 400, body: "nope")
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL).to_return(status: 400, body: "nope")
 
       result = @adapter.refresh!(credential)
 
@@ -314,7 +506,7 @@ module Agents
         "tokens" => { "access_token" => "old", "refresh_token" => "keep-me", "id_token" => "keep-id" }
       })
       # Response rotates only the access token — no refresh_token/id_token echoed back.
-      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL)
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
         .to_return(status: 200, body: { access_token: "new" }.to_json,
                    headers: { "Content-Type" => "application/json" })
 
@@ -335,7 +527,7 @@ module Agents
       # Server hands back a token that expires SOONER than the stored one — the
       # rotation guard must keep the fresher stored token.
       older = jwt_with_exp(1.minute.from_now.to_i)
-      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL)
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
         .to_return(status: 200, body: { access_token: older, refresh_token: "r2" }.to_json,
                    headers: { "Content-Type" => "application/json" })
 
@@ -419,6 +611,27 @@ module Agents
     end
 
     private
+
+    def codex_models_url
+      "#{Codex::Api::MODELS_URL}?client_version=#{Codex::Api::CLIENT_VERSION}"
+    end
+
+    # Canned /codex/models response. `models` entries mirror the API shape the CLI
+    # reads: `slug`, `visibility`, and an optional `upgrade` object naming the
+    # migration target.
+    def stub_codex_models(models)
+      stub_request(:get, codex_models_url).to_return(codex_models_response(models))
+    end
+
+    def codex_models_response(models)
+      { status: 200,
+        body: { "models" => models }.to_json,
+        headers: { "Content-Type" => "application/json" } }
+    end
+
+    def codex_toml(workflow_config, credentials = { "tokens" => { "access_token" => "tok" } })
+      @adapter.config_files(credentials, workflow_config)["/home/codex/.codex/config.toml"]
+    end
 
     # Minimal unsigned JWT carrying an `exp` claim (seconds). Signature segment is
     # irrelevant — token_expires_at reads the payload without verifying.
