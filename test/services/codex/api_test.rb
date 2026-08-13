@@ -41,12 +41,12 @@ module Codex
       assert_equal "GPT-5.6-Sol", listed.display_name
       assert_equal "Fast", listed.description
       assert listed.listed?
-      refute listed.upgradable?
+      refute_predicate listed, :upgradable?
 
       assert_equal "gpt-5.4", hidden.slug
       # A hidden model still has to reach the caller: a session pinned to an older
       # model is exactly the case whose upgrade target needs acknowledging.
-      refute hidden.listed?
+      refute_predicate hidden, :listed?
       assert hidden.upgradable?
       assert_equal "gpt-5.6-terra", hidden.upgrade_target
     end
