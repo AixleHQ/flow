@@ -11,8 +11,12 @@ import { buildTaskStatistics } from 'test/factories/taskStatistics';
 import { buildTaskWorkflowRun } from 'test/factories/taskWorkflowRun';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type BoardTask from 'types/generated/BoardTask';
+import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import BoardPage from './BoardPage';
+
+// Typelizer emits the step shape inline rather than as its own type, so name it here.
+type TaskWorkflowRunStep = TaskWorkflowRun['steps'][number];
 
 const project = { id: 7, name: 'Falcon Initiative' };
 
@@ -360,6 +364,125 @@ describe('Projects/Board/BoardPage', () => {
     // The launched workflow name is shown for each run (regression: #338).
     const link = within(runsPanel).getByRole('link', { name: /Implement Feature/ });
     expect(link).toHaveAttribute('href', '/company/projects/7/workflow_runs/55');
+  });
+
+  // --- jump into a run's terminal session from the drawer (task #541) ---
+
+  // Both surfaces only render for a task sitting in an automated column, so every test below
+  // needs the same workflow-bound column set.
+  const automatedColumns = [
+    {
+      id: 100,
+      name: 'Backlog',
+      position: 0,
+      purpose: null,
+      workflowBinding: { id: 1, workflowId: 5, workflowName: 'Implement Feature', triggerMode: 'on_entry' },
+    },
+    buildBoardColumn({ id: 200, name: 'In Progress', position: 1 }),
+  ];
+
+  const stepOf = (overrides: Partial<TaskWorkflowRunStep> = {}): TaskWorkflowRunStep => ({
+    name: 'Implementation',
+    state: 'completed',
+    startedAt: null,
+    finishedAt: null,
+    durationSeconds: 12,
+    terminalSessionId: null,
+    ...overrides,
+  });
+
+  const drawerWithRuns = (runs: ReturnType<typeof buildTaskWorkflowRun>[]) => ({
+    ...populatedProps,
+    columns: automatedColumns,
+    selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+    taskComments: [],
+    taskAssets: [],
+    taskActivities: [],
+    taskWorkflowRuns: runs,
+  });
+
+  it('jumps straight into the session from the Latest run block on the Details tab', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRuns([
+        buildTaskWorkflowRun({ steps: [stepOf({ state: 'running', terminalSessionId: 91 })] }),
+      ]),
+    });
+
+    // Details is the default tab, so the Latest run block is already on screen.
+    const drawer = within(screen.getByRole('dialog'));
+    await userEvent.click(drawer.getByRole('button', { name: /Open session/i }));
+
+    // Straight to the session view — no stop on the workflow run page.
+    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/91');
+  });
+
+  it('jumps into the session from a run entry in the Runs tab', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRuns([
+        buildTaskWorkflowRun({ id: 55, steps: [stepOf({ terminalSessionId: 77 })] }),
+        buildTaskWorkflowRun({ id: 54, steps: [stepOf({ terminalSessionId: 42 })] }),
+      ]),
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: /Runs/ }));
+    const runsPanel = within(screen.getByRole('tabpanel'));
+
+    // Every run entry carries its own control, not just the latest one.
+    expect(runsPanel.getByRole('button', { name: 'Open session #77' })).toBeInTheDocument();
+    await userEvent.click(runsPanel.getByRole('button', { name: 'Open session #42' }));
+
+    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/42');
+  });
+
+  it('omits the session control on both tabs when the run has no session', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRuns([buildTaskWorkflowRun({ steps: [stepOf({ state: 'pending' })] })]),
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    expect(drawer.queryByRole('button', { name: /Open session/i })).not.toBeInTheDocument();
+    // The rest of the Latest run block still renders.
+    expect(drawer.getByText(/latest run/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: /Runs/ }));
+    expect(within(screen.getByRole('tabpanel')).queryByRole('button', { name: /Open session/i })).not.toBeInTheDocument();
+  });
+
+  it('targets the still-running step when a run has several sessions', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRuns([
+        buildTaskWorkflowRun({
+          steps: [
+            stepOf({ name: 'Analysis', state: 'completed', terminalSessionId: 10 }),
+            stepOf({ name: 'Implementation', state: 'running', terminalSessionId: 11 }),
+            stepOf({ name: 'Review', state: 'pending' }),
+          ],
+        }),
+      ]),
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    await userEvent.click(drawer.getByRole('button', { name: /Open session/i }));
+
+    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/11');
+  });
+
+  it('falls back to the most recent session once every step has finished', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRuns([
+        buildTaskWorkflowRun({
+          steps: [
+            stepOf({ name: 'Analysis', terminalSessionId: 10 }),
+            stepOf({ name: 'Implementation', terminalSessionId: 11 }),
+          ],
+        }),
+      ]),
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    await userEvent.click(drawer.getByRole('button', { name: /Open session/i }));
+
+    expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/11');
   });
 
   it('shows the comments empty state and disables Send until text is entered', async () => {

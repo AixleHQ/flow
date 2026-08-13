@@ -88,6 +88,7 @@ import {
   IconSend,
   IconSettings,
   IconTag,
+  IconTerminal2,
   IconTrash,
   IconChartBar,
   IconExternalLink,
@@ -1255,7 +1256,24 @@ interface TaskWorkflowRun {
     startedAt: string | null;
     finishedAt: string | null;
     durationSeconds: number | null;
+    terminalSessionId?: number | null;
   }>;
+}
+
+// Step states that mean "there is something live to look at right now".
+const STEP_ACTIVE_STATES = new Set(['running', 'waiting_input']);
+
+// A run has one session per step, so "jump into the session" needs a single target.
+// Prefer the session of a step that is still active — that is the one the user is
+// after when a run is in flight — and otherwise fall back to the most recent step
+// that ever got a session. Returns null when the run has no session at all, which
+// is what keeps the control from rendering (AC-4).
+function runSessionId(run: TaskWorkflowRun): number | null {
+  const steps = run.steps ?? [];
+  const active = [...steps].reverse().find((s) => STEP_ACTIVE_STATES.has(s.state) && s.terminalSessionId != null);
+  if (active) return active.terminalSessionId ?? null;
+  const last = [...steps].reverse().find((s) => s.terminalSessionId != null);
+  return last?.terminalSessionId ?? null;
 }
 
 function useBoardActivitiesLoadMore(projectId: number, initialActivities: ActivityItem[]) {
@@ -1987,6 +2005,7 @@ function TaskDetailSidebar({
             (() => {
               const latestRun = (workflowRuns ?? [])[0];
               const dur = latestRun.durationSeconds;
+              const latestSessionId = runSessionId(latestRun);
               return (
                 <Box style={{ marginBottom: 20 }}>
                   {/* sec-label */}
@@ -2067,24 +2086,45 @@ function TaskDetailSidebar({
                         </Text>
                       </Box>
                     )}
-                    <Box
-                      component="button"
-                      onClick={() => setTab('runs')}
-                      style={{
-                        marginLeft: 'auto',
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--app-primary-strong)',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '4px 0',
-                      }}
-                    >
-                      View runs <IconArrowRight size={12} />
+                    <Box style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 14 }}>
+                      {latestSessionId != null && (
+                        <Box
+                          component="button"
+                          onClick={() => router.visit(`/company/projects/${projectId}/sessions/${latestSessionId}`)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--app-primary-strong)',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '4px 0',
+                          }}
+                        >
+                          <IconTerminal2 size={12} /> Open session
+                        </Box>
+                      )}
+                      <Box
+                        component="button"
+                        onClick={() => setTab('runs')}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--app-primary-strong)',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: '4px 0',
+                        }}
+                      >
+                        View runs <IconArrowRight size={12} />
+                      </Box>
                     </Box>
                   </Box>
                 </Box>
@@ -2435,112 +2475,130 @@ function TaskDetailSidebar({
 
                   {/* Run history */}
                   <Stack gap={4}>
-                    {(workflowRuns ?? []).map((run) => (
-                      <Box
-                        key={run.id}
-                        p="xs"
-                        style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}
-                      >
-                        <Group justify="space-between" wrap="nowrap" gap="xs">
-                          <NeutralStatusChip state={run.state} />
-                          <Text
-                            component="a"
-                            href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
-                            target="_blank"
-                            rel="noopener"
-                            size="xs"
-                            c="brand"
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              flex: 1,
-                              minWidth: 0,
-                              textDecoration: 'none',
-                            }}
-                          >
-                            <Box
-                              component="span"
-                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    {(workflowRuns ?? []).map((run) => {
+                      const sessionId = runSessionId(run);
+                      return (
+                        <Box
+                          key={run.id}
+                          p="xs"
+                          style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}
+                        >
+                          <Group justify="space-between" wrap="nowrap" gap="xs">
+                            <NeutralStatusChip state={run.state} />
+                            <Text
+                              component="a"
+                              href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
+                              target="_blank"
+                              rel="noopener"
+                              size="xs"
+                              c="brand"
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                flex: 1,
+                                minWidth: 0,
+                                textDecoration: 'none',
+                              }}
                             >
-                              {run.workflowName ?? 'Workflow run'}
-                            </Box>
-                            <IconExternalLink size={11} style={{ flexShrink: 0 }} />
-                          </Text>
-                          <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                            {formatDateTime(run.createdAt)}
-                          </Text>
-                        </Group>
-
-                        {/* Step timeline for first (latest) run */}
-                        {run.id === (workflowRuns ?? [])[0]?.id && (run.steps ?? []).length > 0 && (
-                          <Box mt="xs">
-                            {(run.steps ?? []).map((step, i) => {
-                              const isHidden = !showAllSteps && i > 2;
-                              return (
-                                <Box
-                                  key={i}
-                                  style={{
-                                    display: isHidden ? 'none' : 'flex',
-                                    gap: 10,
-                                    paddingTop: 8,
-                                    paddingBottom: 8,
-                                    borderBottom: '1px solid var(--app-border-default)',
-                                  }}
+                              <Box
+                                component="span"
+                                style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                              >
+                                {run.workflowName ?? 'Workflow run'}
+                              </Box>
+                              <IconExternalLink size={11} style={{ flexShrink: 0 }} />
+                            </Text>
+                            <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
+                              {formatDateTime(run.createdAt)}
+                            </Text>
+                            {sessionId != null && (
+                              <Tooltip label={`Open session #${sessionId}`}>
+                                <ActionIcon
+                                  variant="subtle"
+                                  size="xs"
+                                  aria-label={`Open session #${sessionId}`}
+                                  style={{ flexShrink: 0 }}
+                                  onClick={() =>
+                                    router.visit(`/company/projects/${projectId}/sessions/${sessionId}`)
+                                  }
                                 >
-                                  <Box
-                                    w={8}
-                                    h={8}
-                                    mt={4}
-                                    style={{
-                                      borderRadius: '50%',
-                                      flexShrink: 0,
-                                      backgroundColor:
-                                        step.state === 'done'
-                                          ? 'var(--app-success-fg)'
-                                          : step.state === 'running'
-                                            ? 'var(--app-warning-fg)'
-                                            : step.state === 'failed'
-                                              ? 'var(--app-danger-fg)'
-                                              : 'var(--mantine-color-gray-5)',
-                                    }}
-                                  />
-                                  <Box style={{ flex: 1 }}>
-                                    <Text size="sm" c={step.state === 'waiting' ? 'dimmed' : undefined}>
-                                      {step.name}
-                                    </Text>
-                                    <Text size="xs" c="dimmed" ff="monospace">
-                                      {step.durationSeconds != null ? formatDuration(step.durationSeconds) : '—'}
-                                    </Text>
-                                  </Box>
-                                </Box>
-                              );
-                            })}
-                            {(run.steps ?? []).length > 3 && (
-                              <Button variant="subtle" size="xs" mt={8} onClick={() => setShowAllSteps((s) => !s)}>
-                                {showAllSteps ? 'Show fewer steps' : `Show all ${(run.steps ?? []).length} steps`}
-                              </Button>
+                                  <IconTerminal2 size={13} />
+                                </ActionIcon>
+                              </Tooltip>
                             )}
-                          </Box>
-                        )}
+                          </Group>
 
-                        {/* Retry in Runs tab for failed run (AC-56) */}
-                        {run.state === 'failed' && canExecute && (
-                          <Box mt="xs">
-                            <Button
-                              size="compact-xs"
-                              variant="outline"
-                              color="red"
-                              leftSection={<IconRefresh size={11} />}
-                              loading={triggeringWorkflow}
-                              onClick={handleTriggerWorkflow}
-                            >
-                              Retry run
-                            </Button>
-                          </Box>
-                        )}
-                      </Box>
-                    ))}
+                          {/* Step timeline for first (latest) run */}
+                          {run.id === (workflowRuns ?? [])[0]?.id && (run.steps ?? []).length > 0 && (
+                            <Box mt="xs">
+                              {(run.steps ?? []).map((step, i) => {
+                                const isHidden = !showAllSteps && i > 2;
+                                return (
+                                  <Box
+                                    key={i}
+                                    style={{
+                                      display: isHidden ? 'none' : 'flex',
+                                      gap: 10,
+                                      paddingTop: 8,
+                                      paddingBottom: 8,
+                                      borderBottom: '1px solid var(--app-border-default)',
+                                    }}
+                                  >
+                                    <Box
+                                      w={8}
+                                      h={8}
+                                      mt={4}
+                                      style={{
+                                        borderRadius: '50%',
+                                        flexShrink: 0,
+                                        backgroundColor:
+                                          step.state === 'done'
+                                            ? 'var(--app-success-fg)'
+                                            : step.state === 'running'
+                                              ? 'var(--app-warning-fg)'
+                                              : step.state === 'failed'
+                                                ? 'var(--app-danger-fg)'
+                                                : 'var(--mantine-color-gray-5)',
+                                      }}
+                                    />
+                                    <Box style={{ flex: 1 }}>
+                                      <Text size="sm" c={step.state === 'waiting' ? 'dimmed' : undefined}>
+                                        {step.name}
+                                      </Text>
+                                      <Text size="xs" c="dimmed" ff="monospace">
+                                        {step.durationSeconds != null ? formatDuration(step.durationSeconds) : '—'}
+                                      </Text>
+                                    </Box>
+                                  </Box>
+                                );
+                              })}
+                              {(run.steps ?? []).length > 3 && (
+                                <Button variant="subtle" size="xs" mt={8} onClick={() => setShowAllSteps((s) => !s)}>
+                                  {showAllSteps ? 'Show fewer steps' : `Show all ${(run.steps ?? []).length} steps`}
+                                </Button>
+                              )}
+                            </Box>
+                          )}
+
+                          {/* Retry in Runs tab for failed run (AC-56) */}
+                          {run.state === 'failed' && canExecute && (
+                            <Box mt="xs">
+                              <Button
+                                size="compact-xs"
+                                variant="outline"
+                                color="red"
+                                leftSection={<IconRefresh size={11} />}
+                                loading={triggeringWorkflow}
+                                onClick={handleTriggerWorkflow}
+                              >
+                                Retry run
+                              </Button>
+                            </Box>
+                          )}
+                        </Box>
+                      );
+                    })}
                   </Stack>
                 </>
               )}

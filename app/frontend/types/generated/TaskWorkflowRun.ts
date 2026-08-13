@@ -12,7 +12,7 @@ type TaskWorkflowRun = {
   workflowName?: string;
   totalCostCents?: number;
   durationSeconds?: number;
-  steps: { name: string; state: string; startedAt: string | null; finishedAt: string | null; durationSeconds: number | null }[];
+  steps: { name: string; state: string; startedAt: string | null; finishedAt: string | null; durationSeconds: number | null; terminalSessionId: number | null }[];
 }
 
 export default TaskWorkflowRun;
