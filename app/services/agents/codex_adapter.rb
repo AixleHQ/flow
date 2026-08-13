@@ -374,10 +374,11 @@ module Agents
     # generated config.toml is stable across runs. Catalog entries win over the
     # static fallback; anything that is not slug-shaped is dropped rather than
     # written into the TOML.
+    #
     # The catalog is read live on every config write rather than cached: the
-    # migration target is exactly the value that must not go stale, and config.toml
-    # is generated once per container start, alongside requests the same endpoint
-    # already serves for the model picker.
+    # migration target is the one value that must not go stale, and config.toml is
+    # generated once per container start — the same endpoint already answers a
+    # request per model-picker load.
     def model_migrations(credentials)
       FALLBACK_MODEL_MIGRATIONS
         .merge(fetch_model_upgrades(credentials))
