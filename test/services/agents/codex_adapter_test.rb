@@ -176,6 +176,44 @@ module Agents
       assert_includes toml, '"gpt-5.4" = "gpt-5.6-terra"'
     end
 
+    test "the migration map is read from the catalog on every config write" do
+      # A live MemoryStore, because the test env's :null_store would let a
+      # reintroduced cache pass unnoticed. The migration target is the one value
+      # that must not go stale: a cached map keeps acknowledging yesterday's target
+      # and the dialog comes back the moment OpenAI moves it.
+      Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+      stub_request(:get, codex_models_url).to_return(
+        codex_models_response([ { "slug" => "gpt-5.4", "upgrade" => { "model" => "gpt-5.6-terra" } } ]),
+        codex_models_response([ { "slug" => "gpt-5.4", "upgrade" => { "model" => "gpt-6-future" } } ])
+      )
+
+      first = codex_toml({ model: "gpt-5.4" })
+      second = codex_toml({ model: "gpt-5.4" })
+
+      assert_includes first, '"gpt-5.4" = "gpt-5.6-terra"'
+      assert_includes second, '"gpt-5.4" = "gpt-6-future"'
+      assert_requested :get, codex_models_url, times: 2
+    end
+
+    test "toml_string escapes control characters instead of emitting them raw" do
+      # The character class is written with \u escapes so the source file stays
+      # plain text — git treats a source file holding a raw NUL as binary and stops
+      # diffing it entirely. The escaping behaviour must be unchanged by that.
+      assert_equal '"a\u0000b"', @adapter.toml_string("a\u0000b")
+      assert_equal '"\u001f"', @adapter.toml_string("\u001F")
+      assert_equal '"\t\n\r"', @adapter.toml_string("\t\n\r")
+      assert_equal '"say \"hi\" c:\\\\tmp"', @adapter.toml_string('say "hi" c:\tmp')
+    end
+
+    test "the adapter source holds no raw control bytes" do
+      source = File.binread(Rails.root.join("app/services/agents/codex_adapter.rb"))
+
+      offenders = source.bytes.uniq.select { |b| b < 0x20 && ![ 0x09, 0x0a, 0x0d ].include?(b) }
+
+      assert_empty offenders.map { |b| format("0x%02x", b) },
+                   "control bytes in the source make git diff the whole file as binary"
+    end
+
     test "config_files pre-acknowledges the remaining Codex startup notices" do
       stub_codex_models([])
 
@@ -542,10 +580,13 @@ module Agents
     # reads: `slug`, `visibility`, and an optional `upgrade` object naming the
     # migration target.
     def stub_codex_models(models)
-      stub_request(:get, codex_models_url)
-        .to_return(status: 200,
-                   body: { "models" => models }.to_json,
-                   headers: { "Content-Type" => "application/json" })
+      stub_request(:get, codex_models_url).to_return(codex_models_response(models))
+    end
+
+    def codex_models_response(models)
+      { status: 200,
+        body: { "models" => models }.to_json,
+        headers: { "Content-Type" => "application/json" } }
     end
 
     def codex_toml(workflow_config, credentials = { "tokens" => { "access_token" => "tok" } })
