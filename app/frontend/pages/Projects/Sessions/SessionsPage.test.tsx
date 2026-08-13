@@ -426,4 +426,30 @@ describe('Projects/Sessions/SessionsPage', () => {
       expect(screen.getByText('in: 5.0k, out: 4.0k')).toBeInTheDocument();
     });
   });
+
+  // --- filter reset ---
+
+  it('clears stale session rows when the filter prop changes', async () => {
+    const sessions1 = [
+      makeSession({ id: 201, state: 'ready' }),
+      makeSession({ id: 202, state: 'finished' }),
+    ];
+    const sessions2 = [makeSession({ id: 203, state: 'failed' })];
+
+    const { rerender } = renderAuthedPage(
+      <SessionsPage sessions={sessions1} filters={{}} perPage={20} />,
+      { props: { project } },
+    );
+
+    expect(screen.getByText('#201')).toBeInTheDocument();
+    expect(screen.getByText('#202')).toBeInTheDocument();
+
+    rerender(<SessionsPage sessions={sessions2} filters={{ state_eq: 'failed' }} perPage={20} />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('#201')).not.toBeInTheDocument();
+      expect(screen.queryByText('#202')).not.toBeInTheDocument();
+      expect(screen.getByText('#203')).toBeInTheDocument();
+    });
+  });
 });

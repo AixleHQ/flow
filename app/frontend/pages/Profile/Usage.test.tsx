@@ -115,6 +115,16 @@ describe('Profile/Usage', () => {
     expect(screen.getByText('$3.40')).toBeInTheDocument();
   });
 
+  it('renders a ready session with the Running label via StatusBadge migration', () => {
+    const runningSessions = [
+      { ...sessions[0], id: 502, state: 'ready' as const, finishedAt: null },
+    ];
+    renderAuthedPage(<UsagePage />, { props: { ...selfProps, sessions: runningSessions } });
+
+    // State `ready` maps to "Running" in STATE_CONFIG; StatusBadge replaces raw Badge.
+    expect(screen.getByText('Running')).toBeInTheDocument();
+  });
+
   it('shows the cross-person banner when viewing another user', () => {
     renderAuthedPage(<UsagePage />, {
       props: { period: '30d' as const, viewerIsSelf: false, targetUser },

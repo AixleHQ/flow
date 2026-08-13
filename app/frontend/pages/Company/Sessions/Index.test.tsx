@@ -248,6 +248,17 @@ describe('Company/Sessions/Index', () => {
     expect(within(table).queryByText('5 pending')).not.toBeInTheDocument();
   });
 
+  it('renders a ready session with the Running label (StatusBadge migration)', () => {
+    renderAuthedPage(
+      <SessionsIndex sessions={[makeSession({ id: 1050, state: 'ready' })]} filters={{}} perPage={20} />,
+    );
+
+    const row = screen.getByText('#1050').closest('tr') as HTMLElement;
+    // State `ready` maps to the human label "Running" via STATE_CONFIG.
+    // The badge now uses StatusBadge instead of raw Mantine Badge.
+    expect(within(row).getByText('Running')).toBeInTheDocument();
+  });
+
   it('renders one badge per model on a session', () => {
     renderAuthedPage(
       <SessionsIndex sessions={[makeSession({ id: 1101, models: ['opus-4', 'haiku-3'] })]} filters={{}} perPage={20} />,
