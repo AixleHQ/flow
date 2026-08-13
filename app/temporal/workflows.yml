@@ -53,6 +53,12 @@ workflows:
       - name: coder_sweep_expired_locks_activity
         task_queue: aixle_ruby
 
+  - name: coder_reap_dead_workspaces_workflow
+    owner: aixle_ruby
+    activities:
+      - name: coder_reap_dead_workspaces_activity
+        task_queue: aixle_ruby
+
   - name: container_sweep_orphaned_resources_workflow
     owner: aixle_ruby
     activities:
