@@ -98,7 +98,7 @@ import {
   IconX,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import {
   Bar,
@@ -1363,6 +1363,56 @@ function NeutralStatusChip({ state, size = 'xs' }: { state: string; size?: strin
   );
 }
 
+// One run, rendered as a single compact row: state chip, a link to the run page, a
+// caller-supplied trailing slot, and the jump-into-the-session control. Shared by the
+// Details tab's "Latest run" block and the Runs tab's history so the two tiles cannot
+// drift apart — the only intentional difference is what goes in `trailing` (the run's
+// timestamp in the Runs tab, a "View runs" button on the Details tab).
+function RunTileRow({ run, projectId, trailing }: { run: TaskWorkflowRun; projectId: number; trailing?: ReactNode }) {
+  const sessionId = runSessionId(run);
+
+  return (
+    <Group justify="space-between" wrap="nowrap" gap="xs">
+      <NeutralStatusChip state={run.state} />
+      <Text
+        component="a"
+        href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
+        target="_blank"
+        rel="noopener"
+        size="xs"
+        c="brand"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          flex: 1,
+          minWidth: 0,
+          textDecoration: 'none',
+        }}
+      >
+        <Box component="span" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {run.workflowName ?? 'Workflow run'}
+        </Box>
+        <IconExternalLink size={11} style={{ flexShrink: 0 }} />
+      </Text>
+      {trailing}
+      {sessionId != null && (
+        <Tooltip label={`Open session #${sessionId}`}>
+          <ActionIcon
+            variant="subtle"
+            size="xs"
+            aria-label={`Open session #${sessionId}`}
+            style={{ flexShrink: 0 }}
+            onClick={() => router.visit(`/company/projects/${projectId}/sessions/${sessionId}`)}
+          >
+            <IconTerminal2 size={13} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+    </Group>
+  );
+}
+
 // --- Inline tags editor (matches reference .tag / .add-tag / .tag-input pattern) ---
 
 function InlineTagsEditor({
@@ -2005,7 +2055,7 @@ function TaskDetailSidebar({
             (() => {
               const latestRun = (workflowRuns ?? [])[0];
               const dur = latestRun.durationSeconds;
-              const latestSessionId = runSessionId(latestRun);
+              const cost = latestRun.totalCostCents;
               return (
                 <Box style={{ marginBottom: 20 }}>
                   {/* sec-label */}
@@ -2027,105 +2077,30 @@ function TaskDetailSidebar({
                     <IconBolt size={14} color="var(--app-primary-strong)" />
                     Latest run
                   </Box>
-                  {/* run-summary card */}
-                  <Box
-                    style={{
-                      display: 'flex',
-                      gap: 16,
-                      alignItems: 'center',
-                      padding: '12px 14px',
-                      border: '1px solid var(--app-border-default)',
-                      borderRadius: 8,
-                      background: 'var(--app-bg-paper)',
-                    }}
-                  >
-                    <Box style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          letterSpacing: '0.06em',
-                          textTransform: 'uppercase',
-                          color: 'var(--mantine-color-placeholder)',
-                        }}
-                      >
-                        Status
+                  {/* run tile — same row as a Runs tab entry, with "View runs" where that tab shows the date */}
+                  <Box p="xs" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
+                    <RunTileRow
+                      run={latestRun}
+                      projectId={projectId}
+                      trailing={
+                        <Button
+                          variant="subtle"
+                          size="compact-xs"
+                          rightSection={<IconArrowRight size={12} />}
+                          onClick={() => setTab('runs')}
+                          style={{ flexShrink: 0 }}
+                        >
+                          View runs
+                        </Button>
+                      }
+                    />
+                    {(dur != null || cost != null) && (
+                      <Text size="xs" c="dimmed" ff="monospace" mt={6}>
+                        {[dur != null ? formatDuration(dur) : null, cost != null ? formatCostCents(cost) : null]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </Text>
-                      <NeutralStatusChip state={latestRun.state} />
-                    </Box>
-                    {dur != null && (
-                      <Box style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            letterSpacing: '0.06em',
-                            textTransform: 'uppercase',
-                            color: 'var(--mantine-color-placeholder)',
-                          }}
-                        >
-                          Duration
-                        </Text>
-                        <Text style={{ fontFamily: 'monospace', fontSize: 14, color: 'var(--mantine-color-text)' }}>
-                          {formatDuration(dur)}
-                        </Text>
-                      </Box>
                     )}
-                    {latestRun.totalCostCents != null && (
-                      <Box style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            letterSpacing: '0.06em',
-                            textTransform: 'uppercase',
-                            color: 'var(--mantine-color-placeholder)',
-                          }}
-                        >
-                          Cost
-                        </Text>
-                        <Text style={{ fontFamily: 'monospace', fontSize: 14, color: 'var(--mantine-color-text)' }}>
-                          {formatCostCents(latestRun.totalCostCents)}
-                        </Text>
-                      </Box>
-                    )}
-                    <Box style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 14 }}>
-                      {latestSessionId != null && (
-                        <Box
-                          component="button"
-                          onClick={() => router.visit(`/company/projects/${projectId}/sessions/${latestSessionId}`)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            color: 'var(--app-primary-strong)',
-                            fontSize: 12,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            padding: '4px 0',
-                          }}
-                        >
-                          <IconTerminal2 size={12} /> Open session
-                        </Box>
-                      )}
-                      <Box
-                        component="button"
-                        onClick={() => setTab('runs')}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: 'var(--app-primary-strong)',
-                          fontSize: 12,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          padding: '4px 0',
-                        }}
-                      >
-                        View runs <IconArrowRight size={12} />
-                      </Box>
-                    </Box>
                   </Box>
                 </Box>
               );
@@ -2475,128 +2450,91 @@ function TaskDetailSidebar({
 
                   {/* Run history */}
                   <Stack gap={4}>
-                    {(workflowRuns ?? []).map((run) => {
-                      const sessionId = runSessionId(run);
-                      return (
-                        <Box
-                          key={run.id}
-                          p="xs"
-                          style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}
-                        >
-                          <Group justify="space-between" wrap="nowrap" gap="xs">
-                            <NeutralStatusChip state={run.state} />
-                            <Text
-                              component="a"
-                              href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
-                              target="_blank"
-                              rel="noopener"
-                              size="xs"
-                              c="brand"
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 4,
-                                flex: 1,
-                                minWidth: 0,
-                                textDecoration: 'none',
-                              }}
-                            >
-                              <Box
-                                component="span"
-                                style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                              >
-                                {run.workflowName ?? 'Workflow run'}
-                              </Box>
-                              <IconExternalLink size={11} style={{ flexShrink: 0 }} />
-                            </Text>
+                    {(workflowRuns ?? []).map((run) => (
+                      <Box
+                        key={run.id}
+                        p="xs"
+                        style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}
+                      >
+                        <RunTileRow
+                          run={run}
+                          projectId={projectId}
+                          trailing={
                             <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
                               {formatDateTime(run.createdAt)}
                             </Text>
-                            {sessionId != null && (
-                              <Tooltip label={`Open session #${sessionId}`}>
-                                <ActionIcon
-                                  variant="subtle"
-                                  size="xs"
-                                  aria-label={`Open session #${sessionId}`}
-                                  style={{ flexShrink: 0 }}
-                                  onClick={() => router.visit(`/company/projects/${projectId}/sessions/${sessionId}`)}
+                          }
+                        />
+
+                        {/* Step timeline for first (latest) run */}
+                        {run.id === (workflowRuns ?? [])[0]?.id && (run.steps ?? []).length > 0 && (
+                          <Box mt="xs">
+                            {(run.steps ?? []).map((step, i) => {
+                              const isHidden = !showAllSteps && i > 2;
+                              return (
+                                <Box
+                                  key={i}
+                                  style={{
+                                    display: isHidden ? 'none' : 'flex',
+                                    gap: 10,
+                                    paddingTop: 8,
+                                    paddingBottom: 8,
+                                    borderBottom: '1px solid var(--app-border-default)',
+                                  }}
                                 >
-                                  <IconTerminal2 size={13} />
-                                </ActionIcon>
-                              </Tooltip>
-                            )}
-                          </Group>
-
-                          {/* Step timeline for first (latest) run */}
-                          {run.id === (workflowRuns ?? [])[0]?.id && (run.steps ?? []).length > 0 && (
-                            <Box mt="xs">
-                              {(run.steps ?? []).map((step, i) => {
-                                const isHidden = !showAllSteps && i > 2;
-                                return (
                                   <Box
-                                    key={i}
+                                    w={8}
+                                    h={8}
+                                    mt={4}
                                     style={{
-                                      display: isHidden ? 'none' : 'flex',
-                                      gap: 10,
-                                      paddingTop: 8,
-                                      paddingBottom: 8,
-                                      borderBottom: '1px solid var(--app-border-default)',
+                                      borderRadius: '50%',
+                                      flexShrink: 0,
+                                      backgroundColor:
+                                        step.state === 'done'
+                                          ? 'var(--app-success-fg)'
+                                          : step.state === 'running'
+                                            ? 'var(--app-warning-fg)'
+                                            : step.state === 'failed'
+                                              ? 'var(--app-danger-fg)'
+                                              : 'var(--mantine-color-gray-5)',
                                     }}
-                                  >
-                                    <Box
-                                      w={8}
-                                      h={8}
-                                      mt={4}
-                                      style={{
-                                        borderRadius: '50%',
-                                        flexShrink: 0,
-                                        backgroundColor:
-                                          step.state === 'done'
-                                            ? 'var(--app-success-fg)'
-                                            : step.state === 'running'
-                                              ? 'var(--app-warning-fg)'
-                                              : step.state === 'failed'
-                                                ? 'var(--app-danger-fg)'
-                                                : 'var(--mantine-color-gray-5)',
-                                      }}
-                                    />
-                                    <Box style={{ flex: 1 }}>
-                                      <Text size="sm" c={step.state === 'waiting' ? 'dimmed' : undefined}>
-                                        {step.name}
-                                      </Text>
-                                      <Text size="xs" c="dimmed" ff="monospace">
-                                        {step.durationSeconds != null ? formatDuration(step.durationSeconds) : '—'}
-                                      </Text>
-                                    </Box>
+                                  />
+                                  <Box style={{ flex: 1 }}>
+                                    <Text size="sm" c={step.state === 'waiting' ? 'dimmed' : undefined}>
+                                      {step.name}
+                                    </Text>
+                                    <Text size="xs" c="dimmed" ff="monospace">
+                                      {step.durationSeconds != null ? formatDuration(step.durationSeconds) : '—'}
+                                    </Text>
                                   </Box>
-                                );
-                              })}
-                              {(run.steps ?? []).length > 3 && (
-                                <Button variant="subtle" size="xs" mt={8} onClick={() => setShowAllSteps((s) => !s)}>
-                                  {showAllSteps ? 'Show fewer steps' : `Show all ${(run.steps ?? []).length} steps`}
-                                </Button>
-                              )}
-                            </Box>
-                          )}
-
-                          {/* Retry in Runs tab for failed run (AC-56) */}
-                          {run.state === 'failed' && canExecute && (
-                            <Box mt="xs">
-                              <Button
-                                size="compact-xs"
-                                variant="outline"
-                                color="red"
-                                leftSection={<IconRefresh size={11} />}
-                                loading={triggeringWorkflow}
-                                onClick={handleTriggerWorkflow}
-                              >
-                                Retry run
+                                </Box>
+                              );
+                            })}
+                            {(run.steps ?? []).length > 3 && (
+                              <Button variant="subtle" size="xs" mt={8} onClick={() => setShowAllSteps((s) => !s)}>
+                                {showAllSteps ? 'Show fewer steps' : `Show all ${(run.steps ?? []).length} steps`}
                               </Button>
-                            </Box>
-                          )}
-                        </Box>
-                      );
-                    })}
+                            )}
+                          </Box>
+                        )}
+
+                        {/* Retry in Runs tab for failed run (AC-56) */}
+                        {run.state === 'failed' && canExecute && (
+                          <Box mt="xs">
+                            <Button
+                              size="compact-xs"
+                              variant="outline"
+                              color="red"
+                              leftSection={<IconRefresh size={11} />}
+                              loading={triggeringWorkflow}
+                              onClick={handleTriggerWorkflow}
+                            >
+                              Retry run
+                            </Button>
+                          </Box>
+                        )}
+                      </Box>
+                    ))}
                   </Stack>
                 </>
               )}

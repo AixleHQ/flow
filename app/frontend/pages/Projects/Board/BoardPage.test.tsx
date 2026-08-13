@@ -13,6 +13,8 @@ import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/rende
 import type BoardTask from 'types/generated/BoardTask';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
+import { formatDateTime } from 'shared/lib/formatDate';
+
 import BoardPage from './BoardPage';
 
 // Typelizer emits the step shape inline rather than as its own type, so name it here.
@@ -483,6 +485,63 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.click(drawer.getByRole('button', { name: /Open session/i }));
 
     expect(router.visit).toHaveBeenCalledWith('/company/projects/7/sessions/11');
+  });
+
+  // --- the Latest run tile mirrors a Runs tab entry (task #541, reporter feedback) ---
+
+  it('renders the Latest run block as the same tile as a Runs tab entry', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRuns([
+        buildTaskWorkflowRun({
+          steps: [stepOf({ state: 'running', terminalSessionId: 91 })],
+          durationSeconds: 90,
+          totalCostCents: 250,
+        }),
+      ]),
+    });
+
+    // Details is the default tab, so the Latest run block is the visible panel. Text queries have
+    // to be scoped to it — the Runs tab panel stays mounted (hidden) and carries the same run.
+    const details = within(screen.getByRole('tabpanel'));
+
+    // Same row as a Runs tab entry: state chip, workflow-name link to the run page, session control.
+    expect(details.getByText('completed')).toBeInTheDocument();
+    expect(details.getByRole('link', { name: /Implement Feature/ })).toHaveAttribute(
+      'href',
+      '/company/projects/7/workflow_runs/55',
+    );
+    expect(details.getByRole('button', { name: 'Open session #91' })).toBeInTheDocument();
+
+    // "View runs" takes the slot the Runs tab gives the run's timestamp, so no date is shown here.
+    expect(details.getByRole('button', { name: /View runs/ })).toBeInTheDocument();
+    expect(details.queryByText(formatDateTime('2026-01-02T00:00:00Z'))).not.toBeInTheDocument();
+
+    // Duration and cost survive the restyle, as one compact line instead of labelled columns.
+    expect(details.getByText('1m 30s · $2.50')).toBeInTheDocument();
+  });
+
+  it('keeps View runs on the Latest run tile switching to the Runs tab', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRuns([buildTaskWorkflowRun({ steps: [stepOf({ terminalSessionId: 91 })] })]),
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    await userEvent.click(drawer.getByRole('button', { name: /View runs/ }));
+
+    expect(screen.getByRole('tab', { name: /Runs/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('lists only the run figures it has on the Latest run tile', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: drawerWithRuns([
+        buildTaskWorkflowRun({ steps: [stepOf({ state: 'running', terminalSessionId: 91 })], durationSeconds: 90 }),
+      ]),
+    });
+
+    const details = within(screen.getByRole('tabpanel'));
+    // A run without a cost yet gets the duration on its own — no dangling separator.
+    expect(details.getByText('1m 30s')).toBeInTheDocument();
+    expect(details.queryByText(/1m 30s ·/)).not.toBeInTheDocument();
   });
 
   it('shows the comments empty state and disables Send until text is entered', async () => {
