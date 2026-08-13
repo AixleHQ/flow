@@ -13,6 +13,12 @@ esac
 
 OS=linux
 
+# The application image freezes Bundler so production builds cannot drift from
+# Gemfile.lock. Ruby LSP generates .ruby-lsp/Gemfile at development time and
+# needs to resolve its own added gems, so unfreeze Bundler only in the created
+# devcontainer. Production containers never run this setup script.
+bundle config set --local frozen false
+
 ensure_persistent_home_state() {
   local claude_state_dir=/root/.claude-state
   local claude_json="${claude_state_dir}/.claude.json"

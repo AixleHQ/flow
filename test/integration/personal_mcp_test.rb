@@ -13,13 +13,19 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     @token = @user.regenerate_mcp_token!
   end
 
-  def rpc(method, params = {}, token: @token)
+  def rpc(method, params = {}, token: @token, protocol_version: nil)
     post "/mcp",
          params: { jsonrpc: "2.0", id: 1, method: method, params: params }.to_json,
          headers: { "Content-Type" => "application/json",
                     "Accept" => "application/json, text/event-stream",
-                    "Authorization" => "Bearer #{token}" }
+                    "Authorization" => "Bearer #{token}",
+                    "MCP-Protocol-Version" => protocol_version }.compact
     response.parsed_body
+  end
+
+  def initialize_with(version)
+    rpc("initialize", { protocolVersion: version, capabilities: {},
+                        clientInfo: { name: "test-client", version: "1" } }).dig("result", "protocolVersion")
   end
 
   def prompt_text(name)
@@ -103,6 +109,50 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     assert_match(/project_id/, result["instructions"])
     assert_match(/list_companies/, result["instructions"])
     assert_match(/setup_project/, result["instructions"])
+  end
+
+  # ── protocol version negotiation ──
+
+  test "an offer newer than what the server serves negotiates down" do
+    # Claude Code always offers 2026-07-28, whose results all require a
+    # `resultType` this server does not emit; agreeing to it made the client
+    # discard every list response and register no tools at all.
+    assert_equal Tools::MCPProtocol::MAX_NEGOTIABLE_VERSION, initialize_with("2026-07-28")
+  end
+
+  test "an offer the server serves is agreed to unchanged" do
+    Tools::MCPProtocol::NEGOTIABLE_VERSIONS.each do |version|
+      assert_equal version, initialize_with(version)
+    end
+  end
+
+  test "an unrecognized offer negotiates the newest version the server serves" do
+    assert_equal Tools::MCPProtocol::MAX_NEGOTIABLE_VERSION, initialize_with("not-a-version")
+  end
+
+  test "an offer that is not a string still gets the spec's invalid-params error" do
+    # Capping must not swallow a malformed handshake: the gem owns that error,
+    # and only offers it would agree to are rewritten on the way in.
+    error = rpc("initialize", { protocolVersion: 20260728, capabilities: {},
+                                clientInfo: { name: "test-client", version: "1" } })["error"]
+
+    assert_equal(-32602, error["code"])
+  end
+
+  test "the list responses match the negotiated version" do
+    negotiated = initialize_with("2026-07-28")
+
+    # The client sends the negotiated version back on every subsequent request:
+    # it has to be accepted, and the results have to be valid for it — which
+    # for 2025-11-25 means no `resultType` is expected.
+    { "tools/list" => "tools", "prompts/list" => "prompts", "resources/list" => "resources" }
+      .each do |method, key|
+      result = rpc(method, {}, protocol_version: negotiated)["result"]
+
+      assert_response :success
+      assert_not_empty result[key]
+      assert_nil result["resultType"]
+    end
   end
 
   test "the platform reference is served as a resource" do
