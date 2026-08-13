@@ -186,38 +186,28 @@ module Agents
       :append_toml
     end
 
-    # Fetch available models from Codex API.
+    MODEL_DESCRIPTION_LIMIT = 120
+
+    # Fetch the models to offer in the picker from the Codex catalog.
     # When an AgentCredential record is passed via `credential:`, expired
     # access tokens are automatically refreshed using the stored refresh_token.
-    CODEX_MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
-    # `client_version` gates the catalog: each model carries a
-    # `minimal_client_version` and the endpoint hides the models a client that old
-    # cannot run (the gpt-5.6 family needs >= 0.144.0). Keep this at the Codex CLI
-    # version baked into docker/codex/Dockerfile, or the model picker and the
-    # migration map both go stale against the CLI the session actually runs.
-    CODEX_CLIENT_VERSION = "0.147.0"
-
+    #
+    # Endpoints, headers, the client-version gate and JSON parsing live in
+    # Codex::Api; what stays here is the decision of which models to offer and
+    # when a rejected token is worth refreshing.
     def fetch_available_models(credentials, credential: nil)
       access_token = credentials.dig("tokens", "access_token")
       return [] if access_token.blank?
 
-      response = request_models(access_token)
-
-      if response.code == "401" && credential
-        new_token = refresh_access_token!(credential)
-        return [] unless new_token
-
-        response = request_models(new_token)
-      end
-
-      return [] unless response.is_a?(Net::HTTPSuccess)
-
-      data = JSON.parse(response.body)
-      (data["models"] || []).filter_map do |m|
-        next unless m["visibility"] == "list"
-
-        { model_id: m["slug"], display_name: m["display_name"] || m["slug"], description: m["description"].to_s.truncate(120) }
-      end
+      catalog(access_token, credential: credential)
+        .select(&:listed?)
+        .map do |model|
+          {
+            model_id: model.slug,
+            display_name: model.display_name,
+            description: model.description.truncate(MODEL_DESCRIPTION_LIMIT)
+          }
+        end
     rescue StandardError => e
       Rails.logger.warn("[CodexAdapter] fetch_available_models failed: #{e.message}")
       []
@@ -226,38 +216,19 @@ module Agents
     # Refresh an expired access token using the stored refresh_token.
     # Persists new tokens back to the AgentCredential record.
     # Returns the new access_token on success, nil on failure.
-    OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
-    OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
-
     def refresh_access_token!(credential)
       refresh_token = credential.config_data.dig("tokens", "refresh_token")
       return nil if refresh_token.blank?
 
-      uri = URI(OAUTH_TOKEN_URL)
-      body = URI.encode_www_form(
-        grant_type: "refresh_token",
-        client_id: OAUTH_CLIENT_ID,
-        refresh_token: refresh_token
-      )
-      req = Net::HTTP::Post.new(uri)
-      req["Content-Type"] = "application/x-www-form-urlencoded"
-      req.body = body
+      tokens = Codex::Api.refresh_tokens(refresh_token: refresh_token)
 
-      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
-
-      unless response.is_a?(Net::HTTPSuccess)
-        Rails.logger.warn("[CodexAdapter] Token refresh failed: #{response.code} #{response.body.to_s.truncate(200)}")
-        return nil
-      end
-
-      data = JSON.parse(response.body)
       current_tokens = credential.config_data["tokens"] || {}
       # Never discard the prior refresh_token/id_token when the server omits a
       # rotated one (RFC: keep the old until a new pair is committed).
       new_tokens = current_tokens.merge(
-        "access_token" => data["access_token"],
-        "refresh_token" => data["refresh_token"] || current_tokens["refresh_token"],
-        "id_token" => data["id_token"] || current_tokens["id_token"]
+        "access_token" => tokens.access_token,
+        "refresh_token" => tokens.refresh_token || current_tokens["refresh_token"],
+        "id_token" => tokens.id_token || current_tokens["id_token"]
       ).compact
 
       new_config = credential.config_data.merge("tokens" => new_tokens, "last_refresh" => Time.current.iso8601)
@@ -394,26 +365,26 @@ module Agents
       access_token = credentials&.dig("tokens", "access_token")
       return {} if access_token.blank?
 
-      response = request_models(access_token)
-      return {} unless response.is_a?(Net::HTTPSuccess)
-
-      data = JSON.parse(response.body)
-      (data["models"] || []).each_with_object({}) do |m, map|
-        target = m.dig("upgrade", "model")
-        next if m["slug"].blank? || target.blank?
-
-        map[m["slug"]] = target
-      end
+      Codex::Api.models(access_token: access_token)
+                .select(&:upgradable?)
+                .to_h { |model| [ model.slug, model.upgrade_target ] }
     rescue StandardError => e
       Rails.logger.warn("[CodexAdapter] fetch_model_upgrades failed: #{e.message}")
       {}
     end
 
-    def request_models(access_token)
-      uri = URI("#{CODEX_MODELS_URL}?client_version=#{CODEX_CLIENT_VERSION}")
-      req = Net::HTTP::Get.new(uri)
-      req["Authorization"] = "Bearer #{access_token}"
-      Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
+    # A rejected access token is the one failure worth retrying: `credential`
+    # carries the refresh token, so refresh once and ask again. Everything else
+    # propagates to the caller's rescue.
+    def catalog(access_token, credential: nil)
+      Codex::Api.models(access_token: access_token)
+    rescue Codex::Api::UnauthorizedError
+      raise unless credential
+
+      new_token = refresh_access_token!(credential)
+      raise unless new_token
+
+      Codex::Api.models(access_token: new_token)
     end
 
     CODEX_RESPONSES_PATH = "/backend-api/codex/responses"

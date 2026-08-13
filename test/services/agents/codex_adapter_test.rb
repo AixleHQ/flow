@@ -240,9 +240,9 @@ module Agents
       # The endpoint hides models whose minimal_client_version is above the version
       # we claim — the gpt-5.6 family requires 0.144.0, which is why an older
       # client_version left those models out of the model picker entirely.
-      assert_operator Gem::Version.new(Agents::CodexAdapter::CODEX_CLIENT_VERSION),
+      assert_operator Gem::Version.new(Codex::Api::CLIENT_VERSION),
                       :>=, Gem::Version.new("0.144.0"),
-                      "CODEX_CLIENT_VERSION must be at least the gpt-5.6 minimal client version"
+                      "Codex::Api::CLIENT_VERSION must be at least the gpt-5.6 minimal client version"
 
       request = stub_codex_models([
         { "slug" => "gpt-5.6-sol", "display_name" => "GPT-5.6-Sol", "description" => "Fast", "visibility" => "list" },
@@ -253,6 +253,46 @@ module Agents
 
       assert_requested request
       assert_equal [ "gpt-5.6-sol" ], models.map { |m| m[:model_id] }
+    end
+
+    test "fetch_available_models refreshes a rejected access token and retries once" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => "stale", "refresh_token" => "r1" }
+      })
+      stub_request(:get, codex_models_url)
+        .with(headers: { "Authorization" => "Bearer stale" })
+        .to_return(status: 401, body: "")
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
+        .to_return(status: 200, body: { access_token: "fresh" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      retried = stub_request(:get, codex_models_url)
+        .with(headers: { "Authorization" => "Bearer fresh" })
+        .to_return(codex_models_response([ { "slug" => "gpt-5.6-sol", "visibility" => "list" } ]))
+
+      models = @adapter.fetch_available_models(credential.config_data, credential: credential)
+
+      assert_requested retried
+      assert_equal [ "gpt-5.6-sol" ], models.map { |m| m[:model_id] }
+      assert_equal "fresh", credential.reload.config_data.dig("tokens", "access_token")
+    end
+
+    test "fetch_available_models returns nothing when the token is rejected and cannot be refreshed" do
+      stub_request(:get, codex_models_url).to_return(status: 401, body: "")
+
+      assert_empty @adapter.fetch_available_models({ "tokens" => { "access_token" => "stale" } })
+    end
+
+    # The reviewer's layering ask (PR #92): the vendor transport belongs in
+    # Codex::Api, and the adapter is only allowed to call it. A raw HTTP call
+    # sneaking back in here is the regression this guards.
+    test "the adapter speaks to the Codex API only through Codex::Api" do
+      source = File.read(Rails.root.join("app/services/agents/codex_adapter.rb"))
+
+      assert_no_match(/Net::HTTP|Faraday|URI\(/, source,
+                      "HTTP transport belongs in Codex::Api, not in the adapter")
+      assert_no_match(%r{https://(chatgpt\.com|auth\.openai\.com)}, source,
+                      "vendor endpoints belong in Codex::Api, not in the adapter")
     end
 
     test "session_command returns codex --yolo for any mode" do
@@ -431,7 +471,7 @@ module Agents
       credential = create(:agent_credential, :codex, user: user, config_data: {
         "tokens" => { "access_token" => "old", "refresh_token" => "r1", "id_token" => "id1" }
       })
-      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL)
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
         .to_return(status: 200,
                    body: { access_token: "new", refresh_token: "r2", id_token: "id2" }.to_json,
                    headers: { "Content-Type" => "application/json" })
@@ -445,7 +485,7 @@ module Agents
       credential = create(:agent_credential, :codex, user: user, config_data: {
         "tokens" => { "access_token" => "old", "refresh_token" => "r1" }
       })
-      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL).to_return(status: 400, body: "nope")
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL).to_return(status: 400, body: "nope")
 
       result = @adapter.refresh!(credential)
 
@@ -466,7 +506,7 @@ module Agents
         "tokens" => { "access_token" => "old", "refresh_token" => "keep-me", "id_token" => "keep-id" }
       })
       # Response rotates only the access token — no refresh_token/id_token echoed back.
-      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL)
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
         .to_return(status: 200, body: { access_token: "new" }.to_json,
                    headers: { "Content-Type" => "application/json" })
 
@@ -487,7 +527,7 @@ module Agents
       # Server hands back a token that expires SOONER than the stored one — the
       # rotation guard must keep the fresher stored token.
       older = jwt_with_exp(1.minute.from_now.to_i)
-      stub_request(:post, CodexAdapter::OAUTH_TOKEN_URL)
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
         .to_return(status: 200, body: { access_token: older, refresh_token: "r2" }.to_json,
                    headers: { "Content-Type" => "application/json" })
 
@@ -573,7 +613,7 @@ module Agents
     private
 
     def codex_models_url
-      "#{Agents::CodexAdapter::CODEX_MODELS_URL}?client_version=#{Agents::CodexAdapter::CODEX_CLIENT_VERSION}"
+      "#{Codex::Api::MODELS_URL}?client_version=#{Codex::Api::CLIENT_VERSION}"
     end
 
     # Canned /codex/models response. `models` entries mirror the API shape the CLI
