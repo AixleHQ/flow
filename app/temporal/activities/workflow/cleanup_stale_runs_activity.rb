@@ -19,6 +19,7 @@ module Activities
       def cleanup_stale(state)
         count = 0
         stale_runs_scope(state).find_each do |run|
+          fail_active_sessions(run)
           run.update_column(:failure_reason, "stale_run")
           run.fail! if run.may_fail?
           count += 1
@@ -26,6 +27,21 @@ module Activities
           log(:warn, "Failed to clean WorkflowRun #{run.id}: #{e.message}")
         end
         count
+      end
+
+      def fail_active_sessions(run)
+        active_sessions = run.step_runs
+                             .includes(:terminal_session)
+                             .filter_map(&:terminal_session)
+                             .select(&:may_fail?)
+        active_sessions.each do |session|
+          SessionService.fail_session(
+            session: session,
+            error_message: "Terminated by stale run reaper (WorkflowRun ##{run.id})"
+          )
+        rescue StandardError => e
+          log(:warn, "Failed to terminate session #{session.id} for run #{run.id}: #{e.message}")
+        end
       end
 
       def stale_runs_scope(state)

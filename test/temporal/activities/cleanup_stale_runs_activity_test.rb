@@ -81,6 +81,37 @@ module Activities
         assert_equal 1, result[:cleaned_running]
         assert_equal 1, result[:cleaned_paused]
       end
+
+      test "fails active terminal sessions attached to a stale run" do
+        run = create(:workflow_run, workflow: @workflow, project: @project, user: @user,
+                     state: "running", started_at: 5.hours.ago)
+        session = create(:terminal_session, :running, user: @user, project: @project,
+                         company: @company, state: "ready")
+        create(:step_run, :running, workflow_run: run, terminal_session: session)
+
+        SessionService.expects(:fail_session).with(
+          session: session,
+          error_message: regexp_matches(/stale run reaper/)
+        )
+
+        run_activity(CleanupStaleRunsActivity)
+
+        assert_equal "failed", run.reload.state
+      end
+
+      test "skips sessions that cannot transition to failed" do
+        run = create(:workflow_run, workflow: @workflow, project: @project, user: @user,
+                     state: "running", started_at: 5.hours.ago)
+        session = create(:terminal_session, user: @user, project: @project,
+                         company: @company, state: "finished")
+        create(:step_run, :running, workflow_run: run, terminal_session: session)
+
+        SessionService.expects(:fail_session).never
+
+        run_activity(CleanupStaleRunsActivity)
+
+        assert_equal "finished", session.reload.state
+      end
     end
   end
 end
