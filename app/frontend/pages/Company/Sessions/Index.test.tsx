@@ -1,8 +1,25 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+
+type CableHandlers = {
+  connected: () => void;
+  disconnected: () => void;
+  received: (data: Record<string, unknown>) => void;
+};
+let lastCableHandlers: CableHandlers | null = null;
+vi.mock('shared/lib/actionCableConsumer', () => ({
+  getConsumer: () => ({
+    subscriptions: {
+      create: (_params: unknown, handlers: CableHandlers) => {
+        lastCableHandlers = handlers;
+        return { unsubscribe: vi.fn() };
+      },
+    },
+  }),
+}));
 
 import SessionsIndex from './Index';
 
@@ -317,4 +334,63 @@ describe('Company/Sessions/Index', () => {
       expect.objectContaining({ preserveState: true, preserveScroll: true }),
     );
   });
+
+  it('keeps accumulated pages when sessions prop reverts to page 1 (poll survival)', () => {
+    const s1 = makeSession({ id: 1201, state: 'finished' });
+    const s2 = makeSession({ id: 1202, state: 'finished' });
+
+    const { rerender } = renderAuthedPage(
+      <SessionsIndex sessions={[s1, s2]} filters={{}} perPage={20} />,
+    );
+
+    expect(screen.getByText('#1202')).toBeInTheDocument();
+
+    rerender(<SessionsIndex sessions={[s1]} filters={{}} perPage={20} />);
+
+    expect(screen.getByText('#1201')).toBeInTheDocument();
+    expect(screen.getByText('#1202')).toBeInTheDocument();
+  });
+
+  it('clears stale session rows when the filter prop changes', async () => {
+    const sessions1 = [makeSession({ id: 1301, state: 'ready' }), makeSession({ id: 1302, state: 'finished' })];
+    const sessions2 = [makeSession({ id: 1303, state: 'failed' })];
+
+    const { rerender } = renderAuthedPage(
+      <SessionsIndex sessions={sessions1} filters={{}} perPage={20} />,
+    );
+
+    expect(screen.getByText('#1301')).toBeInTheDocument();
+    expect(screen.getByText('#1302')).toBeInTheDocument();
+
+    rerender(<SessionsIndex sessions={sessions2} filters={{ state_eq: 'failed' }} perPage={20} />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('#1301')).not.toBeInTheDocument();
+      expect(screen.queryByText('#1302')).not.toBeInTheDocument();
+      expect(screen.getByText('#1303')).toBeInTheDocument();
+    });
+  });
+
+  it('patches a session in place via cable update without discarding accumulated pages', async () => {
+    vi.useFakeTimers();
+    lastCableHandlers = null;
+
+    const s1 = makeSession({ id: 1401, state: 'ready' });
+    const s2 = makeSession({ id: 1402, state: 'finished' });
+
+    renderAuthedPage(<SessionsIndex sessions={[s1, s2]} filters={{}} perPage={20} />);
+
+    await act(async () => { vi.advanceTimersByTime(100); });
+
+    expect(lastCableHandlers).not.toBeNull();
+
+    await act(async () => {
+      lastCableHandlers!.received({ type: 'session_update', session: { ...s1, state: 'finished' } });
+    });
+
+    expect(screen.getByText('#1401')).toBeInTheDocument();
+    expect(screen.getByText('#1402')).toBeInTheDocument();
+  });
+
+  afterEach(() => { vi.useRealTimers(); });
 });

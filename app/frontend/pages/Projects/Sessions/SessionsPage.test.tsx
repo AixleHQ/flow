@@ -1,8 +1,25 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+
+type CableHandlers = {
+  connected: () => void;
+  disconnected: () => void;
+  received: (data: Record<string, unknown>) => void;
+};
+let lastCableHandlers: CableHandlers | null = null;
+vi.mock('shared/lib/actionCableConsumer', () => ({
+  getConsumer: () => ({
+    subscriptions: {
+      create: (_params: unknown, handlers: CableHandlers) => {
+        lastCableHandlers = handlers;
+        return { unsubscribe: vi.fn() };
+      },
+    },
+  }),
+}));
 
 import SessionsPage from './SessionsPage';
 
@@ -428,6 +445,49 @@ describe('Projects/Sessions/SessionsPage', () => {
   });
 
   // --- filter reset ---
+
+  it('keeps accumulated pages when sessions prop reverts to page 1 (poll survival)', () => {
+    const s1 = makeSession({ id: 301, state: 'finished' });
+    const s2 = makeSession({ id: 302, state: 'finished' });
+
+    const { rerender } = renderAuthedPage(
+      <SessionsPage sessions={[s1, s2]} filters={{}} perPage={20} />,
+      { props: { project } },
+    );
+
+    expect(screen.getByText('#302')).toBeInTheDocument();
+
+    // Simulate a poll returning only page 1 again — page 2 rows must survive.
+    rerender(<SessionsPage sessions={[s1]} filters={{}} perPage={20} />);
+
+    expect(screen.getByText('#301')).toBeInTheDocument();
+    expect(screen.getByText('#302')).toBeInTheDocument();
+  });
+
+  it('patches a session in place via cable update without discarding accumulated pages', async () => {
+    vi.useFakeTimers();
+    lastCableHandlers = null;
+
+    const s1 = makeSession({ id: 401, state: 'ready' });
+    const s2 = makeSession({ id: 402, state: 'finished' });
+
+    renderAuthedPage(<SessionsPage sessions={[s1, s2]} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    await act(async () => { vi.advanceTimersByTime(100); });
+
+    expect(lastCableHandlers).not.toBeNull();
+
+    await act(async () => {
+      lastCableHandlers!.received({ type: 'session_update', session: { ...s1, state: 'finished' } });
+    });
+
+    expect(screen.getByText('#401')).toBeInTheDocument();
+    expect(screen.getByText('#402')).toBeInTheDocument();
+  });
+
+  afterEach(() => { vi.useRealTimers(); });
 
   it('clears stale session rows when the filter prop changes', async () => {
     const sessions1 = [makeSession({ id: 201, state: 'ready' }), makeSession({ id: 202, state: 'finished' })];

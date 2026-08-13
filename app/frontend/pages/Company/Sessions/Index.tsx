@@ -2,7 +2,7 @@ import { InfiniteScroll, router } from '@inertiajs/react';
 import { Badge, Box, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
 import { IconExternalLink, IconLock } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
@@ -124,17 +124,26 @@ const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
     return map;
   });
 
-  // Sync new pages loaded by InfiniteScroll into the map (append-only: cable
-  // updates take precedence over Inertia prop data for existing entries).
+  const prevFiltersRef = useRef<string>('');
+
+  // Accumulate pages loaded by InfiniteScroll; reset map when filters change.
   useEffect(() => {
+    const filtersKey = JSON.stringify(filters);
+    const filtersChanged = filtersKey !== prevFiltersRef.current;
+    prevFiltersRef.current = filtersKey;
     setSessionMap((prev) => {
+      if (filtersChanged) {
+        const map = new Map<number, Session>();
+        for (const s of sessions) map.set(s.id, s);
+        return map;
+      }
       const newEntries = sessions.filter((s) => !prev.has(s.id));
       if (newEntries.length === 0) return prev;
       const map = new Map(prev);
       for (const s of newEntries) map.set(s.id, s);
       return map;
     });
-  }, [sessions]);
+  }, [sessions, filters]);
 
   useSessionListCableUpdates({
     onUpdate: useCallback((updated) => {

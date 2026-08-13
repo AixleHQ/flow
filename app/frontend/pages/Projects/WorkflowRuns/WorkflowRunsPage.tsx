@@ -2,7 +2,7 @@ import { Head, InfiniteScroll, router, usePage } from '@inertiajs/react';
 import { Box, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
 import { IconExternalLink } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useWorkflowRunListCableUpdates } from 'shared/lib/hooks/useWorkflowRunListCableUpdates';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -91,14 +91,26 @@ const WorkflowRunsPage = ({ runs, filters, perPage }: Props) => {
     return m;
   });
 
-  // Accumulate pages loaded by InfiniteScroll into the local map.
+  const prevFiltersRef = useRef<string>('');
+
+  // Accumulate pages loaded by InfiniteScroll; reset map when filters change.
   useEffect(() => {
+    const filtersKey = JSON.stringify(filters);
+    const filtersChanged = filtersKey !== prevFiltersRef.current;
+    prevFiltersRef.current = filtersKey;
     setRunMap((prev) => {
+      if (filtersChanged) {
+        const m = new Map<number, WorkflowRun>();
+        runs.forEach((r) => m.set(r.id, r));
+        return m;
+      }
       const next = new Map(prev);
-      runs.forEach((r) => next.set(r.id, r));
+      runs.forEach((r) => {
+        if (!prev.has(r.id)) next.set(r.id, r);
+      });
       return next;
     });
-  }, [runs]);
+  }, [runs, filters]);
 
   // Live cable updates: update existing runs in-place without reloading pages.
   const onUpdate = useCallback((run: Record<string, unknown>) => {
