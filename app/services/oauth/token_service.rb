@@ -7,6 +7,11 @@ module Oauth
   # and returns a usable access token or raises Oauth::ReauthRequired.
   module TokenService
     REFRESH_SKEW = 10.minutes
+    # Pre-session refresh window: sized for session duration, not single-request latency.
+    # A credential expiring within this window is refreshed before the session starts so
+    # the one-shot MCP token injection receives a token valid for the whole session run.
+    # Distinct from REFRESH_SKEW, which governs on-demand per-request refreshes.
+    PRE_START_SKEW = 1.hour
 
     module_function
 
@@ -69,7 +74,7 @@ module Oauth
     # Concurrent calls on the same credential are safe: `fresh` acquires `with_lock`
     # before refreshing, so a racing caller reloads and skips the HTTP call if the
     # token was just refreshed — no stampede even with providers that rotate refresh tokens.
-    def refresh_if_expiring_soon(cred, skew: 1.hour)
+    def refresh_if_expiring_soon(cred, skew: PRE_START_SKEW)
       return unless cred.expired?(skew)
       return unless cred.refreshable?
 

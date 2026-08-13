@@ -89,7 +89,7 @@ class SessionServiceTest < ActiveSupport::TestCase
       cred.update_columns(status: "error")
     end
 
-    assert_raises(Oauth::PreflightError) do
+    error = assert_raises(Oauth::PreflightError) do
       SessionService.create_and_start(
         user: @user, project: @project, session_type: "agent_session",
         agent_type: "claude_code", params: { mcp_server_ids: [ server.id ] }
@@ -97,6 +97,7 @@ class SessionServiceTest < ActiveSupport::TestCase
     end
 
     assert_equal 0, @user.terminal_sessions.count, "must not create a session with a broken credential"
+    assert_equal "/oauth/mcp/#{server.id}/connect", error.connections.first[:connect_url]
   end
 
   test "create_and_start blocks launch when a credential is already in error status before start" do
@@ -111,12 +112,14 @@ class SessionServiceTest < ActiveSupport::TestCase
                             access_token: "tok", expires_at: 30.minutes.from_now,
                             refresh_token: "rt-ok")
 
-    assert_raises(Oauth::PreflightError) do
+    error = assert_raises(Oauth::PreflightError) do
       SessionService.create_and_start(
         user: @user, project: @project, session_type: "agent_session",
         agent_type: "claude_code", params: { mcp_server_ids: [ server.id ] }
       )
     end
+
+    assert_equal "/oauth/mcp/#{server.id}/connect", error.connections.first[:connect_url]
   end
 
   test "create_and_start blocks launch when an OAuth MCP server has no usable credential" do
@@ -479,7 +482,7 @@ class SessionServiceTest < ActiveSupport::TestCase
 
   # == preflight_oauth! with near-expiry token refresh ==
 
-  test "preflight_oauth! calls refresh_if_expiring_soon for a token expiring within 1 hour" do
+  test "preflight_oauth! calls refresh_if_expiring_soon for a token expiring within PRE_START_SKEW" do
     server = create(:mcp_server, :custom, scope: @project, transport: :sse,
                     auth_type: :oauth, credential_scope: :per_user)
     client = OauthClient.create!(
@@ -496,7 +499,7 @@ class SessionServiceTest < ActiveSupport::TestCase
     SessionService.send(:preflight_oauth!, @user, [ server.id ])
   end
 
-  test "preflight_oauth! does not refresh a token with more than 1 hour remaining" do
+  test "preflight_oauth! does not refresh a token with more than PRE_START_SKEW remaining" do
     server = create(:mcp_server, :custom, scope: @project, transport: :sse,
                     auth_type: :oauth, credential_scope: :per_user)
     client = OauthClient.create!(
@@ -508,7 +511,7 @@ class SessionServiceTest < ActiveSupport::TestCase
                                    access_token: "tok2", expires_at: 2.hours.from_now,
                                    refresh_token: "rt-xyz")
 
-    # Token has > 1h remaining — refresh_if_expiring_soon must not call fresh (no HTTP).
+    # Token has > PRE_START_SKEW remaining — refresh_if_expiring_soon must not call fresh (no HTTP).
     Oauth::TokenService.expects(:fresh).never
 
     SessionService.send(:preflight_oauth!, @user, [ server.id ])
