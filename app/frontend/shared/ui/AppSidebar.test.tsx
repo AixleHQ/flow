@@ -108,18 +108,71 @@ describe('AppSidebar', () => {
     expect(screen.getByText('Aurora Platform')).toBeInTheDocument();
   });
 
-  it('opens the workspace switcher and navigates to a selected project via router.visit', async () => {
+  // The switcher's project rows are real Inertia <Link>s; left alone, a click would trigger
+  // the real Router.visit (which has no live page context under jsdom and throws). A
+  // capture-phase preventDefault makes Inertia's shouldIntercept() bail out before visiting,
+  // while React's synthetic onClick still fires.
+  function suppressHardNavigation() {
+    const handler = (e: Event) => e.preventDefault();
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  }
+
+  async function openSwitcher(user: ReturnType<typeof userEvent.setup>) {
+    // The switcher button shows "All Projects" while no project is current.
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+    return screen.findByRole('link', { name: /Borealis Pipeline/ });
+  }
+
+  // Rendering each project as a link is what buys the browser-native affordances the
+  // switcher needs: Cmd/Ctrl+click into a new tab and a right-click "Open in new
+  // tab/window" context menu. Both are the browser's job once there is an href.
+  it('opens the workspace switcher and lists each project as a link to that project', async () => {
     const user = userEvent.setup();
     renderAuthedPage(<AppSidebar context="company" projects={projects} />);
 
-    // The switcher button shows "All Projects" while no project is current.
-    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+    const borealis = await openSwitcher(user);
 
-    // Popover lists the available projects; click one to switch.
-    const borealis = await screen.findByText('Borealis Pipeline');
+    expect(borealis).toHaveAttribute('href', '/company/projects/8');
+    expect(screen.getByRole('link', { name: /Aurora Platform/ })).toHaveAttribute('href', '/company/projects/7');
+  });
+
+  it('marks the current project link as the active page in the switcher', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />);
+
+    await user.click(screen.getByRole('button', { name: /Aurora Platform/ }));
+
+    expect(await screen.findByRole('link', { name: /Aurora Platform/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: /Borealis Pipeline/ })).not.toHaveAttribute('aria-current');
+  });
+
+  it('closes the switcher on a plain click, which navigates in the same tab', async () => {
+    const restore = suppressHardNavigation();
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar context="company" projects={projects} />);
+
+    const borealis = await openSwitcher(user);
     await user.click(borealis);
 
-    expect(router.visit).toHaveBeenCalledWith('/company/projects/8');
+    expect(screen.queryByRole('link', { name: /Borealis Pipeline/ })).not.toBeInTheDocument();
+    restore();
+  });
+
+  // A modifier-click opens the project in another tab and leaves this one where it was, so
+  // dismissing the popover would hide a switcher that never switched.
+  it('keeps the switcher open on a modifier-click, letting the browser open a new tab', async () => {
+    const restore = suppressHardNavigation();
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar context="company" projects={projects} />);
+
+    const borealis = await openSwitcher(user);
+    await user.keyboard('{Meta>}');
+    await user.click(borealis);
+    await user.keyboard('{/Meta}');
+
+    expect(screen.getByRole('link', { name: /Borealis Pipeline/ })).toBeInTheDocument();
+    restore();
   });
 
   it('sends "Build with AI" to the current project\'s builder in project context', async () => {
