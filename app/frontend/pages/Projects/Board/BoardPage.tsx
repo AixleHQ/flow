@@ -2519,9 +2519,7 @@ function TaskDetailSidebar({
                                   size="xs"
                                   aria-label={`Open session #${sessionId}`}
                                   style={{ flexShrink: 0 }}
-                                  onClick={() =>
-                                    router.visit(`/company/projects/${projectId}/sessions/${sessionId}`)
-                                  }
+                                  onClick={() => router.visit(`/company/projects/${projectId}/sessions/${sessionId}`)}
                                 >
                                   <IconTerminal2 size={13} />
                                 </ActionIcon>

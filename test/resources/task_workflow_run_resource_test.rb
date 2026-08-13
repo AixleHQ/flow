@@ -7,10 +7,11 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
     @workflow = create(:workflow, :with_project_scope)
     @project = @workflow.scope
     @run = create(:workflow_run, workflow: @workflow, project: @project)
+    @user = @run.user
   end
 
   test "steps expose the terminal session id so the board task drawer can link into the session" do
-    session = create(:terminal_session, project: @project)
+    session = create(:terminal_session, project: @project, user: @user)
     step = create(:step, workflow: @workflow, name: "Implementation")
     create(:step_run, workflow_run: @run, step: step, terminal_session: session)
 
@@ -32,9 +33,9 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
 
   test "steps keep creation order so the drawer can pick the most recent session" do
     first = create(:step_run, workflow_run: @run, step: create(:step, workflow: @workflow, name: "Analysis"),
-                              terminal_session: create(:terminal_session, project: @project))
+                              terminal_session: create(:terminal_session, project: @project, user: @user))
     second = create(:step_run, workflow_run: @run, step: create(:step, workflow: @workflow, name: "Implementation"),
-                               terminal_session: create(:terminal_session, project: @project))
+                               terminal_session: create(:terminal_session, project: @project, user: @user))
 
     steps = TaskWorkflowRunResource.new(@run.reload).to_h["steps"]
 

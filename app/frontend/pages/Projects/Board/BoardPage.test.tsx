@@ -403,9 +403,7 @@ describe('Projects/Board/BoardPage', () => {
 
   it('jumps straight into the session from the Latest run block on the Details tab', async () => {
     renderAuthedPage(<BoardPage />, {
-      props: drawerWithRuns([
-        buildTaskWorkflowRun({ steps: [stepOf({ state: 'running', terminalSessionId: 91 })] }),
-      ]),
+      props: drawerWithRuns([buildTaskWorkflowRun({ steps: [stepOf({ state: 'running', terminalSessionId: 91 })] })]),
     });
 
     // Details is the default tab, so the Latest run block is already on screen.
@@ -445,7 +443,9 @@ describe('Projects/Board/BoardPage', () => {
     expect(drawer.getByText(/latest run/i)).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: /Runs/ }));
-    expect(within(screen.getByRole('tabpanel')).queryByRole('button', { name: /Open session/i })).not.toBeInTheDocument();
+    expect(
+      within(screen.getByRole('tabpanel')).queryByRole('button', { name: /Open session/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('targets the still-running step when a run has several sessions', async () => {
