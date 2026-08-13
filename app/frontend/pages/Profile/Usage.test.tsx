@@ -116,9 +116,7 @@ describe('Profile/Usage', () => {
   });
 
   it('renders a ready session with the Running label via StatusBadge migration', () => {
-    const runningSessions = [
-      { ...sessions[0], id: 502, state: 'ready' as const, finishedAt: null },
-    ];
+    const runningSessions = [{ ...sessions[0], id: 502, state: 'ready' as const, finishedAt: null }];
     renderAuthedPage(<UsagePage />, { props: { ...selfProps, sessions: runningSessions } });
 
     // State `ready` maps to "Running" in STATE_CONFIG; StatusBadge replaces raw Badge.

@@ -430,16 +430,12 @@ describe('Projects/Sessions/SessionsPage', () => {
   // --- filter reset ---
 
   it('clears stale session rows when the filter prop changes', async () => {
-    const sessions1 = [
-      makeSession({ id: 201, state: 'ready' }),
-      makeSession({ id: 202, state: 'finished' }),
-    ];
+    const sessions1 = [makeSession({ id: 201, state: 'ready' }), makeSession({ id: 202, state: 'finished' })];
     const sessions2 = [makeSession({ id: 203, state: 'failed' })];
 
-    const { rerender } = renderAuthedPage(
-      <SessionsPage sessions={sessions1} filters={{}} perPage={20} />,
-      { props: { project } },
-    );
+    const { rerender } = renderAuthedPage(<SessionsPage sessions={sessions1} filters={{}} perPage={20} />, {
+      props: { project },
+    });
 
     expect(screen.getByText('#201')).toBeInTheDocument();
     expect(screen.getByText('#202')).toBeInTheDocument();

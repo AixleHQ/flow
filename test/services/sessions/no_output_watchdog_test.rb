@@ -34,7 +34,7 @@ class NoOutputWatchdogTest < ActiveSupport::TestCase
     Sessions::LiveLogReader.stubs(:new).with(@session, runtime: nil).returns(reader)
 
     watchdog = Sessions::NoOutputWatchdog.new(@session)
-    refute watchdog.stale?
+    refute_predicate watchdog, :stale?
   end
 
   test "stale? returns false when last_output_at is nil (container not ready for mtime yet)" do
@@ -46,7 +46,7 @@ class NoOutputWatchdogTest < ActiveSupport::TestCase
     Sessions::LiveLogReader.stubs(:new).with(@session, runtime: nil).returns(reader)
 
     watchdog = Sessions::NoOutputWatchdog.new(@session)
-    refute watchdog.stale?
+    refute_predicate watchdog, :stale?
   end
 
   test "stale? returns false when container is unreachable (leave to dead-container scanner)" do
@@ -58,7 +58,7 @@ class NoOutputWatchdogTest < ActiveSupport::TestCase
     Sessions::LiveLogReader.stubs(:new).with(@session, runtime: nil).returns(reader)
 
     watchdog = Sessions::NoOutputWatchdog.new(@session)
-    refute watchdog.stale?
+    refute_predicate watchdog, :stale?
   end
 
   test "message returns a human-readable no-output description" do
