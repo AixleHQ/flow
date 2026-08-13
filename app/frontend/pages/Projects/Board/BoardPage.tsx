@@ -90,7 +90,6 @@ import {
   IconTag,
   IconTrash,
   IconChartBar,
-  IconExternalLink,
   IconFileTypePdf,
   IconPlayerPlay,
   IconUser,
@@ -142,7 +141,11 @@ import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
+import { formatCostCents, formatDuration, formatTokens } from './boardFormat';
 import styles from './BoardPage.module.css';
+import { LatestRunTile } from './LatestRunTile';
+import { WORKFLOW_ACTIVE_STATES, type TaskWorkflowRun } from './taskRuns';
+import { TaskRunsPanel } from './TaskRunsPanel';
 import { useBoardDnd } from './useBoardDnd';
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
@@ -274,8 +277,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: 'var(--app-success-fg)',
 };
 
-const WORKFLOW_ACTIVE_STATES = new Set(['pending', 'running', 'paused']);
-
 // Helper to get workflow status indicator color
 const workflowStatusColor = (state: string): string => {
   if (WORKFLOW_ACTIVE_STATES.has(state)) return 'var(--app-warning-fg)';
@@ -292,24 +293,6 @@ const CHART_TOOLTIP_STYLE: React.CSSProperties = {
   fontSize: 12,
   color: 'var(--app-text-primary)',
 };
-
-function formatCostCents(cents: number): string {
-  return cents >= 100 ? `$${(cents / 100).toFixed(2)}` : `${cents}¢`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
-  return `${tokens}`;
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return `${h}h ${m}m`;
-}
 
 interface BoardFilters {
   assigneeId: string | null;
@@ -1238,26 +1221,6 @@ async function deleteTaskGate(projectId: number, taskId: number, gateId: number)
   }
 }
 
-interface TaskWorkflowRun {
-  id: number;
-  workflowName: string;
-  state: string;
-  mode: string;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  totalCostCents?: number;
-  totalTokens?: number;
-  durationSeconds?: number;
-  steps?: Array<{
-    name: string;
-    state: string;
-    startedAt: string | null;
-    finishedAt: string | null;
-    durationSeconds: number | null;
-  }>;
-}
-
 function useBoardActivitiesLoadMore(projectId: number, initialActivities: ActivityItem[]) {
   const [extraActivities, setExtraActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1312,37 +1275,6 @@ interface TaskStatistics {
     totalTokens: number;
     durationSeconds: number;
   }>;
-}
-
-// --- Neutral Status Chip (AC-13, AC-28) ---
-
-function NeutralStatusChip({ state, size = 'xs' }: { state: string; size?: string }) {
-  const isRunning = WORKFLOW_ACTIVE_STATES.has(state);
-  const isSuccess = state === 'completed' || state === 'succeeded';
-  const isFailed = state === 'failed';
-  let dotColor = 'var(--mantine-color-gray-5)';
-  if (isRunning) dotColor = 'var(--app-warning-fg)';
-  else if (isSuccess) dotColor = 'var(--app-success-fg)';
-  else if (isFailed) dotColor = 'var(--app-danger-fg)';
-
-  return (
-    <Badge
-      size={size as 'xs' | 'sm'}
-      variant="outline"
-      color="gray"
-      leftSection={
-        <Box
-          w={6}
-          h={6}
-          className={isRunning ? styles.workflowDotActive : undefined}
-          style={{ borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0 }}
-        />
-      }
-      style={{ fontSize: 10, cursor: 'default' }}
-    >
-      {state}
-    </Badge>
-  );
 }
 
 // --- Inline tags editor (matches reference .tag / .add-tag / .tag-input pattern) ---
@@ -1551,7 +1483,6 @@ function TaskDetailSidebar({
   const [triggeringWorkflow, setTriggeringWorkflow] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
-  const [showAllSteps, setShowAllSteps] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1733,6 +1664,12 @@ function TaskDetailSidebar({
   const columnWorkflowBinding = taskColumn?.workflowBinding ?? null;
   const hasActiveRun = (task.recentWorkflowRuns ?? []).some((r) => WORKFLOW_ACTIVE_STATES.has(r.state));
   const canTriggerWorkflow = columnWorkflowBinding && !hasActiveRun;
+  // A task keeps its run history wherever it is parked — a workflow that finishes usually moves the
+  // task out of the bound column, and gating the run surfaces on the binding hid the history (and
+  // the session shortcut) exactly then. The runs themselves decide; the binding only decides whether
+  // a *new* run can be started from here (canTriggerWorkflow).
+  const hasRuns = (workflowRuns ?? []).length > 0;
+  const showRuns = !!columnWorkflowBinding || hasRuns;
   const assetsCount = (taskAssets ?? []).length || task.assetsCount || 0;
 
   return (
@@ -1826,7 +1763,7 @@ function TaskDetailSidebar({
       >
         <Tabs.List>
           <Tabs.Tab value="details">Details</Tabs.Tab>
-          {columnWorkflowBinding && <Tabs.Tab value="runs">Runs ({(workflowRuns ?? []).length})</Tabs.Tab>}
+          {showRuns && <Tabs.Tab value="runs">Runs ({(workflowRuns ?? []).length})</Tabs.Tab>}
           <Tabs.Tab value="comments">
             Comments ({(comments ?? []).length > 0 ? (comments ?? []).length : task.commentsCount})
           </Tabs.Tab>
@@ -1981,115 +1918,10 @@ function TaskDetailSidebar({
             )}
           </Box>
 
-          {/* Latest run summary (AC-19) — only for automated columns */}
-          {columnWorkflowBinding &&
-            (workflowRuns ?? []).length > 0 &&
-            (() => {
-              const latestRun = (workflowRuns ?? [])[0];
-              const dur = latestRun.durationSeconds;
-              return (
-                <Box style={{ marginBottom: 20 }}>
-                  {/* sec-label */}
-                  <Box
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                      color: 'var(--mantine-color-dimmed)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      paddingBottom: 10,
-                      borderBottom: '1px solid var(--app-border-default)',
-                      marginBottom: 14,
-                    }}
-                  >
-                    <IconBolt size={14} color="var(--app-primary-strong)" />
-                    Latest run
-                  </Box>
-                  {/* run-summary card */}
-                  <Box
-                    style={{
-                      display: 'flex',
-                      gap: 16,
-                      alignItems: 'center',
-                      padding: '12px 14px',
-                      border: '1px solid var(--app-border-default)',
-                      borderRadius: 8,
-                      background: 'var(--app-bg-paper)',
-                    }}
-                  >
-                    <Box style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <Text
-                        style={{
-                          fontSize: 10,
-                          letterSpacing: '0.06em',
-                          textTransform: 'uppercase',
-                          color: 'var(--mantine-color-placeholder)',
-                        }}
-                      >
-                        Status
-                      </Text>
-                      <NeutralStatusChip state={latestRun.state} />
-                    </Box>
-                    {dur != null && (
-                      <Box style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            letterSpacing: '0.06em',
-                            textTransform: 'uppercase',
-                            color: 'var(--mantine-color-placeholder)',
-                          }}
-                        >
-                          Duration
-                        </Text>
-                        <Text style={{ fontFamily: 'monospace', fontSize: 14, color: 'var(--mantine-color-text)' }}>
-                          {formatDuration(dur)}
-                        </Text>
-                      </Box>
-                    )}
-                    {latestRun.totalCostCents != null && (
-                      <Box style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            letterSpacing: '0.06em',
-                            textTransform: 'uppercase',
-                            color: 'var(--mantine-color-placeholder)',
-                          }}
-                        >
-                          Cost
-                        </Text>
-                        <Text style={{ fontFamily: 'monospace', fontSize: 14, color: 'var(--mantine-color-text)' }}>
-                          {formatCostCents(latestRun.totalCostCents)}
-                        </Text>
-                      </Box>
-                    )}
-                    <Box
-                      component="button"
-                      onClick={() => setTab('runs')}
-                      style={{
-                        marginLeft: 'auto',
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--app-primary-strong)',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        padding: '4px 0',
-                      }}
-                    >
-                      View runs <IconArrowRight size={12} />
-                    </Box>
-                  </Box>
-                </Box>
-              );
-            })()}
+          {/* Latest run summary (AC-19) — whenever the task has runs, bound column or not */}
+          {hasRuns && (
+            <LatestRunTile run={(workflowRuns ?? [])[0]} projectId={projectId} onViewRuns={() => setTab('runs')} />
+          )}
 
           {/* Properties */}
           <Box style={{ marginBottom: 20 }}>
@@ -2387,165 +2219,15 @@ function TaskDetailSidebar({
           )}
         </Tabs.Panel>
 
-        {/* Runs tab — hidden for manual tasks (AC-22) */}
-        {columnWorkflowBinding && (
-          <Tabs.Panel value="runs" p="md" style={{ flex: 1, overflow: 'auto' }}>
-            <Stack gap="md">
-              {(workflowRuns ?? []).length === 0 ? (
-                <Text size="sm" c="dimmed" ta="center" py="xl">
-                  No runs yet.
-                </Text>
-              ) : (
-                <>
-                  {/* Totals row */}
-                  <Group gap="lg" wrap="wrap">
-                    <Box>
-                      <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={2}>
-                        Runs
-                      </Text>
-                      <Text size="sm" fw={600}>
-                        {(workflowRuns ?? []).length}
-                      </Text>
-                    </Box>
-                    <Box>
-                      <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={2}>
-                        Success rate
-                      </Text>
-                      <Text size="sm" fw={600}>
-                        {Math.round(
-                          ((workflowRuns ?? []).filter((r) => r.state === 'completed' || r.state === 'succeeded')
-                            .length /
-                            (workflowRuns ?? []).length) *
-                            100,
-                        )}
-                        %
-                      </Text>
-                    </Box>
-                    {(workflowRuns ?? []).some((r) => r.totalCostCents != null) && (
-                      <Box>
-                        <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={2}>
-                          Total cost
-                        </Text>
-                        <Text size="sm" ff="monospace" fw={600}>
-                          {formatCostCents((workflowRuns ?? []).reduce((s, r) => s + (r.totalCostCents ?? 0), 0))}
-                        </Text>
-                      </Box>
-                    )}
-                  </Group>
-
-                  {/* Run history */}
-                  <Stack gap={4}>
-                    {(workflowRuns ?? []).map((run) => (
-                      <Box
-                        key={run.id}
-                        p="xs"
-                        style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}
-                      >
-                        <Group justify="space-between" wrap="nowrap" gap="xs">
-                          <NeutralStatusChip state={run.state} />
-                          <Text
-                            component="a"
-                            href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
-                            target="_blank"
-                            rel="noopener"
-                            size="xs"
-                            c="brand"
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              flex: 1,
-                              minWidth: 0,
-                              textDecoration: 'none',
-                            }}
-                          >
-                            <Box
-                              component="span"
-                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                            >
-                              {run.workflowName ?? 'Workflow run'}
-                            </Box>
-                            <IconExternalLink size={11} style={{ flexShrink: 0 }} />
-                          </Text>
-                          <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                            {formatDateTime(run.createdAt)}
-                          </Text>
-                        </Group>
-
-                        {/* Step timeline for first (latest) run */}
-                        {run.id === (workflowRuns ?? [])[0]?.id && (run.steps ?? []).length > 0 && (
-                          <Box mt="xs">
-                            {(run.steps ?? []).map((step, i) => {
-                              const isHidden = !showAllSteps && i > 2;
-                              return (
-                                <Box
-                                  key={i}
-                                  style={{
-                                    display: isHidden ? 'none' : 'flex',
-                                    gap: 10,
-                                    paddingTop: 8,
-                                    paddingBottom: 8,
-                                    borderBottom: '1px solid var(--app-border-default)',
-                                  }}
-                                >
-                                  <Box
-                                    w={8}
-                                    h={8}
-                                    mt={4}
-                                    style={{
-                                      borderRadius: '50%',
-                                      flexShrink: 0,
-                                      backgroundColor:
-                                        step.state === 'done'
-                                          ? 'var(--app-success-fg)'
-                                          : step.state === 'running'
-                                            ? 'var(--app-warning-fg)'
-                                            : step.state === 'failed'
-                                              ? 'var(--app-danger-fg)'
-                                              : 'var(--mantine-color-gray-5)',
-                                    }}
-                                  />
-                                  <Box style={{ flex: 1 }}>
-                                    <Text size="sm" c={step.state === 'waiting' ? 'dimmed' : undefined}>
-                                      {step.name}
-                                    </Text>
-                                    <Text size="xs" c="dimmed" ff="monospace">
-                                      {step.durationSeconds != null ? formatDuration(step.durationSeconds) : '—'}
-                                    </Text>
-                                  </Box>
-                                </Box>
-                              );
-                            })}
-                            {(run.steps ?? []).length > 3 && (
-                              <Button variant="subtle" size="xs" mt={8} onClick={() => setShowAllSteps((s) => !s)}>
-                                {showAllSteps ? 'Show fewer steps' : `Show all ${(run.steps ?? []).length} steps`}
-                              </Button>
-                            )}
-                          </Box>
-                        )}
-
-                        {/* Retry in Runs tab for failed run (AC-56) */}
-                        {run.state === 'failed' && canExecute && (
-                          <Box mt="xs">
-                            <Button
-                              size="compact-xs"
-                              variant="outline"
-                              color="red"
-                              leftSection={<IconRefresh size={11} />}
-                              loading={triggeringWorkflow}
-                              onClick={handleTriggerWorkflow}
-                            >
-                              Retry run
-                            </Button>
-                          </Box>
-                        )}
-                      </Box>
-                    ))}
-                  </Stack>
-                </>
-              )}
-            </Stack>
-          </Tabs.Panel>
+        {/* Runs tab — hidden only for manual tasks that never ran (AC-22) */}
+        {showRuns && (
+          <TaskRunsPanel
+            runs={workflowRuns ?? []}
+            projectId={projectId}
+            canRetry={canExecute && !!columnWorkflowBinding}
+            retrying={triggeringWorkflow}
+            onRetry={handleTriggerWorkflow}
+          />
         )}
 
         {/* Comments — composer on top, filter row below (AC-24) */}

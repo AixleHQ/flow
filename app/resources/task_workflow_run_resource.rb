@@ -22,7 +22,8 @@ class TaskWorkflowRunResource < ApplicationResource
     duration >= 0 ? duration : nil
   end
 
-  typelize "{ name: string; state: string; startedAt: string | null; finishedAt: string | null; durationSeconds: number | null }[]"
+  typelize "{ name: string; state: string; startedAt: string | null; finishedAt: string | null; " \
+           "durationSeconds: number | null; terminalSessionId: number | null }[]"
   attribute :steps do |run|
     (run.step_runs || []).includes(:step).order(:created_at).map do |sr|
       dur = sr.started_at && sr.completed_at ? (sr.completed_at - sr.started_at).round : nil
@@ -31,7 +32,10 @@ class TaskWorkflowRunResource < ApplicationResource
         state: sr.state.to_s,
         startedAt: sr.started_at&.iso8601,
         finishedAt: sr.completed_at&.iso8601,
-        durationSeconds: dur && dur >= 0 ? dur : nil
+        durationSeconds: dur && dur >= 0 ? dur : nil,
+        # Lets the board task drawer link straight into the step's terminal session
+        # instead of routing the user through the workflow run page.
+        terminalSessionId: sr.terminal_session_id
       }
     end
   end
