@@ -130,6 +130,15 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     assert_equal Tools::MCPProtocol::MAX_NEGOTIABLE_VERSION, initialize_with("not-a-version")
   end
 
+  test "an offer that is not a string still gets the spec's invalid-params error" do
+    # Capping must not swallow a malformed handshake: the gem owns that error,
+    # and only offers it would agree to are rewritten on the way in.
+    error = rpc("initialize", { protocolVersion: 20260728, capabilities: {},
+                                clientInfo: { name: "test-client", version: "1" } })["error"]
+
+    assert_equal(-32602, error["code"])
+  end
+
   test "the list responses match the negotiated version" do
     negotiated = initialize_with("2026-07-28")
 

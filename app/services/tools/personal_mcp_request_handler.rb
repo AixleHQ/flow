@@ -16,7 +16,8 @@ module Tools
 
     # Returns a Rack response triple.
     #
-    # The offered protocol version is capped before the transport sees it — see
+    # The server is configured with the newest protocol version it can serve
+    # and the offered version is capped before the transport sees it — see
     # MCPProtocol — so the handshake can only agree to a version whose result
     # shapes this server actually produces.
     #
@@ -42,6 +43,7 @@ module Tools
     def server
       MCP::Server.new(
         name: "aixle",
+        configuration: MCPProtocol.configuration,
         instructions: PersonalMCPGuides::INSTRUCTIONS,
         tools: Registry.for_audience(:user).sort_by(&:name).map { |defn| define_tool(defn) },
         prompts: PROMPTS.map { |spec| define_prompt(spec) },
