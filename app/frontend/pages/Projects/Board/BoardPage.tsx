@@ -88,17 +88,15 @@ import {
   IconSend,
   IconSettings,
   IconTag,
-  IconTerminal2,
   IconTrash,
   IconChartBar,
-  IconExternalLink,
   IconFileTypePdf,
   IconPlayerPlay,
   IconUser,
   IconX,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import {
   Bar,
@@ -144,6 +142,10 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 import styles from './BoardPage.module.css';
+import { formatCostCents, formatDuration, formatTokens } from './boardFormat';
+import { LatestRunTile } from './LatestRunTile';
+import { TaskRunsPanel } from './TaskRunsPanel';
+import { WORKFLOW_ACTIVE_STATES, type TaskWorkflowRun } from './taskRuns';
 import { useBoardDnd } from './useBoardDnd';
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
@@ -275,8 +277,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: 'var(--app-success-fg)',
 };
 
-const WORKFLOW_ACTIVE_STATES = new Set(['pending', 'running', 'paused']);
-
 // Helper to get workflow status indicator color
 const workflowStatusColor = (state: string): string => {
   if (WORKFLOW_ACTIVE_STATES.has(state)) return 'var(--app-warning-fg)';
@@ -293,24 +293,6 @@ const CHART_TOOLTIP_STYLE: React.CSSProperties = {
   fontSize: 12,
   color: 'var(--app-text-primary)',
 };
-
-function formatCostCents(cents: number): string {
-  return cents >= 100 ? `$${(cents / 100).toFixed(2)}` : `${cents}¢`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
-  return `${tokens}`;
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  return `${h}h ${m}m`;
-}
 
 interface BoardFilters {
   assigneeId: string | null;
@@ -1239,43 +1221,6 @@ async function deleteTaskGate(projectId: number, taskId: number, gateId: number)
   }
 }
 
-interface TaskWorkflowRun {
-  id: number;
-  workflowName: string;
-  state: string;
-  mode: string;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  totalCostCents?: number;
-  totalTokens?: number;
-  durationSeconds?: number;
-  steps?: Array<{
-    name: string;
-    state: string;
-    startedAt: string | null;
-    finishedAt: string | null;
-    durationSeconds: number | null;
-    terminalSessionId?: number | null;
-  }>;
-}
-
-// Step states that mean "there is something live to look at right now".
-const STEP_ACTIVE_STATES = new Set(['running', 'waiting_input']);
-
-// A run has one session per step, so "jump into the session" needs a single target.
-// Prefer the session of a step that is still active — that is the one the user is
-// after when a run is in flight — and otherwise fall back to the most recent step
-// that ever got a session. Returns null when the run has no session at all, which
-// is what keeps the control from rendering (AC-4).
-function runSessionId(run: TaskWorkflowRun): number | null {
-  const steps = run.steps ?? [];
-  const active = [...steps].reverse().find((s) => STEP_ACTIVE_STATES.has(s.state) && s.terminalSessionId != null);
-  if (active) return active.terminalSessionId ?? null;
-  const last = [...steps].reverse().find((s) => s.terminalSessionId != null);
-  return last?.terminalSessionId ?? null;
-}
-
 function useBoardActivitiesLoadMore(projectId: number, initialActivities: ActivityItem[]) {
   const [extraActivities, setExtraActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1330,87 +1275,6 @@ interface TaskStatistics {
     totalTokens: number;
     durationSeconds: number;
   }>;
-}
-
-// --- Neutral Status Chip (AC-13, AC-28) ---
-
-function NeutralStatusChip({ state, size = 'xs' }: { state: string; size?: string }) {
-  const isRunning = WORKFLOW_ACTIVE_STATES.has(state);
-  const isSuccess = state === 'completed' || state === 'succeeded';
-  const isFailed = state === 'failed';
-  let dotColor = 'var(--mantine-color-gray-5)';
-  if (isRunning) dotColor = 'var(--app-warning-fg)';
-  else if (isSuccess) dotColor = 'var(--app-success-fg)';
-  else if (isFailed) dotColor = 'var(--app-danger-fg)';
-
-  return (
-    <Badge
-      size={size as 'xs' | 'sm'}
-      variant="outline"
-      color="gray"
-      leftSection={
-        <Box
-          w={6}
-          h={6}
-          className={isRunning ? styles.workflowDotActive : undefined}
-          style={{ borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0 }}
-        />
-      }
-      style={{ fontSize: 10, cursor: 'default' }}
-    >
-      {state}
-    </Badge>
-  );
-}
-
-// One run, rendered as a single compact row: state chip, a link to the run page, a
-// caller-supplied trailing slot, and the jump-into-the-session control. Shared by the
-// Details tab's "Latest run" block and the Runs tab's history so the two tiles cannot
-// drift apart — the only intentional difference is what goes in `trailing` (the run's
-// timestamp in the Runs tab, a "View runs" button on the Details tab).
-function RunTileRow({ run, projectId, trailing }: { run: TaskWorkflowRun; projectId: number; trailing?: ReactNode }) {
-  const sessionId = runSessionId(run);
-
-  return (
-    <Group justify="space-between" wrap="nowrap" gap="xs">
-      <NeutralStatusChip state={run.state} />
-      <Text
-        component="a"
-        href={`/company/projects/${projectId}/workflow_runs/${run.id}`}
-        target="_blank"
-        rel="noopener"
-        size="xs"
-        c="brand"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          flex: 1,
-          minWidth: 0,
-          textDecoration: 'none',
-        }}
-      >
-        <Box component="span" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {run.workflowName ?? 'Workflow run'}
-        </Box>
-        <IconExternalLink size={11} style={{ flexShrink: 0 }} />
-      </Text>
-      {trailing}
-      {sessionId != null && (
-        <Tooltip label={`Open session #${sessionId}`}>
-          <ActionIcon
-            variant="subtle"
-            size="xs"
-            aria-label={`Open session #${sessionId}`}
-            style={{ flexShrink: 0 }}
-            onClick={() => router.visit(`/company/projects/${projectId}/sessions/${sessionId}`)}
-          >
-            <IconTerminal2 size={13} />
-          </ActionIcon>
-        </Tooltip>
-      )}
-    </Group>
-  );
 }
 
 // --- Inline tags editor (matches reference .tag / .add-tag / .tag-input pattern) ---
@@ -1619,7 +1483,6 @@ function TaskDetailSidebar({
   const [triggeringWorkflow, setTriggeringWorkflow] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
-  const [showAllSteps, setShowAllSteps] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -2056,60 +1919,9 @@ function TaskDetailSidebar({
           </Box>
 
           {/* Latest run summary (AC-19) — whenever the task has runs, bound column or not */}
-          {hasRuns &&
-            (() => {
-              const latestRun = (workflowRuns ?? [])[0];
-              const dur = latestRun.durationSeconds;
-              const cost = latestRun.totalCostCents;
-              return (
-                <Box style={{ marginBottom: 20 }}>
-                  {/* sec-label */}
-                  <Box
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                      color: 'var(--mantine-color-dimmed)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      paddingBottom: 10,
-                      borderBottom: '1px solid var(--app-border-default)',
-                      marginBottom: 14,
-                    }}
-                  >
-                    <IconBolt size={14} color="var(--app-primary-strong)" />
-                    Latest run
-                  </Box>
-                  {/* run tile — same row as a Runs tab entry, with "View runs" where that tab shows the date */}
-                  <Box p="xs" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
-                    <RunTileRow
-                      run={latestRun}
-                      projectId={projectId}
-                      trailing={
-                        <Button
-                          variant="subtle"
-                          size="compact-xs"
-                          rightSection={<IconArrowRight size={12} />}
-                          onClick={() => setTab('runs')}
-                          style={{ flexShrink: 0 }}
-                        >
-                          View runs
-                        </Button>
-                      }
-                    />
-                    {(dur != null || cost != null) && (
-                      <Text size="xs" c="dimmed" ff="monospace" mt={6}>
-                        {[dur != null ? formatDuration(dur) : null, cost != null ? formatCostCents(cost) : null]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </Text>
-                    )}
-                  </Box>
-                </Box>
-              );
-            })()}
+          {hasRuns && (
+            <LatestRunTile run={(workflowRuns ?? [])[0]} projectId={projectId} onViewRuns={() => setTab('runs')} />
+          )}
 
           {/* Properties */}
           <Box style={{ marginBottom: 20 }}>
@@ -2409,143 +2221,13 @@ function TaskDetailSidebar({
 
         {/* Runs tab — hidden only for manual tasks that never ran (AC-22) */}
         {showRuns && (
-          <Tabs.Panel value="runs" p="md" style={{ flex: 1, overflow: 'auto' }}>
-            <Stack gap="md">
-              {(workflowRuns ?? []).length === 0 ? (
-                <Text size="sm" c="dimmed" ta="center" py="xl">
-                  No runs yet.
-                </Text>
-              ) : (
-                <>
-                  {/* Totals row */}
-                  <Group gap="lg" wrap="wrap">
-                    <Box>
-                      <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={2}>
-                        Runs
-                      </Text>
-                      <Text size="sm" fw={600}>
-                        {(workflowRuns ?? []).length}
-                      </Text>
-                    </Box>
-                    <Box>
-                      <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={2}>
-                        Success rate
-                      </Text>
-                      <Text size="sm" fw={600}>
-                        {Math.round(
-                          ((workflowRuns ?? []).filter((r) => r.state === 'completed' || r.state === 'succeeded')
-                            .length /
-                            (workflowRuns ?? []).length) *
-                            100,
-                        )}
-                        %
-                      </Text>
-                    </Box>
-                    {(workflowRuns ?? []).some((r) => r.totalCostCents != null) && (
-                      <Box>
-                        <Text size="xs" c="dimmed" tt="uppercase" fw={600} mb={2}>
-                          Total cost
-                        </Text>
-                        <Text size="sm" ff="monospace" fw={600}>
-                          {formatCostCents((workflowRuns ?? []).reduce((s, r) => s + (r.totalCostCents ?? 0), 0))}
-                        </Text>
-                      </Box>
-                    )}
-                  </Group>
-
-                  {/* Run history */}
-                  <Stack gap={4}>
-                    {(workflowRuns ?? []).map((run) => (
-                      <Box
-                        key={run.id}
-                        p="xs"
-                        style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}
-                      >
-                        <RunTileRow
-                          run={run}
-                          projectId={projectId}
-                          trailing={
-                            <Text size="xs" c="dimmed" style={{ flexShrink: 0 }}>
-                              {formatDateTime(run.createdAt)}
-                            </Text>
-                          }
-                        />
-
-                        {/* Step timeline for first (latest) run */}
-                        {run.id === (workflowRuns ?? [])[0]?.id && (run.steps ?? []).length > 0 && (
-                          <Box mt="xs">
-                            {(run.steps ?? []).map((step, i) => {
-                              const isHidden = !showAllSteps && i > 2;
-                              return (
-                                <Box
-                                  key={i}
-                                  style={{
-                                    display: isHidden ? 'none' : 'flex',
-                                    gap: 10,
-                                    paddingTop: 8,
-                                    paddingBottom: 8,
-                                    borderBottom: '1px solid var(--app-border-default)',
-                                  }}
-                                >
-                                  <Box
-                                    w={8}
-                                    h={8}
-                                    mt={4}
-                                    style={{
-                                      borderRadius: '50%',
-                                      flexShrink: 0,
-                                      backgroundColor:
-                                        step.state === 'done'
-                                          ? 'var(--app-success-fg)'
-                                          : step.state === 'running'
-                                            ? 'var(--app-warning-fg)'
-                                            : step.state === 'failed'
-                                              ? 'var(--app-danger-fg)'
-                                              : 'var(--mantine-color-gray-5)',
-                                    }}
-                                  />
-                                  <Box style={{ flex: 1 }}>
-                                    <Text size="sm" c={step.state === 'waiting' ? 'dimmed' : undefined}>
-                                      {step.name}
-                                    </Text>
-                                    <Text size="xs" c="dimmed" ff="monospace">
-                                      {step.durationSeconds != null ? formatDuration(step.durationSeconds) : '—'}
-                                    </Text>
-                                  </Box>
-                                </Box>
-                              );
-                            })}
-                            {(run.steps ?? []).length > 3 && (
-                              <Button variant="subtle" size="xs" mt={8} onClick={() => setShowAllSteps((s) => !s)}>
-                                {showAllSteps ? 'Show fewer steps' : `Show all ${(run.steps ?? []).length} steps`}
-                              </Button>
-                            )}
-                          </Box>
-                        )}
-
-                        {/* Retry in Runs tab for failed run (AC-56) — retry runs the column's bound
-                            workflow, so it stays hidden when the task's column has none */}
-                        {run.state === 'failed' && canExecute && columnWorkflowBinding && (
-                          <Box mt="xs">
-                            <Button
-                              size="compact-xs"
-                              variant="outline"
-                              color="red"
-                              leftSection={<IconRefresh size={11} />}
-                              loading={triggeringWorkflow}
-                              onClick={handleTriggerWorkflow}
-                            >
-                              Retry run
-                            </Button>
-                          </Box>
-                        )}
-                      </Box>
-                    ))}
-                  </Stack>
-                </>
-              )}
-            </Stack>
-          </Tabs.Panel>
+          <TaskRunsPanel
+            runs={workflowRuns ?? []}
+            projectId={projectId}
+            canRetry={canExecute && !!columnWorkflowBinding}
+            retrying={triggeringWorkflow}
+            onRetry={handleTriggerWorkflow}
+          />
         )}
 
         {/* Comments — composer on top, filter row below (AC-24) */}
