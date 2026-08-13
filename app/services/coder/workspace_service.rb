@@ -41,6 +41,15 @@ module Coder
       build(workspace_id, transition: "stop")
     end
 
+    # Destroys the workspace and its cloud resources. Coder models deletion as
+    # a build transition like start/stop, not as an HTTP DELETE, so the returned
+    # build runs asynchronously — the workspace keeps being listed with
+    # `transition: "delete"` until it finishes. Callers that need the terminal
+    # state pass the build id to `await_build`.
+    def delete(workspace_id)
+      build(workspace_id, transition: "delete")
+    end
+
     def build(workspace_id, transition:)
       Coder::Api.build_workspace(
         coder_url:     coder_url,

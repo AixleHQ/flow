@@ -31,10 +31,18 @@ module Coder
 
     PROBE_MARKER = "aixle_probe"
 
-    Result = Struct.new(:state, :reason, :load, :cores, keyword_init: true) do
+    # `reachable` answers a different question from `state`: did the box itself
+    # answer us? Both an overloaded machine and one whose agent is gone report
+    # `:sick`, and only the second is dead — `Coder::DeadWorkspaceReaper` may
+    # not delete a workspace that answered. `nil` means we never found out
+    # (the probe could not run), which is never evidence of anything.
+    Result = Struct.new(:state, :reason, :load, :cores, :reachable, keyword_init: true) do
       def healthy? = state == :healthy
       def sick?    = state == :sick
       def unknown? = state == :unknown
+
+      def reachable?   = reachable == true
+      def unreachable? = reachable == false
     end
 
     class << self
@@ -100,9 +108,11 @@ module Coder
 
       case result[:exit_code]
       when 0   then evaluate(result[:stdout].to_s)
-      when 124 then Result.new(state: :sick,    reason: "did not answer a #{probe_timeout}s probe")
+      when 124 then Result.new(state: :sick,    reason: "did not answer a #{probe_timeout}s probe", reachable: false)
       when 127 then Result.new(state: :unknown, reason: "coder CLI missing from the Rails image")
-      else          Result.new(state: :sick,    reason: probe_failure_reason(result))
+      # Anything else is `coder ssh` failing to reach the box: the probe command
+      # itself ends in an `echo` that cannot fail on a live workspace.
+      else          Result.new(state: :sick,    reason: probe_failure_reason(result), reachable: false)
       end
     rescue Coder::SshRunner::CommandError,
            Coder::TokenService::AuthenticationError,
@@ -114,24 +124,29 @@ module Coder
 
     private
 
+    # Everything here came back over a shell on the workspace, so every verdict
+    # it produces is `reachable: true` — including the overloaded one.
     def evaluate(stdout)
-      return Result.new(state: :healthy, reason: "reachable; probe output unrecognised") unless stdout.include?(PROBE_MARKER)
+      return Result.new(state: :healthy, reason: "reachable; probe output unrecognised", reachable: true) unless stdout.include?(PROBE_MARKER)
 
       load  = stdout[/load=([0-9.]+)/, 1]&.to_f
       cores = stdout[/cores=(\d+)/, 1]&.to_i
 
-      return Result.new(state: :healthy, reason: "reachable; load unknown", load: load, cores: cores) if load.nil? || cores.nil? || cores.zero?
+      if load.nil? || cores.nil? || cores.zero?
+        return Result.new(state: :healthy, reason: "reachable; load unknown", load: load, cores: cores, reachable: true)
+      end
 
       ceiling = cores * load_factor
       if load > ceiling
         Result.new(
-          state:  :sick,
-          reason: "load average #{load} over #{format('%.1f', ceiling)} (#{cores} cores)",
-          load:   load,
-          cores:  cores
+          state:     :sick,
+          reason:    "load average #{load} over #{format('%.1f', ceiling)} (#{cores} cores)",
+          load:      load,
+          cores:     cores,
+          reachable: true
         )
       else
-        Result.new(state: :healthy, reason: "load #{load} on #{cores} cores", load: load, cores: cores)
+        Result.new(state: :healthy, reason: "load #{load} on #{cores} cores", load: load, cores: cores, reachable: true)
       end
     end
 

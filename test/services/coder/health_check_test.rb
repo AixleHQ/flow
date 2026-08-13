@@ -136,6 +136,45 @@ module Coder
       assert_match(/load unknown/, verdict.reason)
     end
 
+    # `reachable` is what separates "alive but drowning" from "gone". Both are
+    # `sick`; only the second may be reaped.
+    test "an overloaded workspace is sick but reachable" do
+      runner = FakeRunner.new(result: probe_output(load: "84.34", cores: 4))
+      verdict = Coder::HealthCheck.new(@integration, ssh_runner: runner).probe(workspace_name: "ws-1")
+
+      assert verdict.sick?
+      assert verdict.reachable?
+      assert_not verdict.unreachable?
+    end
+
+    test "a workspace that never answers is sick and unreachable" do
+      runner = FakeRunner.new(result: { exit_code: 124, stdout: "", stderr: "coder ssh: timed out", truncated: false })
+      verdict = Coder::HealthCheck.new(@integration, ssh_runner: runner).probe(workspace_name: "ws-1")
+
+      assert verdict.unreachable?
+      assert_not verdict.reachable?
+    end
+
+    test "a failure on our side leaves reachability unknown, neither reachable nor unreachable" do
+      [
+        FakeRunner.new(result: { exit_code: 127, stdout: "", stderr: "command not found", truncated: false }),
+        FakeRunner.new(raises: Coder::TokenService::AuthenticationError.new("401"))
+      ].each do |runner|
+        verdict = Coder::HealthCheck.new(@integration, ssh_runner: runner).probe(workspace_name: "ws-1")
+
+        assert_not verdict.reachable?
+        assert_not verdict.unreachable?
+        assert_nil verdict.reachable
+      end
+    end
+
+    test "a healthy workspace is reachable" do
+      runner = FakeRunner.new(result: probe_output(load: "1.20", cores: 4))
+      verdict = Coder::HealthCheck.new(@integration, ssh_runner: runner).probe(workspace_name: "ws-1")
+
+      assert verdict.reachable?
+    end
+
     test "reports unknown and does not probe when health probing is disabled" do
       runner = FakeRunner.new(result: probe_output(load: "0.1", cores: 4))
 
