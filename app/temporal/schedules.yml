@@ -6,6 +6,14 @@ schedules:
     cron: "0 * * * *"
     enabled: true
 
+  # Reaps WorkflowRun rows that have been running/paused beyond the stale threshold
+  # (4 hours). These accumulate when the WorkflowExecutionWorkflow process crashes
+  # without sending a final status update, leaving the run permanently active and
+  # holding pod quota. Hourly is sufficient: quota is released within one sweep window.
+  - workflow: stale_run_cleanup_workflow
+    cron: "30 * * * *"
+    enabled: true
+
   - workflow: dismissed_asset_cleanup_workflow
     cron: "0 3 * * *"
     enabled: true
