@@ -1,8 +1,25 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
+type CableHandlers = {
+  connected: () => void;
+  disconnected: () => void;
+  received: (data: Record<string, unknown>) => void;
+};
+let lastCableHandlers: CableHandlers | null = null;
+vi.mock('shared/lib/actionCableConsumer', () => ({
+  getConsumer: () => ({
+    subscriptions: {
+      create: (_params: unknown, handlers: CableHandlers) => {
+        lastCableHandlers = handlers;
+        return { unsubscribe: vi.fn() };
+      },
+    },
+  }),
+}));
+
+import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import WorkflowRunsPage from './WorkflowRunsPage';
 
@@ -27,6 +44,12 @@ function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
 }
 
 describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
+  beforeEach(() => {
+    lastCableHandlers = null;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it('shows the empty state when there are no runs and no filters', () => {
     renderAuthedPage(<WorkflowRunsPage runs={[]} filters={{}} perPage={20} />, {
       props: { project },
@@ -236,5 +259,87 @@ describe('Projects/WorkflowRuns/WorkflowRunsPage', () => {
     for (const label of ['Running', 'Completed', 'Failed', 'Cancelled', 'Pending']) {
       expect(await screen.findByRole('option', { name: label })).toBeInTheDocument();
     }
+  });
+
+  it('renders rows from accumulated runMap, not directly from runs prop (infinite scroll accumulation)', () => {
+    const run1 = makeRun({ id: 300, workflowName: 'First Workflow' });
+    const run2 = makeRun({ id: 301, workflowName: 'Second Workflow' });
+
+    const { rerender } = renderAuthedPage(<WorkflowRunsPage runs={[run1]} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    expect(screen.getByText('First Workflow')).toBeInTheDocument();
+    expect(screen.queryByText('Second Workflow')).not.toBeInTheDocument();
+
+    // Simulate InfiniteScroll appending page 2: runs prop now contains both pages.
+    rerender(<WorkflowRunsPage runs={[run1, run2]} filters={{}} perPage={20} />);
+
+    expect(screen.getByText('First Workflow')).toBeInTheDocument();
+    expect(screen.getByText('Second Workflow')).toBeInTheDocument();
+  });
+
+  it('keeps accumulated pages when runs prop reverts to page 1 (poll survival)', () => {
+    const run1 = makeRun({ id: 400, workflowName: 'Page One Run' });
+    const run2 = makeRun({ id: 401, workflowName: 'Page Two Run' });
+
+    const { rerender } = renderAuthedPage(<WorkflowRunsPage runs={[run1, run2]} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    expect(screen.getByText('Page Two Run')).toBeInTheDocument();
+
+    // Simulate a 10s poll returning only page 1 again.
+    rerender(<WorkflowRunsPage runs={[run1]} filters={{}} perPage={20} />);
+
+    expect(screen.getByText('Page One Run')).toBeInTheDocument();
+    expect(screen.getByText('Page Two Run')).toBeInTheDocument();
+  });
+
+  it('clears stale run rows when the filter prop changes', async () => {
+    const runs1 = [makeRun({ id: 501, state: 'running' }), makeRun({ id: 502, state: 'completed' })];
+    const runs2 = [makeRun({ id: 503, state: 'failed' })];
+
+    const { rerender } = renderAuthedPage(<WorkflowRunsPage runs={runs1} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    expect(screen.getByText('#501')).toBeInTheDocument();
+    expect(screen.getByText('#502')).toBeInTheDocument();
+
+    rerender(<WorkflowRunsPage runs={runs2} filters={{ state_eq: 'failed' }} perPage={20} />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('#501')).not.toBeInTheDocument();
+      expect(screen.queryByText('#502')).not.toBeInTheDocument();
+      expect(screen.getByText('#503')).toBeInTheDocument();
+    });
+  });
+
+  it('patches a run in place via cable update without discarding accumulated pages', async () => {
+    vi.useFakeTimers();
+    lastCableHandlers = null;
+
+    const run1 = makeRun({ id: 601, state: 'running', workflowName: 'Cable Run' });
+    const run2 = makeRun({ id: 602, state: 'completed', workflowName: 'Stable Run' });
+
+    renderAuthedPage(<WorkflowRunsPage runs={[run1, run2]} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    // Advance timers to let the cable subscription initialise (50ms debounce).
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(lastCableHandlers).not.toBeNull();
+
+    await act(async () => {
+      lastCableHandlers!.received({ type: 'run_update', run: { ...run1, state: 'completed' } });
+    });
+
+    // Both rows are still present — no pagination reset.
+    expect(screen.getByText('Cable Run')).toBeInTheDocument();
+    expect(screen.getByText('Stable Run')).toBeInTheDocument();
   });
 });

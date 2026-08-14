@@ -1,8 +1,25 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+
+type CableHandlers = {
+  connected: () => void;
+  disconnected: () => void;
+  received: (data: Record<string, unknown>) => void;
+};
+let lastCableHandlers: CableHandlers | null = null;
+vi.mock('shared/lib/actionCableConsumer', () => ({
+  getConsumer: () => ({
+    subscriptions: {
+      create: (_params: unknown, handlers: CableHandlers) => {
+        lastCableHandlers = handlers;
+        return { unsubscribe: vi.fn() };
+      },
+    },
+  }),
+}));
 
 import SessionsPage from './SessionsPage';
 
@@ -39,6 +56,12 @@ function makeSession(overrides: Partial<Session> = {}): Session {
 }
 
 describe('Projects/Sessions/SessionsPage', () => {
+  beforeEach(() => {
+    lastCableHandlers = null;
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it('shows the no-sessions empty state when the list is empty and no filters are applied', () => {
     renderAuthedPage(<SessionsPage sessions={[]} filters={{}} perPage={20} />, {
       props: { project },
@@ -424,6 +447,74 @@ describe('Projects/Sessions/SessionsPage', () => {
     await userEvent.hover(within(row).getByText('9.0k'));
     await waitFor(() => {
       expect(screen.getByText('in: 5.0k, out: 4.0k')).toBeInTheDocument();
+    });
+  });
+
+  // --- filter reset ---
+
+  it('keeps accumulated pages when sessions prop reverts to page 1 (poll survival)', () => {
+    const s1 = makeSession({ id: 301, state: 'finished' });
+    const s2 = makeSession({ id: 302, state: 'finished' });
+
+    const { rerender } = renderAuthedPage(<SessionsPage sessions={[s1, s2]} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    expect(screen.getByText('#302')).toBeInTheDocument();
+
+    // Simulate a poll returning only page 1 again — page 2 rows must survive.
+    rerender(<SessionsPage sessions={[s1]} filters={{}} perPage={20} />);
+
+    expect(screen.getByText('#301')).toBeInTheDocument();
+    expect(screen.getByText('#302')).toBeInTheDocument();
+  });
+
+  it('patches a session in place via cable update without discarding accumulated pages', async () => {
+    vi.useFakeTimers();
+    lastCableHandlers = null;
+
+    const s1 = makeSession({ id: 401, state: 'ready' });
+    const s2 = makeSession({ id: 402, state: 'finished' });
+
+    renderAuthedPage(<SessionsPage sessions={[s1, s2]} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(lastCableHandlers).not.toBeNull();
+
+    await act(async () => {
+      lastCableHandlers!.received({ type: 'session_update', session: { ...s1, state: 'finished' } });
+    });
+
+    expect(screen.getByText('#401')).toBeInTheDocument();
+    expect(screen.getByText('#402')).toBeInTheDocument();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('clears stale session rows when the filter prop changes', async () => {
+    const sessions1 = [makeSession({ id: 201, state: 'ready' }), makeSession({ id: 202, state: 'finished' })];
+    const sessions2 = [makeSession({ id: 203, state: 'failed' })];
+
+    const { rerender } = renderAuthedPage(<SessionsPage sessions={sessions1} filters={{}} perPage={20} />, {
+      props: { project },
+    });
+
+    expect(screen.getByText('#201')).toBeInTheDocument();
+    expect(screen.getByText('#202')).toBeInTheDocument();
+
+    rerender(<SessionsPage sessions={sessions2} filters={{ state_eq: 'failed' }} perPage={20} />);
+
+    await waitFor(() => {
+      expect(screen.queryByText('#201')).not.toBeInTheDocument();
+      expect(screen.queryByText('#202')).not.toBeInTheDocument();
+      expect(screen.getByText('#203')).toBeInTheDocument();
     });
   });
 });

@@ -2,7 +2,7 @@ import { Head, InfiniteScroll, router, usePage } from '@inertiajs/react';
 import { Badge, Box, Button, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
 import { IconExternalLink, IconLock, IconPlus } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
@@ -157,17 +157,32 @@ const SessionsPage = ({ sessions, filters, perPage }: Props) => {
     return map;
   });
 
-  // Sync new pages loaded by InfiniteScroll into the map (append-only: cable
-  // updates take precedence over Inertia prop data for existing entries).
+  const prevFiltersRef = useRef<string>('');
+
+  // Sync new pages loaded by InfiniteScroll into the map. On filter change,
+  // reset the map to avoid showing stale entries from the previous filter.
   useEffect(() => {
+    const filtersKey = JSON.stringify(filters);
+    const filtersChanged = filtersKey !== prevFiltersRef.current;
+    prevFiltersRef.current = filtersKey;
+
     setSessionMap((prev) => {
+      // Filter change: reset the map to the new first page (stale entries from
+      // the old filter must not survive a narrowed result set).
+      if (filtersChanged) {
+        const map = new Map<number, Session>();
+        for (const s of sessions) map.set(s.id, s);
+        return map;
+      }
+      // New InfiniteScroll page: append only entries not already present (cable
+      // updates take precedence over Inertia prop data for existing entries).
       const newEntries = sessions.filter((s) => !prev.has(s.id));
       if (newEntries.length === 0) return prev;
       const map = new Map(prev);
       for (const s of newEntries) map.set(s.id, s);
       return map;
     });
-  }, [sessions]);
+  }, [sessions, filters]);
 
   useSessionListCableUpdates({
     projectId: project.id,
@@ -361,7 +376,7 @@ function SessionRow({ session: s, projectId }: { session: Session; projectId: nu
       </Table.Td>
       <Table.Td>
         <Group gap={4}>
-          <StatusBadge state={s.state} size="sm">
+          <StatusBadge state={s.state} tone={s.state === 'ready' ? 'running' : undefined} size="sm">
             {stateConfig.label}
           </StatusBadge>
           {s.state === 'finished' && !s.artifactsReviewed && s.pendingArtifactsCount > 0 && (

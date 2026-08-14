@@ -2,12 +2,13 @@ import { InfiniteScroll, router } from '@inertiajs/react';
 import { Badge, Box, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
 import { IconExternalLink, IconLock } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
 import { companySessionPath } from 'shared/routes';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 // Sessions whose show page is worth opening (a live or completed run, not a
 // half-provisioned one). Mirrors the project-scoped sessions list.
@@ -55,13 +56,13 @@ const AGENT_LABELS: Record<string, { label: string; color: string }> = {
   gemini_cli: { label: 'Gemini CLI', color: 'blue' },
 };
 
-const STATE_CONFIG: Record<string, { label: string; color: string }> = {
-  not_started: { label: 'Pending', color: 'gray' },
-  running: { label: 'Starting', color: 'blue' },
-  ready: { label: 'Running', color: 'green' },
-  finishing: { label: 'Finishing', color: 'yellow' },
-  finished: { label: 'Finished', color: 'gray' },
-  failed: { label: 'Failed', color: 'red' },
+const STATE_CONFIG: Record<string, { label: string }> = {
+  not_started: { label: 'Pending' },
+  running: { label: 'Starting' },
+  ready: { label: 'Running' },
+  finishing: { label: 'Finishing' },
+  finished: { label: 'Finished' },
+  failed: { label: 'Failed' },
 };
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
@@ -123,17 +124,26 @@ const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
     return map;
   });
 
-  // Sync new pages loaded by InfiniteScroll into the map (append-only: cable
-  // updates take precedence over Inertia prop data for existing entries).
+  const prevFiltersRef = useRef<string>('');
+
+  // Accumulate pages loaded by InfiniteScroll; reset map when filters change.
   useEffect(() => {
+    const filtersKey = JSON.stringify(filters);
+    const filtersChanged = filtersKey !== prevFiltersRef.current;
+    prevFiltersRef.current = filtersKey;
     setSessionMap((prev) => {
+      if (filtersChanged) {
+        const map = new Map<number, Session>();
+        for (const s of sessions) map.set(s.id, s);
+        return map;
+      }
       const newEntries = sessions.filter((s) => !prev.has(s.id));
       if (newEntries.length === 0) return prev;
       const map = new Map(prev);
       for (const s of newEntries) map.set(s.id, s);
       return map;
     });
-  }, [sessions]);
+  }, [sessions, filters]);
 
   useSessionListCableUpdates({
     onUpdate: useCallback((updated) => {
@@ -270,7 +280,7 @@ const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
 
 function SessionRow({ session: s }: { session: Session }) {
   const agent = AGENT_LABELS[s.agentType ?? ''] ?? { label: s.agentType ?? '—', color: 'gray' };
-  const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state, color: 'gray' };
+  const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state };
   const typeLabel = SESSION_TYPE_LABELS[s.sessionType] ?? s.sessionType;
   const isClickable = CLICKABLE_STATES.has(s.state) && s.viewable;
   const isPrivate = !s.viewable;
@@ -307,9 +317,9 @@ function SessionRow({ session: s }: { session: Session }) {
       </Table.Td>
       <Table.Td>
         <Group gap={4}>
-          <Badge color={stateConfig.color} size="sm" variant="outline">
+          <StatusBadge state={s.state} tone={s.state === 'ready' ? 'running' : undefined} size="sm">
             {stateConfig.label}
-          </Badge>
+          </StatusBadge>
           {s.state === 'finished' && !s.artifactsReviewed && s.pendingArtifactsCount > 0 && (
             <Badge color="yellow" size="xs">
               {s.pendingArtifactsCount} pending
