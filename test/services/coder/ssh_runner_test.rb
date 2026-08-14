@@ -346,6 +346,32 @@ module Coder
       assert_equal "exited", status[:state]
       assert_equal 2, status[:exit_code]
       assert_equal "line one\nline two\n", status[:tail]
+      assert_not status.key?(:result)
+    end
+
+    # How a detached job hands facts back to whoever polls it — the checked-out
+    # commit of a repo bootstrap is only knowable here.
+    test "job status parses the structured result block a job printed" do
+      out = "aixle_job state=exited exit_code=0\n---aixle_job_log---\n" \
+            "cloning\n---aixle_job_result---\nhead_sha=abc123\nworktree=clean\nrequested_ref=\n"
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal({ "head_sha" => "abc123", "worktree" => "clean", "requested_ref" => "" }, status[:result])
+      assert_match(/cloning/, status[:tail])
+    end
+
+    test "job status keeps the last result block when a job printed more than one" do
+      out = "aixle_job state=exited exit_code=0\n---aixle_job_log---\n" \
+            "---aixle_job_result---\nhead_sha=stale\n---aixle_job_result---\nhead_sha=fresh\n"
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal "fresh", status[:result]["head_sha"]
     end
 
     test "job status reports unknown for a job the workspace has no trace of" do

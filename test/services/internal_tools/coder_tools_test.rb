@@ -247,10 +247,11 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
 
     def initialize(_integration) = nil
 
-    def prepare(workspace_name:, repository:, path: nil)
-      self.class.last_call = { workspace_name: workspace_name, repository: repository, path: path }
-      { job_id: "j9", job_dir: "/var/lib/aixle-jobs", log_path: "/var/lib/aixle-jobs/j9.log",
-        repository: repository.full_name, path: path || "/root/#{repository.repo_name}" }
+    def prepare(workspace_name:, repository:, path: nil, ref: nil)
+      self.class.last_call = { workspace_name: workspace_name, repository: repository, path: path, ref: ref }
+      handle = { job_id: "j9", job_dir: "/var/lib/aixle-jobs", log_path: "/var/lib/aixle-jobs/j9.log",
+                 repository: repository.full_name, path: path || "/root/#{repository.repo_name}" }
+      ref ? handle.merge(ref: ref) : handle
     end
   end
 
@@ -278,6 +279,49 @@ class InternalTools::CoderToolsTest < ActiveSupport::TestCase
     assert_equal "/root/app", payload["path"]
     assert_match(/coder_job_status/, payload["next_step"])
     assert_equal "acme/app", FakeRepoBootstrap.last_call[:repository].full_name
+    assert_nil FakeRepoBootstrap.last_call[:ref]
+    assert_not payload.key?("ref")
+  end
+
+  test "prepare_repo: forwards the requested ref and says where the resolved sha lands" do
+    github = create(:integration, :github, :active, company: @company, connected_by: @user)
+    repo   = create(:repository, full_name: "acme/app", integration: github, scope: @project)
+    @session.define_singleton_method(:repositories) { Repository.where(id: repo.id) }
+    hold_lock
+
+    result = Coder::RepoBootstrap.stub(:new, ->(integration) { FakeRepoBootstrap.new(integration) }) do
+      InternalTools::CoderPrepareRepo.new(
+        params: { workspace_name: "ws-1", ref: "feature/login" }, session: @session
+      ).execute
+    end
+
+    assert_equal 0, result[:exit_code]
+    payload = JSON.parse(result[:stdout])
+    assert_equal "feature/login", payload["ref"]
+    assert_equal "feature/login", FakeRepoBootstrap.last_call[:ref]
+    assert_match(/head_sha/, payload["next_step"])
+    assert_match(/exit_code #{Coder::RepoBootstrap::REF_NOT_FOUND_EXIT_CODE}/, payload["next_step"])
+  end
+
+  test "prepare_repo: refuses an unsafe ref before it reaches the workspace" do
+    github = create(:integration, :github, :active, company: @company, connected_by: @user)
+    repo   = create(:repository, full_name: "acme/app", integration: github, scope: @project)
+    @session.define_singleton_method(:repositories) { Repository.where(id: repo.id) }
+    hold_lock
+
+    result = InternalTools::CoderPrepareRepo.new(
+      params: { workspace_name: "ws-1", ref: "main; rm -rf /" }, session: @session
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_match(/is not a valid branch, tag or commit name/, result[:stderr])
+  end
+
+  test "prepare_repo: advertises ref as an optional parameter" do
+    schema = InternalTools::CoderPrepareRepo.tool_definition.input_schema
+
+    assert_equal %w[workspace_name], schema["required"]
+    assert_not_nil schema.dig("properties", "ref")
   end
 
   test "prepare_repo: asks which repository when the session has several" do

@@ -6,12 +6,30 @@ schedules:
     cron: "0 * * * *"
     enabled: true
 
+  # Reaps WorkflowRun rows that have been running/paused beyond the stale threshold
+  # (4 hours). These accumulate when the WorkflowExecutionWorkflow process crashes
+  # without sending a final status update, leaving the run permanently active and
+  # holding pod quota. Hourly is sufficient: quota is released within one sweep window.
+  - workflow: stale_run_cleanup_workflow
+    cron: "30 * * * *"
+    enabled: true
+
   - workflow: dismissed_asset_cleanup_workflow
     cron: "0 3 * * *"
     enabled: true
 
   - workflow: quota_error_scan_workflow
     cron: "* * * * *"
+    enabled: true
+
+  # Terminates sessions that have been `ready` (agent working) but produced no
+  # terminal output for 30 minutes. Catches agents blocked on an interactive
+  # prompt (e.g. claude.ai spend-limit dialog) that the quota scanner misses
+  # because the blocking prompt may appear before any quota-error text.
+  # SKIP overlap: same sessions could be processed by two concurrent sweeps.
+  - workflow: no_output_scan_workflow
+    cron: "* * * * *"
+    overlap: skip
     enabled: true
 
   # Watchdog for agent containers that died without telling anyone (node failure,

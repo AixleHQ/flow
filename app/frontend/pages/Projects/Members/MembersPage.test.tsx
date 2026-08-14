@@ -24,10 +24,11 @@ afterEach(() => {
 });
 
 describe('Projects/Members/MembersPage', () => {
-  it('renders the heading with the member count and lists members', () => {
+  it('renders the heading, member count, and lists members', () => {
     renderAuthedPage(<MembersPage />, { props: baseProps });
 
-    expect(screen.getByRole('heading', { name: 'Project Members (2)' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Project Members' })).toBeInTheDocument();
+    expect(screen.getByText('2 members')).toBeInTheDocument();
     expect(screen.getByText('Ada Owner')).toBeInTheDocument();
     expect(screen.getByText('Bo Member')).toBeInTheDocument();
   });
@@ -44,7 +45,7 @@ describe('Projects/Members/MembersPage', () => {
   it('filters the member list by the search query', async () => {
     renderAuthedPage(<MembersPage />, { props: baseProps });
 
-    await userEvent.type(screen.getByPlaceholderText('Search by name or email...'), 'bo');
+    await userEvent.type(screen.getByPlaceholderText(/search by name or email/i), 'bo');
 
     expect(screen.queryByText('Ada Owner')).not.toBeInTheDocument();
     expect(screen.getByText('Bo Member')).toBeInTheDocument();
@@ -53,9 +54,9 @@ describe('Projects/Members/MembersPage', () => {
   it('shows the empty state when the search matches nobody', async () => {
     renderAuthedPage(<MembersPage />, { props: baseProps });
 
-    await userEvent.type(screen.getByPlaceholderText('Search by name or email...'), 'zzz');
+    await userEvent.type(screen.getByPlaceholderText(/search by name or email/i), 'zzz');
 
-    expect(screen.getByText('No members found')).toBeInTheDocument();
+    expect(screen.getByText('No members match your search')).toBeInTheDocument();
   });
 
   it('removes a member via router.delete after confirmation', async () => {
@@ -71,13 +72,13 @@ describe('Projects/Members/MembersPage', () => {
     );
   });
 
-  it('opens the Add Collaborator modal listing only users not already in the project', async () => {
+  it('opens the Add Collaborator drawer listing only users not already in the project', async () => {
     renderAuthedPage(<MembersPage />, { props: baseProps });
 
     await userEvent.click(screen.getByRole('button', { name: 'Add Collaborator' }));
 
     const dialog = await screen.findByRole('dialog');
-    // The Add button is disabled until a user is picked, so the modal opened cleanly.
+    // The Add button is disabled until a user is picked, so the drawer opened cleanly.
     expect(within(dialog).getByRole('button', { name: 'Add' })).toBeDisabled();
   });
 
@@ -97,7 +98,7 @@ describe('Projects/Members/MembersPage', () => {
 
     // "ada@" appears only in the owner's email, never in any display name, so a match here can
     // only come from the email branch of the filter predicate.
-    await userEvent.type(screen.getByPlaceholderText('Search by name or email...'), 'ada@');
+    await userEvent.type(screen.getByPlaceholderText(/search by name or email/i), 'ada@');
 
     expect(screen.getByText('Ada Owner')).toBeInTheDocument();
     expect(screen.queryByText('Bo Member')).not.toBeInTheDocument();
@@ -137,9 +138,9 @@ describe('Projects/Members/MembersPage', () => {
     );
   });
 
-  it('closes the add modal after a successful add', async () => {
+  it('closes the add drawer after a successful add', async () => {
     // Drive the success path: the mocked router invokes the onSuccess/onFinish callbacks the
-    // component passes, which close the modal and reset the picker. mockImplementationOnce reverts
+    // component passes, which close the drawer and reset the picker. mockImplementationOnce reverts
     // after this single call, so the pinned behavior never leaks into a later test.
     vi.mocked(router.post).mockImplementationOnce((_url, _data, options) => {
       const opts = options as { onSuccess?: () => void; onFinish?: () => void } | undefined;
@@ -157,13 +158,13 @@ describe('Projects/Members/MembersPage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  it('closes the add modal without posting when Cancel is clicked', async () => {
+  it('closes the add drawer without posting when Cancel is clicked', async () => {
     renderAuthedPage(<MembersPage />, { props: baseProps });
 
     await userEvent.click(screen.getByRole('button', { name: 'Add Collaborator' }));
     const dialog = await screen.findByRole('dialog');
 
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(router.post).not.toHaveBeenCalled();
@@ -179,7 +180,7 @@ describe('Projects/Members/MembersPage', () => {
       },
     });
 
-    expect(screen.getByRole('heading', { name: 'Project Members (3)' })).toBeInTheDocument();
+    expect(screen.getByText('3 members')).toBeInTheDocument();
     // With no name the avatar initials come from the email's first letter ("D"), and the email
     // itself is used as the primary label (so it renders both as the label and the dimmed subtext).
     expect(screen.getByText('D')).toBeInTheDocument();

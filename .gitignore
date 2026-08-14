@@ -91,3 +91,11 @@ docker/remote/db_dumps/latest.sql.gz
 docker/tools/
 _bmad/
 _bmad-output/
+.codegraph/
+docs/superpowers/
+
+# local AWS Bedrock-driven development
+.aws/
+bin/aws-login
+bin/dbp-ai
+docker/aws-config.workstation.example

@@ -1,8 +1,13 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Avatar, Badge, Box, Button, Group, List, Modal, Select, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Avatar, Badge, Box, Button, Group, Select, Table, Text, TextInput, Tooltip } from '@mantine/core';
 import { modals } from '@mantine/modals';
-import { IconPlus, IconSearch, IconTrash, IconCrown } from '@tabler/icons-react';
+import { IconCrown, IconPlus, IconSearch, IconTrash, IconUsers } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
+
+import { EmptyState } from 'shared/ui/EmptyState';
+import { PageHeader } from 'shared/ui/PageHeader';
+import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
+import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -56,6 +61,11 @@ const MembersPage = () => {
     return members.filter((m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q));
   }, [members, search]);
 
+  const handleClose = () => {
+    setAddOpen(false);
+    setSelectedUserId(null);
+  };
+
   const handleAdd = () => {
     if (!selectedUserId) return;
     setLoading(true);
@@ -65,10 +75,7 @@ const MembersPage = () => {
       {
         preserveScroll: true,
         onFinish: () => setLoading(false),
-        onSuccess: () => {
-          setAddOpen(false);
-          setSelectedUserId(null);
-        },
+        onSuccess: () => handleClose(),
       },
     );
   };
@@ -91,102 +98,147 @@ const MembersPage = () => {
   return (
     <>
       <Head title={`Members — ${project.name}`} />
-      <Box maw={800}>
-        <Group justify="space-between" mb="lg">
-          <Title order={2}>Project Members ({members.length})</Title>
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setAddOpen(true)}>
-            Add Collaborator
-          </Button>
-        </Group>
-
-        <TextInput
-          placeholder="Search by name or email..."
-          leftSection={<IconSearch size={16} />}
-          value={search}
-          onChange={(e) => setSearch(e.currentTarget.value)}
-          mb="lg"
-          maw={400}
+      <Box>
+        <PageHeader
+          title="Project Members"
+          actions={
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setAddOpen(true)}>
+              Add Collaborator
+            </Button>
+          }
         />
 
-        <List spacing="xs" listStyleType="none">
-          {filtered.map((member) => {
-            const isOwner = member.id === ownerId;
-            return (
-              <List.Item
-                key={member.id}
-                styles={{
-                  itemWrapper: { width: '100%' },
-                  itemLabel: { width: '100%' },
-                }}
-              >
-                <Group
-                  justify="space-between"
-                  wrap="nowrap"
-                  p="sm"
-                  style={{ borderBottom: '1px solid var(--mantine-color-default-border)' }}
-                >
-                  <Group gap="md" wrap="nowrap">
-                    <Avatar color="blue" radius="xl" size="md">
-                      {getInitials(member.name || member.email)}
-                    </Avatar>
-                    <Box>
-                      <Group gap="xs">
-                        <Text fw={500} size="sm">
-                          {member.name || member.email}
-                        </Text>
-                        {isOwner && (
-                          <Badge size="xs" color="blue" leftSection={<IconCrown size={10} />}>
-                            Owner
-                          </Badge>
-                        )}
-                      </Group>
-                      <Text size="xs" c="dimmed">
-                        {member.email}
-                      </Text>
-                    </Box>
-                  </Group>
-                  {!isOwner && (
-                    <Button
-                      variant="subtle"
-                      color="red"
-                      size="xs"
-                      leftSection={<IconTrash size={14} />}
-                      onClick={() => handleRemove(member)}
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </Group>
-              </List.Item>
-            );
-          })}
-          {filtered.length === 0 && (
-            <Text ta="center" c="dimmed" py="xl">
-              No members found
-            </Text>
-          )}
-        </List>
+        <Group mb="lg" gap="sm">
+          <TextInput
+            placeholder="Search by name or email…"
+            aria-label="Search members"
+            leftSection={<IconSearch size={16} />}
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            w={260}
+          />
+          <ResourceCount>
+            {filtered.length} member{filtered.length !== 1 ? 's' : ''}
+          </ResourceCount>
+        </Group>
 
-        <Modal opened={addOpen} onClose={() => setAddOpen(false)} title="Add Collaborator" centered>
+        {filtered.length === 0 ? (
+          <Box
+            style={{
+              border: '1px solid var(--app-border-default)',
+              borderRadius: 'var(--mantine-radius-md)',
+              backgroundColor: 'var(--app-bg-paper)',
+            }}
+          >
+            <EmptyState
+              icon={<IconUsers size={22} />}
+              title={search ? 'No members match your search' : 'No members yet'}
+            />
+          </Box>
+        ) : (
+          <ResourceTableShell minWidth={480}>
+            <Table highlightOnHover>
+              <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
+                <Table.Tr>
+                  <ResourceTh>User</ResourceTh>
+                  <ResourceTh align="right" w={100}>
+                    Actions
+                  </ResourceTh>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {filtered.map((member) => {
+                  const isOwner = member.id === ownerId;
+                  return (
+                    <Table.Tr key={member.id} style={{ height: 60 }}>
+                      <Table.Td>
+                        <Group gap="sm" wrap="nowrap">
+                          <Avatar
+                            size={32}
+                            radius="xl"
+                            styles={{
+                              root: {
+                                background: 'var(--app-bg-elevated)',
+                                border: '1px solid var(--app-border-default)',
+                                color: 'var(--app-text-secondary)',
+                              },
+                            }}
+                          >
+                            {getInitials(member.name || member.email)}
+                          </Avatar>
+                          <Box style={{ minWidth: 0 }}>
+                            <Group gap={7} wrap="nowrap">
+                              <Text fw={500} size="sm" c="var(--app-text-primary)">
+                                {member.name || member.email}
+                              </Text>
+                              {isOwner && (
+                                <Badge
+                                  size="sm"
+                                  variant="default"
+                                  leftSection={<IconCrown size={12} />}
+                                  styles={{
+                                    root: {
+                                      color: 'var(--app-warning-fg)',
+                                      background: 'var(--app-warning-bg)',
+                                      borderColor: 'var(--app-warning-border)',
+                                    },
+                                  }}
+                                >
+                                  Owner
+                                </Badge>
+                              )}
+                            </Group>
+                            <Text size="xs" c="dimmed">
+                              {member.email}
+                            </Text>
+                          </Box>
+                        </Group>
+                      </Table.Td>
+                      <Table.Td>
+                        {!isOwner && (
+                          <Group gap={4} justify="flex-end">
+                            <Tooltip label="Remove">
+                              <ActionIcon
+                                aria-label={`Remove ${member.name || member.email}`}
+                                variant="subtle"
+                                size="sm"
+                                color="red"
+                                onClick={() => handleRemove(member)}
+                              >
+                                <IconTrash size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                          </Group>
+                        )}
+                      </Table.Td>
+                    </Table.Tr>
+                  );
+                })}
+              </Table.Tbody>
+            </Table>
+          </ResourceTableShell>
+        )}
+
+        <ResourceDrawer
+          opened={addOpen}
+          onClose={handleClose}
+          title="Add Collaborator"
+          footer={
+            <Button fullWidth onClick={handleAdd} loading={loading} disabled={!selectedUserId}>
+              Add
+            </Button>
+          }
+        >
           <Select
             label="Select User"
-            placeholder="Choose a company member..."
+            placeholder="Choose a company member…"
             data={selectData}
             value={selectedUserId}
             onChange={setSelectedUserId}
             searchable
             nothingFoundMessage="No users available"
-            mb="xl"
           />
-          <Group justify="flex-end">
-            <Button variant="default" onClick={() => setAddOpen(false)} disabled={loading}>
-              Cancel
-            </Button>
-            <Button onClick={handleAdd} loading={loading} disabled={!selectedUserId}>
-              Add
-            </Button>
-          </Group>
-        </Modal>
+        </ResourceDrawer>
       </Box>
     </>
   );
