@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { act, renderPage, screen, userEvent, within } from 'test/renderPage';
+import { emitUppy } from 'test/uppyMock';
 
 import type { Asset } from './AssetsContent';
 import { AssetsContent } from './AssetsContent';
@@ -35,6 +36,17 @@ function makeAsset(over: Partial<Asset> = {}): Asset {
     updatedAt: '2026-01-10T00:00:00Z',
     ...over,
   };
+}
+
+// Uppy is stubbed inert (see test/setup.ts), so a finished upload is the 'complete' event the
+// component subscribed to, carrying the cache URL the presigned S3 PUT would have produced.
+function completeUpload(files: Array<{ name?: string; uploadURL: string }>) {
+  act(() => emitUppy('complete', { successful: files }));
+}
+
+function lastPostedAsset(): { name: string; folder: string | null; file: Record<string, unknown> } {
+  const init = vi.mocked(globalThis.fetch).mock.calls.at(-1)?.[1] as RequestInit;
+  return JSON.parse(init.body as string).asset;
 }
 
 const baseProps = {
@@ -543,5 +555,44 @@ describe('AssetsContent', () => {
     const links = within(dialog).getAllByRole('link');
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAttribute('href', 'https://files.example/v2.pdf');
+  });
+
+  it('posts the uploaded filename in the cached-file descriptor, and no client-supplied size or type', async () => {
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([{ name: 'release-notes.md', uploadURL: 'https://s3.example/cache/9f8e7d-release-notes.md' }]);
+    await userEvent.click(await screen.findByRole('button', { name: /save 1 file/i }));
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      '/api/v1/company/assets',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    // The filename is what lets Shrine's mime-type analyzer fall back for formats without magic
+    // bytes; size and mime_type stay server-derived, so the descriptor must carry neither.
+    const { file } = lastPostedAsset();
+    expect(file).toEqual({
+      id: '9f8e7d-release-notes.md',
+      storage: 'cache',
+      metadata: { filename: 'release-notes.md' },
+    });
+    expect(file).not.toHaveProperty('size');
+    expect(file).not.toHaveProperty('mime_type');
+  });
+
+  it('sends each uploaded file its own filename, falling back to "file" when Uppy reports none', async () => {
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([
+      { name: 'rows.csv', uploadURL: 'https://s3.example/cache/aaa111-rows.csv' },
+      { uploadURL: 'https://s3.example/cache/bbb222-unnamed' },
+    ]);
+    await userEvent.click(await screen.findByRole('button', { name: /save 2 files/i }));
+
+    const bodies = vi
+      .mocked(globalThis.fetch)
+      .mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string).asset);
+    expect(bodies.map((a) => a.file.metadata.filename)).toEqual(['rows.csv', 'file']);
   });
 });

@@ -4,6 +4,8 @@ import { cleanup } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, vi } from 'vitest';
 
+import { resetUppyMock } from './uppyMock';
+
 interface DeferredStubProps {
   children?: ReactNode;
   data?: string | string[];
@@ -62,7 +64,12 @@ globalThis.fetch = vi.fn(
   async () => new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
 ) as typeof fetch;
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  // Each mounted component registers its Uppy listeners on a fresh instance; drop them so one
+  // test's handlers can never be driven by the next.
+  resetUppyMock();
+});
 
 // ---------------------------------------------------------------------------
 // Backend seams — never touch a real backend.
@@ -82,14 +89,17 @@ vi.mock('@rails/actioncable', () => ({
 // that runs file after file, that 3s timer fires *after* the test's jsdom realm is disposed and
 // throws "ReferenceError: window is not defined" as an unhandled error that fails the whole run —
 // and only in full runs (>3s), never in isolation (<3s), so it reads as flaky. destroy() removes
-// the listeners but cannot cancel the unstored timer. No test drives an actual upload (they assert
-// the modal/list UI only), so stub Uppy inert: chainable instance, no timers, no window access.
-vi.mock('@uppy/core', () => {
+// the listeners but cannot cancel the unstored timer. So stub Uppy inert: chainable instance, no
+// timers, no window access. Registered listeners are recorded in `uppyMock` so a test can drive the
+// upload lifecycle (e.g. emitUppy('complete', …)) without a real S3 round-trip.
+vi.mock('@uppy/core', async () => {
+  const { recordUppyListener } = await import('./uppyMock');
   class UppyMock {
     use() {
       return this;
     }
-    on() {
+    on(event: string, listener: (...args: never[]) => void) {
+      recordUppyListener(event, listener);
       return this;
     }
     off() {
