@@ -31,7 +31,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
                (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count,
                (SELECT COUNT(*) FROM task_assets WHERE board_task_id = board_tasks.id) AS assets_count
              SQL
-             .includes(:assignee, :workflow_runs, :pending_gates, :gates)
+             .includes(:assignee, :workflow_runs, :gates)
              .order(:position).map { |t| BoardTaskResource.new(t).to_h }
       },
       members: -> { current_project.member_users.map { |u| BoardMemberResource.new(u).to_h } },
@@ -97,7 +97,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
 
   def find_task(board)
     board.board_tasks
-         .includes(:assignee, :parent_task, :child_tasks, :task_comments, :task_assets, :workflow_runs, :pending_gates, :gates)
+         .includes(:assignee, :parent_task, :child_tasks, :task_comments, :task_assets, :workflow_runs, :gates)
          .find_by(id: params[:task])
     # note: task_assets included here so TaskDetailResource.assets_count avoids N+1;
     # parent_task so TaskDetailResource.parent_task_title does not fire an extra query
