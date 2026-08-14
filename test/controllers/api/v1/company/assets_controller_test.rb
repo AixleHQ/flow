@@ -26,6 +26,23 @@ module Api
           assert_response :created
         end
 
+        # The browser upload path posts only name/folder/file — no size, no type
+        # — so the version has to derive both, otherwise the Assets list renders
+        # "—" in the Size column for everything uploaded through the UI.
+        test "create records file size and content type for a browser-style payload" do
+          post :create, params: {
+            asset: {
+              name: "doc.md",
+              file: document_file_cache_data
+            }
+          }
+
+          assert_response :created
+          version = response.parsed_body["latestVersion"]
+          assert_equal File.size(UploadSupport::DOCUMENT_FILE_PATH), version["fileSize"]
+          assert version["contentType"].present?
+        end
+
         test "destroy soft-deletes asset" do
           asset = create(:asset, :with_company_scope, scope: @company, created_by: @user)
 
