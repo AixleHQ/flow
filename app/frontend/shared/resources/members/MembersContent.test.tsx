@@ -2,8 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
-import { buildSharedUser } from 'test/factories/sharedProps';
-import { buildSharedProps, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { buildSharedPermissions, buildSharedUser } from 'test/factories/sharedProps';
+import { buildSharedProps, renderAuthedPage, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { MembersContent, type MemberUser } from './MembersContent';
 
@@ -89,7 +89,7 @@ describe('MembersContent', () => {
   });
 
   it('the Invite Member button opens the invite drawer', async () => {
-    renderPage(<MembersContent {...baseProps([makeUser()])} />);
+    renderAuthedPage(<MembersContent {...baseProps([makeUser()])} />);
 
     await userEvent.click(screen.getByRole('button', { name: /invite member/i }));
 
@@ -100,7 +100,7 @@ describe('MembersContent', () => {
 
   it('confirming Remove in the row menu fires router.delete', async () => {
     // Two active admins so neither is the "last admin" (which would disable Remove).
-    renderPage(
+    renderAuthedPage(
       <MembersContent
         {...baseProps([
           makeUser({ id: 7, name: 'Ada Lovelace', role: 'admin', state: 'active' }),
@@ -130,7 +130,7 @@ describe('MembersContent', () => {
   });
 
   it('the "Make Admin" menu action fires router.patch with the new role', async () => {
-    renderPage(<MembersContent {...baseProps([makeUser({ id: 9, name: 'Ada Lovelace', role: 'employee' })])} />);
+    renderAuthedPage(<MembersContent {...baseProps([makeUser({ id: 9, name: 'Ada Lovelace', role: 'employee' })])} />);
 
     // Open the row's action menu (the dots icon button).
     const row = screen.getByText('Ada Lovelace').closest('tr') as HTMLElement;
@@ -149,7 +149,7 @@ describe('MembersContent', () => {
   });
 
   it('a pending invite shows Invited status and a Resend Invitation action', async () => {
-    renderPage(
+    renderAuthedPage(
       <MembersContent
         {...baseProps([makeUser({ id: 3, name: 'Ivy Invitee', state: 'invited' })])}
         // The status filter defaults to Active — switch to All Statuses to see the invite.
@@ -172,6 +172,57 @@ describe('MembersContent', () => {
 
     const row = screen.getByText('Vic Viewer').closest('tr') as HTMLElement;
     expect(within(row).getByText('Viewer')).toBeInTheDocument();
+  });
+
+  describe('when the current user cannot manage members', () => {
+    const readOnlyProps = buildSharedProps({
+      currentUser: buildSharedUser({ id: 1 }),
+      permissions: buildSharedPermissions({ isAdmin: false, canManageMembers: false, canManageProjects: false }),
+    });
+
+    it('hides the Invite Member button', () => {
+      renderPage(<MembersContent {...baseProps([makeUser({ id: 2, name: 'Grace Hopper' })])} />, {
+        props: readOnlyProps,
+      });
+
+      // The page itself stays readable — only the control that always fails is gone.
+      expect(screen.getByText('Grace Hopper')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /invite member/i })).not.toBeInTheDocument();
+    });
+
+    it('offers no per-row action menu and drops the Actions column', () => {
+      renderPage(
+        <MembersContent
+          {...baseProps([
+            makeUser({ id: 2, name: 'Grace Hopper', role: 'admin' }),
+            makeUser({ id: 3, name: 'Ivy Invitee', role: 'employee' }),
+          ])}
+        />,
+        { props: readOnlyProps },
+      );
+
+      const row = screen.getByText('Grace Hopper').closest('tr') as HTMLElement;
+      expect(within(row).queryByRole('button', { name: /actions for/i })).not.toBeInTheDocument();
+      // Case-insensitive: the header label is uppercased by CSS, not in the DOM text.
+      expect(screen.queryByRole('columnheader', { name: /actions/i })).not.toBeInTheDocument();
+    });
+
+    it('treats absent shared permissions the same as no permission', () => {
+      renderPage(<MembersContent {...baseProps([makeUser({ id: 2, name: 'Grace Hopper' })])} />, {
+        props: buildSharedProps({ currentUser: buildSharedUser({ id: 1 }), permissions: undefined }),
+      });
+
+      expect(screen.queryByRole('button', { name: /invite member/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /actions for/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps the Invite Member button and the row menu when the user can manage members', () => {
+    renderAuthedPage(<MembersContent {...baseProps([makeUser({ id: 2, name: 'Grace Hopper' })])} />);
+
+    expect(screen.getByRole('button', { name: /invite member/i })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /actions/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actions for Grace Hopper' })).toBeInTheDocument();
   });
 
   it('shows a "You" pill and no action menu on the current user\'s own row', () => {
