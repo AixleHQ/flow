@@ -15,7 +15,10 @@ module InternalTools
                   "(completed | command_failed | timeout | signaled | runner_vanished), `signal`, `started_at`, " \
                   "`finished_at`, `elapsed_seconds`, `pid`, `pgid`, `command` — and a one-line `diagnosis`: " \
                   "read `reason` before concluding anything about a job that did not exit 0, because it separates " \
-                  "a failing command from a cancellation, a timeout and an infrastructure failure."
+                  "a failing command from a cancellation, a timeout and a runner that vanished. " \
+                  "`runner_vanished` is deliberately ambiguous: a hard kill of the job's process group and an " \
+                  "infrastructure failure leave identical evidence, so it also carries `possible_causes` and its " \
+                  "`diagnosis` names both instead of asserting one."
       tags :coder
       inject_when :coder_integration_connected
       requires_integration :coder

@@ -370,6 +370,27 @@ module Coder
       assert_match(/"\$BASE\.hb"/, script, "expected a heartbeat to date a job that cannot record its own end")
     end
 
+    # The wrapper must send the command the signal it was itself sent — a
+    # recorded `signal=INT` next to a command that was really sent TERM is
+    # exactly the misleading evidence this feature exists to remove.
+    test "the wrapper forwards the received signal rather than always sending TERM" do
+      captured_args = nil
+      stub = popen3_stub(out: "aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs\n") { |_env, argv| captured_args = argv }
+
+      Open3.stub(:popen3, stub) do
+        Coder::SshRunner.new(@integration).exec_detached(workspace_name: "ws-1", command: "sleep 30", job_id: "j1")
+      end
+
+      script = captured_args.last
+
+      assert_match(/kill -s "\$1" "\$AIXLE_CHILD"/, script,
+                   "the trap must forward the signal it received, not a hard-coded TERM")
+      assert_match(/INT\|QUIT/, script,
+                   "INT/QUIT are ignored by a background child (POSIX) and need the TERM follow-up")
+      assert_match(/child_signal=TERM/, script,
+                   "a delivered signal that differs from the received one must be recorded")
+    end
+
     # A workspace name is recorded inside a double-quoted shell string; a name
     # carrying shell metacharacters must not become command substitution.
     test "detached start neutralises shell metacharacters in the recorded workspace name" do
@@ -543,6 +564,41 @@ module Coder
       assert_equal 30, status[:elapsed_seconds]
       assert_match(/SIGTERM/, status[:diagnosis])
       assert_match(/cancellation|outside kill/, status[:diagnosis])
+      assert_nil status[:child_signal], "a forwarded signal that matched needs no second field"
+      assert_nil status[:possible_causes], "a trapped signal is conclusive — it must not read as ambiguous"
+    end
+
+    # INT and QUIT cannot reach a command a non-interactive shell started in the
+    # background (POSIX has the shell ignore them there), so the wrapper follows
+    # with TERM. The poll must say so instead of implying the command handled
+    # the signal the wrapper was sent.
+    test "job status reports the signal the command was really delivered when it differs" do
+      out = job_status_output(
+        header: "state=exited exit_code=130",
+        meta:   <<~META,
+          started_at_epoch=1786701600
+          pid=4242
+          child_signal=TERM
+          finished_at=2026-08-14T10:00:30Z
+          finished_at_epoch=1786701630
+          reason=signaled
+          signal=INT
+          exit_code=130
+          checked_at_epoch=1786701900
+        META
+        command: "make check_all",
+        log:     "compiling\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal "signaled", status[:reason]
+      assert_equal "INT", status[:signal]
+      assert_equal "TERM", status[:child_signal]
+      assert_match(/SIGINT/, status[:diagnosis])
+      assert_match(/delivered to the command as SIGTERM/, status[:diagnosis])
     end
 
     # The case that used to lose everything: the wrapper is SIGKILLed, so no trap
@@ -588,7 +644,42 @@ module Coder
       assert_equal "running tests\n", status[:tail]
       assert_match(/pid 777/, status[:diagnosis])
       assert_match(/never wrote an exit code/, status[:diagnosis])
-      assert_match(/infrastructure failure/, status[:diagnosis])
+    end
+
+    # A hard `kill -9` on the job's process group and a workspace that rebooted
+    # leave byte-identical evidence: no exit file, a dead pid, a stale
+    # heartbeat. The poll must not resolve that to one cause — an operator sent
+    # after a phantom infrastructure failure is worse off than one told the
+    # state is ambiguous.
+    test "job status reports a vanished runner as indeterminate, naming both causes" do
+      out = job_status_output(
+        header: "state=died exit_code=",
+        meta:   <<~META,
+          started_at=2026-08-14T10:00:00Z
+          started_at_epoch=1786701600
+          pid=777
+          pgid=777
+          checked_at_epoch=1786701860
+          heartbeat_at=2026-08-14T10:03:20Z
+          heartbeat_at_epoch=1786701800
+        META
+        command: "make check_all",
+        log:     "running tests\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal %w[hard_cancellation infrastructure_failure], status[:possible_causes],
+                   "both candidate causes must be machine-readable, not buried in prose"
+      assert_match(/indeterminate/, status[:diagnosis])
+      assert_match(/cancellation/, status[:diagnosis], "an explicit hard kill must be named as a candidate")
+      assert_match(/infrastructure failure/, status[:diagnosis], "so must the infrastructure cause")
+      assert_no_match(/^the runner .*\. An infrastructure failure/, status[:diagnosis],
+                      "the diagnosis must not assert a single cause")
+      assert_match(/pgid 777|process group/, status[:diagnosis],
+                   "the reader needs to know a process-group kill produces this too")
     end
 
     test "job status still explains a job whose wrapper predates lifecycle metadata" do
@@ -712,7 +803,7 @@ module Coder
     # code, no end time and no reason.
     test "a detached job terminated mid-run records the signal instead of vanishing" do
       in_local_shell_workspace do |runner|
-        runner.exec_detached(workspace_name: "ws-1", command: "sleep 30", job_id: "wrapkill")
+        runner.exec_detached(workspace_name: "ws-1", command: signal_reporting_command, job_id: "wrapkill")
         pid = poll_for_pid(runner, "wrapkill")
 
         Process.kill("TERM", pid)
@@ -725,10 +816,87 @@ module Coder
         assert_not_nil status[:finished_at], "an interrupted job must still be dated"
         assert_operator status[:elapsed_seconds], :>=, 0
         assert_match(/SIGTERM/, status[:diagnosis])
+        assert_match(/command received TERM/, wait_for_tail(runner, "wrapkill", /command received/),
+                     "the command must be sent the signal the wrapper recorded")
+      end
+    end
+
+    # A non-TERM trap, run for real: the command must receive the same signal
+    # the wrapper did, or the recorded `signal` describes something that never
+    # happened. HUP is the interesting one — unlike INT/QUIT a background child
+    # can actually receive it, so nothing may substitute TERM for it.
+    test "a detached job terminated with HUP forwards HUP, not TERM" do
+      in_local_shell_workspace do |runner|
+        runner.exec_detached(workspace_name: "ws-1", command: signal_reporting_command, job_id: "wraphup")
+        pid = poll_for_pid(runner, "wraphup")
+
+        Process.kill("HUP", pid)
+        status = poll_until_finished(runner, "wraphup")
+
+        assert_equal "exited", status[:state]
+        assert_equal 129, status[:exit_code]
+        assert_equal "signaled", status[:reason]
+        assert_equal "HUP", status[:signal]
+        assert_nil status[:child_signal], "HUP reaches the command; nothing should have been substituted"
+        assert_match(/SIGHUP/, status[:diagnosis])
+
+        tail = wait_for_tail(runner, "wraphup", /command received/)
+        assert_match(/command received HUP/, tail, "the command must be sent the signal the wrapper recorded")
+        assert_no_match(/command received TERM/, tail, "TERM must not be substituted for a forwarded HUP")
+      end
+    end
+
+    # Why the INT/QUIT branch of the trap exists at all, pinned to the POSIX
+    # behaviour it is written for: a non-interactive shell sets INT and QUIT to
+    # ignore in a command it starts in the background, and a shell cannot
+    # re-trap a signal inherited as ignored. The wrapper is launched in the
+    # background, so an INT aimed at a detached job reaches nothing and the job
+    # keeps running — a cancellation must use TERM. The command is started in
+    # the background too, which is why an INT the wrapper *can* receive is
+    # forwarded as TERM and recorded as `child_signal` (covered above).
+    test "INT does not reach a detached wrapper, so the job keeps running" do
+      in_local_shell_workspace do |runner|
+        runner.exec_detached(workspace_name: "ws-1", command: signal_reporting_command, job_id: "wrapint")
+        pid = poll_for_pid(runner, "wrapint")
+
+        Process.kill("INT", pid)
+        sleep 0.5
+
+        status = runner.job_status(workspace_name: "ws-1", job_id: "wrapint")
+        assert_equal "running", status[:state], "a background wrapper cannot be interrupted by INT (POSIX)"
+        assert_empty status[:tail].to_s.strip, "and the command must not have seen it either"
+
+        # Leave nothing behind: TERM is the signal that does reach it.
+        Process.kill("TERM", pid)
+        assert_equal "TERM", poll_until_finished(runner, "wrapint")[:signal]
       end
     end
 
     private
+
+    # A command that names the signal it was sent in its own log, so a test can
+    # tell what the wrapper really delivered rather than trusting the metadata
+    # it wrote. Sleeps in short slices because a POSIX shell runs a trap only
+    # once the foreground command returns.
+    def signal_reporting_command
+      <<~CMD
+        trap 'printf "command received TERM\\n"; exit 143' TERM
+        trap 'printf "command received HUP\\n"; exit 129' HUP
+        trap 'printf "command received INT\\n"; exit 130' INT
+        i=0
+        while [ "$i" -lt 300 ]; do sleep 0.1; i=$((i + 1)); done
+      CMD
+    end
+
+    # The wrapper records its own end and exits without waiting for the command,
+    # so the command's last line can land in the log just after the poll reports
+    # the job finished.
+    def wait_for_tail(runner, job_id, pattern, timeout: 10)
+      poll(timeout: timeout, waiting_for: "job #{job_id} log to match #{pattern.inspect}") do
+        tail = runner.job_status(workspace_name: "ws-1", job_id: job_id)[:tail].to_s
+        tail if tail.match?(pattern)
+      end
+    end
 
     # Assembles a `job_status` remote payload the way the status script does:
     # header, metadata, launch command, log tail.

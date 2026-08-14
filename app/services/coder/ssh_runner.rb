@@ -59,6 +59,15 @@ module Coder
     REASON_SIGNALED       = "signaled"
     REASON_VANISHED       = "runner_vanished"
 
+    # A runner that vanished leaves identical evidence — no exit file, a dead
+    # pid, a stale heartbeat — whether it was hard-killed on purpose
+    # (`kill -9` on the job's process group, which no trap can survive) or lost
+    # with the box. Nothing in the application hard-kills a detached job, so
+    # there is no cancellation intent for the poll to read back; until some
+    # caller records one, the poll reports both candidate causes instead of
+    # asserting the one it cannot tell apart.
+    VANISHED_CAUSES = %w[hard_cancellation infrastructure_failure].freeze
+
     # Conventional status of a command killed by `timeout(1)` — and the status
     # the foreground path returns for its own timeout.
     TIMEOUT_EXIT_CODE = 124
@@ -217,9 +226,10 @@ module Coder
     # (`command`, `workspace`, `pid`, `pgid`, `started_at`, `finished_at`,
     # `elapsed_seconds`, `signal`, `reason`) and a one-line `diagnosis`. That is
     # what makes a job that was killed before it could write its exit code
-    # diagnosable: `reason` separates a command failure from a timeout, an
-    # explicit cancellation and an infrastructure failure, and `finished_at`
-    # falls back to the last heartbeat instead of being lost (task #581).
+    # diagnosable: `reason` separates a command failure from a timeout, a
+    # trapped cancellation and a runner that vanished, and `finished_at` falls
+    # back to the last heartbeat instead of being lost (task #581). A vanished
+    # runner is reported as ambiguous — see `VANISHED_CAUSES`.
     #
     # A job started by the previous wrapper has no metadata file; it still
     # reports state, exit code and log tail, and `reason` is then derived from
@@ -299,9 +309,27 @@ module Coder
     # end normally is still explainable:
     #
     #   * traps — a TERM/INT/HUP/QUIT that lands on the wrapper (an explicit
-    #     cancellation, a `docker stop`, a session teardown) forwards to the
-    #     command and THEN records the signal and writes the exit file, instead
-    #     of leaving the job looking like it evaporated;
+    #     cancellation, a `docker stop`, a session teardown) forwards THE SAME
+    #     signal to the command and THEN records it and writes the exit file,
+    #     instead of leaving the job looking like it evaporated. Forwarding what
+    #     it actually received matters twice over: a command with
+    #     signal-specific cleanup (HUP vs TERM) behaves as it would outside the
+    #     wrapper, and the recorded `signal` then describes what the command was
+    #     really sent rather than what the wrapper substituted for it.
+    #
+    #     Two POSIX facts bound this, both about a *background* command in a
+    #     non-interactive shell — the shell sets INT and QUIT to ignore in it,
+    #     and a shell cannot re-trap a signal it inherited as ignored:
+    #
+    #       - the wrapper is itself launched in the background, so its INT and
+    #         QUIT traps cannot fire in the detached launch path at all (TERM
+    #         and HUP, the ones a teardown actually sends, are unaffected).
+    #         They are kept for a wrapper run any other way, where they can;
+    #       - the command is likewise started in the background, so an INT or
+    #         QUIT the wrapper does manage to receive cannot be forwarded to it.
+    #         TERM follows so the command is not orphaned, and `child_signal`
+    #         records the substitution instead of letting the metadata imply the
+    #         command handled a signal it never got;
     #   * heartbeat — a timestamp rewritten every HEARTBEAT_SECONDS, which dates
     #     the death of a job whose wrapper was SIGKILLed and therefore could not
     #     run a trap;
@@ -330,7 +358,15 @@ module Coder
         }
 
         aixle_on_signal() {
-          if [ -n "$AIXLE_CHILD" ]; then kill -TERM "$AIXLE_CHILD" 2>/dev/null; fi
+          if [ -n "$AIXLE_CHILD" ]; then
+            kill -s "$1" "$AIXLE_CHILD" 2>/dev/null || kill -TERM "$AIXLE_CHILD" 2>/dev/null
+            case "$1" in
+              INT|QUIT)
+                kill -TERM "$AIXLE_CHILD" 2>/dev/null
+                aixle_meta "child_signal=TERM"
+                ;;
+            esac
+          fi
           if [ -n "$AIXLE_HB" ]; then kill "$AIXLE_HB" 2>/dev/null; fi
           aixle_finish "$2" signaled "$1"
           exit "$2"
@@ -491,7 +527,9 @@ module Coder
 
       details = {
         reason:                reason,
+        possible_causes:       (VANISHED_CAUSES if reason == REASON_VANISHED),
         signal:                signal,
+        child_signal:          meta["child_signal"].presence,
         diagnosis:             job_diagnosis(
           state: state, exit_code: exit_code, reason: reason, signal: signal, timing: timing, meta: meta
         ),
@@ -564,9 +602,10 @@ module Coder
       (exit_code - 128).to_s
     end
 
-    # One line an agent can act on. The four outcomes the task cares about read
+    # One line an agent can act on. The outcomes the task cares about read
     # differently on purpose: a non-zero exit is the command's own verdict, a
-    # signal is something outside it, a vanished runner is the box.
+    # trapped signal is something outside it, and a vanished runner is one of
+    # two outside causes the evidence cannot separate.
     def job_diagnosis(state:, exit_code:, reason:, signal:, timing:, meta:)
       elapsed = timing[:elapsed_seconds]
       after   = elapsed ? " after #{elapsed}s" : ""
@@ -581,8 +620,9 @@ module Coder
         "the command exited #{TIMEOUT_EXIT_CODE}#{after}, the conventional timeout status — it ran out of time " \
           "rather than failing on its own terms"
       when REASON_SIGNALED
-        "the job was terminated by SIG#{signal || "?"}#{after} — an explicit cancellation or an outside kill " \
-          "(session teardown, `docker stop`, an operator), not a command failure"
+        "the job was terminated by SIG#{signal || "?"}#{forwarded_as(signal: signal, meta: meta)}#{after} — " \
+          "an explicit cancellation or an outside kill (session teardown, `docker stop`, an operator), " \
+          "not a command failure"
       when REASON_VANISHED
         vanished_diagnosis(timing: timing, meta: meta)
       else
@@ -594,12 +634,31 @@ module Coder
       end
     end
 
+    # The wrapper forwards the signal it received, so the two are normally the
+    # same and this says nothing. It speaks up for the INT/QUIT case, where the
+    # command cannot receive what the wrapper got and was sent TERM instead —
+    # the divergence belongs in the diagnosis rather than only in a field.
+    def forwarded_as(signal:, meta:)
+      delivered = meta["child_signal"].presence
+      return "" if delivered.nil? || delivered == signal
+
+      " (delivered to the command as SIG#{delivered}, which cannot receive SIG#{signal} in the background)"
+    end
+
+    # Deliberately does NOT pick a cause. A hard cancellation (`kill -9` on the
+    # job's process group) and an infrastructure failure (workspace reboot, spot
+    # interruption, OOM kill) are observationally identical here — both leave a
+    # dead runner, no exit file and a stale heartbeat — so naming one would send
+    # an operator down a path the evidence does not support. What the poll can
+    # say for certain is that this is not the command's own verdict.
     def vanished_diagnosis(timing:, meta:)
       pid = meta["pid"].presence
 
       "the runner process#{pid ? " (pid #{pid})" : ""} is gone and never wrote an exit code; " \
-        "#{last_sign_of_life(timing)}. An infrastructure failure — workspace reboot, OOM kill or a " \
-        "SIGKILLed process group — rather than anything the command did"
+        "#{last_sign_of_life(timing)}. The cause is indeterminate: a hard cancellation (SIGKILL on the " \
+        "job's process group, which leaves the wrapper no chance to record it) and an infrastructure " \
+        "failure (workspace reboot, spot interruption, OOM kill) produce exactly this evidence. Not the " \
+        "command's own failure either way — check the log tail and the workspace before concluding which"
     end
 
     def last_sign_of_life(timing)
