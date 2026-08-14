@@ -436,9 +436,7 @@ function ciGateSummary(task: Task): { label: string; color: string; tooltip: str
       return {
         label: 'CI pending',
         color: 'yellow',
-        tooltip: `${name} — waiting ${formatElapsedTime(gate.createdAt)}${
-          gate.expired ? ' (past its TTL)' : ''
-        }`,
+        tooltip: `${name} — waiting ${formatElapsedTime(gate.createdAt)}${gate.expired ? ' (past its TTL)' : ''}`,
       };
   }
 }
@@ -1638,10 +1636,7 @@ function TaskDetailSidebar({
     return history.length > 0 ? history : (task?.pendingGates ?? []);
   }, [task?.ciGates, task?.pendingGates]);
 
-  const hasStaleGate = useMemo(
-    () => gatesForPanel.some((gate) => gateCiStatus(gate) === 'stale'),
-    [gatesForPanel],
-  );
+  const hasStaleGate = useMemo(() => gatesForPanel.some((gate) => gateCiStatus(gate) === 'stale'), [gatesForPanel]);
 
   const parentTask = useMemo(
     () => (task?.parentTaskId ? allTasks.find((t) => t.id === task.parentTaskId) : null) ?? null,
@@ -2287,12 +2282,7 @@ function TaskDetailSidebar({
           {gatesForPanel.length > 0 && (
             <Box>
               <Group gap={6} mb={4}>
-                <ThemeIcon
-                  size={18}
-                  variant="light"
-                  color={hasStaleGate ? 'orange' : 'yellow'}
-                  radius="xl"
-                >
+                <ThemeIcon size={18} variant="light" color={hasStaleGate ? 'orange' : 'yellow'} radius="xl">
                   {hasStaleGate ? <IconAlertCircle size={12} /> : <IconHourglass size={12} />}
                 </ThemeIcon>
                 <Text size="xs" c="dimmed" fw={600} tt="uppercase">
@@ -3099,7 +3089,11 @@ function TaskDetailSidebar({
                           {w.status === 'resolved' ? (
                             <IconCircleCheck size={14} color="var(--mantine-color-green-6)" style={{ flexShrink: 0 }} />
                           ) : w.status === 'stale' ? (
-                            <IconAlertCircle size={14} color="var(--mantine-color-orange-6)" style={{ flexShrink: 0 }} />
+                            <IconAlertCircle
+                              size={14}
+                              color="var(--mantine-color-orange-6)"
+                              style={{ flexShrink: 0 }}
+                            />
                           ) : (
                             <IconHourglass size={14} color="var(--mantine-color-yellow-6)" style={{ flexShrink: 0 }} />
                           )}
