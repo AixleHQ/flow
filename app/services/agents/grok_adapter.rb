@@ -36,9 +36,14 @@ module Agents
     # CLI (its own docs read it with `jq -r '."https://accounts.x.ai/sign-in".key'`).
     TOKEN_FIELD = "key"
 
-    # Every host the CLI talks to for auth, the model catalogue, and inference sits
-    # under x.ai, so this is what the MITM proxy tracks — and what #collect_usage reads.
-    MITM_DOMAIN = "x.ai"
+    # Domains the MITM proxy tracks — and the only ones #collect_usage reads usage from.
+    # Two are needed because the CLI has two inference routes:
+    #   * api.x.ai              — the direct API-key path (and the model catalogue/auth).
+    #   * cli-chat-proxy.grok.com — the inference proxy xAI requires for a signed-in
+    #                             (device-code/OAuth) session, which is the default path.
+    # Tracking only x.ai would drop every completion made by an ordinary OAuth session,
+    # so those sessions would record neither tokens nor cost.
+    MITM_DOMAINS = %w[x.ai grok.com].freeze
 
     def self.default_config_paths
       [ "~/.grok/config.toml", "AGENTS.md" ]
@@ -186,7 +191,7 @@ module Agents
     def default_env_vars(session)
       env = {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => MITM_DOMAIN
+        "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(",")
       }
 
       # Inject the API key from the credential of THIS session's company: keys are per
@@ -208,7 +213,7 @@ module Agents
     end
 
     def mitm_tracked_domains
-      [ MITM_DOMAIN ]
+      MITM_DOMAINS.dup
     end
 
     def session_log_paths
@@ -281,9 +286,11 @@ module Agents
     # matches on — can never reach the collector. Usage therefore comes from the MITM
     # log at cleanup, the same source CursorCli and Codex fall back to.
     #
-    # Model traffic goes to api.x.ai over HTTPS and the responses are OpenAI-shaped, so
-    # each completion carries a `usage` object. Cost is priced from the xAI catalogue,
-    # whose per-token prices are quoted in cents per 10^8 tokens.
+    # Model traffic goes over HTTPS to api.x.ai (API-key login) or to
+    # cli-chat-proxy.grok.com (the default signed-in/OAuth login) — both are tracked, see
+    # MITM_DOMAINS — and the responses are OpenAI-shaped either way, so each completion
+    # carries a `usage` object. Cost is priced from the xAI catalogue, whose per-token
+    # prices are quoted in cents per 10^8 tokens.
     def collect_usage(terminal_session, artifacts = {})
       mitm_log = artifacts["logs/http.log"]
       events = extract_events_from_mitm(mitm_log)
@@ -389,13 +396,24 @@ module Agents
       reasoning_tokens: %w[reasoning_tokens]
     }.freeze
 
+    # Same rule the proxy addon filters on (docker/base/logger/mitm_logger.py::_should_log):
+    # the host is either the tracked domain itself or a subdomain of it. A bare suffix
+    # test would also accept a lookalike host (`phishx.ai` ends with `x.ai`), which must
+    # never be read as vendor traffic.
+    def tracked_host?(host)
+      host = host.to_s.downcase
+      return false if host.blank?
+
+      MITM_DOMAINS.any? { |domain| host == domain || host.end_with?(".#{domain}") }
+    end
+
     def extract_events_from_mitm(log_content)
       return [] if log_content.blank?
 
       log_content.each_line.filter_map do |line|
         entry = JSON.parse(line.strip)
         next unless entry["direction"] == "response"
-        next unless entry["host"].to_s.end_with?(MITM_DOMAIN)
+        next unless tracked_host?(entry["host"])
 
         body = decode_body(entry)
         next if body.blank?

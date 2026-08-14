@@ -169,12 +169,15 @@ module Agents
       assert_equal "mine", @adapter.default_env_vars(@session)["XAI_API_KEY"]
     end
 
-    test "default_env_vars tracks x.ai traffic through the MITM proxy" do
+    # Both inference routes must be tracked: api.x.ai for an API-key login and
+    # cli-chat-proxy.grok.com for the default signed-in (device-code/OAuth) login.
+    # Tracking x.ai alone leaves every OAuth session with no usage at all.
+    test "default_env_vars tracks both the x.ai and grok.com traffic through the MITM proxy" do
       env = @adapter.default_env_vars(@session)
 
-      assert_equal "x.ai", env["MITM_TRACKED_DOMAINS"]
+      assert_equal "x.ai,grok.com", env["MITM_TRACKED_DOMAINS"]
       assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
-      assert_equal [ "x.ai" ], @adapter.mitm_tracked_domains
+      assert_equal [ "x.ai", "grok.com" ], @adapter.mitm_tracked_domains
       assert_includes @adapter.session_log_paths, "/var/log/mitm/http.log"
     end
 
@@ -318,9 +321,31 @@ module Agents
 
     # == Usage ==
 
-    def mitm_line(body, host: "api.x.ai", direction: "response", ts: "2026-08-14T12:00:00.000000Z")
-      { _source: "http2-logger", direction: direction, host: host, path: "/v1/chat/completions",
+    def mitm_line(body, host: "api.x.ai", path: "/v1/chat/completions", direction: "response",
+                  ts: "2026-08-14T12:00:00.000000Z")
+      { _source: "http2-logger", direction: direction, host: host, path: path,
         status_code: 200, ts: ts, body: body }.to_json
+    end
+
+    # What the signed-in path logs: an SSE stream whose `usage` object only appears in the
+    # final chunk, preceded by content chunks that carry none. The logged body may also be
+    # a truncated tail, which is why the counts are matched by pattern.
+    def streamed_completion_body(model: "grok-4.5")
+      chunks = [
+        { id: "chatcmpl-1", object: "chat.completion.chunk", model: model,
+          choices: [ { index: 0, delta: { content: "Hello" } } ] },
+        { id: "chatcmpl-1", object: "chat.completion.chunk", model: model,
+          choices: [ { index: 0, delta: {}, finish_reason: "stop" } ],
+          usage: {
+            prompt_tokens: 2_048,
+            completion_tokens: 512,
+            total_tokens: 2_560,
+            prompt_tokens_details: { cached_tokens: 1_024 },
+            completion_tokens_details: { reasoning_tokens: 128 }
+          } }
+      ]
+
+      "#{chunks.map { |chunk| "data: #{chunk.to_json}" }.join("\n\n")}\n\ndata: [DONE]\n\n"
     end
 
     def chat_completion_body(model: "grok-4.5", prompt: 1_000, completion: 200, cached: 400, reasoning: 50)
@@ -363,6 +388,49 @@ module Agents
       stat = @session.reload.usage_statistic
       assert_equal 12, stat.input_tokens
       assert_equal 7, stat.output_tokens
+    end
+
+    # The default login is device-code/OAuth, and xAI routes a signed-in session's
+    # inference through cli-chat-proxy.grok.com rather than api.x.ai. The proxy streams
+    # the answer, so `usage` arrives in the final SSE chunk of a possibly truncated body.
+    # This is the primary path: if it records nothing, ordinary sessions report no usage.
+    test "collect_usage records the OAuth path's streamed usage from the grok.com proxy" do
+      stub_request(:get, GrokAdapter::MODELS_URL).to_return(status: 401, body: "")
+      create(:agent_credential, user: @user, company: @company, agent_type: "grok",
+                                config_data: @adapter.extract_credentials(oauth_auth_json))
+
+      log = mitm_line(streamed_completion_body, host: "cli-chat-proxy.grok.com",
+                                                path: "/v1/chat/completions")
+      @adapter.collect_usage(@session, { "logs/http.log" => "#{log}\n" })
+
+      stat = @session.reload.usage_statistic
+      assert_equal 2_048, stat.input_tokens
+      assert_equal 512, stat.output_tokens
+      assert_equal 1_024, stat.cache_read_tokens
+      assert_equal [ "grok-4.5" ], stat.models
+      assert_equal 1, stat.events_count
+      assert_equal 128, stat.events_data.first.dig("tokenUsage", "reasoningTokens")
+    end
+
+    # A bare suffix test on the host would accept a lookalike domain as vendor traffic.
+    test "collect_usage accepts the tracked domains and their subdomains, and nothing else" do
+      assert_equal %w[x.ai grok.com], @adapter.mitm_tracked_domains
+
+      accepted = %w[x.ai api.x.ai grok.com cli-chat-proxy.grok.com CLI-Chat-Proxy.Grok.com]
+      rejected = %w[phishx.ai notgrok.com grok.com.evil.example api.x.ai.attacker.test]
+
+      @adapter.collect_usage(
+        @session,
+        { "logs/http.log" => accepted.map { |host| mitm_line(chat_completion_body, host: host) }.join("\n") }
+      )
+      assert_equal accepted.size, @session.reload.usage_statistic.events_count
+
+      other_session = create(:terminal_session, :running, user: @user, project: @project, agent_type: "grok")
+      @adapter.collect_usage(
+        other_session,
+        { "logs/http.log" => rejected.map { |host| mitm_line(chat_completion_body, host: host) }.join("\n") }
+      )
+      assert_nil other_session.reload.usage_statistic
     end
 
     test "collect_usage skips request entries and other hosts" do

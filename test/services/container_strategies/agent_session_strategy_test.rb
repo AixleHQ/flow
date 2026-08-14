@@ -364,7 +364,7 @@ module ContainerStrategies
       assert_includes env_vars, "AGENT_TYPE=grok"
       assert_includes env_vars, "HOME_DIR=/home/grok"
       assert_includes env_vars, "AUTH_WATCH_PATH=/home/grok/.grok/auth.json"
-      assert_includes env_vars, "MITM_TRACKED_DOMAINS=x.ai"
+      assert_includes env_vars, "MITM_TRACKED_DOMAINS=x.ai,grok.com"
       assert_includes env_vars, "XAI_API_KEY=xai-company-key"
     end
 

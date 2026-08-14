@@ -136,14 +136,41 @@ collector by any supported configuration. Routing per session by URL or
 header would mean changing the shared collector and ingest endpoint, which
 is out of scope for adding a runtime.
 
-What works instead: Grok's model traffic goes to `api.x.ai` over HTTPS and
-the responses are OpenAI-shaped, so `MITM_TRACKED_DOMAINS=x.ai` captures
-completions whose bodies carry a `usage` object. The adapter extracts the
-counts by pattern (a streamed body's `usage` arrives in the final chunk and
-the logged body may be a truncated tail — the same constraint the Codex
-adapter works around), matching both wire formats the CLI can speak: Chat
-Completions (`prompt_tokens`/`completion_tokens`) and the Responses API
-(`input_tokens`/`output_tokens`).
+What works instead: Grok's model traffic goes over HTTPS to a host whose
+responses are OpenAI-shaped, so the MITM log captures completions whose
+bodies carry a `usage` object. **Which** host depends on how the user signed
+in, and both have to be tracked:
+
+| Login | Inference host |
+| --- | --- |
+| Device-code / OAuth (the default, §2) | `cli-chat-proxy.grok.com` — the proxy xAI requires for a signed-in session |
+| `XAI_API_KEY` | `api.x.ai` — the direct API path |
+
+`MITM_TRACKED_DOMAINS=x.ai,grok.com` therefore covers both, and
+`#extract_events_from_mitm` accepts an entry whose host is one of those
+domains or a subdomain of one — the same rule
+`docker/base/logger/mitm_logger.py::_should_log` filters on, rather than a
+bare suffix test that would also accept a lookalike host such as
+`phishx.ai`. Tracking `x.ai` alone was the original mistake: it silently
+left every session on the *primary* auth path with no tokens and no cost.
+
+The adapter extracts the counts by pattern (a streamed body's `usage`
+arrives in the final SSE chunk and the logged body may be a truncated tail —
+the same constraint the Codex adapter works around), matching both wire
+formats the CLI can speak: Chat Completions
+(`prompt_tokens`/`completion_tokens`) and the Responses API
+(`input_tokens`/`output_tokens`). Both routes are covered by regression
+tests, the OAuth one against an SSE-framed `cli-chat-proxy.grok.com`
+response under an OAuth credential.
+
+**Open assumption.** The proxy's exact streamed body has not been observed
+against a live account — no xAI credential exists in any Aixle environment
+(the same gap that leaves AC 2–5 and 7 unverified end to end). The parser is
+deliberately shape-tolerant rather than tied to one framing: it scans the
+raw logged text for the token fields of either wire format, so SSE framing,
+chunk boundaries, and a truncated tail all still yield the counts. If a live
+session shows the proxy reporting usage under names outside
+`USAGE_FIELD_ALIASES`, that map is the single place to extend.
 
 **Cost** is priced from the same catalogue as the model list. xAI quotes
 per-token prices in **cents per 10⁸ tokens**, so
