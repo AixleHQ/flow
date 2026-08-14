@@ -412,7 +412,7 @@ docs/                                   # Architecture & design docs (see docs/i
 
 | Term | Meaning | DB column | Examples |
 |------|---------|-----------|----------|
-| **Agent Runtime** | Which AI agent CLI to use | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli` |
+| **Agent Runtime** | Which AI agent CLI to use | `workflow_runs.agent_runtime`, `terminal_sessions.agent_type` | `claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `grok` |
 | **Container Runtime** | Infrastructure that runs containers | `ContainerRuntime.build` (code-level) | Docker (local), Kubernetes (cluster) |
 | **Internal Tool** | Platform tool defined in code (`Tools::Registry`), runs in-process | `tools.source = 'code'`, `execution_mode = 'app'` | `list_sub_steps`, `slack_post_message`, `board_*`, `coder_*` |
 | **Workflow Tool** | Internal tool needing workflow context, auto-injected via code-only `inject_when` rules | `Tools::Registry` `inject_when` (no DB column) | `list_sub_steps`, `mark_sub_step`, `finish_session`, `fail_session` |

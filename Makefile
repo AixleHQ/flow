@@ -336,5 +336,5 @@ help:
 	@echo "  make shell                  - Open shell in web container"
 	@echo ""
 	@echo "Agent Docker Images:"
-	@echo "  make build-agents           - Build all agent images (core + 4 agents in parallel)"
+	@echo "  make build-agents           - Build all agent images (core + 5 agents in parallel)"
 	@echo "  make build-otlp-ingest      - Build the OTLP ingest image"

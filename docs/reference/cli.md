@@ -43,7 +43,7 @@ of these from the repo root.
 | ----------------------- | ------------------------------------------------------------------ |
 | `make build-web`        | Build the web image.                                               |
 | `make build-otlp-ingest`| Build the OpenTelemetry ingest image.                              |
-| `make build-agents`     | Build all four agent runtime images (`claude_code`, `cursor_cli`, `codex`, `gemini_cli`) plus the shared `agent-base-core`. Agents build in parallel. |
+| `make build-agents`     | Build all five agent runtime images (`claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `grok`) plus the shared `agent-base-core`. Agents build in parallel. |
 
 ## Help
 
