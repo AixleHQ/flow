@@ -284,6 +284,16 @@ is missing and repair what is there — widen the refspec, drop the promisor/par
 config whose fetches hang, unshallow, `GIT_TERMINAL_PROMPT=0` — fixing RC-5.2–5.3 for
 every project rather than one template.
 
+`coder_prepare_repo` also takes an optional `ref` (branch, tag or commit). With it the
+same job checks the revision out — resolved in that fixed order, `--force`, and the job
+exits 3 if the ref exists nowhere on origin — so a caller prepares the exact commit under
+test in one operation instead of hand-rolling fetch/checkout over SSH, which is what let a
+green test result belong to the wrong revision. Because the bootstrap is detached, its
+outcome is reported where a detached job's outcome is available at all: the job prints
+`SshRunner::JOB_RESULT_MARKER` followed by `key=value` lines (`head_sha`, `head`,
+`ref_type`, `worktree`, `shallow`, `remote_branches`), and `coder_job_status` returns them
+as `result`.
+
 The credential is **not** written into `remote.origin.url`, and not into the detached
 job's command file either: the workspace is shared and long-lived, so anything on its
 disk outlives the session that minted it. It travels in the launcher's environment (the
