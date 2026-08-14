@@ -16,8 +16,6 @@ module Ci
   # `detail` is operator-facing text: it ends up in the gate's reconciliation log
   # and, for a stale gate, in its `diagnostic_reason`.
   ProbeResult = Struct.new(:state, :conclusion, :detail, keyword_init: true) do
-    STATES = %i[completed in_progress unresolvable unavailable].freeze
-
     class << self
       def completed(conclusion, detail = nil)
         new(state: :completed, conclusion: conclusion.to_s.presence, detail: detail)
