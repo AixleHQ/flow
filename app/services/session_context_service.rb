@@ -770,14 +770,48 @@ class SessionContextService
         merged = existing.merge(new_data)
         write_file(container_id, path, merged.to_json, uid)
       when :append_toml
-        existing = read_file(container_id, path) || ""
-        write_file(container_id, path, "#{existing}\n\n#{content}", uid)
+        append_toml(container_id, path, content, uid)
       else # :fresh
         write_file(container_id, path, content, uid)
       end
     rescue JSON::ParserError => e
       Rails.logger.warn("[SessionContext] Failed to parse existing file #{path}: #{e.message}, writing fresh")
       write_file(container_id, path, content, uid)
+    end
+
+    # Appending is a read-modify-write, and `read_file` answers nil both for "the
+    # file is not there" and for "the read failed" — so the naive version wrote the
+    # MCP block on its own whenever a container hiccup swallowed the read, silently
+    # discarding everything the credential step had put in the same file. For Codex
+    # that file is config.toml, which holds the trusted-project entry: the result
+    # still parses, so the CLI starts and asks "Do you trust the contents of this
+    # directory?", and a non_interactive session has nobody to answer (task #605).
+    #
+    # An existing file we could not read is therefore left alone. Losing MCP servers
+    # surfaces as an agent reporting a missing tool; losing the trust entry surfaces
+    # as a workflow step that never speaks again.
+    def append_toml(container_id, path, content, uid)
+      existing = read_file(container_id, path)
+
+      if existing.nil? && file_exists?(container_id, path)
+        Rails.logger.error(
+          "[SessionContext] Skipped MCP append to #{path}: the file exists but could not be read, " \
+          "and overwriting it would drop the config already written there"
+        )
+        return false
+      end
+
+      write_file(container_id, path, "#{existing}\n\n#{content}", uid)
+    end
+
+    def file_exists?(container_id, path)
+      _stdout, _stderr, exit_code = runtime.exec(
+        container_id, [ "/bin/sh", "-c", "test -f #{Shellwords.escape(path)}" ], stdout: true, stderr: true
+      )
+      exit_code.to_i.zero?
+    rescue StandardError => e
+      Rails.logger.warn("[SessionContext] file_exists?(#{path}) failed: #{e.message}")
+      false
     end
 
     def runtime

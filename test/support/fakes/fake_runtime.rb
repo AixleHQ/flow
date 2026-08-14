@@ -37,6 +37,7 @@ module ContainerRuntime
       @execs = []
       @exec_failures = []
       @unreachable_execs = []
+      @unreadable_paths = []
       @terminal_pane = ""
       @terminal_log_mtime = nil
       @default_container_status = :running
@@ -73,6 +74,16 @@ module ContainerRuntime
     # mirroring the two methods' documented difference.
     def unreachable_on_exec(substring)
       @unreachable_execs << substring
+      self
+    end
+
+    # Read failure injection: both real runtimes answer nil for a file they could
+    # not pull (tar/archive error, exec hiccup) — the same nil a missing file
+    # produces. Callers that must tell those two apart (SessionContextService's TOML
+    # append refuses to overwrite a file it failed to read) need the second case to
+    # be reachable, so the path stays in #fs and only the read fails.
+    def fail_read(path)
+      @unreadable_paths << path.to_s
       self
     end
 
@@ -125,6 +136,13 @@ module ContainerRuntime
       failure = @exec_failures.find { |f| command_string(cmd).include?(f[:substring]) }
       return [ [ "" ], [ failure[:stderr] ], failure[:exit_code] ] if failure
 
+      # `test -f <path>` answers through the exit code, not stdout, and it has to
+      # reflect the virtual FS: callers use it to tell "the file is not there" apart
+      # from "the read failed", which is the whole point of asking.
+      if (probe = command_string(cmd).match(/\btest -f (\S+)/))
+        return [ [ "" ], [ "" ], @fs.key?(probe[1]) ? 0 : 1 ]
+      end
+
       [ [ resolve_command(cmd) ], [ "" ], 0 ]
     end
 
@@ -145,6 +163,8 @@ module ContainerRuntime
     end
 
     def read_file(_id, path)
+      return nil if @unreadable_paths.include?(path.to_s)
+
       @fs[path]
     end
 
