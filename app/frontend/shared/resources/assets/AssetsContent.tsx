@@ -62,13 +62,23 @@ export interface Asset {
 const PRESIGN_URL = '/api/v1/assets/presign';
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
 
-function extractCachedFileData(uploadURL: string): { id: string; storage: string } {
+interface CachedFileDescriptor {
+  id: string;
+  storage: string;
+  metadata?: { filename: string };
+}
+
+// The filename is the only metadata we send: Shrine's determine_mime_type analyzer needs it to
+// derive a content type for formats without magic bytes (.md, .txt, .json, .csv). Size and MIME
+// type are deliberately omitted — restore_cached_data re-derives both from the stored bytes, and
+// file_size must stay client-untrusted (OutputValidator#validate_size depends on it).
+function extractCachedFileData(uploadURL: string, filename: string): CachedFileDescriptor {
   const url = new URL(uploadURL, window.location.origin);
   const pathname = decodeURIComponent(url.pathname.replace(/\+/g, '%20'));
   const cachePrefix = '/cache/';
   const idx = pathname.indexOf(cachePrefix);
   if (idx === -1) throw new Error('Cannot extract cache data from upload URL');
-  return { id: pathname.substring(idx + cachePrefix.length), storage: 'cache' };
+  return { id: pathname.substring(idx + cachePrefix.length), storage: 'cache', metadata: { filename } };
 }
 
 interface AssetsContentProps {
@@ -122,9 +132,7 @@ export function AssetsContent({
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<
-    Array<{ name: string; cachedFile: { id: string; storage: string } }>
-  >([]);
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; cachedFile: CachedFileDescriptor }>>([]);
   const [uploadFolder, setUploadFolder] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -208,10 +216,13 @@ export function AssetsContent({
 
     uppyRef.current.on('progress', (progress: number) => setUploadProgress(progress));
     uppyRef.current.on('complete', (result) => {
-      const files = (result.successful ?? []).map((f) => ({
-        name: f.name ?? 'file',
-        cachedFile: extractCachedFileData((f as unknown as { uploadURL?: string }).uploadURL ?? ''),
-      }));
+      const files = (result.successful ?? []).map((f) => {
+        const name = f.name ?? 'file';
+        return {
+          name,
+          cachedFile: extractCachedFileData((f as unknown as { uploadURL?: string }).uploadURL ?? '', name),
+        };
+      });
       setUploadedFiles((prev) => [...prev, ...files]);
       setIsUploading(false);
     });
