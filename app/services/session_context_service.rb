@@ -371,8 +371,8 @@ class SessionContextService
       # Session-level requested model
       return session.requested_model if session.requested_model.present?
 
-      # User's default model from credential metadata
-      credential&.metadata&.dig("default_model")
+      # User's default model from credential metadata (retired ids mapped forward)
+      credential&.default_model
     end
 
     private

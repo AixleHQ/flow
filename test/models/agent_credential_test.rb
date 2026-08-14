@@ -110,6 +110,39 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal({ "primaryApiKey" => "sk-fresh" }, updated.config_data)
   end
 
+  # --- Default model ---
+
+  test "default_model returns nil when nothing is pinned" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+
+    assert_nil cred.default_model
+  end
+
+  test "default_model returns a still-supported pin unchanged" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+    cred.update!(metadata: (cred.metadata || {}).merge("default_model" => "claude-opus-5"))
+
+    assert_equal "claude-opus-5", cred.default_model
+  end
+
+  test "default_model maps a retired pin forward without rewriting what is stored" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+    cred.update!(metadata: (cred.metadata || {}).merge("default_model" => "claude-3-7-sonnet-20250219"))
+
+    assert_equal "claude-sonnet-5", cred.default_model,
+                 "a pin the vendor retired must resolve to a model that still answers"
+    assert_equal "claude-3-7-sonnet-20250219", cred.reload.metadata["default_model"],
+                 "the stored choice is left alone — the mapping is a read-time rescue"
+  end
+
+  test "default_model leaves a Bedrock inference-profile ARN untouched" do
+    arn = "arn:aws:bedrock:us-east-1:1234:application-inference-profile/abc"
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+    cred.update!(metadata: (cred.metadata || {}).merge("default_model" => arn))
+
+    assert_equal arn, cred.default_model
+  end
+
   # --- Model cache invalidation ---
 
   test "models_cache_key is per-credential" do

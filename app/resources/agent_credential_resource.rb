@@ -12,7 +12,7 @@ class AgentCredentialResource < ApplicationResource
 
   typelize :string?
   attribute :default_model do |credential|
-    credential.metadata&.dig("default_model")
+    credential.default_model
   end
 
   # Connection status derived from token expiry. Agent credentials carry no error
