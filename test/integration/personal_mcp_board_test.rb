@@ -171,6 +171,20 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_equal false, back["archived"] # rubocop:disable Minitest/RefuteFalse
   end
 
+  # The round-trip above goes through archive_board_task; this pins get_board_task
+  # to the persisted archived_at on its own, for both states.
+  test "get_board_task exposes the persisted archive state" do
+    archived = create(:board_task, board: @board, board_column: @todo,
+                      title: "Archived task", archived_at: Time.current)
+
+    active_detail = payload(call_tool("get_board_task", { project_id: @project.id, task_id: @task.id }))
+    assert_includes active_detail.keys, "archived"
+    assert_equal false, active_detail["archived"] # rubocop:disable Minitest/RefuteFalse
+
+    archived_detail = payload(call_tool("get_board_task", { project_id: @project.id, task_id: archived.id }))
+    assert archived_detail["archived"]
+  end
+
   test "archive_board_task requires write access" do
     viewer = create(:user, :viewer, company: @company)
     @project.add_collaborator(viewer)

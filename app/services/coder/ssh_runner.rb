@@ -63,6 +63,13 @@ module Coder
     # the foreground path returns for its own timeout.
     TIMEOUT_EXIT_CODE = 124
 
+    # A detached job can hand structured facts back to whoever polls it by
+    # printing this marker followed by `key=value` lines; `job_status` returns
+    # them as `result`. That is how `RepoBootstrap` reports the commit it checked
+    # out — the poll is where a detached job's outcome is available at all, so a
+    # caller reads the resolved sha there rather than scraping the log tail.
+    JOB_RESULT_MARKER = "---aixle_job_result---"
+
     # Launching a detached job is a handful of file writes; it must not inherit
     # the caller's (possibly long) timeout.
     DETACH_TIMEOUT = 30
@@ -441,7 +448,7 @@ module Coder
       header, _, details = front.partition("#{JOB_META_SEPARATOR}\n")
       meta_raw, _, cmd   = details.partition("#{JOB_CMD_SEPARATOR}\n")
 
-      job_report(
+      report = job_report(
         job_id:    job_id,
         state:     header[/state=(\w+)/, 1] || "unknown",
         exit_code: header[/exit_code=(-?\d+)/, 1]&.to_i,
@@ -449,6 +456,18 @@ module Coder
         command:   cmd.to_s.strip.presence,
         tail:      log.to_s
       )
+
+      result = parse_result_block(log.to_s)
+      result ? report.merge(result: result) : report
+    end
+
+    # Reads the LAST result block in the tail: a job that ran the marker twice
+    # (a retried bootstrap) reports what is true now, not what was true first.
+    def parse_result_block(log)
+      _, marker, block = log.rpartition("#{JOB_RESULT_MARKER}\n")
+      return nil if marker.empty?
+
+      parse_meta(block).presence
     end
 
     # `key=value` lines, last one wins — the wrapper appends as it learns, so a
