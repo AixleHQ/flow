@@ -576,18 +576,21 @@ module Coder
     end
 
     def vanished_diagnosis(timing:, meta:)
-      pid  = meta["pid"].presence
-      age  = timing[:heartbeat_age_seconds]
-      seen = if timing[:estimated] && timing[:finished_at]
-               "last sign of life #{timing[:finished_at]}#{age ? " (#{age}s before this check)" : ""}"
-             else
-               "no heartbeat was ever recorded — it died within the first #{HEARTBEAT_SECONDS}s, " \
-                 "or it predates lifecycle metadata"
-             end
+      pid = meta["pid"].presence
 
-      "the runner process#{pid ? " (pid #{pid})" : ""} is gone and never wrote an exit code; #{seen}. " \
-        "An infrastructure failure — workspace reboot, OOM kill or a SIGKILLed process group — " \
-        "rather than anything the command did"
+      "the runner process#{pid ? " (pid #{pid})" : ""} is gone and never wrote an exit code; " \
+        "#{last_sign_of_life(timing)}. An infrastructure failure — workspace reboot, OOM kill or a " \
+        "SIGKILLed process group — rather than anything the command did"
+    end
+
+    def last_sign_of_life(timing)
+      unless timing[:estimated] && timing[:finished_at]
+        return "no heartbeat was ever recorded — it died within the first #{HEARTBEAT_SECONDS}s, " \
+               "or it predates lifecycle metadata"
+      end
+
+      age = timing[:heartbeat_age_seconds]
+      "last sign of life #{timing[:finished_at]}#{age ? " (#{age}s before this check)" : ""}"
     end
 
     def integer_or_nil(value)
