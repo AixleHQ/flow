@@ -134,7 +134,11 @@ const getInitials = (name: string): string => {
 };
 
 export const MembersContent = ({ users, basePath, title, subtitle, showRoleActions = true }: MembersContentProps) => {
-  const { currentUser } = usePage<SharedProps>().props;
+  const { currentUser, permissions } = usePage<SharedProps>().props;
+  // Every control this page offers mutates membership, so the whole action surface hangs off one
+  // permission. `permissions` is optional on SharedProps — absent means "not permitted", matching
+  // what the server would answer. Read access to the page itself stays open by design.
+  const canManageMembers = permissions?.canManageMembers ?? false;
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active');
@@ -197,9 +201,11 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
         title={title}
         subtitle={subtitle}
         actions={
-          <Button leftSection={<IconPlus size={16} />} onClick={() => setInviteOpen(true)}>
-            Invite Member
-          </Button>
+          canManageMembers ? (
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setInviteOpen(true)}>
+              Invite Member
+            </Button>
+          ) : undefined
         }
       />
 
@@ -255,9 +261,11 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
                 <ResourceTh>Role</ResourceTh>
                 <ResourceTh>Status</ResourceTh>
                 <ResourceTh>Invited</ResourceTh>
-                <ResourceTh align="right" w={60}>
-                  Actions
-                </ResourceTh>
+                {canManageMembers && (
+                  <ResourceTh align="right" w={60}>
+                    Actions
+                  </ResourceTh>
+                )}
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -333,73 +341,77 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
                         {user.invitedBy ? `by ${user.invitedBy.name}` : 'Self-registered'}
                       </Text>
                     </Table.Td>
-                    <Table.Td>
-                      {isSelf ? null : (
-                        <Group gap={4} justify="flex-end">
-                          <Menu position="bottom-end" withArrow>
-                            <Menu.Target>
-                              <ActionIcon variant="subtle" size="sm" aria-label={`Actions for ${user.name}`}>
-                                <IconDotsVertical size={16} />
-                              </ActionIcon>
-                            </Menu.Target>
-                            <Menu.Dropdown>
-                              {showRoleActions && user.role === 'employee' && (
-                                <Menu.Item
-                                  leftSection={<IconUserCheck size={14} />}
-                                  onClick={() => handleRoleChange(user.id, 'admin')}
-                                >
-                                  Make Admin
-                                </Menu.Item>
-                              )}
-                              {showRoleActions && user.role === 'admin' && (
+                    {/* The row menu holds only membership-mutating items, so without the
+                        permission there is nothing left for it to offer — the column goes with it. */}
+                    {canManageMembers && (
+                      <Table.Td>
+                        {isSelf ? null : (
+                          <Group gap={4} justify="flex-end">
+                            <Menu position="bottom-end" withArrow>
+                              <Menu.Target>
+                                <ActionIcon variant="subtle" size="sm" aria-label={`Actions for ${user.name}`}>
+                                  <IconDotsVertical size={16} />
+                                </ActionIcon>
+                              </Menu.Target>
+                              <Menu.Dropdown>
+                                {showRoleActions && user.role === 'employee' && (
+                                  <Menu.Item
+                                    leftSection={<IconUserCheck size={14} />}
+                                    onClick={() => handleRoleChange(user.id, 'admin')}
+                                  >
+                                    Make Admin
+                                  </Menu.Item>
+                                )}
+                                {showRoleActions && user.role === 'admin' && (
+                                  <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
+                                    <Menu.Item
+                                      leftSection={<IconUserOff size={14} />}
+                                      disabled={isLastAdmin(user)}
+                                      onClick={() => handleRoleChange(user.id, 'employee')}
+                                    >
+                                      Make Employee
+                                    </Menu.Item>
+                                  </Tooltip>
+                                )}
+                                {showRoleActions && <Menu.Divider />}
+                                {user.state === 'invited' && (
+                                  <Menu.Item
+                                    leftSection={<IconMailForward size={14} />}
+                                    onClick={() => handleResend(user.id)}
+                                  >
+                                    Resend Invitation
+                                  </Menu.Item>
+                                )}
+                                {user.state === 'active' && (
+                                  <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
+                                    <Menu.Item
+                                      disabled={isLastAdmin(user)}
+                                      onClick={() => handleStateEvent(user.id, 'suspend')}
+                                    >
+                                      Suspend
+                                    </Menu.Item>
+                                  </Tooltip>
+                                )}
+                                {user.state === 'suspended' && (
+                                  <Menu.Item onClick={() => handleStateEvent(user.id, 'activate')}>Activate</Menu.Item>
+                                )}
+                                <Menu.Divider />
                                 <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
                                   <Menu.Item
-                                    leftSection={<IconUserOff size={14} />}
+                                    color="red"
+                                    leftSection={<IconTrash size={14} />}
                                     disabled={isLastAdmin(user)}
-                                    onClick={() => handleRoleChange(user.id, 'employee')}
+                                    onClick={() => handleDelete(user.id, user.name)}
                                   >
-                                    Make Employee
+                                    Remove
                                   </Menu.Item>
                                 </Tooltip>
-                              )}
-                              {showRoleActions && <Menu.Divider />}
-                              {user.state === 'invited' && (
-                                <Menu.Item
-                                  leftSection={<IconMailForward size={14} />}
-                                  onClick={() => handleResend(user.id)}
-                                >
-                                  Resend Invitation
-                                </Menu.Item>
-                              )}
-                              {user.state === 'active' && (
-                                <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
-                                  <Menu.Item
-                                    disabled={isLastAdmin(user)}
-                                    onClick={() => handleStateEvent(user.id, 'suspend')}
-                                  >
-                                    Suspend
-                                  </Menu.Item>
-                                </Tooltip>
-                              )}
-                              {user.state === 'suspended' && (
-                                <Menu.Item onClick={() => handleStateEvent(user.id, 'activate')}>Activate</Menu.Item>
-                              )}
-                              <Menu.Divider />
-                              <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
-                                <Menu.Item
-                                  color="red"
-                                  leftSection={<IconTrash size={14} />}
-                                  disabled={isLastAdmin(user)}
-                                  onClick={() => handleDelete(user.id, user.name)}
-                                >
-                                  Remove
-                                </Menu.Item>
-                              </Tooltip>
-                            </Menu.Dropdown>
-                          </Menu>
-                        </Group>
-                      )}
-                    </Table.Td>
+                              </Menu.Dropdown>
+                            </Menu>
+                          </Group>
+                        )}
+                      </Table.Td>
+                    )}
                   </Table.Tr>
                 );
               })}
@@ -408,7 +420,9 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
         </ResourceTableShell>
       )}
 
-      <InviteMemberDrawer opened={inviteOpen} onClose={() => setInviteOpen(false)} basePath={basePath} />
+      {canManageMembers && (
+        <InviteMemberDrawer opened={inviteOpen} onClose={() => setInviteOpen(false)} basePath={basePath} />
+      )}
     </Box>
   );
 };
