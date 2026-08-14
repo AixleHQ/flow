@@ -34,6 +34,14 @@ module ContainerStrategies
       assert_nil build_strategy.send(:resolve_model, @session)
     end
 
+    # A pin the vendor has since retired answers 404, so launching on it would fail
+    # every session until the user noticed and re-picked.
+    test "resolve_model launches a retired pin on its replacement" do
+      @credential.update!(metadata: { "default_model" => "claude-3-7-sonnet-20250219" })
+
+      assert_equal "claude-sonnet-5", build_strategy.send(:resolve_model, @session)
+    end
+
     # == Inheritance Tests ==
 
     test "inherits from AgentBaseStrategy" do
