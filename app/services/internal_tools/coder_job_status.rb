@@ -16,6 +16,8 @@ module InternalTools
                   "`finished_at`, `elapsed_seconds`, `pid`, `pgid`, `command` — and a one-line `diagnosis`: " \
                   "read `reason` before concluding anything about a job that did not exit 0, because it separates " \
                   "a failing command from a cancellation, a timeout and a runner that vanished. " \
+                  "`exited` means the command itself was reaped, never merely signalled: a cancelled job stays " \
+                  "`running` until it has really ended, and one that had to be killed says so in `escalated_to`. " \
                   "`runner_vanished` is deliberately ambiguous: a hard kill of the job's process group and an " \
                   "infrastructure failure leave identical evidence, so it also carries `possible_causes` and its " \
                   "`diagnosis` names both instead of asserting one."

@@ -92,6 +92,19 @@ module Coder
     end
     self.kill_grace_seconds = 0.5
 
+    # How long the job wrapper waits for the command to actually exit after
+    # forwarding the signal it was sent, before escalating to SIGKILL. The
+    # wrapper publishes nothing terminal until the command has been reaped, so
+    # this is also the longest a cancellation can take to show up in the poll —
+    # generous enough for a real test suite to finish its cleanup, short enough
+    # that a command ignoring the signal cannot hold the job open. Whole
+    # seconds: it becomes `sleep` in a POSIX shell. Overridable so a test does
+    # not have to wait a full grace cycle.
+    class << self
+      attr_accessor :job_kill_grace_seconds
+    end
+    self.job_kill_grace_seconds = 20
+
     def initialize(integration)
       @integration = integration
     end
@@ -223,8 +236,12 @@ module Coder
     #   unknown — no trace of this job id on this workspace
     #
     # Alongside the state it returns the lifecycle metadata the wrapper recorded
-    # (`command`, `workspace`, `pid`, `pgid`, `started_at`, `finished_at`,
-    # `elapsed_seconds`, `signal`, `reason`) and a one-line `diagnosis`. That is
+    # (`command`, `workspace`, `pid`, `pgid`, `started_at`, `signaled_at`,
+    # `finished_at`, `elapsed_seconds`, `signal`, `child_signal`,
+    # `child_exit_code`, `escalated_to`, `reason`) and a one-line `diagnosis`.
+    # A terminal state is only ever published once the command has been reaped,
+    # so `exited` means the command is really gone — a cancellation in progress
+    # still reads as `running`, with `signaled_at` already recorded. That is
     # what makes a job that was killed before it could write its exit code
     # diagnosable: `reason` separates a command failure from a timeout, a
     # trapped cancellation and a runner that vanished, and `finished_at` falls
@@ -278,7 +295,7 @@ module Coder
         #{command}
         #{delimiter}
         : > "$BASE.log"
-        rm -f "$BASE.exit" "$BASE.pid" "$BASE.hb"
+        rm -f "$BASE.exit" "$BASE.pid" "$BASE.hb" "$BASE.escalated"
         AIXLE_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
         AIXLE_STARTED_EPOCH=$(date +%s)
         {
@@ -310,12 +327,24 @@ module Coder
     #
     #   * traps — a TERM/INT/HUP/QUIT that lands on the wrapper (an explicit
     #     cancellation, a `docker stop`, a session teardown) forwards THE SAME
-    #     signal to the command and THEN records it and writes the exit file,
-    #     instead of leaving the job looking like it evaporated. Forwarding what
-    #     it actually received matters twice over: a command with
-    #     signal-specific cleanup (HUP vs TERM) behaves as it would outside the
-    #     wrapper, and the recorded `signal` then describes what the command was
-    #     really sent rather than what the wrapper substituted for it.
+    #     signal to the command, waits for the command to actually exit, and only
+    #     THEN records the outcome and writes the exit file — instead of leaving
+    #     the job looking like it evaporated. Forwarding what it actually
+    #     received matters twice over: a command with signal-specific cleanup
+    #     (HUP vs TERM) behaves as it would outside the wrapper, and the recorded
+    #     `signal` then describes what the command was really sent rather than
+    #     what the wrapper substituted for it.
+    #
+    #     Waiting is what makes the published state true. A `kill` that succeeds
+    #     confirms delivery and nothing else: a command that traps the signal and
+    #     keeps working would otherwise still be running — writing to the log,
+    #     holding the box — while the poll already reported the job terminal. So
+    #     the wrapper reaps the command first, and publishes what the reap
+    #     returned (`child_exit_code`). A command that outlives the grace window
+    #     (`job_kill_grace_seconds`) is escalated to SIGKILL, which is what
+    #     bounds the wait and is recorded as `escalated_to`; the heartbeat keeps
+    #     running throughout, so the job stays legibly `running` until it has
+    #     really ended.
     #
     #     Two POSIX facts bound this, both about a *background* command in a
     #     non-interactive shell — the shell sets INT and QUIT to ignore in it,
@@ -341,10 +370,11 @@ module Coder
     # `$$` is the wrapper's pid in the subshell too (POSIX), so the heartbeat
     # loop can use it to notice the wrapper is gone and stop.
     def runner_script
-      <<~'SH'.sub("__HEARTBEAT_SECONDS__", HEARTBEAT_SECONDS.to_s)
+      template = <<~'SH'
         #!/bin/sh
         BASE="$1"
         AIXLE_HB_INTERVAL=__HEARTBEAT_SECONDS__
+        AIXLE_GRACE=__KILL_GRACE_SECONDS__
 
         aixle_meta() { printf '%s\n' "$1" >> "$BASE.meta" 2>/dev/null; }
 
@@ -358,18 +388,72 @@ module Coder
         }
 
         aixle_on_signal() {
-          if [ -n "$AIXLE_CHILD" ]; then
-            kill -s "$1" "$AIXLE_CHILD" 2>/dev/null || kill -TERM "$AIXLE_CHILD" 2>/dev/null
-            case "$1" in
-              INT|QUIT)
-                kill -TERM "$AIXLE_CHILD" 2>/dev/null
-                aixle_meta "child_signal=TERM"
-                ;;
-            esac
+          AIXLE_TRAP_SIG="$1"
+          AIXLE_TRAP_CODE="$2"
+
+          # Ignored from here on: the reap below must not be re-entered by a
+          # repeat signal, and the escalation window bounds how long that lasts.
+          trap '' TERM INT HUP QUIT
+
+          if [ -z "$AIXLE_CHILD" ]; then
+            if [ -n "$AIXLE_HB" ]; then kill "$AIXLE_HB" 2>/dev/null; fi
+            aixle_finish "$AIXLE_TRAP_CODE" signaled "$AIXLE_TRAP_SIG"
+            exit "$AIXLE_TRAP_CODE"
           fi
+
+          AIXLE_CHILD_SIG="$AIXLE_TRAP_SIG"
+          case "$AIXLE_TRAP_SIG" in
+            INT|QUIT) AIXLE_CHILD_SIG=TERM ;;
+          esac
+          kill -s "$AIXLE_CHILD_SIG" "$AIXLE_CHILD" 2>/dev/null || {
+            AIXLE_CHILD_SIG=TERM
+            kill -TERM "$AIXLE_CHILD" 2>/dev/null
+          }
+          aixle_meta "signaled_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [ "$AIXLE_CHILD_SIG" != "$AIXLE_TRAP_SIG" ]; then aixle_meta "child_signal=$AIXLE_CHILD_SIG"; fi
+
+          # Delivery is not termination. A command may trap the signal and keep
+          # running, so the wrapper stays alive and reaps it before publishing
+          # anything terminal — a watchdog escalates to SIGKILL once the grace
+          # window is up, which is what bounds the wait. The watchdog only drops
+          # a marker file: the wrapper remains the single writer of the metadata,
+          # whose last-line-wins ordering two writers would scramble.
+          #
+          # The command's pid, not the process group: the command shares the
+          # wrapper's group (only the wrapper is setsid'd), so a group-wide kill
+          # would take the wrapper down with it and lose the metadata this whole
+          # path exists to write.
+          (
+            sleep "$AIXLE_GRACE"
+            if kill -0 "$AIXLE_CHILD" 2>/dev/null; then
+              : > "$BASE.escalated"
+              kill -KILL "$AIXLE_CHILD" 2>/dev/null
+            fi
+          ) &
+          AIXLE_WD=$!
+          wait "$AIXLE_CHILD"
+          AIXLE_CHILD_CODE=$?
+          kill "$AIXLE_WD" 2>/dev/null
           if [ -n "$AIXLE_HB" ]; then kill "$AIXLE_HB" 2>/dev/null; fi
-          aixle_finish "$2" signaled "$1"
-          exit "$2"
+
+          aixle_meta "child_exit_code=$AIXLE_CHILD_CODE"
+          # `kill -0` also succeeds on a child that has exited but is not yet
+          # reaped, so the marker alone could be a hair's-breadth false positive
+          # at the grace boundary. A SIGKILL that really landed is the 137 the
+          # reap returns; both together is what gets recorded.
+          if [ -f "$BASE.escalated" ]; then
+            rm -f "$BASE.escalated"
+            if [ "$AIXLE_CHILD_CODE" -eq 137 ]; then aixle_meta "escalated_to=KILL"; fi
+          fi
+
+          # A cancelled job must never report success: a command that trapped
+          # the signal and exited 0 still ended because something killed it, so
+          # the conventional 128+signo status stands in and `child_exit_code`
+          # keeps what the command itself returned.
+          AIXLE_PUB_CODE="$AIXLE_CHILD_CODE"
+          if [ "$AIXLE_CHILD_CODE" -eq 0 ]; then AIXLE_PUB_CODE="$AIXLE_TRAP_CODE"; fi
+          aixle_finish "$AIXLE_PUB_CODE" signaled "$AIXLE_TRAP_SIG"
+          exit "$AIXLE_PUB_CODE"
         }
 
         trap 'aixle_on_signal TERM 143' TERM
@@ -410,6 +494,10 @@ module Coder
           aixle_finish "$AIXLE_CODE" command_failed ""
         fi
       SH
+
+      template
+        .sub("__HEARTBEAT_SECONDS__", HEARTBEAT_SECONDS.to_s)
+        .sub("__KILL_GRACE_SECONDS__", self.class.job_kill_grace_seconds.to_i.to_s)
     end
 
     # The workspace name is recorded inside a double-quoted shell string, so a
@@ -530,6 +618,9 @@ module Coder
         possible_causes:       (VANISHED_CAUSES if reason == REASON_VANISHED),
         signal:                signal,
         child_signal:          meta["child_signal"].presence,
+        child_exit_code:       integer_or_nil(meta["child_exit_code"]),
+        escalated_to:          meta["escalated_to"].presence,
+        signaled_at:           meta["signaled_at"].presence,
         diagnosis:             job_diagnosis(
           state: state, exit_code: exit_code, reason: reason, signal: signal, timing: timing, meta: meta
         ),
@@ -622,7 +713,7 @@ module Coder
       when REASON_SIGNALED
         "the job was terminated by SIG#{signal || "?"}#{forwarded_as(signal: signal, meta: meta)}#{after} — " \
           "an explicit cancellation or an outside kill (session teardown, `docker stop`, an operator), " \
-          "not a command failure"
+          "not a command failure#{escalated_as(meta: meta)}#{outlived_by(exit_code: exit_code, meta: meta)}"
       when REASON_VANISHED
         vanished_diagnosis(timing: timing, meta: meta)
       else
@@ -643,6 +734,32 @@ module Coder
       return "" if delivered.nil? || delivered == signal
 
       " (delivered to the command as SIG#{delivered}, which cannot receive SIG#{signal} in the background)"
+    end
+
+    # The wrapper does not publish a terminal state until the command has been
+    # reaped, so a job that took the escalation was one the first signal did not
+    # end. Worth saying: "terminated by SIGTERM" alone would leave an operator
+    # thinking the command shut itself down cleanly when it had to be killed —
+    # which is also where to look for a command whose cleanup does not finish in
+    # the grace window.
+    def escalated_as(meta:)
+      target = meta["escalated_to"].presence
+      return "" if target.nil?
+
+      ". The command did not exit within the #{self.class.job_kill_grace_seconds.to_i}s grace window, so the " \
+        "wrapper escalated to SIG#{target} — that, not the signal above, is what ended it"
+    end
+
+    # The other way a reap can surprise: the command trapped the cancellation and
+    # exited 0 on its own terms. The job is still reported as cancelled — it did
+    # not run to completion — so the command's own status is stated rather than
+    # silently replaced by the conventional 128+signo one.
+    def outlived_by(exit_code:, meta:)
+      child = integer_or_nil(meta["child_exit_code"])
+      return "" if child.nil? || child == exit_code
+
+      ". The command handled the signal and exited #{child} itself; the job is still reported as " \
+        "#{exit_code} because it was cancelled rather than finished"
     end
 
     # Deliberately does NOT pick a cause. A hard cancellation (`kill -9` on the

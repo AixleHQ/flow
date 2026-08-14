@@ -391,6 +391,36 @@ module Coder
                    "a delivered signal that differs from the received one must be recorded")
     end
 
+    # A `kill` that succeeds proves delivery and nothing else, so the trap may
+    # not publish a terminal state on the strength of it: the command has to be
+    # reaped first, and that wait has to be bounded, or a command which ignores
+    # the signal keeps the job open forever. Asserted on the generated script
+    # because the ordering inside the trap is not observable from a poll.
+    test "the wrapper reaps the command before it publishes a terminal state" do
+      captured_args = nil
+      stub = popen3_stub(out: "aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs\n") { |_env, argv| captured_args = argv }
+
+      with_job_kill_grace(7) do
+        Open3.stub(:popen3, stub) do
+          Coder::SshRunner.new(@integration).exec_detached(workspace_name: "ws-1", command: "sleep 30", job_id: "j1")
+        end
+      end
+
+      script  = captured_args.last
+      handler = script[/aixle_on_signal\(\)\s*\{(.+?)^\}/m, 1].to_s
+
+      assert_match(/AIXLE_GRACE=7\b/, script, "the grace window must come from the configured setting")
+      assert_match(/wait "\$AIXLE_CHILD"/, handler, "the trap must reap the command, not merely signal it")
+      assert_match(/sleep "\$AIXLE_GRACE"/, handler, "the wait must be bounded by the grace window")
+      assert_match(/kill -KILL "\$AIXLE_CHILD"/, handler, "a bounded wait needs an escalation to end it")
+      assert_match(/child_exit_code=\$AIXLE_CHILD_CODE/, handler, "what the reap returned must be recorded")
+
+      # `rindex`: the branch for a signal that arrives before the command was
+      # even started finishes early, and has nothing to reap.
+      assert_operator handler.index('wait "$AIXLE_CHILD"'), :<, handler.rindex("aixle_finish"),
+                      "nothing terminal may be written before the command has been reaped"
+    end
+
     # A workspace name is recorded inside a double-quoted shell string; a name
     # carrying shell metacharacters must not become command substitution.
     test "detached start neutralises shell metacharacters in the recorded workspace name" do
@@ -599,6 +629,77 @@ module Coder
       assert_equal "TERM", status[:child_signal]
       assert_match(/SIGINT/, status[:diagnosis])
       assert_match(/delivered to the command as SIGTERM/, status[:diagnosis])
+    end
+
+    # A command that outlived the signal it was sent: the wrapper waited out the
+    # grace window, killed it and reaped it. "Terminated by SIGTERM" on its own
+    # would read as a clean shutdown, so the escalation is both a field and part
+    # of the diagnosis.
+    test "job status names the SIGKILL escalation when the command outlived its signal" do
+      out = job_status_output(
+        header: "state=exited exit_code=137",
+        meta:   <<~META,
+          started_at_epoch=1786701600
+          pid=4242
+          signaled_at=2026-08-14T10:00:10Z
+          child_exit_code=137
+          escalated_to=KILL
+          finished_at=2026-08-14T10:00:30Z
+          finished_at_epoch=1786701630
+          reason=signaled
+          signal=TERM
+          exit_code=137
+          checked_at_epoch=1786701900
+        META
+        command: "make check_all",
+        log:     "compiling\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal "signaled", status[:reason]
+      assert_equal "TERM", status[:signal]
+      assert_equal "KILL", status[:escalated_to]
+      assert_equal 137, status[:child_exit_code]
+      assert_equal "2026-08-14T10:00:10Z", status[:signaled_at]
+      assert_match(/escalated to SIGKILL/, status[:diagnosis])
+      assert_match(/not the signal above, is what ended it/, status[:diagnosis])
+    end
+
+    # The other reap outcome: the command trapped the cancellation and exited 0
+    # on its own terms. The job must not read as a success — it was cancelled —
+    # but the command's own status is stated rather than silently swallowed.
+    test "job status keeps the command's own status when it handled the cancellation and exited 0" do
+      out = job_status_output(
+        header: "state=exited exit_code=143",
+        meta:   <<~META,
+          started_at_epoch=1786701600
+          pid=4242
+          signaled_at=2026-08-14T10:00:10Z
+          child_exit_code=0
+          finished_at=2026-08-14T10:00:12Z
+          finished_at_epoch=1786701612
+          reason=signaled
+          signal=TERM
+          exit_code=143
+          checked_at_epoch=1786701900
+        META
+        command: "make check_all",
+        log:     "cleaning up\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal 143, status[:exit_code], "a cancelled job must never report success"
+      assert_equal 0, status[:child_exit_code]
+      assert_equal "signaled", status[:reason]
+      assert_nil status[:escalated_to], "the command exited on its own; nothing was escalated"
+      assert_match(/handled the signal and exited 0 itself/, status[:diagnosis])
+      assert_match(/cancelled rather than finished/, status[:diagnosis])
     end
 
     # The case that used to lose everything: the wrapper is SIGKILLed, so no trap
@@ -846,6 +947,45 @@ module Coder
       end
     end
 
+    # Delivery is not termination, run for real: a command that traps TERM and
+    # goes back to work is still running after the wrapper forwarded the signal,
+    # so the job must stay `running` — a poll that reported `exited` here would be
+    # describing a command that is still writing to its own log. The wrapper then
+    # ends the wait by escalating, and says which signal really did it.
+    test "a detached job whose command ignores the signal stays running until the wrapper reaps it" do
+      with_job_kill_grace(6) do
+        in_local_shell_workspace do |runner|
+          runner.exec_detached(workspace_name: "ws-1", command: signal_ignoring_command, job_id: "wrapstay")
+          pid = poll_for_pid(runner, "wrapstay")
+
+          Process.kill("TERM", pid)
+          # The command's own log line is the proof it was delivered the signal
+          # and survived it; asserting before that would prove nothing.
+          wait_for_tail(runner, "wrapstay", /command ignored TERM/)
+
+          alive = runner.job_status(workspace_name: "ws-1", job_id: "wrapstay")
+          assert_equal "running", alive[:state], "a signalled command that is still alive must not read as terminal"
+          assert_nil alive[:exit_code], "no exit code may be published while the command is still running"
+          assert_nil alive[:reason]
+          assert_not_nil alive[:signaled_at], "the cancellation itself is still recorded when it starts"
+
+          status = poll_until_finished(runner, "wrapstay", timeout: 25)
+
+          assert_equal "exited", status[:state]
+          assert_equal 137, status[:exit_code]
+          assert_equal "signaled", status[:reason]
+          assert_equal "TERM", status[:signal]
+          assert_equal "KILL", status[:escalated_to]
+          assert_equal 137, status[:child_exit_code]
+          assert_operator status[:elapsed_seconds], :>=, 5,
+                          "the wrapper must have waited out the grace window before publishing"
+          assert_match(/escalated to SIGKILL/, status[:diagnosis])
+          assert_not_nil status[:finished_at]
+          assert_nil status[:finished_at_estimated], "the wrapper recorded this end itself; it is not an estimate"
+        end
+      end
+    end
+
     # Why the INT/QUIT branch of the trap exists at all, pinned to the POSIX
     # behaviour it is written for: a non-interactive shell sets INT and QUIT to
     # ignore in a command it starts in the background, and a shell cannot
@@ -888,9 +1028,31 @@ module Coder
       CMD
     end
 
-    # The wrapper records its own end and exits without waiting for the command,
-    # so the command's last line can land in the log just after the poll reports
-    # the job finished.
+    # A command that survives the signal it is sent: it reports the TERM in its
+    # own log and goes straight back to work, which is exactly what a `kill` that
+    # only confirms delivery leaves behind. Long enough to outlast the grace
+    # window under test, so the escalation is what ends it.
+    def signal_ignoring_command
+      <<~CMD
+        trap 'printf "command ignored TERM\\n"' TERM
+        i=0
+        while [ "$i" -lt 600 ]; do sleep 0.1; i=$((i + 1)); done
+      CMD
+    end
+
+    # The grace window is `sleep`ed in the wrapper, so a test that wants to see
+    # the escalation has to shorten it — long enough to observe the still-running
+    # job first, short enough not to pad the suite.
+    def with_job_kill_grace(seconds)
+      original = Coder::SshRunner.job_kill_grace_seconds
+      Coder::SshRunner.job_kill_grace_seconds = seconds
+      yield
+    ensure
+      Coder::SshRunner.job_kill_grace_seconds = original
+    end
+
+    # The log tail can trail the metadata by a moment: a signalled command writes
+    # its last line while the wrapper is still reaping it.
     def wait_for_tail(runner, job_id, pattern, timeout: 10)
       poll(timeout: timeout, waiting_for: "job #{job_id} log to match #{pattern.inspect}") do
         tail = runner.job_status(workspace_name: "ws-1", job_id: job_id)[:tail].to_s
