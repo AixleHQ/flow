@@ -166,6 +166,9 @@ const AGENT_COLOR: Record<string, string> = {
   codex: 'var(--app-chart-warm-1)',
   gemini: 'var(--app-chart-warm-3)',
   gemini_cli: 'var(--app-chart-warm-3)',
+  // No xAI artwork ships in this repo, so a Grok row renders the neutral chip
+  // AgentLogo falls back to; naming it here keeps the runtime known, not unmapped.
+  grok: CHART_NEUTRAL,
 };
 
 const getAgentColor = (agentType: string): string => AGENT_COLOR[agentType] ?? CHART_NEUTRAL;

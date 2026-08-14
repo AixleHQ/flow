@@ -360,6 +360,7 @@ export function SessionEditorPanel({
                 { value: 'cursor_cli', label: 'Cursor CLI' },
                 { value: 'codex', label: 'Codex' },
                 { value: 'gemini_cli', label: 'Gemini CLI' },
+                { value: 'grok', label: 'Grok' },
               ]}
               value={step.requiredAgentRuntime ?? ''}
               onChange={(v) => {

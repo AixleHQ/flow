@@ -57,6 +57,10 @@ FactoryBot.define do
       agent_type { "gemini_cli" }
     end
 
+    trait :grok do
+      agent_type { "grok" }
+    end
+
     # == State Traits ==
 
     trait :expired do

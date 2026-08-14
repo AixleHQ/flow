@@ -11,17 +11,17 @@
 # Each agent type gets realistic fixture data: auth configs, MITM logs, outputs.
 #
 # Combinations:
-#   Agent strategies:  4 agents × 2 runtimes × 2 strategies × 2 modes = 32 tests
+#   Agent strategies:  5 agents × 2 runtimes × 2 strategies × 2 modes = 40 tests
 #   Tool execution:    4 variants (basic, with params, with files, with project) = 4 tests
 
 require "test_helper"
 
 class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
   # ===========================================================================
-  # Agent strategy combinations (32 tests)
+  # Agent strategy combinations (40 tests)
   # ===========================================================================
 
-  AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli].freeze
+  AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli grok].freeze
   CONTAINER_RUNTIMES = %w[docker kubernetes].freeze
   STRATEGIES = %w[auth_setup agent_session].freeze
   MODES = %w[interactive non_interactive].freeze
@@ -204,6 +204,9 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
       assert data["tokens"].present?, "Expected tokens in codex credential"
     when "gemini_cli"
       assert data["api_key"].present?, "Expected api_key in gemini_cli credential"
+    when "grok"
+      assert data.dig("auth", "https://accounts.x.ai/sign-in", "key").present?,
+        "Expected the signed-in scope's token in grok credential"
     end
   end
 

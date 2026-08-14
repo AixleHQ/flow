@@ -64,6 +64,7 @@ const AVAILABLE_AGENTS = [
   { type: 'cursor_cli', label: 'Cursor CLI', color: AGENT_BRAND_COLORS.cursor_cli },
   { type: 'codex', label: 'Codex', color: AGENT_BRAND_COLORS.codex },
   { type: 'gemini_cli', label: 'Gemini CLI', color: AGENT_BRAND_COLORS.gemini_cli },
+  { type: 'grok', label: 'Grok', color: AGENT_BRAND_COLORS.grok },
 ];
 
 const AGENT_MANTINE_COLORS: Record<string, string> = {
@@ -71,6 +72,7 @@ const AGENT_MANTINE_COLORS: Record<string, string> = {
   cursor_cli: 'violet',
   codex: 'teal',
   gemini_cli: 'blue',
+  grok: 'gray',
 };
 
 const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;

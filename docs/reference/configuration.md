@@ -64,6 +64,7 @@ it's required.
 | `AGENT_IMAGE_CURSOR_CLI`        | `aixle/cursor-cli`    | Override image for Cursor CLI runtime.                   |
 | `AGENT_IMAGE_CODEX`             | `aixle/codex`         | Override image for Codex runtime.                        |
 | `AGENT_IMAGE_GEMINI_CLI`        | `aixle/gemini-cli`    | Override image for Gemini CLI runtime.                   |
+| `AGENT_IMAGE_GROK`              | `aixle/grok`          | Override image for Grok CLI runtime.                     |
 | `AGENT_MCP_STARTUP_TIMEOUT_MS`  | `10000`               | How long the platform waits for an agent's MCP handshake.|
 | `MCP_SERVER_URL`                | computed              | Internal MCP server URL injected into agent containers.  |
 | `CONTAINER_ASSET_HOST`          | computed              | Host the agent uses to fetch / upload assets.            |

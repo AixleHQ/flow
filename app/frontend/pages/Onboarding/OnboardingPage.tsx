@@ -20,6 +20,7 @@ import { notifications } from '@mantine/notifications';
 import {
   IconBrandGoogleFilled,
   IconBrandOpenai,
+  IconBrandX,
   IconBrush,
   IconBuilding,
   IconCheck,
@@ -91,6 +92,12 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; ic
     name: 'Gemini CLI',
     description: "Google's multimodal AI assistant for code generation and analysis",
     icon: IconBrandGoogleFilled,
+  },
+  {
+    type: 'grok',
+    name: 'Grok',
+    description: "xAI's Grok CLI for agentic coding in the terminal",
+    icon: IconBrandX,
   },
 ];
 

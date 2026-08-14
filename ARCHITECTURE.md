@@ -22,8 +22,8 @@ Browser ──Inertia──▶ Rails (web)
                                   Runtime (Docker | Kubernetes)
                                           │
                                   Agent container (Claude Code / Cursor CLI /
-                                  Codex / Gemini CLI) — runs in isolation,
-                                  streams logs, usage, and cost back
+                                  Codex / Gemini CLI / Grok CLI) — runs in
+                                  isolation, streams logs, usage, and cost back
 ```
 
 ## Backend
@@ -95,7 +95,7 @@ The heart of the platform: running agents and tools safely and reproducibly.
   manages the full container lifecycle, including signals for interactive
   sessions, so long-running runs are durable and retryable.
 - **Agent adapters:** one per supported agent (Claude Code, Cursor CLI, Codex,
-  Gemini CLI). Each defines auth paths, config generation, and usage/cost
+  Gemini CLI, Grok CLI). Each defines auth paths, config generation, and usage/cost
   collection.
 
 ## Infrastructure & quality

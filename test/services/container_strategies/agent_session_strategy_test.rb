@@ -352,6 +352,38 @@ module ContainerStrategies
       refute env_vars.any? { |v| v == "GOOGLE_CLOUD_PROJECT=my-project" }
     end
 
+    # == Grok ==
+
+    test "builds env vars for a grok session with the company API key and MITM tracking" do
+      @session.update!(agent_type: "grok")
+      @credential.update!(agent_type: "grok", config_data: { "api_key" => "xai-company-key" })
+      strategy = build_strategy(agent_type: "grok")
+
+      env_vars = strategy.build_env_vars
+
+      assert_includes env_vars, "AGENT_TYPE=grok"
+      assert_includes env_vars, "HOME_DIR=/home/grok"
+      assert_includes env_vars, "AUTH_WATCH_PATH=/home/grok/.grok/auth.json"
+      assert_includes env_vars, "MITM_TRACKED_DOMAINS=x.ai"
+      assert_includes env_vars, "XAI_API_KEY=xai-company-key"
+    end
+
+    # XAI_API_KEY outranks a stored session token in the Grok CLI's own credential
+    # resolution, so a stray key would silently bill a different xAI account than the
+    # one the user signed in with.
+    test "build_env_vars drops a stray XAI_API_KEY when the grok credential is a session token" do
+      @session.update!(agent_type: "grok")
+      @credential.update!(agent_type: "grok", config_data: {
+        "auth" => { "https://accounts.x.ai/sign-in" => { "key" => "session-token" } }
+      })
+      SessionContextService.stubs(:resolve_env_vars).returns({ "XAI_API_KEY" => "stray-key" })
+      strategy = build_strategy(agent_type: "grok")
+
+      env_vars = strategy.build_env_vars
+
+      refute env_vars.any? { |v| v.start_with?("XAI_API_KEY=") }
+    end
+
     # == Conflicting provider env ==
     #
     # A ConfigItem-sourced ANTHROPIC_API_KEY would shadow a Bedrock connection, and

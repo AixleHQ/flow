@@ -45,7 +45,7 @@ class TerminalSession < ApplicationRecord
   }
   validates :agent_type, presence: true, if: -> { session_type.in?(%w[auth_setup agent_session]) }
   validates :agent_type, inclusion: {
-    in: %w[claude_code cursor_cli codex gemini_cli],
+    in: %w[claude_code cursor_cli codex gemini_cli grok],
     message: "%{value} is not a valid agent type"
   }, allow_nil: true
   validates :state, presence: true

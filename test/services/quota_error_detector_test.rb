@@ -202,6 +202,52 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     assert_equal text, result.message
   end
 
+  # --- xAI / Grok ---
+
+  test "detects grok out-of-credits message" do
+    text = "You are out of credits or over your spending limit. Add credits and retry."
+    result = QuotaErrorDetector.detect(text)
+    assert result.quota_error?
+    assert_equal :xai, result.provider
+    assert_equal text, result.message
+  end
+
+  test "detects grok plan rate-limit message" do
+    result = QuotaErrorDetector.detect("Rate limited — You've hit the rate limit for your plan.")
+    assert result.quota_error?
+    assert_equal :xai, result.provider
+  end
+
+  test "detects grok weekly and free usage limit messages" do
+    %w[weekly free].each do |kind|
+      text = kind == "weekly" ? "You hit your weekly limit." : "You hit your free usage limit."
+      result = QuotaErrorDetector.detect(text)
+      assert result.quota_error?, "Expected #{text.inspect} to be a quota error"
+      assert_equal :xai, result.provider
+    end
+  end
+
+  test "detects grok usage balance exhausted classification" do
+    result = QuotaErrorDetector.detect("request failed: usage balance exhausted")
+    assert result.quota_error?
+    assert_equal :xai, result.provider
+  end
+
+  test "extracts grok quota line from terminal capture" do
+    text = <<~TEXT
+      grok@abc123:/workspace$
+      grok --yolo "$AGENT_PROMPT"
+      Purchase credits to keep using Grok Build
+      grok@abc123:/workspace$
+    TEXT
+
+    result = QuotaErrorDetector.detect(text)
+
+    assert result.quota_error?
+    assert_equal :xai, result.provider
+    assert_equal "Purchase credits to keep using Grok Build", result.message
+  end
+
   test "extracts cursor usage limit line from terminal capture" do
     text = <<~TEXT
       agent --force

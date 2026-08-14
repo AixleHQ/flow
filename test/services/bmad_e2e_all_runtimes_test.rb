@@ -5,7 +5,7 @@ require "shellwords"
 
 # Story 35.4 — E2E Testing: BMAD on All Agent Runtimes
 #
-# Validates the full BMAD pipeline for each of the 4 agent runtimes:
+# Validates the full BMAD pipeline for each of the 5 agent runtimes:
 #   session create → BmadMethodInjector.inject! → context assembly → filesystem verification
 #
 # Agent type → BMAD tool flag → skill directory mapping (bmad-method 6.10.0):
@@ -13,6 +13,7 @@ require "shellwords"
 #   claude_code → --tools claude-code  → /workspace/.claude/skills/
 #   codex       → --tools codex        → /workspace/.agents/skills/
 #   gemini_cli  → --tools gemini       → /workspace/.agents/skills/
+#   grok        → --tools claude-code  → /workspace/.claude/skills/  (Grok reads Claude's artifacts)
 class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
   AGENT_RUNTIMES = {
     "cursor_cli" => {
@@ -38,6 +39,14 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       skill_dir: "/workspace/.agents/skills",
       context_path: "/home/gemini/.gemini/GEMINI.md",
       home_dir: "/home/gemini"
+    },
+    # BMAD has no grok platform; Grok's Claude-compatibility scanning is what makes
+    # the claude-code install consumable, so it installs into .claude/skills.
+    "grok" => {
+      tool_flag: "claude-code",
+      skill_dir: "/workspace/.claude/skills",
+      context_path: "/home/grok/.grok/rules/aixle-session-context.md",
+      home_dir: "/home/grok"
     }
   }.freeze
 
@@ -98,6 +107,14 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
   end
 
   # ====================================================================
+  # AC 4b: grok full pipeline
+  # ====================================================================
+
+  test "E2E grok: install command, context, skill dir, vscode settings, config.yaml" do
+    run_full_pipeline("grok")
+  end
+
+  # ====================================================================
   # AC 5: files.exclude covers all BMAD hidden paths for every runtime
   # ====================================================================
 
@@ -117,7 +134,7 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
   # Cross-runtime: agent_type → tool flag mapping is exhaustive
   # ====================================================================
 
-  test "E2E: AGENT_TYPE_TO_BMAD_TOOL covers all 4 runtimes" do
+  test "E2E: AGENT_TYPE_TO_BMAD_TOOL covers all 5 runtimes" do
     AGENT_RUNTIMES.each do |agent_type, spec|
       assert_equal spec[:tool_flag], BmadMethodInjector::AGENT_TYPE_TO_BMAD_TOOL[agent_type],
         "Expected #{agent_type} to map to --tools #{spec[:tool_flag]}"

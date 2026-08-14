@@ -10,7 +10,12 @@ class BmadMethodInjector
     "cursor_cli" => "cursor",
     "claude_code" => "claude-code",
     "codex" => "codex",
-    "gemini_cli" => "gemini"
+    "gemini_cli" => "gemini",
+    # BMAD has no `grok` platform. Grok CLI reads Claude Code's artifacts by design
+    # (its `[compat.claude]` cells scan `.claude/skills`, `.claude/rules` and
+    # `CLAUDE.md` and are on by default), so the claude-code install is what a Grok
+    # session can actually consume — not a stand-in for a missing platform.
+    "grok" => "claude-code"
   }.freeze
 
   BMAD_HIDDEN_PATHS = %w[

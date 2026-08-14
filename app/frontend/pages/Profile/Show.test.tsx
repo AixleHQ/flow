@@ -271,7 +271,7 @@ describe('Profile/Show', () => {
     expect(screen.getByText('No company memberships')).toBeInTheDocument();
   });
 
-  it('lists all four available agent runtimes with their names and descriptions', () => {
+  it('lists all five available agent runtimes with their names and descriptions', () => {
     const profile = buildProfile();
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
@@ -279,6 +279,7 @@ describe('Profile/Show', () => {
     expect(screen.getByText('Cursor CLI')).toBeInTheDocument();
     expect(screen.getByText('OpenAI Codex')).toBeInTheDocument();
     expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
+    expect(screen.getByText('Grok')).toBeInTheDocument();
     expect(screen.getByText("Anthropic's AI coding assistant with deep reasoning capabilities")).toBeInTheDocument();
   });
 
@@ -323,14 +324,14 @@ describe('Profile/Show', () => {
   });
 
   it('renders Authenticate (not Re-authenticate) for an agent that has no credential', () => {
-    // Only claude_code is configured; the other three should show Authenticate.
+    // Only claude_code is configured; the other four should show Authenticate.
     const credential = buildCredential({ id: 300, agentType: 'claude_code' });
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
     expect(screen.getByRole('button', { name: 'Re-authenticate' })).toBeInTheDocument();
-    // The three unconfigured agents each render an Authenticate button.
-    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(3);
+    // The four unconfigured agents each render an Authenticate button.
+    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(4);
   });
 
   it('shows the session visibility switches in the state the profile reports', () => {
