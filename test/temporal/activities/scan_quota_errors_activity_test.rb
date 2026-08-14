@@ -265,6 +265,7 @@ module Activities
           session_type: :workflow_step,
           agent_type: "codex",
           mode: "non_interactive",
+          initial_prompt: "Fix the failing tests",
           state: "ready",
           container_id: "container-trust",
           started_at: 3.minutes.ago,
