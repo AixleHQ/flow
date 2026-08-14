@@ -9,7 +9,12 @@ interface Props {
 function MembersIndex({ users }: Props) {
   return (
     <AuthLayout>
-      <MembersContent users={users} basePath="/company/members" title="Company Members" />
+      <MembersContent
+        users={users}
+        basePath="/company/members"
+        title="Company Members"
+        subtitle="People with access to this company workspace. Admins manage members, integrations, and settings; employees and viewers work within projects."
+      />
     </AuthLayout>
   );
 }
