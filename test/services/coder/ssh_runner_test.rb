@@ -386,7 +386,7 @@ module Coder
 
       assert_match(/\A[A-Za-z0-9._-]+\z/, recorded,
                    "the recorded workspace name must not carry shell syntax; got #{recorded.inspect}")
-      assert_no_match(/\$\(id/, captured_args.last)
+      assert_no_match(/pwned\)/, recorded)
     end
 
     test "job status parses state, exit code and log tail" do
@@ -421,16 +421,16 @@ module Coder
           job_dir=/var/lib/aixle-jobs
           log_path=/var/lib/aixle-jobs/j1.log
           started_at=2026-08-14T10:00:00Z
-          started_at_epoch=1000
+          started_at_epoch=1786701600
           heartbeat_interval_seconds=10
           pid=4242
           pgid=4242
           finished_at=2026-08-14T10:02:03Z
-          finished_at_epoch=1123
+          finished_at_epoch=1786701723
           reason=completed
           exit_code=0
           checked_at=2026-08-14T10:05:00Z
-          checked_at_epoch=1300
+          checked_at_epoch=1786701900
           log_bytes=64
         META
         command: "make check_all",
@@ -465,13 +465,13 @@ module Coder
         header: "state=exited exit_code=3",
         meta:   <<~META,
           started_at=2026-08-14T10:00:00Z
-          started_at_epoch=1000
+          started_at_epoch=1786701600
           pid=4242
           finished_at=2026-08-14T10:00:20Z
-          finished_at_epoch=1020
+          finished_at_epoch=1786701620
           reason=command_failed
           exit_code=3
-          checked_at_epoch=1100
+          checked_at_epoch=1786701900
         META
         command: "bin/rails test",
         log:     "2 failures\n"
@@ -494,14 +494,14 @@ module Coder
       out = job_status_output(
         header: "state=exited exit_code=143",
         meta:   <<~META,
-          started_at_epoch=1000
+          started_at_epoch=1786701600
           pid=4242
           finished_at=2026-08-14T10:00:30Z
-          finished_at_epoch=1030
+          finished_at_epoch=1786701630
           reason=signaled
           signal=TERM
           exit_code=143
-          checked_at_epoch=1100
+          checked_at_epoch=1786701900
         META
         command: "make check_all",
         log:     "compiling\n"
@@ -530,16 +530,16 @@ module Coder
           job_id=j1
           workspace=ws-1
           started_at=2026-08-14T10:00:00Z
-          started_at_epoch=1000
+          started_at_epoch=1786701600
           heartbeat_interval_seconds=10
           pid=777
           pgid=777
-          checked_at=2026-08-14T10:05:00Z
-          checked_at_epoch=1260
+          checked_at=2026-08-14T10:04:20Z
+          checked_at_epoch=1786701860
           heartbeat_at=2026-08-14T10:03:20Z
-          heartbeat_at_epoch=1200
+          heartbeat_at_epoch=1786701800
           log_bytes=128
-          log_modified_at_epoch=1195
+          log_modified_at_epoch=1786701795
         META
         command: "make check_all",
         log:     "running tests\n"

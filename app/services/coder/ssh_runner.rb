@@ -511,7 +511,8 @@ module Coder
       if finished
         timing.merge!(finished_at: meta["finished_at"].presence, at: finished)
       elsif state == "died" && last_sign
-        timing.merge!(finished_at: epoch_to_iso8601(last_sign), at: last_sign, estimated: true)
+        stamped = beat ? meta["heartbeat_at"].presence : nil
+        timing.merge!(finished_at: stamped || epoch_to_iso8601(last_sign), at: last_sign, estimated: true)
       elsif state == "running"
         timing[:at] = checked
       end
