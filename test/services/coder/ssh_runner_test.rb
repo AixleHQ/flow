@@ -383,11 +383,13 @@ module Coder
 
       script = captured_args.last
 
-      assert_match(/kill -s "\$1" "\$AIXLE_CHILD"/, script,
+      assert_match(/AIXLE_CHILD_SIG="\$AIXLE_TRAP_SIG"/, script,
+                   "the signal forwarded to the command must default to the one the wrapper received")
+      assert_match(/kill -s "\$AIXLE_CHILD_SIG" "\$AIXLE_CHILD"/, script,
                    "the trap must forward the signal it received, not a hard-coded TERM")
-      assert_match(/INT\|QUIT/, script,
-                   "INT/QUIT are ignored by a background child (POSIX) and need the TERM follow-up")
-      assert_match(/child_signal=TERM/, script,
+      assert_match(/INT\|QUIT\) AIXLE_CHILD_SIG=TERM/, script,
+                   "INT/QUIT are ignored by a background child (POSIX) and need the TERM substitution")
+      assert_match(/child_signal=\$AIXLE_CHILD_SIG/, script,
                    "a delivered signal that differs from the received one must be recorded")
     end
 
