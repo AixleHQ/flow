@@ -187,6 +187,17 @@ interface Gate {
   gateType: string;
   metadata: Record<string, unknown> & { repoFullName?: string; prNumber?: number; runId?: number };
   createdAt: string;
+  // `status` is the gate's lifecycle (pending / resolved / stale); `ciStatus` collapses it with the
+  // provider's verdict into the four states a board reader cares about: pending, succeeded, failed,
+  // stale. A stale gate is one reconciliation gave up on — see `diagnosticReason` for why.
+  status?: string;
+  ciStatus?: string;
+  conclusion?: string | null;
+  ageSeconds?: number;
+  expiresAt?: string | null;
+  expired?: boolean;
+  diagnosticReason?: string | null;
+  source?: { provider?: string; repoFullName?: string; referenceType?: string; reference?: unknown };
 }
 
 interface Task {
@@ -217,6 +228,10 @@ interface Task {
     errorMessage?: string | null;
   }>;
   pendingGates: Gate[];
+  // Every CI gate the task has had, newest first — pending, passed, failed and stale alike, which is
+  // what lets a card say which of those four things CI is currently doing. Optional so a payload
+  // serialized before this field existed (or a partial reload) still types.
+  ciGates?: Gate[];
   createdAt: string;
   updatedAt: string;
 }
@@ -276,6 +291,20 @@ const PRIORITY_COLORS: Record<string, string> = {
   medium: 'var(--app-chart-4)',
   low: 'var(--app-success-fg)',
 };
+
+// The four CI states a gate can be in. `stale` gets its own colour rather than sharing red with a
+// failure: a failed check is a verdict, a stale gate is the absence of one, and they need different
+// reactions (fix the code vs. look at why CI never reported).
+const GATE_STATUS_COLORS: Record<string, string> = {
+  pending: 'yellow',
+  succeeded: 'green',
+  failed: 'red',
+  stale: 'orange',
+};
+
+// Gate states that still hold the column auto-trigger or still need a person — the only ones worth
+// offering a delete button for.
+const GATE_UNRESOLVED_STATUSES = new Set(['pending', 'stale']);
 
 // Helper to get workflow status indicator color
 const workflowStatusColor = (state: string): string => {
@@ -369,12 +398,69 @@ function SortableTaskCard({
   );
 }
 
+// What a gate's CI state is, tolerating a payload that predates ciStatus: a gate the server did not
+// classify is pending unless it says otherwise.
+function gateCiStatus(gate: Gate): string {
+  return gate.ciStatus ?? gate.status ?? 'pending';
+}
+
+// The CI verdict a card advertises, from the newest CI gate the task has: which of the four states
+// (waiting / passed / failed / stale) it is in, and the one-line reason a reader needs. Stale is its
+// own state on purpose — it means "no CI verdict was ever obtained", which is neither a pass nor a
+// failure, and it is the state a lost webhook now lands in instead of waiting forever.
+function ciGateSummary(task: Task): { label: string; color: string; tooltip: string } | null {
+  const gate = (task.ciGates ?? [])[0];
+  if (!gate) return null;
+
+  const kind = gateCiStatus(gate);
+  const name = gate.gateType.replace(/_/g, ' ');
+
+  switch (kind) {
+    case 'stale':
+      return {
+        label: 'CI stale',
+        color: 'orange',
+        tooltip: gate.diagnosticReason
+          ? `${name} — stale: ${gate.diagnosticReason}`
+          : `${name} — no CI result was ever obtained`,
+      };
+    case 'failed':
+      return {
+        label: 'CI failed',
+        color: 'red',
+        tooltip: `${name} — ${gate.conclusion ?? 'failed'}`,
+      };
+    case 'succeeded':
+      return { label: 'CI passed', color: 'green', tooltip: `${name} — ${gate.conclusion ?? 'success'}` };
+    default:
+      return {
+        label: 'CI pending',
+        color: 'yellow',
+        tooltip: `${name} — waiting ${formatElapsedTime(gate.createdAt)}${
+          gate.expired ? ' (past its TTL)' : ''
+        }`,
+      };
+  }
+}
+
+// One line of prose for a gate in the task drawer: how long it has been waiting and whether its TTL
+// has run out, or — once it is over — how it ended.
+function gateStatusLine(gate: Gate): string {
+  const kind = gateCiStatus(gate);
+  if (kind === 'succeeded') return `Passed — ${gate.conclusion ?? 'success'}`;
+  if (kind === 'failed') return `Failed — ${gate.conclusion ?? 'no conclusion reported'}`;
+  if (kind === 'stale') return `Stale — no CI result after ${formatElapsedTime(gate.createdAt)}`;
+
+  return `Waiting — ${formatElapsedTime(gate.createdAt)}${gate.expired ? ' · past its TTL' : ''}`;
+}
+
 // Status a collapsed ticket chip advertises: the bar colour and the hover tooltip both come
 // from here, so the folded strip still tells you which tickets are running, failed or waiting
 // without unfolding the column.
 function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean; tooltipLabel: string } {
   const latestRun = task.recentWorkflowRuns?.[0];
   const hasPendingGates = (task.pendingGates?.length ?? 0) > 0;
+  const staleGate = (task.ciGates ?? []).find((g) => gateCiStatus(g) === 'stale');
 
   let color = 'var(--app-text-tertiary)';
   let hasActiveRun = false;
@@ -385,6 +471,11 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
   // A pending gate outranks the run state: the ticket is parked, so it must not read as active.
   if (hasPendingGates) {
     color = 'var(--app-warning-fg)';
+    hasActiveRun = false;
+  }
+  // A stale gate outranks a pending one: nobody is going to resolve it, so it needs a human.
+  if (staleGate) {
+    color = 'var(--app-danger-fg)';
     hasActiveRun = false;
   }
 
@@ -399,6 +490,9 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
   if (hasPendingGates) {
     const oldestGate = task.pendingGates.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
     tooltipParts.push(`Waiting — ${formatElapsedTime(oldestGate.createdAt)}`);
+  }
+  if (staleGate) {
+    tooltipParts.push(`CI stale — ${staleGate.diagnosticReason ?? 'no CI result'}`);
   }
 
   return { color, hasActiveRun, tooltipLabel: tooltipParts.join(' · ') };
@@ -466,6 +560,7 @@ function TaskCardUI({
   const visibleTags = (task.tags ?? []).slice(0, 3);
   const overflowCount = (task.tags ?? []).length - 3;
 
+  const ciSummary = ciGateSummary(task);
   const latestRun = (task.recentWorkflowRuns ?? [])[0] ?? null;
   const isRunning = latestRun && WORKFLOW_ACTIVE_STATES.has(latestRun.state);
   const isFailed = latestRun?.state === 'failed';
@@ -570,6 +665,34 @@ function TaskCardUI({
               style={{ fontSize: 10, cursor: 'default', textTransform: 'uppercase', letterSpacing: 0.3 }}
             >
               {isFailed ? 'Failed' : isRunning ? 'Running' : 'Succeeded'}
+            </Badge>
+          </Group>
+        </Tooltip>
+      )}
+
+      {/* CI chip — the card's own answer to "what is CI doing?", kept separate from the workflow
+          chip above because a green run and a red CI are entirely compatible states. */}
+      {ciSummary && (
+        <Tooltip label={ciSummary.tooltip} multiline maw={320}>
+          <Group gap={4} mt={6} align="center">
+            <Badge
+              size="xs"
+              variant="filled"
+              color={ciSummary.color}
+              leftSection={
+                ciSummary.label === 'CI stale' ? (
+                  <IconAlertCircle size={9} />
+                ) : ciSummary.label === 'CI passed' ? (
+                  <IconCircleCheck size={9} />
+                ) : ciSummary.label === 'CI failed' ? (
+                  <IconX size={9} />
+                ) : (
+                  <IconHourglass size={9} />
+                )
+              }
+              style={{ fontSize: 10, cursor: 'default', textTransform: 'uppercase', letterSpacing: 0.3 }}
+            >
+              {ciSummary.label}
             </Badge>
           </Group>
         </Tooltip>
@@ -1507,6 +1630,19 @@ function TaskDetailSidebar({
 
   const childTasks = useMemo(() => allTasks.filter((t) => t.parentTaskId === task?.id), [allTasks, task?.id]);
 
+  // The drawer lists the task's whole CI history, not only what is still blocking it: a failed or a
+  // stale gate is the most interesting thing on a card, and both have already left `pendingGates`.
+  // The fallback keeps the panel working for a payload serialized before `ciGates` existed.
+  const gatesForPanel = useMemo<Gate[]>(() => {
+    const history = task?.ciGates ?? [];
+    return history.length > 0 ? history : (task?.pendingGates ?? []);
+  }, [task?.ciGates, task?.pendingGates]);
+
+  const hasStaleGate = useMemo(
+    () => gatesForPanel.some((gate) => gateCiStatus(gate) === 'stale'),
+    [gatesForPanel],
+  );
+
   const parentTask = useMemo(
     () => (task?.parentTaskId ? allTasks.find((t) => t.id === task.parentTaskId) : null) ?? null,
     [allTasks, task?.parentTaskId],
@@ -2145,23 +2281,30 @@ function TaskDetailSidebar({
             </Box>
           )}
 
-          {/* Pending waits */}
-          {(task.pendingGates ?? []).length > 0 && (
+          {/* CI gates — pending, passed, failed and stale. A stale gate is the case this panel exists
+              for: its webhook never arrived, reconciliation could not get a verdict either, and it is
+              now waiting on a person rather than on CI. */}
+          {gatesForPanel.length > 0 && (
             <Box>
               <Group gap={6} mb={4}>
-                <ThemeIcon size={18} variant="light" color="yellow" radius="xl">
-                  <IconHourglass size={12} />
+                <ThemeIcon
+                  size={18}
+                  variant="light"
+                  color={hasStaleGate ? 'orange' : 'yellow'}
+                  radius="xl"
+                >
+                  {hasStaleGate ? <IconAlertCircle size={12} /> : <IconHourglass size={12} />}
                 </ThemeIcon>
                 <Text size="xs" c="dimmed" fw={600} tt="uppercase">
-                  Pending Waits ({(task.pendingGates ?? []).length})
+                  CI Gates ({gatesForPanel.length})
                 </Text>
               </Group>
               <Stack gap={4}>
-                {(task.pendingGates ?? []).map((wait) => (
+                {gatesForPanel.map((wait) => (
                   <Group key={wait.id} gap="xs" align="flex-start" wrap="nowrap">
                     <Badge
                       size="xs"
-                      color="yellow"
+                      color={GATE_STATUS_COLORS[gateCiStatus(wait)] ?? 'yellow'}
                       variant="filled"
                       style={{ fontSize: 10, fontWeight: 600, flexShrink: 0 }}
                     >
@@ -2200,12 +2343,23 @@ function TaskDetailSidebar({
                             {String(wait.metadata.repoFullName)} #{String(wait.metadata.runId)}
                           </Text>
                         )}
+                      {/* Age, TTL and outcome — a gate is only judgeable with them: "waiting" reads
+                          very differently at two minutes and at eleven hours. */}
+                      <Text size="xs" c="dimmed" style={{ fontSize: 11 }}>
+                        {gateStatusLine(wait)}
+                      </Text>
+                      {gateCiStatus(wait) === 'stale' && wait.diagnosticReason && (
+                        <Text size="xs" c="orange.4" style={{ fontSize: 11 }}>
+                          {wait.diagnosticReason}
+                        </Text>
+                      )}
                     </Box>
-                    {canExecute && (
+                    {canExecute && GATE_UNRESOLVED_STATUSES.has(gateCiStatus(wait)) && (
                       <ActionIcon
                         size="xs"
                         variant="subtle"
                         color="gray"
+                        aria-label={`Delete gate ${wait.id}`}
                         onClick={() => handleDeleteGate(wait.id)}
                         loading={deletingGateId === wait.id}
                       >
@@ -2924,7 +3078,8 @@ function TaskDetailSidebar({
                     </Text>
                     <Text size="11px" c="dimmed">
                       {stats.gateStats.filter((w) => w.status === 'pending').length} pending &middot;{' '}
-                      {stats.gateStats.filter((w) => w.status === 'resolved').length} resolved
+                      {stats.gateStats.filter((w) => w.status === 'resolved').length} resolved &middot;{' '}
+                      {stats.gateStats.filter((w) => w.status === 'stale').length} stale
                     </Text>
                   </Group>
                   <Paper p="md" radius="md" withBorder>
@@ -2943,6 +3098,8 @@ function TaskDetailSidebar({
                         >
                           {w.status === 'resolved' ? (
                             <IconCircleCheck size={14} color="var(--mantine-color-green-6)" style={{ flexShrink: 0 }} />
+                          ) : w.status === 'stale' ? (
+                            <IconAlertCircle size={14} color="var(--mantine-color-orange-6)" style={{ flexShrink: 0 }} />
                           ) : (
                             <IconHourglass size={14} color="var(--mantine-color-yellow-6)" style={{ flexShrink: 0 }} />
                           )}
@@ -2959,7 +3116,7 @@ function TaskDetailSidebar({
                           <Badge
                             size="xs"
                             variant="filled"
-                            color={w.status === 'resolved' ? 'green' : 'yellow'}
+                            color={w.status === 'resolved' ? 'green' : w.status === 'stale' ? 'orange' : 'yellow'}
                             style={{ fontSize: 10, fontWeight: 600 }}
                           >
                             {w.status}
@@ -3684,6 +3841,7 @@ function normalizeTask(t: Task): Task {
     tags: t.tags ?? [],
     archived: t.archived ?? false,
     pendingGates: t.pendingGates ?? [],
+    ciGates: t.ciGates ?? [],
     recentWorkflowRuns: t.recentWorkflowRuns ?? [],
     assetsCount: t.assetsCount ?? 0,
     childrenCount: t.childrenCount ?? 0,

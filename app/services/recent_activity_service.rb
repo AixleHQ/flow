@@ -103,6 +103,8 @@ class RecentActivityService
     when "workflow_completed"    then "Workflow completed for \"#{task_title}\""
     when "workflow_failed"       then "Workflow failed for \"#{task_title}\""
     when "human_help_requested"  then "Human help requested for \"#{task_title}\""
+    when "gate_reconciled"       then "CI gate reconciled for \"#{task_title}\""
+    when "gate_stale"            then "CI gate went stale for \"#{task_title}\""
     else                              "Activity on \"#{task_title}\""
     end
 

@@ -378,6 +378,106 @@ class TaskServiceTest < ActiveSupport::TestCase
     TaskService.resolve_gate(gate: gate1, resolution_data: { conclusion: "success" })
   end
 
+  # == mark_gate_stale ==
+
+  test "mark_gate_stale ends the wait with a reason but never with a passing verdict" do
+    task = create(:board_task, board: @board, board_column: @column)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    TaskService.mark_gate_stale(gate: gate, reason: "PR #1 cannot be read", detail: "404 Not Found")
+
+    gate.reload
+    assert gate.stale?
+    assert_equal "stale", gate.ci_status
+    assert_equal "PR #1 cannot be read", gate.diagnostic_reason
+    assert_equal "stale", gate.resolution_data["outcome"]
+    assert_equal "404 Not Found", gate.resolution_data["detail"]
+    assert_nil gate.conclusion
+    assert_nil gate.resolved_at
+    assert_not gate.passed?
+  end
+
+  test "mark_gate_stale records the escalation on the board activity feed" do
+    task = create(:board_task, board: @board, board_column: @column)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    TaskService.mark_gate_stale(gate: gate, reason: "no CI result after 13 hours")
+
+    activity = BoardActivity.where(event_type: "gate_stale", board_task: task).last
+    assert_not_nil activity
+    assert_equal "system", activity.actor_type
+    assert_equal gate.id, activity.metadata["gate_id"]
+  end
+
+  test "mark_gate_stale releases the auto-trigger the gate was holding" do
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: task, mode: :non_interactive)
+    ).once
+
+    TaskService.mark_gate_stale(gate: gate, reason: "run deleted")
+  end
+
+  test "mark_gate_stale leaves the auto-trigger held while another gate is pending" do
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+    task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 2 },
+      creator: @user
+    )
+
+    WorkflowService.expects(:start).never
+
+    TaskService.mark_gate_stale(gate: gate, reason: "run deleted")
+  end
+
+  test "resolve_gate_by_reconciliation resolves the gate and records the activity" do
+    task = create(:board_task, board: @board, board_column: @column)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    TaskService.resolve_gate_by_reconciliation(
+      gate: gate,
+      resolution_data: { "conclusion" => "failure", "source" => "reconciliation" }
+    )
+
+    gate.reload
+    assert gate.resolved?
+    assert_equal "failure", gate.conclusion
+    assert_equal "failed", gate.ci_status
+    activity = BoardActivity.where(event_type: "gate_reconciled", board_task: task).last
+    assert_not_nil activity
+    assert_equal "failure", activity.metadata["conclusion"]
+  end
+
   test "remove_gate deletes pending gate" do
     task = create(:board_task, board: @board, board_column: @column)
     gate = task.gates.create!(

@@ -141,6 +141,20 @@ github:
 gitlab:
   endpoint: <%= ENV['GITLAB_ENDPOINT'] || 'https://gitlab.com/api/v4' %>
 
+# CI gates (board task preconditions resolved by a CI webhook). These bound how
+# long a gate may wait on a webhook that may never arrive — see GateReconciler.
+gates:
+  # How long a pending CI gate may live before the reconciliation sweep gives up
+  # on it and marks it stale (never "passed"). Long enough for a slow pipeline,
+  # short enough that a lost webhook does not park a card for a working day.
+  ttl_hours:                <%= (ENV['GATES_TTL_HOURS'] || 12).to_f %>
+  # Grace before the first provider probe, and the minimum gap between probes.
+  # The webhook is the fast path; probing a fresh gate would just race it.
+  reconcile_after_minutes:  <%= (ENV['GATES_RECONCILE_AFTER_MINUTES'] || 10).to_f %>
+  # Gates probed per sweep, so one cron tick makes a bounded number of provider
+  # requests. A backlog drains over successive ticks.
+  reconcile_batch_size:     <%= (ENV['GATES_RECONCILE_BATCH_SIZE'] || 100).to_i %>
+
 slack:
   # One Slack app per Aixle deployment (multi-workspace via OAuth). Companies
   # connect their workspace with one click; these app-level credentials are

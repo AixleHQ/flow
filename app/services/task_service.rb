@@ -173,6 +173,53 @@ class TaskService
       TriggerEngine.dispatch_pending(pending_event) if pending_event
     end
 
+    # Resolve a gate from a reconciliation probe rather than from its webhook.
+    # Identical to resolve_gate — same transition, same auto-trigger — plus a
+    # board activity, because a gate that resolved without its webhook is exactly
+    # the case an operator needs to be able to see after the fact.
+    def resolve_gate_by_reconciliation(gate:, resolution_data:)
+      task = gate.board_task
+      resolve_gate(gate: gate, resolution_data: resolution_data)
+
+      record_activity(task.board, :gate_reconciled, gate.creator, task: task, actor_type: :system,
+        metadata: { gate_id: gate.id, gate_type: gate.gate_type.to_s,
+                    conclusion: gate.reload.conclusion, source: gate.source })
+    end
+
+    # End a gate's wait without a provider verdict: nothing can resolve it (its
+    # run/repository is unreadable) or its TTL ran out while CI was still going.
+    #
+    # A stale gate stops blocking the column auto-trigger — leaving it pending is
+    # what wedged tasks forever — but it is never recorded as a pass. The reason
+    # goes on the gate (`diagnostic_reason`, surfaced on the card), into its
+    # resolution_data as `outcome: "stale"`, and onto the board activity feed, so
+    # the bypass is documented rather than silent.
+    def mark_gate_stale(gate:, reason:, detail: nil, now: Time.current)
+      task = gate.board_task
+
+      pending_event = nil
+      ActiveRecord::Base.transaction do
+        gate.update!(
+          status: :stale,
+          diagnostic_reason: reason,
+          resolution_data: gate.resolution_data.merge({
+            "outcome" => "stale",
+            "reason" => reason,
+            "detail" => detail,
+            "source" => "reconciliation",
+            "stale_at" => now.utc.iso8601
+          }.compact)
+        )
+        pending_event = record_pending_auto_trigger(task: task, column: task.board_column, actor: gate.creator)
+      end
+
+      record_activity(task.board, :gate_stale, gate.creator, task: task, actor_type: :system,
+        metadata: { gate_id: gate.id, gate_type: gate.gate_type.to_s,
+                    reason: reason, detail: detail, source: gate.source })
+
+      TriggerEngine.dispatch_pending(pending_event) if pending_event
+    end
+
     def remove_gate(gate:, actor:)
       task = gate.board_task
       column = task.board_column
@@ -282,10 +329,10 @@ class TaskService
       AgentCredential.exists?(user_id: candidate.id, company_id: company_id)
     end
 
-    def record_activity(board, event_type, actor, task: nil, metadata: {})
+    def record_activity(board, event_type, actor, task: nil, metadata: {}, actor_type: :human)
       BoardActivity.create!(
         board: board, board_task: task, event_type: event_type,
-        actor: actor, actor_type: :human, metadata: metadata
+        actor: actor, actor_type: actor_type, metadata: metadata
       )
       board.touch
     rescue StandardError => e

@@ -85,6 +85,47 @@ module FakeGithub
     end
   end
 
+  # Mirrors Github::CheckStatusService — the read-only CI status adapter the gate
+  # reconciler probes with. Hands back real `Ci::ProbeResult`s, so a caller test
+  # never has to know what GitHub's own payloads look like; the shapes those
+  # results come from are pinned in test/services/github/check_status_service_test.rb.
+  class CheckStatusService
+    attr_reader :calls
+
+    # @param integration recorded for assertions
+    # @param pr_result [Ci::ProbeResult] what #pull_request_checks returns
+    # @param run_result [Ci::ProbeResult] what #workflow_run_status returns
+    def initialize(integration = nil, pr_result: nil, run_result: nil)
+      @integration = integration
+      @pr_result = pr_result || Ci::ProbeResult.in_progress("checks still running")
+      @run_result = run_result || Ci::ProbeResult.in_progress("workflow run still running")
+      @calls = []
+    end
+
+    def pull_request_checks(repo_full_name, pr_number)
+      @calls << { method: :pull_request_checks, repo_full_name: repo_full_name, pr_number: pr_number }
+      @pr_result
+    end
+
+    def workflow_run_status(repo_full_name, run_id)
+      @calls << { method: :workflow_run_status, repo_full_name: repo_full_name, run_id: run_id }
+      @run_result
+    end
+
+    # ---- call recording readers -------------------------------------------
+    def called?(method_name)
+      @calls.any? { |call| call[:method] == method_name }
+    end
+
+    def calls_to(method_name)
+      @calls.select { |call| call[:method] == method_name }
+    end
+
+    def last_call
+      @calls.last
+    end
+  end
+
   # Mirrors Github::RepositoryService.
   class RepositoryService
     DEFAULT_REPOS = [

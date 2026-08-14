@@ -7,7 +7,9 @@ module Api
         module Task
           class GatesController < Task::ApplicationController
             def destroy
-              gate = current_task.gates.pending.find(params[:id])
+              # Stale gates are deletable too: they are the ones an operator is most
+              # likely to be clearing by hand after reconciliation gave up on them.
+              gate = current_task.gates.unresolved.find(params[:id])
               TaskService.remove_gate(gate: gate, actor: current_user)
               head :no_content
             end

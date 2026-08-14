@@ -91,16 +91,52 @@ auto-trigger re-evaluates — firing only once the **last** gate clears.
 | | Trigger | Gate |
 | --- | ------- | ----------- |
 | **Effect** | starts a run | defers the auto-start |
-| **Lifetime** | standing config | runtime, one-shot, per task |
+| **Lifetime** | standing config | runtime, one-shot, per task, TTL-bounded |
 | **Created by** | a person, in config | a workflow step (`board_create_gate`) |
-| **Cleared by** | — | a matching CI event (resolve once) |
+| **Cleared by** | — | a matching CI event, or reconciliation (see below) |
+
+### TTL and reconciliation
+
+A gate must not be able to park a card forever. Every CI gate therefore carries a
+**TTL** (`gates.ttl_hours`, 12h by default) alongside the repository and
+run/check/pipeline identifiers it was created with, and a scheduled sweep
+reconciles the gates whose webhook never arrived:
+
+1. Ten minutes after a gate is created (`gates.reconcile_after_minutes`) it
+   becomes eligible for reconciliation, and is re-checked at most that often
+   afterwards. The webhook stays the fast path — reconciliation only ever sees
+   what it missed.
+2. The sweep asks the provider what happened to that exact run. If the provider
+   has a verdict, the gate resolves **with that verdict** — a failed check
+   resolves as failed, never as a pass.
+3. If the run, pull request, pipeline or repository cannot be read at all (deleted
+   run, repository detached from the project, integration disconnected), no
+   webhook can ever resolve the gate, so it is marked **stale** immediately with a
+   diagnostic reason.
+4. If the provider says the run is still going — or cannot be reached — the gate
+   keeps waiting until its TTL runs out, and is then marked **stale** too.
+
+A stale gate stops blocking the column auto-trigger (that is the point: the card
+moves again) but is never recorded as a success. It keeps a `diagnostic_reason`, a
+`reconciliation_log` of everything the sweep saw, and it raises a board activity
+event. So the four CI states are always distinguishable on the card:
+
+| Card says | Meaning |
+| --- | --- |
+| **CI pending** | still waiting on the provider, with the age of the wait |
+| **CI passed** | provider reported success |
+| **CI failed** | provider reported a failure — nothing bypassed it |
+| **CI stale** | no verdict was ever obtained; the reason says why |
+
+`list_gates` returns the same fields (age, TTL, source, diagnostic reason,
+reconciliation log) for an agent, and `delete_gate` still clears a gate by hand.
 
 So the same CI webhook can do one of two things: **resolve a gate** on a
 waiting task (today's path), or — if you bind a workflow to a `ci.completed`
 event — **start a run** directly. Wait-resolution is the special case;
 event-to-workflow matching is the general one.
 
-> **tip** A card "stuck" in a bound column almost always has a pending gate. Open it and clear the gate, and the binding re-evaluates.
+> **tip** A card "stuck" in a bound column almost always has a pending gate. Open it: the CI gates panel names the run it is waiting on and how long it has been waiting, and clearing the gate re-evaluates the binding. A gate marked **CI stale** has already stopped blocking the column — read its reason before re-running anything.
 
 ## Inbound webhooks = a start API
 

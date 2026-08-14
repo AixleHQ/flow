@@ -28,7 +28,7 @@ module InternalTools
       return error("task_id is required") unless task_id
 
       task = board.board_tasks
-                  .includes(:workflow_runs, :pending_gates)
+                  .includes(:workflow_runs, :pending_gates, :gates)
                   .find_by(id: task_id)
       return error("Task not found on this board") unless task
 
