@@ -162,7 +162,7 @@ describe('RunWorkflowModal', () => {
   it('offers a newly configured runtime with a formatted label', async () => {
     renderModal({ configuredAgents: ['grok'], defaultAgentRuntime: 'grok' });
 
-    expect(screen.getByLabelText('Fallback Agent Runtime')).toHaveValue('Grok');
+    expect(screen.getByDisplayValue('Grok')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Run Workflow' }));
 

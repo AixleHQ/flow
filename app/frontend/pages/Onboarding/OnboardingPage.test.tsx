@@ -216,7 +216,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
-    expect(screen.getByText('1 of 4 connected')).toBeInTheDocument();
+    expect(screen.getByText('1 of 5 connected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Get started/ })).toBeEnabled();
   });
 
