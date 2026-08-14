@@ -431,7 +431,7 @@ module Agents
 
     test "no extra env fields are required before the auth container starts" do
       assert_equal [], @adapter.required_env_fields
-      refute @adapter.requires_env_fields?
+      assert_equal false, @adapter.requires_env_fields? # rubocop:disable Minitest/RefuteFalse
       assert_equal({}, @adapter.env_vars_from_metadata({ "anything" => "here" }))
     end
   end
