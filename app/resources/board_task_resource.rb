@@ -74,7 +74,13 @@ class BoardTaskResource < ApplicationResource
 
   typelize GATE_TYPE
   attribute :pending_gates do |task|
-    task.pending_gates.map { |gate| BoardTaskResource.gate_payload(gate) }
+    gates = if task.association(:gates).loaded?
+      task.gates.select(&:pending?)
+    else
+      task.pending_gates
+    end
+
+    gates.map { |gate| BoardTaskResource.gate_payload(gate) }
   end
 
   # The task's CI story, newest first: what is still pending, what passed, what
