@@ -85,6 +85,38 @@ class AssetVersionTest < ActiveSupport::TestCase
     assert { version.github? }
   end
 
+  # ====== File metadata ======
+
+  test "derives file_size and content_type from the attached file when the caller sends neither" do
+    version = AssetVersion.create!(asset: @asset, uploaded_by: @owner, file: document_file_cache_data)
+
+    assert { version.file_size == File.size(UploadSupport::DOCUMENT_FILE_PATH) }
+    assert { version.content_type == version.file.metadata["mime_type"] }
+    assert { version.content_type.present? }
+  end
+
+  test "keeps a content_type the caller set explicitly" do
+    version = AssetVersion.create!(asset: @asset, uploaded_by: @owner,
+                                   content_type: "text/x-custom", file: document_file_cache_data)
+
+    assert { version.content_type == "text/x-custom" }
+    assert { version.file_size == File.size(UploadSupport::DOCUMENT_FILE_PATH) }
+  end
+
+  test "keeps a file_size the caller set explicitly" do
+    version = AssetVersion.create!(asset: @asset, uploaded_by: @owner,
+                                   file_size: 7, file: document_file_cache_data)
+
+    assert { version.file_size == 7 }
+  end
+
+  test "leaves file metadata nil when there is no attached file" do
+    version = AssetVersion.create!(asset: @asset, uploaded_by: @owner)
+
+    assert { version.file_size.nil? }
+    assert { version.content_type.nil? }
+  end
+
   # ====== S3 key location ======
 
   test "generate_location produces scoped path" do
