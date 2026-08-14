@@ -292,5 +292,14 @@ module Agents
       # Agents whose credentials carry no refreshable OAuth token never refresh.
       assert_equal({ status: :not_needed, detail: nil }, @adapter.refresh!(Object.new))
     end
+
+    # == Retired Model Mapping ==
+
+    test "migrate_model_id passes ids through for an agent with no retirements" do
+      # An adapter that declares no RETIRED_MODEL_REPLACEMENTS must never rewrite a pin.
+      assert_equal "some-vendor-model", @adapter.migrate_model_id("some-vendor-model")
+      assert_nil @adapter.migrate_model_id(nil)
+      assert_equal "", @adapter.migrate_model_id("")
+    end
   end
 end

@@ -89,6 +89,22 @@ class AgentCredential < ApplicationRecord
     credential
   end
 
+  # The model this credential's sessions default to, with a vendor-retired id
+  # mapped to its replacement (see BaseAdapter#migrate_model_id). Every consumer
+  # — the profile select, session launch, the generated container config — reads
+  # the pin through here, so a default saved before a retirement keeps working
+  # instead of 404ing at session start. The stored value is left untouched: the
+  # mapping is a rescue for a dead id, not a rewrite of the user's choice.
+  def default_model
+    stored = metadata&.dig("default_model")
+    return nil if stored.blank?
+
+    adapter.migrate_model_id(stored)
+  rescue StandardError => e
+    Rails.logger.warn("[AgentCredential] default_model lookup failed for #{id}: #{e.message}")
+    stored
+  end
+
   # Cache key for this credential's fetched model list (per-credential, not global).
   def models_cache_key
     "agent_models/#{agent_type}/#{id}"

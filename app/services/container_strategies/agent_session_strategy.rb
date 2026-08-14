@@ -129,7 +129,7 @@ module ContainerStrategies
       # pin is per credential, and a credential is per company — a model pinned against
       # another company's Bedrock account does not exist here.
       credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: session.agent_type)
-      credential&.metadata&.dig("default_model")
+      credential&.default_model
     end
 
     private
