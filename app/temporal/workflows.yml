@@ -23,6 +23,12 @@ workflows:
       - name: session_cleanup_stale_activity
         task_queue: aixle_ruby
 
+  - name: stale_run_cleanup_workflow
+    owner: aixle_ruby
+    activities:
+      - name: workflow_cleanup_stale_runs_activity
+        task_queue: aixle_ruby
+
   - name: dead_container_scan_workflow
     owner: aixle_ruby
     activities:
@@ -45,6 +51,12 @@ workflows:
     owner: aixle_ruby
     activities:
       - name: workflow_scan_quota_errors_activity
+        task_queue: aixle_ruby
+
+  - name: no_output_scan_workflow
+    owner: aixle_ruby
+    activities:
+      - name: workflow_scan_no_output_sessions_activity
         task_queue: aixle_ruby
 
   - name: coder_sweep_expired_locks_workflow

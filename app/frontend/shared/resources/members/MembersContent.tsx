@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
   ActionIcon,
   Avatar,
@@ -16,20 +16,25 @@ import {
 import { modals } from '@mantine/modals';
 import {
   IconDotsVertical,
+  IconEye,
   IconMailForward,
   IconPlus,
   IconSearch,
+  IconShieldCheck,
   IconTrash,
   IconUserCheck,
   IconUserOff,
+  IconUsers,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
-import type { UserRole } from 'shared/ui';
+import type { SharedProps, UserRole } from 'shared/ui';
+import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
+import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
-import { InviteUserModal } from './InviteUserModal';
+import { InviteMemberDrawer } from './InviteMemberDrawer';
 
 // A company-membership row: `id` is the user id (member routes are keyed by
 // user id), while `role`/`state` are the PER-COMPANY membership role and state
@@ -50,15 +55,30 @@ interface MembersContentProps {
   users: MemberUser[];
   basePath: string;
   title: string;
+  subtitle?: string;
   showRoleActions?: boolean;
 }
 
 // Revoked members are never rendered (the index excludes them).
-const ROLE_COLORS: Record<UserRole, string> = {
-  super_admin: 'grape',
-  admin: 'blue',
-  employee: 'gray',
-  viewer: 'teal',
+// Admin is the only role with a colored tag — an amber fill + shield icon —
+// so role scans instantly without every role competing for attention.
+const ROLE_TAG_STYLES: Record<UserRole, { color: string; background: string; borderColor: string }> = {
+  admin: {
+    color: 'var(--app-warning-fg)',
+    background: 'var(--app-warning-bg)',
+    borderColor: 'var(--app-warning-border)',
+  },
+  super_admin: {
+    color: 'var(--app-warning-fg)',
+    background: 'var(--app-warning-bg)',
+    borderColor: 'var(--app-warning-border)',
+  },
+  employee: {
+    color: 'var(--app-text-secondary)',
+    background: 'var(--app-action-hover)',
+    borderColor: 'var(--app-border-default)',
+  },
+  viewer: { color: 'var(--app-info-fg)', background: 'var(--app-info-bg)', borderColor: 'var(--app-info-border)' },
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -68,21 +88,43 @@ const ROLE_LABELS: Record<UserRole, string> = {
   viewer: 'Viewer',
 };
 
+const ROLE_ICONS: Partial<Record<UserRole, typeof IconShieldCheck>> = {
+  admin: IconShieldCheck,
+  super_admin: IconShieldCheck,
+  viewer: IconEye,
+};
+
+function RoleTag({ role }: { role: UserRole }) {
+  const Icon = ROLE_ICONS[role];
+  return (
+    <Badge
+      size="sm"
+      variant="default"
+      styles={{ root: ROLE_TAG_STYLES[role] }}
+      leftSection={Icon ? <Icon size={12} /> : undefined}
+    >
+      {ROLE_LABELS[role]}
+    </Badge>
+  );
+}
+
 const formatDate = (d: string | null) => {
   if (!d) return '—';
   return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 const ROLE_FILTER_OPTIONS = [
-  { value: 'admin', label: 'Admin' },
-  { value: 'employee', label: 'Employee' },
-  { value: 'viewer', label: 'Viewer' },
+  { value: 'all', label: 'All Roles' },
+  { value: 'admin', label: 'Admins' },
+  { value: 'employee', label: 'Employees' },
+  { value: 'viewer', label: 'Viewers' },
 ];
 
 const STATUS_FILTER_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'invited', label: 'Invited' },
   { value: 'suspended', label: 'Suspended' },
+  { value: 'all', label: 'All Statuses' },
 ];
 
 const getInitials = (name: string): string => {
@@ -91,10 +133,11 @@ const getInitials = (name: string): string => {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-export const MembersContent = ({ users, basePath, title, showRoleActions = true }: MembersContentProps) => {
+export const MembersContent = ({ users, basePath, title, subtitle, showRoleActions = true }: MembersContentProps) => {
+  const { currentUser } = usePage<SharedProps>().props;
   const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('active');
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const activeAdminCount = useMemo(
@@ -111,14 +154,16 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
       const q = search.toLowerCase();
       result = result.filter((u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
     }
-    if (roleFilter) {
+    if (roleFilter !== 'all') {
       result = result.filter((u) => u.role === roleFilter);
     }
-    if (statusFilter) {
+    if (statusFilter !== 'all') {
       result = result.filter((u) => u.state === statusFilter);
     }
     return result;
   }, [users, search, roleFilter, statusFilter]);
+
+  const hasFilters = !!search || roleFilter !== 'all' || statusFilter !== 'active';
 
   const handleRoleChange = (userId: number, role: string) => {
     router.patch(`${basePath}/${userId}`, { user: { role } }, { preserveScroll: true });
@@ -150,6 +195,7 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
     <Box>
       <PageHeader
         title={title}
+        subtitle={subtitle}
         actions={
           <Button leftSection={<IconPlus size={16} />} onClick={() => setInviteOpen(true)}>
             Invite Member
@@ -159,157 +205,210 @@ export const MembersContent = ({ users, basePath, title, showRoleActions = true 
 
       <Group mb="lg" gap="sm">
         <TextInput
-          placeholder="Search by name or email..."
+          placeholder="Search by name or email…"
           aria-label="Search members"
           leftSection={<IconSearch size={16} />}
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
-          maw={300}
+          w={260}
         />
         <Select
-          placeholder="All Roles"
           aria-label="Filter by role"
           data={ROLE_FILTER_OPTIONS}
           value={roleFilter}
-          onChange={setRoleFilter}
-          clearable
+          onChange={(value) => setRoleFilter(value ?? 'all')}
+          allowDeselect={false}
           w={140}
         />
         <Select
-          placeholder="All Statuses"
           aria-label="Filter by status"
           data={STATUS_FILTER_OPTIONS}
           value={statusFilter}
-          onChange={setStatusFilter}
-          clearable
+          onChange={(value) => setStatusFilter(value ?? 'active')}
+          allowDeselect={false}
           w={150}
         />
-        <Text size="xs" c="dimmed">
+        <ResourceCount>
           {filtered.length} member{filtered.length !== 1 ? 's' : ''}
-        </Text>
+        </ResourceCount>
       </Group>
 
-      <Table highlightOnHover>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>User</Table.Th>
-            <Table.Th>Role</Table.Th>
-            <Table.Th>Status</Table.Th>
-            <Table.Th>Invited</Table.Th>
-            <Table.Th w={60} />
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {filtered.map((user) => (
-            <Table.Tr key={user.id}>
-              <Table.Td>
-                <Group gap="sm" wrap="nowrap">
-                  <Avatar size={32} radius="xl" color="blue">
-                    {getInitials(user.name)}
-                  </Avatar>
-                  <Box>
-                    <Text fw={500} size="sm">
-                      {user.name}
-                    </Text>
-                    <Text size="xs" c="dimmed">
-                      {user.email}
-                    </Text>
-                  </Box>
-                </Group>
-              </Table.Td>
-              <Table.Td>
-                <Badge color={ROLE_COLORS[user.role]} size="sm" variant="light">
-                  {ROLE_LABELS[user.role]}
-                </Badge>
-              </Table.Td>
-              <Table.Td>
-                <StatusBadge state={user.state} size="sm" />
-              </Table.Td>
-              <Table.Td>
-                <Text size="sm">{formatDate(user.invitedAt ?? user.createdAt)}</Text>
-                {user.invitedBy && (
-                  <Text size="xs" c="dimmed">
-                    by {user.invitedBy.name}
-                  </Text>
-                )}
-                {!user.invitedBy && (
-                  <Text size="xs" c="dimmed">
-                    Self-registered
-                  </Text>
-                )}
-              </Table.Td>
-              <Table.Td>
-                <Menu position="bottom-end" withArrow>
-                  <Menu.Target>
-                    <ActionIcon variant="subtle" size="sm" aria-label={`Actions for ${user.name}`}>
-                      <IconDotsVertical size={16} />
-                    </ActionIcon>
-                  </Menu.Target>
-                  <Menu.Dropdown>
-                    {showRoleActions && user.role === 'employee' && (
-                      <Menu.Item
-                        leftSection={<IconUserCheck size={14} />}
-                        onClick={() => handleRoleChange(user.id, 'admin')}
-                      >
-                        Make Admin
-                      </Menu.Item>
-                    )}
-                    {showRoleActions && user.role === 'admin' && (
-                      <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
-                        <Menu.Item
-                          leftSection={<IconUserOff size={14} />}
-                          disabled={isLastAdmin(user)}
-                          onClick={() => handleRoleChange(user.id, 'employee')}
+      {filtered.length === 0 ? (
+        <Box
+          style={{
+            border: '1px solid var(--app-border-default)',
+            borderRadius: 'var(--mantine-radius-md)',
+            backgroundColor: 'var(--app-bg-paper)',
+          }}
+        >
+          <EmptyState
+            icon={<IconUsers size={22} />}
+            title={hasFilters ? 'No members match your filters' : 'No members yet'}
+          />
+        </Box>
+      ) : (
+        <ResourceTableShell>
+          <Table highlightOnHover>
+            <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
+              <Table.Tr>
+                <ResourceTh>User</ResourceTh>
+                <ResourceTh>Role</ResourceTh>
+                <ResourceTh>Status</ResourceTh>
+                <ResourceTh>Invited</ResourceTh>
+                <ResourceTh align="right" w={60}>
+                  Actions
+                </ResourceTh>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {filtered.map((user) => {
+                const isSelf = currentUser != null && user.id === currentUser.id;
+                return (
+                  <Table.Tr
+                    key={user.id}
+                    style={{
+                      height: 60,
+                      opacity: user.state === 'suspended' ? 0.52 : undefined,
+                    }}
+                  >
+                    <Table.Td>
+                      <Group gap="sm" wrap="nowrap">
+                        <Avatar
+                          size={32}
+                          radius="xl"
+                          styles={{
+                            root: isSelf
+                              ? {
+                                  background: 'var(--app-action-selected)',
+                                  border: '1px solid var(--app-primary)',
+                                  color: 'var(--app-primary)',
+                                }
+                              : {
+                                  background: 'var(--app-bg-elevated)',
+                                  border: '1px solid var(--app-border-default)',
+                                  color: 'var(--app-text-secondary)',
+                                },
+                          }}
                         >
-                          Make Employee
-                        </Menu.Item>
-                      </Tooltip>
-                    )}
-                    {showRoleActions && <Menu.Divider />}
-                    {user.state === 'invited' && (
-                      <Menu.Item leftSection={<IconMailForward size={14} />} onClick={() => handleResend(user.id)}>
-                        Resend Invitation
-                      </Menu.Item>
-                    )}
-                    {user.state === 'active' && (
-                      <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
-                        <Menu.Item disabled={isLastAdmin(user)} onClick={() => handleStateEvent(user.id, 'suspend')}>
-                          Suspend
-                        </Menu.Item>
-                      </Tooltip>
-                    )}
-                    {user.state === 'suspended' && (
-                      <Menu.Item onClick={() => handleStateEvent(user.id, 'activate')}>Activate</Menu.Item>
-                    )}
-                    <Menu.Divider />
-                    <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
-                      <Menu.Item
-                        color="red"
-                        leftSection={<IconTrash size={14} />}
-                        disabled={isLastAdmin(user)}
-                        onClick={() => handleDelete(user.id, user.name)}
-                      >
-                        Remove
-                      </Menu.Item>
-                    </Tooltip>
-                  </Menu.Dropdown>
-                </Menu>
-              </Table.Td>
-            </Table.Tr>
-          ))}
-          {filtered.length === 0 && (
-            <Table.Tr>
-              <Table.Td colSpan={5}>
-                <Text ta="center" c="dimmed" py="xl">
-                  No members found
-                </Text>
-              </Table.Td>
-            </Table.Tr>
-          )}
-        </Table.Tbody>
-      </Table>
+                          {getInitials(user.name)}
+                        </Avatar>
+                        <Box style={{ minWidth: 0 }}>
+                          <Group gap={7} wrap="nowrap">
+                            <Text fw={500} size="sm" c="var(--app-text-primary)">
+                              {user.name}
+                            </Text>
+                            {isSelf && (
+                              <Badge
+                                size="xs"
+                                variant="default"
+                                styles={{
+                                  root: {
+                                    color: 'var(--app-primary)',
+                                    background: 'var(--app-action-selected)',
+                                    borderColor: 'var(--app-primary)',
+                                  },
+                                }}
+                              >
+                                You
+                              </Badge>
+                            )}
+                          </Group>
+                          <Text size="xs" c="dimmed">
+                            {user.email}
+                          </Text>
+                        </Box>
+                      </Group>
+                    </Table.Td>
+                    <Table.Td>
+                      <RoleTag role={user.role} />
+                    </Table.Td>
+                    <Table.Td>
+                      <StatusBadge state={user.state} size="sm" />
+                    </Table.Td>
+                    <Table.Td>
+                      <Text size="sm" c="var(--app-text-primary)">
+                        {formatDate(user.invitedAt ?? user.createdAt)}
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        {user.invitedBy ? `by ${user.invitedBy.name}` : 'Self-registered'}
+                      </Text>
+                    </Table.Td>
+                    <Table.Td>
+                      {isSelf ? null : (
+                        <Group gap={4} justify="flex-end">
+                          <Menu position="bottom-end" withArrow>
+                            <Menu.Target>
+                              <ActionIcon variant="subtle" size="sm" aria-label={`Actions for ${user.name}`}>
+                                <IconDotsVertical size={16} />
+                              </ActionIcon>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                              {showRoleActions && user.role === 'employee' && (
+                                <Menu.Item
+                                  leftSection={<IconUserCheck size={14} />}
+                                  onClick={() => handleRoleChange(user.id, 'admin')}
+                                >
+                                  Make Admin
+                                </Menu.Item>
+                              )}
+                              {showRoleActions && user.role === 'admin' && (
+                                <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
+                                  <Menu.Item
+                                    leftSection={<IconUserOff size={14} />}
+                                    disabled={isLastAdmin(user)}
+                                    onClick={() => handleRoleChange(user.id, 'employee')}
+                                  >
+                                    Make Employee
+                                  </Menu.Item>
+                                </Tooltip>
+                              )}
+                              {showRoleActions && <Menu.Divider />}
+                              {user.state === 'invited' && (
+                                <Menu.Item
+                                  leftSection={<IconMailForward size={14} />}
+                                  onClick={() => handleResend(user.id)}
+                                >
+                                  Resend Invitation
+                                </Menu.Item>
+                              )}
+                              {user.state === 'active' && (
+                                <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
+                                  <Menu.Item
+                                    disabled={isLastAdmin(user)}
+                                    onClick={() => handleStateEvent(user.id, 'suspend')}
+                                  >
+                                    Suspend
+                                  </Menu.Item>
+                                </Tooltip>
+                              )}
+                              {user.state === 'suspended' && (
+                                <Menu.Item onClick={() => handleStateEvent(user.id, 'activate')}>Activate</Menu.Item>
+                              )}
+                              <Menu.Divider />
+                              <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
+                                <Menu.Item
+                                  color="red"
+                                  leftSection={<IconTrash size={14} />}
+                                  disabled={isLastAdmin(user)}
+                                  onClick={() => handleDelete(user.id, user.name)}
+                                >
+                                  Remove
+                                </Menu.Item>
+                              </Tooltip>
+                            </Menu.Dropdown>
+                          </Menu>
+                        </Group>
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                );
+              })}
+            </Table.Tbody>
+          </Table>
+        </ResourceTableShell>
+      )}
 
-      <InviteUserModal opened={inviteOpen} onClose={() => setInviteOpen(false)} basePath={basePath} />
+      <InviteMemberDrawer opened={inviteOpen} onClose={() => setInviteOpen(false)} basePath={basePath} />
     </Box>
   );
 };

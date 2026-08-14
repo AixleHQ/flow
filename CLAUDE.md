@@ -27,6 +27,9 @@ it catches what a partial, hand-picked test run misses.
 
 ## Docker is required
 
+**NEVER run `ruby`, `bundle`, `rails`, `rake`, or any gem/node-dependent command directly on the host.**
+This rule applies to Claude itself AND to every subagent Claude spawns — include it explicitly in every subagent prompt.
+
 Rails, tests, and migrations run **only inside the `web` container** — the host
 has no bundled gems, and its `node_modules` is Linux-built (native bindings fail
 on the host). If the container isn't running: `docker compose up -d`.

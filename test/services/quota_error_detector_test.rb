@@ -58,6 +58,26 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     assert_equal :anthropic, result.provider
   end
 
+  test "detects claude.ai individual spend limit message" do
+    text = "You've hit your individual spend limit · ask your admin to raise it at claude.ai/settings/usage"
+    result = QuotaErrorDetector.detect(text)
+    assert result.quota_error?
+    assert_equal :anthropic, result.provider
+    assert_equal text, result.message
+  end
+
+  test "extracts individual spend limit line from terminal capture" do
+    text = <<~TEXT
+      claude --dangerously-skip-permissions "$AGENT_PROMPT"
+      You've hit your individual spend limit · ask your admin to raise it at claude.ai/settings/usage?from=cc_cli_limit_message
+      /rate-limit-options
+    TEXT
+    result = QuotaErrorDetector.detect(text)
+    assert result.quota_error?
+    assert_equal :anthropic, result.provider
+    assert_includes result.message, "individual spend limit"
+  end
+
   # --- OpenAI patterns ---
 
   test "detects openai quota exceeded" do

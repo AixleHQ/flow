@@ -73,6 +73,55 @@ class SessionServiceTest < ActiveSupport::TestCase
 
   # == create_and_start: OAuth session-start preflight (§4.6) ==
 
+  test "create_and_start blocks launch when a credential enters error status after a failed pre-start refresh" do
+    server = create(:mcp_server, :custom, scope: @project, transport: :sse,
+                    auth_type: :oauth, credential_scope: :per_user)
+    client = OauthClient.create!(
+      issuer: "https://provider.test3", authorization_endpoint: "https://provider.test3/a",
+      token_endpoint: "https://provider.test3/t", client_id: "c3", source: "static"
+    )
+    cred = OauthCredential.create!(owner: @user, oauth_client: client, mcp_server: server,
+                                   provider: "mcp:z", status: :active,
+                                   access_token: "tok", expires_at: 30.minutes.from_now,
+                                   refresh_token: "rt-fail")
+
+    Oauth::TokenService.stubs(:refresh_if_expiring_soon).with(cred) do
+      cred.update_columns(status: "error")
+    end
+
+    error = assert_raises(Oauth::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "claude_code", params: { mcp_server_ids: [ server.id ] }
+      )
+    end
+
+    assert_equal 0, @user.terminal_sessions.count, "must not create a session with a broken credential"
+    assert_equal "/oauth/mcp/#{server.id}/connect", error.connections.first[:connect_url]
+  end
+
+  test "create_and_start blocks launch when a credential is already in error status before start" do
+    server = create(:mcp_server, :custom, scope: @project, transport: :sse,
+                    auth_type: :oauth, credential_scope: :per_user)
+    client = OauthClient.create!(
+      issuer: "https://provider.test4", authorization_endpoint: "https://provider.test4/a",
+      token_endpoint: "https://provider.test4/t", client_id: "c4", source: "static"
+    )
+    OauthCredential.create!(owner: @user, oauth_client: client, mcp_server: server,
+                            provider: "mcp:q", status: :error,
+                            access_token: "tok", expires_at: 30.minutes.from_now,
+                            refresh_token: "rt-ok")
+
+    error = assert_raises(Oauth::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "claude_code", params: { mcp_server_ids: [ server.id ] }
+      )
+    end
+
+    assert_equal "/oauth/mcp/#{server.id}/connect", error.connections.first[:connect_url]
+  end
+
   test "create_and_start blocks launch when an OAuth MCP server has no usable credential" do
     server = create(:mcp_server, :custom, scope: @project, transport: :sse,
                     auth_type: :oauth, credential_scope: :per_user)
@@ -429,5 +478,42 @@ class SessionServiceTest < ActiveSupport::TestCase
     # SessionContextService#inject_assets mounts session.input_asset_ids into the container,
     # so a step asset reaching session.input_assets is the contract that it reaches /workspace/assets/.
     assert_includes session.input_assets, asset
+  end
+
+  # == preflight_oauth! with near-expiry token refresh ==
+
+  test "preflight_oauth! calls refresh_if_expiring_soon for a token expiring within PRE_START_SKEW" do
+    server = create(:mcp_server, :custom, scope: @project, transport: :sse,
+                    auth_type: :oauth, credential_scope: :per_user)
+    client = OauthClient.create!(
+      issuer: "https://provider.test", authorization_endpoint: "https://provider.test/a",
+      token_endpoint: "https://provider.test/t", client_id: "c1", source: "static"
+    )
+    cred = OauthCredential.create!(owner: @user, oauth_client: client, mcp_server: server,
+                                   provider: "mcp:x", status: :active,
+                                   access_token: "tok", expires_at: 30.minutes.from_now,
+                                   refresh_token: "rt-abc")
+
+    Oauth::TokenService.expects(:refresh_if_expiring_soon).with(cred).once
+
+    SessionService.send(:preflight_oauth!, @user, [ server.id ])
+  end
+
+  test "preflight_oauth! does not refresh a token with more than PRE_START_SKEW remaining" do
+    server = create(:mcp_server, :custom, scope: @project, transport: :sse,
+                    auth_type: :oauth, credential_scope: :per_user)
+    client = OauthClient.create!(
+      issuer: "https://provider.test2", authorization_endpoint: "https://provider.test2/a",
+      token_endpoint: "https://provider.test2/t", client_id: "c2", source: "static"
+    )
+    cred = OauthCredential.create!(owner: @user, oauth_client: client, mcp_server: server,
+                                   provider: "mcp:y", status: :active,
+                                   access_token: "tok2", expires_at: 2.hours.from_now,
+                                   refresh_token: "rt-xyz")
+
+    # Token has > PRE_START_SKEW remaining — refresh_if_expiring_soon must not call fresh (no HTTP).
+    Oauth::TokenService.expects(:fresh).never
+
+    SessionService.send(:preflight_oauth!, @user, [ server.id ])
   end
 end

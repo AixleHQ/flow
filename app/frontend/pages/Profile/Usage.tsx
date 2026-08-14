@@ -38,6 +38,7 @@ import { profilePath } from 'shared/routes';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { type SharedProps } from 'shared/ui';
 import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
+import { StatusBadge } from 'shared/ui/StatusBadge';
 
 type Period = '7d' | '30d' | '90d' | '1y';
 
@@ -125,13 +126,13 @@ const AGENT_LABELS: Record<string, { label: string; color: string }> = {
   gemini_cli: { label: 'Gemini CLI', color: 'blue' },
 };
 
-const STATE_CONFIG: Record<string, { label: string; color: string }> = {
-  not_started: { label: 'Pending', color: 'gray' },
-  running: { label: 'Starting', color: 'blue' },
-  ready: { label: 'Running', color: 'green' },
-  finishing: { label: 'Finishing', color: 'yellow' },
-  finished: { label: 'Finished', color: 'gray' },
-  failed: { label: 'Failed', color: 'red' },
+const STATE_CONFIG: Record<string, { label: string }> = {
+  not_started: { label: 'Pending' },
+  running: { label: 'Starting' },
+  ready: { label: 'Running' },
+  finishing: { label: 'Finishing' },
+  finished: { label: 'Finished' },
+  failed: { label: 'Failed' },
 };
 
 const SESSION_TYPE_LABELS: Record<string, string> = {
@@ -487,7 +488,7 @@ function SessionsPanel() {
             <Table.Tbody>
               {sessions.map((s) => {
                 const agent = AGENT_LABELS[s.agentType ?? ''] ?? { label: s.agentType ?? '—', color: 'gray' };
-                const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state, color: 'gray' };
+                const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state };
                 const typeLabel = SESSION_TYPE_LABELS[s.sessionType] ?? s.sessionType;
                 return (
                   <Table.Tr key={s.id}>
@@ -507,9 +508,9 @@ function SessionsPanel() {
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={stateConfig.color} size="sm" variant="outline">
+                      <StatusBadge state={s.state} tone={s.state === 'ready' ? 'running' : undefined} size="sm">
                         {stateConfig.label}
-                      </Badge>
+                      </StatusBadge>
                     </Table.Td>
                     <Table.Td>
                       <Text size="sm" truncate maw={120} c="dimmed">

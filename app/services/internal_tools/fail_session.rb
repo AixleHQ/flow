@@ -29,8 +29,8 @@ module InternalTools
         return error("fail_session is only available in non-interactive sessions")
       end
 
-      unless session.may_start_finishing? || session.finishing?
-        return error("Session cannot be finished in current state: #{session.state}")
+      unless session.may_fail?
+        return error("Session cannot be failed in current state: #{session.state}")
       end
 
       reason = params[:reason].presence || "Session failed (no reason provided)"
@@ -40,7 +40,7 @@ module InternalTools
       end
 
       step_run&.update!(error_message: reason)
-      SessionService.finish(session: session)
+      SessionService.fail_session(session: session, error_message: reason)
       success("Session marked as failed: #{reason}")
     end
 

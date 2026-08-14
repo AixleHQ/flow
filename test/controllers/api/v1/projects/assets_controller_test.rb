@@ -28,6 +28,22 @@ module Api
           assert_response :created
         end
 
+        # Same omission as the company path: the browser sends neither field.
+        test "create records file size and content type for a browser-style payload" do
+          post :create, params: {
+            project_id: @project.id,
+            asset: {
+              name: "proj-doc.md",
+              file: document_file_cache_data
+            }
+          }
+
+          assert_response :created
+          version = response.parsed_body["latestVersion"]
+          assert_equal File.size(UploadSupport::DOCUMENT_FILE_PATH), version["fileSize"]
+          assert version["contentType"].present?
+        end
+
         test "destroy soft-deletes asset" do
           asset = create(:asset, :with_project_scope, scope: @project, created_by: @user)
 

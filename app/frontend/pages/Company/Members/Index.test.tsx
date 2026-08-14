@@ -48,7 +48,7 @@ describe('Company/Members/Index', () => {
       />,
     );
 
-    await userEvent.type(screen.getByPlaceholderText('Search by name or email...'), 'glenn');
+    await userEvent.type(screen.getByPlaceholderText(/search by name or email/i), 'glenn');
 
     expect(screen.queryByText('Dana Member')).not.toBeInTheDocument();
     expect(screen.getByText('Glenn Globex')).toBeInTheDocument();
@@ -57,9 +57,9 @@ describe('Company/Members/Index', () => {
   it('shows the empty state when the search matches no member', async () => {
     renderAuthedPage(<MembersIndex users={[member({ name: 'Dana Member' })]} />);
 
-    await userEvent.type(screen.getByPlaceholderText('Search by name or email...'), 'zzz');
+    await userEvent.type(screen.getByPlaceholderText(/search by name or email/i), 'zzz');
 
-    expect(screen.getByText('No members found')).toBeInTheDocument();
+    expect(screen.getByText('No members match your filters')).toBeInTheDocument();
     expect(screen.queryByText('Dana Member')).not.toBeInTheDocument();
   });
 
