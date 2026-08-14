@@ -119,10 +119,16 @@ module Agents
       model ? "grok --yolo --model #{Shellwords.shellescape(model)}" : "grok --yolo"
     end
 
-    # Context file: a home-level rule file. `~/.grok/rules/*.md` is scanned on every
-    # session regardless of the working directory (and regardless of whether it is a
-    # git repo), which keeps /workspace clean — unlike AGENTS.md, which would have to
-    # live in the repo the user is working on.
+    # Context file: a home-level rule file. `$GROK_HOME/rules/*.md` is the root the CLI
+    # documents as "always scanned; applies to all projects" — every session, every
+    # directory, git repo or not — which keeps /workspace clean, unlike AGENTS.md, which
+    # would have to live in the repo the user is working on. A home-level
+    # ~/.grok/AGENTS.md is discovered too; a dedicated file under rules/ is preferred
+    # because it cannot collide with an AGENTS.md the user, a plugin or a future CLI
+    # default writes into the agent home.
+    #
+    # docker/grok/Dockerfile pins this against the installed CLI: it drops a marker here
+    # and fails the build unless `grok inspect` reports the path as discovered.
     def context_file_path
       "#{home_dir}/.grok/rules/aixle-session-context.md"
     end

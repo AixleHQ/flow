@@ -31,6 +31,22 @@ RUN set -eux; \
     rm -f "$(npm root -g)"/@xai-official/grok-linux-*/bin/grok.br; \
     npm cache clean --force
 
+# Integration boundary: Agents::GrokAdapter#context_file_path writes every session's
+# task/role context to ~/.grok/rules/aixle-session-context.md, which the CLI is
+# documented to scan as a global rules root. If a CLI release ever stops scanning it,
+# sessions would silently run without their instructions and every Ruby-side assertion
+# would still pass — they only pin the string we write. So ask the installed CLI
+# instead: `grok inspect` prints the instruction files it discovers, and the build
+# fails here rather than in a live session. Runs offline and unauthenticated.
+RUN set -eux; \
+    su grok -c 'set -eux; \
+        mkdir -p /home/grok/.grok/rules; \
+        printf "aixle context probe\n" > /home/grok/.grok/rules/aixle-session-context.md; \
+        HOME=/home/grok GROK_DISABLE_AUTOUPDATER=1 GROK_TELEMETRY_ENABLED=false \
+            grok inspect > /tmp/grok-inspect.txt; \
+        grep -qF "/home/grok/.grok/rules/aixle-session-context.md" /tmp/grok-inspect.txt; \
+        rm -f /home/grok/.grok/rules/aixle-session-context.md /tmp/grok-inspect.txt'
+
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)
 # =============================================================================

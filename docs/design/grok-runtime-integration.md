@@ -111,6 +111,30 @@ so the picker is never empty.
   `$GROK_HOME/rules/*.md` on every session in every directory, git repo or
   not, which keeps `/workspace` clean — unlike `AGENTS.md`, which would have
   to be written into the user's repo.
+
+  The CLI's own project-rules documentation lists this root as
+  *"`$GROK_HOME/rules/` (default `~/.grok/rules/`) — Always scanned; applies
+  to all projects"*, ahead of the per-directory `AGENTS.md` files. Verified
+  against the installed CLI (`@xai-official/grok@1.0.4`) rather than against
+  the docs alone:
+
+  ```
+  $ grok inspect
+    Project Instructions (1)
+    └ /home/grok/.grok/rules/aixle-session-context.md (global, ~7 tokens)
+  ```
+
+  A home-level `~/.grok/AGENTS.md` is discovered too, so this is a choice
+  between two working paths, not a fix for a broken one. `rules/` wins
+  because it is the root xAI documents as *always* scanned and because a
+  dedicated file there cannot collide with an `AGENTS.md` written into the
+  agent home by the user, a plugin, or a future CLI default.
+
+  `docker/grok/Dockerfile` pins this boundary at build time: it drops a
+  marker at the adapter's context path, runs `grok inspect` as the `grok`
+  user, and fails the build unless the CLI reports that exact path. A CLI
+  release that stops scanning home-level rules breaks the image build
+  instead of silently dropping every session's task and role instructions.
 - **Skills:** skills.sh knows Grok as agent id `grok` with global directory
   `~/.grok/skills`, so registry installs and hand-written skills both land
   where the CLI looks.
