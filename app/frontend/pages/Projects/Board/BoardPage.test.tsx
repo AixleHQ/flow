@@ -843,6 +843,49 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByText('Render dashboard charts')).toBeInTheDocument();
   });
 
+  // --- inline "+ Add column" control orientation ---
+  //
+  // The control has two presentations: a narrow full-height vertical strip and a wide horizontal
+  // pill. Orientation is purely visual, and style assertions are off-limits in page tests, so the
+  // rendered presentation is exposed as `data-orientation` on the control and asserted through that.
+
+  it('renders the inline add-column control vertically when the board has columns', () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    expect(screen.getByTestId('add-column-control')).toHaveAttribute('data-orientation', 'vertical');
+  });
+
+  it('keeps the inline add-column control vertical when every column is collapsed', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
+
+    await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
+    expect(screen.getByTestId('add-column-control')).toHaveAttribute('data-orientation', 'vertical');
+  });
+
+  it('renders the inline add-column control horizontally on a board with no columns', () => {
+    renderAuthedPage(<BoardPage />, { props: { ...populatedProps, columns: [], tasks: [] } });
+
+    expect(screen.getByTestId('add-column-control')).toHaveAttribute('data-orientation', 'horizontal');
+  });
+
+  it('POSTs a new column when the inline add-column control is clicked', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByTestId('add-column-control'));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/columns');
+      expect(call).toBeTruthy();
+      expect(JSON.parse((call![1] as RequestInit).body as string).boardColumn.name).toBe('New column');
+    });
+
+    fetchSpy.mockRestore();
+  });
+
   it('keeps a collapsed non-empty column’s tickets draggable so they can be moved out', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 

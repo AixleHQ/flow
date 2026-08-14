@@ -4370,60 +4370,61 @@ const BoardPage = () => {
               ))}
             </SortableContext>
 
-            {/* Add column button — strip when all columns are collapsed, pill otherwise */}
-            {(() => {
-              const allCollapsed = allColumnsCollapsed;
-              return allCollapsed ? (
-                <Box
-                  onClick={handleAddColumnInline}
-                  className={styles.addColumnBtn}
+            {/* Add column button — vertical strip once the board has columns, pill on an empty board */}
+            {localColumns.length > 0 ? (
+              <Box
+                onClick={handleAddColumnInline}
+                className={styles.addColumnBtn}
+                data-testid="add-column-control"
+                data-orientation="vertical"
+                style={{
+                  flex: '0 0 46px',
+                  minWidth: 46,
+                  maxWidth: 46,
+                  alignSelf: 'stretch',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'flex-start',
+                  gap: 10,
+                  padding: '12px 0',
+                }}
+              >
+                <IconPlus size={15} />
+                <div
                   style={{
-                    flex: '0 0 46px',
-                    minWidth: 46,
-                    maxWidth: 46,
-                    alignSelf: 'stretch',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                    gap: 10,
-                    padding: '12px 0',
-                  }}
-                >
-                  <IconPlus size={15} />
-                  <div
-                    style={{
-                      writingMode: 'vertical-rl',
-                      fontSize: 13,
-                      fontWeight: 500,
-                      userSelect: 'none',
-                    }}
-                  >
-                    Add column
-                  </div>
-                </Box>
-              ) : (
-                <Box
-                  onClick={handleAddColumnInline}
-                  className={styles.addColumnBtn}
-                  style={{
-                    flex: '0 0 220px',
-                    minWidth: 220,
-                    alignSelf: 'flex-start',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    height: 44,
+                    writingMode: 'vertical-rl',
                     fontSize: 13,
                     fontWeight: 500,
+                    userSelect: 'none',
                   }}
                 >
-                  <IconPlus size={15} />
                   Add column
-                </Box>
-              );
-            })()}
+                </div>
+              </Box>
+            ) : (
+              <Box
+                onClick={handleAddColumnInline}
+                className={styles.addColumnBtn}
+                data-testid="add-column-control"
+                data-orientation="horizontal"
+                style={{
+                  flex: '0 0 220px',
+                  minWidth: 220,
+                  alignSelf: 'flex-start',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  height: 44,
+                  fontSize: 13,
+                  fontWeight: 500,
+                }}
+              >
+                <IconPlus size={15} />
+                Add column
+              </Box>
+            )}
           </Box>
           <DragOverlay dropAnimation={{ duration: 200, easing: 'cubic-bezier(0.25, 1, 0.5, 1)' }}>
             {activeTask ? (
