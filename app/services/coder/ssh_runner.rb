@@ -37,6 +37,13 @@ module Coder
     JOB_MARKER        = "aixle_job"
     JOB_LOG_SEPARATOR = "---aixle_job_log---"
 
+    # A detached job can hand structured facts back to whoever polls it by
+    # printing this marker followed by `key=value` lines; `job_status` returns
+    # them as `result`. That is how `RepoBootstrap` reports the commit it checked
+    # out — the poll is where a detached job's outcome is available at all, so a
+    # caller reads the resolved sha there rather than scraping the log tail.
+    JOB_RESULT_MARKER = "---aixle_job_result---"
+
     # Launching a detached job is a handful of file writes; it must not inherit
     # the caller's (possibly long) timeout.
     DETACH_TIMEOUT = 30
@@ -268,12 +275,31 @@ module Coder
       state = header[/state=(\w+)/, 1] || "unknown"
       code  = header[/exit_code=(-?\d+)/, 1]
 
-      {
+      status = {
         job_id:    job_id,
         state:     state,
         exit_code: code&.to_i,
         tail:      log.to_s
       }
+
+      result = parse_result_block(log.to_s)
+      result ? status.merge(result: result) : status
+    end
+
+    # Reads the LAST result block in the tail: a job that ran the marker twice
+    # (a retried bootstrap) reports what is true now, not what was true first.
+    def parse_result_block(log)
+      _, marker, block = log.rpartition("#{JOB_RESULT_MARKER}\n")
+      return nil if marker.empty?
+
+      pairs = block.lines.filter_map do |line|
+        key, separator, value = line.strip.partition("=")
+        next if separator.empty? || key.empty?
+
+        [ key, value ]
+      end
+
+      pairs.empty? ? nil : pairs.to_h
     end
 
     # Bounded chunked reader for the child's stdout/stderr. Reader threads

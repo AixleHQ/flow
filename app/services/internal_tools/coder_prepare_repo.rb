@@ -12,8 +12,10 @@ module InternalTools
       description "Clone a session repository onto an allocated Coder workspace, or repair an existing clone " \
                   "(re-point origin, widen the refspec so feature branches exist locally, drop a partial-clone " \
                   "filter whose fetches hang, unshallow). Run this once after coder_allocate_machine, before " \
-                  "any git work on the box. Returns a `job_id` — poll coder_job_status until it reports exited " \
-                  "with exit_code 0. The GitHub credential is short-lived and never written to the workspace disk."
+                  "any git work on the box. Pass `ref` to also check out the exact branch, tag or commit under " \
+                  "test. Returns a `job_id` — poll coder_job_status until it reports exited with exit_code 0; its " \
+                  "`result` carries the checked-out `head_sha` and the working-tree state. The GitHub credential " \
+                  "is short-lived and never written to the workspace disk."
       tags :coder
       inject_when :coder_integration_connected
       requires_integration :coder
@@ -33,6 +35,14 @@ module InternalTools
             type: "string",
             description: "Absolute path for the clone. Defaults to /root/<repo name>; pass the existing path " \
                          "(e.g. /root/app) to adopt a clone a previous session left behind."
+          },
+          ref: {
+            type: "string",
+            description: "Branch, tag or commit to fetch and check out once the clone is ready — e.g. a PR head " \
+                         "sha, so a test run cannot report green for the wrong revision. Resolved in that order " \
+                         "(branch, tag, commit) and checked out with --force, discarding local edits. Omit to " \
+                         "leave the clone on the repository's default branch. A ref that exists nowhere on " \
+                         "origin fails the job with exit_code #{Coder::RepoBootstrap::REF_NOT_FOUND_EXIT_CODE}."
           }
         }
       })
@@ -59,12 +69,11 @@ module InternalTools
       started = Coder::RepoBootstrap.new(coder_integration).prepare(
         workspace_name: workspace_name,
         repository:     repository,
-        path:           params[:path].presence
+        path:           params[:path].presence,
+        ref:            params[:ref].presence
       )
 
-      success(started.merge(
-        next_step: "poll coder_job_status with this job_id until state=exited; exit_code 0 means the clone is ready"
-      ).to_json)
+      success(started.merge(next_step: next_step_for(started)).to_json)
     rescue Concerns::CoderResolver::NotConfiguredError => e
       error(e.message)
     rescue Coder::RepoBootstrap::Error,
@@ -75,6 +84,16 @@ module InternalTools
     end
 
     private
+
+    # The clone runs detached, so the checked-out revision is only knowable once
+    # the job has finished — point the caller at the poll that carries it.
+    def next_step_for(started)
+      base = "poll coder_job_status with this job_id until state=exited; exit_code 0 means the clone is ready"
+      return base if started[:ref].blank?
+
+      "#{base}. Its `result` reports head_sha (the commit #{started[:ref]} resolved to), ref_type and worktree; " \
+        "exit_code #{Coder::RepoBootstrap::REF_NOT_FOUND_EXIT_CODE} means the ref does not exist on origin"
+    end
 
     def repositories
       @repositories ||= session.repositories.includes(:integration).to_a

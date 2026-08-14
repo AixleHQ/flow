@@ -33,12 +33,13 @@ module Coder
       @runner      = FakeRunner.new
     end
 
-    def prepare(path: nil, repository: nil)
+    def prepare(path: nil, repository: nil, ref: nil)
       Github::TokenService.stub(:new, ->(integration) { FakeTokenService.new(integration) }) do
         Coder::RepoBootstrap.new(@coder, ssh_runner: @runner).prepare(
           workspace_name: "ws-1",
           repository:     repository || @repository,
-          path:           path
+          path:           path,
+          ref:            ref
         )
       end
     end
@@ -99,6 +100,81 @@ module Coder
       assert_equal "/root/linux", result[:path]
       assert_empty @runner.env
       assert_no_match(/credential\.helper="\$HELPER"/, @runner.command)
+    end
+
+    # ---------- ref ----------
+
+    test "reports the revision it left the clone on so the caller can verify it" do
+      prepare
+
+      assert_match(/#{Regexp.escape(Coder::SshRunner::JOB_RESULT_MARKER)}/, @runner.command)
+      assert_match(/echo "head_sha=\$\(git -C "\$TARGET" rev-parse HEAD\)"/, @runner.command)
+      assert_match(/echo "worktree=\$WORKTREE"/, @runner.command)
+      assert_match(/status --porcelain/, @runner.command)
+    end
+
+    test "without a ref nothing is checked out and the handle stays as it was" do
+      result = prepare
+
+      assert_not result.key?(:ref)
+      assert_match(/^REF=''$/, @runner.command)
+      assert_no_match(/checkout/, @runner.command)
+    end
+
+    test "a blank ref is treated as no ref at all" do
+      result = prepare(ref: "   ")
+
+      assert_not result.key?(:ref)
+      assert_no_match(/checkout/, @runner.command)
+    end
+
+    # Branch, then tag, then commit — one ref must always land on one revision.
+    test "checks out a requested ref, resolving branch then tag then commit" do
+      result = prepare(ref: "feature/login")
+
+      assert_equal "feature/login", result[:ref]
+      assert_match(/^REF='feature\/login'$/, @runner.command)
+      assert_match(%r{fetch --force origin "\+refs/heads/\$REF:refs/remotes/origin/\$REF"}, @runner.command)
+      assert_match(/checkout --force -B "\$REF" "refs\/remotes\/origin\/\$REF"/, @runner.command)
+      assert_match(%r{fetch --force origin "\+refs/tags/\$REF:refs/tags/\$REF"}, @runner.command)
+      assert_match(/checkout --force --detach "refs\/tags\/\$REF"/, @runner.command)
+      assert_match(/rev-parse --verify --quiet "\$REF\^\{commit\}"/, @runner.command)
+      assert_match(/checkout --force --detach "\$REF"/, @runner.command)
+    end
+
+    test "a ref that exists nowhere on origin fails the job with its own exit code" do
+      prepare(ref: "0f1e2d3c4b5a69788796a5b4c3d2e1f001234567")
+
+      assert_match(/is not a branch, tag or commit on origin/, @runner.command)
+      assert_match(/exit #{Coder::RepoBootstrap::REF_NOT_FOUND_EXIT_CODE}$/, @runner.command)
+    end
+
+    test "the ref fetch is authenticated like every other fetch" do
+      prepare(ref: "develop")
+
+      ref_block = @runner.command[/checking out \$REF.*\z/m] || @runner.command[/if \[ -n "\$REF" \].*\z/m]
+      assert_not_nil ref_block
+      assert_equal 0, ref_block.scan(/git -C "\$TARGET" fetch/).size,
+        "every fetch in the ref block must carry the credential helper"
+      assert_match(/credential\.helper="\$HELPER" -C "\$TARGET" fetch/, ref_block)
+    end
+
+    test "refuses a ref that is not a plain branch, tag or commit name" do
+      [
+        "main; rm -rf /",
+        "--upload-pack=evil",
+        "feature branch",
+        "a..b",
+        "refs//heads/x",
+        "topic/",
+        "topic.lock",
+        "$(whoami)"
+      ].each do |bad_ref|
+        error = assert_raises(Coder::RepoBootstrap::Error, "expected #{bad_ref.inspect} to be refused") do
+          prepare(ref: bad_ref)
+        end
+        assert_match(/is not a valid branch, tag or commit name/, error.message)
+      end
     end
 
     test "refuses a relative path" do
