@@ -605,6 +605,56 @@ class TaskServiceTest < ActiveSupport::TestCase
     TaskService.remove_gate(gate: gate, actor: @user)
   end
 
+  # A stale gate stopped blocking the column when it went terminal, so the row
+  # left behind is an audit record. Deleting it releases nothing and must not
+  # record or dispatch a second column trigger.
+  test "remove_gate does not re-trigger the auto-workflow when it deletes a stale gate" do
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      status: :stale,
+      diagnostic_reason: "run deleted",
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    WorkflowService.expects(:start).never
+
+    assert_difference -> { Gate.count }, -1 do
+      assert_no_difference -> { TriggerEvent.where(event_type: TriggerEngine::COLUMN_EVENT_TYPE).count } do
+        TaskService.remove_gate(gate: gate, actor: @user)
+      end
+    end
+  end
+
+  # The whole lifecycle of the gate the reconciliation sweep gave up on: it is
+  # staled (which releases the column) and later cleared by hand. The column
+  # workflow must start exactly once across both steps.
+  test "remove_gate after mark_gate_stale starts the column workflow exactly once" do
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: task, mode: :non_interactive)
+    ).once
+
+    TaskService.mark_gate_stale(gate: gate, reason: "run deleted")
+
+    assert_no_difference -> { TriggerEvent.where(event_type: TriggerEngine::COLUMN_EVENT_TYPE).count } do
+      TaskService.remove_gate(gate: gate, actor: @user)
+    end
+  end
+
   # == check_auto_trigger (pending gates guard) ==
 
   test "check_auto_trigger does not start workflow when task has pending gates" do

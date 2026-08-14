@@ -236,14 +236,27 @@ class TaskService
       true
     end
 
+    # Delete a gate, re-evaluating the column auto-trigger ONLY when the gate was
+    # still pending.
+    #
+    # A terminal gate (`resolved` or `stale`) already stopped blocking the column
+    # and had its auto-trigger evaluated and dispatched at transition time. The
+    # row that stays behind is an audit record, so deleting it releases nothing —
+    # re-evaluating here would dispatch the same column workflow a second time
+    # (record_pending_auto_trigger does not guard against an already-active run).
+    #
+    # The status is re-read under the row lock, the same compare-and-set idiom as
+    # with_pending_gate: a webhook or the reconciliation sweep can take the gate
+    # terminal between load and delete, and that writer dispatches the trigger.
     def remove_gate(gate:, actor:)
       task = gate.board_task
       column = task.board_column
 
       pending_event = nil
       ActiveRecord::Base.transaction do
+        was_pending = gate.lock!.pending?
         gate.destroy!
-        pending_event = record_pending_auto_trigger(task: task, column: column, actor: actor)
+        pending_event = record_pending_auto_trigger(task: task, column: column, actor: actor) if was_pending
       end
 
       TriggerEngine.dispatch_pending(pending_event) if pending_event
