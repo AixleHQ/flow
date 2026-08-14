@@ -10,15 +10,17 @@ module Activities
     # resolve vs. leave waiting vs. mark stale) lives in `GateReconciler` and is
     # unit-tested there.
     #
-    # Retries are safe. Claiming is FOR UPDATE SKIP LOCKED and each gate's
-    # transition is a one-way pending → resolved/stale move, so a re-run only ever
-    # looks at gates the previous attempt did not finish.
+    # Retries are safe. Claiming is durable (a claimed gate leaves the due set for a
+    # grace window) and each gate's transition is a compare-and-set on a still-
+    # pending row, so a re-run — or a retry overlapping the attempt it replaces —
+    # only ever finishes gates the previous attempt did not.
     class ReconcileCiActivity < ::Activities::Base
       def run(_input = nil)
         counts = ::GateReconciler.reconcile_all
 
         log(:info, "checked #{counts[:checked]} pending CI gates: resolved #{counts[:resolved]}, " \
-                   "stale #{counts[:stale]}, still waiting #{counts[:waiting]}, errors #{counts[:errors]}")
+                   "stale #{counts[:stale]}, still waiting #{counts[:waiting]}, " \
+                   "superseded #{counts[:skipped]}, errors #{counts[:errors]}")
 
         counts
       end

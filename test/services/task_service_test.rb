@@ -478,6 +478,102 @@ class TaskServiceTest < ActiveSupport::TestCase
     assert_equal "failure", activity.metadata["conclusion"]
   end
 
+  # == gate transitions are compare-and-set ==
+  #
+  # A CI gate has three racing writers: its webhook delivery, the reconciliation
+  # sweep, and a retried/overlapping second sweeper. Every terminal transition
+  # re-reads `pending` under a row lock, so the first writer wins outright and the
+  # losers are no-ops — no overwritten verdict, no duplicate activity row, no
+  # second auto-trigger dispatch.
+
+  test "resolve_gate is a no-op on an already resolved gate instead of overwriting its verdict" do
+    task = create(:board_task, board: @board, board_column: @column)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    assert TaskService.resolve_gate(gate: gate, resolution_data: { conclusion: "failure" })
+    resolved_at = gate.reload.resolved_at
+
+    assert_not TaskService.resolve_gate(gate: gate, resolution_data: { conclusion: "success" })
+
+    gate.reload
+    assert_equal "failure", gate.conclusion
+    assert_equal resolved_at.to_i, gate.resolved_at.to_i
+  end
+
+  test "resolve_gate dispatches the auto-trigger once when the same gate is resolved twice" do
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: task, mode: :non_interactive)
+    ).once
+
+    TaskService.resolve_gate(gate: gate, resolution_data: { conclusion: "success" })
+    TaskService.resolve_gate(gate: gate, resolution_data: { conclusion: "success" })
+  end
+
+  test "mark_gate_stale refuses to replace a provider verdict with 'we do not know'" do
+    task = create(:board_task, board: @board, board_column: @column)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+    TaskService.resolve_gate(gate: gate, resolution_data: { conclusion: "failure" })
+
+    assert_no_difference -> { BoardActivity.where(event_type: "gate_stale").count } do
+      assert_not TaskService.mark_gate_stale(gate: gate, reason: "no CI result after 13 hours")
+    end
+
+    gate.reload
+    assert gate.resolved?
+    assert_equal "failed", gate.ci_status
+    assert_equal "failure", gate.conclusion
+    assert_nil gate.diagnostic_reason
+  end
+
+  test "resolve_gate_by_reconciliation records no second activity when the webhook already won" do
+    task = create(:board_task, board: @board, board_column: @column)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+    TaskService.resolve_gate(gate: gate, resolution_data: { conclusion: "failure" })
+
+    assert_no_difference -> { BoardActivity.where(event_type: "gate_reconciled").count } do
+      assert_not TaskService.resolve_gate_by_reconciliation(
+        gate: gate,
+        resolution_data: { "conclusion" => "success", "source" => "reconciliation" }
+      )
+    end
+
+    assert_equal "failure", gate.reload.conclusion
+  end
+
+  test "mark_gate_stale treats a gate deleted from under it as a lost race, not an error" do
+    task = create(:board_task, board: @board, board_column: @column)
+    gate = task.gates.create!(
+      gate_type: :github_checks_completed,
+      metadata: { repo_full_name: "org/app", pr_number: 1 },
+      creator: @user
+    )
+    Gate.where(id: gate.id).delete_all
+
+    assert_not TaskService.mark_gate_stale(gate: gate, reason: "run deleted")
+  end
+
   test "remove_gate deletes pending gate" do
     task = create(:board_task, board: @board, board_column: @column)
     gate = task.gates.create!(

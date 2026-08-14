@@ -4,7 +4,7 @@ require "test_helper"
 
 class Activities::Gates::ReconcileCiActivityTest < ActiveSupport::TestCase
   test "returns the sweep counts" do
-    counts = { checked: 3, resolved: 1, stale: 1, waiting: 1, errors: 0, elapsed: 0.4 }
+    counts = { checked: 3, resolved: 1, stale: 1, waiting: 1, skipped: 0, errors: 0, elapsed: 0.4 }
     GateReconciler.expects(:reconcile_all).returns(counts)
 
     assert_equal counts, run_activity(Activities::Gates::ReconcileCiActivity)

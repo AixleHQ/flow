@@ -238,7 +238,91 @@ class GateReconcilerTest < ActiveSupport::TestCase
   test "returns zeroed counts when nothing is due" do
     counts = GateReconciler.reconcile_all
 
-    assert_equal({ checked: 0, resolved: 0, stale: 0, waiting: 0, errors: 0 }, counts.except(:elapsed))
+    assert_equal({ checked: 0, resolved: 0, stale: 0, waiting: 0, skipped: 0, errors: 0 }, counts.except(:elapsed))
+  end
+
+  # == races: the sweep is not the only writer ==
+  #
+  # A provider call takes real time, and the gate's own webhook (plus a retried or
+  # overlapping second sweeper) can reach a terminal state during it. The claim is
+  # durable and every transition is a compare-and-set on a still-pending row, so a
+  # probe that comes back late is discarded rather than applied.
+
+  test "does not overwrite a webhook verdict that lands while the provider is being probed" do
+    gate = create_gate(created_at: 20.hours.ago, expires_at: 8.hours.ago)
+
+    # The gate's real webhook arrives mid-probe and records the provider's failure.
+    # Without the pending re-check, the TTL branch below would then bury it as stale.
+    stub_probe(Ci::ProbeResult.in_progress("still running")) do
+      GateService.resolve_github_checks(repo_full_name: "org/app", pr_number: 42, conclusion: "failure")
+    end
+
+    counts = GateReconciler.reconcile_all
+
+    gate.reload
+    assert_equal 1, counts[:skipped]
+    assert_equal 0, counts[:stale]
+    assert gate.resolved?
+    assert_equal "failure", gate.conclusion
+    assert_equal "failed", gate.ci_status
+    assert_nil gate.diagnostic_reason
+    assert_equal 0, BoardActivity.where(event_type: "gate_stale").count
+    assert_equal "superseded:resolved", gate.reconciliation_log.first["outcome"]
+  end
+
+  test "a second sweeper that probed the same gate records neither a second resolution nor a second activity" do
+    gate = create_gate(created_at: 1.hour.ago)
+    stub_probe(Ci::ProbeResult.completed("success"))
+
+    # Two drainers holding their own copy of the row, both already past the probe.
+    first_worker = Gate.find(gate.id)
+    second_worker = Gate.find(gate.id)
+
+    assert_difference -> { BoardActivity.where(event_type: "gate_reconciled").count }, 1 do
+      assert_equal :resolved, GateReconciler.reconcile(first_worker)
+      assert_equal :skipped, GateReconciler.reconcile(second_worker)
+    end
+
+    gate.reload
+    assert gate.resolved?
+    assert_equal "success", gate.conclusion
+    assert_equal "superseded:resolved", gate.reconciliation_log.first["outcome"]
+  end
+
+  test "two sweepers finishing the same gate dispatch the column auto-trigger once" do
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
+    gate = create_gate(created_at: 1.hour.ago)
+    stub_probe(Ci::ProbeResult.unresolvable("PR #42 not found in org/app"))
+
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: @task, mode: :non_interactive)
+    ).once
+
+    assert_equal :stale, GateReconciler.reconcile(Gate.find(gate.id))
+    assert_equal :skipped, GateReconciler.reconcile(Gate.find(gate.id))
+  end
+
+  test "claiming is durable, so a probe that raises does not hand the gate to the next sweeper" do
+    Rails.logger.stubs(:error)
+    gate = create_gate(created_at: 1.hour.ago)
+    probe = mock("probe")
+    probe.stubs(:call).raises(RuntimeError, "boom")
+    Ci::GateProbe.stubs(:new).returns(probe)
+
+    first = GateReconciler.reconcile_all
+
+    assert_equal 1, first[:errors]
+    # The claim, not an outcome stamp: the probe never returned, so nothing was
+    # recorded on the gate — but the row is out of the due set all the same.
+    assert_not_nil gate.reload.last_reconciled_at
+    assert_equal 0, gate.reconcile_attempts
+    assert_empty Array(gate.reconciliation_log)
+
+    second = GateReconciler.reconcile_all
+
+    assert_equal 0, second[:checked]
+    assert gate.reload.pending?
   end
 
   private
@@ -253,9 +337,15 @@ class GateReconcilerTest < ActiveSupport::TestCase
 
   # The CI provider is the only faked boundary: the probe is app-owned, returns an
   # app-owned value object, and every adapter behind it has its own contract test.
-  def stub_probe(result)
-    probe = mock("probe")
-    probe.stubs(:call).returns(result)
+  #
+  # An optional block runs INSIDE the probe, which is how the race tests land a
+  # competing write in the window the sweep is waiting on the provider.
+  def stub_probe(result, &during_probe)
+    probe = Object.new
+    probe.define_singleton_method(:call) do
+      during_probe&.call
+      result
+    end
     Ci::GateProbe.stubs(:new).returns(probe)
   end
 end

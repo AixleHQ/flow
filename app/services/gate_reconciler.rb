@@ -21,20 +21,25 @@
 # and records the outcome on the gate either way, so a gate's
 # `reconciliation_log` explains what was seen and when.
 #
+# Every one of those transitions is a compare-and-set on a still-`pending` row
+# (`TaskService.with_pending_gate`), and gates are claimed durably before the
+# provider call. The sweep therefore never overwrites a verdict that the gate's
+# own webhook — or a second sweeper — landed while it was probing; it records the
+# overlap as `superseded:<status>` and moves on.
+#
 # It never invents a passing conclusion: an expired or unresolvable gate becomes
 # `stale` with a diagnostic reason, which unblocks the task's automation but is
 # recorded as "we do not know", never as "CI was green".
 class GateReconciler
   class << self
-    # Sweep the reconcilable gates and act on each. Rows are claimed under
-    # FOR UPDATE SKIP LOCKED in a short transaction (so two drainers never probe
-    # the same gate) and the lock is released before the provider call — an HTTP
+    # Sweep the reconcilable gates and act on each. Rows are claimed durably (see
+    # claim_ids) and the row locks are released before the provider call — an HTTP
     # request must not run while holding row locks.
     #
-    # Returns { checked:, resolved:, stale:, waiting:, errors: } counts.
+    # Returns { checked:, resolved:, stale:, waiting:, skipped:, errors: } counts.
     def reconcile_all(limit: Gate.reconcile_batch_size, now: Time.current)
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      counts = { checked: 0, resolved: 0, stale: 0, waiting: 0, errors: 0 }
+      counts = { checked: 0, resolved: 0, stale: 0, waiting: 0, skipped: 0, errors: 0 }
 
       claim_ids(limit: limit, now: now).each do |id|
         gate = Gate.find_by(id: id)
@@ -47,14 +52,15 @@ class GateReconciler
       elapsed = (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).round(2)
       Rails.logger.info(
         "[GateReconciler] checked=#{counts[:checked]} resolved=#{counts[:resolved]} " \
-        "stale=#{counts[:stale]} waiting=#{counts[:waiting]} errors=#{counts[:errors]} in #{elapsed}s"
+        "stale=#{counts[:stale]} waiting=#{counts[:waiting]} skipped=#{counts[:skipped]} " \
+        "errors=#{counts[:errors]} in #{elapsed}s"
       )
 
       counts.merge(elapsed: elapsed)
     end
 
     # Reconcile one gate. Returns the counter key for what happened:
-    # :resolved, :stale, :waiting or :errors.
+    # :resolved, :stale, :waiting, :skipped or :errors.
     def reconcile(gate, now: Time.current)
       result = Ci::GateProbe.new(gate).call
 
@@ -72,23 +78,42 @@ class GateReconciler
 
     private
 
+    # Claim the due gates DURABLY. `FOR UPDATE SKIP LOCKED` alone would not do it:
+    # its locks die at COMMIT, which is long before the provider call, so a second
+    # drainer starting a moment later would re-select the very same rows (still
+    # pending, `last_reconciled_at` untouched) and probe them all over again.
+    #
+    # Stamping the probe time inside the locking transaction is the claim marker:
+    # `Gate.reconcilable` only admits rows whose `last_reconciled_at` is null or
+    # older than the grace cutoff, so a claimed gate is invisible to other sweepers
+    # for a full grace window. The claim doubles as the backoff for a gate whose
+    # probe raises — it is retried on a later tick, with the TTL still the backstop.
+    #
+    # `update_all` on purpose: no callbacks, one statement, and the partial sweep
+    # index covers the predicate.
     def claim_ids(limit:, now:)
       Gate.transaction do
-        Gate
+        ids = Gate
           .reconcilable(now)
           .limit(limit)
           .lock("FOR UPDATE SKIP LOCKED")
           .pluck(:id)
+
+        Gate.where(id: ids).update_all(last_reconciled_at: now, updated_at: now) if ids.any?
+
+        ids
       end
     end
 
     # Act first, then log the outcome: an audit entry that says "resolved" for a
     # transition that then failed would be worse than no entry at all.
     def resolve(gate, result)
-      TaskService.resolve_gate_by_reconciliation(
+      transitioned = TaskService.resolve_gate_by_reconciliation(
         gate: gate,
         resolution_data: resolution_data_for(gate, result)
       )
+      return superseded(gate, result) unless transitioned
+
       gate.record_reconciliation!(outcome: "resolved:#{result.conclusion}", detail: result.detail)
       Rails.logger.info("[GateReconciler] gate ##{gate.id} resolved as #{result.conclusion} by reconciliation")
       :resolved
@@ -106,10 +131,24 @@ class GateReconciler
 
     def mark_stale(gate, kind, result, now:)
       reason = stale_reason(gate, kind, result, now: now)
-      TaskService.mark_gate_stale(gate: gate, reason: reason, detail: result.detail, now: now)
+      transitioned = TaskService.mark_gate_stale(gate: gate, reason: reason, detail: result.detail, now: now)
+      return superseded(gate, result, now: now) unless transitioned
+
       gate.record_reconciliation!(outcome: "stale:#{kind}", detail: result.detail, now: now)
       Rails.logger.warn("[GateReconciler] gate ##{gate.id} marked stale: #{reason} (#{result.detail})")
       :stale
+    end
+
+    # Someone else reached a terminal state for this gate while we were talking to
+    # the provider — its own webhook delivery, or a second sweeper. Their verdict
+    # stands: we discard ours rather than overwrite a real CI result (or emit a
+    # duplicate activity and a second auto-trigger dispatch). The probe still goes
+    # into the audit trail, so the overlap is visible instead of merely absent.
+    def superseded(gate, result, now: Time.current)
+      status = Gate.where(id: gate.id).pick(:status) || "removed"
+      gate.record_reconciliation!(outcome: "superseded:#{status}", detail: result.detail, now: now) unless status == "removed"
+      Rails.logger.info("[GateReconciler] gate ##{gate.id} already #{status}; discarded probe #{result.state}")
+      :skipped
     end
 
     # Operator-facing, and deliberately specific about which of the two ways a

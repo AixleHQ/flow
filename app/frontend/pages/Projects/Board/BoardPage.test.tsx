@@ -661,6 +661,58 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByText('1m 35s')).toBeInTheDocument();
   });
 
+  it('counts stale gates as their own bucket in the Analytics Waits panel', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+        // Through the factory on purpose: its `: TaskStatistics` return type is the
+        // drift contract, so `status: 'stale'` only compiles while the generated
+        // TaskStatistics union still admits the state this panel renders.
+        taskStatistics: buildTaskStatistics({
+          gateStats: [
+            {
+              id: 1,
+              gateType: 'github_checks_completed',
+              status: 'pending',
+              createdAt: '2026-08-14T10:00:00Z',
+              resolvedAt: null,
+              durationSeconds: null,
+            },
+            {
+              id: 2,
+              gateType: 'github_workflow_completed',
+              status: 'resolved',
+              createdAt: '2026-08-14T10:00:00Z',
+              resolvedAt: '2026-08-14T10:01:35Z',
+              durationSeconds: 95,
+            },
+            {
+              id: 3,
+              gateType: 'gitlab_pipeline_completed',
+              status: 'stale',
+              createdAt: '2026-08-14T10:00:00Z',
+              resolvedAt: null,
+              durationSeconds: null,
+            },
+          ],
+        }),
+      },
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Analytics' }));
+
+    // A stale gate is neither pending nor resolved: it gets counted, and badged, apart.
+    expect(screen.getByText(/1 pending/)).toBeInTheDocument();
+    expect(screen.getByText(/1 resolved/)).toBeInTheDocument();
+    expect(screen.getByText(/1 stale/)).toBeInTheDocument();
+    expect(screen.getByText('stale')).toBeInTheDocument();
+  });
+
   it('offers a Run workflow button when the task column has a workflow binding and no active run', () => {
     renderAuthedPage(<BoardPage />, {
       props: {

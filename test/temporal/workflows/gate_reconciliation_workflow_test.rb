@@ -14,7 +14,7 @@ module Workflows
     class FakeReconcileActivity < Temporalio::Activity::Definition
       activity_name "gates_reconcile_ci_activity"
       def execute(_input = nil)
-        { checked: 3, resolved: 1, stale: 1, waiting: 1, errors: 0 }
+        { checked: 3, resolved: 1, stale: 1, waiting: 1, skipped: 0, errors: 0 }
       end
     end
 
@@ -29,7 +29,7 @@ module Workflows
         self.class.attempts += 1
         raise "transient failure" if self.class.attempts < 2
 
-        { checked: 0, resolved: 0, stale: 0, waiting: 0, errors: 0 }
+        { checked: 0, resolved: 0, stale: 0, waiting: 0, skipped: 0, errors: 0 }
       end
     end
 

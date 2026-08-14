@@ -116,6 +116,12 @@ reconciles the gates whose webhook never arrived:
 4. If the provider says the run is still going — or cannot be reached — the gate
    keeps waiting until its TTL runs out, and is then marked **stale** too.
 
+Whoever gets there first wins, once. If the real webhook arrives while the sweep is
+still asking the provider, the webhook's verdict stands and the late answer is
+discarded (recorded in the gate's log as `superseded`) — a reported CI failure is
+never overwritten by "no verdict", and the card's automation is never released
+twice.
+
 A stale gate stops blocking the column auto-trigger (that is the point: the card
 moves again) but is never recorded as a success. It keeps a `diagnostic_reason`, a
 `reconciliation_log` of everything the sweep saw, and it raises a board activity

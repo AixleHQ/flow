@@ -6,7 +6,7 @@ type TaskStatistics = {
   costTotals: { totalCostCents: number };
   tokenTotals: { totalTokens: number };
   timeTotals: { totalDurationSeconds: number };
-  gateStats: Array<{ id: number; gateType: "github_checks_completed" | "github_workflow_completed" | "gitlab_pipeline_completed"; status: "pending" | "resolved"; createdAt: string; resolvedAt: string | null; durationSeconds: number | null }>;
+  gateStats: Array<{ id: number; gateType: "github_checks_completed" | "github_workflow_completed" | "gitlab_pipeline_completed"; status: "pending" | "resolved" | "stale"; createdAt: string; resolvedAt: string | null; durationSeconds: number | null }>;
   workflowBreakdowns: Array<{ workflowId: number; workflowName: string; costCents: number; totalTokens: number; durationSeconds: number }>;
 }
 
