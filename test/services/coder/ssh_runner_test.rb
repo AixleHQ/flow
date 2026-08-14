@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "tmpdir"
 
 module Coder
   class SshRunnerTest < ActiveSupport::TestCase
@@ -336,6 +337,58 @@ module Coder
       end
     end
 
+    # The launch metadata has to be on disk *before* the wrapper starts, or a job
+    # killed a second later has nothing to identify it (task #581). The traps and
+    # the heartbeat are what a `died` job is dated and explained by, and neither
+    # is observable from the outside once the wrapper is gone — so they are
+    # asserted on the script that gets written.
+    test "detached start persists launch metadata before it starts the wrapper" do
+      captured_args = nil
+      stub = popen3_stub(
+        out: "aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs started_at=2026-08-14T10:00:00Z\n"
+      ) { |_env, argv| captured_args = argv }
+
+      result = Open3.stub(:popen3, stub) do
+        Coder::SshRunner.new(@integration).exec_detached(
+          workspace_name: "ws-1", command: "make check_all", job_id: "j1"
+        )
+      end
+
+      assert_equal "2026-08-14T10:00:00Z", result[:started_at]
+      assert_equal "/var/lib/aixle-jobs/j1.meta", result[:meta_path]
+
+      script       = captured_args.last
+      before_start = script.split("chmod +x").first
+
+      assert_match(/job_id=j1/, before_start)
+      assert_match(/workspace=ws-1/, before_start)
+      assert_match(/started_at=\$AIXLE_STARTED_AT/, before_start)
+      assert_match(/> "\$BASE\.meta"/, before_start, "metadata must be written before the wrapper is launched")
+
+      assert_match(/trap '.*TERM 143' TERM/, script, "a terminated wrapper must still record its outcome")
+      assert_match(/reason=\$2/, script)
+      assert_match(/"\$BASE\.hb"/, script, "expected a heartbeat to date a job that cannot record its own end")
+    end
+
+    # A workspace name is recorded inside a double-quoted shell string; a name
+    # carrying shell metacharacters must not become command substitution.
+    test "detached start neutralises shell metacharacters in the recorded workspace name" do
+      captured_args = nil
+      stub = popen3_stub(out: "aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs\n") { |_env, argv| captured_args = argv }
+
+      Open3.stub(:popen3, stub) do
+        Coder::SshRunner.new(@integration).exec_detached(
+          workspace_name: 'ws-1"; $(id > /tmp/pwned); echo "', command: "true", job_id: "j1"
+        )
+      end
+
+      recorded = captured_args.last[/echo "workspace=(.*)"$/, 1]
+
+      assert_match(/\A[A-Za-z0-9._-]+\z/, recorded,
+                   "the recorded workspace name must not carry shell syntax; got #{recorded.inspect}")
+      assert_no_match(/\$\(id/, captured_args.last)
+    end
+
     test "job status parses state, exit code and log tail" do
       out = "aixle_job state=exited exit_code=2\n---aixle_job_log---\nline one\nline two\n"
 
@@ -355,6 +408,176 @@ module Coder
 
       assert_equal "unknown", status[:state]
       assert_nil status[:exit_code]
+    end
+
+    # ---------- lifecycle metadata and diagnosis (task #581) ----------
+
+    test "job status returns the lifecycle metadata of a job that finished normally" do
+      out = job_status_output(
+        header: "state=exited exit_code=0",
+        meta:   <<~META,
+          job_id=j1
+          workspace=ws-1
+          job_dir=/var/lib/aixle-jobs
+          log_path=/var/lib/aixle-jobs/j1.log
+          started_at=2026-08-14T10:00:00Z
+          started_at_epoch=1000
+          heartbeat_interval_seconds=10
+          pid=4242
+          pgid=4242
+          finished_at=2026-08-14T10:02:03Z
+          finished_at_epoch=1123
+          reason=completed
+          exit_code=0
+          checked_at=2026-08-14T10:05:00Z
+          checked_at_epoch=1300
+          log_bytes=64
+        META
+        command: "make check_all",
+        log:     "3 files inspected\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal "exited", status[:state]
+      assert_equal 0, status[:exit_code]
+      assert_equal "completed", status[:reason]
+      assert_equal "ws-1", status[:workspace]
+      assert_equal "make check_all", status[:command]
+      assert_equal 4242, status[:pid]
+      assert_equal 4242, status[:pgid]
+      assert_equal "2026-08-14T10:00:00Z", status[:started_at]
+      assert_equal "2026-08-14T10:02:03Z", status[:finished_at]
+      assert_equal 123, status[:elapsed_seconds]
+      assert_equal 64, status[:log_bytes]
+      assert_equal "/var/lib/aixle-jobs/j1.log", status[:log_path]
+      assert_equal "3 files inspected\n", status[:tail]
+      assert_nil status[:finished_at_estimated], "a job that dated itself must not be reported as an estimate"
+      assert_match(/completed successfully after 123s/, status[:diagnosis])
+    end
+
+    # The distinction the whole feature exists for: a non-zero exit is the
+    # command's own verdict, and must not read as an infrastructure failure.
+    test "job status reports a non-zero exit as the command's own failure" do
+      out = job_status_output(
+        header: "state=exited exit_code=3",
+        meta:   <<~META,
+          started_at=2026-08-14T10:00:00Z
+          started_at_epoch=1000
+          pid=4242
+          finished_at=2026-08-14T10:00:20Z
+          finished_at_epoch=1020
+          reason=command_failed
+          exit_code=3
+          checked_at_epoch=1100
+        META
+        command: "bin/rails test",
+        log:     "2 failures\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal "exited", status[:state]
+      assert_equal 3, status[:exit_code]
+      assert_equal "command_failed", status[:reason]
+      assert_equal 20, status[:elapsed_seconds]
+      assert_nil status[:signal]
+      assert_match(/exited 3/, status[:diagnosis])
+      assert_match(/not an infrastructure problem/, status[:diagnosis])
+    end
+
+    test "job status reports a trapped signal as a cancellation, not a command failure" do
+      out = job_status_output(
+        header: "state=exited exit_code=143",
+        meta:   <<~META,
+          started_at_epoch=1000
+          pid=4242
+          finished_at=2026-08-14T10:00:30Z
+          finished_at_epoch=1030
+          reason=signaled
+          signal=TERM
+          exit_code=143
+          checked_at_epoch=1100
+        META
+        command: "make check_all",
+        log:     "compiling\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal "signaled", status[:reason]
+      assert_equal "TERM", status[:signal]
+      assert_equal 143, status[:exit_code]
+      assert_equal 30, status[:elapsed_seconds]
+      assert_match(/SIGTERM/, status[:diagnosis])
+      assert_match(/cancellation|outside kill/, status[:diagnosis])
+    end
+
+    # The case that used to lose everything: the wrapper is SIGKILLed, so no trap
+    # runs and no exit file is written. The job must still be datable and
+    # attributable — from the last heartbeat, not from file mtimes recovered by
+    # hand.
+    test "job status dates and explains a job killed before it could write its exit code" do
+      out = job_status_output(
+        header: "state=died exit_code=",
+        meta:   <<~META,
+          job_id=j1
+          workspace=ws-1
+          started_at=2026-08-14T10:00:00Z
+          started_at_epoch=1000
+          heartbeat_interval_seconds=10
+          pid=777
+          pgid=777
+          checked_at=2026-08-14T10:05:00Z
+          checked_at_epoch=1260
+          heartbeat_at=2026-08-14T10:03:20Z
+          heartbeat_at_epoch=1200
+          log_bytes=128
+          log_modified_at_epoch=1195
+        META
+        command: "make check_all",
+        log:     "running tests\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal "died", status[:state]
+      assert_nil status[:exit_code]
+      assert_equal "runner_vanished", status[:reason]
+      assert_equal "2026-08-14T10:03:20Z", status[:finished_at]
+      assert status[:finished_at_estimated], "a heartbeat-derived end time must be marked as an estimate"
+      assert_equal 200, status[:elapsed_seconds]
+      assert_equal 60, status[:heartbeat_age_seconds]
+      assert_equal "2026-08-14T10:03:20Z", status[:last_heartbeat_at]
+      assert_equal 777, status[:pid]
+      assert_equal "make check_all", status[:command]
+      assert_equal "running tests\n", status[:tail]
+      assert_match(/pid 777/, status[:diagnosis])
+      assert_match(/never wrote an exit code/, status[:diagnosis])
+      assert_match(/infrastructure failure/, status[:diagnosis])
+    end
+
+    test "job status still explains a job whose wrapper predates lifecycle metadata" do
+      out = "aixle_job state=exited exit_code=2\n---aixle_job_log---\n2 failures\n"
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "old")
+      end
+
+      assert_equal "exited", status[:state]
+      assert_equal 2, status[:exit_code]
+      assert_equal "command_failed", status[:reason], "the exit code alone still classifies an old job"
+      assert_equal "2 failures\n", status[:tail]
+      assert_nil status[:started_at]
+      assert_nil status[:elapsed_seconds]
     end
 
     test "job id must be a safe token" do
@@ -416,7 +639,122 @@ module Coder
       end
     end
 
+    # ---------- the job wrapper, run for real ----------
+    #
+    # Half of this feature is shell that runs on the workspace, and a canned
+    # `job_status` payload cannot tell whether the wrapper actually produces it.
+    # These three exercise the generated scripts through a local shell (job files
+    # in a tmpdir via AIXLE_JOB_DIR) — the same launch → poll cycle a session
+    # runs, with `coder ssh` swapped for `sh -c`.
+
+    test "a detached job that succeeds records its exit code, reason and timing" do
+      in_local_shell_workspace do |runner|
+        runner.exec_detached(workspace_name: "ws-1", command: "printf 'all good\\n'", job_id: "wrapok")
+        status = poll_until_finished(runner, "wrapok")
+
+        assert_equal "exited", status[:state]
+        assert_equal 0, status[:exit_code]
+        assert_equal "completed", status[:reason]
+        assert_equal "ws-1", status[:workspace]
+        assert_equal "printf 'all good\\n'", status[:command]
+        assert_operator status[:pid].to_i, :>, 0
+        assert_match(/\A\d{4}-\d{2}-\d{2}T/, status[:started_at])
+        assert_match(/\A\d{4}-\d{2}-\d{2}T/, status[:finished_at])
+        assert_operator status[:elapsed_seconds], :>=, 0
+        assert_nil status[:finished_at_estimated]
+        assert_equal "all good\n", status[:tail]
+      end
+    end
+
+    test "a detached job that fails reports the command's own non-zero exit" do
+      in_local_shell_workspace do |runner|
+        runner.exec_detached(
+          workspace_name: "ws-1", command: "printf 'boom\\n' >&2; exit 3", job_id: "wrapfail"
+        )
+        status = poll_until_finished(runner, "wrapfail")
+
+        assert_equal "exited", status[:state]
+        assert_equal 3, status[:exit_code]
+        assert_equal "command_failed", status[:reason]
+        assert_match(/exited 3/, status[:diagnosis])
+        assert_match(/boom/, status[:tail], "stderr must still land in the job log")
+      end
+    end
+
+    # Termination before the normal exit-file write: the wrapper is signalled
+    # while the command is running, which used to leave the job with no exit
+    # code, no end time and no reason.
+    test "a detached job terminated mid-run records the signal instead of vanishing" do
+      in_local_shell_workspace do |runner|
+        runner.exec_detached(workspace_name: "ws-1", command: "sleep 30", job_id: "wrapkill")
+        pid = poll_for_pid(runner, "wrapkill")
+
+        Process.kill("TERM", pid)
+        status = poll_until_finished(runner, "wrapkill")
+
+        assert_equal "exited", status[:state]
+        assert_equal 143, status[:exit_code]
+        assert_equal "signaled", status[:reason]
+        assert_equal "TERM", status[:signal]
+        assert_not_nil status[:finished_at], "an interrupted job must still be dated"
+        assert_operator status[:elapsed_seconds], :>=, 0
+        assert_match(/SIGTERM/, status[:diagnosis])
+      end
+    end
+
     private
+
+    # Assembles a `job_status` remote payload the way the status script does:
+    # header, metadata, launch command, log tail.
+    def job_status_output(header:, meta:, command:, log:)
+      [
+        "aixle_job #{header}\n",
+        "---aixle_job_meta---\n", meta,
+        "---aixle_job_cmd---\n", "#{command}\n\n",
+        "---aixle_job_log---\n", log
+      ].join
+    end
+
+    # Runs the remote command through the local shell instead of `coder ssh`.
+    # `Open3.popen3` is captured before it is stubbed, so the stub can still
+    # reach the real implementation.
+    def in_local_shell_workspace
+      real_popen3 = Open3.method(:popen3)
+      job_dir     = Dir.mktmpdir("aixle-jobs")
+      local_shell = lambda { |env, *argv, **opts, &blk|
+        real_popen3.call(env.merge("AIXLE_JOB_DIR" => job_dir), "sh", "-c", argv.last, **opts, &blk)
+      }
+
+      Open3.stub(:popen3, local_shell) do
+        yield Coder::SshRunner.new(@integration)
+      end
+    ensure
+      FileUtils.remove_entry(job_dir) if job_dir && File.directory?(job_dir)
+    end
+
+    def poll_until_finished(runner, job_id, timeout: 15)
+      poll(timeout: timeout, waiting_for: "job #{job_id} to finish") do
+        status = runner.job_status(workspace_name: "ws-1", job_id: job_id)
+        status if status[:state] != "running"
+      end
+    end
+
+    def poll_for_pid(runner, job_id, timeout: 15)
+      poll(timeout: timeout, waiting_for: "job #{job_id} to report its pid") do
+        runner.job_status(workspace_name: "ws-1", job_id: job_id)[:pid]
+      end
+    end
+
+    def poll(timeout:, waiting_for:)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+      loop do
+        result = yield
+        return result if result
+        flunk "timed out after #{timeout}s waiting for #{waiting_for}" if
+          Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+        sleep 0.05
+      end
+    end
 
     def with_settings_ceiling(seconds)
       original = Settings.coder.ssh_exec_ceiling_seconds
