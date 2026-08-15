@@ -1139,7 +1139,9 @@ describe('Projects/Board/BoardPage', () => {
     const drawer = within(screen.getByRole('dialog'));
     expect(drawer.getByText(/CI Gates \(1\)/)).toBeInTheDocument();
     expect(drawer.getByText(/PR #42 not found/)).toBeInTheDocument();
-    expect(drawer.getByText(/^Stale — no CI result after/)).toBeInTheDocument();
+    // The state is the chip's label now; the row keeps only what the chip cannot say — the age.
+    expect(drawer.getByText('stale')).toBeInTheDocument();
+    expect(drawer.queryByText(/^Stale — /)).not.toBeInTheDocument();
     expect(drawer.getByRole('button', { name: 'Delete gate 9' })).toBeInTheDocument();
   });
 
@@ -1168,8 +1170,60 @@ describe('Projects/Board/BoardPage', () => {
     });
 
     const drawer = within(screen.getByRole('dialog'));
-    expect(drawer.getByText('Failed — failure')).toBeInTheDocument();
+    expect(drawer.getByText('failed')).toBeInTheDocument();
     expect(drawer.queryByRole('button', { name: 'Delete gate 9' })).not.toBeInTheDocument();
+  });
+
+  it('renders CI gates as compact state chips with no duplicated status line', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          ciGates: gatesOf(
+            {
+              id: 9,
+              gateType: 'github_workflow_completed',
+              createdAt: '2026-01-02T00:00:00Z',
+              status: 'resolved',
+              ciStatus: 'succeeded',
+              conclusion: 'success',
+              metadata: { repoFullName: 'org/app', runId: 555 },
+            },
+            {
+              id: 10,
+              gateType: 'github_checks_completed',
+              createdAt: '2026-01-02T00:00:00Z',
+              status: 'pending',
+              ciStatus: 'pending',
+              metadata: { repoFullName: 'org/app', prNumber: 42 },
+            },
+          ),
+        }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    // Each gate reads as one chip carrying its state — not as a filled pill spelling out the gate
+    // type with a status line under it repeating what the pill's colour already said.
+    expect(drawer.getByText('passed')).toBeInTheDocument();
+    expect(drawer.getByText('waiting')).toBeInTheDocument();
+    expect(drawer.queryByText(/^Passed — /)).not.toBeInTheDocument();
+    expect(drawer.queryByText(/^Waiting — /)).not.toBeInTheDocument();
+    expect(drawer.queryByText('github workflow completed')).not.toBeInTheDocument();
+
+    // Both provider links survive the tightening.
+    expect(drawer.getByText('org/app #555').closest('a')).toHaveAttribute(
+      'href',
+      'https://github.com/org/app/actions/runs/555',
+    );
+    expect(drawer.getByText('org/app #42').closest('a')).toHaveAttribute('href', 'https://github.com/org/app/pull/42');
   });
 
   it('lists every recent run state in the card status chip tooltip', async () => {

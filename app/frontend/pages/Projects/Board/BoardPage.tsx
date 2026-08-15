@@ -143,6 +143,7 @@ import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 import { formatCostCents, formatDuration, formatTokens } from './boardFormat';
 import styles from './BoardPage.module.css';
+import { GATE_CHIP_WIDTH, GateStatusChip } from './GateStatusChip';
 import { LatestRunTile } from './LatestRunTile';
 import { WORKFLOW_ACTIVE_STATES, type TaskWorkflowRun } from './taskRuns';
 import { TaskRunsPanel } from './TaskRunsPanel';
@@ -292,16 +293,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: 'var(--app-success-fg)',
 };
 
-// The four CI states a gate can be in. `stale` gets its own colour rather than sharing red with a
-// failure: a failed check is a verdict, a stale gate is the absence of one, and they need different
-// reactions (fix the code vs. look at why CI never reported).
-const GATE_STATUS_COLORS: Record<string, string> = {
-  pending: 'yellow',
-  succeeded: 'green',
-  failed: 'red',
-  stale: 'orange',
-};
-
 // Gate states that still hold the column auto-trigger or still need a person — the only ones worth
 // offering a delete button for.
 const GATE_UNRESOLVED_STATUSES = new Set(['pending', 'stale']);
@@ -441,15 +432,52 @@ function ciGateSummary(task: Task): { label: string; color: string; tooltip: str
   }
 }
 
-// One line of prose for a gate in the task drawer: how long it has been waiting and whether its TTL
-// has run out, or — once it is over — how it ended.
-function gateStatusLine(gate: Gate): string {
+// The part of a gate's story its chip does NOT already tell, as a short muted suffix. The state
+// itself is the chip's label, so repeating it here would only be noise; age is not — "waiting"
+// reads very differently at two minutes and at eleven hours — and neither is a failure that ended
+// in something other than a plain failed check (timed out, cancelled, action required).
+function gateDetail(gate: Gate): string | null {
   const kind = gateCiStatus(gate);
-  if (kind === 'succeeded') return `Passed — ${gate.conclusion ?? 'success'}`;
-  if (kind === 'failed') return `Failed — ${gate.conclusion ?? 'no conclusion reported'}`;
-  if (kind === 'stale') return `Stale — no CI result after ${formatElapsedTime(gate.createdAt)}`;
+  if (kind === 'succeeded') return null;
+  if (kind === 'failed') {
+    const conclusion = gate.conclusion;
+    if (!conclusion || conclusion === 'failure' || conclusion === 'failed') return null;
+    return conclusion.replace(/_/g, ' ');
+  }
 
-  return `Waiting — ${formatElapsedTime(gate.createdAt)}${gate.expired ? ' · past its TTL' : ''}`;
+  const elapsed = formatElapsedTime(gate.createdAt);
+  if (kind === 'stale') return elapsed;
+  return gate.expired ? `${elapsed} · past TTL` : elapsed;
+}
+
+// What the chip's tooltip spells out: the gate type the row no longer prints as a pill, plus the
+// provider's own conclusion when there is one worth naming.
+function gateTooltip(gate: Gate): string {
+  const name = gate.gateType.replace(/_/g, ' ');
+  return gate.conclusion ? `${name} — ${gate.conclusion}` : name;
+}
+
+// The provider page a gate row links to: the pull request for a checks gate, the run page for a
+// workflow gate. Null when the metadata a link needs was never recorded.
+function gateLink(gate: Gate): { href: string; label: string; kind: 'pr' | 'run' } | null {
+  const repo = gate.metadata.repoFullName;
+  if (!repo) return null;
+
+  if (gate.gateType === 'github_checks_completed' && gate.metadata.prNumber) {
+    return {
+      href: `https://github.com/${repo}/pull/${gate.metadata.prNumber}`,
+      label: `${repo} #${gate.metadata.prNumber}`,
+      kind: 'pr',
+    };
+  }
+  if (gate.gateType === 'github_workflow_completed' && gate.metadata.runId) {
+    return {
+      href: `https://github.com/${repo}/actions/runs/${gate.metadata.runId}`,
+      label: `${repo} #${gate.metadata.runId}`,
+      kind: 'run',
+    };
+  }
+  return null;
 }
 
 // Status a collapsed ticket chip advertises: the bar colour and the hover tooltip both come
@@ -2290,74 +2318,79 @@ function TaskDetailSidebar({
                 </Text>
               </Group>
               <Stack gap={4}>
-                {gatesForPanel.map((wait) => (
-                  <Group key={wait.id} gap="xs" align="flex-start" wrap="nowrap">
-                    <Badge
-                      size="xs"
-                      color={GATE_STATUS_COLORS[gateCiStatus(wait)] ?? 'yellow'}
-                      variant="filled"
-                      style={{ fontSize: 10, fontWeight: 600, flexShrink: 0 }}
-                    >
-                      {wait.gateType.replace(/_/g, ' ')}
-                    </Badge>
-                    <Box style={{ flex: 1, minWidth: 0 }}>
-                      {wait.gateType === 'github_checks_completed' &&
-                        wait.metadata.repoFullName &&
-                        wait.metadata.prNumber && (
+                {gatesForPanel.map((wait) => {
+                  const kind = gateCiStatus(wait);
+                  const link = gateLink(wait);
+                  const detail = gateDetail(wait);
+
+                  return (
+                    <Box key={wait.id}>
+                      <Group gap={8} align="center" wrap="nowrap">
+                        <Box w={GATE_CHIP_WIDTH} style={{ flexShrink: 0 }}>
+                          <GateStatusChip status={kind} tooltip={gateTooltip(wait)} />
+                        </Box>
+                        {link ? (
                           <Text
                             component="a"
-                            href={`https://github.com/${wait.metadata.repoFullName}/pull/${wait.metadata.prNumber}`}
+                            href={link.href}
                             target="_blank"
                             rel="noopener noreferrer"
                             size="xs"
                             c="brand"
-                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              flex: 1,
+                              minWidth: 0,
+                              textDecoration: 'none',
+                            }}
                           >
-                            <IconLink size={10} />
-                            {String(wait.metadata.repoFullName)} #{String(wait.metadata.prNumber)}
+                            <IconLink size={10} style={{ flexShrink: 0 }} />
+                            <Box
+                              component="span"
+                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                            >
+                              {link.label}
+                            </Box>
+                          </Text>
+                        ) : (
+                          // A gate whose metadata carries no linkable reference still has to say what
+                          // it is waiting on, and the chip only carries the state.
+                          <Text size="xs" c="dimmed" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
+                            {wait.gateType.replace(/_/g, ' ')}
                           </Text>
                         )}
-                      {wait.gateType === 'github_workflow_completed' &&
-                        wait.metadata.repoFullName &&
-                        wait.metadata.runId && (
-                          <Text
-                            component="a"
-                            href={`https://github.com/${wait.metadata.repoFullName}/actions/runs/${wait.metadata.runId}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        {/* Age, TTL and an unusual conclusion — what the chip cannot say on its own:
+                            "waiting" reads very differently at two minutes and at eleven hours. */}
+                        {detail && (
+                          <Text size="xs" c="dimmed" style={{ fontSize: 11, flexShrink: 0 }}>
+                            {detail}
+                          </Text>
+                        )}
+                        {canExecute && GATE_UNRESOLVED_STATUSES.has(kind) && (
+                          <ActionIcon
                             size="xs"
-                            c="brand"
-                            style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+                            variant="subtle"
+                            color="gray"
+                            aria-label={`Delete gate ${wait.id}`}
+                            onClick={() => handleDeleteGate(wait.id)}
+                            loading={deletingGateId === wait.id}
                           >
-                            <IconLink size={10} />
-                            {String(wait.metadata.repoFullName)} #{String(wait.metadata.runId)}
-                          </Text>
+                            <IconX size={12} />
+                          </ActionIcon>
                         )}
-                      {/* Age, TTL and outcome — a gate is only judgeable with them: "waiting" reads
-                          very differently at two minutes and at eleven hours. */}
-                      <Text size="xs" c="dimmed" style={{ fontSize: 11 }}>
-                        {gateStatusLine(wait)}
-                      </Text>
-                      {gateCiStatus(wait) === 'stale' && wait.diagnosticReason && (
-                        <Text size="xs" c="orange.4" style={{ fontSize: 11 }}>
+                      </Group>
+                      {/* Why reconciliation gave up — the one thing a stale gate has that no other
+                          state does, so it keeps a line of its own, aligned under the link. */}
+                      {kind === 'stale' && wait.diagnosticReason && (
+                        <Text size="xs" c="orange.4" pl={GATE_CHIP_WIDTH + 8} style={{ fontSize: 11 }}>
                           {wait.diagnosticReason}
                         </Text>
                       )}
                     </Box>
-                    {canExecute && GATE_UNRESOLVED_STATUSES.has(gateCiStatus(wait)) && (
-                      <ActionIcon
-                        size="xs"
-                        variant="subtle"
-                        color="gray"
-                        aria-label={`Delete gate ${wait.id}`}
-                        onClick={() => handleDeleteGate(wait.id)}
-                        loading={deletingGateId === wait.id}
-                      >
-                        <IconX size={12} />
-                      </ActionIcon>
-                    )}
-                  </Group>
-                ))}
+                  );
+                })}
               </Stack>
             </Box>
           )}
