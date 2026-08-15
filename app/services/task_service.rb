@@ -23,16 +23,26 @@ class TaskService
       task
     end
 
+    # A column change is a MOVE, not an attribute write. It has to record a
+    # ColumnTransition, log task_moved, and fire the column's auto-trigger — and
+    # `board_column_id` is a permitted attribute on the task endpoint, so without
+    # routing it through #move an ordinary PATCH relocates the card while
+    # silently skipping all three. Everything else still saves in one write, so
+    # a request that renames a task AND moves it produces one task_updated for
+    # the rename and one task_moved for the move.
     def update(task:, params:, actor:)
-      task.assign_attributes(params)
-      changes = task.changes
+      attrs = (params.respond_to?(:to_unsafe_h) ? params.to_h : params).with_indifferent_access
+      to_column = extract_move_target(task, attrs)
 
-      if task.save
-        record_activity(task.board, :task_updated, actor, task: task,
-          metadata: { changes: changes.except("updated_at") })
-      end
+      task.assign_attributes(attrs)
+      changes = task.changes.except("updated_at")
 
-      task
+      return task unless task.save
+
+      record_activity(task.board, :task_updated, actor, task: task, metadata: { changes: changes }) if changes.any?
+      return task if to_column.nil?
+
+      move(task: task, to_column: to_column, actor: actor)
     end
 
     def archive(task:, actor:)
@@ -296,6 +306,21 @@ class TaskService
     end
 
     private
+
+    # Pulls `board_column_id` out of an update's attributes when it names a
+    # DIFFERENT column on this task's board — that is a move, and #update hands
+    # it to #move once the rest of the write has landed. Anything else (blank,
+    # the column the task is already in, or a column belonging to another board)
+    # is left in the attributes, so the model's own `column_belongs_to_board`
+    # validation still rejects a foreign column instead of it being dropped here.
+    def extract_move_target(task, attrs)
+      column_id = attrs[:board_column_id]
+      return nil if column_id.blank? || column_id.to_i == task.board_column_id
+
+      column = task.board.board_columns.find_by(id: column_id)
+      attrs.delete(:board_column_id) if column
+      column
+    end
 
     # Compare-and-set for a gate's one-way `pending` → terminal transition. Takes a
     # row lock, RE-READS the status inside it, and yields only while the gate is
