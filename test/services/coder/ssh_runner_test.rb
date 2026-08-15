@@ -448,6 +448,14 @@ module Coder
                    "the wrapper's own group must never be the target — that would kill the wrapper")
       assert_match(/command_pgid=\$AIXLE_CHILD_PGID/, script, "the command's group belongs in the metadata")
 
+      # setsid(2) makes the command the leader of a group of its own, so its
+      # group id is its pid. Deriving it from the pid rather than from a probe
+      # of `/proc` is what stops a command that exits first from taking the
+      # field with it.
+      launch = script[/AIXLE_CHILD_PGID=""(.+?)aixle_meta "command_pid=/m, 1].to_s
+      assert_match(/AIXLE_CHILD_PGID="\$AIXLE_CHILD"/, launch,
+                   "the isolated command's group must not depend on winning a race against its own exit")
+
       # `kill -s NAME -1234` dies with "Illegal option -1" in dash: everything
       # after `-s NAME` is parsed as another option bundle. The `-NAME` form
       # takes the signal first and pids — negative ones included — after it.
@@ -1002,6 +1010,34 @@ module Coder
         assert_equal "command_failed", status[:reason]
         assert_match(/exited 3/, status[:diagnosis])
         assert_match(/boom/, status[:tail], "stderr must still land in the job log")
+      end
+    end
+
+    # BUG-6.1, run for real: the command's process group used to be read back
+    # out of `/proc` after the launch, and a command that had already exited by
+    # the time the probe ran left `command_pgid` unwritten — around a quarter of
+    # instantly-exiting jobs in QA round 6. That field is what a caller cleans
+    # up a job's survivors by, and what `command_group_alive` is derived from,
+    # so losing it on the shortest jobs loses exactly the diagnosis this change
+    # exists to add. A batch rather than a single job: one job passed most of
+    # the time, which is how the gap survived four rounds.
+    test "a detached job that exits instantly still records the command's process group" do
+      in_local_shell_workspace do |runner|
+        statuses = (1..8).map do |n|
+          runner.exec_detached(workspace_name: "ws-1", command: "printf 'fast\\n'", job_id: "wrapfast#{n}")
+          [ n, poll_until_finished(runner, "wrapfast#{n}") ]
+        end
+
+        statuses.each do |n, status|
+          assert_equal 0, status[:exit_code], "job #{n} must have finished normally"
+          assert_operator status[:command_pid].to_i, :>, 0, "job #{n} recorded no command_pid"
+          assert_operator status[:command_pgid].to_i, :>, 0,
+                          "job #{n} recorded no command_pgid, so nothing can be cleaned up by group"
+          assert_equal status[:command_pid], status[:command_pgid],
+                       "job #{n}: a setsid command leads a group of its own, so the group is the pid"
+          assert_not_equal status[:pgid], status[:command_pgid],
+                           "job #{n} must not be recorded as sharing the wrapper's group"
+        end
       end
     end
 

@@ -585,12 +585,27 @@ module Coder
         # setsid(2) runs in the child, a moment after `$!` is known here. A
         # handful of `ps` calls is enough for the new group to show up and costs
         # milliseconds — no dependency on a `sleep` that can take fractions.
+        #
+        # On the `setsid` path the answer is known without asking: setsid(2)
+        # makes the child the leader of a session, and so of a group, of its own
+        # — its group id IS its pid. The probe below can only ever confirm that,
+        # and it loses the race against a command that exits before the first
+        # read of `/proc/<pid>/stat` lands, which used to drop the field
+        # entirely for whole classes of short job (task #581, BUG-6.1). So the
+        # pid is recorded up front and the probe may only refine it, never
+        # unset it. `setsid` cannot fork here — it forks only when its caller
+        # already leads a group, and a freshly forked child never does — so the
+        # pid really is the group the command runs in.
         AIXLE_CHILD_PGID=""
         if [ -n "$AIXLE_ISOLATED" ]; then
+          AIXLE_CHILD_PGID="$AIXLE_CHILD"
           AIXLE_TRY=0
           while [ "$AIXLE_TRY" -lt 20 ]; do
-            AIXLE_CHILD_PGID=$(aixle_pgid_of "$AIXLE_CHILD")
-            if [ -z "$AIXLE_CHILD_PGID" ] || [ "$AIXLE_CHILD_PGID" != "$AIXLE_PGID" ]; then break; fi
+            AIXLE_PROBED=$(aixle_pgid_of "$AIXLE_CHILD")
+            # Gone already: nothing left to read, and the pid above still names
+            # the group its survivors were left in.
+            if [ -z "$AIXLE_PROBED" ]; then break; fi
+            if [ "$AIXLE_PROBED" != "$AIXLE_PGID" ]; then AIXLE_CHILD_PGID="$AIXLE_PROBED"; break; fi
             AIXLE_TRY=$((AIXLE_TRY + 1))
           done
         else
