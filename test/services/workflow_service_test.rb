@@ -91,6 +91,23 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_equal "cancelled", run.state
   end
 
+  test "cancel records a workflow_cancelled activity on the task's board" do
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution)
+    TemporalService.stubs(:send_signal)
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user, task: task)
+
+    assert_difference("BoardActivity.count", 1) do
+      WorkflowService.cancel(run: run)
+    end
+
+    activity = BoardActivity.by_event_type(:workflow_cancelled).sole
+    assert_equal task.id, activity.board_task_id
+    assert_equal run.id, activity.metadata["workflow_run_id"]
+  end
+
   # == approve_step ==
 
   test "approve_step marks completed and sends signal" do

@@ -144,7 +144,7 @@ class WorkflowService
       )
       board.touch
     rescue StandardError => e
-      Rails.logger.warn("[WorkflowService] Failed to record activity for run ##{run.id}: #{e.message}")
+      Rails.logger.warn("[WorkflowService] Failed to record #{event_type} activity for run ##{run.id}: #{e.message}")
     end
   end
 end
