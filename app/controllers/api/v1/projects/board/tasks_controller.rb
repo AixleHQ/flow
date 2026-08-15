@@ -7,7 +7,7 @@ module Api
         class TasksController < Board::ApplicationController
           def index
             tasks = current_board.board_tasks
-                                 .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_gates)
+                                 .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_gates, :gates)
             tasks = tasks.where(board_column_id: params[:board_column_id]) if params[:board_column_id].present?
             tasks = tasks.tags_overlap(Array(params[:tags])) if params[:tags].present?
             tasks = filter_by_archived(tasks)

@@ -25,7 +25,7 @@ module PersonalTools
 
     def find_task(project)
       project.board&.board_tasks
-             &.includes(:workflow_runs, :pending_gates)
+             &.includes(:workflow_runs, :gates)
              &.find_by(id: params[:task_id])
     end
   end

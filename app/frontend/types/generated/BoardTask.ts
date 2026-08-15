@@ -21,7 +21,8 @@ type BoardTask = {
   childrenCount: number;
   assetsCount: number;
   recentWorkflowRuns: Array<{ id: number; state: string; created_at: string }>;
-  pendingGates: Array<{ id: number; gate_type: string; metadata: Record<string, unknown>; created_at: string }>;
+  pendingGates: Array<{ id: number; gate_type: string; status: string; ci_status: string; conclusion: string | null; metadata: Record<string, unknown>; source: Record<string, unknown>; age_seconds: number; expires_at: string; expired: boolean; diagnostic_reason: string | null; created_at: string; resolved_at: string | null }>;
+  ciGates: Array<{ id: number; gate_type: string; status: string; ci_status: string; conclusion: string | null; metadata: Record<string, unknown>; source: Record<string, unknown>; age_seconds: number; expires_at: string; expired: boolean; diagnostic_reason: string | null; created_at: string; resolved_at: string | null }>;
 }
 
 export default BoardTask;

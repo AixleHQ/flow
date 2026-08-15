@@ -59,6 +59,25 @@ schedules:
     overlap: skip
     enabled: true
 
+  # Recovery path for CI gates whose resolving webhook never arrived: asks the CI
+  # provider what happened to each pending gate's run and resolves it with the
+  # provider's own verdict, or marks it stale when the run/repository cannot be
+  # read at all or the gate's TTL has run out. Without it, one lost delivery parks
+  # a card's automation permanently.
+  #
+  # Every 5 minutes against a 10-minute grace window: a gate is probed no sooner
+  # than 10 minutes after it was created (and no more often than that afterwards),
+  # so the cadence sets recovery latency, not how often a provider is called. The
+  # webhook remains the fast path — this only ever sees the gates it missed.
+  #
+  # SKIP overlap: a slow sweep must not be joined by the next one probing the same
+  # gates. Claiming is FOR UPDATE SKIP LOCKED, so an overlap would be safe, just
+  # wasteful in provider requests.
+  - workflow: gate_reconciliation_workflow
+    cron: "*/5 * * * *"
+    overlap: skip
+    enabled: true
+
   - workflow: coder_sweep_expired_locks_workflow
     cron: "0 * * * *"
     enabled: true

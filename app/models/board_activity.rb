@@ -13,6 +13,7 @@ class BoardActivity < ApplicationRecord
     comment_added asset_attached
     workflow_started workflow_completed workflow_failed
     human_help_requested
+    gate_reconciled gate_stale
   ]
   enumerize :actor_type, in: %i[human agent system]
 

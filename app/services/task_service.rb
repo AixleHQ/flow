@@ -158,9 +158,12 @@ class TaskService
       run || { error: "Workflow could not be started" }
     end
 
+    # Returns true if THIS call performed the transition, false if the gate was
+    # already terminal (see with_pending_gate).
     def resolve_gate(gate:, resolution_data: {})
       pending_event = nil
-      ActiveRecord::Base.transaction do
+
+      transitioned = with_pending_gate(gate) do
         gate.update!(
           status: :resolved,
           resolved_at: Time.current,
@@ -171,16 +174,89 @@ class TaskService
       end
 
       TriggerEngine.dispatch_pending(pending_event) if pending_event
+      transitioned
     end
 
+    # Resolve a gate from a reconciliation probe rather than from its webhook.
+    # Identical to resolve_gate — same transition, same auto-trigger — plus a
+    # board activity, because a gate that resolved without its webhook is exactly
+    # the case an operator needs to be able to see after the fact.
+    #
+    # Returns false without recording anything when the gate reached a terminal
+    # state while the provider was being probed: the winner already recorded its
+    # own outcome, and a second activity row would claim this sweep did the work.
+    def resolve_gate_by_reconciliation(gate:, resolution_data:)
+      task = gate.board_task
+      return false unless resolve_gate(gate: gate, resolution_data: resolution_data)
+
+      record_activity(task.board, :gate_reconciled, gate.creator, task: task, actor_type: :system,
+        metadata: { gate_id: gate.id, gate_type: gate.gate_type.to_s,
+                    conclusion: gate.reload.conclusion, source: gate.source })
+      true
+    end
+
+    # End a gate's wait without a provider verdict: nothing can resolve it (its
+    # run/repository is unreadable) or its TTL ran out while CI was still going.
+    #
+    # A stale gate stops blocking the column auto-trigger — leaving it pending is
+    # what wedged tasks forever — but it is never recorded as a pass. The reason
+    # goes on the gate (`diagnostic_reason`, surfaced on the card), into its
+    # resolution_data as `outcome: "stale"`, and onto the board activity feed, so
+    # the bypass is documented rather than silent.
+    #
+    # Returns true if THIS call staled the gate, false if it was already terminal —
+    # a provider verdict that landed while we were probing MUST NOT be overwritten
+    # by "we do not know".
+    def mark_gate_stale(gate:, reason:, detail: nil, now: Time.current)
+      task = gate.board_task
+      pending_event = nil
+
+      transitioned = with_pending_gate(gate) do
+        gate.update!(
+          status: :stale,
+          diagnostic_reason: reason,
+          resolution_data: gate.resolution_data.merge({
+            "outcome" => "stale",
+            "reason" => reason,
+            "detail" => detail,
+            "source" => "reconciliation",
+            "stale_at" => now.utc.iso8601
+          }.compact)
+        )
+        pending_event = record_pending_auto_trigger(task: task, column: task.board_column, actor: gate.creator)
+      end
+
+      return false unless transitioned
+
+      record_activity(task.board, :gate_stale, gate.creator, task: task, actor_type: :system,
+        metadata: { gate_id: gate.id, gate_type: gate.gate_type.to_s,
+                    reason: reason, detail: detail, source: gate.source })
+
+      TriggerEngine.dispatch_pending(pending_event) if pending_event
+      true
+    end
+
+    # Delete a gate, re-evaluating the column auto-trigger ONLY when the gate was
+    # still pending.
+    #
+    # A terminal gate (`resolved` or `stale`) already stopped blocking the column
+    # and had its auto-trigger evaluated and dispatched at transition time. The
+    # row that stays behind is an audit record, so deleting it releases nothing —
+    # re-evaluating here would dispatch the same column workflow a second time
+    # (record_pending_auto_trigger does not guard against an already-active run).
+    #
+    # The status is re-read under the row lock, the same compare-and-set idiom as
+    # with_pending_gate: a webhook or the reconciliation sweep can take the gate
+    # terminal between load and delete, and that writer dispatches the trigger.
     def remove_gate(gate:, actor:)
       task = gate.board_task
       column = task.board_column
 
       pending_event = nil
       ActiveRecord::Base.transaction do
+        was_pending = gate.lock!.pending?
         gate.destroy!
-        pending_event = record_pending_auto_trigger(task: task, column: column, actor: actor)
+        pending_event = record_pending_auto_trigger(task: task, column: column, actor: actor) if was_pending
       end
 
       TriggerEngine.dispatch_pending(pending_event) if pending_event
@@ -220,6 +296,32 @@ class TaskService
     end
 
     private
+
+    # Compare-and-set for a gate's one-way `pending` → terminal transition. Takes a
+    # row lock, RE-READS the status inside it, and yields only while the gate is
+    # still pending; the block therefore runs at most once across every writer.
+    # Same idiom as TriggerEngine#fire_workflow's `dispatch.with_lock`.
+    #
+    # Three writers race for a CI gate: its webhook delivery, the reconciliation
+    # sweep, and a second sweeper (Temporal retries an activity, `overlap: skip`
+    # only bounds the schedule). Without this, a webhook's `failure` could be
+    # overwritten by the sweep's `stale` at TTL, and each redundant winner would
+    # emit its own activity row and dispatch the column auto-trigger again.
+    #
+    # `with_lock` opens the transaction, so the caller's domain write and the
+    # auto-trigger outbox row it records still commit atomically. Returns whether
+    # the block ran; a gate deleted from under us counts as lost, not as an error.
+    def with_pending_gate(gate)
+      gate.with_lock do
+        next false unless gate.pending?
+
+        yield
+        true
+      end
+    rescue ActiveRecord::RecordNotFound
+      false
+    end
+
 
     # WHO a launched run belongs to — which is not the same question as who was
     # allowed to launch it.
@@ -282,10 +384,10 @@ class TaskService
       AgentCredential.exists?(user_id: candidate.id, company_id: company_id)
     end
 
-    def record_activity(board, event_type, actor, task: nil, metadata: {})
+    def record_activity(board, event_type, actor, task: nil, metadata: {}, actor_type: :human)
       BoardActivity.create!(
         board: board, board_task: task, event_type: event_type,
-        actor: actor, actor_type: :human, metadata: metadata
+        actor: actor, actor_type: actor_type, metadata: metadata
       )
       board.touch
     rescue StandardError => e
