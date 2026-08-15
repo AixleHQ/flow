@@ -107,6 +107,17 @@ class RecentActivityServiceTest < ActiveSupport::TestCase
     assert_equal 'Task "Ship it" moved to Done', call[:activities].first[:description]
   end
 
+  test "workflow board activities describe start, completion, failure, and cancellation" do
+    task = create(:board_task, board: @board, board_column: @board_column, title: "Ship it")
+    %w[workflow_started workflow_completed workflow_failed workflow_cancelled].each_with_index do |event_type, i|
+      create_board_activity(event_type:, board_task: task, created_at: (i + 1).minutes.ago)
+    end
+
+    descriptions = call[:activities].map { |a| a[:description] }
+    assert_equal [ 'Workflow started for "Ship it"', 'Workflow completed for "Ship it"',
+                   'Workflow failed for "Ship it"', 'Workflow cancelled for "Ship it"' ], descriptions
+  end
+
   test "board activity preserves event type, actor type, and metadata" do
     create_board_activity(event_type: "comment_added", actor_type: "agent",
                           metadata: { "task_title" => "Docs", "note" => "hi" })

@@ -8,14 +8,10 @@ class BoardActivityDashboard < Administrate::BaseDashboard
     board: Field::BelongsTo,
     board_task: Field::BelongsTo.with_options(optional: true),
     actor: Field::BelongsTo.with_options,
+    # Sourced from the model so the filter list can't drift from the enum.
     event_type: Field::Select.with_options(
       include_blank: false,
-      collection: %w[
-        task_created task_updated task_deleted task_moved
-        comment_added asset_attached
-        workflow_started workflow_completed workflow_failed
-        human_help_requested
-      ]
+      collection: BoardActivity.event_type.values.map(&:to_s)
     ),
     actor_type: Field::Select.with_options(
       include_blank: false,

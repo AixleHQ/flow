@@ -102,6 +102,7 @@ class RecentActivityService
     when "workflow_started"      then "Workflow started for \"#{task_title}\""
     when "workflow_completed"    then "Workflow completed for \"#{task_title}\""
     when "workflow_failed"       then "Workflow failed for \"#{task_title}\""
+    when "workflow_cancelled"    then "Workflow cancelled for \"#{task_title}\""
     when "human_help_requested"  then "Human help requested for \"#{task_title}\""
     else                              "Activity on \"#{task_title}\""
     end

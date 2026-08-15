@@ -51,6 +51,8 @@ class BoardActivityResource < ApplicationResource
       "Workflow '#{meta['workflow_name']}' completed on '#{task}'"
     when "workflow_failed"
       "Workflow '#{meta['workflow_name']}' failed on '#{task}'"
+    when "workflow_cancelled"
+      "Workflow '#{meta['workflow_name']}' cancelled on '#{task}'"
     when "human_help_requested"
       "Agent requested help on '#{task}': #{meta['question'].to_s.truncate(80)}"
     else
