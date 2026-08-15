@@ -24,6 +24,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   teardown do
     Thread.current[:session_context_runtime] = nil
+    cleanup_runtime_overrides
   end
 
   # ====================================================================
@@ -430,6 +431,58 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     SessionContextService.inject_mcp_config("abc123", session)
   end
 
+  # The Codex append is a read-modify-write over the same config.toml the credential
+  # step already wrote, and that file carries the trusted-project entry. Overwriting
+  # it with the MCP block alone leaves a file that still parses and trusts nothing, so
+  # the CLI starts and asks "Do you trust the contents of this directory?" — which a
+  # non_interactive workflow step can never answer (task #605).
+  test "inject_mcp_config keeps an unreadable config.toml instead of overwriting it" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
+
+    fake = stub_container_runtime(agent_type: "codex")
+    Thread.current[:session_context_runtime] = nil
+    toml_path = "/home/codex/.codex/config.toml"
+    credential_config = "approval_policy = \"never\"\n\n[projects.\"/workspace\"]\ntrust_level = \"trusted\"\n"
+    fake.fs[toml_path] = credential_config
+    fake.fail_read(toml_path)
+
+    SessionContextService.inject_mcp_config("abc123", session)
+
+    assert_equal credential_config, fake.fs[toml_path]
+  end
+
+  # The failure that swallows the read is the one likeliest to swallow the existence
+  # probe as well, so the probe must not answer "absent" when it could not answer at
+  # all: an unreadable file plus an unanswerable probe still has to leave the file
+  # alone rather than replace it with the MCP block.
+  test "inject_mcp_config keeps a config.toml it could neither read nor probe" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
+
+    fake = stub_container_runtime(agent_type: "codex")
+    Thread.current[:session_context_runtime] = nil
+    toml_path = "/home/codex/.codex/config.toml"
+    credential_config = "approval_policy = \"never\"\n\n[projects.\"/workspace\"]\ntrust_level = \"trusted\"\n"
+    fake.fs[toml_path] = credential_config
+    fake.fail_read(toml_path)
+    fake.raise_on_exec("test -f", error: ContainerRuntime::ContainerUnreachableError.new(container_identifier: "abc123"))
+
+    SessionContextService.inject_mcp_config("abc123", session)
+
+    assert_equal credential_config, fake.fs[toml_path]
+  end
+
+  test "inject_mcp_config writes a fresh config.toml when there is none to append to" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
+
+    fake = stub_container_runtime(agent_type: "codex")
+    Thread.current[:session_context_runtime] = nil
+    toml_path = "/home/codex/.codex/config.toml"
+
+    SessionContextService.inject_mcp_config("abc123", session)
+
+    assert_includes fake.fs[toml_path], "[mcp_servers."
+  end
+
   test "inject_mcp_config writes aixle-tools even without external mcp servers" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
 
@@ -674,13 +727,14 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Codex adapter session_command returns codex --yolo for interactive mode" do
     adapter = Agents::CodexAdapter.new
-    assert_equal "codex --yolo", adapter.session_command(mode: "interactive")
+    assert_equal "codex --yolo -c projects./workspace.trust_level=trusted",
+                 adapter.session_command(mode: "interactive")
   end
 
   test "Codex adapter session_command returns codex --yolo for non_interactive mode" do
     adapter = Agents::CodexAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Run tests")
-    assert_equal "codex --yolo", result
+    assert_equal "codex --yolo -c projects./workspace.trust_level=trusted", result
   end
 
   test "Gemini adapter session_command returns gemini --yolo for interactive mode" do

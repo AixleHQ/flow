@@ -296,14 +296,58 @@ module Agents
     end
 
     test "session_command returns codex --yolo for any mode" do
-      assert_equal "codex --yolo", @adapter.session_command(mode: "interactive")
-      assert_equal "codex --yolo", @adapter.session_command(mode: "non_interactive", prompt: "Run tests")
+      expected = "codex --yolo -c projects./workspace.trust_level=trusted"
+
+      assert_equal expected, @adapter.session_command(mode: "interactive")
+      assert_equal expected, @adapter.session_command(mode: "non_interactive", prompt: "Run tests")
     end
 
     test "session_command includes model flag when model provided" do
       result = @adapter.session_command(mode: "interactive", model: "gpt-5.3-codex")
 
-      assert_equal "codex --model gpt-5.3-codex --yolo", result
+      assert_equal "codex --model gpt-5.3-codex --yolo -c projects./workspace.trust_level=trusted", result
+    end
+
+    # =========================================================================
+    # Workspace-trust prompt (task #605)
+    #
+    # `--yolo` does NOT cover Codex's "Do you trust the contents of this directory?"
+    # dialog — it is keyed on the cwd, not on a notice flag. A non_interactive
+    # workflow step that reaches it produces no further output and never finishes,
+    # so trust is granted twice: in config.toml AND on the launch command, because
+    # config.toml is read-modify-written after it is created and can lose the entry.
+    # =========================================================================
+
+    test "session_command grants workspace trust so the launch cannot depend on config.toml" do
+      assert_includes @adapter.session_command(mode: "non_interactive", prompt: "Run tests"),
+                      "-c projects./workspace.trust_level=trusted"
+    end
+
+    test "the trust flag survives the shell quoting the launch path applies to it" do
+      # The command travels through `tmux send-keys -t agent '<cmd>' Enter`
+      # (AgentBaseStrategy#send_tmux_sequence), so a flag needing quotes of its own
+      # would arrive mangled. Nothing in it may be shell-special.
+      flag = @adapter.cli_trust_flag.strip
+
+      assert_equal flag, Shellwords.split(flag).join(" ")
+      assert_no_match(/['"\\$`]/, flag)
+    end
+
+    test "cli_trust_flag is dropped for a workspace it cannot address" do
+      # Codex splits a -c path on ".", and the quoting above rules out spaces, so a
+      # path like these can only be trusted through config.toml.
+      assert_equal "", @adapter.cli_trust_flag("/work.space")
+      assert_equal "", @adapter.cli_trust_flag("/work space")
+      assert_equal "", @adapter.cli_trust_flag("")
+    end
+
+    test "cli_trust_flag trusts exactly the workspace config.toml trusts" do
+      stub_codex_models([])
+
+      toml = codex_toml({ workspace: "/srv/agent" })
+
+      assert_includes toml, '[projects."/srv/agent"]'
+      assert_includes @adapter.cli_trust_flag("/srv/agent"), "projects./srv/agent.trust_level=trusted"
     end
 
     # =========================================================================
