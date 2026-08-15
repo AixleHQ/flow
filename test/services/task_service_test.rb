@@ -745,7 +745,11 @@ class TaskServiceTest < ActiveSupport::TestCase
     TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
   end
 
-  test "check_auto_trigger does not start workflow when last run failed with quota_exceeded" do
+  # Regression: a quota failure used to latch the column off permanently — the
+  # next move, and every move after it, silently did nothing until somebody
+  # started a successful run by hand. Vendor quotas reset on their own, so the
+  # board has to keep firing and let the run report the quota if it is still hit.
+  test "check_auto_trigger still starts the workflow after a run failed on quota" do
     workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
     run = create(:workflow_run, :failed, workflow: workflow, project: @project, user: @user)
@@ -753,7 +757,9 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: task, mode: :non_interactive)
+    ).once
 
     TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
   end

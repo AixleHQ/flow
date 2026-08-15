@@ -293,11 +293,26 @@ class TaskService
     # transaction back (atomic-or-nothing), not silently drop the trigger while
     # committing the domain write. The out-of-transaction check_auto_trigger
     # wrapper above is where best-effort error handling lives.
+    #
+    # The two remaining guards are deliberate and self-clearing, and nothing else
+    # may be added that isn't: an auto-trigger that stops firing and never
+    # resumes is indistinguishable from a broken board.
+    #   • trigger_mode — configuration. Manual means manual.
+    #   • a pending gate — the task is waiting on a precondition (CI, approval).
+    #     Gates carry a TTL and are reconciled, so this clears itself.
+    #
+    # A third guard used to latch on "the workflow's most recent run in this
+    # project failed with quota_exceeded", meant to stop a stampede of runs
+    # against an exhausted vendor account. It never expired: one quota failure
+    # disabled the column permanently, silently, until somebody happened to start
+    # a successful run by hand — and vendor quotas reset on their own, so the
+    # condition it latched on was gone within hours anyway. A run that hits a
+    # quota now fails with failure_reason: "quota_exceeded", which is visible on
+    # the run and does not poison the next move.
     def record_pending_auto_trigger(task:, column:, actor:)
       binding = column.column_workflow_binding
       return nil unless binding&.trigger_mode&.to_sym == :auto
       return nil if task.gates.pending.exists?
-      return nil if quota_block_auto_trigger?(binding, column)
 
       TriggerEngine.record_column_trigger(
         binding: binding, task: task,
@@ -438,14 +453,6 @@ class TaskService
           .where("position >= ? AND position < ?", new_pos, old_pos)
           .update_all("position = position + 1")
       end
-    end
-
-    def quota_block_auto_trigger?(binding, column)
-      last_run = binding.workflow.runs
-        .where(project: column.board.project)
-        .order(created_at: :desc)
-        .first
-      last_run&.failure_reason == "quota_exceeded"
     end
   end
 end
