@@ -10,12 +10,14 @@ import {
   IconSearch,
 } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type RunListEntry from 'types/generated/RunListEntry';
 import type SessionListEntry from 'types/generated/SessionListEntry';
 
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
+import { useWorkflowRunListCableUpdates } from 'shared/lib/hooks/useWorkflowRunListCableUpdates';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
 import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
 
@@ -83,6 +85,10 @@ const STATUS_OPTIONS = [
 // being provisioned — there is nothing to show yet.
 const OPENABLE_SESSION_STATES = new Set(['ready', 'finished', 'failed', 'finishing']);
 
+function entryKey(entry: ListEntry): string {
+  return `${entry.kind}-${entry.id}`;
+}
+
 function stateLabel(entry: ListEntry): string {
   if (entry.kind === 'run') {
     return { completed: 'Completed', running: 'Running', failed: 'Failed', cancelled: 'Cancelled' }[entry.state] ?? '';
@@ -100,6 +106,59 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions }: Ses
   const [newSessionOpen, setNewSessionOpen] = useState(false);
   const [runWorkflowOpen, setRunWorkflowOpen] = useState(false);
   const [searchValue, setSearchValue] = useState(filters.search ?? '');
+
+  const [entryMap, setEntryMap] = useState<Map<string, ListEntry>>(() => {
+    const map = new Map<string, ListEntry>();
+    for (const e of entries) map.set(entryKey(e), e);
+    return map;
+  });
+
+  const prevFiltersRef = useRef<string>('');
+
+  // Sync new InfiniteScroll pages into the map. On filter change, reset the
+  // map to the new first page — stale entries from the old filter must not
+  // survive a narrowed result set.
+  useEffect(() => {
+    const filtersKey = JSON.stringify(filters);
+    const filtersChanged = filtersKey !== prevFiltersRef.current;
+    prevFiltersRef.current = filtersKey;
+
+    setEntryMap((prev) => {
+      if (filtersChanged) {
+        const map = new Map<string, ListEntry>();
+        for (const e of entries) map.set(entryKey(e), e);
+        return map;
+      }
+      const newEntries = entries.filter((e) => !prev.has(entryKey(e)));
+      if (newEntries.length === 0) return prev;
+      const map = new Map(prev);
+      for (const e of newEntries) map.set(entryKey(e), e);
+      return map;
+    });
+  }, [entries, filters]);
+
+  const onSessionUpdate = useCallback((session: Record<string, unknown>) => {
+    setEntryMap((prev) => {
+      const key = `session-${session.id}`;
+      const existing = prev.get(key);
+      if (!existing) return prev;
+      return new Map(prev).set(key, { ...existing, ...(session as unknown as ListEntry) });
+    });
+  }, []);
+
+  const onRunUpdate = useCallback((run: Record<string, unknown>) => {
+    setEntryMap((prev) => {
+      const key = `run-${run.id}`;
+      const existing = prev.get(key);
+      if (!existing) return prev;
+      return new Map(prev).set(key, { ...existing, ...(run as unknown as ListEntry) });
+    });
+  }, []);
+
+  useSessionListCableUpdates({ projectId: project.id, onUpdate: onSessionUpdate });
+  useWorkflowRunListCableUpdates({ projectId: project.id, onUpdate: onRunUpdate });
+
+  const orderedEntries = useMemo(() => Array.from(entryMap.values()), [entryMap]);
 
   const listUrl = `/company/projects/${project.id}/sessions`;
 
@@ -252,7 +311,7 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions }: Ses
                 <span style={{ paddingLeft: 24 }}>Started</span>
                 <span />
               </div>
-              {entries.map((entry) => (
+              {orderedEntries.map((entry) => (
                 <EntryRow
                   key={`${entry.kind}-${entry.id}`}
                   entry={entry}
