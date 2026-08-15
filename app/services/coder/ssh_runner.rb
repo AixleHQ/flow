@@ -105,6 +105,14 @@ module Coder
     end
     self.job_kill_grace_seconds = 20
 
+    # Extra seconds the wrapper spends draining the command's process group
+    # after the SIGKILL escalation has already been sent to it. A process that
+    # is still there five seconds after a SIGKILL is stuck in the kernel
+    # (uninterruptible I/O) and no amount of further waiting will reap it, so
+    # this is the cap that stops a wrapper hanging on one — the surviving group
+    # is recorded instead.
+    KILL_SETTLE_SECONDS = 5
+
     def initialize(integration)
       @integration = integration
     end
@@ -236,12 +244,14 @@ module Coder
     #   unknown — no trace of this job id on this workspace
     #
     # Alongside the state it returns the lifecycle metadata the wrapper recorded
-    # (`command`, `workspace`, `pid`, `pgid`, `started_at`, `signaled_at`,
-    # `finished_at`, `elapsed_seconds`, `signal`, `child_signal`,
-    # `child_exit_code`, `escalated_to`, `reason`) and a one-line `diagnosis`.
-    # A terminal state is only ever published once the command has been reaped,
-    # so `exited` means the command is really gone — a cancellation in progress
-    # still reads as `running`, with `signaled_at` already recorded. That is
+    # (`command`, `workspace`, `pid`, `pgid`, `command_pid`, `command_pgid`,
+    # `started_at`, `signaled_at`, `finished_at`, `elapsed_seconds`, `signal`,
+    # `child_signal`, `child_exit_code`, `escalated_to`, `reason`) and a one-line
+    # `diagnosis`. A terminal state is only ever published once the command AND
+    # its process group have been reaped, so `exited` means the work is really
+    # gone — a cancellation in progress still reads as `running`, with
+    # `signaled_at` already recorded. A `died` job whose command group outlived
+    # its wrapper says so in `command_group_alive`. That is
     # what makes a job that was killed before it could write its exit code
     # diagnosable: `reason` separates a command failure from a timeout, a
     # trapped cancellation and a runner that vanished, and `finished_at` falls
@@ -322,14 +332,25 @@ module Coder
 
     # The wrapper that actually runs the command, written to `<job_id>.run`.
     #
-    # Three things beyond running the command, all so that a job which does not
+    # Four things beyond running the command, all so that a job which does not
     # end normally is still explainable:
     #
+    #   * a process group for the command — the command is started under
+    #     `setsid`, so it leads a group of its own and the wrapper can signal the
+    #     whole tree it builds rather than only the `sh <job>.cmd` shell at the
+    #     top of it. `wait` reaps that shell and nothing else: a script blocked
+    #     on a foreground descendant (`sleep 60; echo done`) returns the moment
+    #     the shell is signalled while the descendant runs on, and a job reported
+    #     terminal there is still burning the box. Signalling the group is also
+    #     why the command may not share the WRAPPER's group: a group-wide kill
+    #     would take the wrapper down with it and lose the metadata this whole
+    #     path exists to write. Where `setsid` is missing the wrapper falls back
+    #     to the command's pid, which is the old behaviour;
     #   * traps — a TERM/INT/HUP/QUIT that lands on the wrapper (an explicit
     #     cancellation, a `docker stop`, a session teardown) forwards THE SAME
-    #     signal to the command, waits for the command to actually exit, and only
-    #     THEN records the outcome and writes the exit file — instead of leaving
-    #     the job looking like it evaporated. Forwarding what it actually
+    #     signal to the command's group, waits for the command to actually exit,
+    #     and only THEN records the outcome and writes the exit file — instead of
+    #     leaving the job looking like it evaporated. Forwarding what it actually
     #     received matters twice over: a command with signal-specific cleanup
     #     (HUP vs TERM) behaves as it would outside the wrapper, and the recorded
     #     `signal` then describes what the command was really sent rather than
@@ -339,12 +360,12 @@ module Coder
     #     confirms delivery and nothing else: a command that traps the signal and
     #     keeps working would otherwise still be running — writing to the log,
     #     holding the box — while the poll already reported the job terminal. So
-    #     the wrapper reaps the command first, and publishes what the reap
-    #     returned (`child_exit_code`). A command that outlives the grace window
-    #     (`job_kill_grace_seconds`) is escalated to SIGKILL, which is what
-    #     bounds the wait and is recorded as `escalated_to`; the heartbeat keeps
-    #     running throughout, so the job stays legibly `running` until it has
-    #     really ended.
+    #     the wrapper reaps the command first, then drains what is left of its
+    #     group, and publishes what the reap returned (`child_exit_code`). A
+    #     command that outlives the grace window (`job_kill_grace_seconds`) has
+    #     its whole group escalated to SIGKILL, which is what bounds the wait and
+    #     is recorded as `escalated_to`; the heartbeat keeps running throughout,
+    #     so the job stays legibly `running` until it has really ended.
     #
     #     Two POSIX facts bound this, both about a *background* command in a
     #     non-interactive shell — the shell sets INT and QUIT to ignore in it,
@@ -375,8 +396,43 @@ module Coder
         BASE="$1"
         AIXLE_HB_INTERVAL=__HEARTBEAT_SECONDS__
         AIXLE_GRACE=__KILL_GRACE_SECONDS__
+        AIXLE_SETTLE=__KILL_SETTLE_SECONDS__
 
         aixle_meta() { printf '%s\n' "$1" >> "$BASE.meta" 2>/dev/null; }
+
+        # The process group of $1 — empty when it is already gone, or when the
+        # workspace can answer neither way. `/proc` first: the `ps` a minimal
+        # image ships (busybox) often has no `-p`, and this is the one fact the
+        # signalling below depends on. Field 5 of `/proc/<pid>/stat` is the
+        # pgid; the command in field 2 can contain spaces and parentheses, so
+        # everything up to the LAST `)` goes first and the pgid is then the
+        # third field of what is left.
+        aixle_pgid_of() {
+          AIXLE_PG=""
+          if [ -r "/proc/$1/stat" ]; then
+            AIXLE_PG=$(sed 's/^.*) *//' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f3)
+          fi
+          if [ -z "$AIXLE_PG" ]; then
+            AIXLE_PG=$(ps -o pgid= -p "$1" 2>/dev/null | tr -d ' ')
+          fi
+          printf '%s' "$AIXLE_PG"
+        }
+
+        # What a signal aimed at the command is sent to: its whole process group
+        # when `setsid` gave it one of its own, the bare pid otherwise. The
+        # group is only trusted when it is led by the command itself AND differs
+        # from the wrapper's own group — signalling the wrapper's group would
+        # kill the wrapper along with the command and lose the metadata.
+        aixle_resolve_target() {
+          AIXLE_TARGET="$AIXLE_CHILD"
+          AIXLE_GROUP=""
+          AIXLE_CGID=$(aixle_pgid_of "$AIXLE_CHILD")
+          if [ -z "$AIXLE_CGID" ]; then AIXLE_CGID="$AIXLE_CHILD_PGID"; fi
+          if [ -n "$AIXLE_CGID" ] && [ "$AIXLE_CGID" = "$AIXLE_CHILD" ] && [ "$AIXLE_CGID" != "$AIXLE_PGID" ]; then
+            AIXLE_GROUP="$AIXLE_CGID"
+            AIXLE_TARGET="-$AIXLE_CGID"
+          fi
+        }
 
         aixle_finish() {
           aixle_meta "finished_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -401,14 +457,27 @@ module Coder
             exit "$AIXLE_TRAP_CODE"
           fi
 
+          aixle_resolve_target
+
           AIXLE_CHILD_SIG="$AIXLE_TRAP_SIG"
           case "$AIXLE_TRAP_SIG" in
             INT|QUIT) AIXLE_CHILD_SIG=TERM ;;
           esac
-          kill -s "$AIXLE_CHILD_SIG" "$AIXLE_CHILD" 2>/dev/null || {
-            AIXLE_CHILD_SIG=TERM
-            kill -TERM "$AIXLE_CHILD" 2>/dev/null
-          }
+          # `kill -NAME <target>`, not `kill -s NAME <target>`: a process GROUP is
+          # a negative pid, and dash's `kill` parses the argument after `-s NAME`
+          # as another option bundle, so `kill -s TERM -1234` dies with "Illegal
+          # option -1". The obsolescent-but-universal `-NAME` form takes the
+          # signal first and everything after it as pids, negative ones included.
+          if ! kill "-$AIXLE_CHILD_SIG" "$AIXLE_TARGET" 2>/dev/null; then
+            # Two different failures look the same here: the target is already
+            # gone, or this shell does not know the signal name. Retrying the
+            # bare pid separates them — only a rejected NAME is worth
+            # substituting TERM for, and only then is the substitution recorded.
+            if ! kill "-$AIXLE_CHILD_SIG" "$AIXLE_CHILD" 2>/dev/null && kill -0 "$AIXLE_CHILD" 2>/dev/null; then
+              AIXLE_CHILD_SIG=TERM
+              kill -TERM "$AIXLE_TARGET" 2>/dev/null || kill -TERM "$AIXLE_CHILD" 2>/dev/null
+            fi
+          fi
           aixle_meta "signaled_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           if [ "$AIXLE_CHILD_SIG" != "$AIXLE_TRAP_SIG" ]; then aixle_meta "child_signal=$AIXLE_CHILD_SIG"; fi
 
@@ -419,31 +488,53 @@ module Coder
           # a marker file: the wrapper remains the single writer of the metadata,
           # whose last-line-wins ordering two writers would scramble.
           #
-          # The command's pid, not the process group: the command shares the
-          # wrapper's group (only the wrapper is setsid'd), so a group-wide kill
-          # would take the wrapper down with it and lose the metadata this whole
-          # path exists to write.
+          # Both the signal above and this escalation go to `$AIXLE_TARGET` —
+          # the command's own process group when it has one, so a descendant the
+          # command shell was merely blocked on is not left behind by either.
           (
             sleep "$AIXLE_GRACE"
-            if kill -0 "$AIXLE_CHILD" 2>/dev/null; then
+            if kill -0 "$AIXLE_TARGET" 2>/dev/null; then
               : > "$BASE.escalated"
-              kill -KILL "$AIXLE_CHILD" 2>/dev/null
+              kill -KILL "$AIXLE_TARGET" 2>/dev/null
             fi
           ) &
           AIXLE_WD=$!
           wait "$AIXLE_CHILD"
           AIXLE_CHILD_CODE=$?
+
+          # The reap covers the command shell and nothing below it. Whatever is
+          # still in the command's group is still the job's work, so the wrapper
+          # keeps the heartbeat and the watchdog running and waits the group out
+          # before it publishes anything terminal. Bounded twice over: the
+          # watchdog SIGKILLs the group at the grace boundary, and the settle
+          # window caps what not even SIGKILL can reap (uninterruptible I/O) so
+          # a stuck descendant cannot hold the job open for ever.
+          AIXLE_SURVIVORS=""
+          if [ -n "$AIXLE_GROUP" ]; then
+            AIXLE_WAITED=0
+            while kill -0 "$AIXLE_TARGET" 2>/dev/null; do
+              AIXLE_SURVIVORS=1
+              if [ "$AIXLE_WAITED" -ge $((AIXLE_GRACE + AIXLE_SETTLE)) ]; then
+                aixle_meta "group_survivors=true"
+                break
+              fi
+              sleep 1
+              AIXLE_WAITED=$((AIXLE_WAITED + 1))
+            done
+          fi
+
           kill "$AIXLE_WD" 2>/dev/null
           if [ -n "$AIXLE_HB" ]; then kill "$AIXLE_HB" 2>/dev/null; fi
 
           aixle_meta "child_exit_code=$AIXLE_CHILD_CODE"
           # `kill -0` also succeeds on a child that has exited but is not yet
           # reaped, so the marker alone could be a hair's-breadth false positive
-          # at the grace boundary. A SIGKILL that really landed is the 137 the
-          # reap returns; both together is what gets recorded.
+          # at the grace boundary. A SIGKILL that really landed shows up either
+          # as the 137 the reap returns or as a group that was still populated
+          # after the reap; the marker plus one of those is what gets recorded.
           if [ -f "$BASE.escalated" ]; then
             rm -f "$BASE.escalated"
-            if [ "$AIXLE_CHILD_CODE" -eq 137 ]; then aixle_meta "escalated_to=KILL"; fi
+            if [ "$AIXLE_CHILD_CODE" -eq 137 ] || [ -n "$AIXLE_SURVIVORS" ]; then aixle_meta "escalated_to=KILL"; fi
           fi
 
           # A cancelled job must never report success: a command that trapped
@@ -463,7 +554,7 @@ module Coder
 
         printf '%s\n' "$$" > "$BASE.pid"
         aixle_meta "pid=$$"
-        AIXLE_PGID=$(ps -o pgid= -p $$ 2>/dev/null | tr -d ' ')
+        AIXLE_PGID=$(aixle_pgid_of $$)
         aixle_meta "pgid=${AIXLE_PGID}"
 
         (
@@ -476,12 +567,47 @@ module Coder
         ) &
         AIXLE_HB=$!
 
-        sh "$BASE.cmd" >> "$BASE.log" 2>&1 &
-        AIXLE_CHILD=$!
+        # `setsid` puts the command in a session — and so a process group — of
+        # its own, which is what lets a cancellation reach the whole tree it
+        # builds instead of only the shell at the top. It execs (the wrapper is
+        # not a group leader in this child, so nothing forks in between), so the
+        # command stays a direct child and `wait` below still reaps it.
+        if command -v setsid >/dev/null 2>&1; then
+          setsid sh "$BASE.cmd" >> "$BASE.log" 2>&1 &
+          AIXLE_CHILD=$!
+          AIXLE_ISOLATED=1
+        else
+          sh "$BASE.cmd" >> "$BASE.log" 2>&1 &
+          AIXLE_CHILD=$!
+          AIXLE_ISOLATED=""
+        fi
+
+        # setsid(2) runs in the child, a moment after `$!` is known here. A
+        # handful of `ps` calls is enough for the new group to show up and costs
+        # milliseconds — no dependency on a `sleep` that can take fractions.
+        AIXLE_CHILD_PGID=""
+        if [ -n "$AIXLE_ISOLATED" ]; then
+          AIXLE_TRY=0
+          while [ "$AIXLE_TRY" -lt 20 ]; do
+            AIXLE_CHILD_PGID=$(aixle_pgid_of "$AIXLE_CHILD")
+            if [ -z "$AIXLE_CHILD_PGID" ] || [ "$AIXLE_CHILD_PGID" != "$AIXLE_PGID" ]; then break; fi
+            AIXLE_TRY=$((AIXLE_TRY + 1))
+          done
+        else
+          AIXLE_CHILD_PGID=$(aixle_pgid_of "$AIXLE_CHILD")
+        fi
+
+        aixle_meta "command_pid=$AIXLE_CHILD"
+        if [ -n "$AIXLE_CHILD_PGID" ]; then aixle_meta "command_pgid=$AIXLE_CHILD_PGID"; fi
+
         wait "$AIXLE_CHILD"
         AIXLE_CODE=$?
         kill "$AIXLE_HB" 2>/dev/null
 
+        # No group drain on this path on purpose: the command was not cancelled,
+        # it decided to exit, and a process it deliberately left running in the
+        # background is its own business — waiting for one here would hold a job
+        # open that has genuinely finished.
         if [ "$AIXLE_CODE" -gt 128 ]; then
           AIXLE_SIGNO=$((AIXLE_CODE - 128))
           AIXLE_SIG=$(kill -l "$AIXLE_SIGNO" 2>/dev/null | tr -d ' ')
@@ -498,6 +624,7 @@ module Coder
       template
         .sub("__HEARTBEAT_SECONDS__", HEARTBEAT_SECONDS.to_s)
         .sub("__KILL_GRACE_SECONDS__", self.class.job_kill_grace_seconds.to_i.to_s)
+        .sub("__KILL_SETTLE_SECONDS__", KILL_SETTLE_SECONDS.to_s)
     end
 
     # The workspace name is recorded inside a double-quoted shell string, so a
@@ -545,6 +672,14 @@ module Coder
         echo "#{JOB_MARKER} state=$STATE exit_code=$CODE"
         echo "#{JOB_META_SEPARATOR}"
         cat "$BASE.meta" 2>/dev/null || true
+        # The command runs in a process group of its own, so a wrapper that was
+        # hard-killed does not necessarily take the work with it. Whether that
+        # group still has members is the difference between "gone" and "still
+        # burning the box, and here is what to kill".
+        if [ "$STATE" = "died" ]; then
+          CGID=$(sed -n 's/^command_pgid=//p' "$BASE.meta" 2>/dev/null | tail -n 1)
+          if [ -n "$CGID" ] && kill -0 "-$CGID" 2>/dev/null; then echo "command_group_alive=true"; fi
+        fi
         echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
         echo "checked_at_epoch=$(date +%s)"
         if [ -s "$BASE.hb" ]; then
@@ -628,6 +763,9 @@ module Coder
         workspace:             meta["workspace"].presence,
         pid:                   integer_or_nil(meta["pid"]),
         pgid:                  integer_or_nil(meta["pgid"]),
+        command_pid:           integer_or_nil(meta["command_pid"]),
+        command_pgid:          integer_or_nil(meta["command_pgid"]),
+        command_group_alive:   (true if meta["command_group_alive"] == "true"),
         started_at:            meta["started_at"].presence,
         finished_at:           timing[:finished_at],
         finished_at_estimated: timing[:estimated],
@@ -713,7 +851,8 @@ module Coder
       when REASON_SIGNALED
         "the job was terminated by SIG#{signal || "?"}#{forwarded_as(signal: signal, meta: meta)}#{after} — " \
           "an explicit cancellation or an outside kill (session teardown, `docker stop`, an operator), " \
-          "not a command failure#{escalated_as(meta: meta)}#{outlived_by(exit_code: exit_code, meta: meta)}"
+          "not a command failure#{escalated_as(meta: meta)}#{outlived_by(exit_code: exit_code, meta: meta)}" \
+          "#{survivors_note(meta: meta)}"
       when REASON_VANISHED
         vanished_diagnosis(timing: timing, meta: meta)
       else
@@ -775,7 +914,30 @@ module Coder
         "#{last_sign_of_life(timing)}. The cause is indeterminate: a hard cancellation (SIGKILL on the " \
         "job's process group, which leaves the wrapper no chance to record it) and an infrastructure " \
         "failure (workspace reboot, spot interruption, OOM kill) produce exactly this evidence. Not the " \
-        "command's own failure either way — check the log tail and the workspace before concluding which"
+        "command's own failure either way — check the log tail and the workspace before concluding which" \
+        "#{command_group_note(meta: meta)}"
+    end
+
+    # The command has its own process group, so losing the wrapper does not
+    # necessarily stop the work: the poll says so rather than letting `died`
+    # imply an idle workspace, and names the group to kill.
+    def command_group_note(meta:)
+      return "" unless meta["command_group_alive"] == "true"
+
+      pgid = meta["command_pgid"].presence
+      ". The command's own process group#{pgid ? " (pgid #{pgid})" : ""} is STILL RUNNING — the wrapper " \
+        "died, the work did not#{pgid ? "; `kill -TERM -#{pgid}` on the workspace stops it" : ""}"
+    end
+
+    # A descendant that outlived even the SIGKILL of its group: the job is over
+    # as far as the wrapper is concerned, but the workspace is not clean.
+    def survivors_note(meta:)
+      return "" unless meta["group_survivors"] == "true"
+
+      pgid = meta["command_pgid"].presence
+      ". Something in the command's process group#{pgid ? " (pgid #{pgid})" : ""} survived the SIGKILL and " \
+        "was still there when the job was published — most likely stuck in uninterruptible I/O; check the " \
+        "workspace before reusing it"
     end
 
     def last_sign_of_life(timing)

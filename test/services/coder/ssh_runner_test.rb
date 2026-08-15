@@ -385,7 +385,7 @@ module Coder
 
       assert_match(/AIXLE_CHILD_SIG="\$AIXLE_TRAP_SIG"/, script,
                    "the signal forwarded to the command must default to the one the wrapper received")
-      assert_match(/kill -s "\$AIXLE_CHILD_SIG" "\$AIXLE_CHILD"/, script,
+      assert_match(/kill "-\$AIXLE_CHILD_SIG" "\$AIXLE_TARGET"/, script,
                    "the trap must forward the signal it received, not a hard-coded TERM")
       assert_match(/INT\|QUIT\) AIXLE_CHILD_SIG=TERM/, script,
                    "INT/QUIT are ignored by a background child (POSIX) and need the TERM substitution")
@@ -414,13 +414,52 @@ module Coder
       assert_match(/AIXLE_GRACE=7\b/, script, "the grace window must come from the configured setting")
       assert_match(/wait "\$AIXLE_CHILD"/, handler, "the trap must reap the command, not merely signal it")
       assert_match(/sleep "\$AIXLE_GRACE"/, handler, "the wait must be bounded by the grace window")
-      assert_match(/kill -KILL "\$AIXLE_CHILD"/, handler, "a bounded wait needs an escalation to end it")
+      assert_match(/kill -KILL "\$AIXLE_TARGET"/, handler, "a bounded wait needs an escalation to end it")
       assert_match(/child_exit_code=\$AIXLE_CHILD_CODE/, handler, "what the reap returned must be recorded")
 
       # `rindex`: the branch for a signal that arrives before the command was
       # even started finishes early, and has nothing to reap.
       assert_operator handler.index('wait "$AIXLE_CHILD"'), :<, handler.rindex("aixle_finish"),
                       "nothing terminal may be written before the command has been reaped"
+    end
+
+    # `wait` reaps the `sh <job>.cmd` shell and nothing under it. A script
+    # sitting on a foreground descendant returns the instant that shell is
+    # signalled, so a wrapper that signals only the shell's pid publishes a
+    # terminal state over work that is still running. The command therefore gets
+    # a process group of its own — which is also why it may not simply share the
+    # wrapper's group: signalling that would kill the wrapper too.
+    test "the wrapper runs the command in its own process group and signals the group" do
+      captured_args = nil
+      stub = popen3_stub(out: "aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs\n") { |_env, argv| captured_args = argv }
+
+      Open3.stub(:popen3, stub) do
+        Coder::SshRunner.new(@integration).exec_detached(workspace_name: "ws-1", command: "sleep 30", job_id: "j1")
+      end
+
+      script  = captured_args.last
+      handler = script[/aixle_on_signal\(\)\s*\{(.+?)^\}/m, 1].to_s
+
+      assert_match(/setsid sh "\$BASE\.cmd"/, script, "the command needs a session, and so a group, of its own")
+      assert_match(/^\s*sh "\$BASE\.cmd" >> "\$BASE\.log"/, script,
+                   "a workspace without setsid must still run the command")
+      assert_match(/AIXLE_TARGET="-\$AIXLE_CGID"/, script, "a group is addressed as a negative pid")
+      assert_match(/"\$AIXLE_CGID" != "\$AIXLE_PGID"/, script,
+                   "the wrapper's own group must never be the target — that would kill the wrapper")
+      assert_match(/command_pgid=\$AIXLE_CHILD_PGID/, script, "the command's group belongs in the metadata")
+
+      # `kill -s NAME -1234` dies with "Illegal option -1" in dash: everything
+      # after `-s NAME` is parsed as another option bundle. The `-NAME` form
+      # takes the signal first and pids — negative ones included — after it.
+      assert_no_match(/kill -s "\$AIXLE_CHILD_SIG" "\$AIXLE_TARGET"/, handler,
+                      "`kill -s NAME <negative pid>` is not parsable by every POSIX shell")
+      assert_match(/kill "-\$AIXLE_CHILD_SIG" "\$AIXLE_TARGET"/, handler)
+
+      drain = handler[/wait "\$AIXLE_CHILD"(.+)\z/m, 1].to_s
+      assert_match(/while kill -0 "\$AIXLE_TARGET"/, drain,
+                   "the group has to be drained after the reap, before anything terminal is written")
+      assert_operator drain.index('while kill -0 "$AIXLE_TARGET"'), :<, drain.rindex("aixle_finish"),
+                      "the drain must happen before the exit file is written, not after"
     end
 
     # A workspace name is recorded inside a double-quoted shell string; a name
@@ -785,6 +824,71 @@ module Coder
                    "the reader needs to know a process-group kill produces this too")
     end
 
+    # The flip side of giving the command its own process group: a hard kill of
+    # the wrapper's group no longer takes the command with it. `died` on its own
+    # would read as an idle workspace, so the poll checks the command's group and
+    # says both that the work is still running and how to stop it.
+    test "job status says when a vanished runner left its command still running" do
+      out = job_status_output(
+        header: "state=died exit_code=",
+        meta:   <<~META,
+          started_at=2026-08-14T10:00:00Z
+          started_at_epoch=1786701600
+          pid=777
+          pgid=777
+          command_pid=778
+          command_pgid=778
+          command_group_alive=true
+          checked_at_epoch=1786701860
+          heartbeat_at=2026-08-14T10:03:20Z
+          heartbeat_at_epoch=1786701800
+        META
+        command: "make check_all",
+        log:     "running tests\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_equal "died", status[:state]
+      assert_equal 778, status[:command_pid]
+      assert_equal 778, status[:command_pgid]
+      assert status[:command_group_alive], "a command that outlived its wrapper must be machine-readable"
+      assert_match(/STILL RUNNING/, status[:diagnosis])
+      assert_match(/kill -TERM -778/, status[:diagnosis], "the reader needs the group to kill, not just the news")
+    end
+
+    test "job status reports a command group nothing could kill after a cancellation" do
+      out = job_status_output(
+        header: "state=exited exit_code=143",
+        meta:   <<~META,
+          started_at_epoch=1786701600
+          pid=777
+          command_pid=778
+          command_pgid=778
+          signaled_at=2026-08-14T10:00:10Z
+          child_exit_code=143
+          escalated_to=KILL
+          group_survivors=true
+          finished_at_epoch=1786701640
+          reason=signaled
+          signal=TERM
+          exit_code=143
+          checked_at_epoch=1786701900
+        META
+        command: "make check_all",
+        log:     "compiling\n"
+      )
+
+      status = Open3.stub(:popen3, popen3_stub(out: out)) do
+        Coder::SshRunner.new(@integration).job_status(workspace_name: "ws-1", job_id: "j1")
+      end
+
+      assert_match(/survived the SIGKILL/, status[:diagnosis])
+      assert_match(/pgid 778/, status[:diagnosis])
+    end
+
     test "job status still explains a job whose wrapper predates lifecycle metadata" do
       out = "aixle_job state=exited exit_code=2\n---aixle_job_log---\n2 failures\n"
 
@@ -1014,6 +1118,81 @@ module Coder
       end
     end
 
+    # The regression the process group exists for, run for real: a command
+    # script blocked on a foreground `sleep` is not the command's only process,
+    # and `wait` in the wrapper reaps only the shell above it. Cancelling a job
+    # like this used to publish a terminal state while the `sleep` carried on
+    # holding the workspace — with no pid left in the metadata to chase it by.
+    test "a detached job terminated mid-run takes its foreground descendant with it" do
+      with_job_kill_grace(3) do
+        in_local_shell_workspace do |runner|
+          runner.exec_detached(workspace_name: "ws-1", command: foreground_child_command, job_id: "wrapdesc")
+          pid     = poll_for_pid(runner, "wrapdesc")
+          running = runner.job_status(workspace_name: "ws-1", job_id: "wrapdesc")
+          group   = running[:command_pgid]
+
+          assert_operator group.to_i, :>, 0, "the command's own process group must be recorded"
+          assert_not_equal running[:pgid], group,
+                           "the command must not share the wrapper's group — killing that kills the wrapper"
+
+          members = poll(timeout: 10, waiting_for: "the command to reach its foreground descendant") do
+            found = live_group_members(group)
+            found if found.size >= 2
+          end
+          assert_includes members, running[:command_pid], "the command shell must be in the group it reported"
+
+          Process.kill("TERM", pid)
+          status = poll_until_finished(runner, "wrapdesc", timeout: 25)
+
+          assert_equal "exited", status[:state]
+          assert_equal "signaled", status[:reason]
+          assert_equal "TERM", status[:signal]
+          assert_empty live_group_members(group),
+                       "no process from the command group may still be running once the job reads terminal"
+        end
+      end
+    end
+
+    # And the same guarantee when the descendant does not go quietly: while
+    # anything in the command's group is still alive the job may not read
+    # terminal, however promptly the command shell itself returned. Here the
+    # shell exits 143 the moment it is signalled and its child ignores TERM
+    # outright, so only the escalation ends the job.
+    test "a detached job stays running while a descendant of the command survives the signal" do
+      with_job_kill_grace(6) do
+        in_local_shell_workspace do |runner|
+          runner.exec_detached(workspace_name: "ws-1", command: stubborn_child_command, job_id: "wrapdrain")
+          pid   = poll_for_pid(runner, "wrapdrain")
+          group = poll(timeout: 10, waiting_for: "job wrapdrain to report its command group") do
+            runner.job_status(workspace_name: "ws-1", job_id: "wrapdrain")[:command_pgid]
+          end
+
+          Process.kill("TERM", pid)
+          # The command shell is gone — its own last line says so — while the
+          # child it left behind is not. That is the window the wrapper used to
+          # publish a terminal state in.
+          wait_for_tail(runner, "wrapdrain", /command shell leaving/)
+
+          alive = runner.job_status(workspace_name: "ws-1", job_id: "wrapdrain")
+          assert_equal "running", alive[:state],
+                       "a surviving descendant means the job is still running, whatever the shell above it did"
+          assert_nil alive[:exit_code]
+          assert_not_nil alive[:signaled_at]
+          assert_not_empty live_group_members(group), "the descendant is the whole point of this case"
+
+          status = poll_until_finished(runner, "wrapdrain", timeout: 30)
+
+          assert_equal "exited", status[:state]
+          assert_equal "signaled", status[:reason]
+          assert_equal "KILL", status[:escalated_to], "only the escalation could have ended this one"
+          assert_operator status[:elapsed_seconds], :>=, 5,
+                          "the wrapper must have waited out the grace window before publishing"
+          assert_empty live_group_members(group),
+                       "the escalation must reach the whole group, not just the command shell"
+        end
+      end
+    end
+
     private
 
     # A command that names the signal it was sent in its own log, so a test can
@@ -1027,6 +1206,30 @@ module Coder
         trap 'printf "command received INT\\n"; exit 130' INT
         i=0
         while [ "$i" -lt 300 ]; do sleep 0.1; i=$((i + 1)); done
+      CMD
+    end
+
+    # The reviewer's case from PR #103, and the plainest shape a real job has:
+    # a script whose work is a foreground child. The shell is blocked in `sleep`,
+    # so the wrapper's `wait` on it returns as soon as the shell is signalled
+    # while the `sleep` keeps running.
+    def foreground_child_command
+      <<~CMD
+        printf 'command started\\n'
+        sleep 30
+        printf 'never reached\\n'
+      CMD
+    end
+
+    # The same shape with a child that will not take the hint: the shell returns
+    # immediately and says so, its child ignores TERM and keeps working. Only a
+    # signal aimed at the whole group ends this, and until it does the job is
+    # still running no matter what the shell above it returned.
+    def stubborn_child_command
+      <<~CMD
+        trap 'printf "command shell leaving\\n"; exit 143' TERM
+        sh -c 'trap "" TERM; i=0; while [ "$i" -lt 600 ]; do sleep 0.1; i=$((i + 1)); done' &
+        wait $!
       CMD
     end
 
@@ -1051,6 +1254,25 @@ module Coder
       yield
     ensure
       Coder::SshRunner.job_kill_grace_seconds = original
+    end
+
+    # Every process still able to do work in process group `pgid`, read out of
+    # `/proc`. Ruby cannot list a process group, and `Process.kill(0, -pgid)`
+    # cannot answer this one: it succeeds for a zombie too, and a zombie is
+    # exactly what a killed descendant leaves behind until its new parent reaps
+    # it. Field 3 after the `)` of `/proc/<pid>/stat` is the state, field 5 the
+    # process group; the command name in field 2 can hold spaces and brackets,
+    # so everything up to the last `)` is dropped first.
+    def live_group_members(pgid)
+      return [] if pgid.to_i.zero?
+
+      Dir.glob("/proc/[0-9]*/stat").filter_map do |path|
+        fields = File.read(path)[/\)\s+(.*)/m, 1].to_s.split
+        next if fields[0] == "Z"
+        path[%r{/proc/(\d+)/}, 1].to_i if fields[2].to_i == pgid.to_i
+      rescue Errno::ENOENT, Errno::ESRCH
+        next
+      end
     end
 
     # The log tail can trail the metadata by a moment: a signalled command writes
