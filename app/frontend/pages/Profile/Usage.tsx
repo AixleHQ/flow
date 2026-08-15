@@ -124,6 +124,7 @@ const AGENT_LABELS: Record<string, { label: string; color: string }> = {
   cursor_cli: { label: 'Cursor CLI', color: 'violet' },
   codex: { label: 'Codex', color: 'teal' },
   gemini_cli: { label: 'Gemini CLI', color: 'blue' },
+  grok: { label: 'Grok', color: 'gray' },
 };
 
 const STATE_CONFIG: Record<string, { label: string }> = {

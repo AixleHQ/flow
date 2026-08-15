@@ -248,6 +248,73 @@ module Activities
         result = run_activity(ScanQuotaErrorsActivity)
         assert_equal 0, result[:cleaned]
       end
+
+      # ===================================================================
+      # Unanswerable startup prompts (task #605)
+      #
+      # A non_interactive step parked on a TTY dialog never errors and never
+      # finishes: it stays `ready` on zero tokens until a human notices. The
+      # no-output watchdog only reaches it after 30 minutes of silence, and its
+      # message names the wrong cause; this sweep already reads the pane every
+      # minute, so the dialog is caught here instead.
+      # ===================================================================
+
+      test "fails a non_interactive session parked on the Codex workspace-trust prompt" do
+        session = create(:terminal_session,
+          user: @user,
+          session_type: :workflow_step,
+          agent_type: "codex",
+          mode: "non_interactive",
+          initial_prompt: "Fix the failing tests",
+          state: "ready",
+          container_id: "container-trust",
+          started_at: 3.minutes.ago,
+          error_message: nil)
+
+        stub_trust_prompt_pane("container-trust")
+
+        result = run_activity(ScanQuotaErrorsActivity)
+
+        assert_equal 1, result[:cleaned]
+        session.reload
+        assert_equal "failed", session.state
+        assert_match(/workspace-trust prompt/, session.error_message)
+      end
+
+      test "leaves an interactive session on the trust prompt for its owner to answer" do
+        session = create(:terminal_session,
+          user: @user,
+          session_type: :workflow_step,
+          agent_type: "codex",
+          mode: "interactive",
+          state: "ready",
+          container_id: "container-trust-interactive",
+          started_at: 3.minutes.ago,
+          error_message: nil)
+
+        stub_trust_prompt_pane("container-trust-interactive")
+
+        result = run_activity(ScanQuotaErrorsActivity)
+
+        assert_equal 0, result[:cleaned]
+        session.reload
+        assert_equal "ready", session.state
+      end
+
+      private
+
+      def stub_trust_prompt_pane(container_id)
+        container = mock("container")
+        @runtime_mock.stubs(:resolve_container).with(container_id).returns(container)
+        @runtime_mock.stubs(:exec!).returns([
+          [ "> You are in /workspace\n",
+            "  Do you trust the contents of this directory? Working with untrusted contents\n",
+            "› 1. Yes, continue\n",
+            "  2. No, quit\n" ],
+          [],
+          0
+        ])
+      end
     end
   end
 end

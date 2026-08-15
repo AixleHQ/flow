@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_08_130000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_14_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -332,8 +332,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_08_130000) do
     t.bigint "board_task_id", null: false
     t.datetime "created_at", null: false
     t.bigint "creator_id"
+    t.string "diagnostic_reason"
+    t.datetime "expires_at", null: false
     t.string "gate_type", null: false
+    t.datetime "last_reconciled_at"
     t.jsonb "metadata", default: {}, null: false
+    t.integer "reconcile_attempts", default: 0, null: false
+    t.jsonb "reconciliation_log", default: [], null: false
     t.jsonb "resolution_data", default: {}, null: false
     t.datetime "resolved_at"
     t.string "status", default: "pending", null: false
@@ -345,6 +350,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_08_130000) do
     t.index ["board_task_id"], name: "index_gates_on_board_task_id"
     t.index ["creator_id"], name: "index_gates_on_creator_id"
     t.index ["gate_type", "status"], name: "index_gates_on_gate_type_and_status"
+    t.index ["status", "expires_at"], name: "index_gates_on_status_and_expires_at", where: "((status)::text <> 'resolved'::text)"
     t.index ["status"], name: "index_gates_on_status"
   end
 

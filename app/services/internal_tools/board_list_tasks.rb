@@ -43,7 +43,7 @@ module InternalTools
                      (SELECT COUNT(*) FROM board_tasks children WHERE children.parent_task_id = board_tasks.id) AS children_count,
                      (SELECT COUNT(*) FROM task_assets WHERE board_task_id = board_tasks.id) AS assets_count
                    SQL
-                   .includes(:board_column, :assignee, :workflow_runs, :pending_gates)
+                   .includes(:board_column, :assignee, :workflow_runs, :gates)
       tasks = tasks.joins(:board_column).where(board_columns: { name: params[:column_name] }) if params[:column_name].present?
       tasks = tasks.with_tag(params[:tag]) if params[:tag].present?
       tasks = tasks.where(task_type: params[:task_type]) if params[:task_type].present?

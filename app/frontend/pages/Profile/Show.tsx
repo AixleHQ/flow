@@ -92,6 +92,12 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; co
     description: "Google's multimodal AI for code and documentation tasks",
     color: AGENT_BRAND_COLORS.gemini_cli,
   },
+  {
+    type: 'grok',
+    name: 'Grok',
+    description: "xAI's Grok CLI for agentic coding in the terminal",
+    color: AGENT_BRAND_COLORS.grok,
+  },
 ];
 
 const ROLE_COLORS: Record<UserRole, string> = {
@@ -251,12 +257,18 @@ function CredentialModelRow({ credential, models }: { credential: AgentCredentia
     handleSubmit(val);
   };
 
-  const selectData =
-    models.length > 0
-      ? models.map((m) => ({ value: m.modelId, label: m.displayName }))
-      : currentModel
-        ? [{ value: currentModel, label: currentModel }]
-        : [];
+  // The saved pin is always an option, even when the fetched list doesn't contain it
+  // (a model retired since it was chosen, a Bedrock inference-profile ARN, or a list
+  // that failed to load). Mantine renders a value with no matching option as an empty
+  // input, so without this the row reads as "no default set" and the next change the
+  // user makes silently replaces a pin they never saw.
+  const selectData = useMemo(() => {
+    const options = models.map((m) => ({ value: m.modelId, label: m.displayName }));
+    if (currentModel && !options.some((o) => o.value === currentModel)) {
+      options.push({ value: currentModel, label: currentModel });
+    }
+    return options;
+  }, [models, currentModel]);
 
   return (
     <Box>

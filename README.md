@@ -34,7 +34,7 @@ It is the only open platform we know of that combines:
 
 - A **board** with column → workflow bindings (drop a card, trigger a run)
 - A **DAG workflow engine** with retries, approval gates, and parallel steps
-- **Container-isolated** agent execution (Claude Code, Cursor CLI, Codex, Gemini CLI)
+- **Container-isolated** agent execution (Claude Code, Cursor CLI, Codex, Gemini CLI, Grok CLI)
 - **MCP-native** tool integration
 - **Per-session cost tracking** in tokens and cents
 - **Temporal** under the hood for durable, long-running runs
@@ -87,7 +87,7 @@ contributing.
 
 - **Backend** — Ruby on Rails 8, PostgreSQL, Redis, Temporal
 - **Frontend** — React 19, Inertia.js, Mantine 9, Vite, TypeScript
-- **Agents** — Claude Code, Cursor CLI, OpenAI Codex CLI, Gemini CLI
+- **Agents** — Claude Code, Cursor CLI, OpenAI Codex CLI, Gemini CLI, xAI Grok CLI
   (each runs in its own Docker container)
 - **Protocols** — MCP for tools, ActionCable for live updates
 - **Dev environment** — Docker Compose, one Makefile

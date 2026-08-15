@@ -1,11 +1,22 @@
 # frozen_string_literal: true
 
 # ScanQuotaErrorsActivity
-# Finds active workflow_step sessions and checks for quota error patterns in
-# error_message and live terminal output. When detected, fails the session through
-# SessionService.fail_session, which both completes the step (container_finished →
-# CompleteStepActivity) and lets the session's own container workflow reach its
-# cleanup phase instead of waiting out its 23-hour signal timeout.
+# Finds active workflow_step sessions and checks their error_message and live
+# terminal output for conditions that mean the session will never finish on its own:
+#
+#   - provider quota exhaustion (QuotaErrorDetector)
+#   - a CLI startup prompt a non_interactive session cannot answer
+#     (InteractivePromptDetector) — task #605
+#
+# When detected, fails the session through SessionService.fail_session, which both
+# completes the step (container_finished → CompleteStepActivity) and lets the
+# session's own container workflow reach its cleanup phase instead of waiting out its
+# 23-hour signal timeout.
+#
+# Both checks share this sweep's single `capture-pane` per session on purpose: the
+# pod-exec handshake is the expensive part of the scan, and a second per-minute
+# sweep over the same containers is what previously pinned worker-ruby to its HPA
+# ceiling.
 module Activities
   module Workflow
     class ScanQuotaErrorsActivity < ::Activities::Base
@@ -18,15 +29,15 @@ module Activities
         unreachable = 0
 
         candidate_sessions.find_each do |session|
-          detection = QuotaErrorDetector.detect(detection_text_for(session))
-          next unless detection.quota_error?
+          message = blocker_message_for(session)
+          next if message.blank?
 
           # Through SessionService, not `fail!` directly: failing the row alone
           # leaves this session's own container workflow parked on its
           # `container_finished` await for 23 hours, so its cleanup phase never
           # runs and the pod/Service/IngressRoute leak. See
           # SessionService.fail_session.
-          SessionService.fail_session(session: session, error_message: detection.message)
+          SessionService.fail_session(session: session, error_message: message)
           cleaned += 1
         rescue ContainerRuntime::ContainerUnreachableError => e
           # The pod behind this session is gone (node died, pod evicted). Its
@@ -52,11 +63,19 @@ module Activities
           .where("COALESCE(started_at, created_at) < ?", MIN_AGE.ago)
       end
 
-      def detection_text_for(session)
-        [
-          session.error_message,
-          live_terminal_output(session)
-        ].compact_blank.join("\n")
+      # nil when the session looks healthy. One pane read serves both detectors.
+      def blocker_message_for(session)
+        terminal = live_terminal_output(session)
+        quota = QuotaErrorDetector.detect([ session.error_message, terminal ].compact_blank.join("\n"))
+        return quota.message if quota.quota_error?
+
+        # Only for sessions nobody can rescue by typing: an interactive session's
+        # owner can answer the dialog in the web terminal, so killing it would take
+        # the decision away from them.
+        return nil unless session.mode == "non_interactive"
+
+        prompt = InteractivePromptDetector.detect(terminal, agent_type: session.agent_type)
+        prompt.blocked? ? prompt.message : nil
       end
 
       def live_terminal_output(session)

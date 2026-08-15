@@ -17,6 +17,12 @@ workflows:
       - name: outbox_relay_drain_activity
         task_queue: aixle_ruby
 
+  - name: gate_reconciliation_workflow
+    owner: aixle_ruby
+    activities:
+      - name: gates_reconcile_ci_activity
+        task_queue: aixle_ruby
+
   - name: stale_session_cleanup_workflow
     owner: aixle_ruby
     activities:

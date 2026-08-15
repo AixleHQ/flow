@@ -281,7 +281,7 @@ RUN set -eux; \
 # browser resolvable under the fallback too, so Chrome launches regardless of
 # whether any given CLI forwards the env var. We seed the symlink into /etc/skel
 # so every derived agent image's `useradd -m <user>` copies it into that user's
-# home automatically (all four agents — claude/codex/cursor/gemini — create
+# home automatically (all five agents — claude/codex/cursor/gemini/grok — create
 # their user with -m), keeping this a single, DRY, forward-compatible fix.
 # The symlink is copied verbatim (not dereferenced) by useradd, and a later
 # `chown -R` on the home operates on the link itself (lchown), never on the

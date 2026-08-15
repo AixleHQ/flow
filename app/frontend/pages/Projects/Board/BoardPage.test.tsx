@@ -48,8 +48,9 @@ type BoardTaskGate = BoardTask['pendingGates'][number];
 const runOf = (overrides: Parameters<typeof buildTaskWorkflowRun>[0] = {}): BoardTaskRun =>
   buildTaskWorkflowRun(overrides) as unknown as BoardTaskRun;
 
-const gatesOf = (...gates: Array<{ id: number; gateType: string; createdAt: string }>): BoardTaskGate[] =>
-  gates.map((g) => ({ metadata: {}, ...g }) as unknown as BoardTaskGate);
+const gatesOf = (
+  ...gates: Array<{ id: number; gateType: string; createdAt: string } & Record<string, unknown>>
+): BoardTaskGate[] => gates.map((g) => ({ metadata: {}, ...g }) as unknown as BoardTaskGate);
 
 const populatedProps = {
   project,
@@ -660,6 +661,58 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByText('1m 35s')).toBeInTheDocument();
   });
 
+  it('counts stale gates as their own bucket in the Analytics Waits panel', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+        // Through the factory on purpose: its `: TaskStatistics` return type is the
+        // drift contract, so `status: 'stale'` only compiles while the generated
+        // TaskStatistics union still admits the state this panel renders.
+        taskStatistics: buildTaskStatistics({
+          gateStats: [
+            {
+              id: 1,
+              gateType: 'github_checks_completed',
+              status: 'pending',
+              createdAt: '2026-08-14T10:00:00Z',
+              resolvedAt: null,
+              durationSeconds: null,
+            },
+            {
+              id: 2,
+              gateType: 'github_workflow_completed',
+              status: 'resolved',
+              createdAt: '2026-08-14T10:00:00Z',
+              resolvedAt: '2026-08-14T10:01:35Z',
+              durationSeconds: 95,
+            },
+            {
+              id: 3,
+              gateType: 'gitlab_pipeline_completed',
+              status: 'stale',
+              createdAt: '2026-08-14T10:00:00Z',
+              resolvedAt: null,
+              durationSeconds: null,
+            },
+          ],
+        }),
+      },
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Analytics' }));
+
+    // A stale gate is neither pending nor resolved: it gets counted, and badged, apart.
+    expect(screen.getByText(/1 pending/)).toBeInTheDocument();
+    expect(screen.getByText(/1 resolved/)).toBeInTheDocument();
+    expect(screen.getByText(/1 stale/)).toBeInTheDocument();
+    expect(screen.getByText('stale')).toBeInTheDocument();
+  });
+
   it('offers a Run workflow button when the task column has a workflow binding and no active run', () => {
     renderAuthedPage(<BoardPage />, {
       props: {
@@ -1006,6 +1059,117 @@ describe('Projects/Board/BoardPage', () => {
     );
 
     expect(chip).toHaveStyle({ backgroundColor: 'var(--app-warning-fg)' });
+  });
+
+  it('colors a collapsed column chip with a stale CI gate as needing attention', async () => {
+    // A stale gate outranks a pending one: nothing will resolve it, so it must not read as "waiting".
+    const chip = await collapseBacklogAndGetChip(
+      makeTask({
+        id: 1,
+        title: 'Wedged task',
+        boardColumnId: 100,
+        ciGates: gatesOf({
+          id: 9,
+          gateType: 'github_checks_completed',
+          createdAt: '2026-01-02T00:00:00Z',
+          ciStatus: 'stale',
+          diagnosticReason: 'PR #42 on org/app cannot be read',
+        }),
+      }),
+    );
+
+    expect(chip).toHaveStyle({ backgroundColor: 'var(--app-danger-fg)' });
+  });
+
+  // --- CI gate state on the card (pending / passed / failed / stale) ---
+
+  it.each([
+    ['pending', 'CI pending'],
+    ['succeeded', 'CI passed'],
+    ['failed', 'CI failed'],
+    ['stale', 'CI stale'],
+  ])('names a %s CI gate on the card as "%s"', async (ciStatus, label) => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        tasks: [
+          makeTask({
+            id: 1,
+            title: 'Wire up authentication',
+            boardColumnId: 100,
+            ciGates: gatesOf({
+              id: 9,
+              gateType: 'github_checks_completed',
+              createdAt: '2026-01-02T00:00:00Z',
+              ciStatus,
+              conclusion: ciStatus === 'failed' ? 'failure' : null,
+            }),
+          }),
+        ],
+      },
+    });
+
+    expect(await screen.findByText(label)).toBeInTheDocument();
+  });
+
+  it('explains in the task drawer why a stale CI gate gave up, and offers to clear it', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          ciGates: gatesOf({
+            id: 9,
+            gateType: 'github_checks_completed',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'stale',
+            ciStatus: 'stale',
+            diagnosticReason: 'CI pr number 42 on org/app cannot be read: PR #42 not found',
+          }),
+        }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    expect(drawer.getByText(/CI Gates \(1\)/)).toBeInTheDocument();
+    expect(drawer.getByText(/PR #42 not found/)).toBeInTheDocument();
+    expect(drawer.getByText(/^Stale — no CI result after/)).toBeInTheDocument();
+    expect(drawer.getByRole('button', { name: 'Delete gate 9' })).toBeInTheDocument();
+  });
+
+  it('does not offer to clear a CI gate that already has a verdict', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          ciGates: gatesOf({
+            id: 9,
+            gateType: 'github_checks_completed',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'resolved',
+            ciStatus: 'failed',
+            conclusion: 'failure',
+          }),
+        }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    expect(drawer.getByText('Failed — failure')).toBeInTheDocument();
+    expect(drawer.queryByRole('button', { name: 'Delete gate 9' })).not.toBeInTheDocument();
   });
 
   it('lists every recent run state in the card status chip tooltip', async () => {

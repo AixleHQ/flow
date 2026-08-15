@@ -53,6 +53,10 @@ class BoardActivityResource < ApplicationResource
       "Workflow '#{meta['workflow_name']}' failed on '#{task}'"
     when "human_help_requested"
       "Agent requested help on '#{task}': #{meta['question'].to_s.truncate(80)}"
+    when "gate_reconciled"
+      "CI gate #{meta['gate_type']} on '#{task}' resolved as #{meta['conclusion'] || 'unknown'} by reconciliation"
+    when "gate_stale"
+      "CI gate #{meta['gate_type']} on '#{task}' marked stale: #{meta['reason'].to_s.truncate(120)}"
     else
       "#{actor} performed #{activity.event_type.to_s.humanize.downcase}"
     end

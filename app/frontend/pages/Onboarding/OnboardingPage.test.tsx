@@ -125,13 +125,14 @@ describe('Onboarding/OnboardingPage', () => {
     expect(screen.queryByText('Complete')).not.toBeInTheDocument();
   });
 
-  it('renders all four agent cards with their descriptions on the agent connection step', () => {
+  it('renders all five agent cards with their descriptions on the agent connection step', () => {
     renderAuthedPage(<OnboardingPage />, {
       props: { currentUser: userAt({ onboardingState: 'step2' }), authSessions: [] },
     });
 
     expect(screen.getByText('OpenAI Codex')).toBeInTheDocument();
     expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
+    expect(screen.getByText('Grok')).toBeInTheDocument();
     expect(screen.getByText("Anthropic's AI coding assistant with deep reasoning capabilities")).toBeInTheDocument();
     expect(
       screen.getByText('Connect at least one agent to continue. You can add the rest later in Settings.'),
@@ -199,7 +200,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByText('Connect your agents')).toBeInTheDocument();
-    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(4);
+    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(5);
   });
 
   it('shows the Connected badge and an enabled Get started when an agent is configured', () => {
@@ -215,7 +216,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
-    expect(screen.getByText('1 of 4 connected')).toBeInTheDocument();
+    expect(screen.getByText('1 of 5 connected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Get started/ })).toBeEnabled();
   });
 

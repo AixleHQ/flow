@@ -371,8 +371,8 @@ class SessionContextService
       # Session-level requested model
       return session.requested_model if session.requested_model.present?
 
-      # User's default model from credential metadata
-      credential&.metadata&.dig("default_model")
+      # User's default model from credential metadata (retired ids mapped forward)
+      credential&.default_model
     end
 
     private
@@ -770,14 +770,70 @@ class SessionContextService
         merged = existing.merge(new_data)
         write_file(container_id, path, merged.to_json, uid)
       when :append_toml
-        existing = read_file(container_id, path) || ""
-        write_file(container_id, path, "#{existing}\n\n#{content}", uid)
+        append_toml(container_id, path, content, uid)
       else # :fresh
         write_file(container_id, path, content, uid)
       end
     rescue JSON::ParserError => e
       Rails.logger.warn("[SessionContext] Failed to parse existing file #{path}: #{e.message}, writing fresh")
       write_file(container_id, path, content, uid)
+    end
+
+    # Appending is a read-modify-write, and `read_file` answers nil both for "the
+    # file is not there" and for "the read failed" — so the naive version wrote the
+    # MCP block on its own whenever a container hiccup swallowed the read, silently
+    # discarding everything the credential step had put in the same file. For Codex
+    # that file is config.toml, which holds the trusted-project entry: the result
+    # still parses, so the CLI starts and asks "Do you trust the contents of this
+    # directory?", and a non_interactive session has nobody to answer (task #605).
+    #
+    # An existing file we could not read is therefore left alone. Losing MCP servers
+    # surfaces as an agent reporting a missing tool; losing the trust entry surfaces
+    # as a workflow step that never speaks again.
+    def append_toml(container_id, path, content, uid)
+      existing = read_file(container_id, path)
+
+      if existing.nil?
+        presence = file_presence(container_id, path)
+
+        # Only positively established absence may be overwritten. A probe that
+        # errored answers :unknown, and the transient failure that swallowed the
+        # read is exactly the one likeliest to swallow the probe too — treating
+        # that as "absent" would recreate the loss this guard exists to prevent.
+        if presence != :absent
+          Rails.logger.error(
+            "[SessionContext] Skipped MCP append to #{path}: the file could not be read and its " \
+            "existence could not be ruled out (probe: #{presence}); overwriting it would drop the " \
+            "config already written there"
+          )
+          return false
+        end
+      end
+
+      write_file(container_id, path, "#{existing}\n\n#{content}", uid)
+    end
+
+    # Tri-state on purpose — see append_toml. A boolean would have to fold "the
+    # probe could not answer" into one of the two answers, and both foldings are
+    # wrong: `false` overwrites a file that may exist, `true` blocks the very
+    # first write on a container whose exec is merely slow to warm up.
+    #
+    # Absence is only established by `test -f` exiting 1 with a silent stderr,
+    # which is what the shell itself reports for a path that is not there. Any
+    # other exit code is the transport failing, not the file missing.
+    #
+    # @return [Symbol] :present, :absent or :unknown
+    def file_presence(container_id, path)
+      _stdout, stderr, exit_code = runtime.exec(
+        container_id, [ "/bin/sh", "-c", "test -f #{Shellwords.escape(path)}" ], stdout: true, stderr: true
+      )
+      return :present if exit_code.to_i.zero?
+      return :absent if exit_code.to_i == 1 && Array(stderr).join.strip.empty?
+
+      :unknown
+    rescue StandardError => e
+      Rails.logger.warn("[SessionContext] file_presence(#{path}) probe failed: #{e.message}")
+      :unknown
     end
 
     def runtime

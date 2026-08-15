@@ -86,6 +86,8 @@ const ACTIVITY_EVENT_COLORS: Record<string, string> = {
   session_started: 'var(--app-chart-2)',
   session_completed: 'var(--app-success-fg)',
   session_failed: 'var(--app-danger-fg)',
+  gate_reconciled: 'var(--app-chart-4)',
+  gate_stale: 'var(--app-danger-fg)',
 };
 
 const WORKFLOW_STATUS_COLORS: Record<string, string> = {

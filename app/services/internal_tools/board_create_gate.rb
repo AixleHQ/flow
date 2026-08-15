@@ -4,7 +4,10 @@ module InternalTools
   class BoardCreateGate < Base
     tool do
       display_name "Board Create Gate"
-      description "Create a Gate on a board task. The auto-workflow for the task's column will not fire until all Gates are resolved."
+      description "Create a Gate on a board task. The auto-workflow for the task's column will not fire until all " \
+                  "Gates are resolved. A Gate is TTL-bounded: if its CI webhook never arrives, a periodic sweep asks " \
+                  "the provider about the recorded repository and run/check id and resolves the Gate with the real " \
+                  "verdict, or marks it stale with a diagnostic reason once it is unreadable or past its TTL."
       tags :board
       inject_when :workflow_step_session
       input_schema({
@@ -54,11 +57,14 @@ module InternalTools
       gate = task.gates.create!(gate_type: gate_type, metadata: metadata, creator: workflow_run.user)
 
       success({
-        id:        gate.id,
-        task_id:   task.id,
-        gate_type: gate.gate_type,
-        status:    gate.status,
-        metadata:  gate.metadata
+        id:         gate.id,
+        task_id:    task.id,
+        gate_type:  gate.gate_type,
+        status:     gate.status,
+        metadata:   gate.metadata,
+        # When this Gate stops waiting on CI whatever happens, so a step that parks
+        # a task can say how long the wait can last.
+        expires_at: gate.expires_at
       }.to_json)
     end
 

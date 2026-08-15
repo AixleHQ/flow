@@ -24,6 +24,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   teardown do
     Thread.current[:session_context_runtime] = nil
+    cleanup_runtime_overrides
   end
 
   # ====================================================================
@@ -250,6 +251,46 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     refute_includes result[toml_path], 'type = "'
   end
 
+  test "generate_mcp_config generates Grok TOML format with plain headers" do
+    server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
+                    transport: "sse", scope: @project,
+                    headers: { "Authorization" => "Bearer secret123" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "grok")
+    session.mcp_servers << server
+
+    result = SessionContextService.generate_mcp_config(session)
+
+    toml_path = "/home/grok/.grok/config.toml"
+    assert result.key?(toml_path)
+    assert_includes result[toml_path], '[mcp_servers."tavily"]'
+    assert_includes result[toml_path], 'url = "https://tavily.com/mcp"'
+    # Grok reads `headers`, not Codex's `http_headers`, and infers the transport
+    # from url-vs-command — there is no type field.
+    assert_includes result[toml_path], 'headers = { "Authorization" = "Bearer secret123" }'
+    refute_includes result[toml_path], 'type = "'
+  end
+
+  test "inject_mcp_config appends Grok TOML to the generated config" do
+    server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
+                    transport: "sse", scope: @project, headers: {})
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "grok")
+    session.mcp_servers << server
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+
+    existing_toml = "[ui]\npermission_mode = \"always-approve\"\n"
+    runtime_mock.expects(:read_file).with("abc123", "/home/grok/.grok/config.toml").returns(existing_toml)
+
+    runtime_mock.expects(:write_file).with do |ctr, path, content|
+      ctr == "abc123" && path == "/home/grok/.grok/config.toml" &&
+        content.include?("permission_mode") && content.include?('[mcp_servers."tavily"]')
+    end.returns(true)
+
+    SessionContextService.inject_mcp_config("abc123", session)
+  end
+
   test "generate_mcp_config Codex uses http_headers not headers" do
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
                     transport: "sse", scope: @project,
@@ -390,6 +431,58 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     SessionContextService.inject_mcp_config("abc123", session)
   end
 
+  # The Codex append is a read-modify-write over the same config.toml the credential
+  # step already wrote, and that file carries the trusted-project entry. Overwriting
+  # it with the MCP block alone leaves a file that still parses and trusts nothing, so
+  # the CLI starts and asks "Do you trust the contents of this directory?" — which a
+  # non_interactive workflow step can never answer (task #605).
+  test "inject_mcp_config keeps an unreadable config.toml instead of overwriting it" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
+
+    fake = stub_container_runtime(agent_type: "codex")
+    Thread.current[:session_context_runtime] = nil
+    toml_path = "/home/codex/.codex/config.toml"
+    credential_config = "approval_policy = \"never\"\n\n[projects.\"/workspace\"]\ntrust_level = \"trusted\"\n"
+    fake.fs[toml_path] = credential_config
+    fake.fail_read(toml_path)
+
+    SessionContextService.inject_mcp_config("abc123", session)
+
+    assert_equal credential_config, fake.fs[toml_path]
+  end
+
+  # The failure that swallows the read is the one likeliest to swallow the existence
+  # probe as well, so the probe must not answer "absent" when it could not answer at
+  # all: an unreadable file plus an unanswerable probe still has to leave the file
+  # alone rather than replace it with the MCP block.
+  test "inject_mcp_config keeps a config.toml it could neither read nor probe" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
+
+    fake = stub_container_runtime(agent_type: "codex")
+    Thread.current[:session_context_runtime] = nil
+    toml_path = "/home/codex/.codex/config.toml"
+    credential_config = "approval_policy = \"never\"\n\n[projects.\"/workspace\"]\ntrust_level = \"trusted\"\n"
+    fake.fs[toml_path] = credential_config
+    fake.fail_read(toml_path)
+    fake.raise_on_exec("test -f", error: ContainerRuntime::ContainerUnreachableError.new(container_identifier: "abc123"))
+
+    SessionContextService.inject_mcp_config("abc123", session)
+
+    assert_equal credential_config, fake.fs[toml_path]
+  end
+
+  test "inject_mcp_config writes a fresh config.toml when there is none to append to" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
+
+    fake = stub_container_runtime(agent_type: "codex")
+    Thread.current[:session_context_runtime] = nil
+    toml_path = "/home/codex/.codex/config.toml"
+
+    SessionContextService.inject_mcp_config("abc123", session)
+
+    assert_includes fake.fs[toml_path], "[mcp_servers."
+  end
+
   test "inject_mcp_config writes aixle-tools even without external mcp servers" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
 
@@ -509,6 +602,13 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "/workspace/AGENTS.md", adapter.context_file_path
   end
 
+  # A home-level rule file, not AGENTS.md: ~/.grok/rules/*.md is scanned on every
+  # session in every directory, so /workspace stays clean.
+  test "Grok adapter context_file_path returns a home dir rule file" do
+    adapter = Agents::GrokAdapter.new
+    assert_equal "/home/grok/.grok/rules/aixle-session-context.md", adapter.context_file_path
+  end
+
   test "Base adapter context_file_path returns nil" do
     adapter = Agents::BaseAdapter.new
     assert_nil adapter.context_file_path
@@ -568,7 +668,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       "claude_code" => "/home/claude/.claude/CLAUDE.md",
       "codex" => "/workspace/AGENTS.md",
       "gemini_cli" => "/home/gemini/.gemini/GEMINI.md",
-      "cursor_cli" => "/workspace/AGENTS.md"
+      "cursor_cli" => "/workspace/AGENTS.md",
+      "grok" => "/home/grok/.grok/rules/aixle-session-context.md"
     }.each do |agent_type, expected_path|
       session = create(:terminal_session, user: @user, project: @project,
                        agent_type: agent_type, mode: "interactive")
@@ -626,13 +727,14 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Codex adapter session_command returns codex --yolo for interactive mode" do
     adapter = Agents::CodexAdapter.new
-    assert_equal "codex --yolo", adapter.session_command(mode: "interactive")
+    assert_equal "codex --yolo -c projects./workspace.trust_level=trusted",
+                 adapter.session_command(mode: "interactive")
   end
 
   test "Codex adapter session_command returns codex --yolo for non_interactive mode" do
     adapter = Agents::CodexAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Run tests")
-    assert_equal "codex --yolo", result
+    assert_equal "codex --yolo -c projects./workspace.trust_level=trusted", result
   end
 
   test "Gemini adapter session_command returns gemini --yolo for interactive mode" do
@@ -644,6 +746,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     adapter = Agents::GeminiCliAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
     assert_equal "gemini --yolo", result
+  end
+
+  test "Grok adapter session_command returns grok --yolo for both modes" do
+    adapter = Agents::GrokAdapter.new
+    assert_equal "grok --yolo", adapter.session_command(mode: "interactive")
+    assert_equal "grok --yolo", adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
   end
 
   test "Cursor adapter session_command returns agent --force for interactive mode" do
@@ -685,7 +793,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     credential_mock = mock("credential")
     credential_mock.stubs(:agent_type).returns("claude_code")
     credential_mock.stubs(:config_data).returns({ "oauthAccount" => {}, "primaryApiKey" => "sk-test" })
-    credential_mock.stubs(:metadata).returns(nil)
+    credential_mock.stubs(:default_model).returns(nil)
 
     call_order = sequence("assembly_order")
 
@@ -832,6 +940,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     paths = Agents::CursorCliAdapter.default_config_paths
     assert_includes paths, "~/.cursor/cli-config.json"
     assert_includes paths, ".cursorrules"
+  end
+
+  test "Grok adapter has default_config_paths" do
+    paths = Agents::GrokAdapter.default_config_paths
+    assert_includes paths, "~/.grok/config.toml"
+    assert_includes paths, "AGENTS.md"
   end
 
   test "Base adapter returns empty default_config_paths" do

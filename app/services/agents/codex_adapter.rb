@@ -35,6 +35,20 @@ module Agents
     # quoted key (see toml_string) for something the suppression depends on.
     MODEL_SLUG_FORMAT = /\A[A-Za-z0-9._-]+\z/
 
+    # The working directory every agent container runs the CLI in. Codex asks
+    # "Do you trust the contents of this directory?" for any cwd that is not a
+    # trusted project, and in a non_interactive session nobody can answer it — the
+    # step just sits at `ready` forever. Both places that grant trust (config.toml
+    # and the launch command) key off this one constant.
+    DEFAULT_WORKSPACE = "/workspace"
+
+    # Codex splits a `-c` override on ".", so a workspace path containing a dot
+    # cannot be addressed this way, and the launch command travels through
+    # `tmux send-keys -t agent '<cmd>'` (AgentBaseStrategy#send_tmux_sequence), so
+    # anything needing shell quoting cannot go on the command line either. Paths
+    # that fail this fall back to the config.toml entry alone.
+    CLI_TRUSTABLE_WORKSPACE_FORMAT = %r{\A/[A-Za-z0-9_/-]+\z}
+
     def self.default_config_paths
       [ "~/.codex/config.toml", "AGENTS.md" ]
     end
@@ -113,11 +127,27 @@ module Agents
       { "#{home_dir}/.codex/config.toml" => generate_config_toml({}) }
     end
 
-    # Session command: always codex --yolo
+    # Session command: always codex --yolo, with workspace trust granted inline.
     # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file.
-    def session_command(mode:, prompt: nil, model: nil)
+    def session_command(mode:, prompt: nil, model: nil, workspace: DEFAULT_WORKSPACE)
       model_flag = model ? " --model #{Shellwords.shellescape(model)}" : ""
-      "codex#{model_flag} --yolo"
+      "codex#{model_flag} --yolo#{cli_trust_flag(workspace)}"
+    end
+
+    # Grant workspace trust on the command line as well as in config.toml.
+    #
+    # `--yolo` does NOT cover the trust dialog — it is the one startup prompt that
+    # is keyed on the cwd rather than on a notice flag, and a non_interactive
+    # session that reaches it never produces another byte (task #605: run 3190,
+    # step run 3476, session 3834 sat at `ready` for ~52 minutes on 0 tokens).
+    # config.toml alone is not a safe place to keep the only copy: it is written
+    # once by the credential step and then read-modify-written by the MCP append, so
+    # any container hiccup on that path leaves a file that parses fine and trusts
+    # nothing. A `-c` override is applied from argv, so it cannot be lost that way.
+    def cli_trust_flag(workspace = DEFAULT_WORKSPACE)
+      return "" unless workspace.to_s.match?(CLI_TRUSTABLE_WORKSPACE_FORMAT)
+
+      " -c projects.#{workspace}.trust_level=trusted"
     end
 
     # Context file: /workspace/AGENTS.md (auto-read by Codex from workspace root)
@@ -685,7 +715,7 @@ module Agents
     # =========================================================================
 
     def generate_config_toml(workflow_config, credentials = {})
-      workspace = workflow_config[:workspace] || "/workspace"
+      workspace = workflow_config[:workspace] || DEFAULT_WORKSPACE
       model = workflow_config[:model]
       toml = +""
       toml << "model = \"#{model}\"\n\n" if model.present?

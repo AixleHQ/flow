@@ -31,6 +31,16 @@ class QuotaErrorDetector
       /you'?re out of usage/i,
       /increase your limit to continue/i,
       /usage limit has been reached/i
+    ],
+    # Grok CLI's own rendered limit messages, plus the phrases it classifies a
+    # quota/billing rejection by ("out of credits", "usage balance exhausted").
+    xai: [
+      /out of credits/i,
+      /usage balance exhausted/i,
+      /Add credits and retry/i,
+      /You'?ve hit the rate limit for your plan/i,
+      /You hit your (?:weekly|free usage) limit/i,
+      /Purchase credits to keep using Grok/i
     ]
   }.freeze
 

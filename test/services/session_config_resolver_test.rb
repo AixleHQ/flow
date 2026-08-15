@@ -400,6 +400,20 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_equal "gemini_cli", result[:agent_runtime]
   end
 
+  # A workflow step pinned to Grok must resolve to it like any other runtime —
+  # agent_runtime is resolved per step, so a new runtime has to work here as well
+  # as in an ad-hoc terminal session.
+  test "step required_agent_runtime resolves grok" do
+    session = build_workflow_session(
+      agent_runtime: "codex",
+      step_required_agent_runtime: "grok"
+    )
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal "grok", result[:agent_runtime]
+  end
+
   test "user latest credential used when no step or run runtime" do
     create(:agent_credential, user: @user, agent_type: "codex")
     session = build_workflow_session(

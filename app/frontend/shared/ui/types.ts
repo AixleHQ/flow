@@ -1,4 +1,4 @@
-export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'claude_code';
+export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'claude_code' | 'grok';
 export type UserRole = 'employee' | 'admin' | 'super_admin' | 'viewer';
 
 export interface ProjectPermissions {

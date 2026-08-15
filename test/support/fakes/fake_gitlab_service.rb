@@ -39,11 +39,16 @@ module Fakes
     # branches:     Hash full_name => [names]; falls back to DEFAULT_BRANCHES
     # verify_error: Exception (class or instance) #verify_token should raise
     #               instead of returning — e.g. Gitlab::TokenService::AuthenticationError
-    def initialize(user: DEFAULT_USER, repos: DEFAULT_REPOS, branches: {}, verify_error: nil)
+    # pipeline_result: Ci::ProbeResult returned by #pipeline_status (the
+    #               Gitlab::PipelineStatusService interface, used by the CI gate
+    #               reconciler). Defaults to "still running".
+    def initialize(user: DEFAULT_USER, repos: DEFAULT_REPOS, branches: {}, verify_error: nil,
+                   pipeline_result: nil)
       @user = user
       @repos = repos.map(&:dup)
       @branches = branches
       @verify_error = verify_error
+      @pipeline_result = pipeline_result
       @calls = []
     end
 
@@ -85,6 +90,13 @@ module Fakes
     def remove(repository)
       record(:remove, repository)
       nil
+    end
+
+    # --- Gitlab::PipelineStatusService interface -----------------------------
+
+    def pipeline_status(full_name, pipeline_id)
+      record(:pipeline_status, full_name, pipeline_id)
+      @pipeline_result || Ci::ProbeResult.in_progress("pipeline #{pipeline_id} is running")
     end
 
     # --- Call introspection for assertions ----------------------------------
