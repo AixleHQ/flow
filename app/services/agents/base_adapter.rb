@@ -343,6 +343,25 @@ module Agents
       { models: fetch_available_models(credentials, credential: credential), source: :api }
     end
 
+    # Model ids a stored default may still carry after the vendor retired them,
+    # mapped to the replacement to run instead. A retired id is not "an older
+    # model" — the vendor answers 404, so every session started from that pin
+    # fails. Adapters whose vendor retires ids override this.
+    RETIRED_MODEL_REPLACEMENTS = {}.freeze
+
+    # The model id to actually use for a stored default: the stored value unless
+    # it names a retired model, in which case its replacement. Unknown ids pass
+    # through untouched — an id we don't recognise is far more likely to be a
+    # per-account one (a Bedrock inference-profile ARN, a preview slug) than a
+    # dead one, and rewriting it would break the pin it is meant to protect.
+    # @param model_id [String, nil]
+    # @return [String, nil]
+    def migrate_model_id(model_id)
+      return model_id if model_id.blank?
+
+      self.class::RETIRED_MODEL_REPLACEMENTS.fetch(model_id, model_id)
+    end
+
     # Comparable expiry of the credential's primary token, or nil if the agent's
     # tokens don't carry one. Used to avoid overwriting a newer stored token with
     # an older one when sessions run concurrently and refresh-token rotation occurs.

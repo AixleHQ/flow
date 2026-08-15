@@ -685,13 +685,40 @@ module Agents
 
     # Safety net used only when the live API is unreachable or the token lacks
     # model-list access. Kept current so even the fallback isn't badly stale.
+    #
+    # Deliberately the widely-available models only: this list is generic, while the
+    # live /v1/models answer is account-scoped. Claude Fable 5 and Mythos 5 are left
+    # out for that reason — Fable 5 requires 30-day data retention (an org on zero
+    # data retention gets a 400 on every request) and Mythos 5 needs Project
+    # Glasswing, so offering either to an account that cannot invoke it would hand
+    # the user a default that only fails at session start. Accounts that do have
+    # them still see them: they come back from the live fetch.
     FALLBACK_CLAUDE_MODELS = [
-      { model_id: "claude-opus-4-8", display_name: "Claude Opus 4.8", description: "Most capable model" },
-      { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6", description: "Best balance of speed and intelligence" },
-      { model_id: "claude-opus-4-7", display_name: "Claude Opus 4.7", description: "Highly autonomous, long-horizon work" },
-      { model_id: "claude-opus-4-6", display_name: "Claude Opus 4.6", description: "Advanced reasoning" },
+      { model_id: "claude-opus-5", display_name: "Claude Opus 5", description: "Most capable model for agentic coding" },
+      { model_id: "claude-sonnet-5", display_name: "Claude Sonnet 5", description: "Best balance of speed and intelligence" },
+      { model_id: "claude-opus-4-8", display_name: "Claude Opus 4.8", description: "Previous-generation Opus" },
+      { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6", description: "Previous-generation Sonnet" },
       { model_id: "claude-haiku-4-5", display_name: "Claude Haiku 4.5", description: "Fastest model" }
     ].freeze
+
+    # Retired Anthropic model ids (the API answers 404) mapped to their documented
+    # replacement, so a default pinned before the retirement still starts a session
+    # instead of failing on every run. Deprecated-but-live ids (claude-opus-4-0,
+    # claude-sonnet-4-0, claude-3-haiku-20240307, and the 4.5/4.6/4.7 aliases) are
+    # NOT listed: they still answer, and silently swapping a model a user can
+    # actually run is the opposite of preserving their choice.
+    RETIRED_MODEL_REPLACEMENTS = {
+      "claude-opus-4-1" => "claude-opus-5",
+      "claude-opus-4-1-20250805" => "claude-opus-5",
+      "claude-3-opus-20240229" => "claude-opus-4-8",
+      "claude-3-7-sonnet-20250219" => "claude-sonnet-5",
+      "claude-3-5-sonnet-20241022" => "claude-sonnet-5",
+      "claude-3-5-sonnet-20240620" => "claude-sonnet-5",
+      "claude-3-sonnet-20240229" => "claude-sonnet-5",
+      "claude-3-5-haiku-20241022" => "claude-haiku-4-5",
+      "claude-2.1" => "claude-sonnet-5",
+      "claude-2.0" => "claude-sonnet-5"
+    }.freeze
 
     # Default environment variables for Claude Code runtime.
     def default_env_vars(session)

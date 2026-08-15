@@ -467,6 +467,33 @@ module Agents
       assert_equal ClaudeCodeAdapter::FALLBACK_CLAUDE_MODELS, result[:models]
     end
 
+    test "the fallback list offers only current model ids" do
+      offered = ClaudeCodeAdapter::FALLBACK_CLAUDE_MODELS.map { |m| m[:model_id] }
+
+      assert_includes offered, "claude-opus-5"
+      assert_includes offered, "claude-sonnet-5"
+      retired = offered & ClaudeCodeAdapter::RETIRED_MODEL_REPLACEMENTS.keys
+      assert_empty retired, "the picker must not offer retired models: #{retired.join(', ')}"
+      ClaudeCodeAdapter::FALLBACK_CLAUDE_MODELS.each do |model|
+        assert model[:display_name].present?, "#{model[:model_id]} needs a display name"
+        assert model[:description].present?, "#{model[:model_id]} needs a description"
+      end
+    end
+
+    test "migrate_model_id maps a retired model to its replacement" do
+      assert_equal "claude-sonnet-5", @adapter.migrate_model_id("claude-3-7-sonnet-20250219")
+      assert_equal "claude-opus-5", @adapter.migrate_model_id("claude-opus-4-1")
+    end
+
+    test "migrate_model_id leaves supported and account-specific ids untouched" do
+      assert_equal "claude-opus-5", @adapter.migrate_model_id("claude-opus-5")
+      # Still deprecated-but-live: the vendor answers, so the user's pick stands.
+      assert_equal "claude-sonnet-4-0", @adapter.migrate_model_id("claude-sonnet-4-0")
+      arn = "arn:aws:bedrock:us-east-1:1234:application-inference-profile/abc"
+      assert_equal arn, @adapter.migrate_model_id(arn)
+      assert_nil @adapter.migrate_model_id(nil)
+    end
+
     test "fetch_available_models_with_source uses x-api-key for API key credentials" do
       captured = stub_models_response([ { "id" => "claude-opus-4-8", "display_name" => "Claude Opus 4.8" } ])
 

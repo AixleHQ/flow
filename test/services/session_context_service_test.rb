@@ -739,7 +739,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     credential_mock = mock("credential")
     credential_mock.stubs(:agent_type).returns("claude_code")
     credential_mock.stubs(:config_data).returns({ "oauthAccount" => {}, "primaryApiKey" => "sk-test" })
-    credential_mock.stubs(:metadata).returns(nil)
+    credential_mock.stubs(:default_model).returns(nil)
 
     call_order = sequence("assembly_order")
 

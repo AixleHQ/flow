@@ -538,6 +538,38 @@ describe('Profile/Show', () => {
     );
   });
 
+  it('keeps a saved default model visible when the fetched list does not contain it', async () => {
+    // A pin chosen before the model left the catalogue (or a Bedrock ARN) is not in
+    // agentModels. Mantine shows a value with no matching option as an empty input, so
+    // the row would read as "no default set" and hide the pin the session actually uses.
+    const credential = buildCredential({ id: 100, agentType: 'claude_code', defaultModel: 'claude-opus-4-1' });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    const props = {
+      ...baseProps(profile),
+      agentModels: [
+        {
+          agentType: 'claude_code',
+          models: [{ modelId: 'claude-opus-5', displayName: 'Claude Opus 5', description: 'Most capable' }],
+        },
+      ],
+    };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    const modelsSection = screen.getByText('Default Models').parentElement as HTMLElement;
+    const select = within(modelsSection).getByRole('combobox');
+    expect(select).toHaveValue('claude-opus-4-1');
+
+    // ...and the current catalogue is still selectable from the same row.
+    await userEvent.click(select);
+    await userEvent.click(await screen.findByRole('option', { name: 'Claude Opus 5' }));
+
+    expect(router.put).toHaveBeenCalledWith(
+      '/profile/update_default_model',
+      { agentCredentialId: 100, defaultModel: 'claude-opus-5' },
+      expect.objectContaining({ preserveScroll: true, preserveState: true }),
+    );
+  });
+
   it('opens the authentication modal and starts a terminal session when Re-authenticate is clicked', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const credential = buildCredential({ id: 400, agentType: 'claude_code' });
