@@ -793,25 +793,47 @@ class SessionContextService
     def append_toml(container_id, path, content, uid)
       existing = read_file(container_id, path)
 
-      if existing.nil? && file_exists?(container_id, path)
-        Rails.logger.error(
-          "[SessionContext] Skipped MCP append to #{path}: the file exists but could not be read, " \
-          "and overwriting it would drop the config already written there"
-        )
-        return false
+      if existing.nil?
+        presence = file_presence(container_id, path)
+
+        # Only positively established absence may be overwritten. A probe that
+        # errored answers :unknown, and the transient failure that swallowed the
+        # read is exactly the one likeliest to swallow the probe too — treating
+        # that as "absent" would recreate the loss this guard exists to prevent.
+        if presence != :absent
+          Rails.logger.error(
+            "[SessionContext] Skipped MCP append to #{path}: the file could not be read and its " \
+            "existence could not be ruled out (probe: #{presence}); overwriting it would drop the " \
+            "config already written there"
+          )
+          return false
+        end
       end
 
       write_file(container_id, path, "#{existing}\n\n#{content}", uid)
     end
 
-    def file_exists?(container_id, path)
-      _stdout, _stderr, exit_code = runtime.exec(
+    # Tri-state on purpose — see append_toml. A boolean would have to fold "the
+    # probe could not answer" into one of the two answers, and both foldings are
+    # wrong: `false` overwrites a file that may exist, `true` blocks the very
+    # first write on a container whose exec is merely slow to warm up.
+    #
+    # Absence is only established by `test -f` exiting 1 with a silent stderr,
+    # which is what the shell itself reports for a path that is not there. Any
+    # other exit code is the transport failing, not the file missing.
+    #
+    # @return [Symbol] :present, :absent or :unknown
+    def file_presence(container_id, path)
+      _stdout, stderr, exit_code = runtime.exec(
         container_id, [ "/bin/sh", "-c", "test -f #{Shellwords.escape(path)}" ], stdout: true, stderr: true
       )
-      exit_code.to_i.zero?
+      return :present if exit_code.to_i.zero?
+      return :absent if exit_code.to_i == 1 && Array(stderr).join.strip.empty?
+
+      :unknown
     rescue StandardError => e
-      Rails.logger.warn("[SessionContext] file_exists?(#{path}) failed: #{e.message}")
-      false
+      Rails.logger.warn("[SessionContext] file_presence(#{path}) probe failed: #{e.message}")
+      :unknown
     end
 
     def runtime

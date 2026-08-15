@@ -122,17 +122,26 @@ in `capture-pane` output within seconds of launch.
    path). Codex splits a `-c` key on `.`, so a workspace path containing a dot — or anything
    needing shell quoting — cannot be expressed this way; those fall back to the `config.toml`
    entry alone, which is why both grants exist.
-2. **`SessionContextService#append_toml`** — an existing file that could not be read is left
-   alone and the append is skipped with an `error` log, instead of being overwritten with just
-   the new block. Losing MCP servers surfaces as an agent reporting a missing tool; losing the
-   trust entry surfaces as a step that never speaks again.
+2. **`SessionContextService#append_toml`** — a file that could not be read is left alone and the
+   append is skipped with an `error` log, instead of being overwritten with just the new block.
+   Losing MCP servers surfaces as an agent reporting a missing tool; losing the trust entry
+   surfaces as a step that never speaks again. The existence probe behind that decision is
+   **tri-state** (`:present` / `:absent` / `:unknown`), and only positively established absence
+   is overwritten: the transient failure that swallows the read is the one likeliest to swallow
+   the probe too, so a probe that raises — or answers with anything other than `test -f` exiting 1
+   on a silent stderr — is `:unknown` and the file is kept.
 3. **`InteractivePromptDetector`** — fails the session fast, with a diagnostic that names the
    prompt. It runs inside the existing per-minute `ScanQuotaErrorsActivity` sweep and shares that
    sweep's single `capture-pane` per session, so detection costs no extra pod-exec. It fires only
-   for `non_interactive` sessions (an interactive session's owner can answer the dialog) and only
-   when **every** marker of the dialog is present — the prompt text also appears in bug reports,
-   task descriptions and this document, and a single-phrase match would kill the session
-   investigating it.
+   for `non_interactive` sessions (an interactive session's owner can answer the dialog), and only
+   when the dialog is the screen the CLI is **currently** blocked on: **every** marker has to
+   appear within the pane's trailing block (`TAIL_LINES`, blank rows dropped — tmux pads
+   `capture-pane` to the pane height) *and* the pane's last nonblank line has to be the dialog's
+   own footer (`Press enter to continue`, or the final option when the hint has not rendered yet).
+   The sweep hands over 1,000 lines of scrollback, and the full dialog appears verbatim in bug
+   reports, task #605's description and this document — so matching anywhere in that scrollback
+   would kill the session investigating the incident. A pane whose last word is not the dialog's
+   belongs to an agent that is still producing output, which is the definition of not wedged.
 
 ## Regression checks
 
@@ -142,9 +151,12 @@ Automated (`docker compose exec -T web bin/rails test <file>`):
   contains nothing shell-special (the `tmux send-keys` constraint); unaddressable workspaces drop
   the flag; the flag and `config.toml` trust the same path.
 - `test/services/session_context_service_test.rb` — an unreadable `config.toml` is preserved
-  rather than replaced by the MCP block; a genuinely absent one is still written fresh.
-- `test/services/interactive_prompt_detector_test.rb` — the wedged pane is detected; quoted prose
-  containing the prompt sentence is not.
+  rather than replaced by the MCP block; one that can be neither read nor probed is preserved too;
+  a genuinely absent one is still written fresh.
+- `test/services/interactive_prompt_detector_test.rb` — the wedged pane is detected, including
+  through tmux's trailing padding and when the pane ends on the last option; neither quoted prose
+  containing the prompt sentence, nor the complete dialog quoted before further agent output, nor
+  a dialog left behind in the scrollback fires it.
 - `test/temporal/activities/scan_quota_errors_activity_test.rb` — a `non_interactive` session on
   the prompt is failed with the diagnostic; an `interactive` one is left for its owner.
 

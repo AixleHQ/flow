@@ -55,6 +55,52 @@ class InteractivePromptDetectorTest < ActiveSupport::TestCase
     assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
   end
 
+  # The dangerous shape the phrase-only test above does not cover: the *complete*
+  # dialog, quoted verbatim from task #605 (the task description and this repo's
+  # research doc both carry it), printed by a session that then keeps working. The
+  # pane no longer ends on the dialog, so the session is not on it.
+  test "does not fire on the complete dialog quoted before ordinary agent output" do
+    investigating = <<~TEXT
+      #{CODEX_TRUST_PANE}
+      That is the wedge from task 605. Reading app/services/agents/codex_adapter.rb
+      to check how the launch command grants trust.
+
+      Running 24 tests...
+    TEXT
+
+    result = InteractivePromptDetector.detect(investigating, agent_type: "codex")
+
+    assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  # capture-pane hands over 1,000 lines of scrollback. A dialog that scrolled out of
+  # sight long ago must not be read as the screen the CLI is blocked on now.
+  test "does not fire on a dialog left far behind in the scrollback" do
+    scrolled_away = CODEX_TRUST_PANE + Array.new(60) { |i| "  ✓ test case #{i} passed" }.join("\n")
+
+    result = InteractivePromptDetector.detect(scrolled_away, agent_type: "codex")
+
+    assert_equal false, result.blocked? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  # tmux pads capture-pane output to the pane height, so the real wedged pane arrives
+  # with trailing blank rows after the dialog — they are padding, not output.
+  test "detects the prompt through the blank rows tmux pads the pane with" do
+    result = InteractivePromptDetector.detect("#{CODEX_TRUST_PANE}\n\n\n\n", agent_type: "codex")
+
+    assert result.blocked?
+  end
+
+  # The pane can be captured in the instant before the "press enter" hint renders,
+  # leaving the last option as the final line.
+  test "detects the prompt when the pane ends on the last dialog option" do
+    without_hint = CODEX_TRUST_PANE.sub(/\n\s*Press enter to continue\n/, "\n")
+
+    result = InteractivePromptDetector.detect(without_hint, agent_type: "codex")
+
+    assert result.blocked?
+  end
+
   test "reports healthy for ordinary output and for nothing at all" do
     assert_equal false, InteractivePromptDetector.detect("Running 42 tests...").blocked? # rubocop:disable Minitest/RefuteFalse
     assert_equal false, InteractivePromptDetector.detect(nil).blocked? # rubocop:disable Minitest/RefuteFalse

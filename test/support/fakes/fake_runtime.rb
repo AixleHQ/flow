@@ -37,6 +37,7 @@ module ContainerRuntime
       @execs = []
       @exec_failures = []
       @unreachable_execs = []
+      @raising_execs = []
       @unreadable_paths = []
       @terminal_pane = ""
       @terminal_log_mtime = nil
@@ -87,6 +88,16 @@ module ContainerRuntime
       self
     end
 
+    # Exec failure injection for the case an exit code cannot express: the call
+    # itself blows up (websocket upgrade error, connection reset), which both real
+    # runtimes let propagate out of #exec. Callers whose behaviour depends on
+    # telling "the command answered no" apart from "the command could not answer"
+    # need this second case to be reachable.
+    def raise_on_exec(substring, error: nil)
+      @raising_execs << { substring: substring, error: error || StandardError.new("exec failed") }
+      self
+    end
+
     # The pane `tmux capture-pane` is asked for, and the mtime `stat` reports for
     # the captured log. Both back Sessions::LiveLogReader's single exec.
     def set_terminal_pane(text, last_output_at: nil)
@@ -133,6 +144,9 @@ module ContainerRuntime
 
     def exec(_id, cmd, _opts = {})
       @execs << cmd
+      raising = @raising_execs.find { |r| command_string(cmd).include?(r[:substring]) }
+      raise raising[:error] if raising
+
       failure = @exec_failures.find { |f| command_string(cmd).include?(f[:substring]) }
       return [ [ "" ], [ failure[:stderr] ], failure[:exit_code] ] if failure
 

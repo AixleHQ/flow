@@ -411,6 +411,26 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal credential_config, fake.fs[toml_path]
   end
 
+  # The failure that swallows the read is the one likeliest to swallow the existence
+  # probe as well, so the probe must not answer "absent" when it could not answer at
+  # all: an unreadable file plus an unanswerable probe still has to leave the file
+  # alone rather than replace it with the MCP block.
+  test "inject_mcp_config keeps a config.toml it could neither read nor probe" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
+
+    fake = stub_container_runtime(agent_type: "codex")
+    Thread.current[:session_context_runtime] = nil
+    toml_path = "/home/codex/.codex/config.toml"
+    credential_config = "approval_policy = \"never\"\n\n[projects.\"/workspace\"]\ntrust_level = \"trusted\"\n"
+    fake.fs[toml_path] = credential_config
+    fake.fail_read(toml_path)
+    fake.raise_on_exec("test -f", error: ContainerRuntime::ContainerUnreachableError.new(container_identifier: "abc123"))
+
+    SessionContextService.inject_mcp_config("abc123", session)
+
+    assert_equal credential_config, fake.fs[toml_path]
+  end
+
   test "inject_mcp_config writes a fresh config.toml when there is none to append to" do
     session = create(:terminal_session, user: @user, project: @project, agent_type: "codex")
 
