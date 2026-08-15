@@ -2,15 +2,27 @@
 
 module InternalTools
   # coder_job_status — poll a command started by `coder_ssh_exec` with
-  # `detach: true`. Reads the job's pid / exit-code / log files on the
-  # workspace; each call is a short SSH round trip, so polling is safe where
-  # running the work in the foreground is not.
+  # `detach: true`. Reads the job's pid / exit-code / metadata / heartbeat / log
+  # files on the workspace; each call is a short SSH round trip, so polling is
+  # safe where running the work in the foreground is not.
   class CoderJobStatus < Base
     tool do
       display_name "Coder: Job Status"
       description "Check a detached command started by coder_ssh_exec (detach: true). " \
                   "Returns `state` (running | exited | died | unknown), the `exit_code` once it has finished, " \
-                  "and the tail of its log. Poll this instead of re-running a long command."
+                  "and the tail of its log. Poll this instead of re-running a long command. " \
+                  "A finished or interrupted job also carries its lifecycle metadata — `reason` " \
+                  "(completed | command_failed | timeout | signaled | runner_vanished), `signal`, `started_at`, " \
+                  "`finished_at`, `elapsed_seconds`, `pid`, `pgid`, `command` — and a one-line `diagnosis`: " \
+                  "read `reason` before concluding anything about a job that did not exit 0, because it separates " \
+                  "a failing command from a cancellation, a timeout and a runner that vanished. " \
+                  "`exited` means the command and everything in its process group were reaped, never merely " \
+                  "signalled: a cancelled job stays `running` until the whole command group has really ended, " \
+                  "and one that had to be killed says so in `escalated_to`. " \
+                  "`runner_vanished` is deliberately ambiguous: a hard kill of the job's process group and an " \
+                  "infrastructure failure leave identical evidence, so it also carries `possible_causes` and its " \
+                  "`diagnosis` names both instead of asserting one — and `command_group_alive` tells you when " \
+                  "the wrapper died but the command (`command_pgid`) is still running on the workspace."
       tags :coder
       inject_when :coder_integration_connected
       requires_integration :coder
