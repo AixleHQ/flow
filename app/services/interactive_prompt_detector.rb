@@ -53,7 +53,7 @@ class InteractivePromptDetector
       # pane is captured before that line renders — the final option of the dialog.
       # Anchored past the TUI's selection decoration ("› 1. ", "  2. ") so prose that
       # merely mentions the phrase mid-sentence does not qualify as a footer.
-      footer: /\A[\s>›*\-•|]*(?:\d+[.)]\s*)?(?:No,\s*quit|Press enter to continue)\b/i,
+      footer: /\A[\s>›*•|-]*(?:\d+[.)]\s*)?(?:No,\s*quit|Press enter to continue)\b/i,
       message: "Codex is blocked on the workspace-trust prompt " \
                '("Do you trust the contents of this directory?"), which a non_interactive ' \
                "session cannot answer. Trust is granted both on the launch command " \
