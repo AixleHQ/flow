@@ -1289,6 +1289,84 @@ module Agents
       assert_includes config, "sso_region = eu-central-1"
     end
 
+    # == Subscription usage limits ==
+
+    test "fetch_subscription_usage returns the windows the endpoint reports, newest-scoped first" do
+      stub_request(:get, ClaudeCodeAdapter::USAGE_URL)
+        .with(headers: {
+          "Authorization" => "Bearer sub-token",
+          "anthropic-beta" => "oauth-2025-04-20",
+          "User-Agent" => ClaudeCodeAdapter::USAGE_USER_AGENT
+        })
+        .to_return(status: 200, body: {
+          five_hour: { utilization: 33.0, resets_at: "2026-08-16T18:00:00+00:00" },
+          seven_day: { utilization: 13.5, resets_at: "2026-08-20T00:59:59+00:00" },
+          seven_day_opus: nil,
+          seven_day_sonnet: { utilization: 2.0, resets_at: "2026-08-20T00:59:59+00:00" },
+          extra_usage: { is_enabled: false, monthly_limit: nil, used_credits: nil, utilization: nil }
+        }.to_json, headers: { "Content-Type" => "application/json" })
+
+      usage = @adapter.fetch_subscription_usage({ "claudeAiOauth" => { "accessToken" => "sub-token" } })
+
+      assert_equal "ok", usage[:status]
+      assert_equal %w[five_hour seven_day seven_day_sonnet], usage[:windows].map { |w| w[:key] }
+      assert_in_delta 33.0, usage[:windows].first[:utilization]
+      assert_equal "2026-08-16T18:00:00+00:00", usage[:windows].first[:resets_at]
+      assert_nil usage[:extra_usage] # is_enabled false → nothing to show
+    end
+
+    test "fetch_subscription_usage keeps a zero-utilization window and surfaces enabled extra usage" do
+      stub_request(:get, ClaudeCodeAdapter::USAGE_URL)
+        .to_return(status: 200, body: {
+          five_hour: { utilization: 0, resets_at: nil },
+          extra_usage: { is_enabled: true, monthly_limit: 100, used_credits: 12.5, utilization: 12.5 }
+        }.to_json, headers: { "Content-Type" => "application/json" })
+
+      usage = @adapter.fetch_subscription_usage({ "claudeAiOauth" => { "accessToken" => "sub-token" } })
+
+      assert_equal %w[five_hour], usage[:windows].map { |w| w[:key] }
+      assert_in_delta 0.0, usage[:windows].first[:utilization]
+      assert_nil usage[:windows].first[:resets_at]
+      assert_equal({ enabled: true, utilization: 12.5, monthly_limit: 100.0, used_credits: 12.5 }, usage[:extra_usage])
+    end
+
+    test "fetch_subscription_usage reports a dead token as unauthorized rather than raising" do
+      stub_request(:get, ClaudeCodeAdapter::USAGE_URL).to_return(status: 401, body: "{}")
+
+      usage = @adapter.fetch_subscription_usage({ "claudeAiOauth" => { "accessToken" => "sub-token" } })
+
+      assert_equal({ status: "unauthorized" }, usage)
+    end
+
+    test "fetch_subscription_usage reports throttling separately so the UI can say try again" do
+      stub_request(:get, ClaudeCodeAdapter::USAGE_URL).to_return(status: 429, body: "slow down")
+
+      usage = @adapter.fetch_subscription_usage({ "claudeAiOauth" => { "accessToken" => "sub-token" } })
+
+      assert_equal({ status: "rate_limited" }, usage)
+    end
+
+    test "fetch_subscription_usage degrades to unavailable on a server error or a network failure" do
+      stub_request(:get, ClaudeCodeAdapter::USAGE_URL).to_return(status: 500, body: "boom")
+      assert_equal({ status: "unavailable" },
+                   @adapter.fetch_subscription_usage({ "claudeAiOauth" => { "accessToken" => "sub-token" } }))
+
+      stub_request(:get, ClaudeCodeAdapter::USAGE_URL).to_timeout
+      assert_equal({ status: "unavailable" },
+                   @adapter.fetch_subscription_usage({ "claudeAiOauth" => { "accessToken" => "sub-token" } }))
+    end
+
+    test "fetch_subscription_usage returns nil for credentials that bill somewhere other than a plan" do
+      # An API key bills per token; a Bedrock connection bills to AWS. Neither has
+      # a 5-hour window, and neither should cost a request to find that out.
+      assert_nil @adapter.fetch_subscription_usage({ "primaryApiKey" => "sk-ant-x" })
+      assert_nil @adapter.fetch_subscription_usage({
+        "awsBedrock" => { "region" => "us-east-1" },
+        "claudeAiOauth" => { "accessToken" => "sub-token" }
+      })
+      assert_nil @adapter.fetch_subscription_usage({})
+    end
+
     private
 
     def connect_bedrock

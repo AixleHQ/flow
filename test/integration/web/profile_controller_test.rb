@@ -55,6 +55,29 @@ class Web::ProfileControllerTest < ActionDispatch::IntegrationTest
     assert_equal "en", other_membership.reload.preferred_agent_language
   end
 
+  # The usage panel reads Anthropic over HTTP. Deferring it is the contract that
+  # keeps a slow or throttled vendor off the profile page's critical path.
+  test "show defers the usage limits prop rather than blocking the render on the vendor" do
+    get profile_path
+
+    assert_inertia_deferred_props :usage_limits, group: "limits"
+    assert_inertia_props do |props|
+      !props.key?(:usageLimits)
+    end
+  end
+
+  test "the deferred usage limits prop resolves to an empty list when no credential bills against a plan" do
+    # Billed to the member's own AWS account, so there is no plan window to read
+    # — and no request to Anthropic to find that out.
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code",
+                              config_data: { "awsBedrock" => { "region" => "us-east-1" } })
+
+    get profile_path
+    inertia_load_deferred_props("limits")
+
+    assert_inertia_props usageLimits: []
+  end
+
   test "update_default_model redirects on success" do
     credential = create(:agent_credential, user: @user)
 

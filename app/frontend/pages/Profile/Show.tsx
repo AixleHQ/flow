@@ -1,4 +1,4 @@
-import { Head, router, useForm } from '@inertiajs/react';
+import { Deferred, Head, router, useForm } from '@inertiajs/react';
 import {
   CopyButton,
   Alert,
@@ -13,6 +13,7 @@ import {
   Loader,
   Modal,
   Select,
+  Skeleton,
   Stack,
   Switch,
   Tabs,
@@ -52,6 +53,7 @@ import { type AgentCredential, type AgentType, type SharedMembership, type Share
 import { StatusBadge, type StatusTone } from 'shared/ui/StatusBadge';
 
 import classes from './Show.module.css';
+import { UsageLimitsCard, type UsageLimitsEntry } from './UsageLimitsCard';
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
@@ -175,6 +177,8 @@ interface Props {
   agentModels: AgentModelsEntry[];
   cableStream?: string;
   mcp: McpProps;
+  // Deferred (group "limits"): absent until Inertia's follow-up request lands.
+  usageLimits?: UsageLimitsEntry[];
 }
 
 function DefaultAgentSelector({ profile }: { profile: SharedUser }) {
@@ -1132,7 +1136,7 @@ function PersonalMcpSection({ mcp }: { mcp: McpProps }) {
   );
 }
 
-function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mcp }: Props) {
+function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mcp, usageLimits }: Props) {
   const currentCompanyName = profile.currentCompany?.name ?? null;
   useInertiaCableStream(cableStream, { only: ['profile', 'agent_models'] });
 
@@ -1301,6 +1305,10 @@ function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, mc
             </Card>
 
             <AgentRuntimesSection profile={profile} />
+            {/* Deferred: reads the vendor's usage endpoint, so it must not hold up the page. */}
+            <Deferred data="usageLimits" fallback={<Skeleton height={180} radius="sm" />}>
+              <UsageLimitsCard entries={usageLimits ?? []} />
+            </Deferred>
             <PersonalMcpSection mcp={mcp} />
           </Box>
 
