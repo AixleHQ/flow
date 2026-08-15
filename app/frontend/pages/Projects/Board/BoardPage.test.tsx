@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
+import { rem } from '@mantine/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildBoard } from 'test/factories/board';
@@ -16,6 +17,7 @@ import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 import { formatDateTime } from 'shared/lib/formatDate';
 
 import BoardPage from './BoardPage';
+import { GATE_CHIP_WIDTH } from './GateStatusChip';
 
 // Typelizer emits the step shape inline rather than as its own type, so name it here.
 type TaskWorkflowRunStep = TaskWorkflowRun['steps'][number];
@@ -1224,6 +1226,42 @@ describe('Projects/Board/BoardPage', () => {
       'https://github.com/org/app/actions/runs/555',
     );
     expect(drawer.getByText('org/app #42').closest('a')).toHaveAttribute('href', 'https://github.com/org/app/pull/42');
+  });
+
+  it('gives the gate chip column room to spell out the longest state word', async () => {
+    // The column that aligns the gate links used to be a hard width two pixels narrower than
+    // "waiting", so the badge's own ellipsis ate the end of the most common state word while the
+    // DOM text stayed intact. It is now a floor: wide enough for every label, and free to grow.
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          ciGates: gatesOf({
+            id: 9,
+            gateType: 'github_checks_completed',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'pending',
+            ciStatus: 'pending',
+            metadata: { repoFullName: 'org/app', prNumber: 42 },
+          }),
+        }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    const column = drawer.getByText('waiting').closest('.mantine-Badge-root')?.parentElement as HTMLElement;
+
+    // jsdom has no layout, so the clipping itself is not observable here — what is observable is
+    // the shape that caused it: the room the column reserves must be a floor and not a cap.
+    expect(column.style.minWidth).toBe(rem(GATE_CHIP_WIDTH));
+    expect(column.style.width).toBe('');
   });
 
   it('lists every recent run state in the card status chip tooltip', async () => {

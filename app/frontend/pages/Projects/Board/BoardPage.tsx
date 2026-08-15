@@ -2326,7 +2326,10 @@ function TaskDetailSidebar({
                   return (
                     <Box key={wait.id}>
                       <Group gap={8} align="center" wrap="nowrap">
-                        <Box w={GATE_CHIP_WIDTH} style={{ flexShrink: 0 }}>
+                        {/* A floor, not a fixed width: every state word fits inside it so the links
+                            still align, but a chip that ever outgrew it would widen the column
+                            rather than have its label clipped by the badge's ellipsis. */}
+                        <Box miw={GATE_CHIP_WIDTH} style={{ flexShrink: 0 }}>
                           <GateStatusChip status={kind} tooltip={gateTooltip(wait)} />
                         </Box>
                         {link ? (

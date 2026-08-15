@@ -18,9 +18,13 @@ const GATE_CHIP_STATES: Record<string, { label: string; dot: string }> = {
   stale: { label: 'stale', dot: 'var(--mantine-color-orange-6)' },
 };
 
-// Width the chip column is pinned to, so a stack of gate rows lines its links up instead of
-// ragging with the length of each state word.
-export const GATE_CHIP_WIDTH = 68;
+// Width reserved for the chip column, so a stack of gate rows lines its links up instead of
+// ragging with the length of each state word. Sized for the longest label ("waiting", the widest
+// of the four and the state a gate spends most of its life in) with headroom to spare: at 68 the
+// column was two pixels short of it and Mantine's badge ellipsis clipped it to "waiti…". It is a
+// floor rather than a hard width — see the call site — so a wider label would push its own row's
+// link right instead of losing letters.
+export const GATE_CHIP_WIDTH = 78;
 
 export function GateStatusChip({ status, tooltip }: { status: string; tooltip?: string }) {
   const state = GATE_CHIP_STATES[status] ?? GATE_CHIP_PENDING;
