@@ -28,6 +28,10 @@ module Tools
       Entry.new(tag: :async_results, label: "Async results", ui_visible: false, presentation: :individual),
       Entry.new(tag: :session_lifecycle, label: "Session lifecycle", ui_visible: false, presentation: :individual),
       Entry.new(tag: :repositories, label: "Repositories", ui_visible: false, presentation: :individual),
+      # Read-only supervision of the OTHER sessions in the project. Its own tag
+      # rather than the personal server's :sessions, so a user-audience tool can
+      # never be resolved into a picker group.
+      Entry.new(tag: :session_supervision, label: "Session supervision", ui_visible: true, presentation: :group),
       Entry.new(tag: :builder, label: "Aixle Builder", ui_visible: false, presentation: :individual)
     ].freeze
 

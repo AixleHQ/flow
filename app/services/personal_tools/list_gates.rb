@@ -24,15 +24,7 @@ module PersonalTools
       task = project.board&.board_tasks&.find_by(id: params[:task_id])
       return error("Task not found on this project's board") unless task
 
-      rows = task.gates.includes(:creator).order(:created_at).map do |gate|
-        { id: gate.id, gate_type: gate.gate_type, status: gate.status, ci_status: gate.ci_status,
-          conclusion: gate.conclusion, metadata: gate.metadata, source: gate.source,
-          creator: gate.creator&.name, creator_id: gate.creator_id,
-          created_at: gate.created_at, resolved_at: gate.resolved_at,
-          age_seconds: gate.age_seconds, expires_at: gate.expires_at, expired: gate.expired?,
-          diagnostic_reason: gate.diagnostic_reason, last_reconciled_at: gate.last_reconciled_at,
-          reconcile_attempts: gate.reconcile_attempts, reconciliation_log: gate.reconciliation_log }
-      end
+      rows = task.gates.includes(:creator).order(:created_at).map { |gate| Gates::ToolRow.call(gate) }
       success(task_id: task.id, gates: rows)
     end
   end
