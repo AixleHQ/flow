@@ -24,18 +24,18 @@ module Tools
 
     # Returns a Rack response triple.
     #
-    # The server is configured with the newest protocol version it can serve
-    # and the offered version is capped before the transport sees it — see
-    # MCPProtocol — so the handshake can only agree to a version whose result
-    # shapes this server actually produces.
+    # Protocol version handling is entirely the gem's: since mcp 1.2.0 the
+    # `initialize` handshake negotiates legacy versions only and counter-offers
+    # its newest handshake version to anything else, while a modern (SEP-2575)
+    # client carries its version in each request's `_meta` envelope and gets
+    # the `resultType`/cache-hint stamps that era requires. See
+    # PersonalMCPRequestHandler#call for the full note.
     #
     # `dns_rebinding_protection: false`: see PersonalMCPRequestHandler#call —
     # the SDK default accepts only a loopback `Host` and 403s every deployed
     # request, and this endpoint is header-token authenticated, so the browser
     # rebinding it defends against cannot present a credential.
     def call(request)
-      MCPProtocol.clamp_initialize_offer!(request)
-
       if (response = unavailable_tool_shim(request))
         return response
       end
@@ -53,7 +53,6 @@ module Tools
     def server
       @server ||= MCP::Server.new(
         name: "aixle-tools",
-        configuration: MCPProtocol.configuration,
         tools: tool_classes,
         server_context: { session: session }
       )
@@ -123,6 +122,13 @@ module Tools
     # Entitled-but-unavailable tools are hidden from the per-request server,
     # so intercept their calls before the transport and answer with an
     # actionable in-band tool error instead of "tool not found".
+    #
+    # This answer never reaches the gem, so the SEP-2322 `resultType` the
+    # modern lifecycle makes REQUIRED on every result has to be stamped here —
+    # a modern client discards a result without it, which would turn the
+    # actionable remedy into a dropped response. The request's own `_meta`
+    # envelope is the era signal, exactly as MCP::Server reads it. Legacy
+    # results stay unstamped: pre-2026 clients do not know the field.
     def unavailable_tool_shim(request)
       return nil unless request.post?
 
@@ -134,11 +140,10 @@ module Tools
       return nil if tool.nil? || tool.available?(ctx)
 
       result = { exit_code: 1, stdout: "", stderr: tool.unavailable_message }
-      json = {
-        jsonrpc: "2.0",
-        id: body["id"],
-        result: { content: CallExecutor.response_content(result), isError: true }
-      }.to_json
+      payload = { content: CallExecutor.response_content(result), isError: true }
+      payload[:resultType] = MCP::ResultType::COMPLETE if MCP::RequestEnvelope.modern?(body["params"])
+
+      json = { jsonrpc: "2.0", id: body["id"], result: payload }.to_json
       [ 200, { "Content-Type" => "application/json" }, [ json ] ]
     end
 

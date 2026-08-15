@@ -28,6 +28,27 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
                         clientInfo: { name: "test-client", version: "1" } }).dig("result", "protocolVersion")
   end
 
+  # One request of the stateless "modern" lifecycle (2026-07-28, SEP-2575) —
+  # the one Claude Code speaks: no `initialize`, no session id, the protocol
+  # version and client capabilities carried in a per-request `_meta` envelope
+  # and mirrored in routing headers.
+  def modern_rpc(method, params = {}, name: nil, version: MCP::Configuration::LATEST_MODERN_PROTOCOL_VERSION)
+    envelope = {
+      "io.modelcontextprotocol/protocolVersion" => version,
+      "io.modelcontextprotocol/clientCapabilities" => {},
+      "io.modelcontextprotocol/clientInfo" => { name: "claude-code", version: "1" }
+    }
+    post "/mcp",
+         params: { jsonrpc: "2.0", id: 1, method: method, params: params.merge(_meta: envelope) }.to_json,
+         headers: { "Content-Type" => "application/json",
+                    "Accept" => "application/json, text/event-stream",
+                    "Authorization" => "Bearer #{@token}",
+                    "MCP-Protocol-Version" => version,
+                    "Mcp-Method" => method,
+                    "Mcp-Name" => name }.compact
+    response.parsed_body
+  end
+
   def prompt_text(name)
     rpc("prompts/get", { name: name, arguments: {} }).dig("result", "messages").first.dig("content", "text")
   end
@@ -111,40 +132,40 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     assert_match(/setup_project/, result["instructions"])
   end
 
-  # ── protocol version negotiation ──
+  # ── the legacy `initialize` handshake ──
 
-  test "an offer newer than what the server serves negotiates down" do
-    # Claude Code always offers 2026-07-28, whose results all require a
-    # `resultType` this server does not emit; agreeing to it made the client
-    # discard every list response and register no tools at all.
-    assert_equal Tools::MCPProtocol::MAX_NEGOTIABLE_VERSION, initialize_with("2026-07-28")
+  test "a modern offer is counter-offered the newest handshake version" do
+    # The modern lifecycle has no handshake, so `initialize` must never agree
+    # to 2026-07-28 — the version Claude Code always offers. Echoing it back
+    # promised result shapes the handshake era does not emit, and the client
+    # discarded every list response and registered no tools at all.
+    assert_equal MCP::Configuration::LATEST_HANDSHAKE_PROTOCOL_VERSION, initialize_with("2026-07-28")
   end
 
-  test "an offer the server serves is agreed to unchanged" do
-    Tools::MCPProtocol::NEGOTIABLE_VERSIONS.each do |version|
+  test "an offer the handshake serves is agreed to unchanged" do
+    MCP::Configuration::SUPPORTED_HANDSHAKE_PROTOCOL_VERSIONS.each do |version|
       assert_equal version, initialize_with(version)
     end
   end
 
-  test "an unrecognized offer negotiates the newest version the server serves" do
-    assert_equal Tools::MCPProtocol::MAX_NEGOTIABLE_VERSION, initialize_with("not-a-version")
+  test "an unrecognized offer is counter-offered the newest handshake version" do
+    assert_equal MCP::Configuration::LATEST_HANDSHAKE_PROTOCOL_VERSION, initialize_with("not-a-version")
   end
 
   test "an offer that is not a string still gets the spec's invalid-params error" do
-    # Capping must not swallow a malformed handshake: the gem owns that error,
-    # and only offers it would agree to are rewritten on the way in.
     error = rpc("initialize", { protocolVersion: 20260728, capabilities: {},
                                 clientInfo: { name: "test-client", version: "1" } })["error"]
 
     assert_equal(-32602, error["code"])
   end
 
-  test "the list responses match the negotiated version" do
+  test "the handshake list responses match the negotiated version" do
     negotiated = initialize_with("2026-07-28")
 
     # The client sends the negotiated version back on every subsequent request:
     # it has to be accepted, and the results have to be valid for it — which
-    # for 2025-11-25 means no `resultType` is expected.
+    # on a handshake version means neither `resultType` nor the cache hints,
+    # fields a pre-2026 client does not know.
     { "tools/list" => "tools", "prompts/list" => "prompts", "resources/list" => "resources" }
       .each do |method, key|
       result = rpc(method, {}, protocol_version: negotiated)["result"]
@@ -152,7 +173,46 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
       assert_response :success
       assert_not_empty result[key]
       assert_nil result["resultType"]
+      assert_nil result["ttlMs"]
+      assert_nil result["cacheScope"]
     end
+  end
+
+  # ── the modern (SEP-2575) lifecycle ──
+
+  test "the modern list responses carry the resultType and cache hints their schema requires" do
+    # The actual Claude Code failure: it never negotiates through
+    # `initialize`, it sends the per-request envelope, and 2026-07-28 makes
+    # `resultType` (SEP-2322) required on every result and `ttlMs`/`cacheScope`
+    # (SEP-2549) required on the cacheable ones. Unstamped, every list response
+    # failed the client's schema check and the server exposed 0 tools.
+    { "tools/list" => "tools", "prompts/list" => "prompts", "resources/list" => "resources" }
+      .each do |method, key|
+      result = modern_rpc(method)["result"]
+
+      assert_response :success
+      assert_not_empty result[key], "#{method} served nothing"
+      assert_equal "complete", result["resultType"], "#{method} is missing resultType"
+      assert_equal 0, result["ttlMs"], "#{method} is missing the ttlMs cache hint"
+      assert_equal "private", result["cacheScope"], "#{method} is missing the cacheScope cache hint"
+    end
+  end
+
+  test "a modern tools/call is dispatched and its result is stamped" do
+    result = modern_rpc("tools/call", { name: "list_companies", arguments: {} },
+                        name: "list_companies")["result"]
+
+    assert_response :success
+    assert_equal "complete", result["resultType"]
+    companies = JSON.parse(result["content"].first["text"])["companies"]
+    assert_equal [ @company.id ], companies.map { |c| c["id"] }
+  end
+
+  test "a modern request for a version the server does not serve is refused with -32022" do
+    error = modern_rpc("tools/list", version: "2099-01-01")["error"]
+
+    assert_equal(-32022, error["code"])
+    assert_equal MCP::Configuration::SUPPORTED_MODERN_PROTOCOL_VERSIONS, error.dig("data", "supported")
   end
 
   test "the platform reference is served as a resource" do

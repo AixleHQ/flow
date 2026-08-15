@@ -24,6 +24,28 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     response.parsed_body
   end
 
+  # One request of the stateless "modern" lifecycle (2026-07-28, SEP-2575) —
+  # the one Claude Code speaks: no `initialize`, no session id, the protocol
+  # version and client capabilities carried in a per-request `_meta` envelope
+  # and mirrored in routing headers.
+  def modern_rpc(method, params = {}, name: nil)
+    version = MCP::Configuration::LATEST_MODERN_PROTOCOL_VERSION
+    envelope = {
+      "io.modelcontextprotocol/protocolVersion" => version,
+      "io.modelcontextprotocol/clientCapabilities" => {},
+      "io.modelcontextprotocol/clientInfo" => { name: "claude-code", version: "1" }
+    }
+    post "/action_mcp",
+         params: { jsonrpc: "2.0", id: 1, method: method, params: params.merge(_meta: envelope) }.to_json,
+         headers: { "Content-Type" => "application/json",
+                    "Accept" => "application/json, text/event-stream",
+                    "X-Session-Key" => @session.mcp_key,
+                    "MCP-Protocol-Version" => version,
+                    "Mcp-Method" => method,
+                    "Mcp-Name" => name }.compact
+    response.parsed_body
+  end
+
   def attach_platform_tool(name)
     Tool.shadow_for(Tools::Registry.fetch(name)).tap { |row| @session.tools << row }
   end
@@ -59,19 +81,31 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     assert_equal "2025-06-18", body.dig("result", "protocolVersion")
   end
 
-  test "initialize never agrees to a version whose result shapes the server does not serve" do
+  test "initialize never agrees to a version whose lifecycle has no handshake" do
     attach_platform_tool("board_list_tasks")
 
     negotiated = rpc("initialize", { protocolVersion: "2026-07-28", capabilities: {},
                                      clientInfo: { name: "claude-code", version: "1" } })
                  .dig("result", "protocolVersion")
 
-    assert_equal Tools::MCPProtocol::MAX_NEGOTIABLE_VERSION, negotiated
+    assert_equal MCP::Configuration::LATEST_HANDSHAKE_PROTOCOL_VERSION, negotiated
 
     tools = listed_tools(rpc("tools/list", {}, protocol_version: negotiated))
 
     assert_response :success
     assert_includes tools.map { |t| t["name"] }, "board_list_tasks"
+  end
+
+  test "a modern tools/list serves the session's tools with the stamps its schema requires" do
+    attach_platform_tool("board_list_tasks")
+
+    result = modern_rpc("tools/list")["result"]
+
+    assert_response :success
+    assert_includes result["tools"].map { |t| t["name"] }, "board_list_tasks"
+    assert_equal "complete", result["resultType"]
+    assert_equal 0, result["ttlMs"]
+    assert_equal "private", result["cacheScope"]
   end
 
   # ── tools/list ──
@@ -136,6 +170,21 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     text = body.dig("result", "content").map { |c| c["text"] }.join("\n")
     assert_match(/slack integration is not connected/i, text)
     assert_match(/Project Settings/, text)
+  end
+
+  test "the in-band error for a disconnected tool is stamped on the modern wire" do
+    # The shim answers before the transport, so nothing else can stamp the
+    # `resultType` 2026-07-28 requires — without it a modern client drops the
+    # remedy instead of showing it.
+    attach_platform_tool("slack_post_message")
+
+    result = modern_rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } },
+                        name: "slack_post_message")["result"]
+
+    assert_equal "complete", result["resultType"]
+    assert result["isError"]
+    assert_match(/slack integration is not connected/i,
+                 result["content"].map { |c| c["text"] }.join("\n"))
   end
 
   test "tools/call outside the entitlement stays an opaque protocol error" do

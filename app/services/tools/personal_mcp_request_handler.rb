@@ -16,10 +16,20 @@ module Tools
 
     # Returns a Rack response triple.
     #
-    # The server is configured with the newest protocol version it can serve
-    # and the offered version is capped before the transport sees it — see
-    # MCPProtocol — so the handshake can only agree to a version whose result
-    # shapes this server actually produces.
+    # No protocol-version shim: the gem owns negotiation for both eras of the
+    # SEP-2575 dual-era model, and since mcp 1.2.0 it owns them correctly.
+    # `initialize` negotiates legacy versions only — an offer of 2026-07-28
+    # (Claude Code always offers it) is answered with a counter-offer of the
+    # newest handshake version rather than echoed — and a modern client, which
+    # runs `server/discover` plus a per-request `_meta` envelope instead of a
+    # handshake, gets the `resultType` (SEP-2322) and `ttlMs`/`cacheScope`
+    # (SEP-2549) stamps that era makes REQUIRED on list results. 1.1.0 did
+    # neither: it echoed 2026-07-28 back through `initialize` and stamped
+    # nothing on either wire, so every list response failed the client's
+    # schema check and no tools were ever registered. Leaving the
+    # `configuration` unpinned is deliberate — a pin only scopes the handshake
+    # counter-offer, and the gem's own default there is already the newest
+    # version its result bodies conform to.
     #
     # `dns_rebinding_protection: false`: the SDK's own default only accepts a
     # loopback `Host`, which 403s every request to a deployed host. The
@@ -28,8 +38,6 @@ module Tools
     # a header, never a cookie, so a rebound browser request arrives without a
     # credential and is answered with 401.
     def call(request)
-      MCPProtocol.clamp_initialize_offer!(request)
-
       transport = MCP::Server::Transports::StreamableHTTPTransport.new(
         server, stateless: true, dns_rebinding_protection: false
       )
@@ -43,7 +51,6 @@ module Tools
     def server
       MCP::Server.new(
         name: "aixle",
-        configuration: MCPProtocol.configuration,
         instructions: PersonalMCPGuides::INSTRUCTIONS,
         tools: Registry.for_audience(:user).sort_by(&:name).map { |defn| define_tool(defn) },
         prompts: PROMPTS.map { |spec| define_prompt(spec) },
