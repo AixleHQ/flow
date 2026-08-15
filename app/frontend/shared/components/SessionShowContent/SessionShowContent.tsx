@@ -36,6 +36,7 @@ const AGENT_LABELS: Record<string, string> = {
   cursor_cli: 'Cursor CLI',
   codex: 'Codex',
   gemini_cli: 'Gemini CLI',
+  grok: 'Grok',
 };
 
 const AGENT_COLORS: Record<string, string> = {
@@ -43,6 +44,7 @@ const AGENT_COLORS: Record<string, string> = {
   cursor_cli: 'violet',
   codex: 'teal',
   gemini_cli: 'blue',
+  grok: 'gray',
 };
 
 function formatTokens(n: number): string {

@@ -92,6 +92,12 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; co
     description: "Google's multimodal AI for code and documentation tasks",
     color: AGENT_BRAND_COLORS.gemini_cli,
   },
+  {
+    type: 'grok',
+    name: 'Grok',
+    description: "xAI's Grok CLI for agentic coding in the terminal",
+    color: AGENT_BRAND_COLORS.grok,
+  },
 ];
 
 const ROLE_COLORS: Record<UserRole, string> = {

@@ -53,9 +53,9 @@ This single command:
 - Installs Ruby gems (Bundler) and JS packages (Yarn) inside the web
   container.
 - Creates the database, runs migrations, and seeds defaults.
-- Builds the four agent runtime images
+- Builds the five agent runtime images
   (`aixle/agent-base-core`, `aixle/claude-code`, `aixle/cursor-cli`,
-  `aixle/codex`, `aixle/gemini-cli`).
+  `aixle/codex`, `aixle/gemini-cli`, `aixle/grok`).
 
 ## 4. Run
 

@@ -332,6 +332,15 @@ module ContainerRuntime
           - file1.txt
           - file2.txt
         LOG
+      when "grok"
+        <<~LOG
+          Grok 1.0.3
+          model: grok-4.5
+
+          > Create two test files with sample content
+
+          Created file1.txt and file2.txt with sample content.
+        LOG
       else
         "$ agent running\nTask completed.\n"
       end
@@ -386,12 +395,24 @@ module ContainerRuntime
           "/home/gemini/.gemini/gemini-credentials.json" =>
             "9b744f9a5cab60c42a69a50f:04da5baafc2bbc778085937044112f07:2a4afe6a9c8969be3dfa312251b49ef9807b3271175bedacfc2f0f319176956cb144525368f4b9468db780e8d419f6e05ea7881b34370411bd33bdf7b913045dc9f2279f15c5b4bef8933933642f644487b5d141790619784e43c202c64016451d92"
         }
+      },
+      # Grok CLI writes one file for every login flow: a map of auth scope => entry,
+      # with the bearer token under "key".
+      "grok" => {
+        path: "/home/grok/.grok/auth.json",
+        content: {
+          "https://accounts.x.ai/sign-in" => {
+            "key" => "grok-session-token-placeholder",
+            "token_type" => "Bearer"
+          }
+        }.to_json
       }
     }.freeze
 
     MITM_LOGS = {
       "claude_code" => "",
       "gemini_cli" => "",
+      "grok" => "",
       "cursor_cli" => [
         { _source: "http2-logger", direction: "request", scheme: "https", method: "POST",
           host: "api2.cursor.sh", port: 443,

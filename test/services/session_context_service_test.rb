@@ -250,6 +250,46 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     refute_includes result[toml_path], 'type = "'
   end
 
+  test "generate_mcp_config generates Grok TOML format with plain headers" do
+    server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
+                    transport: "sse", scope: @project,
+                    headers: { "Authorization" => "Bearer secret123" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "grok")
+    session.mcp_servers << server
+
+    result = SessionContextService.generate_mcp_config(session)
+
+    toml_path = "/home/grok/.grok/config.toml"
+    assert result.key?(toml_path)
+    assert_includes result[toml_path], '[mcp_servers."tavily"]'
+    assert_includes result[toml_path], 'url = "https://tavily.com/mcp"'
+    # Grok reads `headers`, not Codex's `http_headers`, and infers the transport
+    # from url-vs-command — there is no type field.
+    assert_includes result[toml_path], 'headers = { "Authorization" = "Bearer secret123" }'
+    refute_includes result[toml_path], 'type = "'
+  end
+
+  test "inject_mcp_config appends Grok TOML to the generated config" do
+    server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
+                    transport: "sse", scope: @project, headers: {})
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "grok")
+    session.mcp_servers << server
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+
+    existing_toml = "[ui]\npermission_mode = \"always-approve\"\n"
+    runtime_mock.expects(:read_file).with("abc123", "/home/grok/.grok/config.toml").returns(existing_toml)
+
+    runtime_mock.expects(:write_file).with do |ctr, path, content|
+      ctr == "abc123" && path == "/home/grok/.grok/config.toml" &&
+        content.include?("permission_mode") && content.include?('[mcp_servers."tavily"]')
+    end.returns(true)
+
+    SessionContextService.inject_mcp_config("abc123", session)
+  end
+
   test "generate_mcp_config Codex uses http_headers not headers" do
     server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp",
                     transport: "sse", scope: @project,
@@ -509,6 +549,13 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "/workspace/AGENTS.md", adapter.context_file_path
   end
 
+  # A home-level rule file, not AGENTS.md: ~/.grok/rules/*.md is scanned on every
+  # session in every directory, so /workspace stays clean.
+  test "Grok adapter context_file_path returns a home dir rule file" do
+    adapter = Agents::GrokAdapter.new
+    assert_equal "/home/grok/.grok/rules/aixle-session-context.md", adapter.context_file_path
+  end
+
   test "Base adapter context_file_path returns nil" do
     adapter = Agents::BaseAdapter.new
     assert_nil adapter.context_file_path
@@ -568,7 +615,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       "claude_code" => "/home/claude/.claude/CLAUDE.md",
       "codex" => "/workspace/AGENTS.md",
       "gemini_cli" => "/home/gemini/.gemini/GEMINI.md",
-      "cursor_cli" => "/workspace/AGENTS.md"
+      "cursor_cli" => "/workspace/AGENTS.md",
+      "grok" => "/home/grok/.grok/rules/aixle-session-context.md"
     }.each do |agent_type, expected_path|
       session = create(:terminal_session, user: @user, project: @project,
                        agent_type: agent_type, mode: "interactive")
@@ -644,6 +692,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     adapter = Agents::GeminiCliAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
     assert_equal "gemini --yolo", result
+  end
+
+  test "Grok adapter session_command returns grok --yolo for both modes" do
+    adapter = Agents::GrokAdapter.new
+    assert_equal "grok --yolo", adapter.session_command(mode: "interactive")
+    assert_equal "grok --yolo", adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
   end
 
   test "Cursor adapter session_command returns agent --force for interactive mode" do
@@ -832,6 +886,12 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     paths = Agents::CursorCliAdapter.default_config_paths
     assert_includes paths, "~/.cursor/cli-config.json"
     assert_includes paths, ".cursorrules"
+  end
+
+  test "Grok adapter has default_config_paths" do
+    paths = Agents::GrokAdapter.default_config_paths
+    assert_includes paths, "~/.grok/config.toml"
+    assert_includes paths, "AGENTS.md"
   end
 
   test "Base adapter returns empty default_config_paths" do

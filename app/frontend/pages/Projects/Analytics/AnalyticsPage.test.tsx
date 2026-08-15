@@ -398,11 +398,14 @@ describe('Projects/Analytics/AnalyticsPage', () => {
 
   it('renders agent logos for known production agent types', () => {
     const productionAgents = {
-      agentTypes: ['claude_code', 'codex', 'gemini_cli'],
+      agentTypes: ['claude_code', 'codex', 'gemini_cli', 'grok'],
       sessionsByAgent: [
         { agentType: 'claude_code', sessions: 10, costCents: 500, tokens: 20_000 },
         { agentType: 'codex', sessions: 5, costCents: 250, tokens: 10_000 },
         { agentType: 'gemini_cli', sessions: 2, costCents: 100, tokens: 4_000 },
+        // No xAI artwork ships in this repo, so Grok renders the neutral colour chip
+        // the logo lookup falls back to — still a chip, still labelled.
+        { agentType: 'grok', sessions: 1, costCents: 50, tokens: 2_000 },
       ],
       activityOverTime: [{ date: '2026-06-01', agentType: 'claude_code', sessions: 10 }],
     };
@@ -416,5 +419,6 @@ describe('Projects/Analytics/AnalyticsPage', () => {
     expect(breakdownPanel).toHaveTextContent('claude_code');
     expect(breakdownPanel).toHaveTextContent('codex');
     expect(breakdownPanel).toHaveTextContent('gemini_cli');
+    expect(breakdownPanel).toHaveTextContent('grok');
   });
 });

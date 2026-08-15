@@ -3,7 +3,7 @@
 A **runtime** is the actual LLM CLI that runs inside an agent's
 container. The persona decides *who* the agent is; the runtime decides
 *what model and tool it drives*. The same persona can run on any of the
-four supported runtimes — pick the one whose model and credentials you
+five supported runtimes — pick the one whose model and credentials you
 have.
 
 ## Supported runtimes
@@ -14,8 +14,9 @@ have.
 | `cursor_cli`  | Cursor AI    | `aixle/cursor-cli`  | Editor-style autocomplete and edits. |
 | `codex`       | OpenAI       | `aixle/codex`       | OpenAI Codex CLI.                    |
 | `gemini_cli`  | Google       | `aixle/gemini-cli`  | Google Gemini CLI.                   |
+| `grok`        | xAI          | `aixle/grok`        | xAI Grok CLI.                        |
 
-All four images are built locally with `make build-agents` and used by
+All five images are built locally with `make build-agents` and used by
 the platform when starting a step's container. Each runtime has an
 adapter under `app/services/agents/` (`*_adapter.rb`) that knows how to
 launch the CLI, feed it the assembled context, wire up MCP servers, and
@@ -34,6 +35,7 @@ image.
 | `cursor_cli`  | Cursor API key.                                                    |
 | `codex`       | OpenAI API key.                                                    |
 | `gemini_cli`  | Google AI Studio API key.                                          |
+| `grok`        | xAI account, signed in with the device-code flow (or an xAI API key). |
 
 A step fails immediately with a "no credentials" error if the runtime's
 credentials aren't configured for the user who triggered the run.
@@ -42,7 +44,7 @@ credentials aren't configured for the user who triggered the run.
 
 The platform records `cost_cents` and token counts per session by
 parsing usage events out of the runtime's logs. This works only on
-runtimes that emit usage — all four currently do. If `cost_cents` is
+runtimes that emit usage — all five currently do. If `cost_cents` is
 `null` on a finished session, the runtime didn't emit usage events;
 check **Admin → Session Logs**.
 

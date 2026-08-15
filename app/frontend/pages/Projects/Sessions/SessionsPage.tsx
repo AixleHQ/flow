@@ -53,6 +53,7 @@ const AGENT_LABELS: Record<string, { label: string }> = {
   cursor_cli: { label: 'Cursor CLI' },
   codex: { label: 'Codex' },
   gemini_cli: { label: 'Gemini CLI' },
+  grok: { label: 'Grok' },
 };
 
 // Session lifecycle labels are domain-specific ("running" means the container
@@ -128,6 +129,7 @@ const AGENT_FILTER_OPTIONS = [
   { value: 'cursor_cli', label: 'Cursor CLI' },
   { value: 'codex', label: 'Codex' },
   { value: 'gemini_cli', label: 'Gemini CLI' },
+  { value: 'grok', label: 'Grok' },
 ];
 
 const STATE_FILTER_OPTIONS = [

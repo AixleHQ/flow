@@ -14,8 +14,8 @@ Read in any order:
 - **[Board](board.md)** — projects, columns, cards, and column → workflow bindings.
 - **[Workflows](workflows.md)** — DAG steps, retries, approval gates, parallel runs.
 - **[Agents](agents.md)** — personas, the container, and how session context is built.
-- **[Runtimes](runtimes.md)** — the four LLM CLIs (Claude Code, Cursor CLI,
-  Codex, Gemini), their images, credentials, and cost tracking.
+- **[Runtimes](runtimes.md)** — the five LLM CLIs (Claude Code, Cursor CLI,
+  Codex, Gemini, Grok), their images, credentials, and cost tracking.
 - **[Tools](tools.md)** — tool kinds, execution modes, the built-in board
   tools, and resource resolution.
 - **[MCP servers](mcp.md)** — transports, the internal `aixle-tools` server,

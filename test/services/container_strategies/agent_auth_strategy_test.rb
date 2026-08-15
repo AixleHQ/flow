@@ -85,6 +85,25 @@ module ContainerStrategies
       assert_equal "aixle/gemini-cli:latest", strategy.resolve_image
     end
 
+    test "resolves grok image" do
+      @session.update!(agent_type: "grok")
+      strategy = build_strategy(agent_type: "grok")
+      assert_equal "aixle/grok:latest", strategy.resolve_image
+    end
+
+    # The Grok login is the device-code flow: nothing in the container can open a
+    # browser, so the default browser flow would strand the auth terminal.
+    test "grok auth terminal runs the device-code login" do
+      assert_equal "grok login --device-auth", AgentBaseStrategy::AUTH_COMMANDS.fetch("grok")
+
+      @session.update!(agent_type: "grok")
+      strategy = build_strategy(agent_type: "grok")
+
+      assert_equal "grok login --device-auth", strategy.send(:ttyd_command)
+      assert_includes strategy.build_env_vars, "AUTH_WATCH_PATH=/home/grok/.grok/auth.json"
+      assert_includes strategy.build_env_vars, "AUTH_REQUIRED_KEYS=__present__"
+    end
+
     # == Environment Variables Tests ==
 
     test "builds env vars with session info" do

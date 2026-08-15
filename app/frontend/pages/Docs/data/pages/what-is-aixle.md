@@ -35,7 +35,7 @@ with AI") generates workflows from a plain-language description.
 
 An **Agent** is a persona (who it is, how it communicates, what
 principles it follows) running on top of an LLM CLI runtime —
-`claude_code`, `cursor_cli`, `codex`, or `gemini_cli`. The same persona
+`claude_code`, `cursor_cli`, `codex`, `gemini_cli`, or `grok`. The same persona
 can run on any runtime.
 
 ### Containers

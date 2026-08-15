@@ -32,6 +32,7 @@ a document is added, removed, or moved here, update this index in the same chang
 - **[design/cloud-connection-security.md](./design/cloud-connection-security.md)** — Customer-facing security notes for connecting an organisation's own Amazon Bedrock account: what the grant allows, where prompts go, the three connect paths and the trust each creates (including the device-code phishing posture), attribution, and what is stored where
 - **[design/coder-pool-hardening.md](./design/coder-pool-hardening.md)** — Coder workspace pool + template hardening: why allocation kept handing out one dead box (health never checked, no escape from a bad box, locks aging from acquisition not activity), detached execution for 15–25 min gates, and the template/AMI corrections plus a Collectively-specific template
 - **[design/oauth-implementation.md](./design/oauth-implementation.md)** — As-built OAuth guide: runtime flows, flow engine + `Oauth::State`, MCP discovery (DCR/CIMD) + SSRF doctrine, delivery/refresh/preflight, context.log redaction, agent-CLI auth methods + `/design-login`
+- **[design/grok-runtime-integration.md](./design/grok-runtime-integration.md)** — Grok (xAI) runtime decisions: the official `@xai-official/grok` CLI, device-code auth with `~/.grok/auth.json` as the credential, model catalogue + pricing from `/v1/language-models`, and why usage comes from the MITM log rather than OTLP
 
 ## Feature Pipeline
 

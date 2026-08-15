@@ -7,7 +7,7 @@ An Agent in Aixle Flow is two things layered together:
 - A **runtime** — the actual LLM CLI that runs inside the container.
 
 You can mix and match: the same "Code Reviewer" persona can run on top
-of Claude Code, Cursor CLI, Codex CLI, or Gemini CLI.
+of Claude Code, Cursor CLI, Codex CLI, Gemini CLI, or Grok CLI.
 
 ## Persona fields
 
@@ -25,8 +25,8 @@ in that order.
 
 ## Runtimes
 
-The persona runs on top of one of four LLM CLIs — `claude_code`,
-`cursor_cli`, `codex`, or `gemini_cli`. Each runs in its own Docker
+The persona runs on top of one of five LLM CLIs — `claude_code`,
+`cursor_cli`, `codex`, `gemini_cli`, or `grok`. Each runs in its own Docker
 image and needs its own per-user credentials, configured on the
 **Profile** page. The full runtime table, credential requirements, and
 cost-tracking notes live on the dedicated [Runtimes](runtimes.md) page.

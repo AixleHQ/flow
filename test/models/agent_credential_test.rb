@@ -268,12 +268,16 @@ class AgentCredentialTest < ActiveSupport::TestCase
     codex = create(:agent_credential, user: @user, agent_type: "codex")
     cursor = create(:agent_credential, user: @user, agent_type: "cursor_cli")
     gemini = create(:agent_credential, user: @user, agent_type: "gemini_cli")
+    # Grok tokens do expire, but xAI publishes no token endpoint to refresh them
+    # server-side — the CLI rotates them in-container and cleanup re-captures the blob.
+    grok = create(:agent_credential, user: @user, agent_type: "grok")
 
     refreshable = AgentCredential.refreshable
     assert_includes refreshable, claude
     assert_includes refreshable, codex
     assert_includes refreshable, cursor
     refute_includes refreshable, gemini
+    refute_includes refreshable, grok
   end
 
   test "refresh_due returns creds expiring within the window, excluding far-future and null-expiry" do

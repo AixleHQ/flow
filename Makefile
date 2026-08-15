@@ -298,6 +298,7 @@ build-agents:
 	docker build -t aixle/cursor-cli:latest -f docker/cursor-cli/Dockerfile docker/ & pids="$$pids $$!"; \
 	docker build -t aixle/codex:latest -f docker/codex/Dockerfile docker/ & pids="$$pids $$!"; \
 	docker build -t aixle/gemini-cli:latest -f docker/gemini-cli/Dockerfile docker/ & pids="$$pids $$!"; \
+	docker build -t aixle/grok:latest -f docker/grok/Dockerfile docker/ & pids="$$pids $$!"; \
 	fail=0; for p in $$pids; do wait $$p || fail=1; done; \
 	if [ $$fail -ne 0 ]; then echo "ERROR: at least one agent image failed to build"; exit 1; fi
 
@@ -335,5 +336,5 @@ help:
 	@echo "  make shell                  - Open shell in web container"
 	@echo ""
 	@echo "Agent Docker Images:"
-	@echo "  make build-agents           - Build all agent images (core + 4 agents in parallel)"
+	@echo "  make build-agents           - Build all agent images (core + 5 agents in parallel)"
 	@echo "  make build-otlp-ingest      - Build the OTLP ingest image"

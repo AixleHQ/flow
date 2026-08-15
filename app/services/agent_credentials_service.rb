@@ -7,7 +7,8 @@ class AgentCredentialsService
     "claude_code" => Agents::ClaudeCodeAdapter,
     "cursor_cli" => Agents::CursorCliAdapter,
     "codex" => Agents::CodexAdapter,
-    "gemini_cli" => Agents::GeminiCliAdapter
+    "gemini_cli" => Agents::GeminiCliAdapter,
+    "grok" => Agents::GrokAdapter
   }.freeze
 
   attr_reader :adapter, :agent_type

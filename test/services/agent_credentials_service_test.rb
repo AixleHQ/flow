@@ -35,6 +35,13 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     assert_instance_of Agents::GeminiCliAdapter, service.adapter
   end
 
+  test "initializes with grok adapter" do
+    service = AgentCredentialsService.new("grok")
+
+    assert_equal "grok", service.agent_type
+    assert_instance_of Agents::GrokAdapter, service.adapter
+  end
+
   test "raises error for unknown agent type" do
     assert_raises(ArgumentError) do
       AgentCredentialsService.new("unknown_agent")
@@ -57,6 +64,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     assert_includes agents, "cursor_cli"
     assert_includes agents, "gemini_cli"
     assert_includes agents, "codex"
+    assert_includes agents, "grok"
   end
 
   test "supported? returns true for known agent" do

@@ -67,6 +67,7 @@ const AGENT_OPTIONS = [
   { value: 'cursor_cli', label: 'Cursor CLI', color: 'violet' },
   { value: 'codex', label: 'Codex', color: 'teal' },
   { value: 'gemini_cli', label: 'Gemini CLI', color: 'blue' },
+  { value: 'grok', label: 'Grok', color: 'gray' },
 ];
 
 const LandingPage = () => {

@@ -157,6 +157,26 @@ describe('RunWorkflowModal', () => {
     );
   });
 
+  // The runtime Select is data-driven from configuredAgents and labels with a generic
+  // formatter, so a newly added runtime must appear with no per-runtime registration.
+  it('offers a newly configured runtime with a formatted label', async () => {
+    renderModal({ configuredAgents: ['grok'], defaultAgentRuntime: 'grok' });
+
+    expect(screen.getByDisplayValue('Grok')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Run Workflow' }));
+
+    await waitFor(() =>
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/projects/7/workflow_runs',
+        expect.objectContaining({
+          workflowRun: expect.objectContaining({ agentRuntime: 'grok' }),
+        }),
+        expect.any(Object),
+      ),
+    );
+  });
+
   it('shows the empty fallback and disables Run when there are no configured agents', () => {
     renderModal({ configuredAgents: [] });
 

@@ -64,6 +64,18 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   end
 
   # ====================================================================
+  # AC 4b: grok → --tools claude-code (Grok reads Claude Code's artifacts)
+  # ====================================================================
+
+  test "grok session installs with --tools claude-code" do
+    session = build_bmad_session(agent_type: "grok")
+
+    expect_exec_matching("--tools claude-code")
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+  end
+
+  # ====================================================================
   # AC 5: Custom modules → --modules bmm,cis,bmb
   # ====================================================================
 
@@ -346,7 +358,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   end
 
   test "AGENT_TYPE_TO_BMAD_TOOL covers all valid agent types" do
-    %w[cursor_cli claude_code codex gemini_cli].each do |agent_type|
+    %w[cursor_cli claude_code codex gemini_cli grok].each do |agent_type|
       assert BmadMethodInjector::AGENT_TYPE_TO_BMAD_TOOL.key?(agent_type),
         "Missing BMAD tool mapping for #{agent_type}"
     end
