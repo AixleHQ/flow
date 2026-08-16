@@ -64,7 +64,7 @@ class Web::Company::Projects::FavoritesControllerTest < ActionDispatch::Integrat
 
     get company_projects_path
 
-    assert_equal true, inertia.props[:projects].find { |p| p[:id] == @project.id }[:favorite]
+    assert inertia.props[:projects].find { |p| p[:id] == @project.id }[:favorite]
   end
 
   test "a project the user cannot reach cannot be favorited" do

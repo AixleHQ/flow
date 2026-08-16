@@ -65,10 +65,8 @@ const COMPARATORS: Record<SortKey, (a: Project, b: Project) => number> = {
 // The user's own favorites lead every sort mode — the selected sort only decides
 // the order WITHIN the favorites and within the rest. Matches the server-side
 // ordering the sidebar's project list uses.
-const favoritesFirst =
-  (sortBy: SortKey) =>
-  (a: Project, b: Project): number =>
-    Number(b.favorite) - Number(a.favorite) || COMPARATORS[sortBy](a, b);
+const compareFavoritesFirst = (a: Project, b: Project, sortBy: SortKey): number =>
+  Number(b.favorite) - Number(a.favorite) || COMPARATORS[sortBy](a, b);
 
 const IndexPage = () => {
   const { projects } = usePage<PageProps>().props;
@@ -86,7 +84,7 @@ const IndexPage = () => {
   );
 
   const sortedAndFiltered = useMemo(() => {
-    const sorted = [...byState].sort(favoritesFirst(sortBy));
+    const sorted = [...byState].sort((a, b) => compareFavoritesFirst(a, b, sortBy));
 
     if (!searchQuery.trim()) return sorted;
     const query = searchQuery.toLowerCase();
