@@ -143,6 +143,7 @@ import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 import { formatCostCents, formatDuration, formatTokens } from './boardFormat';
 import styles from './BoardPage.module.css';
+import { CHIP_TOOLTIP_PROPS } from './chipTooltip';
 import { GATE_CHIP_WIDTH, GateStatusChip } from './GateStatusChip';
 import { LatestRunTile } from './LatestRunTile';
 import { WORKFLOW_ACTIVE_STATES, type TaskWorkflowRun } from './taskRuns';
@@ -555,7 +556,7 @@ function CollapsedTaskChip({ task, onClick }: { task: Task; onClick?: (t: Task) 
   const { color, hasActiveRun, tooltipLabel } = collapsedTaskStatus(task);
 
   return (
-    <Tooltip label={tooltipLabel} position="right" withArrow color="dark">
+    <Tooltip {...CHIP_TOOLTIP_PROPS} label={tooltipLabel}>
       <Box
         ref={setNodeRef}
         aria-label={`Drag ${task.title}`}
