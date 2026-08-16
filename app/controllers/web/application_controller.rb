@@ -41,7 +41,14 @@ class Web::ApplicationController < ApplicationController
           # `members` (owner/collaborator avatars) is opt-in via params — the
           # sidebar only needs name/counts, and loading owner+collaborators for
           # every project on every page load would be a flat but pointless cost.
-          scope.with_state(:active).with_computed_counts.order(:name).map { |p| ProjectResource.new(p).to_h }
+          # The user's own favorites lead the list (same order as
+          # /company/projects); the star itself only lives on the project tiles,
+          # so `favorite_project_ids` stays unset here and no extra query runs.
+          scope.with_state(:active)
+               .with_computed_counts
+               .favorites_first_for(current_user)
+               .order(:name)
+               .map { |p| ProjectResource.new(p).to_h }
         }
       )
     else

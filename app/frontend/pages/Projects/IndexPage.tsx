@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { companyProjectFavoritePath } from 'shared/routes';
 import { EmptyState } from 'shared/ui';
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -26,6 +27,7 @@ interface Project {
   lastActivityAt?: string | null;
   createdAt: string;
   members: { id: number; initials: string }[];
+  favorite: boolean;
 }
 
 interface PageProps {
@@ -49,6 +51,23 @@ const STATE_FILTER_OPTIONS: { value: StateFilter; label: string }[] = [
   { value: 'archived', label: 'Archived' },
 ];
 
+const COMPARATORS: Record<SortKey, (a: Project, b: Project) => number> = {
+  name: (a, b) => a.name.localeCompare(b.name),
+  last_activity: (a, b) => {
+    if (!a.lastActivityAt && !b.lastActivityAt) return 0;
+    if (!a.lastActivityAt) return 1;
+    if (!b.lastActivityAt) return -1;
+    return new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime();
+  },
+  newest: (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+};
+
+// The user's own favorites lead every sort mode — the selected sort only decides
+// the order WITHIN the favorites and within the rest. Matches the server-side
+// ordering the sidebar's project list uses.
+const compareFavoritesFirst = (a: Project, b: Project, sortBy: SortKey): number =>
+  Number(b.favorite) - Number(a.favorite) || COMPARATORS[sortBy](a, b);
+
 const IndexPage = () => {
   const { projects } = usePage<PageProps>().props;
   const [createOpened, setCreateOpened] = useState(false);
@@ -65,24 +84,7 @@ const IndexPage = () => {
   );
 
   const sortedAndFiltered = useMemo(() => {
-    const sorted = [...byState];
-
-    switch (sortBy) {
-      case 'last_activity':
-        sorted.sort((a, b) => {
-          if (!a.lastActivityAt && !b.lastActivityAt) return 0;
-          if (!a.lastActivityAt) return 1;
-          if (!b.lastActivityAt) return -1;
-          return new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime();
-        });
-        break;
-      case 'newest':
-        sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        break;
-      case 'name':
-      default:
-        sorted.sort((a, b) => a.name.localeCompare(b.name));
-    }
+    const sorted = [...byState].sort((a, b) => compareFavoritesFirst(a, b, sortBy));
 
     if (!searchQuery.trim()) return sorted;
     const query = searchQuery.toLowerCase();
@@ -91,6 +93,21 @@ const IndexPage = () => {
 
   const handleProjectClick = (projectId: number) => {
     router.visit(`/company/projects/${projectId}`);
+  };
+
+  // The server owns the favorite (it is per-user and must survive a reload), so
+  // the toggle is a round trip. `preserveState` keeps the search/sort/filter the
+  // user set, `preserveScroll` keeps their place in a long grid; the refreshed
+  // props re-order both this grid and the sidebar's project list.
+  const handleToggleFavorite = (project: Project) => {
+    const path = companyProjectFavoritePath(project.id);
+    const options = { preserveScroll: true, preserveState: true };
+
+    if (project.favorite) {
+      router.delete(path, options);
+    } else {
+      router.post(path, {}, options);
+    }
   };
 
   const stateFilterLabel = STATE_FILTER_OPTIONS.find((o) => o.value === stateFilter)?.label ?? stateFilter;
@@ -163,7 +180,12 @@ const IndexPage = () => {
         ) : (
           <Box className={classes.grid}>
             {sortedAndFiltered.map((project) => (
-              <ProjectCard key={project.id} project={project} onClick={() => handleProjectClick(project.id)} />
+              <ProjectCard
+                key={project.id}
+                project={project}
+                onClick={() => handleProjectClick(project.id)}
+                onToggleFavorite={() => handleToggleFavorite(project)}
+              />
             ))}
           </Box>
         )}

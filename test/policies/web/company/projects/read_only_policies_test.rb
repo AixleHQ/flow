@@ -97,6 +97,22 @@ module Web
           assert_not p.finish?
         end
 
+        # The one write a viewer IS allowed: their own list ordering. Favoriting
+        # touches nothing about the project and nobody else's list.
+        test "FavoritesPolicy: viewer can favorite and unfavorite" do
+          p = FavoritesPolicy.new(context_for(@viewer), nil)
+          assert p.create?
+          assert p.destroy?
+        end
+
+        test "FavoritesPolicy: a user with no access to the project cannot favorite it" do
+          stranger = create(:user, :employee, :onboarding_completed, company: @company)
+
+          p = FavoritesPolicy.new(context_for(stranger), nil)
+          assert_not p.create?
+          assert_not p.destroy?
+        end
+
         test "AgentsPolicy/ToolsPolicy: viewer writes denied" do
           assert_not AgentsPolicy.new(context_for(@viewer), nil).create?
           assert_not ToolsPolicy.new(context_for(@viewer), nil).create?

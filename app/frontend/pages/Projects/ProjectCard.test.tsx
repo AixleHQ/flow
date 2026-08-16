@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { renderPage, screen, userEvent } from 'test/renderPage';
 
@@ -30,6 +30,7 @@ const project = {
     { id: 2, initials: 'BD' },
     { id: 3, initials: 'CE' },
   ],
+  favorite: false,
 };
 
 describe('ProjectCard', () => {
@@ -63,6 +64,39 @@ describe('ProjectCard', () => {
     renderPage(<ProjectCard project={project} />);
     expect(screen.getByRole('button', { name: /open/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /settings/i })).toBeInTheDocument();
+  });
+
+  it('offers a favorite control that reports the unstarred state', () => {
+    renderPage(<ProjectCard project={project} onToggleFavorite={vi.fn()} />);
+
+    const star = screen.getByRole('button', { name: 'Add Acme to favorites' });
+    expect(star).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('reports the starred state on an already favorited project', () => {
+    renderPage(<ProjectCard project={{ ...project, favorite: true }} onToggleFavorite={vi.fn()} />);
+
+    const star = screen.getByRole('button', { name: 'Remove Acme from favorites' });
+    expect(star).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  // The star lives inside the tile but must not open the project — favoriting is
+  // done without navigating in.
+  it('toggles the favorite without opening the project', async () => {
+    const onToggleFavorite = vi.fn();
+    const onClick = vi.fn();
+    renderPage(<ProjectCard project={project} onClick={onClick} onToggleFavorite={onToggleFavorite} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add Acme to favorites' }));
+
+    expect(onToggleFavorite).toHaveBeenCalledTimes(1);
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it('omits the favorite control when no toggle handler is given', () => {
+    renderPage(<ProjectCard project={project} />);
+
+    expect(screen.queryByRole('button', { name: /favorites/ })).not.toBeInTheDocument();
   });
 
   it('dims archived projects', () => {

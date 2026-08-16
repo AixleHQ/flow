@@ -1,4 +1,5 @@
 .card {
+  position: relative;
   background-color: var(--app-bg-card);
   border: 1px solid var(--app-border-default);
   border-radius: 10px;
@@ -33,6 +34,20 @@
   width: 100%;
   text-align: left;
   border-radius: 6px;
+}
+
+/* The favorite star is pinned to the tile's top-right corner, over the card's
+   own padding; the header row reserves the width so the status badge never
+   slides under it. */
+.favoriteButton {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+}
+
+.headerRow {
+  padding-right: 24px;
 }
 
 .avatar {

@@ -51,4 +51,41 @@ class ProjectTest < ActiveSupport::TestCase
     assert_not_equal @project.owner_id, admin.id
     assert_not @project.admin?(admin)
   end
+
+  # favorites_first_for is an ORDER BY prefix: `.order(:name)` still decides the
+  # order inside each group, so a favorited "Zeta" leads an alphabetical list.
+  test "favorites_first_for puts the user's favorites ahead of the chained ordering" do
+    trio = create_named_projects("Alpha", "Middle", "Zeta")
+    create(:project_favorite, user: @project_owner, project: trio.fetch("Zeta"))
+
+    assert_equal %w[Zeta Alpha Middle], named_projects.favorites_first_for(@project_owner).order(:name).pluck(:name)
+  end
+
+  test "favorites_first_for is per user: one user's star does not reorder another list" do
+    trio = create_named_projects("Alpha", "Middle", "Zeta")
+    other = create(:user, :employee, :onboarding_completed, company: @company)
+    create(:project_favorite, user: @project_owner, project: trio.fetch("Zeta"))
+
+    assert_equal %w[Zeta Alpha Middle], named_projects.favorites_first_for(@project_owner).order(:name).pluck(:name)
+    assert_equal %w[Alpha Middle Zeta], named_projects.favorites_first_for(other).order(:name).pluck(:name)
+  end
+
+  test "favorites_first_for keeps the chained ordering when nothing is favorited" do
+    create_named_projects("Alpha", "Middle", "Zeta")
+
+    assert_equal named_projects.order(:name).pluck(:name),
+                 named_projects.favorites_first_for(@project_owner).order(:name).pluck(:name)
+  end
+
+  private
+
+  def create_named_projects(*names)
+    names.index_with { |name| create(:project, name: name, company: @company, owner: @project_owner) }
+  end
+
+  # Only the projects a favorites test created, so the setup project's
+  # sequence-generated name cannot land between them alphabetically.
+  def named_projects
+    @company.projects.where(name: %w[Alpha Middle Zeta])
+  end
 end

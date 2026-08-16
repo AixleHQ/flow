@@ -128,6 +128,49 @@ describe('Projects/IndexPage', () => {
     expect(screen.getAllByText(/^(Busy|Quiet)$/).map((el) => el.textContent)).toEqual(['Busy', 'Quiet']);
   });
 
+  it('lists favorites before non-favorites, whatever the sort mode', async () => {
+    renderAuthedPage(<IndexPage />, {
+      props: {
+        projects: [
+          project({ id: 1, name: 'Alpha', slug: 'alpha', createdAt: '2026-05-01T00:00:00Z' }),
+          project({ id: 2, name: 'Zeta', slug: 'zeta', createdAt: '2026-01-01T00:00:00Z', favorite: true }),
+        ],
+      },
+    });
+
+    // Favorited Zeta leads even though the default sort is alphabetical.
+    expect(screen.getAllByText(/^(Alpha|Zeta)$/).map((el) => el.textContent)).toEqual(['Zeta', 'Alpha']);
+
+    // ...and still leads under "Newest first", where Alpha is the newer project.
+    await userEvent.click(screen.getByDisplayValue('Name'));
+    await userEvent.click(screen.getByRole('option', { name: 'Newest first' }));
+
+    expect(screen.getAllByText(/^(Alpha|Zeta)$/).map((el) => el.textContent)).toEqual(['Zeta', 'Alpha']);
+  });
+
+  it('favorites a project from its tile', async () => {
+    renderAuthedPage(<IndexPage />, { props: { projects: [project({ id: 5, name: 'Acme' })] } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add Acme to favorites' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/5/favorite',
+      {},
+      { preserveScroll: true, preserveState: true },
+    );
+  });
+
+  it('unfavorites a project that is already a favorite', async () => {
+    renderAuthedPage(<IndexPage />, { props: { projects: [project({ id: 5, name: 'Acme', favorite: true })] } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove Acme from favorites' }));
+
+    expect(router.delete).toHaveBeenCalledWith('/company/projects/5/favorite', {
+      preserveScroll: true,
+      preserveState: true,
+    });
+  });
+
   it('opens the create modal from the header button', async () => {
     renderAuthedPage(<IndexPage />, { props: { projects: [project()] } });
 
