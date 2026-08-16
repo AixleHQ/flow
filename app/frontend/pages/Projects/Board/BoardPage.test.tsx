@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
+import { rem } from '@mantine/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildBoard } from 'test/factories/board';
@@ -9,13 +10,14 @@ import { buildBoardTask } from 'test/factories/boardTask';
 import { buildTaskComment } from 'test/factories/taskComment';
 import { buildTaskStatistics } from 'test/factories/taskStatistics';
 import { buildTaskWorkflowRun } from 'test/factories/taskWorkflowRun';
-import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
+import { act, cleanup, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type BoardTask from 'types/generated/BoardTask';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import { formatDateTime } from 'shared/lib/formatDate';
 
 import BoardPage from './BoardPage';
+import { GATE_CHIP_WIDTH } from './GateStatusChip';
 
 // Typelizer emits the step shape inline rather than as its own type, so name it here.
 type TaskWorkflowRunStep = TaskWorkflowRun['steps'][number];
@@ -1112,7 +1114,9 @@ describe('Projects/Board/BoardPage', () => {
     expect(await screen.findByText(label)).toBeInTheDocument();
   });
 
-  it('explains in the task drawer why a stale CI gate gave up, and offers to clear it', async () => {
+  // The task drawer for a task whose lone CI gate went stale — the surface every assertion about
+  // the stale diagnostic needs, since the diagnostic now lives only in the gate chip's tooltip.
+  const renderStaleGateDrawer = (diagnosticReason: string | null) =>
     renderAuthedPage(<BoardPage />, {
       props: {
         ...populatedProps,
@@ -1126,7 +1130,7 @@ describe('Projects/Board/BoardPage', () => {
             createdAt: '2026-01-02T00:00:00Z',
             status: 'stale',
             ciStatus: 'stale',
-            diagnosticReason: 'CI pr number 42 on org/app cannot be read: PR #42 not found',
+            diagnosticReason,
           }),
         }),
         taskComments: [],
@@ -1136,11 +1140,90 @@ describe('Projects/Board/BoardPage', () => {
       },
     });
 
+  const STALE_DIAGNOSTIC = 'CI pr number 42 on org/app cannot be read: PR #42 not found';
+  const STALE_EXPLANATION = `github checks completed — stale: ${STALE_DIAGNOSTIC}`;
+
+  // The colour Mantine resolved for a tooltip — the part of a chip tooltip's look jsdom can still
+  // see with no layout and no stylesheets. Read off both tooltips and compared with each other
+  // rather than with a literal, so the assertion is about the two agreeing and not about a copy of
+  // Mantine's internals.
+  const tooltipBackground = (tip: HTMLElement) => tip.style.getPropertyValue('--tooltip-bg');
+
+  it('explains in a tooltip why a stale CI gate gave up, and offers to clear it', async () => {
+    renderStaleGateDrawer(STALE_DIAGNOSTIC);
+
     const drawer = within(screen.getByRole('dialog'));
     expect(drawer.getByText(/CI Gates \(1\)/)).toBeInTheDocument();
-    expect(drawer.getByText(/PR #42 not found/)).toBeInTheDocument();
-    expect(drawer.getByText(/^Stale — no CI result after/)).toBeInTheDocument();
+    // The diagnostic is a sentence of prose: it must not be printed into the row, where it was the
+    // one thing that still made a gate row taller and noisier than the rest.
+    expect(drawer.queryByText(/PR #42 not found/)).not.toBeInTheDocument();
+    // The state is the chip's label now; the row keeps only the short things the chip cannot say —
+    // the age of the gate.
+    expect(drawer.getByText('stale')).toBeInTheDocument();
+    expect(drawer.getByText(/^\d+h \d+m$/)).toBeInTheDocument();
+    expect(drawer.queryByText(/^Stale — /)).not.toBeInTheDocument();
     expect(drawer.getByRole('button', { name: 'Delete gate 9' })).toBeInTheDocument();
+
+    // Hovering the chip is how a reader with a pointer gets the explanation back — the tooltip
+    // portals out of the drawer, so it is looked up on the whole document.
+    await userEvent.hover(drawer.getByText('stale'));
+
+    expect(await screen.findByText(STALE_EXPLANATION)).toBeInTheDocument();
+  });
+
+  it('says a stale CI gate never got a verdict when it carries no diagnostic', async () => {
+    // Reconciliation records a reason in every path it knows about, but the gate row must still say
+    // something more useful than the bare gate type when one is missing.
+    renderStaleGateDrawer(null);
+
+    await userEvent.hover(within(screen.getByRole('dialog')).getByText('stale'));
+
+    const explanation = 'github checks completed — stale: no CI result was ever obtained';
+    expect(await screen.findByText(explanation)).toBeInTheDocument();
+  });
+
+  it('reaches the stale gate explanation by keyboard, not only by hover', async () => {
+    // The tooltip is the only place the diagnostic exists now, so hover cannot be the only way in.
+    renderStaleGateDrawer(STALE_DIAGNOSTIC);
+
+    const chip = within(screen.getByRole('dialog')).getByRole('button', { name: /stale CI gate/ });
+    // Tabbing lands here — which is the point of the chip being a button and not a bare badge.
+    act(() => chip.focus());
+
+    const explanation = await screen.findByText(STALE_EXPLANATION);
+    // Not merely on screen: named as the focused chip's own description, which is what a screen
+    // reader reads out when focus arrives.
+    expect(chip).toHaveAttribute('aria-describedby', explanation.id);
+  });
+
+  it('reaches the stale gate explanation by touch, where there is no hover', async () => {
+    renderStaleGateDrawer(STALE_DIAGNOSTIC);
+
+    const chip = within(screen.getByRole('dialog')).getByRole('button', { name: /stale CI gate/ });
+    await userEvent.pointer({ target: chip, keys: '[TouchA]' });
+
+    expect(await screen.findByText(STALE_EXPLANATION)).toBeInTheDocument();
+  });
+
+  it('gives the gate chip tooltip the look a card wears in a collapsed column', async () => {
+    // Both chips are deliberately tiny elements whose whole story is in the tooltip, so there the
+    // tooltip is the content and not a hint — and the two must not read as two different
+    // mechanisms. The collapsed column's card tooltip is the reference design (they share
+    // CHIP_TOOLTIP_PROPS, which also gives them the same arrow and placement); the colour is the
+    // part of that jsdom can still see.
+    const card = await collapseBacklogAndGetChip(
+      makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+    );
+    await userEvent.hover(card);
+    const reference = tooltipBackground(await screen.findByText(/^Wire up authentication/));
+    expect(reference).not.toBe('');
+
+    cleanup();
+
+    renderStaleGateDrawer(STALE_DIAGNOSTIC);
+    await userEvent.hover(within(screen.getByRole('dialog')).getByText('stale'));
+
+    expect(tooltipBackground(await screen.findByText(STALE_EXPLANATION))).toBe(reference);
   });
 
   it('does not offer to clear a CI gate that already has a verdict', async () => {
@@ -1168,8 +1251,96 @@ describe('Projects/Board/BoardPage', () => {
     });
 
     const drawer = within(screen.getByRole('dialog'));
-    expect(drawer.getByText('Failed — failure')).toBeInTheDocument();
+    expect(drawer.getByText('failed')).toBeInTheDocument();
     expect(drawer.queryByRole('button', { name: 'Delete gate 9' })).not.toBeInTheDocument();
+  });
+
+  it('renders CI gates as compact state chips with no duplicated status line', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          ciGates: gatesOf(
+            {
+              id: 9,
+              gateType: 'github_workflow_completed',
+              createdAt: '2026-01-02T00:00:00Z',
+              status: 'resolved',
+              ciStatus: 'succeeded',
+              conclusion: 'success',
+              metadata: { repoFullName: 'org/app', runId: 555 },
+            },
+            {
+              id: 10,
+              gateType: 'github_checks_completed',
+              createdAt: '2026-01-02T00:00:00Z',
+              status: 'pending',
+              ciStatus: 'pending',
+              metadata: { repoFullName: 'org/app', prNumber: 42 },
+            },
+          ),
+        }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    // Each gate reads as one chip carrying its state — not as a filled pill spelling out the gate
+    // type with a status line under it repeating what the pill's colour already said.
+    expect(drawer.getByText('passed')).toBeInTheDocument();
+    expect(drawer.getByText('waiting')).toBeInTheDocument();
+    expect(drawer.queryByText(/^Passed — /)).not.toBeInTheDocument();
+    expect(drawer.queryByText(/^Waiting — /)).not.toBeInTheDocument();
+    expect(drawer.queryByText('github workflow completed')).not.toBeInTheDocument();
+
+    // Both provider links survive the tightening.
+    expect(drawer.getByText('org/app #555').closest('a')).toHaveAttribute(
+      'href',
+      'https://github.com/org/app/actions/runs/555',
+    );
+    expect(drawer.getByText('org/app #42').closest('a')).toHaveAttribute('href', 'https://github.com/org/app/pull/42');
+  });
+
+  it('gives the gate chip column room to spell out the longest state word', async () => {
+    // The column that aligns the gate links used to be a hard width two pixels narrower than
+    // "waiting", so the badge's own ellipsis ate the end of the most common state word while the
+    // DOM text stayed intact. It is now a floor: wide enough for every label, and free to grow.
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          ciGates: gatesOf({
+            id: 9,
+            gateType: 'github_checks_completed',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'pending',
+            ciStatus: 'pending',
+            metadata: { repoFullName: 'org/app', prNumber: 42 },
+          }),
+        }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    const column = drawer.getByText('waiting').closest('.mantine-Badge-root')?.parentElement as HTMLElement;
+
+    // jsdom has no layout, so the clipping itself is not observable here — what is observable is
+    // the shape that caused it: the room the column reserves must be a floor and not a cap.
+    expect(column.style.minWidth).toBe(rem(GATE_CHIP_WIDTH));
+    expect(column.style.width).toBe('');
   });
 
   it('lists every recent run state in the card status chip tooltip', async () => {
