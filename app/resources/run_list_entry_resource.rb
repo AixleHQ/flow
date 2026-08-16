@@ -31,22 +31,22 @@ class RunListEntryResource < ApplicationResource
   # so, which is what the detail page is for.
   typelize :string?
   attribute :agent_type do |run|
-    RunListEntryResource.ordered_step_runs(run).filter_map { |sr| sr.terminal_session&.agent_type }.first
+    ordered_step_runs(run).filter_map { |sr| sr.terminal_session&.agent_type }.first
   end
 
   typelize :number
   attribute :total_tokens do |run|
-    RunListEntryResource.ordered_step_runs(run).sum { |sr| sr.terminal_session&.total_tokens.to_i }
+    ordered_step_runs(run).sum { |sr| sr.terminal_session&.total_tokens.to_i }
   end
 
   typelize :number
   attribute :cost_cents do |run|
-    RunListEntryResource.ordered_step_runs(run).sum { |sr| sr.terminal_session&.cost_cents.to_i }
+    ordered_step_runs(run).sum { |sr| sr.terminal_session&.cost_cents.to_i }
   end
 
   typelize :number
   attribute :steps_completed do |run|
-    RunListEntryResource.ordered_step_runs(run).count { |sr| sr.state.to_s == "completed" }
+    ordered_step_runs(run).count { |sr| sr.state.to_s == "completed" }
   end
 
   typelize :number
@@ -56,7 +56,7 @@ class RunListEntryResource < ApplicationResource
 
   typelize "SessionListEntry[]"
   attribute :sessions do |run|
-    RunListEntryResource.ordered_step_runs(run).filter_map do |step_run|
+    ordered_step_runs(run).filter_map do |step_run|
       session = step_run.terminal_session
       next if session.nil?
 
@@ -83,5 +83,13 @@ class RunListEntryResource < ApplicationResource
   # execution order.
   def self.ordered_step_runs(run)
     run.step_runs.sort_by { |sr| [ sr.step&.position || 0, sr.created_at ] }
+  end
+
+  private
+
+  # Every attribute above needs the same ordered list — memoized per resource
+  # instance (one per run) so a single row doesn't re-sort it five times.
+  def ordered_step_runs(run)
+    @ordered_step_runs ||= self.class.ordered_step_runs(run)
   end
 end

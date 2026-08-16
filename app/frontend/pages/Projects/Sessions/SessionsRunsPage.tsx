@@ -140,9 +140,27 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions }: Ses
   const onSessionUpdate = useCallback((session: Record<string, unknown>) => {
     setEntryMap((prev) => {
       const key = `session-${session.id}`;
-      const existing = prev.get(key);
-      if (!existing) return prev;
-      return new Map(prev).set(key, { ...existing, ...(session as unknown as ListEntry) });
+      let map = prev;
+
+      if (prev.has(key)) {
+        map = new Map(prev).set(key, { ...prev.get(key)!, ...(session as unknown as ListEntry) });
+      }
+
+      // A step session lives nested under its run's `sessions` array, not as
+      // its own top-level entry — patch it there too, or an expanded run's
+      // child rows never see live updates.
+      for (const [runKey, entry] of map) {
+        if (entry.kind !== 'run' || !entry.sessions) continue;
+        const index = entry.sessions.findIndex((s) => s.id === session.id);
+        if (index === -1) continue;
+
+        if (map === prev) map = new Map(prev);
+        const sessions = [...entry.sessions];
+        sessions[index] = { ...sessions[index], ...(session as unknown as SessionListEntry) };
+        map.set(runKey, { ...entry, sessions });
+      }
+
+      return map;
     });
   }, []);
 

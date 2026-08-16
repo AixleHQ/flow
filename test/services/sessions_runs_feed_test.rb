@@ -93,6 +93,33 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
     assert_equal 0, feed(filters: { search: "%" }).page(page: 1, limit: 10).pagy.count
   end
 
+  test "search does not surface another user's private session that merely matches the term" do
+    private_session = create(:terminal_session, :agent_session, :running, project: @project, user: @other,
+                                                                          initial_prompt: "rotate the API keys")
+    assert_not private_session.user.share_active_sessions?, "fixture assumption: sharing is off by default"
+
+    assert_equal 0, feed(filters: { search: "rotate" }, viewer: @user).page(page: 1, limit: 10).pagy.count
+  end
+
+  test "search still surfaces a session its own owner searches for" do
+    private_session = create(:terminal_session, :agent_session, :running, project: @project, user: @other,
+                                                                          initial_prompt: "rotate the API keys")
+
+    ids = feed(filters: { search: "rotate" }, viewer: @other).page(page: 1, limit: 10).entries.map { |e| e.record.id }
+
+    assert_equal [ private_session.id ], ids
+  end
+
+  test "search surfaces a shared session that matches the term" do
+    @other.update!(share_completed_sessions: true)
+    shared_session = create(:terminal_session, :agent_session, state: "finished", project: @project, user: @other,
+                                                                initial_prompt: "rotate the API keys")
+
+    ids = feed(filters: { search: "rotate" }, viewer: @user).page(page: 1, limit: 10).entries.map { |e| e.record.id }
+
+    assert_equal [ shared_session.id ], ids
+  end
+
   test "agent filter reaches a run through its step sessions" do
     standalone(agent_type: "codex")
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)

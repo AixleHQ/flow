@@ -94,9 +94,17 @@ export function RunWorkflowDrawer({
   const [requestedModel, setRequestedModel] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
 
+  // The drawer stays mounted between opens (only `opened` toggles visibility),
+  // so its form state has to be reset explicitly — otherwise reopening shows
+  // the previous run's stale selections.
   useEffect(() => {
+    if (!opened) return;
     setWorkflowId(initialWorkflowId ?? null);
-  }, [initialWorkflowId]);
+    setMode('automatic');
+    setSelectedRepoIds([]);
+    setSelectedAssetIds([]);
+    setRequestedModel(null);
+  }, [opened, initialWorkflowId]);
 
   const workflow = useMemo(() => workflows.find((w) => w.id === workflowId) ?? null, [workflows, workflowId]);
   const steps = workflow?.steps ?? [];

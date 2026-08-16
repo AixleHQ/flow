@@ -2,13 +2,14 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { Alert, Anchor, Button, Group, Loader, Modal, Stack, Text, Textarea, TextInput } from '@mantine/core';
 import { IconAlertTriangle, IconDownload, IconFile, IconPlayerStop, IconUpload } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import type StepRun from 'types/generated/StepRun';
 import type WorkflowRun from 'types/generated/WorkflowRun';
 import type WorkflowRunAsset from 'types/generated/WorkflowRunAsset';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
 import {
@@ -67,20 +68,56 @@ function toCardData(stepRun: StepRun, index: number): SessionCardData {
   };
 }
 
+/** One live step's terminal — tracks its own "connecting…" state so several can load independently. */
+function StepConsole({ step, label }: { step: StepRun; label: string }) {
+  const [termLoaded, setTermLoaded] = useState(false);
+
+  return (
+    <ConsoleFrame className={classes.console} label={label} live>
+      {step.terminalUrl ? (
+        <>
+          {!termLoaded && (
+            <div className={classes.terminalLoading}>
+              <Loader size="md" />
+              <Text size="sm" c="dimmed">
+                Connecting to terminal…
+              </Text>
+            </div>
+          )}
+          <iframe
+            key={step.terminalUrl}
+            src={step.terminalUrl}
+            title="Terminal"
+            allow="clipboard-read; clipboard-write"
+            onLoad={() => setTermLoaded(true)}
+          />
+        </>
+      ) : (
+        <div className={classes.terminalLoading}>
+          <Loader size="md" />
+          <Text size="sm" c="dimmed">
+            Session starting…
+          </Text>
+        </div>
+      )}
+    </ConsoleFrame>
+  );
+}
+
 const WorkflowRunShowPage = () => {
   const { project, run, assets, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
 
   const isActive = ACTIVE_STATES.has(run.state);
   const isTerminal = run.state === 'completed' || run.state === 'failed' || run.state === 'cancelled';
+  const now = useElapsedTimer(isActive);
 
   const [tab, setTab] = useState<'sessions' | 'assets'>('sessions');
-  const [skipOpen, setSkipOpen] = useState(false);
+  const [skipStepId, setSkipStepId] = useState<number | null>(null);
   const [skipReason, setSkipReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState<{ assetId: number | null; name: string } | null>(null);
   const [promoteFolder, setPromoteFolder] = useState('');
   const [promoteLoading, setPromoteLoading] = useState(false);
-  const [termLoaded, setTermLoaded] = useState(false);
 
   useInertiaCableStream(cableStream, { only: ['run', 'assets'], enabled: !isTerminal });
 
@@ -93,18 +130,16 @@ const WorkflowRunShowPage = () => {
     [run.stepRuns],
   );
 
-  // The session whose console the running view shows: whatever is producing
-  // output right now, or waiting on the person looking at the screen.
-  const liveStep = useMemo(
-    () => sortedSteps.find((s) => s.state === 'running' || s.state === 'waiting_input') ?? null,
+  // A DAG run can have several steps producing output or waiting on approval
+  // at once — every one of them gets its own console and action bar, not just
+  // whichever the old single-"current step" model happened to pick.
+  const liveSteps = useMemo(
+    () => sortedSteps.filter((s) => s.state === 'running' || s.state === 'waiting_input'),
     [sortedSteps],
   );
 
-  useEffect(() => {
-    setTermLoaded(false);
-  }, [liveStep?.terminalUrl]);
-
-  const failedStep = useMemo(() => sortedSteps.find((s) => s.state === 'failed') ?? null, [sortedSteps]);
+  const failedSteps = useMemo(() => sortedSteps.filter((s) => s.state === 'failed'), [sortedSteps]);
+  const failedStep = failedSteps[0] ?? null;
 
   const post = useCallback((path: string, data: Parameters<typeof router.post>[1] = {}) => {
     setActionLoading(true);
@@ -141,19 +176,28 @@ const WorkflowRunShowPage = () => {
     }
   }, [project.id, run.id, promoteOpen, promoteFolder]);
 
-  const stepIsInteractive = run.mode === 'interactive' || (run.mode === 'mixed' && !liveStep?.allowNonInteractive);
-  const canFinishSession = liveStep?.state === 'running' && !!liveStep.terminalSessionId && stepIsInteractive;
+  const stepIsInteractive = useCallback(
+    (step: StepRun) => run.mode === 'interactive' || (run.mode === 'mixed' && !step.allowNonInteractive),
+    [run.mode],
+  );
+  const canFinishSession = useCallback(
+    (step: StepRun) => step.state === 'running' && !!step.terminalSessionId && stepIsInteractive(step),
+    [stepIsInteractive],
+  );
 
   // Failed runs swap "Started" for where they stopped — the one fact you open a
   // failed run to learn.
   const stats = [
     { label: 'Sessions', value: `${run.stepsCompleted}/${run.stepsTotal}` },
-    { label: 'Duration', value: formatDuration(run.startedAt, run.completedAt, run.state) },
+    { label: 'Duration', value: formatDuration(run.startedAt, run.completedAt, run.state, now) },
     { label: 'Cost', value: formatCost(run.costCents), color: costColor(run.costCents) },
     run.state === 'failed' && failedStep
       ? {
           label: 'Failed at',
-          value: `${failedStep.stepName ?? `Step ${failedStep.stepPosition}`}`,
+          value:
+            failedSteps.length > 1
+              ? `${failedSteps.length} steps`
+              : `${failedStep.stepName ?? `Step ${failedStep.stepPosition}`}`,
           sans: true,
         }
       : {
@@ -163,49 +207,31 @@ const WorkflowRunShowPage = () => {
         },
   ];
 
+  const liveStepIds = useMemo(() => new Set(liveSteps.map((s) => s.id)), [liveSteps]);
+
   const sessionCards = sortedSteps.map((step, i) => (
     <SessionCard
       key={step.id}
       data={toCardData(step, i)}
-      live={isActive && step.id === liveStep?.id}
-      defaultOpen={isActive ? step.id === liveStep?.id : step.state === 'failed'}
+      live={isActive && liveStepIds.has(step.id)}
+      defaultOpen={isActive ? liveStepIds.has(step.id) : step.state === 'failed'}
       sessionHref={step.terminalSessionId ? `${basePath}/sessions/${step.terminalSessionId}` : null}
     />
   ));
 
-  const renderConsole = () => {
-    if (!liveStep) return null;
-    const label = `Session ${sortedSteps.indexOf(liveStep) + 1} · ${liveStep.stepName ?? 'Step'}`;
+  const renderConsoles = () => {
+    if (liveSteps.length === 0) return null;
 
     return (
-      <ConsoleFrame className={classes.console} label={label} live>
-        {liveStep.terminalUrl ? (
-          <>
-            {!termLoaded && (
-              <div className={classes.terminalLoading}>
-                <Loader size="md" />
-                <Text size="sm" c="dimmed">
-                  Connecting to terminal…
-                </Text>
-              </div>
-            )}
-            <iframe
-              key={liveStep.terminalUrl}
-              src={liveStep.terminalUrl}
-              title="Terminal"
-              allow="clipboard-read; clipboard-write"
-              onLoad={() => setTermLoaded(true)}
-            />
-          </>
-        ) : (
-          <div className={classes.terminalLoading}>
-            <Loader size="md" />
-            <Text size="sm" c="dimmed">
-              Session starting…
-            </Text>
-          </div>
-        )}
-      </ConsoleFrame>
+      <div className={classes.consoleStack}>
+        {liveSteps.map((step) => (
+          <StepConsole
+            key={step.id}
+            step={step}
+            label={`Session ${sortedSteps.indexOf(step) + 1} · ${step.stepName ?? 'Step'}`}
+          />
+        ))}
+      </div>
     );
   };
 
@@ -356,56 +382,65 @@ const WorkflowRunShowPage = () => {
             <div className={classes.empty}>This run has no sessions yet.</div>
           ) : (
             <>
-              {/* The one human decision in a run gets the only solid button on
-                  the surface; the escape hatches stay secondary. */}
-              {isActive && liveStep && (liveStep.state === 'waiting_input' || canFinishSession) && (
-                <div className={classes.actionBar}>
-                  <span className={classes.actionBarText}>
-                    {liveStep.state === 'waiting_input'
-                      ? `"${liveStep.stepName ?? 'This session'}" is waiting for your approval.`
-                      : `"${liveStep.stepName ?? 'This session'}" is running interactively.`}
-                  </span>
-                  {liveStep.state === 'waiting_input' && (
-                    <>
-                      <Button loading={actionLoading} onClick={() => post(`${runPath}/approve_step`)}>
-                        Approve &amp; continue
-                      </Button>
-                      <Button variant="subtle" color="gray" onClick={() => setSkipOpen(true)}>
-                        Skip
-                      </Button>
-                      <Button
-                        variant="subtle"
-                        color="gray"
-                        loading={actionLoading}
-                        onClick={() => post(`${runPath}/retry_step`)}
-                      >
-                        Retry
-                      </Button>
-                    </>
-                  )}
-                  {canFinishSession && liveStep.state !== 'waiting_input' && (
-                    <Button loading={actionLoading} onClick={() => handleFinishSession(liveStep.terminalSessionId!)}>
-                      Finish session
+              {/* Every step that needs a human decision gets its own bar — a
+                  parallel run can have more than one waiting at once. */}
+              {isActive &&
+                liveSteps
+                  .filter((step) => step.state === 'waiting_input' || canFinishSession(step))
+                  .map((step) => (
+                    <div className={classes.actionBar} key={step.id}>
+                      <span className={classes.actionBarText}>
+                        {step.state === 'waiting_input'
+                          ? `"${step.stepName ?? 'This session'}" is waiting for your approval.`
+                          : `"${step.stepName ?? 'This session'}" is running interactively.`}
+                      </span>
+                      {step.state === 'waiting_input' && (
+                        <>
+                          <Button
+                            loading={actionLoading}
+                            onClick={() => post(`${runPath}/approve_step`, { step_run_id: step.id })}
+                          >
+                            Approve &amp; continue
+                          </Button>
+                          <Button variant="subtle" color="gray" onClick={() => setSkipStepId(step.id)}>
+                            Skip
+                          </Button>
+                          <Button
+                            variant="subtle"
+                            color="gray"
+                            loading={actionLoading}
+                            onClick={() => post(`${runPath}/retry_step`, { step_run_id: step.id })}
+                          >
+                            Retry
+                          </Button>
+                        </>
+                      )}
+                      {canFinishSession(step) && step.state !== 'waiting_input' && (
+                        <Button loading={actionLoading} onClick={() => handleFinishSession(step.terminalSessionId!)}>
+                          Finish session
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+
+              {!isActive &&
+                failedSteps.map((step) => (
+                  <div className={classes.actionBar} key={step.id}>
+                    <span className={classes.actionBarText}>&quot;{step.stepName ?? 'A session'}&quot; failed.</span>
+                    <Button
+                      variant="default"
+                      loading={actionLoading}
+                      onClick={() => post(`${runPath}/retry_step`, { step_run_id: step.id })}
+                    >
+                      Retry session
                     </Button>
-                  )}
-                </div>
-              )}
+                  </div>
+                ))}
 
-              {failedStep && !isActive && (
-                <div className={classes.actionBar}>
-                  <span className={classes.actionBarText}>
-                    &quot;{failedStep.stepName ?? 'A session'}&quot; failed.
-                  </span>
-                  <Button variant="default" loading={actionLoading} onClick={() => post(`${runPath}/retry_step`)}>
-                    Retry session
-                  </Button>
-                </div>
-              )}
-
-              {isActive && liveStep ? (
+              {isActive && liveSteps.length > 0 ? (
                 <div className={classes.split}>
                   <div className={classes.list}>{sessionCards}</div>
-                  {renderConsole()}
+                  {renderConsoles()}
                 </div>
               ) : (
                 <div className={classes.list}>{sessionCards}</div>
@@ -415,7 +450,7 @@ const WorkflowRunShowPage = () => {
         </div>
       </div>
 
-      <Modal opened={skipOpen} onClose={() => setSkipOpen(false)} title="Skip session" centered size="sm">
+      <Modal opened={skipStepId != null} onClose={() => setSkipStepId(null)} title="Skip session" centered size="sm">
         <Textarea
           label="Reason (optional)"
           value={skipReason}
@@ -425,14 +460,14 @@ const WorkflowRunShowPage = () => {
           mb="md"
         />
         <Group justify="flex-end">
-          <Button variant="default" onClick={() => setSkipOpen(false)}>
+          <Button variant="default" onClick={() => setSkipStepId(null)}>
             Cancel
           </Button>
           <Button
             loading={actionLoading}
             onClick={() => {
-              post(`${runPath}/skip_step`, { reason: skipReason || null });
-              setSkipOpen(false);
+              post(`${runPath}/skip_step`, { reason: skipReason || null, step_run_id: skipStepId });
+              setSkipStepId(null);
               setSkipReason('');
             }}
           >

@@ -58,7 +58,7 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
 
   def approve_step
     run = current_project.workflow_runs.find(params[:id])
-    current_step = run.current_step_run
+    current_step = resolve_step_run(run)
     if current_step
       WorkflowService.approve_step(step_run: current_step)
     end
@@ -67,7 +67,7 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
 
   def retry_step
     run = current_project.workflow_runs.find(params[:id])
-    step_run = run.current_step_run || run.latest_failed_step_run
+    step_run = resolve_step_run(run) || run.latest_failed_step_run
     if step_run&.retryable?
       WorkflowService.retry_step(step_run: step_run)
     end
@@ -76,7 +76,7 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
 
   def skip_step
     run = current_project.workflow_runs.find(params[:id])
-    current_step = run.current_step_run
+    current_step = resolve_step_run(run)
     if current_step
       WorkflowService.skip_step(step_run: current_step, reason: params[:reason])
     end
@@ -84,6 +84,15 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
   end
 
   private
+
+  # A DAG run can have more than one step active at once, so the client names
+  # which one it means. Falls back to the old single-"current step" behavior
+  # for callers that don't pass it.
+  def resolve_step_run(run)
+    return run.step_runs.find(params[:step_run_id]) if params[:step_run_id].present?
+
+    run.current_step_run
+  end
 
   def workflow_run_params
     permitted = params.require(:workflow_run).permit(:workflow_id, :mode, :agent_runtime, :requested_model, input_asset_ids: [], repository_ids: [])

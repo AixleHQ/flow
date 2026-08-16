@@ -37,4 +37,24 @@ class Web::Company::Projects::WorkflowRunsRenderTest < ActionDispatch::Integrati
       props[:run][:id] == run.id
     end
   end
+
+  test "show reports the workflow's description and the run's rolled-up token total" do
+    workflow = create(:workflow, scope: @project, description: "Ships the release")
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+    step_one = create(:step, workflow: workflow, position: 1)
+    step_two = create(:step, workflow: workflow, position: 2)
+    session_one = create(:terminal_session, session_type: "workflow_step", project: @project, user: @user,
+                                             total_tokens: 100)
+    session_two = create(:terminal_session, session_type: "workflow_step", project: @project, user: @user,
+                                             total_tokens: 250)
+    create(:step_run, workflow_run: run, step: step_one, terminal_session: session_one)
+    create(:step_run, workflow_run: run, step: step_two, terminal_session: session_two)
+
+    get company_project_workflow_run_path(@project, run)
+
+    assert_response :success
+    assert_inertia_props do |props|
+      props[:run][:workflowDescription] == "Ships the release" && props[:run][:totalTokens] == 350
+    end
+  end
 end

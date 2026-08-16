@@ -10,7 +10,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       filters: feed_filters,
       type: list_type
     )
-    result = feed.page(page: (params[:page] || 1).to_i, limit: per_page)
+    result = feed.page(page: [ (params[:page] || 1).to_i, 1 ].max, limit: per_page)
 
     render inertia: "Projects/Sessions/SessionsRunsPage", props: {
       project: project_props,

@@ -111,8 +111,25 @@ class SessionsRunsFeed
     end
     if filters[:search].present?
       scope = scope.where("terminal_sessions.initial_prompt ILIKE :q", q: "%#{sanitize_like(filters[:search])}%")
+                   .merge(viewer_visible_scope)
     end
     scope
+  end
+
+  # Search matches on `initial_prompt` — a field the row itself may not be
+  # allowed to reveal (see TerminalSession#visible_to?). Without this, a
+  # private session whose hidden prompt matches someone else's search term
+  # would still surface in their results, leaking that the prompt matched.
+  IN_FLIGHT_STATES = %w[not_started running ready finishing].freeze
+
+  def viewer_visible_scope
+    TerminalSession.joins(:user).where(user_id: viewer.id).or(
+      TerminalSession.joins(:user).where(
+        "(terminal_sessions.state IN (:in_flight) AND users.share_active_sessions = TRUE) " \
+        "OR (terminal_sessions.state NOT IN (:in_flight) AND users.share_completed_sessions = TRUE)",
+        in_flight: IN_FLIGHT_STATES
+      )
+    )
   end
 
   def filtered_runs

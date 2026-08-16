@@ -39,9 +39,15 @@
   gap: 12px;
 }
 
-.console {
+.consoleStack {
   position: sticky;
   top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.console {
   height: 520px;
 }
 

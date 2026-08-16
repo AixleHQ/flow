@@ -183,7 +183,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
 
     expect(router.post).toHaveBeenCalledWith(
       '/company/projects/7/workflow_runs/42/approve_step',
-      {},
+      { step_run_id: 201 },
       expect.objectContaining({ preserveScroll: true }),
     );
   });
@@ -196,7 +196,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
 
     expect(router.post).toHaveBeenCalledWith(
       '/company/projects/7/workflow_runs/42/retry_step',
-      {},
+      { step_run_id: 202 },
       expect.objectContaining({ preserveScroll: true }),
     );
   });
@@ -214,7 +214,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
 
     expect(router.post).toHaveBeenCalledWith(
       '/company/projects/7/workflow_runs/42/skip_step',
-      { reason: 'Not needed for this run' },
+      { reason: 'Not needed for this run', step_run_id: 203 },
       expect.objectContaining({ preserveScroll: true }),
     );
 
@@ -243,7 +243,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
 
     expect(router.post).toHaveBeenCalledWith(
       '/company/projects/7/workflow_runs/42/retry_step',
-      {},
+      { step_run_id: 204 },
       expect.objectContaining({ preserveScroll: true }),
     );
   });
@@ -262,6 +262,48 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     expect(screen.getByText('Session 1 · Collect data')).toBeInTheDocument();
     expect((screen.getByTitle('Terminal') as HTMLIFrameElement).getAttribute('src')).toBe(
       'https://host.test/t/abc/tty',
+    );
+  });
+
+  it('shows a console and action bar for every concurrently active step in a parallel run', async () => {
+    const runningA = buildStepRun({
+      id: 711,
+      stepName: 'Collect data',
+      stepPosition: 1,
+      state: 'running',
+      terminalUrl: 'https://host.test/t/a/tty',
+      terminalSessionId: 91,
+      allowNonInteractive: false,
+    });
+    const waitingB = buildStepRun({
+      id: 712,
+      stepName: 'Review draft',
+      stepPosition: 2,
+      state: 'waiting_input',
+      terminalUrl: 'https://host.test/t/b/tty',
+    });
+    renderAuthedPage(<ShowPage />, {
+      props: seed({ run: makeRun({ mode: 'interactive', stepRuns: [runningA, waitingB] }) }),
+    });
+
+    // Both steps get their own console.
+    const terminals = screen.getAllByTitle('Terminal') as HTMLIFrameElement[];
+    expect(terminals.map((t) => t.getAttribute('src')).sort()).toEqual([
+      'https://host.test/t/a/tty',
+      'https://host.test/t/b/tty',
+    ]);
+
+    // Both steps get their own action bar — the running one can be finished,
+    // the waiting one can be approved, and each targets its own step_run_id.
+    expect(screen.getByText(/"Collect data" is running interactively/)).toBeInTheDocument();
+    expect(screen.getByText(/"Review draft" is waiting for your approval/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /approve & continue/i }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/workflow_runs/42/approve_step',
+      { step_run_id: 712 },
+      expect.objectContaining({ preserveScroll: true }),
     );
   });
 

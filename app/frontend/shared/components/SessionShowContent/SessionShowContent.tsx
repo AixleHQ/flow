@@ -3,12 +3,13 @@ import { ActionIcon, Badge, Box, Button, Center, Group, Loader, Stack, Text, Too
 import { useHotkeys } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import { IconChevronLeft, IconChevronRight, IconCopy, IconEye, IconPlus, IconSquareCheck } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels';
 
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
@@ -53,16 +54,6 @@ const SESSION_STATE_LABELS: Record<string, string> = {
   finished: 'Finished',
   failed: 'Failed',
 };
-
-function useElapsedTimer(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [active]);
-  return now;
-}
 
 /** First line of the prompt — the session's own one-line description. */
 function sessionTitle(s: TerminalSession, workflowContext?: SessionWorkflowContext | null): string {
@@ -384,7 +375,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
           </section>
         )}
 
-        {isTerminal && workflowContext && s.initialPrompt && (
+        {workflowContext && s.initialPrompt && (
           <section className={classes.panel}>
             <h3 className={classes.panelTitle}>Prompt</h3>
             <p className={classes.promptBody}>{s.initialPrompt}</p>
