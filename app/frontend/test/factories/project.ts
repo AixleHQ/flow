@@ -19,5 +19,6 @@ export const buildProject = (overrides: Partial<Project> = {}): Project => ({
   workflowsCount: 0,
   boardTasksCount: 0,
   members: [],
+  favorite: false,
   ...overrides,
 });

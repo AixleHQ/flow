@@ -26,6 +26,41 @@ class Web::Company::ProjectsControllerTest < ActionDispatch::IntegrationTest
     assert_equal [ @user.id, collaborator.id ], props_project[:members].pluck(:id)
   end
 
+  test "index marks the current user's favorites and lists them first" do
+    create(:project, name: "Alpha", company: @company, owner: @user)
+    zeta = create(:project, name: "Zeta", company: @company, owner: @user)
+    create(:project_favorite, user: @user, project: zeta)
+
+    get company_projects_path
+
+    assert_equal [ "Zeta", "Alpha" ], inertia.props[:projects].pluck(:name)
+    assert_equal [ true, false ], inertia.props[:projects].pluck(:favorite)
+  end
+
+  test "index favorites are per user — another member's star is not reported or ordered for this user" do
+    alpha = create(:project, name: "Alpha", company: @company, owner: @user)
+    create(:project, name: "Zeta", company: @company, owner: @user)
+    other = create(:user, :employee, :onboarding_completed, company: @company)
+    create(:project_favorite, user: other, project: alpha)
+
+    get company_projects_path
+
+    assert_equal [ "Alpha", "Zeta" ], inertia.props[:projects].pluck(:name)
+    assert_equal [ false, false ], inertia.props[:projects].pluck(:favorite)
+  end
+
+  # The sidebar's "All Projects" list comes from the shared props, not this page,
+  # so it is asserted on a page that renders no `projects` prop of its own.
+  test "the sidebar project list puts the current user's favorites first" do
+    create(:project, name: "Alpha", company: @company, owner: @user)
+    zeta = create(:project, name: "Zeta", company: @company, owner: @user)
+    create(:project_favorite, user: @user, project: zeta)
+
+    get company_members_path
+
+    assert_equal [ "Zeta", "Alpha" ], inertia.props[:projects].pluck(:name)
+  end
+
   test "create redirects on success" do
     post company_projects_path, params: { project: { name: "Test Project", description: "A test" } }
     assert_response :redirect

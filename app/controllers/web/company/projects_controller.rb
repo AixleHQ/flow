@@ -15,10 +15,19 @@ class Web::Company::ProjectsController < Web::Company::ApplicationController
                         "(SELECT COUNT(*) FROM workflows WHERE workflows.scope_type = 'Project' AND workflows.scope_id = projects.id AND workflows.deleted_at IS NULL) AS cached_workflows_count",
                         "(SELECT COUNT(*) FROM board_tasks INNER JOIN boards ON boards.id = board_tasks.board_id WHERE boards.project_id = projects.id) AS cached_board_tasks_count"
                       )
+                      .favorites_first_for(current_user)
                       .order(:name)
 
+    # One query for the whole list instead of a per-project lookup in the
+    # resource. The page re-sorts client-side (name / last activity / newest),
+    # keeping favorites first in every mode — the SQL order above is what an
+    # unsorted render and the sidebar's list agree on.
+    favorite_project_ids = current_user.project_favorites.pluck(:project_id).to_set
+
     render inertia: "Projects/IndexPage", props: {
-      projects: projects.map { |p| ProjectResource.new(p, params: { with_members: true }).to_h }
+      projects: projects.map { |p|
+        ProjectResource.new(p, params: { with_members: true, favorite_project_ids: favorite_project_ids }).to_h
+      }
     }
   end
 

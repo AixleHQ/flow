@@ -40,6 +40,8 @@ class User < ApplicationRecord
   has_many :companies, through: :company_memberships
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborated_projects, through: :project_collaborators, source: :project
+  has_many :project_favorites, dependent: :destroy
+  has_many :favorite_projects, through: :project_favorites, source: :project
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :restrict_with_error, inverse_of: :owner
   has_many :terminal_sessions, dependent: :destroy
   # Credentials belong to a (user, company) pair — the default for a company

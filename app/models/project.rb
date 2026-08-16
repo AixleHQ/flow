@@ -13,6 +13,8 @@ class Project < ApplicationRecord
   belongs_to :owner, class_name: "User", inverse_of: :owned_projects
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborators, through: :project_collaborators, source: :user
+  has_many :project_favorites, dependent: :destroy
+  has_many :favorited_by_users, through: :project_favorites, source: :user
   has_many :terminal_sessions, dependent: :nullify
   has_many :config_items, as: :scope, dependent: :destroy
   has_many :agents, as: :scope, dependent: :destroy
@@ -49,6 +51,18 @@ class Project < ApplicationRecord
     )
   }
   scope :for_company, ->(company) { where(company: company) }
+  # Favorites-first ordering for ONE user, as an ORDER BY prefix: chain the
+  # list's own ordering after it (`favorites_first_for(user).order(:name)`) so
+  # the existing order still decides everything within each group.
+  #
+  # A subquery rather than a join: joining project_favorites would either drop
+  # the non-favorites (INNER) or need a user-filtered LEFT JOIN condition, and
+  # both fight with the `select` that with_computed_counts already builds.
+  scope :favorites_first_for, ->(user) {
+    favorite_project_ids = ProjectFavorite.where(user_id: user&.id).select(:project_id)
+
+    order(Arel.sql("CASE WHEN projects.id IN (#{favorite_project_ids.to_sql}) THEN 0 ELSE 1 END"))
+  }
   scope :for_user, ->(user) {
     member_company_ids = user.company_memberships.active.select(:company_id)
     admin_company_ids = user.company_memberships.active.where(role: "admin").select(:company_id)

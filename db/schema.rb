@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_14_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_16_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -480,6 +480,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_120000) do
     t.index ["project_id", "user_id"], name: "index_project_collaborators_on_project_id_and_user_id", unique: true
     t.index ["project_id"], name: "index_project_collaborators_on_project_id"
     t.index ["user_id"], name: "index_project_collaborators_on_user_id"
+  end
+
+  create_table "project_favorites", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "project_id", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["project_id"], name: "index_project_favorites_on_project_id"
+    t.index ["user_id", "project_id"], name: "index_project_favorites_on_user_id_and_project_id", unique: true
+    t.index ["user_id"], name: "index_project_favorites_on_user_id"
   end
 
   create_table "projects", force: :cascade do |t|
@@ -1154,6 +1164,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_14_120000) do
   add_foreign_key "oauth_credentials", "oauth_clients"
   add_foreign_key "project_collaborators", "projects"
   add_foreign_key "project_collaborators", "users"
+  add_foreign_key "project_favorites", "projects"
+  add_foreign_key "project_favorites", "users"
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "received_webhooks", "webhook_endpoints", on_delete: :cascade

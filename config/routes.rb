@@ -272,6 +272,9 @@ Rails.application.routes.draw do
       resources :projects, only: %i[index show create destroy] do
         scope module: :projects do
           resources :overview, only: :index
+          # Per-user star on the project tiles. Singular: there is at most one
+          # favorite per (user, project), and the actor is always current_user.
+          resource :favorite, only: %i[create destroy]
           resource :board, only: %i[show]
           resources :sessions, only: %i[index new show] do
             scope module: :sessions do

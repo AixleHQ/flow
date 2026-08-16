@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
-import { Avatar, Box, Button, Group, Text, Tooltip, UnstyledButton } from '@mantine/core';
-import { IconArrowRight, IconClock, IconSettings } from '@tabler/icons-react';
+import { ActionIcon, Avatar, Box, Button, Group, Text, Tooltip, UnstyledButton } from '@mantine/core';
+import { IconArrowRight, IconClock, IconSettings, IconStar, IconStarFilled } from '@tabler/icons-react';
 
 import { Identicon, StatusBadge } from 'shared/ui';
 
@@ -20,11 +20,13 @@ interface Project {
   lastActivityAt?: string | null;
   createdAt: string;
   members: { id: number; initials: string }[];
+  favorite: boolean;
 }
 
 interface ProjectCardProps {
   project: Project;
   onClick?: () => void;
+  onToggleFavorite?: () => void;
 }
 
 const formatRelativeTime = (dateString?: string | null): string => {
@@ -73,13 +75,41 @@ const MemberAvatars = ({ members, total }: { members: { id: number; initials: st
   );
 };
 
-export const ProjectCard = ({ project, onClick }: ProjectCardProps) => {
+// The star sits OUTSIDE the card's click area: a button inside a button is
+// invalid HTML, and the whole tile body opens the project. Absolutely
+// positioned in the corner so the header row keeps its own layout — the row
+// reserves the space via `.headerRow`'s padding.
+const FavoriteButton = ({ project, onToggle }: { project: Project; onToggle: () => void }) => {
+  const label = project.favorite ? `Remove ${project.name} from favorites` : `Add ${project.name} to favorites`;
+
+  return (
+    <Tooltip label={label} openDelay={300}>
+      <ActionIcon
+        variant="subtle"
+        color={project.favorite ? 'yellow' : 'gray'}
+        size="sm"
+        className={classes.favoriteButton}
+        aria-label={label}
+        aria-pressed={project.favorite}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      >
+        {project.favorite ? <IconStarFilled size={15} /> : <IconStar size={15} />}
+      </ActionIcon>
+    </Tooltip>
+  );
+};
+
+export const ProjectCard = ({ project, onClick, onToggleFavorite }: ProjectCardProps) => {
   const isArchived = project.state === 'archived';
 
   return (
     <Box className={`${classes.card} ${isArchived ? classes.archived : ''}`}>
+      {onToggleFavorite && <FavoriteButton project={project} onToggle={onToggleFavorite} />}
       <UnstyledButton onClick={onClick} className={classes.clickArea}>
-        <Group gap={12} align="center" wrap="nowrap">
+        <Group gap={12} align="center" wrap="nowrap" className={classes.headerRow}>
           <Box className={classes.avatar}>
             <Identicon seed={project.name} size={24} />
           </Box>

@@ -17,6 +17,7 @@ type Project = {
   workflowsCount: number;
   boardTasksCount: number;
   members: Array<{ id: number; initials: string }>;
+  favorite: boolean;
 }
 
 export default Project;
