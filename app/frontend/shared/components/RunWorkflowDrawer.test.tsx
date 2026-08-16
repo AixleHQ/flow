@@ -72,7 +72,7 @@ describe('RunWorkflowDrawer', () => {
   it('marks unconnected runtimes as needing setup and does not select them', async () => {
     renderDrawer({ initialWorkflowId: 9, configuredAgents: ['claude_code'] });
 
-    expect(screen.getAllByText('Setup')).toHaveLength(3);
+    expect(screen.getAllByText('Setup')).toHaveLength(4);
 
     const codex = screen.getByRole('button', { name: /Codex/ });
     expect(codex).toBeDisabled();

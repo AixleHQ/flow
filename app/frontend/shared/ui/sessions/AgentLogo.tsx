@@ -19,6 +19,7 @@ export const AGENT_LABELS: Record<string, string> = {
   cursor_cli: 'Cursor CLI',
   codex: 'Codex',
   gemini_cli: 'Gemini CLI',
+  grok: 'Grok',
 };
 
 /** `claude_code` → `Claude Code`; unknown runtimes fall back to the raw id. */

@@ -21,7 +21,7 @@ export function FormSection({ icon, children, first = false }: FormSectionProps)
   );
 }
 
-const RUNTIME_ORDER = ['claude_code', 'cursor_cli', 'codex', 'gemini_cli'];
+const RUNTIME_ORDER = ['claude_code', 'cursor_cli', 'codex', 'gemini_cli', 'grok'];
 
 interface RuntimeTilesProps {
   value: string | null;

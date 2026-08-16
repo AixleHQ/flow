@@ -70,6 +70,7 @@ const AGENT_OPTIONS = [
   { value: 'cursor_cli', label: 'Cursor CLI' },
   { value: 'codex', label: 'Codex' },
   { value: 'gemini_cli', label: 'Gemini CLI' },
+  { value: 'grok', label: 'Grok' },
 ];
 
 // One vocabulary over two state machines — see SessionsRunsFeed::STATUS_FILTERS.
