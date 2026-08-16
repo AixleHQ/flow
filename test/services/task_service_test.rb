@@ -133,6 +133,65 @@ class TaskServiceTest < ActiveSupport::TestCase
     assert_not BoardActivity.exists?(board: @board, event_type: :task_updated, board_task: task)
   end
 
+  # A column change arriving as an attribute is still a move: the board's whole
+  # transition pipeline (history, activity, auto-trigger) hangs off #move, and
+  # board_column_id is a permitted attribute on the task endpoint.
+  test "update that changes the column records a transition and a task_moved activity" do
+    other = create(:board_column, board: @board, name: "Done")
+    task = create(:board_task, board: @board, board_column: @column)
+
+    assert_difference -> { ColumnTransition.count }, 1 do
+      TaskService.update(task: task, params: { board_column_id: other.id }, actor: @user)
+    end
+
+    assert_equal other.id, task.reload.board_column_id
+    assert BoardActivity.exists?(board: @board, event_type: :task_moved, board_task: task)
+  end
+
+  test "update that changes the column fires that column's auto-trigger" do
+    other = create(:board_column, board: @board, name: "Done")
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: other, workflow: workflow, trigger_mode: :auto)
+    task = create(:board_task, board: @board, board_column: @column)
+    WorkflowService.expects(:start).once.returns(create(:workflow_run, workflow: workflow, project: @project, user: @user))
+
+    TaskService.update(task: task, params: { board_column_id: other.id }, actor: @user)
+  end
+
+  test "update that renames and moves in one request logs the rename and the move separately" do
+    other = create(:board_column, board: @board, name: "Done")
+    task = create(:board_task, board: @board, board_column: @column, title: "Old")
+
+    TaskService.update(task: task, params: { title: "New", board_column_id: other.id }, actor: @user)
+
+    assert_equal "New", task.reload.title
+    assert_equal other.id, task.board_column_id
+    assert BoardActivity.exists?(board: @board, event_type: :task_updated, board_task: task)
+    assert BoardActivity.exists?(board: @board, event_type: :task_moved, board_task: task)
+  end
+
+  # Re-submitting the form the card is already in must not manufacture a
+  # transition — a move is a change of column, not a restatement of one.
+  test "update to the column the task is already in records no transition" do
+    task = create(:board_task, board: @board, board_column: @column)
+
+    assert_no_difference -> { ColumnTransition.count } do
+      TaskService.update(task: task, params: { board_column_id: @column.id }, actor: @user)
+    end
+  end
+
+  # The column is resolved on the task's own board, so a foreign id still has to
+  # fail validation rather than be quietly dropped on the way to #move.
+  test "update to a column on another board is rejected" do
+    foreign_column = create(:board_column, board: create(:board, project: create(:project, owner: @user, company: @company)))
+    task = create(:board_task, board: @board, board_column: @column)
+
+    result = TaskService.update(task: task, params: { board_column_id: foreign_column.id }, actor: @user)
+
+    assert result.errors[:board_column].present?
+    assert_equal @column.id, task.reload.board_column_id
+  end
+
   # == destroy ==
 
   test "destroy removes task and records activity" do
@@ -686,7 +745,11 @@ class TaskServiceTest < ActiveSupport::TestCase
     TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
   end
 
-  test "check_auto_trigger does not start workflow when last run failed with quota_exceeded" do
+  # Regression: a quota failure used to latch the column off permanently — the
+  # next move, and every move after it, silently did nothing until somebody
+  # started a successful run by hand. Vendor quotas reset on their own, so the
+  # board has to keep firing and let the run report the quota if it is still hit.
+  test "check_auto_trigger still starts the workflow after a run failed on quota" do
     workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
     run = create(:workflow_run, :failed, workflow: workflow, project: @project, user: @user)
@@ -694,7 +757,9 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:start).with(
+      has_entries(workflow: workflow, task: task, mode: :non_interactive)
+    ).once
 
     TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
   end

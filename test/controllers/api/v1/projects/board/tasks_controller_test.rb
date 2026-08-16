@@ -209,6 +209,36 @@ module Api
           assert_response :success
         end
 
+        # The board card's column selector calls #move, so this guards the path the
+        # UI actually uses.
+        test "move into an auto-bound column starts that column's workflow" do
+          ColumnWorkflowBinding.create!(board_column: @col2, workflow: @workflow, trigger_mode: :auto, cooldown_seconds: 0)
+          WorkflowService.expects(:start).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
+
+          patch :move, params: { project_id: @project.id, id: @task.id, column_id: @col2.id }
+
+          assert_response :success
+          assert_equal @col2.id, @task.reload.board_column_id
+        end
+
+        # Regression: board_column_id is a permitted attribute here, so a plain
+        # PATCH used to relocate the card while skipping the transition record,
+        # the task_moved activity and the column's auto-trigger entirely.
+        test "update that changes the column moves the task, exactly as #move would" do
+          ColumnWorkflowBinding.create!(board_column: @col2, workflow: @workflow, trigger_mode: :auto, cooldown_seconds: 0)
+          WorkflowService.expects(:start).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
+
+          assert_difference -> { ColumnTransition.count }, 1 do
+            patch :update, params: {
+              project_id: @project.id, id: @task.id,
+              board_task: { board_column_id: @col2.id }
+            }
+          end
+
+          assert_response :success
+          assert_equal @col2.id, @task.reload.board_column_id
+        end
+
         # === viewer (read-only) enforcement ===
 
         class ViewerTest < ActionController::TestCase
