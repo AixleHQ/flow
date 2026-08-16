@@ -2,7 +2,7 @@ import { Head, usePage } from '@inertiajs/react';
 import { Box } from '@mantine/core';
 
 import { SessionNewForm } from 'shared/components/SessionNewForm';
-import type { NamedItem, SessionCostHint } from 'shared/components/SessionNewForm';
+import type { ConfigItemOption, NamedItem, SessionCostHint } from 'shared/components/SessionNewForm';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -31,6 +31,7 @@ interface Props {
   mcpServers?: NamedItem[];
   repositories?: NamedItem[];
   assets?: NamedItem[];
+  configItems?: ConfigItemOption[];
   costHint?: SessionCostHint;
 }
 
@@ -44,6 +45,7 @@ const ProjectSessionNewPage = () => {
     mcpServers = [],
     repositories = [],
     assets = [],
+    configItems = [],
     costHint,
   } = usePage<{ props: Props }>().props as unknown as Props;
 
@@ -62,6 +64,7 @@ const ProjectSessionNewPage = () => {
           repositories={repositories}
           costHint={costHint}
           assets={assets}
+          configItems={configItems}
           onCreatedPath={(sessionId) => `/company/projects/${project.id}/sessions/${sessionId}`}
           fallbackPath={`/company/projects/${project.id}/sessions`}
         />

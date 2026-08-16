@@ -43,7 +43,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     result = SessionConfigResolver.resolve(session)
 
     expected_keys = %i[session_type agent_runtime configured_agent_id tool_ids skill_ids
-                       mcp_server_ids repository_ids input_asset_ids mode]
+                       mcp_server_ids config_item_ids repository_ids input_asset_ids mode]
     expected_keys.each do |key|
       assert result.key?(key), "Missing key: #{key}"
     end
@@ -375,6 +375,72 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_includes result[:tool_ids], 999
   end
 
+  # === Config items: additive cascade (spec-session-config-item-access) ===
+
+  test "standalone session returns config_item_ids from association" do
+    item = create(:config_item, scope: @project)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+                                                        config_items: [ item ])
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [ item.id ], result[:config_item_ids]
+  end
+
+  test "standalone session with nothing attached resolves to no config items" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    assert_empty SessionConfigResolver.resolve(session)[:config_item_ids]
+  end
+
+  test "workflow session merges workflow base + step config items" do
+    base = create(:config_item, scope: @project, name: "BASE_KEY")
+    step_item = create(:config_item, :secret, scope: @project, name: "STEP_KEY")
+    session = build_workflow_session(
+      workflow_config: { "base_config_item_ids" => [ base.id ] },
+      step_config_item_ids: [ step_item.id ]
+    )
+
+    result = SessionConfigResolver.resolve(session)
+
+    assert_equal [ base.id, step_item.id ].sort, result[:config_item_ids].sort
+  end
+
+  test "inherit_all adds project config items" do
+    project_item = create(:config_item, scope: @project, name: "PROJECT_KEY")
+    session = build_workflow_session(
+      workflow_config: { "inherit_all_project_resources" => true }
+    )
+
+    assert_includes SessionConfigResolver.resolve(session)[:config_item_ids], project_item.id
+  end
+
+  test "inherit_all false excludes project config items" do
+    create(:config_item, scope: @project, name: "PROJECT_KEY")
+    step_item = create(:config_item, scope: @project, name: "STEP_KEY")
+    session = build_workflow_session(
+      workflow_config: { "inherit_all_project_resources" => false },
+      step_config_item_ids: [ step_item.id ]
+    )
+
+    assert_equal [ step_item.id ], SessionConfigResolver.resolve(session)[:config_item_ids]
+  end
+
+  test "config item breakdown records which level supplied each item" do
+    base = create(:config_item, scope: @project, name: "BASE_KEY")
+    step_item = create(:config_item, scope: @project, name: "STEP_KEY")
+    session = build_workflow_session(
+      workflow_config: { "base_config_item_ids" => [ base.id ] },
+      step_config_item_ids: [ step_item.id ]
+    )
+
+    breakdown = SessionConfigResolver.resolve_with_breakdown(session)[:config_items]
+
+    assert_equal [ base.id ], breakdown[:from_workflow_base]
+    assert_equal [ step_item.id ], breakdown[:from_step]
+    assert_equal [ base.id, step_item.id ].sort, breakdown[:resolved].sort
+  end
+
   # === Story 29.5: Step required_agent_runtime ===
 
   test "step required_agent_runtime overrides everything" do
@@ -686,11 +752,15 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
                              run_repository_ids: [], run_input_asset_ids: [],
                              board_task: nil, workflow_config: {},
                              step_required_agent_runtime: nil,
+                             step_config_item_ids: [],
                              step_bmad_enabled: false)
-    workflow = create(:workflow, :with_project_scope, config: workflow_config)
+    # Scoped to @project, the same project the run and the session belong to —
+    # config item attachments are validated against the workflow's own project,
+    # so a workflow in some other project could not name them.
+    workflow = create(:workflow, scope: @project, config: workflow_config)
     step = create(:step, workflow: workflow, tool_ids: step_tool_ids, skill_ids: step_skill_ids,
       mcp_server_ids: step_mcp_server_ids, asset_ids: step_asset_ids, agent: step_agent,
-      repository_ids: step_repository_ids,
+      repository_ids: step_repository_ids, config_item_ids: step_config_item_ids,
       required_agent_runtime: step_required_agent_runtime, bmad_enabled: step_bmad_enabled)
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user,
       agent_runtime: agent_runtime, mode: run_mode, repository_ids: run_repository_ids,

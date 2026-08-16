@@ -23,6 +23,7 @@ class SessionConfigResolver
       tool_ids: resolve_tool_ids,
       skill_ids: resolve_skill_ids,
       mcp_server_ids: resolve_mcp_server_ids,
+      config_item_ids: resolve_config_item_ids,
       repository_ids: resolve_repository_ids,
       input_asset_ids: resolve_input_asset_ids,
       mode: resolve_mode,
@@ -39,6 +40,7 @@ class SessionConfigResolver
       tools: build_resource_breakdown(:tool_ids),
       skills: build_resource_breakdown(:skill_ids),
       mcp_servers: build_resource_breakdown(:mcp_server_ids),
+      config_items: build_resource_breakdown(:config_item_ids),
       input_assets: build_input_asset_breakdown,
       repositories: build_repository_breakdown,
       mode: resolve_mode,
@@ -52,6 +54,26 @@ class SessionConfigResolver
     else
       step&.bmad_enabled || false
     end
+  end
+
+  # Additive like tools and skills, NOT explicit-pick-wins like repositories: a
+  # step that names one credential should still get the workflow's base set and,
+  # when the workflow inherits, the project's.
+  #
+  # This resolves ENTITLEMENT, not delivery — nothing is injected into the
+  # container. The set is exactly what `get_config_item` is allowed to decrypt,
+  # which is why the tool and its injection rule both read it here rather than
+  # walking `session.config_items` (empty for a workflow step).
+  #
+  # Public because the tool layer calls it directly.
+  def resolve_config_item_ids
+    return session.config_item_ids if standalone_session?
+
+    ids = []
+    ids += project_config_item_ids if workflow&.inherit_all_project_resources
+    ids += workflow&.base_config_item_ids || []
+    ids += step&.config_item_ids || []
+    ids.uniq
   end
 
   private
@@ -178,6 +200,12 @@ class SessionConfigResolver
 
   def project_mcp_server_ids
     MCPServer.visible_for_project(project).pluck(:id)
+  end
+
+  def project_config_item_ids
+    return [] unless project.present?
+
+    ConfigItem.visible_for_project(project).pluck(:id)
   end
 
   def project_repository_ids

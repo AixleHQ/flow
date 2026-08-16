@@ -19,8 +19,11 @@ import {
 import { IconCheck, IconPlayerPlay, IconRobot } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
+import type { ConfigItemPicker } from '@/types/generated';
+
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { SecretExposureNotice } from 'shared/resources/config-items/SecretExposureNotice';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
 import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
 import { StatusBadge } from 'shared/ui/StatusBadge';
@@ -39,6 +42,9 @@ export interface NamedItem {
   name: string;
 }
 
+/** Picker payload for a project config item — names and types only, never a value. */
+export type ConfigItemOption = ConfigItemPicker;
+
 export interface SessionNewFormProps {
   projectId?: number;
   projects?: NamedItem[];
@@ -49,6 +55,7 @@ export interface SessionNewFormProps {
   mcpServers?: NamedItem[];
   repositories?: NamedItem[];
   assets?: NamedItem[];
+  configItems?: ConfigItemOption[];
   /** Where to redirect after session creation */
   onCreatedPath: (sessionId: string, projectId: number) => string;
   /** Fallback redirect if no session id returned */
@@ -97,6 +104,7 @@ export const SessionNewForm = ({
   mcpServers = [],
   repositories = [],
   assets = [],
+  configItems = [],
   onCreatedPath,
   fallbackPath,
   preSelectedProjectId,
@@ -128,6 +136,7 @@ export const SessionNewForm = ({
   const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([]);
   const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
+  const [selectedConfigItems, setSelectedConfigItems] = useState<string[]>([]);
 
   const resolvedProjectId = fixedProjectId ? String(fixedProjectId) : projectId;
   const showProjectSelector = !fixedProjectId && projects && projects.length > 0;
@@ -141,6 +150,11 @@ export const SessionNewForm = ({
   const models = useMemo(() => (agentType ? (modelsMap[agentType] ?? []) : []), [agentType, modelsMap]);
 
   const avgCostCents = agentType ? (costHint?.avgCostCentsByRuntime?.[agentType] ?? null) : null;
+
+  const hasSelectedSecret = useMemo(
+    () => configItems.some((c) => c.itemType === 'secret' && selectedConfigItems.includes(String(c.id))),
+    [configItems, selectedConfigItems],
+  );
 
   const canSubmit =
     !!agentType &&
@@ -156,7 +170,8 @@ export const SessionNewForm = ({
       selectedSkills.length +
       selectedMcpServers.length +
       selectedRepos.length +
-      selectedAssets.length;
+      selectedAssets.length +
+      selectedConfigItems.length;
     if (bmadEnabled) count++;
     return count;
   }, [
@@ -167,6 +182,7 @@ export const SessionNewForm = ({
     selectedMcpServers,
     selectedRepos,
     selectedAssets,
+    selectedConfigItems,
     bmadEnabled,
   ]);
 
@@ -194,6 +210,7 @@ export const SessionNewForm = ({
             mcpServerIds: selectedMcpServers.length > 0 ? selectedMcpServers.map(Number) : undefined,
             repositoryIds: selectedRepos.length > 0 ? selectedRepos.map(Number) : undefined,
             inputAssetIds: selectedAssets.length > 0 ? selectedAssets.map(Number) : undefined,
+            configItemIds: selectedConfigItems.length > 0 ? selectedConfigItems.map(Number) : undefined,
             sessionConfig: bmadEnabled ? { bmadEnabled: true } : {},
           },
         }),
@@ -237,6 +254,7 @@ export const SessionNewForm = ({
     selectedMcpServers,
     selectedRepos,
     selectedAssets,
+    selectedConfigItems,
     onCreatedPath,
     fallbackPath,
   ]);
@@ -426,6 +444,26 @@ export const SessionNewForm = ({
             searchable
             clearable
           />
+        )}
+
+        {configItems.length > 0 && (
+          <>
+            <MultiSelect
+              label="Secrets & Variables"
+              description="The agent can read these with the get_config_item tool instead of asking you to paste a credential."
+              placeholder="Select secrets and variables..."
+              aria-label="Secrets and variables"
+              data={configItems.map((c) => ({
+                value: String(c.id),
+                label: c.itemType === 'secret' ? `${c.name} (secret)` : c.name,
+              }))}
+              value={selectedConfigItems}
+              onChange={setSelectedConfigItems}
+              searchable
+              clearable
+            />
+            {hasSelectedSecret && <SecretExposureNotice />}
+          </>
         )}
 
         {/* ── Execution ───────────────────────────────── */}

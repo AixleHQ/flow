@@ -68,4 +68,9 @@ class WorkflowResource < ApplicationResource
   attribute :base_asset_ids do |workflow|
     workflow.base_asset_ids
   end
+
+  typelize "number[]"
+  attribute :base_config_item_ids do |workflow|
+    workflow.base_config_item_ids
+  end
 end

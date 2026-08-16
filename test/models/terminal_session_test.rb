@@ -9,7 +9,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
   end
 
-  # == session_config JSONB (config_files & env_vars only) ==
+  # == session_config JSONB (config_files only) ==
 
   test "valid with empty session_config" do
     session = build(:terminal_session, user: @user, session_config: {})
@@ -28,16 +28,31 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_equal({}, session.config_files)
   end
 
-  test "env_vars returns env_vars hash" do
-    session = build(:terminal_session, user: @user, session_config: {
-      "env_vars" => { "KEY" => "value" }
-    })
-    assert_equal({ "KEY" => "value" }, session.env_vars)
+  # == Config item attachment ==
+
+  test "accepts config items belonging to the session's project" do
+    item = create(:config_item, scope: @project)
+    session = build(:terminal_session, user: @user, project: @project, config_items: [ item ])
+
+    assert session.valid?, session.errors.full_messages.to_sentence
   end
 
-  test "env_vars returns empty hash when absent" do
-    session = build(:terminal_session, user: @user, session_config: {})
-    assert_equal({}, session.env_vars)
+  test "rejects a config item from another project" do
+    other_project = create(:project, company: @company, owner: @user)
+    foreign = create(:config_item, scope: other_project, name: "OTHER_KEY")
+    session = build(:terminal_session, user: @user, project: @project, config_items: [ foreign ])
+
+    refute_predicate session, :valid?
+    assert_match(/OTHER_KEY/, session.errors.full_messages.to_sentence)
+  end
+
+  test "rejects config items on a project-less session" do
+    item = create(:config_item, scope: @project)
+    session = build(:terminal_session, user: @user, project: nil, session_type: "auth_setup",
+                                       config_items: [ item ])
+
+    refute_predicate session, :valid?
+    assert_match(/without a project/, session.errors.full_messages.to_sentence)
   end
 
   # == BMAD config helpers ==
@@ -468,10 +483,10 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert session.persisted?
     assert_equal({}, session.session_config)
     assert_equal({}, session.config_files)
-    assert_equal({}, session.env_vars)
     assert_nil session.configured_agent_id
     assert_equal 0, session.tools.count
     assert_equal 0, session.skills.count
     assert_equal 0, session.mcp_servers.count
+    assert_equal 0, session.config_items.count
   end
 end

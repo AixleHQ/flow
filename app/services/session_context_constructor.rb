@@ -11,6 +11,7 @@ class SessionContextConstructor
     ContextBuilders::BoardContext,
     ContextBuilders::Tools,
     ContextBuilders::Resources,
+    ContextBuilders::ConfigItems,
     ContextBuilders::BmadMethod,
     ContextBuilders::OutputRules
   ].freeze

@@ -65,6 +65,14 @@ module InternalTools
               type: "integer"
             }
           },
+          config_item_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "Config item IDs (secrets / environment variables) readable with " \
+                         "`get_config_item` in this step."
+          },
           depends_on_step_ids: {
             type: "array",
             items: {
@@ -87,7 +95,7 @@ module InternalTools
 
       updatable = %i[name instructions agent_id allow_non_interactive
                      skip_policy on_failure max_retries tool_ids skill_ids mcp_server_ids asset_ids
-                     repository_ids preferred_model bmad_enabled
+                     repository_ids config_item_ids preferred_model bmad_enabled
                      input_asset_specs output_asset_specs depends_on_step_ids]
 
       attrs = {}

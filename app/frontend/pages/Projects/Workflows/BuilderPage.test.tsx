@@ -26,6 +26,7 @@ const makeStep = (overrides: Record<string, unknown> = {}) => ({
   skillIds: [] as number[],
   assetIds: [] as number[],
   repositoryIds: [] as number[],
+  configItemIds: [] as number[],
   inputAssetSpecs: [] as { name: string; assetType: string; required: boolean; namePattern?: string | null }[],
   outputAssetSpecs: [] as { name: string; assetType: string; required: boolean; namePattern?: string | null }[],
   subSteps: [] as {
@@ -50,6 +51,7 @@ const makeWorkflow = (overrides: Record<string, unknown> = {}) => ({
   baseMCPServerIds: [] as number[],
   baseAssetIds: [] as number[],
   baseRepositoryIds: [] as number[],
+  baseConfigItemIds: [] as number[],
   ...overrides,
 });
 
@@ -64,6 +66,7 @@ const projectProps = (overrides: Record<string, unknown> = {}) => ({
   mcpServers: [],
   assets: [],
   repositories: [],
+  configItems: [],
   agentModels: [],
   readOnly: false,
   configuredAgents: [] as string[],
@@ -248,6 +251,33 @@ describe('Projects/Workflows/BuilderPage', () => {
       ).not.toBeInTheDocument(),
     );
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('attaching a config item to a step PATCHes configItemIds and warns when it is a secret', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({}),
+    } as Response);
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })],
+        configItems: [
+          { id: 11, name: 'STRIPE_KEY', itemType: 'secret' },
+          { id: 12, name: 'API_BASE', itemType: 'variable' },
+        ],
+      }),
+    });
+
+    await user.click(screen.getByRole('combobox', { name: /secrets and variables/i }));
+    await user.click(await screen.findByText('STRIPE_KEY (secret)'));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const patch = fetchSpy.mock.calls.find(([, init]) => init?.method === 'PATCH');
+    expect(JSON.parse(patch![1]!.body as string).step.configItemIds).toEqual([11]);
+
+    expect(await screen.findByText(/What attaching a secret means/i)).toBeInTheDocument();
   });
 
   it('renders drag handles for sessions in the tree nav', () => {

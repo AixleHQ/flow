@@ -184,6 +184,35 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert(duplicator.summary[:needs_setup].any? { |m| m.match?(/Secrets.*not copied/i) })
   end
 
+  test "config item attachments resolve by name in the target project" do
+    source_item = create(:config_item, :secret, scope: @source_project, name: "STRIPE_KEY")
+    target_item = create(:config_item, :secret, scope: @project, name: "STRIPE_KEY")
+    @step1.update!(config_item_ids: [ source_item.id ])
+    @source.merge_config!("base_config_item_ids" => [ source_item.id ])
+
+    duplicator = WorkflowDuplicator.new(@source, target_scope: @project)
+    copy = nil
+    assert_no_difference -> { ConfigItem.count } do
+      copy = duplicator.duplicate!
+    end
+
+    # The target project's OWN item, never the source id — an id carried across
+    # would point the copy at another project's vault.
+    assert_equal [ target_item.id ], copy.steps.not_deleted.order(:position).first.config_item_ids
+    assert_equal [ target_item.id ], copy.base_config_item_ids
+  end
+
+  test "a config item missing in the target project is dropped and reported" do
+    source_item = create(:config_item, :secret, scope: @source_project, name: "STRIPE_KEY")
+    @step1.update!(config_item_ids: [ source_item.id ])
+
+    duplicator = WorkflowDuplicator.new(@source, target_scope: @project)
+    copy = duplicator.duplicate!
+
+    assert_empty copy.steps.not_deleted.order(:position).first.config_item_ids
+    assert(duplicator.summary[:needs_setup].any? { |m| m.include?("STRIPE_KEY") })
+  end
+
   test "generates unique name when duplicate exists" do
     create(:workflow, scope: @project, name: "Source WF")
 

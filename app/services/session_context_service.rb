@@ -50,6 +50,17 @@ class SessionContextService
       end
     end
 
+    # Values known to be secrets — the `secret` config items attached to the
+    # session — with no length floor. MIN_REDACT_LEN guards `redact` because it
+    # receives every MCP header/env value, secret or not; here every value was
+    # explicitly marked secret, and a short one is still a secret.
+    def redact_known_secrets(*values)
+      values.flatten.each do |value|
+        s = value.to_s
+        @secrets << s if s.present?
+      end
+    end
+
     def to_s
       lines = []
       lines << "=== Session Context Log ==="
@@ -80,13 +91,11 @@ class SessionContextService
 
     private
 
-    # Replace every registered secret with a fingerprint. Longest-first so a secret
-    # that is a substring of a longer one never corrupts the longer replacement.
+    # One implementation of the substitution, shared with the log-collection
+    # sinks — a second copy would drift and produce two different fingerprints
+    # for the same secret across artifacts of the same session.
     def scrub_secrets(text)
-      @secrets.uniq.sort_by { |s| -s.length }.each do |secret|
-        text = text.gsub(secret, "«redacted:sha256:#{Digest::SHA256.hexdigest(secret)[0, 8]}»")
-      end
-      text
+      Sessions::SecretRedactor.new(@secrets).call(text)
     end
   end
 
@@ -114,6 +123,10 @@ class SessionContextService
       # /var/log/context.log artifact (oauth-unification §7). The real values still
       # reach the container's MCP config files — only the log copy is redacted.
       context_log.redact(collect_context_secrets(resolved_servers, session))
+      # Config items attached to this session: the context file lists their
+      # NAMES, but a value could still reach the log through an MCP header that
+      # references the same item, so register them here too.
+      context_log.redact_known_secrets(Sessions::SecretRedactor.secret_values_for(session))
       context_log.record(:mcp_servers, mcp_server_names)
       Rails.logger.info("[SessionContext] Pre-resolved MCP server names: #{mcp_server_names.inspect}")
 
@@ -181,30 +194,6 @@ class SessionContextService
         write_file(container_id, expanded, content, adapter.container_uid)
         Rails.logger.info("[SessionContext] Injected config file: #{path} (#{content.bytesize} bytes)")
       end
-    end
-
-    # == Story 9.3: Environment Variable Resolution ==
-
-    # Resolve env vars from session_config, replacing config_item:NAME references
-    # with decrypted values from ConfigItem.
-    # @return [Hash] resolved { "KEY" => "value" } pairs
-    def resolve_env_vars(session)
-      vars = session.env_vars
-      return {} if vars.blank?
-
-      effective_items = resolve_effective_config_items(session)
-      resolved = {}
-
-      vars.each do |key, value|
-        resolved_value = resolve_config_item_reference(value, effective_items)
-        resolved[key] = resolved_value if resolved_value.present?
-      end
-
-      if resolved.any?
-        Rails.logger.info("[SessionContext] Resolved env vars: #{resolved.keys.join(', ')} (#{resolved.size} vars)")
-      end
-
-      resolved
     end
 
     # == Story 9.6: Skill Injection ==
@@ -409,21 +398,6 @@ class SessionContextService
       return {} unless session.project.present?
 
       ConfigItem.effective_for_project(session.project)
-    end
-
-    # Resolve full config_item:NAME reference (for env vars where entire value is a ref)
-    def resolve_config_item_reference(value, effective_items)
-      return value unless value.to_s.start_with?("config_item:")
-
-      item_name = value.sub("config_item:", "")
-      resolved = effective_items[item_name]
-
-      unless resolved
-        Rails.logger.warn("[SessionContext] ConfigItem '#{item_name}' not found, skipping")
-        return nil
-      end
-
-      resolved
     end
 
     # Resolve embedded config_item:NAME references (for headers like "Bearer config_item:KEY")

@@ -5,7 +5,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
     scope = current_project.terminal_sessions
                            .with_cached_resource_counts
                            .includes(:user, :project,
-                                     :tools, :skills, :mcp_servers,
+                                     :tools, :skills, :mcp_servers, :config_items,
                                      :input_assets, :repositories)
                            .where.not(session_type: "auth_setup")
                            .ransack(q_params)
@@ -28,6 +28,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
     mcp_servers = MCPServer.visible_for_project(current_project)
     assets = Asset.accessible_from_project(current_project).includes(:versions)
     repositories = Repository.visible_for_project(current_project)
+    config_items = ConfigItem.visible_for_project(current_project)
 
     render inertia: "Projects/Sessions/NewPage", props: {
       project: project_props,
@@ -37,6 +38,8 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       mcp_servers: mcp_servers.map { |m| { id: m.id, name: m.name } },
       assets: assets.map { |a| { id: a.id, name: a.folder.present? ? "#{a.folder}/#{a.name}" : a.name } },
       repositories: repositories.map { |r| { id: r.id, name: r.full_name } },
+      # Names and types only — a config item's value never reaches a prop.
+      config_items: config_items.map { |c| ConfigItemPickerResource.new(c).to_h },
       agent_models: current_project_membership&.agent_models_for_props || [],
       # Cost is shown on every screen AFTER a session runs and nowhere on the
       # screen where the spend is actually committed. These two numbers put the

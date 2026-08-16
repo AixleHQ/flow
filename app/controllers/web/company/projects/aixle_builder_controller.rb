@@ -4,7 +4,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
   def show
     sessions = current_project.terminal_sessions
                        .with_cached_resource_counts
-                       .includes(:user, :project, :tools, :skills, :mcp_servers,
+                       .includes(:user, :project, :tools, :skills, :mcp_servers, :config_items,
                                  :input_assets, :repositories)
                        .where(user: current_user)
                        .where("metadata @> ?", { aixle_builder: true }.to_json)

@@ -14,7 +14,8 @@ class Workflow < ApplicationRecord
 
   ALLOWED_CONFIG_KEYS = %w[
     base_tool_ids base_skill_ids base_mcp_server_ids
-    base_asset_ids base_repository_ids inherit_all_project_resources
+    base_asset_ids base_repository_ids base_config_item_ids
+    inherit_all_project_resources
   ].freeze
 
   validates :name, presence: true
@@ -23,6 +24,7 @@ class Workflow < ApplicationRecord
   validates :scope_type, presence: true, inclusion: { in: %w[Project System] }
   validates :scope, presence: true, unless: -> { scope_type == "System" }
   validate :config_keys_whitelist
+  validate :base_config_item_ids_belong_to_project
 
   scope :active, -> { where(deleted_at: nil) }
   scope :published, -> { where.not(published_at: nil) }
@@ -101,6 +103,10 @@ class Workflow < ApplicationRecord
     config&.dig("base_repository_ids") || []
   end
 
+  def base_config_item_ids
+    config&.dig("base_config_item_ids") || []
+  end
+
   def inherit_all_project_resources
     config&.dig("inherit_all_project_resources") || false
   end
@@ -125,6 +131,26 @@ class Workflow < ApplicationRecord
 
     unknown = config.keys - ALLOWED_CONFIG_KEYS
     errors.add(:config, "contains unknown keys: #{unknown.join(', ')}") if unknown.any?
+  end
+
+  # The base set decides what `get_config_item` may decrypt for every session
+  # this workflow spawns, so it may only name config items of the workflow's own
+  # project. A System workflow (Aixle Builder) has no project and therefore no
+  # base config items at all.
+  def base_config_item_ids_belong_to_project
+    ids = base_config_item_ids
+    return if ids.blank?
+
+    unless scope_type == "Project"
+      errors.add(:config, "base_config_item_ids can only be set on a project-scoped workflow")
+      return
+    end
+
+    owned = ConfigItem.where(scope_type: "Project", scope_id: scope_id, id: ids).pluck(:id)
+    foreign = ids.map(&:to_i) - owned
+    return if foreign.empty?
+
+    errors.add(:config, "base_config_item_ids contains items outside this project: #{foreign.sort.join(', ')}")
   end
 
   def purge_steps

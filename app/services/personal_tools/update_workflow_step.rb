@@ -26,6 +26,12 @@ module PersonalTools
             description: "MCP server ids. Replaces the whole list — read the current value with " \
                          "get_workflow_step first.",
             items: { type: "integer" }
+      param :config_item_ids, type: :array,
+            description: "Config item ids (secrets / environment variables) this step's agent may read with " \
+                         "get_config_item. Attach a credential here instead of writing it into the " \
+                         "instructions. Replaces the whole list — read the current value with " \
+                         "get_workflow_step first.",
+            items: { type: "integer" }
       param :depends_on_step_ids, type: :array,
             description: "Step ids this step depends on. Replaces the whole list — read the current value " \
                          "with get_workflow_step first.",
@@ -35,8 +41,8 @@ module PersonalTools
     end
 
     UPDATABLE = %i[
-      name instructions agent_id tool_ids skill_ids mcp_server_ids depends_on_step_ids
-      bmad_enabled allow_non_interactive
+      name instructions agent_id tool_ids skill_ids mcp_server_ids config_item_ids
+      depends_on_step_ids bmad_enabled allow_non_interactive
     ].freeze
 
     def execute

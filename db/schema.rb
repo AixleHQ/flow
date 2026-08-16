@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_16_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_17_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -288,6 +288,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_16_000001) do
     t.index ["user_id", "company_id"], name: "index_company_memberships_on_user_id_and_company_id", unique: true
   end
 
+  create_table "config_item_accesses", force: :cascade do |t|
+    t.bigint "config_item_id", null: false
+    t.string "config_item_name", null: false
+    t.datetime "created_at", null: false
+    t.string "item_type", null: false
+    t.bigint "terminal_session_id", null: false
+    t.bigint "user_id"
+    t.index ["config_item_id"], name: "index_config_item_accesses_on_config_item_id"
+    t.index ["created_at"], name: "index_config_item_accesses_on_created_at"
+    t.index ["terminal_session_id"], name: "index_config_item_accesses_on_terminal_session_id"
+  end
+
   create_table "config_items", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.text "description"
@@ -542,6 +554,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_16_000001) do
     t.index ["webhook_secret"], name: "index_repositories_on_webhook_secret", unique: true
   end
 
+  create_table "session_config_items", id: false, force: :cascade do |t|
+    t.bigint "config_item_id", null: false
+    t.bigint "terminal_session_id", null: false
+    t.index ["config_item_id"], name: "index_session_config_items_on_config_item_id"
+    t.index ["terminal_session_id", "config_item_id"], name: "index_session_config_items_on_session_and_item", unique: true
+  end
+
   create_table "session_input_assets", id: false, force: :cascade do |t|
     t.bigint "asset_id", null: false
     t.bigint "terminal_session_id", null: false
@@ -751,6 +770,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_16_000001) do
     t.boolean "allow_non_interactive", default: false, null: false
     t.jsonb "asset_ids", default: [], null: false
     t.boolean "bmad_enabled", default: false, null: false
+    t.jsonb "config_item_ids", default: [], null: false
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
     t.jsonb "depends_on_step_ids", default: [], null: false

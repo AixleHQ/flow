@@ -32,6 +32,14 @@ module Api
           params: session_params.except(:project_id, :session_type, :agent_type, :configured_agent_id)
         )
 
+        # `create_and_start` returns the unsaved record when validation rejects it —
+        # e.g. an attached config item that belongs to another project. Serializing an
+        # unpersisted session raises on its Global ID, so the client would get a 500
+        # where it should get the errors it can act on.
+        unless session.persisted?
+          return render json: { errors: session.errors.full_messages }, status: :unprocessable_entity
+        end
+
         render json: TerminalSessionResource.new(session).to_h, status: :created
       rescue Oauth::PreflightError, CloudAuth::PreflightError => e
         # Session-start preflight (§4.6): block launch with a "Connect …" CTA rather
@@ -125,7 +133,7 @@ module Api
           :project_id, :session_type, :agent_type, :configured_agent_id, :mode,
           :initial_prompt, :requested_model, :auth_kind,
           tool_ids: [], skill_ids: [], mcp_server_ids: [],
-          input_asset_ids: [], repository_ids: [],
+          input_asset_ids: [], repository_ids: [], config_item_ids: [],
           session_config: [ :bmad_enabled, { bmad_modules: [] } ]
         )
       end

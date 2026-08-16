@@ -52,6 +52,11 @@ class StepResource < ApplicationResource
   end
 
   typelize "number[]"
+  attribute :config_item_ids do |step|
+    step.config_item_ids || []
+  end
+
+  typelize "number[]"
   attribute :asset_ids do |step|
     step.asset_ids || []
   end

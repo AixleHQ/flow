@@ -376,48 +376,49 @@ module ContainerStrategies
       assert_includes env_vars, "XAI_API_KEY=xai-company-key"
     end
 
+    # == Conflicting provider env ==
+    #
     # XAI_API_KEY outranks a stored session token in the Grok CLI's own credential
-    # resolution, so a stray key would silently bill a different xAI account than the
-    # one the user signed in with.
-    test "build_env_vars drops a stray XAI_API_KEY when the grok credential is a session token" do
+    # resolution, so a key left in the environment would silently bill a different
+    # xAI account than the one the user signed in with. `scrub_conflicting_auth_env`
+    # runs last, after every other env source has had its say.
+    #
+    # There is deliberately no arbitrary per-session env channel any more: a session
+    # reaches its config items through the `get_config_item` MCP tool and nothing is
+    # injected into the container (see spec-session-config-item-access). The adapters'
+    # own `default_env_vars` are therefore the only producer left, and the scrub stays
+    # as the net for them. Per-adapter key lists are covered in the adapter tests.
+
+    test "build_env_vars keeps XAI_API_KEY when the grok credential is an API-key login" do
+      @session.update!(agent_type: "grok")
+      @credential.update!(agent_type: "grok", config_data: { "api_key" => "xai-company-key" })
+
+      env_vars = build_strategy(agent_type: "grok").build_env_vars
+
+      assert_includes env_vars, "XAI_API_KEY=xai-company-key"
+    end
+
+    test "build_env_vars carries no XAI_API_KEY when the grok credential is a session token" do
       @session.update!(agent_type: "grok")
       @credential.update!(agent_type: "grok", config_data: {
         "auth" => { "https://accounts.x.ai/sign-in" => { "key" => "session-token" } }
       })
-      SessionContextService.stubs(:resolve_env_vars).returns({ "XAI_API_KEY" => "stray-key" })
-      strategy = build_strategy(agent_type: "grok")
 
-      env_vars = strategy.build_env_vars
+      env_vars = build_strategy(agent_type: "grok").build_env_vars
 
-      refute env_vars.any? { |v| v.start_with?("XAI_API_KEY=") }
+      assert_not env_vars.any? { |v| v.start_with?("XAI_API_KEY=") }
     end
 
-    # == Conflicting provider env ==
-    #
-    # A ConfigItem-sourced ANTHROPIC_API_KEY would shadow a Bedrock connection, and
-    # Claude Code hides Bedrock errors — the symptom would be an agent that never
-    # answers. Scrubbing runs after every other env source has been merged.
-
-    test "build_env_vars drops env that would shadow an active bedrock connection" do
-      @credential.update!(config_data: { "awsBedrock" => {
-        "region" => "us-east-1", "profile" => "aixle-bedrock",
-        "credential_process" => "/usr/local/bin/aixle-aws-creds"
-      } })
-      SessionContextService.stubs(:resolve_env_vars).returns({
-        "ANTHROPIC_API_KEY" => "sk-ant-leftover",
-        "MY_APP_TOKEN" => "keep-me"
-      })
+    test "build_env_vars injects no config item values — the MCP tool is the only channel" do
+      project = create(:project, company: @company, owner: @user)
+      @session.update!(project: project)
+      @session.config_items << create(:config_item, :secret, scope: project, name: "STRIPE_KEY",
+                                                            value: "sk_live_abc123")
 
       env_vars = build_strategy.build_env_vars
 
-      assert_not env_vars.any? { |v| v.start_with?("ANTHROPIC_API_KEY=") }
-      assert_includes env_vars, "MY_APP_TOKEN=keep-me"
-    end
-
-    test "build_env_vars leaves env alone when there is no bedrock connection" do
-      SessionContextService.stubs(:resolve_env_vars).returns({ "ANTHROPIC_API_KEY" => "sk-ant-legit" })
-
-      assert_includes build_strategy.build_env_vars, "ANTHROPIC_API_KEY=sk-ant-legit"
+      assert_not env_vars.any? { |v| v.include?("sk_live_abc123") }
+      assert_not env_vars.any? { |v| v.start_with?("STRIPE_KEY=") }
     end
 
     test "builds env vars skips blank credential metadata values" do

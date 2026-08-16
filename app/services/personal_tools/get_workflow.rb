@@ -28,6 +28,7 @@ module PersonalTools
               base_tool_ids: workflow.base_tool_ids, base_skill_ids: workflow.base_skill_ids,
               base_mcp_server_ids: workflow.base_mcp_server_ids,
               base_repository_ids: workflow.base_repository_ids,
+              base_config_item_ids: workflow.base_config_item_ids,
               steps_count: steps.size, steps: steps)
     end
 

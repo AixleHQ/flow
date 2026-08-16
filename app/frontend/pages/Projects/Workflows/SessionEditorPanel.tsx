@@ -13,6 +13,10 @@ import {
 } from '@tabler/icons-react';
 import { useState } from 'react';
 
+import type { ConfigItemPicker } from '@/types/generated';
+
+import { SecretExposureNotice } from 'shared/resources/config-items/SecretExposureNotice';
+
 import classes from './BuilderPage.module.css';
 
 interface NamedItem {
@@ -51,6 +55,7 @@ interface Step {
   skillIds: number[];
   assetIds: number[];
   repositoryIds: number[];
+  configItemIds: number[];
   inputAssetSpecs: AssetSpec[];
   outputAssetSpecs: AssetSpec[];
 }
@@ -175,6 +180,7 @@ interface SessionEditorPanelProps {
   mcpServers: NamedItem[];
   assets: NamedItem[];
   repositories: NamedItem[];
+  configItems: ConfigItemPicker[];
   agentModels?: AgentModelsEntry[];
   readOnly: boolean;
   onFieldChange: (field: string, value: unknown, immediate?: boolean) => void;
@@ -191,6 +197,7 @@ export function SessionEditorPanel({
   mcpServers,
   assets,
   repositories,
+  configItems,
   agentModels = [],
   readOnly,
   onFieldChange,
@@ -209,6 +216,12 @@ export function SessionEditorPanel({
     step.preferredModel && !modelOptions.some((o) => o.value === step.preferredModel)
       ? [...modelOptions, { value: step.preferredModel, label: step.preferredModel }]
       : modelOptions;
+
+  const stepConfigItemIds = step.configItemIds ?? [];
+  const configItemSelectData = (Array.isArray(configItems) ? configItems : [])
+    .filter((c) => c?.id != null)
+    .map((c) => ({ value: String(c.id), label: c.itemType === 'secret' ? `${c.name} (secret)` : c.name }));
+  const stepHasSecret = configItems.some((c) => c.itemType === 'secret' && stepConfigItemIds.includes(c.id));
 
   const groupedToolIds = new Set(toolGroups.flatMap((g) => g.toolIds));
   const toolSelectData = [
@@ -497,6 +510,29 @@ export function SessionEditorPanel({
               input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
             }}
           />
+        </div>
+
+        <div className={classes.resGroup}>
+          <div className={classes.resType}>
+            Secrets &amp; Variables <span className={classes.resTypeSub}>— read on demand with get_config_item</span>
+          </div>
+          <MultiSelect
+            data={configItemSelectData}
+            value={toStringArr(stepConfigItemIds)}
+            onChange={(v) => onFieldChange('configItemIds', toNumberArr(v), true)}
+            disabled={readOnly}
+            searchable
+            placeholder="None added"
+            aria-label="Secrets and variables"
+            styles={{
+              input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+            }}
+          />
+          {stepHasSecret && (
+            <div style={{ marginTop: 8 }}>
+              <SecretExposureNotice />
+            </div>
+          )}
         </div>
 
         <div className={classes.resGroup}>
