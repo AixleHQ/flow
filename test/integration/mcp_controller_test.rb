@@ -24,6 +24,28 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     response.parsed_body
   end
 
+  # One request of the stateless "modern" lifecycle (2026-07-28, SEP-2575) —
+  # the one Claude Code speaks: no `initialize`, no session id, the protocol
+  # version and client capabilities carried in a per-request `_meta` envelope
+  # and mirrored in routing headers.
+  def modern_rpc(method, params = {}, name: nil, version: MCP::Configuration::LATEST_MODERN_PROTOCOL_VERSION,
+                 envelope: nil)
+    envelope ||= {
+      "io.modelcontextprotocol/protocolVersion" => version,
+      "io.modelcontextprotocol/clientCapabilities" => {},
+      "io.modelcontextprotocol/clientInfo" => { name: "claude-code", version: "1" }
+    }
+    post "/action_mcp",
+         params: { jsonrpc: "2.0", id: 1, method: method, params: params.merge(_meta: envelope) }.to_json,
+         headers: { "Content-Type" => "application/json",
+                    "Accept" => "application/json, text/event-stream",
+                    "X-Session-Key" => @session.mcp_key,
+                    "MCP-Protocol-Version" => version,
+                    "Mcp-Method" => method,
+                    "Mcp-Name" => name }.compact
+    response.parsed_body
+  end
+
   def attach_platform_tool(name)
     Tool.shadow_for(Tools::Registry.fetch(name)).tap { |row| @session.tools << row }
   end
@@ -59,19 +81,31 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     assert_equal "2025-06-18", body.dig("result", "protocolVersion")
   end
 
-  test "initialize never agrees to a version whose result shapes the server does not serve" do
+  test "initialize never agrees to a version whose lifecycle has no handshake" do
     attach_platform_tool("board_list_tasks")
 
     negotiated = rpc("initialize", { protocolVersion: "2026-07-28", capabilities: {},
                                      clientInfo: { name: "claude-code", version: "1" } })
                  .dig("result", "protocolVersion")
 
-    assert_equal Tools::MCPProtocol::MAX_NEGOTIABLE_VERSION, negotiated
+    assert_equal MCP::Configuration::LATEST_HANDSHAKE_PROTOCOL_VERSION, negotiated
 
     tools = listed_tools(rpc("tools/list", {}, protocol_version: negotiated))
 
     assert_response :success
     assert_includes tools.map { |t| t["name"] }, "board_list_tasks"
+  end
+
+  test "a modern tools/list serves the session's tools with the stamps its schema requires" do
+    attach_platform_tool("board_list_tasks")
+
+    result = modern_rpc("tools/list")["result"]
+
+    assert_response :success
+    assert_includes result["tools"].map { |t| t["name"] }, "board_list_tasks"
+    assert_equal "complete", result["resultType"]
+    assert_equal 0, result["ttlMs"]
+    assert_equal "private", result["cacheScope"]
   end
 
   # ── tools/list ──
@@ -136,6 +170,74 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     text = body.dig("result", "content").map { |c| c["text"] }.join("\n")
     assert_match(/slack integration is not connected/i, text)
     assert_match(/Project Settings/, text)
+  end
+
+  test "the in-band error for a disconnected tool is stamped on the modern wire" do
+    # The disconnected tool is hidden from the server that serves tools/list,
+    # so its call is served by one that registers it with the remedy as its
+    # handler — which is what puts the result on the gem's own path and earns
+    # the `resultType` 2026-07-28 requires. Without it a modern client drops
+    # the remedy instead of showing it.
+    attach_platform_tool("slack_post_message")
+
+    result = modern_rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } },
+                        name: "slack_post_message")["result"]
+
+    assert_equal "complete", result["resultType"]
+    assert result["isError"]
+    assert_match(/slack integration is not connected/i,
+                 result["content"].map { |c| c["text"] }.join("\n"))
+  end
+
+  # ── the remedy never outranks the protocol (SEP-2575 validation) ──
+  #
+  # The remedy is the one result this app produces for a request the gem would
+  # answer "tool not found". Reaching it must still cost a valid modern
+  # request: an unsupported version, a malformed envelope or a header that
+  # contradicts the body has to be refused exactly as it is for a connected
+  # tool, never answered with a successful in-band result.
+
+  test "a disconnected tool's call at an unserved modern version is refused with -32022" do
+    attach_platform_tool("slack_post_message")
+
+    body = modern_rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } },
+                      name: "slack_post_message", version: "2099-01-01")
+
+    assert_response :bad_request
+    assert_nil body["result"]
+    assert_equal MCP::ErrorCodes::UNSUPPORTED_PROTOCOL_VERSION, body.dig("error", "code")
+    assert_equal MCP::Configuration::SUPPORTED_MODERN_PROTOCOL_VERSIONS,
+                 body.dig("error", "data", "supported")
+  end
+
+  test "a disconnected tool's call with a malformed modern envelope is refused with -32602" do
+    attach_platform_tool("slack_post_message")
+
+    # `clientCapabilities` is REQUIRED and must be an object: the loose
+    # `RequestEnvelope.modern?` classifier accepts this envelope, only
+    # `RequestEnvelope.parse!` rejects it.
+    version = MCP::Configuration::LATEST_MODERN_PROTOCOL_VERSION
+    body = modern_rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } },
+                      name: "slack_post_message",
+                      envelope: { "io.modelcontextprotocol/protocolVersion" => version,
+                                  "io.modelcontextprotocol/clientCapabilities" => "not-an-object" })
+
+    assert_nil body["result"]
+    assert_equal(-32602, body.dig("error", "code"))
+    assert_match(/clientCapabilities/, body.dig("error", "message").to_s)
+  end
+
+  test "a disconnected tool's call whose routing headers contradict the body is refused with -32020" do
+    attach_platform_tool("slack_post_message")
+
+    # `Mcp-Name` mirrors the called tool so intermediaries can route without
+    # parsing bodies; SEP-2575 requires it on the name-bearing methods.
+    body = modern_rpc("tools/call", { name: "slack_post_message", arguments: { text: "hi" } },
+                      name: "board_list_tasks")
+
+    assert_response :bad_request
+    assert_nil body["result"]
+    assert_equal MCP::ErrorCodes::HEADER_MISMATCH, body.dig("error", "code")
   end
 
   test "tools/call outside the entitlement stays an opaque protocol error" do
