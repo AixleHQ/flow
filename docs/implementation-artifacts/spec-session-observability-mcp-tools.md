@@ -162,3 +162,12 @@ button, this tool, and a column auto-trigger — and `requested_by_id` is record
   (existing `test/integration/api/v1/terminal_sessions_log_visibility_test.rb` must stay green).
 - Registry test: the four tools are discoverable with `audience :user` and no duplicate names.
 - Full suite: `docker compose exec -T web make check_all`.
+
+## Spec Change Log
+
+- **2026-08-17 — "return log content unredacted" narrowed.** The Boundaries rule above ("no secret
+  filtering") and its matching *Ask First* entry are renegotiated by
+  [spec-session-config-item-access.md](./spec-session-config-item-access.md): values of `secret`
+  `ConfigItem`s **attached to the session** are redacted to a fingerprint before a log leaves the
+  process, including through `get_session_log`. The set is known and enumerable — this is not a
+  heuristic scan for secret-looking text, and everything else in a log is still returned verbatim.
