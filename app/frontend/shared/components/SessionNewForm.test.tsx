@@ -161,4 +161,58 @@ describe('SessionNewForm', () => {
     const summary = screen.getByText('Session Summary').closest('div')!;
     expect(within(summary.parentElement as HTMLElement).getByText('Interactive')).toBeInTheDocument();
   });
+  it('does not render the secrets picker when the project has no config items', () => {
+    renderAuthedPage(<SessionNewForm {...makeProps()} />, { props: authProps(['claude_code']) });
+
+    expect(screen.queryByRole('combobox', { name: /secrets and variables/i })).not.toBeInTheDocument();
+  });
+
+  it('marks secrets in the picker so a secret reads differently from a variable', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <SessionNewForm
+        {...makeProps({
+          projectId: 1,
+          configItems: [
+            { id: 7, name: 'STRIPE_KEY', itemType: 'secret' },
+            { id: 8, name: 'API_BASE', itemType: 'variable' },
+          ],
+        })}
+      />,
+      { props: authProps(['claude_code']) },
+    );
+
+    const picker = screen.getByRole('combobox', { name: /secrets and variables/i });
+    await user.click(picker);
+
+    // A secret is labelled as such: attaching one is a different decision.
+    expect(await screen.findByText('STRIPE_KEY (secret)')).toBeInTheDocument();
+    expect(screen.getByText('API_BASE')).toBeInTheDocument();
+  });
+
+  it('sends the selected config item ids with the session', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { id: 'sess-9' } }),
+    } as Response);
+
+    renderAuthedPage(
+      <SessionNewForm
+        {...makeProps({ projectId: 3, configItems: [{ id: 7, name: 'STRIPE_KEY', itemType: 'secret' }] })}
+      />,
+      { props: authProps(['claude_code']) },
+    );
+
+    await user.click(screen.getByText('Claude Code'));
+    await user.click(screen.getByRole('combobox', { name: /secrets and variables/i }));
+    await user.click(await screen.findByText('STRIPE_KEY (secret)'));
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(JSON.parse(init!.body as string).terminalSession.configItemIds).toEqual([7]);
+
+    fetchSpy.mockRestore();
+  });
 });

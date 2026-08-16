@@ -49,7 +49,10 @@ module Sessions
 
       return Result.new(status: :not_ready, text: "", last_output_at: mtime) unless exit_code.to_i.zero?
 
-      Result.new(status: :ok, text: pane, last_output_at: mtime)
+      # A live read is the same bytes the stored log would carry, just earlier —
+      # so it gets the same redaction. Without this, tailing a running session
+      # (UI or the `get_session_log` MCP tool) would be the way around it.
+      Result.new(status: :ok, text: redactor.call(pane), last_output_at: mtime)
     rescue ContainerRuntime::ContainerUnreachableError
       Result.new(status: :unreachable, text: "", last_output_at: nil)
     end
@@ -57,6 +60,10 @@ module Sessions
     private
 
     attr_reader :session, :runtime
+
+    def redactor
+      @redactor ||= SecretRedactor.for_session(session)
+    end
 
     # The pane dump runs LAST so the exec's exit code is tmux's: a container
     # whose tmux server is not up answers non-zero, which is what separates

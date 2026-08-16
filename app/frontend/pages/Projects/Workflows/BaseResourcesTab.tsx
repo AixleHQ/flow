@@ -1,5 +1,7 @@
 import { MultiSelect, Switch } from '@mantine/core';
 
+import type { ConfigItemPicker } from '@/types/generated';
+
 interface NamedItem {
   id: number;
   name: string;
@@ -18,6 +20,7 @@ interface Workflow {
   baseMCPServerIds: number[];
   baseAssetIds: number[];
   baseRepositoryIds: number[];
+  baseConfigItemIds: number[];
 }
 
 interface BaseResourcesTabProps {
@@ -28,6 +31,7 @@ interface BaseResourcesTabProps {
   mcpServers: NamedItem[];
   assets: NamedItem[];
   repositories: NamedItem[];
+  configItems: ConfigItemPicker[];
   readOnly: boolean;
   onWorkflowChange: (field: string, value: unknown) => void;
 }
@@ -42,6 +46,7 @@ export function BaseResourcesTab({
   mcpServers,
   assets,
   repositories,
+  configItems,
   readOnly,
   onWorkflowChange,
 }: BaseResourcesTabProps) {
@@ -83,6 +88,15 @@ export function BaseResourcesTab({
 
   const toStringArr = (ids: number[]) => (Array.isArray(ids) ? ids : []).map(String);
   const toNumberArr = (vals: string[]) => (Array.isArray(vals) ? vals : []).map(Number);
+
+  // A secret is labelled as such in the picker: attaching one is a different
+  // decision from attaching a variable, and the label is what makes that visible
+  // before the warning below appears.
+  const configItemSelectData = (Array.isArray(configItems) ? configItems : [])
+    .filter((c) => c?.id != null)
+    .map((c) => ({ value: String(c.id), label: c.itemType === 'secret' ? `${c.name} (secret)` : c.name }));
+
+  const baseConfigItemIds = workflow.baseConfigItemIds ?? [];
 
   return (
     <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
@@ -174,6 +188,16 @@ export function BaseResourcesTab({
                 isEmpty: workflow.baseAssetIds.length === 0,
                 supersededByInherit: true,
                 emptyHint: 'None added',
+              },
+              {
+                label: 'Secrets & Variables',
+                placeholder: 'Select secrets and variables…',
+                data: configItemSelectData,
+                value: toStringArr(baseConfigItemIds),
+                onChange: (v: string[]) => onWorkflowChange('baseConfigItemIds', toNumberArr(v)),
+                isEmpty: baseConfigItemIds.length === 0,
+                supersededByInherit: true,
+                emptyHint: 'None added — steps can attach their own',
               },
               {
                 // Repositories stay selectable while "inherit all" is on: unlike the

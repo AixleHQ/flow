@@ -55,6 +55,15 @@ class WorkflowDuplicator
       map_ids(ids) { |id| mcp_map.fetch(id) { mcp_map[id] = copy_mcp_server(id) } }
     end
 
+    # Config items are the secrets boundary: the ROW is never copied, so the id
+    # cannot be carried either — it would point the copy at another project's
+    # vault. Resolve by NAME in the target project instead: an item the target
+    # already has keeps working, and anything missing is reported in #summary so
+    # the person finishing the setup knows exactly what to create.
+    def map_config_item_ids(ids)
+      map_ids(ids) { |id| resolve_config_item_by_name(id) }
+    end
+
     # Human-readable summary of what was NOT copied / needs setup. Returns nil
     # when nothing needs attention, so callers can conditionally surface it.
     def summary
@@ -187,6 +196,22 @@ class WorkflowDuplicator
         attrs[:file_data] = tf.file_data if tf.file_data.present?
         new_tool.tool_files.create!(attrs)
       end
+    end
+
+    # ---- ConfigItem --------------------------------------------------------
+
+    # Never creates anything: an id that has no same-named item in the target
+    # project is dropped from the copy and named in the summary.
+    def resolve_config_item_by_name(id)
+      source_item = ConfigItem.find_by(id: id)
+      return nil if source_item.nil?
+      return source_item.id if project_local?(source_item)
+
+      match = ConfigItem.for_project(@project).find_by(name: source_item.name)
+      return match.id if match
+
+      @not_copied[:config_items] << source_item.name
+      nil
     end
 
     # ---- Config-item / summary helpers ------------------------------------

@@ -29,6 +29,10 @@ class TerminalSession < ApplicationRecord
   has_and_belongs_to_many :mcp_servers, join_table: :session_mcp_servers, class_name: "MCPServer"
   has_and_belongs_to_many :input_assets, class_name: "Asset", join_table: :session_input_assets
   has_and_belongs_to_many :repositories, join_table: :session_repositories
+  # Attaching a config item is what authorizes this session to decrypt its value
+  # through `get_config_item` — the tool resolves against this set, never against
+  # the project's items. See docs/implementation-artifacts/spec-session-config-item-access.md.
+  has_and_belongs_to_many :config_items, join_table: :session_config_items
 
   # Callbacks
   before_create :generate_route_token
@@ -54,6 +58,7 @@ class TerminalSession < ApplicationRecord
   validates :mode, inclusion: { in: %w[interactive non_interactive] }, allow_nil: true
   validates :initial_prompt, presence: true, if: -> { mode == "non_interactive" }
   validates :requested_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
+  validate :config_items_belong_to_project
 
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)
@@ -152,10 +157,6 @@ class TerminalSession < ApplicationRecord
     session_config["config_files"] || {}
   end
 
-  def env_vars
-    session_config["env_vars"] || {}
-  end
-
   def bmad_enabled?
     session_config&.dig("bmad_enabled") == true
   end
@@ -213,6 +214,24 @@ class TerminalSession < ApplicationRecord
   end
 
   private
+
+  # Attaching a config item is what lets this session decrypt its value, so the
+  # ids cannot be taken on trust from whoever posted them: a session may only
+  # attach config items of its OWN project. Enforced on the model rather than in
+  # a controller so every path — the API, the meta tools, a console — is covered.
+  def config_items_belong_to_project
+    return if config_items.empty?
+
+    if project_id.blank?
+      errors.add(:config_items, "cannot be attached to a session without a project")
+      return
+    end
+
+    foreign = config_items.reject { |item| item.scope_type == "Project" && item.scope_id == project_id }
+    return if foreign.empty?
+
+    errors.add(:config_items, "must belong to this session's project: #{foreign.map(&:name).sort.join(', ')}")
+  end
 
   # == State machine callbacks ==
 

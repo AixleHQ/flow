@@ -31,7 +31,8 @@ class SessionService
         configured_agent: configured_agent,
         metadata: metadata.presence,
         **params.slice(:mode, :initial_prompt, :requested_model, :session_config,
-                       :tool_ids, :skill_ids, :mcp_server_ids, :input_asset_ids, :repository_ids)
+                       :tool_ids, :skill_ids, :mcp_server_ids, :input_asset_ids, :repository_ids,
+                       :config_item_ids)
       )
 
       return session unless session.save

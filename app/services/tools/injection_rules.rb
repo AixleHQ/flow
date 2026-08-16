@@ -20,6 +20,12 @@ module Tools
       github_repositories_attached: lambda { |ctx|
         ctx.session.present? &&
           ctx.session.repositories.includes(:integration).any? { |repo| repo.integration&.github? }
+      },
+      # get_config_item — served only where an attachment already authorized it.
+      # Resolved through SessionConfigResolver so a workflow step sees the items
+      # its workflow/step named, not just the (empty) session association.
+      config_items_attached: lambda { |ctx|
+        ctx.session.present? && SessionConfigResolver.new(ctx.session).resolve_config_item_ids.any?
       }
     }.freeze
 

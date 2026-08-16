@@ -36,9 +36,11 @@ module ContainerStrategies
           .each { |k, v| upsert_env_var(env_vars_list, k, v) }
       end
 
-      SessionContextService.resolve_env_vars(session)
-        .each { |k, v| upsert_env_var(env_vars_list, k, v) }
-
+      # No config-item env injection here, deliberately: a session reaches its
+      # attached config items through the `get_config_item` MCP tool and nowhere
+      # else, so there is exactly one channel to reason about (and exactly one
+      # that writes an audit row). See
+      # docs/implementation-artifacts/spec-session-config-item-access.md.
       scrub_conflicting_auth_env(env_vars_list)
     end
 
@@ -149,12 +151,23 @@ module ContainerStrategies
       Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
     end
 
+    # Built once per cleanup: resolving the session's attached secrets decrypts
+    # rows, and both collectors run back to back over the same session.
+    def secret_redactor(session)
+      @secret_redactor ||= Sessions::SecretRedactor.for_session(session)
+    end
+
     def collect_terminal_output(container, session)
       # The file is populated live by the `agent` pane's tmux pipe-pane, set up in
       # docker/base/entrypoint.sh at container start (`tee -a /tmp/terminal_output.log`),
       # so it already holds the raw ANSI stream — no capture-pane snapshot needed.
       content = read_file_from_container(container, "/tmp/terminal_output.log")
       return 0 if content.blank?
+
+      # Anything the agent echoed — a value it read through get_config_item, most
+      # of all — is in this stream verbatim. Scrub before it is persisted and
+      # replayed in the UI.
+      content = secret_redactor(session).call(content)
 
       io = StringIO.new(content)
       io.define_singleton_method(:original_filename) { "terminal_output.log" }
@@ -177,9 +190,15 @@ module ContainerStrategies
 
       count = 0
       contents = {}
+      redactor = secret_redactor(session)
       agent_service.adapter.session_log_paths.each do |path|
         content = read_file_from_container(container, path)
         next if content.blank?
+
+        # Covers /var/log/mitm/http.log, which holds the FULL provider request
+        # bodies — so every value the agent read is in there, having travelled to
+        # the model as part of the conversation.
+        content = redactor.call(content)
 
         filename = File.basename(path)
         contents["logs/#{filename}"] = content

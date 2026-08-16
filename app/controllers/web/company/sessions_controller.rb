@@ -4,7 +4,7 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   def index
     scope = company_sessions_scope.with_cached_resource_counts
               .includes(:user, :project,
-                        :tools, :skills, :mcp_servers,
+                        :tools, :skills, :mcp_servers, :config_items,
                         :input_assets, :repositories)
               .where.not(session_type: "auth_setup")
               .ransack(q_params)
@@ -23,7 +23,7 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   def show
     session = company_sessions_scope.with_cached_resource_counts
                 .includes(:user, :project,
-                          :tools, :skills, :mcp_servers,
+                          :tools, :skills, :mcp_servers, :config_items,
                           :input_assets, :repositories)
                 .find(params[:id])
     authorize_session_visibility!(session)

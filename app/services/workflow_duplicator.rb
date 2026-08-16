@@ -63,6 +63,9 @@ class WorkflowDuplicator
     config["base_skill_ids"]      = @dep_copier.map_skill_ids(config["base_skill_ids"])           if config["base_skill_ids"]
     config["base_mcp_server_ids"] = @dep_copier.map_mcp_server_ids(config["base_mcp_server_ids"]) if config["base_mcp_server_ids"]
     config["base_repository_ids"] = carried_repository_ids(config["base_repository_ids"])         if config["base_repository_ids"]
+    if config["base_config_item_ids"]
+      config["base_config_item_ids"] = @dep_copier.map_config_item_ids(config["base_config_item_ids"])
+    end
     # base_asset_ids intentionally NOT remapped — assets are out of scope (D5).
     config
   end
@@ -113,6 +116,9 @@ class WorkflowDuplicator
       skill_ids: @dep_copier.map_skill_ids(step.skill_ids),
       asset_ids: step.asset_ids, # unchanged — assets are out of scope (D5)
       repository_ids: carried_repository_ids(step.repository_ids),
+      # Resolved by name in the target project; ids are never carried across a
+      # secrets boundary. Anything missing is reported by DependencyCopier#summary.
+      config_item_ids: @dep_copier.map_config_item_ids(step.config_item_ids),
       depends_on_step_ids: []
     )
 

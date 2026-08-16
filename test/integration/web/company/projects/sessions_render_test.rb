@@ -37,6 +37,26 @@ class Web::Company::Projects::SessionsRenderTest < ActionDispatch::IntegrationTe
     assert_inertia_page "Projects/Sessions/NewPage"
   end
 
+  # Names and types reach the picker; the value never leaves the vault. The whole
+  # point of routing values through `get_config_item` is that they are fetched on
+  # demand and audited, so a prop carrying one would undo the feature.
+  test "new offers the project's config items by name and type, never a value" do
+    create(:config_item, :secret, scope: @project, name: "STRIPE_KEY", value: "sk_live_abc123",
+                                  description: "Billing key")
+
+    get new_company_project_session_path(@project)
+
+    assert_response :success
+    assert_inertia_props do |props|
+      offered = props[:configItems]
+      offered.present? &&
+        offered.map { |c| c[:name] } == [ "STRIPE_KEY" ] &&
+        offered.map { |c| c[:itemType] } == [ "secret" ] &&
+        offered.map { |c| c[:description] } == [ "Billing key" ]
+    end
+    assert_not_includes response.body, "sk_live_abc123"
+  end
+
   test "show renders a session" do
     session = create(:terminal_session, :agent_session, project: @project, user: @user)
 

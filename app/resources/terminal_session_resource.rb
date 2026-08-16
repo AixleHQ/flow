@@ -120,11 +120,10 @@ class TerminalSessionResource < ApplicationResource
     InertiaCable::Streams::StreamName.signed_stream_name(session)
   end
 
-  typelize "{ config_files?: Record<string, unknown>; env_vars?: Record<string, string>; bmad_enabled?: boolean; bmad_modules?: string[] }"
+  typelize "{ config_files?: Record<string, unknown>; bmad_enabled?: boolean; bmad_modules?: string[] }"
   attribute :session_config do |session|
     {
       "config_files" => session.config_files,
-      "env_vars" => session.env_vars,
       "bmad_enabled" => session.bmad_enabled?,
       "bmad_modules" => session.bmad_enabled? ? session.bmad_modules : nil
     }.compact
@@ -140,6 +139,11 @@ class TerminalSessionResource < ApplicationResource
 
   attribute :mcp_server_ids do |session|
     session.mcp_servers.map(&:id)
+  end
+
+  # Ids only — a config item's VALUE never crosses into a serialized payload.
+  attribute :config_item_ids do |session|
+    session.config_items.map(&:id)
   end
 
   attribute :input_asset_ids do |session|

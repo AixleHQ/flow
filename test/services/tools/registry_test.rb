@@ -39,8 +39,8 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   test "injectable covers the auto-injection rule groups" do
     rules = Tools::Registry.injectable.flat_map(&:inject_rules).uniq.sort
 
-    assert_equal %i[coder_integration_connected container_tools_present github_repositories_attached
-                    non_interactive_session workflow_step_session], rules
+    assert_equal %i[coder_integration_connected config_items_attached container_tools_present
+                    github_repositories_attached non_interactive_session workflow_step_session], rules
   end
 
   test "grouping axes cover every definition" do

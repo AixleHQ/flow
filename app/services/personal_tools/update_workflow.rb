@@ -24,6 +24,12 @@ module PersonalTools
             description: "MCP server ids available to every step of this workflow. Replaces the whole list — " \
                          "read the current value with get_workflow first.",
             items: { type: "integer" }
+      param :base_config_item_ids, type: :array,
+            description: "Config item ids (secrets / environment variables) every step of this workflow " \
+                         "may read with get_config_item. Attach a credential here instead of writing it " \
+                         "into step instructions. Replaces the whole list — read the current value with " \
+                         "get_workflow first.",
+            items: { type: "integer" }
       param :base_repository_ids, type: :array,
             description: "Repository ids cloned into /workspace/repo for every step of this workflow. " \
                          "Replaces the whole list — read the current value with get_workflow first. " \
@@ -34,7 +40,8 @@ module PersonalTools
     ATTRS = %i[name description].freeze
     # Base resources are not columns — they live in workflow.config, behind the
     # model's base_* readers and merge_config! writer.
-    CONFIG_ATTRS = %i[base_tool_ids base_skill_ids base_mcp_server_ids base_repository_ids].freeze
+    CONFIG_ATTRS = %i[base_tool_ids base_skill_ids base_mcp_server_ids base_repository_ids
+                      base_config_item_ids].freeze
 
     def execute
       project = find_project!
@@ -54,6 +61,7 @@ module PersonalTools
               base_tool_ids: workflow.base_tool_ids, base_skill_ids: workflow.base_skill_ids,
               base_mcp_server_ids: workflow.base_mcp_server_ids,
               base_repository_ids: workflow.base_repository_ids,
+              base_config_item_ids: workflow.base_config_item_ids,
               updated_fields: (attrs.keys + config.keys).map(&:to_s))
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to update workflow: #{e.message}")

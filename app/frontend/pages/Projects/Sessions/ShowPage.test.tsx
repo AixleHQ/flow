@@ -44,6 +44,7 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     toolIds: [],
     skillIds: [],
     mcpServerIds: [],
+    configItemIds: [],
     inputAssetIds: [],
     repositoryIds: [],
     pendingArtifactsCount: 0,

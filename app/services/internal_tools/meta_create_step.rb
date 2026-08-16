@@ -44,6 +44,15 @@ module InternalTools
             },
             description: "Skill IDs injected into context"
           },
+          config_item_ids: {
+            type: "array",
+            items: {
+              type: "integer"
+            },
+            description: "Config item IDs (secrets / environment variables) this step's agent may " \
+                         "read with `get_config_item`. Attach a credential here instead of writing " \
+                         "it into the instructions."
+          },
           on_failure: {
             enum: %w[retry skip fail],
             type: "string",
@@ -125,6 +134,7 @@ module InternalTools
         mcp_server_ids: params[:mcp_server_ids] || [],
         asset_ids: params[:asset_ids] || [],
         repository_ids: params[:repository_ids] || [],
+        config_item_ids: params[:config_item_ids] || [],
         preferred_model: params[:preferred_model],
         bmad_enabled: params.fetch(:bmad_enabled, false),
         input_asset_specs: params[:input_asset_specs] || [],

@@ -69,7 +69,12 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     #       survive a new session. Once per session, on the first request that
     #       resolves a membership — which a test always starts fresh, so it is
     #       always counted here.
-    assert_operator query_count, :<=, 19, "Expected bounded content query count, got #{query_count}"
+    #
+    # 19 -> 20 with attachable config items: TerminalSessionResource serializes
+    # `config_item_ids`, so the session scope preloads `:config_items`. One query
+    # for the whole page however many sessions it lists — which is exactly what
+    # this guard exists to hold.
+    assert_operator query_count, :<=, 20, "Expected bounded content query count, got #{query_count}"
   end
 
   # ── start ─────────────────────────────────────────

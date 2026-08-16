@@ -18,6 +18,7 @@ class Step < ApplicationRecord
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
   validates :preferred_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
   validate :depends_on_step_ids_valid
+  validate :config_item_ids_belong_to_project
 
   default_scope { order(:position) }
 
@@ -58,6 +59,24 @@ class Step < ApplicationRecord
   end
 
   private
+
+  # A step may only name config items of its workflow's own project — the ids
+  # decide what `get_config_item` will decrypt for the step's session, so they
+  # are never taken on trust from the request that set them.
+  def config_item_ids_belong_to_project
+    return if config_item_ids.blank?
+
+    unless workflow&.scope_type == "Project"
+      errors.add(:config_item_ids, "can only be set on a project-scoped workflow")
+      return
+    end
+
+    owned = ConfigItem.where(scope_type: "Project", scope_id: workflow.scope_id, id: config_item_ids).pluck(:id)
+    foreign = config_item_ids.map(&:to_i) - owned
+    return if foreign.empty?
+
+    errors.add(:config_item_ids, "contains items outside this project: #{foreign.sort.join(', ')}")
+  end
 
   def depends_on_step_ids_valid
     return if depends_on_step_ids.blank?

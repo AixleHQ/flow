@@ -4,7 +4,10 @@ module InternalTools
   class MetaLinkResourceToStep < Base
     tool do
       display_name "Meta Link Resource to Step"
-      description "Link a tool, skill, MCP server, or asset to a step."
+      description "Link a tool, skill, MCP server, asset, or config item (secret / environment " \
+                  "variable) to a step. Linking a config item is what lets the step's agent read " \
+                  "its value with `get_config_item` — attach one instead of writing a credential " \
+                  "into the step instructions."
       tags :builder
       user_attachable false
       input_schema({
@@ -20,7 +23,7 @@ module InternalTools
             description: "Resource ID to link"
           },
           resource_type: {
-            enum: %w[tool skill mcp_server asset],
+            enum: %w[tool skill mcp_server asset config_item],
             type: "string",
             description: "Resource type"
           }
@@ -34,7 +37,8 @@ module InternalTools
       "tool" => :tool_ids,
       "skill" => :skill_ids,
       "mcp_server" => :mcp_server_ids,
-      "asset" => :asset_ids
+      "asset" => :asset_ids,
+      "config_item" => :config_item_ids
     }.freeze
 
     def execute
@@ -45,7 +49,9 @@ module InternalTools
       resource_id = params[:resource_id]
 
       field = RESOURCE_FIELDS[resource_type]
-      return error("Invalid resource_type: #{resource_type}. Use: tool, skill, mcp_server, asset") unless field
+      unless field
+        return error("Invalid resource_type: #{resource_type}. Use: #{RESOURCE_FIELDS.keys.join(', ')}")
+      end
 
       current_ids = step.send(field) || []
       unless current_ids.include?(resource_id)

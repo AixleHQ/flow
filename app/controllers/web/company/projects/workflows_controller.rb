@@ -24,6 +24,10 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       repositories: InertiaRails.defer(group: "resources") {
         Repository.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
+      # Names and types only — a config item's value never reaches a prop.
+      config_items: InertiaRails.defer(group: "resources") {
+        ConfigItem.visible_for_project(current_project).map { |r| ConfigItemPickerResource.new(r).to_h }
+      },
       agent_models: InertiaRails.defer(group: "resources") {
         current_project_membership&.agent_models_for_props || []
       }
@@ -71,6 +75,10 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       },
       repositories: InertiaRails.defer(group: "resources") {
         Repository.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
+      },
+      # Names and types only — a config item's value never reaches a prop.
+      config_items: InertiaRails.defer(group: "resources") {
+        ConfigItem.visible_for_project(current_project).map { |r| ConfigItemPickerResource.new(r).to_h }
       },
       agent_models: InertiaRails.defer(group: "resources") {
         current_project_membership&.agent_models_for_props || []

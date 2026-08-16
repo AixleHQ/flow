@@ -40,6 +40,10 @@ class ConfigItem < ApplicationRecord
     "project"
   end
 
+  def picker_name
+    name
+  end
+
   # Get effective config items for container injection (resolved overrides).
   # Config items are Project-scoped. Returns hash { name => decrypted_value }.
   def self.effective_for_project(project)

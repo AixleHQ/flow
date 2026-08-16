@@ -46,6 +46,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   toolIds: [],
   skillIds: [],
   mcpServerIds: [],
+  configItemIds: [],
   inputAssetIds: [],
   repositoryIds: [],
   pendingArtifactsCount: 0,
