@@ -343,6 +343,17 @@ module Agents
       { models: fetch_available_models(credentials, credential: credential), source: :api }
     end
 
+    # Plan-usage windows for a credential whose auth is a consumer subscription
+    # rather than metered API billing — how much of a rolling quota has been
+    # burned and when it resets. nil means "this credential has no such windows":
+    # an API key or a cloud-provider connection bills per token, and most agents
+    # have no equivalent concept at all.
+    # @param _credentials [Hash] decrypted credential data from AgentCredential
+    # @return [Hash, nil] { status:, windows: [{ key:, utilization:, resets_at: }], ... }
+    def fetch_subscription_usage(_credentials)
+      nil
+    end
+
     # Model ids a stored default may still carry after the vendor retired them,
     # mapped to the replacement to run instead. A retired id is not "an older
     # model" — the vendor answers 404, so every session started from that pin
