@@ -69,17 +69,38 @@ session's tools, but your own Aixle account, so an outside client
 (Claude Code, Claude Desktop, any MCP client) can drive the platform for
 you — list projects, build workflows, run them, work the board.
 
-Enable it under **Profile → Personal MCP**, which hands you an `amcp_`
-token and the ready-made command:
+Enable it under **Profile → MCP**, which hands you an `amcp_` token and,
+alongside it, the two ways to install the server. Clients register it
+under the name `flow`, so its tools appear as `mcp__flow__list_projects`
+and so on.
 
 ```
-claude mcp add aixle --transport http $MCP_SERVER_URL --header "Authorization: Bearer amcp_…"
+claude mcp add flow --transport http $MCP_SERVER_URL --header "Authorization: Bearer amcp_…"
 ```
+
+For Cursor the same tab has an **Add to Cursor** button — a
+`cursor://anysphere.cursor-deeplink/mcp/install` link carrying the URL and
+the bearer header — plus a **Copy JSON** action for any other client's
+`mcp.json`. All three carry the token, so they are only offered while the
+token is on screen: it is stored as a digest and shown exactly once.
 
 The token carries **exactly your own access level** — every call runs
 through the same Pundit policies as the UI, across every company you are
 an active member of. There is no "current project": tools take an
 explicit `project_id`. Regenerating the token revokes the old one.
+
+### Choosing which tools it serves
+
+The **Tools** card on the same tab lists every tool the server can offer,
+grouped the way the `tool_catalog` prompt groups them. Unchecking the ones
+you never use keeps their schemas out of your agent's context; the
+`tool_catalog` prompt then describes exactly the remaining set. It is not
+a permission boundary — the token always runs as you, with your access
+level — just a smaller surface.
+
+Leaving everything checked is stored as "all tools", so tools added in a
+later release arrive switched on. A client picks up a change on its next
+connection.
 
 Beyond its ~85 tools, the server ships its own documentation:
 

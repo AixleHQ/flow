@@ -57,7 +57,6 @@ const buildCredential = (overrides: Partial<AgentCredential> = {}): AgentCredent
 const baseProps = (profile: SharedUser) => ({
   profile,
   languageOptions: ['en', 'es'],
-  mcp: { enabled: false, lastUsedAt: null, serverUrl: 'http://localhost:4000/mcp', token: null },
   agentModels: [],
 });
 
@@ -407,82 +406,6 @@ describe('Profile/Show', () => {
 
     expect(screen.getByText('Name must be less than 100 characters')).toBeInTheDocument();
     expect(form.patch).not.toHaveBeenCalled();
-  });
-
-  it('enables MCP by posting to the regenerate-token route when MCP is disabled', async () => {
-    const profile = buildProfile();
-    const props = {
-      ...baseProps(profile),
-      mcp: { enabled: false, lastUsedAt: null, serverUrl: 'http://localhost:4000/mcp', token: null },
-    };
-    renderAuthedPage(<ProfilePage {...props} />, { props });
-
-    // Disabled state: primary CTA reads "Enable MCP" and there is no Disable action yet.
-    expect(screen.queryByRole('button', { name: 'Disable' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/MCP access is enabled/)).not.toBeInTheDocument();
-
-    await userEvent.click(screen.getByRole('button', { name: 'Enable MCP' }));
-
-    expect(router.post).toHaveBeenCalledWith(
-      '/profile/regenerate_mcp_token',
-      {},
-      expect.objectContaining({ preserveScroll: true }),
-    );
-  });
-
-  it('regenerates and disables the MCP token via the router when MCP is enabled', async () => {
-    const profile = buildProfile();
-    const props = {
-      ...baseProps(profile),
-      mcp: { enabled: true, lastUsedAt: '2026-03-01T12:00:00Z', serverUrl: 'http://localhost:4000/mcp', token: null },
-    };
-    renderAuthedPage(<ProfilePage {...props} />, { props });
-
-    // Enabled-without-token hint includes the last-used timestamp.
-    expect(screen.getByText(/MCP access is enabled/)).toHaveTextContent(/Last used/);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Regenerate token' }));
-    expect(router.post).toHaveBeenCalledWith(
-      '/profile/regenerate_mcp_token',
-      {},
-      expect.objectContaining({ preserveScroll: true }),
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Disable' }));
-    expect(router.delete).toHaveBeenCalledWith(
-      '/profile/disable_mcp_token',
-      expect.objectContaining({ preserveScroll: true }),
-    );
-  });
-
-  it('shows the not-used-yet hint when MCP is enabled but has never been used', () => {
-    const profile = buildProfile();
-    const props = {
-      ...baseProps(profile),
-      mcp: { enabled: true, lastUsedAt: null, serverUrl: 'http://localhost:4000/mcp', token: null },
-    };
-    renderAuthedPage(<ProfilePage {...props} />, { props });
-
-    expect(screen.getByText(/MCP access is enabled/)).toHaveTextContent(/Not used yet/);
-  });
-
-  it('renders the one-time MCP token and the ready-to-paste Claude command when a token is present', () => {
-    const profile = buildProfile();
-    const props = {
-      ...baseProps(profile),
-      mcp: { enabled: true, lastUsedAt: null, serverUrl: 'http://localhost:4000/mcp', token: 'mcp_tok_abc123' },
-    };
-    renderAuthedPage(<ProfilePage {...props} />, { props });
-
-    expect(screen.getByText('Your token — copy it now, it will not be shown again:')).toBeInTheDocument();
-    // The token renders on its own in a Code block…
-    expect(screen.getByText('mcp_tok_abc123')).toBeInTheDocument();
-    // …and is embedded in the copyable `claude mcp add` command with the server URL.
-    const command = screen.getByText(/claude mcp add aixle --transport http/);
-    expect(command).toHaveTextContent('http://localhost:4000/mcp');
-    expect(command).toHaveTextContent('Authorization: Bearer mcp_tok_abc123');
-    // With MCP already enabled the primary button rotates the token rather than enabling.
-    expect(screen.getByRole('button', { name: 'Regenerate token' })).toBeInTheDocument();
   });
 
   it('patches the default agent runtime when a different credential is selected', async () => {

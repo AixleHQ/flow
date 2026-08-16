@@ -78,6 +78,30 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     refute_includes names, "meta_create_tool"
   end
 
+  # The server name prefixes every tool inside the client
+  # (`mcp__flow__list_projects`), so it is user-visible surface — renaming it is
+  # a wire change, not a cosmetic one.
+  test "the server introduces itself as flow" do
+    info = rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {},
+                               clientInfo: { name: "test-client", version: "1" } })
+           .dig("result", "serverInfo")
+
+    assert_equal "flow", info["name"]
+  end
+
+  test "a narrowed tool selection is what the server serves, catalog included" do
+    @user.update!(mcp_enabled_tools: %w[list_projects])
+
+    names = rpc("tools/list").dig("result", "tools").map { |t| t["name"] }
+    assert_equal %w[list_projects], names
+
+    # A catalog advertising tools the client cannot call is worse than no
+    # catalog: the agent plans a call that comes back "unknown tool".
+    catalog = prompt_text("tool_catalog")
+    assert_match(/`list_projects`/, catalog)
+    refute_match(/`list_companies`/, catalog)
+  end
+
   test "personal tools are not materialized as shadow rows and stay out of session serving" do
     Tools::Reconciler.run!
 

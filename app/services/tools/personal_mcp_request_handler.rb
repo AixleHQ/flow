@@ -49,11 +49,15 @@ module Tools
     attr_reader :user
 
     def server
+      # The user's own selection, not the whole registry: a client that is only
+      # ever asked about boards should not carry 80 tool schemas in its context.
+      definitions = PersonalMCP.definitions_for(user)
+
       MCP::Server.new(
-        name: "aixle",
+        name: PersonalMCP::NAME,
         instructions: PersonalMCPGuides::INSTRUCTIONS,
-        tools: Registry.for_audience(:user).sort_by(&:name).map { |defn| define_tool(defn) },
-        prompts: PROMPTS.map { |spec| define_prompt(spec) },
+        tools: definitions.map { |defn| define_tool(defn) },
+        prompts: PROMPTS.map { |spec| define_prompt(spec, definitions) },
         resources: [ reference_resource ],
         server_context: { user: user }
       )
@@ -96,31 +100,36 @@ module Tools
     end
 
     # Complex flows need more guidance than tool descriptions can carry —
-    # served as MCP prompts the client pulls in on demand. `guide` names the
-    # PersonalMCPGuides method, called inside the block so nothing is rendered
-    # until a client actually asks for that prompt.
+    # served as MCP prompts the client pulls in on demand. `render` takes the
+    # tools this server is serving (the catalog describes exactly those, no
+    # more) and is called inside the block, so nothing is rendered until a
+    # client actually asks for that prompt.
     PROMPTS = [
-      { name: "setup_project", guide: :setup_project, title: "Aixle project setup guide",
+      { name: "setup_project", render: ->(_defs) { PersonalMCPGuides.setup_project },
+        title: "Aixle project setup guide",
         description: "How to take an Aixle project from nothing to a running workflow: company and " \
                      "project, integrations, repositories, secrets, tools/skills/MCP servers, agents, " \
                      "the board, then the workflow and its trigger." },
-      { name: "build_workflow", guide: :build_workflow, title: "Aixle workflow building guide",
+      { name: "build_workflow", render: ->(_defs) { PersonalMCPGuides.build_workflow },
+        title: "Aixle workflow building guide",
         description: "How to build an Aixle workflow end-to-end: concepts, the order to call the " \
                      "workflow tools, step/sub-step structure, running and inspecting runs." },
-      { name: "author_step", guide: :author_step, title: "Aixle step authoring guide",
+      { name: "author_step", render: ->(_defs) { PersonalMCPGuides.author_step },
+        title: "Aixle step authoring guide",
         description: "How to write a good Aixle workflow step: instructions, agent/tools/skills, " \
                      "sub-steps, dependencies, and failure handling." },
-      { name: "tool_catalog", guide: :tool_catalog, title: "Aixle tool catalog",
+      { name: "tool_catalog", render: ->(defs) { PersonalMCPGuides.tool_catalog(defs) },
+        title: "Aixle tool catalog",
         description: "Every tool this server exposes, grouped by area (account, integrations, project " \
                      "resources, board, workflows) with a one-line summary each." }
     ].freeze
 
-    def define_prompt(spec)
+    def define_prompt(spec, definitions)
       MCP::Prompt.define(name: spec[:name], description: spec[:description]) do |_args, server_context: nil|
         MCP::Prompt::Result.new(
           description: spec[:title],
           messages: [ MCP::Prompt::Message.new(
-            role: "user", content: { type: "text", text: PersonalMCPGuides.public_send(spec[:guide]) }
+            role: "user", content: { type: "text", text: spec[:render].call(definitions) }
           ) ]
         )
       end
