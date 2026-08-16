@@ -51,6 +51,14 @@ export function GateStatusChip({ status, tooltip }: { status: string; tooltip?: 
   );
 
   // The gate type moved off the row and into the tooltip — it is what the oversized pill used to
-  // spell out, and the row's link already says which repo and which PR or run it belongs to.
-  return tooltip ? <Tooltip label={tooltip}>{chip}</Tooltip> : chip;
+  // spell out, and the row's link already says which repo and which PR or run it belongs to. A
+  // stale gate's diagnostic rides here too, and that one is a whole sentence: the tooltip wraps at
+  // the same width the card's CI summary chip uses instead of stretching off the panel.
+  return tooltip ? (
+    <Tooltip label={tooltip} multiline maw={320}>
+      {chip}
+    </Tooltip>
+  ) : (
+    chip
+  );
 }

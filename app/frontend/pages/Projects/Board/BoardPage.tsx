@@ -451,9 +451,17 @@ function gateDetail(gate: Gate): string | null {
 }
 
 // What the chip's tooltip spells out: the gate type the row no longer prints as a pill, plus the
-// provider's own conclusion when there is one worth naming.
+// provider's own conclusion when there is one worth naming — and, for a stale gate, why
+// reconciliation gave up. That last one is a sentence of prose, not a label: it rides in the
+// tooltip so a stale row stays as compact as every other one, worded the same way the card's CI
+// summary chip words it.
 function gateTooltip(gate: Gate): string {
   const name = gate.gateType.replace(/_/g, ' ');
+  if (gateCiStatus(gate) === 'stale') {
+    return gate.diagnosticReason
+      ? `${name} — stale: ${gate.diagnosticReason}`
+      : `${name} — stale: no CI result was ever obtained`;
+  }
   return gate.conclusion ? `${name} — ${gate.conclusion}` : name;
 }
 
@@ -2324,74 +2332,67 @@ function TaskDetailSidebar({
                   const detail = gateDetail(wait);
 
                   return (
-                    <Box key={wait.id}>
-                      <Group gap={8} align="center" wrap="nowrap">
-                        {/* A floor, not a fixed width: every state word fits inside it so the links
-                            still align, but a chip that ever outgrew it would widen the column
-                            rather than have its label clipped by the badge's ellipsis. */}
-                        <Box miw={GATE_CHIP_WIDTH} style={{ flexShrink: 0 }}>
-                          <GateStatusChip status={kind} tooltip={gateTooltip(wait)} />
-                        </Box>
-                        {link ? (
-                          <Text
-                            component="a"
-                            href={link.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            size="xs"
-                            c="brand"
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              flex: 1,
-                              minWidth: 0,
-                              textDecoration: 'none',
-                            }}
+                    // One line per gate, stale ones included: why reconciliation gave up is prose,
+                    // so it lives in the chip's tooltip rather than as a second line under the row.
+                    <Group key={wait.id} gap={8} align="center" wrap="nowrap">
+                      {/* A floor, not a fixed width: every state word fits inside it so the links
+                          still align, but a chip that ever outgrew it would widen the column
+                          rather than have its label clipped by the badge's ellipsis. */}
+                      <Box miw={GATE_CHIP_WIDTH} style={{ flexShrink: 0 }}>
+                        <GateStatusChip status={kind} tooltip={gateTooltip(wait)} />
+                      </Box>
+                      {link ? (
+                        <Text
+                          component="a"
+                          href={link.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          size="xs"
+                          c="brand"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            flex: 1,
+                            minWidth: 0,
+                            textDecoration: 'none',
+                          }}
+                        >
+                          <IconLink size={10} style={{ flexShrink: 0 }} />
+                          <Box
+                            component="span"
+                            style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                           >
-                            <IconLink size={10} style={{ flexShrink: 0 }} />
-                            <Box
-                              component="span"
-                              style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                            >
-                              {link.label}
-                            </Box>
-                          </Text>
-                        ) : (
-                          // A gate whose metadata carries no linkable reference still has to say what
-                          // it is waiting on, and the chip only carries the state.
-                          <Text size="xs" c="dimmed" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
-                            {wait.gateType.replace(/_/g, ' ')}
-                          </Text>
-                        )}
-                        {/* Age, TTL and an unusual conclusion — what the chip cannot say on its own:
-                            "waiting" reads very differently at two minutes and at eleven hours. */}
-                        {detail && (
-                          <Text size="xs" c="dimmed" style={{ fontSize: 11, flexShrink: 0 }}>
-                            {detail}
-                          </Text>
-                        )}
-                        {canExecute && GATE_UNRESOLVED_STATUSES.has(kind) && (
-                          <ActionIcon
-                            size="xs"
-                            variant="subtle"
-                            color="gray"
-                            aria-label={`Delete gate ${wait.id}`}
-                            onClick={() => handleDeleteGate(wait.id)}
-                            loading={deletingGateId === wait.id}
-                          >
-                            <IconX size={12} />
-                          </ActionIcon>
-                        )}
-                      </Group>
-                      {/* Why reconciliation gave up — the one thing a stale gate has that no other
-                          state does, so it keeps a line of its own, aligned under the link. */}
-                      {kind === 'stale' && wait.diagnosticReason && (
-                        <Text size="xs" c="orange.4" pl={GATE_CHIP_WIDTH + 8} style={{ fontSize: 11 }}>
-                          {wait.diagnosticReason}
+                            {link.label}
+                          </Box>
+                        </Text>
+                      ) : (
+                        // A gate whose metadata carries no linkable reference still has to say what
+                        // it is waiting on, and the chip only carries the state.
+                        <Text size="xs" c="dimmed" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
+                          {wait.gateType.replace(/_/g, ' ')}
                         </Text>
                       )}
-                    </Box>
+                      {/* Age, TTL and an unusual conclusion — what the chip cannot say on its own:
+                          "waiting" reads very differently at two minutes and at eleven hours. */}
+                      {detail && (
+                        <Text size="xs" c="dimmed" style={{ fontSize: 11, flexShrink: 0 }}>
+                          {detail}
+                        </Text>
+                      )}
+                      {canExecute && GATE_UNRESOLVED_STATUSES.has(kind) && (
+                        <ActionIcon
+                          size="xs"
+                          variant="subtle"
+                          color="gray"
+                          aria-label={`Delete gate ${wait.id}`}
+                          onClick={() => handleDeleteGate(wait.id)}
+                          loading={deletingGateId === wait.id}
+                        >
+                          <IconX size={12} />
+                        </ActionIcon>
+                      )}
+                    </Group>
                   );
                 })}
               </Stack>

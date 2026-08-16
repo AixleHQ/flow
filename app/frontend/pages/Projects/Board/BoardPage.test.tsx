@@ -1114,7 +1114,7 @@ describe('Projects/Board/BoardPage', () => {
     expect(await screen.findByText(label)).toBeInTheDocument();
   });
 
-  it('explains in the task drawer why a stale CI gate gave up, and offers to clear it', async () => {
+  it('explains in a tooltip why a stale CI gate gave up, and offers to clear it', async () => {
     renderAuthedPage(<BoardPage />, {
       props: {
         ...populatedProps,
@@ -1140,11 +1140,54 @@ describe('Projects/Board/BoardPage', () => {
 
     const drawer = within(screen.getByRole('dialog'));
     expect(drawer.getByText(/CI Gates \(1\)/)).toBeInTheDocument();
-    expect(drawer.getByText(/PR #42 not found/)).toBeInTheDocument();
-    // The state is the chip's label now; the row keeps only what the chip cannot say — the age.
+    // The diagnostic is a sentence of prose: it must not be printed into the row, where it was the
+    // one thing that still made a gate row taller and noisier than the rest.
+    expect(drawer.queryByText(/PR #42 not found/)).not.toBeInTheDocument();
+    // The state is the chip's label now; the row keeps only the short things the chip cannot say —
+    // the age of the gate.
     expect(drawer.getByText('stale')).toBeInTheDocument();
+    expect(drawer.getByText(/^\d+h \d+m$/)).toBeInTheDocument();
     expect(drawer.queryByText(/^Stale — /)).not.toBeInTheDocument();
     expect(drawer.getByRole('button', { name: 'Delete gate 9' })).toBeInTheDocument();
+
+    // Hovering the chip is how a reader gets the explanation back — the tooltip portals out of the
+    // drawer, so it is looked up on the whole document.
+    await userEvent.hover(drawer.getByText('stale'));
+
+    const explanation = 'github checks completed — stale: CI pr number 42 on org/app cannot be read: PR #42 not found';
+    expect(await screen.findByText(explanation)).toBeInTheDocument();
+  });
+
+  it('says a stale CI gate never got a verdict when it carries no diagnostic', async () => {
+    // Reconciliation records a reason in every path it knows about, but the gate row must still say
+    // something more useful than the bare gate type when one is missing.
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          ciGates: gatesOf({
+            id: 9,
+            gateType: 'github_checks_completed',
+            createdAt: '2026-01-02T00:00:00Z',
+            status: 'stale',
+            ciStatus: 'stale',
+            diagnosticReason: null,
+          }),
+        }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    await userEvent.hover(within(screen.getByRole('dialog')).getByText('stale'));
+
+    const explanation = 'github checks completed — stale: no CI result was ever obtained';
+    expect(await screen.findByText(explanation)).toBeInTheDocument();
   });
 
   it('does not offer to clear a CI gate that already has a verdict', async () => {
