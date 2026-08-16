@@ -205,4 +205,37 @@ class BoardTaskTest < ActiveSupport::TestCase
     assert_includes BoardTask.archived, archived
     assert_not_includes BoardTask.archived, active
   end
+
+  # == Pagination ==
+
+  test "first_per_column takes the leading tasks of every column, ordered by position" do
+    backlog = 4.times.map { |i| BoardTask.create!(title: "Backlog #{i}", board: @board, board_column: @col1, position: i) }
+    done = 3.times.map { |i| BoardTask.create!(title: "Done #{i}", board: @board, board_column: @col2, position: i) }
+
+    page = BoardTask.first_per_column(2).in_board_order
+
+    assert_equal [ backlog[0], backlog[1], done[0], done[1] ].map(&:id).sort, page.map(&:id).sort
+  end
+
+  test "first_per_column composes with the scope it is called on" do
+    BoardTask.create!(title: "Archived", board: @board, board_column: @col1, position: 0, archived_at: Time.current)
+    active = BoardTask.create!(title: "Active", board: @board, board_column: @col1, position: 1)
+
+    assert_equal [ active.id ], BoardTask.active.first_per_column(1).map(&:id)
+  end
+
+  test "in_board_order breaks a position tie by id so pages cannot overlap" do
+    first = BoardTask.create!(title: "First", board: @board, board_column: @col1, position: 0)
+    second = BoardTask.create!(title: "Second", board: @board, board_column: @col1, position: 0)
+
+    assert_equal [ first.id, second.id ], BoardTask.where(board_column: @col1).in_board_order.map(&:id)
+  end
+
+  test "tags_contains requires every listed tag while tags_overlap needs only one" do
+    both = BoardTask.create!(title: "Both", board: @board, board_column: @col1, tags: %w[api ui])
+    one = BoardTask.create!(title: "One", board: @board, board_column: @col1, tags: %w[api])
+
+    assert_equal [ both.id ], BoardTask.tags_contains(%w[api ui]).map(&:id)
+    assert_equal [ both.id, one.id ].sort, BoardTask.tags_overlap(%w[api ui]).map(&:id).sort
+  end
 end

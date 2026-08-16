@@ -5,13 +5,19 @@ module Api
     module Projects
       module Board
         class TasksController < Board::ApplicationController
+          # @summary List board tasks, filtered and paginated
+          #
+          # This is the board's per-column pagination endpoint: a column asks for
+          # `board_column_id` + `limit`/`offset` and reads the column's unpaginated
+          # total from the `X-Total-Count` response header, so it can show the real
+          # count while holding only the pages it has scrolled to.
           def index
-            tasks = current_board.board_tasks
-                                 .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_gates, :gates)
-            tasks = tasks.where(board_column_id: params[:board_column_id]) if params[:board_column_id].present?
-            tasks = tasks.tags_overlap(Array(params[:tags])) if params[:tags].present?
-            tasks = filter_by_archived(tasks)
-            tasks = tasks.order(:position)
+            scope = filtered_tasks
+            response.set_header("X-Total-Count", scope.count.to_s)
+
+            tasks = scope
+              .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_gates, :gates)
+              .in_board_order
             tasks = tasks.limit(params[:limit]) if params[:limit].present?
             tasks = tasks.offset(params[:offset]) if params[:offset].present?
             render json: tasks.map { |t| BoardTaskResource.new(t).to_h }
@@ -90,6 +96,32 @@ module Api
           end
 
           private
+
+          # Every board filter, applied server-side. The board used to filter its
+          # in-memory task array, which only worked while it held every task; a
+          # paginated column has to ask the server instead.
+          #
+          # The plain attribute filters (title/assignee/type/priority) go through
+          # ransack — `q[title_cont]`, `q[assignee_id_eq]`, … — against
+          # BoardTask.ransackable_attributes. Column, tags and archived stay explicit
+          # params: they are an existing contract, and neither array containment nor
+          # the archived tri-state is a ransack predicate.
+          def filtered_tasks
+            scope = current_board.board_tasks
+            scope = scope.where(board_column_id: params[:board_column_id]) if params[:board_column_id].present?
+            scope = filter_by_tags(scope)
+            filter_by_archived(scope).ransack(q_params).result
+          end
+
+          # `tags_match=all` narrows to tasks carrying *every* listed tag, which is what
+          # the board's tag filter means. The default stays `any` (overlap) so existing
+          # callers of this endpoint keep the behavior they were written against.
+          def filter_by_tags(scope)
+            tags = Array(params[:tags]).reject(&:blank?)
+            return scope if tags.empty?
+
+            params[:tags_match].to_s == "all" ? scope.tags_contains(tags) : scope.tags_overlap(tags)
+          end
 
           # Default view hides archived tasks. `archived=archived` returns only archived
           # tasks (for the "Show archived" toggle); `archived=all` returns everything.

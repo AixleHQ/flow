@@ -89,6 +89,25 @@ class BoardColumnTest < ActiveSupport::TestCase
     assert_equal [ col1, col2, col3 ], @board.board_columns.to_a
   end
 
+  # == Task counts ==
+
+  test "with_tasks_count counts each column's active tasks in one query" do
+    backlog = BoardColumn.create!(name: "Backlog", board: @board, position: 1)
+    done = BoardColumn.create!(name: "Done", board: @board, position: 2)
+    empty = BoardColumn.create!(name: "Empty", board: @board, position: 3)
+    create_list(:board_task, 2, board: @board, board_column: backlog)
+    create(:board_task, board: @board, board_column: done)
+    create(:board_task, board: @board, board_column: done, archived_at: Time.current)
+
+    counts = nil
+    # One query for every column: the board header would otherwise pay a count per column.
+    assert_queries_count(1) do
+      counts = @board.board_columns.with_tasks_count.order(:position).map { |c| [ c.name, c[:tasks_count] ] }
+    end
+
+    assert_equal [ [ "Backlog", 2 ], [ "Done", 1 ], [ "Empty", 0 ] ], counts
+  end
+
   # == Ransack ==
 
   test "ransackable_attributes returns expected fields" do

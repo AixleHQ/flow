@@ -83,6 +83,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
         board = current_project.board
         if board
           board.board_columns
+               .with_tasks_count
                .includes(column_workflow_binding: :workflow)
                .order(:position)
                .map { |c| BoardColumnResource.new(c).to_h }

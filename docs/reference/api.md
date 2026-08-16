@@ -130,6 +130,22 @@ GET    /api/v1/projects/:project_id/board/tasks/:task_id/activities
 GET    /api/v1/projects/:project_id/board/tasks/:task_id/statistics
 ```
 
+`GET .../board/tasks` is the board's pagination endpoint — the board page
+props carry only the first page of each column, and the column pulls the
+rest from here as it is scrolled:
+
+| Query param                            | Meaning                                                             |
+| -------------------------------------- | ------------------------------------------------------------------- |
+| `board_column_id`                      | Restrict to one column.                                             |
+| `limit` / `offset`                     | Page window, ordered by `position` then `id`.                       |
+| `q[title_cont]`, `q[assignee_id_eq]`, … | Ransack predicates over `BoardTask.ransackable_attributes`.         |
+| `tags[]` + `tags_match=all`            | Tag filter. Default matches any listed tag; `all` requires them all. |
+| `archived`                             | `archived` for archived only, `all` for both; default active only.   |
+
+The response carries the **unpaginated** match count in the
+`X-Total-Count` header, which is how a column header shows its real total
+while holding a single page.
+
 ### Assets
 
 ```
