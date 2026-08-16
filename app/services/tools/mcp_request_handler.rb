@@ -11,9 +11,10 @@ module Tools
   # - tools/list serves only available tools, deterministically ordered, tags
   #   in _meta, MCP behavior annotations from the definition.
   # - tools/call on an entitled-but-unavailable tool (integration
-  #   disconnected) returns an actionable in-band tool error — handled by a
-  #   thin pre-transport shim, since the per-request server only knows
-  #   available tools and would otherwise answer "tool not found".
+  #   disconnected) returns an actionable in-band tool error — the tool is
+  #   registered for that one request with the remedy as its handler, since the
+  #   per-request server otherwise only knows available tools and would answer
+  #   "tool not found".
   # - Anything outside the entitlement stays an opaque protocol error, so the
   #   remedy text cannot leak capability existence.
   class MCPRequestHandler
@@ -24,24 +25,26 @@ module Tools
 
     # Returns a Rack response triple.
     #
-    # Protocol version handling is entirely the gem's: since mcp 1.2.0 the
-    # `initialize` handshake negotiates legacy versions only and counter-offers
-    # its newest handshake version to anything else, while a modern (SEP-2575)
-    # client carries its version in each request's `_meta` envelope and gets
-    # the `resultType`/cache-hint stamps that era requires. See
-    # PersonalMCPRequestHandler#call for the full note.
+    # Every request goes through the transport, so protocol handling is
+    # entirely the gem's — envelope, version, header and lifecycle validation
+    # included. Since mcp 1.2.0 the `initialize` handshake negotiates legacy
+    # versions only and counter-offers its newest handshake version to anything
+    # else, while a modern (SEP-2575) client carries its version in each
+    # request's `_meta` envelope and gets the `resultType`/cache-hint stamps
+    # that era requires. See PersonalMCPRequestHandler#call for the full note.
+    #
+    # The one local decision is which tool set serves this request: a call to
+    # an entitled-but-disconnected tool is served by a server that registers it
+    # with the remedy as its handler — see #disconnected_call_target.
     #
     # `dns_rebinding_protection: false`: see PersonalMCPRequestHandler#call —
     # the SDK default accepts only a loopback `Host` and 403s every deployed
     # request, and this endpoint is header-token authenticated, so the browser
     # rebinding it defends against cannot present a credential.
     def call(request)
-      if (response = unavailable_tool_shim(request))
-        return response
-      end
-
       transport = MCP::Server::Transports::StreamableHTTPTransport.new(
-        server, stateless: true, dns_rebinding_protection: false
+        server(remedy_for: disconnected_call_target(request)),
+        stateless: true, dns_rebinding_protection: false
       )
       transport.handle_request(request)
     end
@@ -50,10 +53,13 @@ module Tools
 
     attr_reader :session, :ctx
 
-    def server
-      @server ||= MCP::Server.new(
+    def server(remedy_for: nil)
+      tools = tool_classes
+      tools += [ define_unavailable_tool(remedy_for) ] if remedy_for
+
+      MCP::Server.new(
         name: "aixle-tools",
-        tools: tool_classes,
+        tools: tools,
         server_context: { session: session }
       )
     end
@@ -64,8 +70,9 @@ module Tools
     end
 
     # Memoized per request: a tools/call resolves the entitlement twice (the
-    # shim, then the server build), and holding a pooled connection for a
-    # duplicate query is what tips a busy MCP pod into checkout timeouts.
+    # availability check, then the server build), and holding a pooled
+    # connection for a duplicate query is what tips a busy MCP pod into
+    # checkout timeouts.
     def entitled_tools
       @entitled_tools ||= session.available_tools(ctx: ctx)
     end
@@ -119,17 +126,18 @@ module Tools
       }
     end
 
-    # Entitled-but-unavailable tools are hidden from the per-request server,
-    # so intercept their calls before the transport and answer with an
-    # actionable in-band tool error instead of "tool not found".
-    #
-    # This answer never reaches the gem, so the SEP-2322 `resultType` the
-    # modern lifecycle makes REQUIRED on every result has to be stamped here —
-    # a modern client discards a result without it, which would turn the
-    # actionable remedy into a dropped response. The request's own `_meta`
-    # envelope is the era signal, exactly as MCP::Server reads it. Legacy
-    # results stay unstamped: pre-2026 clients do not know the field.
-    def unavailable_tool_shim(request)
+    # The tools/call target when it names an entitled-but-unavailable tool
+    # (integration disconnected), otherwise nil. Peeking at the body is only a
+    # routing decision — which tool set this one request is served with — never
+    # a response: answering here instead would put a result on the wire that
+    # the gem never validated, and `RequestEnvelope.modern?` is deliberately
+    # only a loose era classifier. `RequestEnvelope.parse!` is what rejects a
+    # missing/mistyped `clientCapabilities` (-32602) or an unsupported version
+    # (-32022), and the transport is what enforces the SEP-2575 header/body
+    # match (-32020) and the version, Accept, content-type and session-id
+    # gates. Registering the tool keeps every one of those checks in front of
+    # the remedy, and lets the gem stamp `resultType` itself.
+    def disconnected_call_target(request)
       return nil unless request.post?
 
       body = parsed_body(request)
@@ -139,12 +147,31 @@ module Tools
       tool = entitled_tools.detect { |t| t.name == requested }
       return nil if tool.nil? || tool.available?(ctx)
 
-      result = { exit_code: 1, stdout: "", stderr: tool.unavailable_message }
-      payload = { content: CallExecutor.response_content(result), isError: true }
-      payload[:resultType] = MCP::ResultType::COMPLETE if MCP::RequestEnvelope.modern?(body["params"])
+      tool
+    end
 
-      json = { jsonrpc: "2.0", id: body["id"], result: payload }.to_json
-      [ 200, { "Content-Type" => "application/json" }, [ json ] ]
+    # The remedy, as a tool the gem dispatches: an in-band `isError` result
+    # naming what to connect, produced by the same path a connected tool's
+    # result takes, so the modern lifecycle's REQUIRED `resultType` (SEP-2322)
+    # is the gem's stamp rather than ours and legacy results stay unstamped.
+    #
+    # It exists for the single tools/call that named it and is absent from
+    # every tools/list, which is a different request and so a different
+    # per-request server. The schema is permissive on purpose: the disconnected
+    # integration is the dominant fact, so argument validation must not answer
+    # in place of the remedy.
+    def define_unavailable_tool(row)
+      message = row.unavailable_message
+
+      MCP::Tool.define(
+        name: row.name,
+        description: row.definition&.description || row.description || row.display_name,
+        input_schema: { "type" => "object", "properties" => {}, "required" => [] }
+      ) do |**_arguments|
+        MCP::Tool::Response.new(
+          CallExecutor.response_content({ exit_code: 1, stdout: "", stderr: message }), error: true
+        )
+      end
     end
 
     def parsed_body(request)
