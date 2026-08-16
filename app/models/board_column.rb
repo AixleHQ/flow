@@ -10,6 +10,19 @@ class BoardColumn < ApplicationRecord
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :board_id }
 
+  # Total active tasks per column, as a `tasks_count` attribute on each row. The board
+  # header shows the real total while the column itself holds only the pages it has
+  # loaded, so the count cannot come from the task payload — and a count per column
+  # would be an N+1, hence the single GROUP BY.
+  scope :with_tasks_count, -> {
+    select("board_columns.*, COUNT(board_tasks.id) AS tasks_count")
+      .joins(
+        "LEFT OUTER JOIN board_tasks ON board_tasks.board_column_id = board_columns.id " \
+        "AND board_tasks.archived_at IS NULL"
+      )
+      .group("board_columns.id")
+  }
+
   before_validation :assign_next_position, on: :create
   after_save :detach_preset
   after_destroy :detach_preset

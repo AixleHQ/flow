@@ -183,6 +183,9 @@ export function useBoardDnd<T extends DndTask, C extends DndColumn>({
       if (sameColumn && targetPosition === undefined) return;
       if (sameColumn && targetPosition === origTask.position) return;
 
+      // Columns are paginated, so this max is over the pages the client has loaded, not the whole
+      // column. That is the right answer anyway: a drop onto the column body lands the card after
+      // the last card the user can see, and TaskService.move shifts the rest of the column down.
       const snapshot = preDragSnapshotRef.current;
       const maxInTargetColumn = snapshot
         .filter((t) => t.boardColumnId === targetColumnId && t.id !== origTask.id)

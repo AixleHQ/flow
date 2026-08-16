@@ -6,6 +6,6 @@ class BoardResource < ApplicationResource
   typelize "BoardColumn[]"
   attribute :board_columns, if: proc { params[:include_columns] } do |board|
     # params carries `snake_keys` through to the nested columns.
-    board.board_columns.order(:position).map { |c| BoardColumnResource.new(c, params: params).to_h }
+    board.board_columns.with_tasks_count.order(:position).map { |c| BoardColumnResource.new(c, params: params).to_h }
   end
 end

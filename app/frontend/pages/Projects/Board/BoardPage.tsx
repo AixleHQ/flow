@@ -47,6 +47,7 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
+import { useDebouncedValue } from '@mantine/hooks';
 import { modals } from '@mantine/modals';
 import {
   IconActivity,
@@ -149,6 +150,7 @@ import { LatestRunTile } from './LatestRunTile';
 import { WORKFLOW_ACTIVE_STATES, type TaskWorkflowRun } from './taskRuns';
 import { TaskRunsPanel } from './TaskRunsPanel';
 import { useBoardDnd } from './useBoardDnd';
+import { useBoardTaskPages } from './useBoardTaskPages';
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
 const AUTHOR_TYPES = [
@@ -179,6 +181,9 @@ interface Column {
   position: number;
   purpose: string | null;
   workflowBinding: WorkflowBinding | null;
+  // Every active task in the column, not just the loaded page — the column header count.
+  // Optional so a partial reload serialized before this field existed still types.
+  tasksCount?: number;
 }
 interface Workflow {
   id: number;
@@ -216,6 +221,9 @@ interface Task {
   // Serialized only on the task detail payload (TaskDetailResource), so the drawer can name the
   // parent epic even when the epic is archived and therefore absent from the board's task list.
   parentTaskTitle?: string | null;
+  // Also detail-payload-only: an epic's children, which a board holding one page per column can
+  // no longer be filtered for. Nested keys stay snake_case, as Alba serializes them.
+  childTasks?: Array<{ id: number; title: string; task_type: string }>;
   tags: string[];
   archived: boolean;
   commentsCount: number;
@@ -262,7 +270,12 @@ interface Props {
   board: Board | null;
   boardPresets?: BoardPreset[];
   columns: Column[];
+  // First page of each column only; the rest arrives through useBoardTaskPages.
   tasks: Task[];
+  tasksPageSize?: number;
+  // Board-wide filter/picker options, which can no longer be derived from `tasks`.
+  boardTags?: string[];
+  epics?: Array<{ id: number; title: string }>;
   members: Member[];
   workflows: Workflow[];
   viewPresets?: ViewPreset[];
@@ -854,6 +867,10 @@ function TaskCardUI({
 function BoardColumn({
   column,
   tasks,
+  totalCount,
+  hasMore,
+  loadingMore,
+  onLoadMore,
   taskHref,
   onAddTask,
   onTaskClick,
@@ -869,7 +886,13 @@ function BoardColumn({
   canExecute,
 }: {
   column: Column;
+  /** The pages of this column the client has loaded — not necessarily all of it. */
   tasks: Task[];
+  /** Every task in the column, which is what the header count means. */
+  totalCount: number;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: (columnId: number) => void;
   taskHref: (task: Task) => string;
   onAddTask: (columnId: number) => void;
   onTaskClick: (task: Task) => void;
@@ -939,6 +962,14 @@ function BoardColumn({
     const val = renameValue.trim();
     if (!val || val === column.name) return;
     onRenameColumn?.(column.id, val);
+  };
+
+  // Infinite scroll: the next page is pulled as the column nears its end. The Load more button
+  // below stays as the explicit (and keyboard-reachable) way to do the same thing.
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    if (!hasMore || loadingMore) return;
+    const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight <= LOAD_MORE_SCROLL_THRESHOLD_PX) onLoadMore(column.id);
   };
 
   if (collapsed) {
@@ -1011,7 +1042,7 @@ function BoardColumn({
             flexShrink: 0,
           }}
         >
-          {tasks.length}
+          {totalCount}
         </div>
 
         {/* Workflow status indicator for automated columns */}
@@ -1153,7 +1184,7 @@ function BoardColumn({
             </Tooltip>
           )}
           <Text fw={500} c="dimmed" style={{ flexShrink: 0, fontSize: 12 }}>
-            {tasks.length}
+            {totalCount}
           </Text>
           {column.workflowBinding && (
             <Tooltip label={column.workflowBinding.workflowName ?? 'Automation'} withArrow>
@@ -1278,10 +1309,10 @@ function BoardColumn({
         </Group>
       </Box>
 
-      {/* Task list */}
+      {/* Task list — one page at a time, extended as it is scrolled */}
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-        <Box style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px', minHeight: 60 }}>
-          {tasks.length === 0 ? (
+        <Box onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px', minHeight: 60 }}>
+          {tasks.length === 0 && !loadingMore ? (
             <Text size="xs" c="dimmed" ta="center" py="xl">
               {isFiltered ? 'No matching tasks' : 'No tasks yet'}
             </Text>
@@ -1295,6 +1326,18 @@ function BoardColumn({
                 onRetry={onRetryTask}
               />
             ))
+          )}
+          {hasMore && (
+            <Button
+              variant="subtle"
+              size="xs"
+              fullWidth
+              mt={4}
+              loading={loadingMore}
+              onClick={() => onLoadMore(column.id)}
+            >
+              {`Load more (${tasks.length} of ${totalCount})`}
+            </Button>
           )}
         </Box>
       </SortableContext>
@@ -1596,9 +1639,10 @@ function InlineTagsEditor({
 function TaskDetailSidebar({
   task,
   allTasks,
+  epics,
   onClose,
   onDelete,
-  onOpenTask,
+  onOpenTaskId,
   projectId,
   columns,
   members,
@@ -1610,10 +1654,14 @@ function TaskDetailSidebar({
   canExecute,
 }: {
   task: Task | null;
+  /** The pages the board holds — a fallback source, not the whole board. */
   allTasks: Task[];
+  /** Every epic on the board, for the Parent Epic picker. */
+  epics: Array<{ id: number; title: string }>;
   onClose: () => void;
   onDelete: (taskId: number) => void;
-  onOpenTask: (task: Task) => void;
+  /** Opens a task by id — the board may hold no card for it (an unloaded child or parent). */
+  onOpenTaskId: (taskId: number) => void;
   projectId: number;
   columns: Column[];
   members: Member[];
@@ -1658,12 +1706,19 @@ function TaskDetailSidebar({
     });
   }, [comments, authorFilter, tagFilter]);
 
-  const epicTasks = useMemo(
-    () => allTasks.filter((t) => t.taskType === 'epic' && t.id !== task?.id),
-    [allTasks, task?.id],
-  );
+  // Board-wide epics, from their own prop: the loaded pages hold only some of them.
+  const epicTasks = useMemo(() => epics.filter((e) => e.id !== task?.id), [epics, task?.id]);
 
-  const childTasks = useMemo(() => allTasks.filter((t) => t.parentTaskId === task?.id), [allTasks, task?.id]);
+  // Children come with the task payload. The board-derived list is the fallback for a render that
+  // has not received the detail payload yet (a card opened straight from a partial reload).
+  const childTasks = useMemo(() => {
+    if (task?.childTasks) {
+      return task.childTasks.map((c) => ({ id: c.id, title: c.title, taskType: c.task_type }));
+    }
+    return allTasks
+      .filter((t) => t.parentTaskId === task?.id)
+      .map((t) => ({ id: t.id, title: t.title, taskType: t.taskType }));
+  }, [task?.childTasks, allTasks, task?.id]);
 
   // The drawer lists the task's whole CI history, not only what is still blocking it: a failed or a
   // stale gate is the most interesting thing on a card, and both have already left `pendingGates`.
@@ -1683,7 +1738,15 @@ function TaskDetailSidebar({
   // The board only loads active tasks, so an archived parent epic is absent from `allTasks`.
   // The serialized parentTaskTitle keeps the link visible (and the select's current value
   // selectable) even when the epic itself was never loaded onto the board.
-  const parentTaskTitle = parentTask?.title ?? task?.parentTaskTitle ?? null;
+  // The epic may be on a page this board has not loaded; it is still openable by id, and the
+  // epics prop names it. Only a task missing from both (an archived epic) has no card to open.
+  const parentEpic = useMemo(
+    () => (task?.parentTaskId ? epics.find((e) => e.id === task.parentTaskId) : undefined) ?? null,
+    [epics, task?.parentTaskId],
+  );
+  const parentLinkId = parentTask?.id ?? parentEpic?.id ?? null;
+
+  const parentTaskTitle = parentTask?.title ?? parentEpic?.title ?? task?.parentTaskTitle ?? null;
 
   // Options for the Parent Epic select: every epic on the board, plus the current parent when
   // it is not among them — without it Mantine has no option matching `value` and renders blank.
@@ -2248,7 +2311,7 @@ function TaskDetailSidebar({
                   {childTasks.map((child) => (
                     <UnstyledButton
                       key={child.id}
-                      onClick={() => onOpenTask(child)}
+                      onClick={() => onOpenTaskId(child.id)}
                       px={6}
                       py={4}
                       style={{
@@ -2289,8 +2352,8 @@ function TaskDetailSidebar({
               <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
                 Parent Epic
               </Text>
-              {parentTask ? (
-                <UnstyledButton onClick={() => onOpenTask(parentTask)}>
+              {parentLinkId ? (
+                <UnstyledButton onClick={() => onOpenTaskId(parentLinkId)}>
                   <Text
                     size="sm"
                     c="brand"
@@ -2302,7 +2365,7 @@ function TaskDetailSidebar({
                       e.currentTarget.style.textDecoration = 'none';
                     }}
                   >
-                    {parentTask.title}
+                    {parentTaskTitle}
                   </Text>
                 </UnstyledButton>
               ) : (
@@ -3881,13 +3944,18 @@ function normalizeTask(t: Task): Task {
   };
 }
 
-// Merge two task lists, deduping by id. Tasks in `primary` win over `extra`
-// (used to fold on-demand-loaded archived tasks into the active board without
-// duplicating any task that already appears in the active set).
-function mergeTasksById(primary: Task[], extra: Task[]): Task[] {
-  const ids = new Set(primary.map((t) => t.id));
-  return [...primary, ...extra.filter((t) => !ids.has(t.id))];
-}
+// Mirrors BoardTask::PAGE_SIZE. Only used when the prop is missing (a partial reload of a page
+// rendered before the prop existed) — the server's value wins.
+const DEFAULT_TASKS_PAGE_SIZE = 25;
+
+// Stable fallbacks: useBoardTaskPages keys its work off array identity, so a fresh `[]` per render
+// would have it re-derive its state on every render for nothing.
+const NO_TASKS: Task[] = [];
+const NO_COLUMNS: Column[] = [];
+const NO_EPICS: Array<{ id: number; title: string }> = [];
+
+// How close to the bottom of a column the scroll has to get before its next page is fetched.
+const LOAD_MORE_SCROLL_THRESHOLD_PX = 200;
 
 const BoardPage = () => {
   const {
@@ -3896,6 +3964,9 @@ const BoardPage = () => {
     boardPresets,
     columns,
     tasks: serverTasks,
+    tasksPageSize,
+    boardTags,
+    epics,
     members,
     viewPresets,
     currentUserId,
@@ -3912,45 +3983,35 @@ const BoardPage = () => {
   const { canExecute } = useProjectPermissions();
 
   const [filters, setFilters] = useState<BoardFilters>(EMPTY_FILTERS);
-  const showArchived = filters.showArchived;
 
-  // Archived tasks are fetched on demand — only when "Show archived" is enabled — so the
-  // initial board load stays limited to active tasks (the core load optimization). Refetched
-  // whenever the active task set changes so archive/unarchive stays reflected in this view.
-  const [archivedTasks, setArchivedTasks] = useState<Task[]>([]);
+  // Typing must not fire a request per keystroke now that search runs server-side.
+  const [debouncedSearch] = useDebouncedValue(filters.search, 300);
+  const serverFilters = useMemo(() => ({ ...filters, search: debouncedSearch }), [filters, debouncedSearch]);
 
-  const [localTasks, setLocalTasks] = useState<Task[]>(() => (serverTasks ?? []).map(normalizeTask));
-  useEffect(() => {
-    const base = (serverTasks ?? []).map(normalizeTask);
-    setLocalTasks(showArchived ? mergeTasksById(base, archivedTasks) : base);
-  }, [serverTasks, archivedTasks, showArchived]);
+  // Columns load a page at a time: the props carry the first page of each, this hook fetches the
+  // rest as columns are scrolled, and re-queries the board server-side whenever a filter is on
+  // (including "Show archived", which is how archived tasks reach the board at all).
+  const {
+    tasks: localTasks,
+    setTasks: setLocalTasks,
+    counts: columnCounts,
+    hasMore: columnHasMore,
+    loading: columnLoading,
+    loadMore: loadMoreColumn,
+  } = useBoardTaskPages<Task>({
+    projectId: project.id,
+    enabled: !!board,
+    columns: columns ?? NO_COLUMNS,
+    initialTasks: serverTasks ?? NO_TASKS,
+    pageSize: tasksPageSize ?? DEFAULT_TASKS_PAGE_SIZE,
+    filters: serverFilters,
+    normalize: normalizeTask,
+  });
 
   const [localColumns, setLocalColumns] = useState<Column[]>(() => columns ?? []);
   useEffect(() => {
     setLocalColumns(columns ?? []);
   }, [columns]);
-
-  useEffect(() => {
-    if (!showArchived || !board) {
-      if (!showArchived) setArchivedTasks([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiFetch(`${apiV1ProjectTasksPath(project.id)}?archived=archived`);
-        if (res.ok && !cancelled) {
-          const data = await res.json();
-          setArchivedTasks((Array.isArray(data) ? data : []).map(normalizeTask));
-        }
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [showArchived, board, project.id, serverTasks]);
 
   const selectedTask = selectedTaskProp ? normalizeTask(selectedTaskProp) : null;
 
@@ -3964,7 +4025,7 @@ const BoardPage = () => {
     const nextTask = normalizeTask(selectedTaskProp);
 
     setLocalTasks((prev) => prev.map((t) => (t.id === nextTask.id ? nextTask : t)));
-  }, [selectedTaskProp]);
+  }, [selectedTaskProp, setLocalTasks]);
 
   const boardUrl = `/company/projects/${project.id}/board`;
 
@@ -3985,6 +4046,15 @@ const BoardPage = () => {
   const [collapsedColumns, setCollapsedColumns] = useLocalStorageSet<number>(collapsedColumnsStorageKey, new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Opening by id, for a task the board may not hold a card for — an epic's child or parent that
+  // lives on a page no column has loaded.
+  const openTaskById = useCallback(
+    (taskId: number) => {
+      router.get(boardUrl, { task: taskId }, { preserveState: true, preserveScroll: true });
+    },
+    [boardUrl],
+  );
 
   const openTask = useCallback(
     (task: Task | null) => {
@@ -4023,33 +4093,20 @@ const BoardPage = () => {
     filters.search
   );
 
-  const allTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    for (const t of localTasks) for (const tag of t.tags ?? []) tagSet.add(tag);
-    return [...tagSet].sort();
-  }, [localTasks]);
+  // Every tag on the board, not only the tags of the loaded pages — otherwise a filter could not
+  // reach a tag that only exists further down a column.
+  const allTags = useMemo(() => [...(boardTags ?? [])].sort(), [boardTags]);
 
-  const filteredTasks = useMemo(() => {
-    return localTasks.filter((t) => {
-      if (!filters.showArchived && t.archived) return false;
-      if (filters.search && !(t.title ?? '').toLowerCase().includes(filters.search.toLowerCase())) return false;
-      if (filters.assigneeId && String(t.assigneeId) !== filters.assigneeId) return false;
-      if (filters.taskType && t.taskType !== filters.taskType) return false;
-      if (filters.priority && t.priority !== filters.priority) return false;
-      if (filters.tags.length > 0 && !filters.tags.every((ft) => (t.tags ?? []).includes(ft))) return false;
-      return true;
-    });
-  }, [localTasks, filters]);
-
+  // Filtering itself is server-side (see useBoardTaskPages); the loaded tasks only need bucketing.
   const tasksByColumn = useMemo(() => {
     const map: Record<number, Task[]> = {};
     for (const col of columns) map[col.id] = [];
-    for (const task of filteredTasks) {
+    for (const task of localTasks) {
       if (map[task.boardColumnId]) map[task.boardColumnId].push(task);
     }
     for (const col of columns) map[col.id].sort((a, b) => a.position - b.position);
     return map;
-  }, [columns, filteredTasks]);
+  }, [columns, localTasks]);
 
   const form = useForm<TaskFormValues>({
     validate: zodResolver(taskSchema),
@@ -4065,11 +4122,9 @@ const BoardPage = () => {
   });
 
   // Epics available as a parent in the create drawer. Nesting is one level deep, so an epic
-  // itself never gets a parent — the field is hidden when Type is Epic (see below).
-  const epicOptions = useMemo(
-    () => localTasks.filter((t) => t.taskType === 'epic').map((t) => ({ value: String(t.id), label: t.title })),
-    [localTasks],
-  );
+  // itself never gets a parent — the field is hidden when Type is Epic (see below). The list comes
+  // from the board rather than the loaded tasks, which hold only a page per column.
+  const epicOptions = useMemo(() => (epics ?? []).map((e) => ({ value: String(e.id), label: e.title })), [epics]);
 
   const handleCreateTask = useCallback(
     async (values: TaskFormValues) => {
@@ -4104,7 +4159,7 @@ const BoardPage = () => {
       }
       setLoading(false);
     },
-    [board, project.id, form],
+    [board, project.id, form, setLocalTasks],
   );
 
   const handleDeleteTask = useCallback(
@@ -4517,6 +4572,10 @@ const BoardPage = () => {
                   key={col.id}
                   column={col}
                   tasks={tasksByColumn[col.id] ?? []}
+                  totalCount={columnCounts[col.id] ?? (tasksByColumn[col.id] ?? []).length}
+                  hasMore={columnHasMore[col.id] ?? false}
+                  loadingMore={columnLoading[col.id] ?? false}
+                  onLoadMore={loadMoreColumn}
                   taskHref={taskHref}
                   onAddTask={openCreateForColumn}
                   onTaskClick={openTask}
@@ -4636,9 +4695,10 @@ const BoardPage = () => {
       <TaskDetailSidebar
         task={selectedTask}
         allTasks={localTasks}
+        epics={epics ?? NO_EPICS}
         onClose={closeTask}
         onDelete={handleDeleteTask}
-        onOpenTask={openTask}
+        onOpenTaskId={openTaskById}
         projectId={project.id}
         columns={columns}
         members={members}

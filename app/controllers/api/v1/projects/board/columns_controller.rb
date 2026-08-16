@@ -6,7 +6,8 @@ module Api
       module Board
         class ColumnsController < Board::ApplicationController
           def index
-            render json: current_board.board_columns.order(:position).map { |c| BoardColumnResource.new(c).to_h }
+            columns = current_board.board_columns.with_tasks_count.order(:position)
+            render json: columns.map { |c| BoardColumnResource.new(c).to_h }
           end
 
           def show
@@ -47,7 +48,8 @@ module Api
               end
               current_board.update_column(:preset_origin, nil) if current_board.preset_origin.present?
             end
-            render json: current_board.board_columns.reload.order(:position).map { |c| BoardColumnResource.new(c).to_h }
+            reordered = current_board.board_columns.reload.with_tasks_count.order(:position)
+            render json: reordered.map { |c| BoardColumnResource.new(c).to_h }
           end
 
           private

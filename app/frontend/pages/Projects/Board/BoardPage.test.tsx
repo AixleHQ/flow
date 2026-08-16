@@ -68,6 +68,23 @@ const populatedProps = {
   currentUserId: 1,
 };
 
+// Columns are paginated, so filtering runs server-side: switching a filter on makes the board
+// re-query one page per column instead of narrowing the array it already holds. This answers that
+// endpoint with the tasks belonging to the requested column, plus the X-Total-Count header the
+// column header reads its total from.
+const stubColumnTasks = (tasks: BoardTask[]) =>
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (!url.includes('/tasks?')) return new Response('{}', { status: 200 });
+
+    const columnId = Number(new URL(url, 'http://localhost').searchParams.get('board_column_id'));
+    const items = tasks.filter((t) => t.boardColumnId === columnId);
+    return new Response(JSON.stringify(items), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'X-Total-Count': String(items.length) },
+    });
+  });
+
 describe('Projects/Board/BoardPage', () => {
   // Column collapse state is persisted to localStorage (`board:<id>:collapsedColumns`) and is NOT
   // reset between tests by the harness, so a prior collapse-all/collapse-one test would otherwise
@@ -101,22 +118,65 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByText('Render dashboard charts')).toBeInTheDocument();
   });
 
-  it('filters task cards by the search query', async () => {
+  it('counts a column by its total and pulls the pages it is missing on demand', async () => {
+    const loaded = makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, position: 0 });
+    const nextPage = [
+      makeTask({ id: 2, title: 'Second page task', boardColumnId: 100, position: 1 }),
+      makeTask({ id: 3, title: 'Third page task', boardColumnId: 100, position: 2 }),
+    ];
+    const fetchSpy = stubColumnTasks(nextPage);
+
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        columns: [
+          // Backlog holds three tasks but the props carry only the first page of one.
+          buildBoardColumn({ id: 100, name: 'Backlog', position: 0, tasksCount: 3 }),
+          buildBoardColumn({ id: 200, name: 'In Progress', position: 1, tasksCount: 0 }),
+        ],
+        tasks: [loaded],
+        tasksPageSize: 1,
+      },
+    });
+
+    // The count is the column's total, not what happens to be loaded.
+    const loadMore = await screen.findByRole('button', { name: 'Load more (1 of 3)' });
+    await userEvent.click(loadMore);
+
+    expect(await screen.findByText('Second page task')).toBeInTheDocument();
+    expect(screen.getByText('Third page task')).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/projects/7/tasks?board_column_id=100&limit=1&offset=1',
+      expect.anything(),
+    );
+    // Nothing left to fetch, so the control goes away.
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Load more/ })).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
+  });
+
+  it('filters task cards by the search query, through the server', async () => {
+    const match = makeTask({ id: 2, title: 'Render dashboard charts', boardColumnId: 200, position: 0 });
+    const fetchSpy = stubColumnTasks([match]);
+
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
     await userEvent.type(screen.getByPlaceholderText('Search tasks'), 'dashboard');
 
-    expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument();
-    expect(screen.getByText('Render dashboard charts')).toBeInTheDocument();
+    // The search reaches the tasks endpoint as a ransack predicate rather than filtering the
+    // pages the board happens to hold.
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('q%5Btitle_cont%5D=dashboard'), expect.anything()),
+    );
+    expect(await screen.findByText('Render dashboard charts')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
   });
 
   it('toggling the Archived filter fetches and reveals archived tasks without crashing', async () => {
     const archived = makeTask({ id: 3, title: 'Retired epic', boardColumnId: 100, position: 1, archived: true });
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(
-        new Response(JSON.stringify([archived]), { status: 200, headers: { 'Content-Type': 'application/json' } }),
-      );
+    const fetchSpy = stubColumnTasks([...populatedProps.tasks, archived]);
 
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
@@ -129,9 +189,11 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: 'Archived' }));
 
     await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('archived=archived'), expect.anything()),
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('archived=all'), expect.anything()),
     );
     expect(await screen.findByText('Retired epic')).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
   });
 
   it('renders an empty-column placeholder when a column has no tasks', () => {
@@ -234,45 +296,44 @@ describe('Projects/Board/BoardPage', () => {
   // --- toolbar filters ---
 
   it('filters by task type via the Type select and shows a Clear control', async () => {
-    renderAuthedPage(<BoardPage />, {
-      props: {
-        ...populatedProps,
-        tasks: [
-          makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100, taskType: 'bug' }),
-          makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200, taskType: 'story' }),
-        ],
-      },
-    });
+    const bug = makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100, taskType: 'bug' });
+    const story = makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200, taskType: 'story' });
+    const fetchSpy = stubColumnTasks([bug]);
+
+    renderAuthedPage(<BoardPage />, { props: { ...populatedProps, tasks: [bug, story] } });
 
     // Open the Type menu button and pick Bug.
     await userEvent.click(screen.getByRole('button', { name: /Type: All/ }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Bug' }));
 
-    expect(screen.getByText('Fix login crash')).toBeInTheDocument();
-    expect(screen.queryByText('Build settings page')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('q%5Btask_type_eq%5D=bug'), expect.anything()),
+    );
+    expect(await screen.findByText('Fix login crash')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Build settings page')).not.toBeInTheDocument());
 
-    // A Clear icon button appears once a filter is active; clicking it restores all tasks.
-    const clear = screen.getByRole('button', { name: 'Clear filters' });
-    await userEvent.click(clear);
-    expect(screen.getByText('Build settings page')).toBeInTheDocument();
+    // A Clear icon button appears once a filter is active; clearing it drops back to the
+    // unfiltered board the props carry.
+    await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(await screen.findByText('Build settings page')).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
   });
 
   it('applies the built-in "All Bugs" view preset from the Presets menu', async () => {
-    renderAuthedPage(<BoardPage />, {
-      props: {
-        ...populatedProps,
-        tasks: [
-          makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100, taskType: 'bug' }),
-          makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200, taskType: 'story' }),
-        ],
-      },
-    });
+    const bug = makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100, taskType: 'bug' });
+    const story = makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200, taskType: 'story' });
+    const fetchSpy = stubColumnTasks([bug]);
+
+    renderAuthedPage(<BoardPage />, { props: { ...populatedProps, tasks: [bug, story] } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Presets' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'All Bugs' }));
 
-    expect(screen.getByText('Fix login crash')).toBeInTheDocument();
-    expect(screen.queryByText('Build settings page')).not.toBeInTheDocument();
+    expect(await screen.findByText('Fix login crash')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Build settings page')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
   });
 
   // --- per-column add + board settings ---
@@ -832,9 +893,7 @@ describe('Projects/Board/BoardPage', () => {
       position: 5,
       archived: true,
     });
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify([archivedTask]), { status: 200 }));
+    const fetchSpy = stubColumnTasks([...populatedProps.tasks, archivedTask]);
 
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
@@ -843,9 +902,12 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.click(screen.getByLabelText('Archived'));
 
-    // Toggling fetches archived tasks (?archived=archived) and merges them into the board.
+    // Toggling re-queries each column with archived=all and renders what comes back.
     await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith('/api/v1/projects/7/tasks?archived=archived', expect.anything()),
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('board_column_id=200&limit=25&offset=0'),
+        expect.anything(),
+      ),
     );
     const card = (await screen.findByText('Old finished task')).closest('[class*="Paper-root"]') as HTMLElement;
     expect(within(card).getByText('Archived')).toBeInTheDocument();
@@ -1428,7 +1490,9 @@ describe('Projects/Board/BoardPage', () => {
 
   const epic = makeTask({ id: 50, title: 'Checkout revamp', taskType: 'epic', boardColumnId: 100, position: 0 });
   const story = makeTask({ id: 51, title: 'Add card form', boardColumnId: 100, position: 1, parentTaskId: 50 });
-  const epicProps = { ...populatedProps, tasks: [epic, story] };
+  // The parent-epic picker reads the board's epics from their own prop, since a paginated column
+  // can no longer be relied on to hold every epic.
+  const epicProps = { ...populatedProps, tasks: [epic, story], epics: [{ id: 50, title: 'Checkout revamp' }] };
 
   it('attaches the new task to an epic chosen in the create-task form', async () => {
     const created = makeTask({ id: 99, title: 'Child of epic', boardColumnId: 100, parentTaskId: 50 });
@@ -1488,13 +1552,40 @@ describe('Projects/Board/BoardPage', () => {
     expect(within(drawer).getByRole('combobox', { name: 'Parent Epic' })).toHaveValue('Checkout revamp');
   });
 
+  it("lists an epic's children from the task payload, including ones no column has loaded", async () => {
+    // The board holds one page per column, so the children cannot be found by filtering `tasks`;
+    // TaskDetailResource ships them with the epic. Alba leaves nested keys snake_case.
+    const selectedEpic = {
+      ...epic,
+      childTasks: [
+        { id: 51, title: 'Add card form', task_type: 'story' },
+        { id: 77, title: 'Unloaded child', task_type: 'bug' },
+      ],
+    };
+
+    renderAuthedPage(<BoardPage />, {
+      props: { ...epicProps, tasks: [epic], selectedTask: selectedEpic },
+    });
+
+    const drawer = screen.getAllByRole('dialog')[0];
+    expect(within(drawer).getByText('Child Tasks (2)')).toBeInTheDocument();
+
+    await userEvent.click(within(drawer).getByRole('button', { name: /Unloaded child/ }));
+    expect(router.get).toHaveBeenCalledWith(
+      '/company/projects/7/board',
+      { task: 77 },
+      expect.objectContaining({ preserveState: true }),
+    );
+  });
+
   it('names the parent epic on the task detail view when the epic is archived and off the board', () => {
-    // Archived epics are excluded from the board load, so the client cannot resolve the parent
-    // from `tasks` — the detail payload's parentTaskTitle is what keeps the link visible.
+    // Archived epics are excluded from the board load and from the `epics` prop, so the client
+    // cannot resolve the parent at all — the detail payload's parentTaskTitle keeps it visible.
     renderAuthedPage(<BoardPage />, {
       props: {
         ...epicProps,
         tasks: [story],
+        epics: [],
         selectedTask: { ...story, parentTaskTitle: 'Checkout revamp' },
       },
     });
@@ -1558,65 +1649,81 @@ describe('Projects/Board/BoardPage', () => {
   // --- more toolbar filters ---
 
   it('filters tasks by assignee via the Assignee select', async () => {
+    const mine = makeTask({ id: 1, title: 'Assigned task', boardColumnId: 100, assigneeId: 1 });
+    const other = makeTask({ id: 2, title: 'Unassigned task', boardColumnId: 200, assigneeId: null });
+    const fetchSpy = stubColumnTasks([mine]);
+
     renderAuthedPage(<BoardPage />, {
-      props: {
-        ...populatedProps,
-        members: [{ id: 1, name: 'Dana Scout' }],
-        tasks: [
-          makeTask({ id: 1, title: 'Assigned task', boardColumnId: 100, assigneeId: 1 }),
-          makeTask({ id: 2, title: 'Unassigned task', boardColumnId: 200, assigneeId: null }),
-        ],
-      },
+      props: { ...populatedProps, members: [{ id: 1, name: 'Dana Scout' }], tasks: [mine, other] },
     });
 
     await userEvent.click(screen.getByRole('button', { name: /Assignee: All/ }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Dana Scout' }));
 
-    expect(screen.getByText('Assigned task')).toBeInTheDocument();
-    expect(screen.queryByText('Unassigned task')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('q%5Bassignee_id_eq%5D=1'), expect.anything()),
+    );
+    expect(await screen.findByText('Assigned task')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Unassigned task')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
   });
 
   it('filters tasks by tag via the Tags menu', async () => {
+    const frontend = makeTask({ id: 1, title: 'Frontend task', boardColumnId: 100, tags: ['frontend'] });
+    const backend = makeTask({ id: 2, title: 'Backend task', boardColumnId: 200, tags: ['backend'] });
+    const fetchSpy = stubColumnTasks([frontend]);
+
     renderAuthedPage(<BoardPage />, {
       props: {
         ...populatedProps,
-        tasks: [
-          makeTask({ id: 1, title: 'Frontend task', boardColumnId: 100, tags: ['frontend'] }),
-          makeTask({ id: 2, title: 'Backend task', boardColumnId: 200, tags: ['backend'] }),
-        ],
+        tasks: [frontend, backend],
+        // Tag options come from the board, not the loaded pages, now that columns are paginated.
+        boardTags: ['backend', 'frontend'],
       },
     });
 
-    // The Tags Menu only renders once at least one task carries a tag.
     await userEvent.click(screen.getByRole('button', { name: /Tags: All/i }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'frontend' }));
 
-    expect(screen.getByText('Frontend task')).toBeInTheDocument();
-    expect(screen.queryByText('Backend task')).not.toBeInTheDocument();
+    // `tags_match=all` is what makes the board's multi-tag filter mean "carries all of these".
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('tags%5B%5D=frontend&tags_match=all'),
+        expect.anything(),
+      ),
+    );
+    expect(await screen.findByText('Frontend task')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Backend task')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
   });
 
   // --- view presets (built-in + saved) ---
 
   it('applies the built-in "My Work" preset to show only the current user\'s tasks', async () => {
+    const mine = makeTask({ id: 1, title: 'My task', boardColumnId: 100, assigneeId: 1 });
+    const other = makeTask({ id: 2, title: 'Other task', boardColumnId: 200, assigneeId: 2 });
+    const fetchSpy = stubColumnTasks([mine]);
+
     renderAuthedPage(<BoardPage />, {
-      props: {
-        ...populatedProps,
-        currentUserId: 1,
-        tasks: [
-          makeTask({ id: 1, title: 'My task', boardColumnId: 100, assigneeId: 1 }),
-          makeTask({ id: 2, title: 'Other task', boardColumnId: 200, assigneeId: 2 }),
-        ],
-      },
+      props: { ...populatedProps, currentUserId: 1, tasks: [mine, other] },
     });
 
     await userEvent.click(screen.getByRole('button', { name: 'Presets' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'My Work' }));
 
-    expect(screen.getByText('My task')).toBeInTheDocument();
-    expect(screen.queryByText('Other task')).not.toBeInTheDocument();
+    expect(await screen.findByText('My task')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Other task')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
   });
 
   it('applies a saved view preset from the Presets menu', async () => {
+    const bug = makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100, taskType: 'bug' });
+    const story = makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200, taskType: 'story' });
+    const fetchSpy = stubColumnTasks([bug]);
+
     renderAuthedPage(<BoardPage />, {
       props: {
         ...populatedProps,
@@ -1631,10 +1738,7 @@ describe('Projects/Board/BoardPage', () => {
             createdAt: '2026-01-01T00:00:00Z',
           },
         ],
-        tasks: [
-          makeTask({ id: 1, title: 'Fix login crash', boardColumnId: 100, taskType: 'bug' }),
-          makeTask({ id: 2, title: 'Build settings page', boardColumnId: 200, taskType: 'story' }),
-        ],
+        tasks: [bug, story],
       },
     });
 
@@ -1645,8 +1749,10 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.click(await screen.findByRole('menuitem', { name: /Only Bugs/ }));
 
-    expect(screen.getByText('Fix login crash')).toBeInTheDocument();
-    expect(screen.queryByText('Build settings page')).not.toBeInTheDocument();
+    expect(await screen.findByText('Fix login crash')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Build settings page')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
   });
 
   it('deletes a saved view preset the current user owns', async () => {

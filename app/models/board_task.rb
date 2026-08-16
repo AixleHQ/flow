@@ -31,11 +31,33 @@ class BoardTask < ApplicationRecord
   after_commit :touch_board
   after_commit :broadcast_task_updates
 
+  # How many tasks one board column loads at a time — the size of the first page
+  # the board page ships in its props, and of every page the column then pulls in
+  # as it is scrolled.
+  PAGE_SIZE = 25
+
   scope :for_company, ->(company) { joins(board: :project).where(projects: { company_id: company.id }) }
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
   scope :tags_overlap, ->(tags) { where("tags && ARRAY[?]::varchar[]", Array(tags)) }
+  scope :tags_contains, ->(tags) { where("tags @> ARRAY[?]::varchar[]", Array(tags)) }
   scope :active, -> { where(archived_at: nil) }
   scope :archived, -> { where.not(archived_at: nil) }
+  # Board ordering. `position` is only unique-ish within a column, so the id keeps
+  # offset pagination from re-serving or skipping a row between pages.
+  scope :in_board_order, -> { order(:position, :id) }
+
+  # The first `limit` tasks of *every* column, in one query — what keeps the board's
+  # initial payload bounded on a board with hundreds of tasks per column. Ranking
+  # happens in a window function because SQL has no per-group LIMIT.
+  scope :first_per_column, ->(limit) {
+    ranked = all.reorder(nil).select(
+      "board_tasks.id, ROW_NUMBER() OVER (" \
+      "PARTITION BY board_tasks.board_column_id ORDER BY board_tasks.position ASC, board_tasks.id ASC" \
+      ") AS column_rank"
+    )
+
+    where(id: BoardTask.from(ranked, :ranked).where("ranked.column_rank <= ?", limit).select("ranked.id"))
+  }
 
   def archived?
     archived_at.present?
