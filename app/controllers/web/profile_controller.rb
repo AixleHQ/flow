@@ -25,13 +25,27 @@ class Web::ProfileController < Web::ApplicationController
       # throttles it so the button can't turn into a 429 generator.
       usage_limits: InertiaRails.defer(group: "limits") {
         Agents::SubscriptionUsageService.new(membership: current_membership, force: params[:refresh].present?).call
-      },
+      }
+    }
+  end
+
+  # The personal MCP server: its own tab rather than a card on the account
+  # page, because connecting a client and choosing what that client may do are
+  # a task of their own — and the tool picker alone is longer than the rest of
+  # the profile put together.
+  def mcp
+    render inertia: "Profile/Mcp", props: {
       mcp: {
         enabled: current_user.mcp_enabled?,
         last_used_at: current_user.mcp_token_last_used_at,
-        server_url: Settings.mcp.public_server_url,
+        server_url: Tools::PersonalMCP.public_url,
+        server_name: Tools::PersonalMCP::NAME,
         # Present only right after regeneration — shown once, never persisted.
-        token: session.delete(:mcp_token_plaintext)
+        token: session.delete(:mcp_token_plaintext),
+        tool_groups: Tools::PersonalMCP.catalog_groups,
+        # nil means "every tool, including ones added later" — the client
+        # renders that as everything checked, and sends nil back for it.
+        enabled_tools: current_user.mcp_enabled_tools
       }
     }
   end
@@ -40,12 +54,25 @@ class Web::ProfileController < Web::ApplicationController
   # moment a new digest lands.
   def regenerate_mcp_token
     session[:mcp_token_plaintext] = current_user.regenerate_mcp_token!
-    redirect_to profile_path, notice: "MCP token generated — copy it now, it won't be shown again"
+    redirect_to mcp_profile_path, notice: "MCP token generated — copy it now, it won't be shown again"
   end
 
   def disable_mcp_token
     current_user.disable_mcp_token!
-    redirect_to profile_path, notice: "MCP access disabled"
+    redirect_to mcp_profile_path, notice: "MCP access disabled"
+  end
+
+  # `tool_names` absent/null — or a list covering the whole registry — stores
+  # NULL, i.e. "every tool", so tools added in a later release are on without
+  # the user having to come back here. An empty array is a real, if odd,
+  # choice: a server with no tools. Names are intersected with the registry
+  # rather than validated, so a stale name from an old tab is dropped, not a
+  # 500.
+  def update_mcp_tools
+    names = params[:tool_names]
+    Tools::PersonalMCP.update_selection!(current_user, names.nil? ? nil : Array(names).map(&:to_s))
+
+    redirect_to mcp_profile_path, notice: "MCP tools updated"
   end
 
   def usage

@@ -64,12 +64,16 @@ aws:
   region:            <%= ENV['AWS_DEFAULT_REGION'] || 'fake' %>
 
 mcp:
-  name: aixle-mcp-server
+  name: flow-mcp-server
   server_url: <%= ENV['MCP_SERVER_URL'] || 'http://web:4002/action_mcp' %>
-  # The URL users configure their own MCP clients with (personal token) —
-  # public host, unlike server_url which agent containers reach over the
-  # docker network.
-  public_server_url: <%= ENV['MCP_PUBLIC_SERVER_URL'] || "http://#{ENV['DOMAIN'] || 'localhost:4000'}/mcp" %>
+  # Override for the URL users configure their own MCP clients with (personal
+  # token) — a public host, unlike server_url which agent containers reach over
+  # the docker network. Blank by default: the fallback is built from the app's
+  # own protocol + domain in Tools::PersonalMCP.public_url, because the
+  # per-environment `protocol` (https outside development/test) is not readable
+  # from this file — hardcoding `http://` here handed deployed users a URL
+  # their MCP client refuses.
+  public_server_url: <%= ENV['MCP_PUBLIC_SERVER_URL'] %>
 
 cloud:
   # Where the in-container credential_process helper asks for short-lived cloud

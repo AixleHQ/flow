@@ -11,7 +11,6 @@ import {
   SimpleGrid,
   Skeleton,
   Table,
-  Tabs,
   Text,
   Title,
   Tooltip,
@@ -34,11 +33,12 @@ import {
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
-import { profilePath } from 'shared/routes';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { type SharedProps } from 'shared/ui';
 import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
 import { StatusBadge } from 'shared/ui/StatusBadge';
+
+import { ProfileTabs } from './ProfileTabs';
 
 type Period = '7d' | '30d' | '90d' | '1y';
 
@@ -585,18 +585,7 @@ const UsagePage = () => {
           {companyName ? ` in ${companyName}` : ''}.
         </Text>
 
-        <Tabs
-          value="usage"
-          onChange={(v) => {
-            if (v === 'account') router.visit(profilePath());
-          }}
-          mb="lg"
-        >
-          <Tabs.List>
-            <Tabs.Tab value="account">Account</Tabs.Tab>
-            <Tabs.Tab value="usage">Usage</Tabs.Tab>
-          </Tabs.List>
-        </Tabs>
+        <ProfileTabs active="usage" />
 
         <Group justify="flex-end" mb="xl">
           <Select value={period} onChange={(v) => navigate(v ?? '30d')} data={PERIOD_OPTIONS} size="sm" w={140} />

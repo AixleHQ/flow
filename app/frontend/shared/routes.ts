@@ -847,6 +847,11 @@ export function adminNamespaceResourceQuotaPath(id: ScalarType, options?: object
   return "/" + "admin" + "/" + "namespace_resource_quotas" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /admin/catalog_syncs(.:format) */
+export function adminCatalogSyncsPath(options?: object): string {
+  return "/" + "admin" + "/" + "catalog_syncs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** / */
 export function rootPath(options?: object): string {
   return "/" + $buildOptions(options, []);
@@ -937,6 +942,11 @@ export function usageProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "usage" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /profile/mcp(.:format) */
+export function mcpProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "mcp" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /profile/update_default_model(.:format) */
 export function updateDefaultModelProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "update_default_model" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -955,6 +965,11 @@ export function regenerateMCPTokenProfilePath(options?: object): string {
 /** /profile/disable_mcp_token(.:format) */
 export function disableMCPTokenProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "disable_mcp_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /profile/update_mcp_tools(.:format) */
+export function updateMCPToolsProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "update_mcp_tools" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /profile(.:format) */
@@ -1225,6 +1240,11 @@ export function companyProjectMCPServerPath(project_id: ScalarType, id: ScalarTy
 /** /company/projects/:project_id/connectors(.:format) */
 export function companyProjectConnectorsPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "connectors" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/skills/manual(.:format) */
+export function manualCompanyProjectSkillsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "skills" + "/" + "manual" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/skills(.:format) */

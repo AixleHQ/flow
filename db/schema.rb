@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_17_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1047,6 +1047,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_17_000003) do
     t.datetime "deleted_at"
     t.citext "email", null: false
     t.bigint "last_company_id"
+    t.jsonb "mcp_enabled_tools"
     t.string "mcp_token_digest"
     t.datetime "mcp_token_last_used_at"
     t.string "name", null: false

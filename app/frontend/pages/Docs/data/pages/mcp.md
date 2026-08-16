@@ -38,13 +38,19 @@ internal server (see resource resolution on the Tools page).
 ## Personal MCP (connect your own agent)
 
 You can point your own agent (Claude Code, Cursor, …) at Aixle directly —
-no session, no container. Enable **Personal MCP** on your profile to get a
-personal token; the profile page shows the exact command to add it, e.g.:
+no session, no container. Enable it on **Profile → MCP** to get a personal
+token. Clients register the server under the name `flow`, so its tools
+appear as `mcp__flow__list_projects` and so on:
 
 ```
-claude mcp add aixle --transport http https://<your-aixle-host>/mcp \
+claude mcp add flow --transport http https://<your-aixle-host>/mcp \
   --header "Authorization: Bearer amcp_…"
 ```
+
+The same tab has an **Add to Cursor** button (a one-click install
+deeplink) and a **Copy JSON** action for any other client's `mcp.json`.
+All three carry the token, so they are only offered while it is on screen
+— it is stored as a digest and shown exactly once.
 
 This server is **session-less** and grants **exactly your own access
 level** — every action runs through the same permission checks as the UI,
@@ -53,6 +59,13 @@ things you do in the app: list your companies and projects, manage board
 tasks, columns and gates, build and run workflows (steps, sub-steps,
 triggers, runs), manage agents, custom tools, skills, MCP servers, config
 items and repositories, and update project settings.
+
+The **Tools** card on the same tab picks which of those the server offers.
+Unchecking what you never use keeps its schemas out of the agent's
+context, and the `tool_catalog` prompt then describes exactly the
+remaining set. Leaving everything checked means "all tools", so ones added
+in a later release arrive switched on. This is not a permission boundary —
+the token always runs as you.
 
 The server also documents itself, so a client does not have to guess. Its
 `instructions` — in your agent's context from the moment it connects —

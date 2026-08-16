@@ -123,6 +123,66 @@ class Web::ProfileControllerTest < ActionDispatch::IntegrationTest
     assert AgentCredential.exists?(credential.id)
   end
 
+  # ── the MCP tab ──
+
+  test "mcp renders its own page with the connection details and the tool catalog" do
+    get mcp_profile_path
+
+    assert_inertia_page "Profile/Mcp"
+    assert_inertia_props do |props|
+      assert_equal "flow", props[:mcp][:serverName]
+      assert_equal Tools::PersonalMCP.public_url, props[:mcp][:serverUrl]
+      # No selection yet: the client renders "everything", including tools
+      # added after this page was last opened.
+      assert_nil props[:mcp][:enabledTools]
+      assert_includes props[:mcp][:toolGroups].flat_map { |g| g[:tools] }.map { |t| t[:name] }, "list_projects"
+    end
+  end
+
+  # The token exists exactly once, in the response to the regeneration itself —
+  # so the redirect has to land on the page that renders it.
+  test "regenerate_mcp_token redirects to the mcp tab and shows the token once" do
+    post regenerate_mcp_token_profile_path
+
+    assert_redirected_to mcp_profile_path
+    follow_redirect!
+    assert_inertia_props { |props| assert props[:mcp][:token].starts_with?(User::MCP_TOKEN_PREFIX) }
+
+    get mcp_profile_path
+    assert_inertia_props { |props| assert_nil props[:mcp][:token] }
+  end
+
+  test "disable_mcp_token redirects to the mcp tab" do
+    @user.regenerate_mcp_token!
+
+    delete disable_mcp_token_profile_path
+
+    assert_redirected_to mcp_profile_path
+    assert_not @user.reload.mcp_enabled?
+  end
+
+  test "update_mcp_tools stores the selection and drops names the registry does not know" do
+    patch update_mcp_tools_profile_path, params: { toolNames: %w[list_projects not_a_tool] }, as: :json
+
+    assert_redirected_to mcp_profile_path
+    assert_equal %w[list_projects], @user.reload.mcp_enabled_tools
+  end
+
+  test "update_mcp_tools stores a full selection as 'everything'" do
+    @user.update!(mcp_enabled_tools: %w[list_projects])
+
+    patch update_mcp_tools_profile_path,
+          params: { toolNames: Tools::Registry.for_audience(:user).map(&:name) }, as: :json
+
+    assert_nil @user.reload.mcp_enabled_tools
+  end
+
+  test "update_mcp_tools accepts an empty selection" do
+    patch update_mcp_tools_profile_path, params: { toolNames: [] }, as: :json
+
+    assert_empty @user.reload.mcp_enabled_tools
+  end
+
   private
 
   # The same person's credential in a second company they belong to: theirs, but not

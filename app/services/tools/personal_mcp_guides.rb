@@ -106,9 +106,10 @@ module Tools
 
       # Generated from the live registry: adding a tool updates the catalog,
       # and a tool that carries no known tag still shows up (under "Other")
-      # rather than silently vanishing from the map.
-      def tool_catalog
-        defs = Registry.for_audience(:user)
+      # rather than silently vanishing from the map. `defs` is what the caller
+      # is actually serving — a user who has switched tools off must not be
+      # handed a catalog advertising them.
+      def tool_catalog(defs = Registry.for_audience(:user))
         known = CATALOG_GROUPS.map { |g| g[:tag] }
         sections = CATALOG_GROUPS.filter_map do |group|
           section(group[:title], group[:blurb], defs.select { |d| d.tags.include?(group[:tag]) })
