@@ -4,13 +4,25 @@ set -e
 # docker-compose overrides the image ENTRYPOINT with this script. Mirror
 # bin/run-as-app so bundle_cache/app_home stay writable under the non-root
 # app user (app_home holds corepack/yarn's global cache — see docker-compose.yml).
-# Only chown -R once (checked via top-level ownership): app_home accumulates a
-# large corepack/yarn cache, and re-walking it on every container start is slow.
+#
+# The chown is UNCONDITIONAL on purpose. A "chown only if the top-level dir is
+# already root-owned" guard was tried and reverted: once /home/app itself is
+# app-owned the guard skips forever, so any subdirectory a root process creates
+# later stays root-owned permanently. That is not hypothetical — root-owned
+# 0700 /home/app/.config and /home/app/.local left Chromium unable to write its
+# profile, which SIGTRAPs it at startup and failed every system test with
+# `Ferrum::ProcessTimeoutError: Browser did not produce websocket url`.
+# The walk is cheap: bundle_cache is the larger of the two (~48k files) and was
+# already being walked unconditionally before app_home existed (~0.15s for both).
+#
+# -h (chown the symlink, never its target) is load-bearing, not cosmetic: this
+# runs as root over caches that package managers write, so a symlink planted
+# there must not hand its target to the app user. BusyBox already behaves this
+# way under -R; the flag states it, so swapping the base image for one with GNU
+# coreutils — where dereferencing is the default — can't silently reintroduce it.
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /bundle_cache /home/app
-  for dir in /bundle_cache /home/app; do
-    [ "$(stat -c '%U' "$dir" 2>/dev/null)" = "app" ] || chown -R app:app "$dir" 2>/dev/null || true
-  done
+  chown -Rh app:app /bundle_cache /home/app 2>/dev/null || true
   # See bin/run-as-app: grant the app user access to the host Docker socket
   # when it's mounted (root:root 660 on the host side). No-op otherwise.
   if [ -S /var/run/docker.sock ]; then
