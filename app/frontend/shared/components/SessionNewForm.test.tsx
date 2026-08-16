@@ -167,7 +167,7 @@ describe('SessionNewForm', () => {
     expect(screen.queryByRole('combobox', { name: /secrets and variables/i })).not.toBeInTheDocument();
   });
 
-  it('marks secrets in the picker and warns about exposure only once one is selected', async () => {
+  it('marks secrets in the picker so a secret reads differently from a variable', async () => {
     const user = userEvent.setup();
     renderAuthedPage(
       <SessionNewForm
@@ -188,13 +188,6 @@ describe('SessionNewForm', () => {
     // A secret is labelled as such: attaching one is a different decision.
     expect(await screen.findByText('STRIPE_KEY (secret)')).toBeInTheDocument();
     expect(screen.getByText('API_BASE')).toBeInTheDocument();
-
-    // No warning while only a variable is attached.
-    await user.click(screen.getByText('API_BASE'));
-    expect(screen.queryByText(/What attaching a secret means/i)).not.toBeInTheDocument();
-
-    await user.click(screen.getByText('STRIPE_KEY (secret)'));
-    expect(await screen.findByText(/What attaching a secret means/i)).toBeInTheDocument();
   });
 
   it('sends the selected config item ids with the session', async () => {

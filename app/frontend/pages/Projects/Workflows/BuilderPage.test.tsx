@@ -253,7 +253,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('attaching a config item to a step PATCHes configItemIds and warns when it is a secret', async () => {
+  it('attaching a config item to a step PATCHes configItemIds', async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
@@ -276,8 +276,6 @@ describe('Projects/Workflows/BuilderPage', () => {
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     const patch = fetchSpy.mock.calls.find(([, init]) => init?.method === 'PATCH');
     expect(JSON.parse(patch![1]!.body as string).step.configItemIds).toEqual([11]);
-
-    expect(await screen.findByText(/What attaching a secret means/i)).toBeInTheDocument();
   });
 
   it('renders drag handles for sessions in the tree nav', () => {

@@ -108,7 +108,8 @@ follow-up — together with an explicit, documented statement of the one sink it
   with no attached config items — the tool exists only where an attachment already authorized it.
 - Never state, in the UI or in docs, that an attached secret stays out of logs. It stays out of the
   *persisted* logs this feature redacts. It does not stay out of pod stdout, and it is fully visible in
-  the live terminal to anyone who may watch the session.
+  the live terminal to anyone who may watch the session. (The picker says nothing about exposure at
+  all — see the 2026-08-17 change-log entry. Silence is fine; a false reassurance is not.)
 
 ## I/O & Edge-Case Matrix
 
@@ -266,8 +267,8 @@ follow-up — together with an explicit, documented statement of the one sink it
 
 **Phase 4 — UI**
 
-9. Pickers on the three screens + a warning next to a selected `secret` stating plainly: the value will
-   be visible in this session's live terminal and on the pod's stdout.
+9. Pickers on the three screens. A `secret` is labelled as such in the option list, so attaching one
+   reads differently from attaching a variable; there is no exposure warning (see the change log).
    *Accept:* Vitest coverage per `docs/testing.md`; the picker payload carries no values.
 
 **Phase 5 — meta tools & duplication**
@@ -304,7 +305,13 @@ follow-up — together with an explicit, documented statement of the one sink it
   4. **`WorkflowDuplicator` resolves attachments by name** (`DependencyCopier#map_config_item_ids`)
      and reports what it dropped through the existing `summary[:needs_setup]`. Ids are never
      carried across a project boundary and `ConfigItem` rows are still never copied.
-  5. **Eager loading**, because `TerminalSessionResource` serializes `config_item_ids`:
+  5. **No exposure warning in the UI.** The first cut shipped a `SecretExposureNotice` alert on all
+     three pickers, spelling out the sink table above. Removed at the human's request: it was not part
+     of the brief, and a paragraph about pod stdout is not what someone attaching a credential needs to
+     read. What remains is the `(secret)` suffix on the option label, so attaching a secret still reads
+     differently from attaching a variable. The limitation itself is unchanged and stays documented
+     here — the rule against *claiming* logs are clean still stands, and silence satisfies it.
+  6. **Eager loading**, because `TerminalSessionResource` serializes `config_item_ids`:
      `:config_items` added to the session scopes in the two sessions controllers, the Aixle Builder
      and the profile page. The Aixle Builder N+1 budget moves 19 → 20 for the one constant preload.
 
@@ -346,8 +353,8 @@ The pod-stdout sink is the one redaction cannot reach: the dual sink writes at p
 before the collector runs, and Loki holds a copy we do not own. Closing it means dropping
 `> /proc/1/fd/1` for secret-bearing sessions, which costs cluster-side visibility of exactly the
 sessions most worth watching — see `research/technical-agent-session-log-access-and-control-2026-08-10`
-for what that sink is for. **Product decision 2026-08-17: keep the sink, state the limitation.** The UI
-warning in Task 9 and this table are that statement.
+for what that sink is for. **Product decision 2026-08-17: keep the sink, state the limitation here.**
+This table is that statement; the UI does not repeat it (see the change log).
 
 ### Renegotiated: log redaction
 

@@ -23,7 +23,6 @@ import type { ConfigItemPicker } from '@/types/generated';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
-import { SecretExposureNotice } from 'shared/resources/config-items/SecretExposureNotice';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
 import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
 import { StatusBadge } from 'shared/ui/StatusBadge';
@@ -150,11 +149,6 @@ export const SessionNewForm = ({
   const models = useMemo(() => (agentType ? (modelsMap[agentType] ?? []) : []), [agentType, modelsMap]);
 
   const avgCostCents = agentType ? (costHint?.avgCostCentsByRuntime?.[agentType] ?? null) : null;
-
-  const hasSelectedSecret = useMemo(
-    () => configItems.some((c) => c.itemType === 'secret' && selectedConfigItems.includes(String(c.id))),
-    [configItems, selectedConfigItems],
-  );
 
   const canSubmit =
     !!agentType &&
@@ -447,23 +441,20 @@ export const SessionNewForm = ({
         )}
 
         {configItems.length > 0 && (
-          <>
-            <MultiSelect
-              label="Secrets & Variables"
-              description="The agent can read these with the get_config_item tool instead of asking you to paste a credential."
-              placeholder="Select secrets and variables..."
-              aria-label="Secrets and variables"
-              data={configItems.map((c) => ({
-                value: String(c.id),
-                label: c.itemType === 'secret' ? `${c.name} (secret)` : c.name,
-              }))}
-              value={selectedConfigItems}
-              onChange={setSelectedConfigItems}
-              searchable
-              clearable
-            />
-            {hasSelectedSecret && <SecretExposureNotice />}
-          </>
+          <MultiSelect
+            label="Secrets & Variables"
+            description="The agent can read these with the get_config_item tool instead of asking you to paste a credential."
+            placeholder="Select secrets and variables..."
+            aria-label="Secrets and variables"
+            data={configItems.map((c) => ({
+              value: String(c.id),
+              label: c.itemType === 'secret' ? `${c.name} (secret)` : c.name,
+            }))}
+            value={selectedConfigItems}
+            onChange={setSelectedConfigItems}
+            searchable
+            clearable
+          />
         )}
 
         {/* ── Execution ───────────────────────────────── */}

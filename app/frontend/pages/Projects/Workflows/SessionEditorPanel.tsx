@@ -15,8 +15,6 @@ import { useState } from 'react';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
-import { SecretExposureNotice } from 'shared/resources/config-items/SecretExposureNotice';
-
 import classes from './BuilderPage.module.css';
 
 interface NamedItem {
@@ -221,7 +219,6 @@ export function SessionEditorPanel({
   const configItemSelectData = (Array.isArray(configItems) ? configItems : [])
     .filter((c) => c?.id != null)
     .map((c) => ({ value: String(c.id), label: c.itemType === 'secret' ? `${c.name} (secret)` : c.name }));
-  const stepHasSecret = configItems.some((c) => c.itemType === 'secret' && stepConfigItemIds.includes(c.id));
 
   const groupedToolIds = new Set(toolGroups.flatMap((g) => g.toolIds));
   const toolSelectData = [
@@ -528,11 +525,6 @@ export function SessionEditorPanel({
               input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
             }}
           />
-          {stepHasSecret && (
-            <div style={{ marginTop: 8 }}>
-              <SecretExposureNotice />
-            </div>
-          )}
         </div>
 
         <div className={classes.resGroup}>

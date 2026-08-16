@@ -2,8 +2,6 @@ import { MultiSelect, Switch } from '@mantine/core';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
-import { SecretExposureNotice } from 'shared/resources/config-items/SecretExposureNotice';
-
 interface NamedItem {
   id: number;
   name: string;
@@ -99,12 +97,6 @@ export function BaseResourcesTab({
     .map((c) => ({ value: String(c.id), label: c.itemType === 'secret' ? `${c.name} (secret)` : c.name }));
 
   const baseConfigItemIds = workflow.baseConfigItemIds ?? [];
-  const showSecretNotice =
-    workflow.inheritAllProjectResources || baseConfigItemIds.length > 0
-      ? configItems.some(
-          (c) => c.itemType === 'secret' && (workflow.inheritAllProjectResources || baseConfigItemIds.includes(c.id)),
-        )
-      : false;
 
   return (
     <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
@@ -257,12 +249,6 @@ export function BaseResourcesTab({
             </div>
           ))}
         </div>
-
-        {showSecretNotice && (
-          <div style={{ marginTop: 20 }}>
-            <SecretExposureNotice />
-          </div>
-        )}
       </div>
     </div>
   );
