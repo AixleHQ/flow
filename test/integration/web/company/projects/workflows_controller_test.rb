@@ -69,6 +69,31 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_response :redirect
   end
 
+  # The workflows page's Edit dialog PATCHes this path (WorkflowsPage.tsx), and its
+  # own Vitest coverage passes on a mocked `router.patch` — so a missing route here
+  # looked green on both sides while renaming a workflow in the UI did nothing.
+  test "update renames a workflow and edits its description" do
+    wf = create(:workflow, scope: @project, name: "Old name", description: "old description")
+
+    patch company_project_workflow_path(@project, wf),
+          params: { workflow: { name: "New name", description: "new description" } }
+    assert_response :redirect
+
+    wf.reload
+    assert_equal "New name", wf.name
+    assert_equal "new description", wf.description
+  end
+
+  test "update reports validation errors instead of renaming" do
+    create(:workflow, scope: @project, name: "Taken")
+    wf = create(:workflow, scope: @project, name: "Keeps its name")
+
+    patch company_project_workflow_path(@project, wf), params: { workflow: { name: "Taken" } }
+    assert_response :redirect
+
+    assert_equal "Keeps its name", wf.reload.name
+  end
+
   test "destroy redirects on success" do
     wf = create(:workflow, scope: @project)
 
