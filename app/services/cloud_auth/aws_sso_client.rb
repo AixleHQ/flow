@@ -59,7 +59,7 @@ module CloudAuth
         client_secret: resp.client_secret,
         expires_at: Time.zone.at(resp.client_secret_expires_at.to_i)
       )
-    rescue ::Aws::SSOOIDC::Errors::ServiceError => e
+    rescue ::Aws::SSOOIDC::Errors::ServiceError, ::Seahorse::Client::NetworkingError => e
       raise translate(e)
     end
 
@@ -80,7 +80,7 @@ module CloudAuth
         interval: resp.interval.to_i.clamp(1, 60),
         expires_in: resp.expires_in.to_i
       )
-    rescue ::Aws::SSOOIDC::Errors::ServiceError => e
+    rescue ::Aws::SSOOIDC::Errors::ServiceError, ::Seahorse::Client::NetworkingError => e
       raise translate(e)
     end
 
@@ -96,7 +96,7 @@ module CloudAuth
       build_token(resp)
     rescue ::Aws::SSOOIDC::Errors::AuthorizationPendingException, ::Aws::SSOOIDC::Errors::SlowDownException
       nil
-    rescue ::Aws::SSOOIDC::Errors::ServiceError => e
+    rescue ::Aws::SSOOIDC::Errors::ServiceError, ::Seahorse::Client::NetworkingError => e
       raise translate(e)
     end
 
@@ -108,7 +108,7 @@ module CloudAuth
         refresh_token: refresh_token
       )
       build_token(resp)
-    rescue ::Aws::SSOOIDC::Errors::ServiceError => e
+    rescue ::Aws::SSOOIDC::Errors::ServiceError, ::Seahorse::Client::NetworkingError => e
       raise translate(e)
     end
 
@@ -121,7 +121,7 @@ module CloudAuth
             Account.new(account_id: a.account_id, account_name: a.account_name, email: a.email_address)
           end
         end
-    rescue ::Aws::SSO::Errors::ServiceError => e
+    rescue ::Aws::SSO::Errors::ServiceError, ::Seahorse::Client::NetworkingError => e
       raise translate(e)
     end
 
@@ -129,7 +129,7 @@ module CloudAuth
       each_page(:list_account_roles) do |token|
         portal.list_account_roles({ access_token: access_token, account_id: account_id, next_token: token }.compact)
       end.flat_map { |page| page.role_list.map(&:role_name) }
-    rescue ::Aws::SSO::Errors::ServiceError => e
+    rescue ::Aws::SSO::Errors::ServiceError, ::Seahorse::Client::NetworkingError => e
       raise translate(e)
     end
 
@@ -144,7 +144,7 @@ module CloudAuth
         # The portal returns epoch MILLIseconds, not seconds.
         expiration: Time.zone.at(creds.expiration.to_i / 1000)
       )
-    rescue ::Aws::SSO::Errors::ServiceError => e
+    rescue ::Aws::SSO::Errors::ServiceError, ::Seahorse::Client::NetworkingError => e
       raise translate(e)
     end
 
@@ -190,6 +190,13 @@ module CloudAuth
     # Never leak a vendor exception class to callers, and never put a response body in
     # the message — an OIDC error body can echo back the code being exchanged.
     def translate(error)
+      # A networking failure carries no service code, and the overwhelmingly common cause
+      # is a mistyped region: the endpoint host for `us-2-west` never resolves. Say that,
+      # rather than surfacing `getaddrinfo` as a 500 the user cannot act on.
+      if error.is_a?(::Seahorse::Client::NetworkingError)
+        return Error.new("Could not reach AWS in region #{@region}. Check the region is a valid AWS region.")
+      end
+
       klass =
         case error
         when ::Aws::SSOOIDC::Errors::ExpiredTokenException then ExpiredError

@@ -82,7 +82,9 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
       },
       task_workflow_runs: -> {
         next [] unless task
-        task.workflow_runs.includes(:workflow).order(created_at: :desc)
+        # step_runs: :step because the resource renders a row per step run; without the
+        # preload a task with a run history costs two queries per run.
+        task.workflow_runs.includes(:workflow, step_runs: :step).order(created_at: :desc)
             .map { |r| TaskWorkflowRunResource.new(r).to_h }
       },
       task_statistics: -> {

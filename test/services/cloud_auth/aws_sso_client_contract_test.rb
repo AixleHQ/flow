@@ -96,6 +96,20 @@ module CloudAuth
       assert_equal %w[sso:account:access], AwsSsoClient::SCOPES
     end
 
+    # A mistyped region (`us-2-west`) makes the endpoint host unresolvable, so the SDK
+    # raises a networking error rather than a service error. That must still arrive as a
+    # CloudAuth error naming the region — it used to escape as a 500 with `getaddrinfo`
+    # in it, which tells the user nothing about what they typed wrong.
+    test "an unreachable endpoint becomes a CloudAuth error naming the region" do
+      stub_request(:post, %r{oidc\.us-east-1\.amazonaws\.com}).to_raise(SocketError)
+
+      error = assert_raises(CloudAuth::Error) { client.register_client(client_name: "aixle") }
+
+      assert_match(/us-east-1/, error.message)
+      assert_match(/region/i, error.message)
+      assert_no_match(/getaddrinfo|Seahorse/, error.message)
+    end
+
     # -- portal pagination -----------------------------------------------------
     #
     # An organisation whose user is assigned to more accounts than one page holds gets a

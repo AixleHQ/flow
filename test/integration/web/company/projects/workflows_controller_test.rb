@@ -17,6 +17,31 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_inertia_page "Projects/Workflows/WorkflowsPage"
   end
 
+  # This page reported an N+1 from production: the steps of every workflow, plus the
+  # sub-steps of every step, were fetched one query at a time. The preload makes it two
+  # queries whatever the workflow count, so the assertion is on the shape of the load,
+  # not on a total that any unrelated change would move.
+  test "index loads steps and sub steps in a fixed number of queries" do
+    create_list(:workflow, 3, scope: @project).each do |workflow|
+      create_list(:step, 2, workflow: workflow).each { |step| create(:sub_step, step: step) }
+    end
+
+    queries = []
+    subscriber = ActiveSupport::Notifications.subscribe("sql.active_record") do |*, payload|
+      queries << payload[:sql]
+    end
+
+    begin
+      get company_project_workflows_path(@project)
+    ensure
+      ActiveSupport::Notifications.unsubscribe(subscriber)
+    end
+
+    assert_response :success
+    assert_equal 1, queries.count { |sql| sql.match?(/FROM "steps"/) }, queries.grep(/FROM "steps"/).inspect
+    assert_equal 1, queries.count { |sql| sql.match?(/FROM "sub_steps"/) }, queries.grep(/FROM "sub_steps"/).inspect
+  end
+
   test "builder renders workflow builder" do
     wf = create(:workflow, scope: @project)
 

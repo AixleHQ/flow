@@ -102,4 +102,27 @@ class WorkflowTest < ActiveSupport::TestCase
     wf = create(:workflow, scope: @project)
     assert_equal({}, wf.config)
   end
+
+  test "visible_steps drops soft-deleted steps in position order" do
+    wf = create(:workflow, scope: @project)
+    first = create(:step, workflow: wf, position: 1)
+    create(:step, workflow: wf, position: 2).soft_delete!
+    third = create(:step, workflow: wf, position: 3)
+
+    assert_equal [ first.id, third.id ], wf.reload.visible_steps.map(&:id)
+  end
+
+  test "visible_steps reads a preloaded association instead of re-querying it" do
+    wf = create(:workflow, scope: @project)
+    kept = create(:step, workflow: wf, position: 1)
+    create(:step, workflow: wf, position: 2).soft_delete!
+    create(:sub_step, step: kept)
+
+    preloaded = Workflow.where(id: wf.id).includes(steps: :sub_steps).first
+
+    assert_no_queries do
+      assert_equal [ kept.id ], preloaded.visible_steps.map(&:id)
+      assert_equal 1, preloaded.visible_steps.first.sub_steps.size
+    end
+  end
 end
