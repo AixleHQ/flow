@@ -208,8 +208,9 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
   # ── meta_get_workflow ──
 
   test "meta_get_workflow returns full workflow structure" do
+    long = "x" * 900
     wf = create(:workflow, scope: @project, name: "Full WF")
-    step = create(:step, workflow: wf, name: "S1", position: 1, instructions: "Do it")
+    step = create(:step, workflow: wf, name: "S1", position: 1, instructions: long)
     create(:sub_step, step: step, name: "SS1", position: 1)
     @workflow_run.update!(shared_context: { "target_workflow_id" => wf.id })
 
@@ -223,6 +224,7 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
     assert_equal "Full WF", data["name"]
     assert_equal 1, data["steps_count"]
     assert_equal "S1", data["steps"][0]["name"]
+    assert_equal long, data["steps"][0]["instructions"]
     assert_equal 1, data["steps"][0]["sub_steps"].size
   end
 

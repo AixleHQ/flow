@@ -70,7 +70,7 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_match(/no fields/i, text(nothing))
   end
 
-  test "get_workflow_step returns full instructions and wiring while get_workflow truncates and flags" do
+  test "get_workflow returns long instructions in full and get_workflow_step adds the wiring" do
     long = "x" * 900
     agent = create(:agent, scope: @project)
     tool = create(:tool, scope: @project)
@@ -81,9 +81,8 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     create(:sub_step, step: step, name: "check A", instructions: long)
 
     listed = payload(call_tool("get_workflow", { project_id: @project.id, workflow_id: @workflow.id }))["steps"].first
-    assert_equal 500, listed["instructions"].length
-    assert listed["instructions_truncated"]
-    assert listed["sub_steps"].first["instructions_truncated"]
+    assert_equal long, listed["instructions"]
+    assert_equal long, listed["sub_steps"].first["instructions"]
 
     full = payload(call_tool("get_workflow_step",
                              { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id }))

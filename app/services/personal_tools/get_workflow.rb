@@ -5,16 +5,15 @@ module PersonalTools
     tool do
       display_name "Get Workflow"
       description "Return a workflow's full definition: base resources, steps, sub-steps, agents, " \
-                  "dependencies. Step instructions are truncated here (instructions_truncated: true) — " \
-                  "use get_workflow_step to read a step's complete instructions before editing it."
+                  "dependencies. Step and sub-step instructions come back complete — use " \
+                  "get_workflow_step for one step's remaining wiring (retries, failure and skip " \
+                  "policy, preferred model, asset specs)."
       audience :user
       tags :workflows
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
       param :workflow_id, type: :integer, description: "Workflow id.", required: true
     end
-
-    INSTRUCTIONS_LIMIT = 500
 
     def execute
       project = find_project!
@@ -34,23 +33,22 @@ module PersonalTools
 
     private
 
+    # Instructions are returned whole. They used to be cut at 500 characters,
+    # which is shorter than almost every real step: a caller that read a
+    # workflow and then wrote a step back silently dropped the tail it never
+    # saw. Size is the caller's problem to manage (read one workflow at a
+    # time), not a reason to hand back text that looks complete and isn't.
     def step_view(step)
       { id: step.id, name: step.name, position: step.position,
-        instructions: truncate(step.instructions),
-        instructions_truncated: truncated?(step.instructions),
+        instructions: step.instructions,
         agent: step.agent && { id: step.agent.id, title: step.agent.title },
         tool_ids: step.tool_ids, skill_ids: step.skill_ids, mcp_server_ids: step.mcp_server_ids,
         repository_ids: step.repository_ids,
         depends_on_step_ids: step.depends_on_step_ids,
         sub_steps: step.sub_steps.active.order(:position).map { |ss|
           { id: ss.id, name: ss.name, position: ss.position, required: ss.required,
-            instructions: truncate(ss.instructions),
-            instructions_truncated: truncated?(ss.instructions) }
+            instructions: ss.instructions }
         } }
     end
-
-    def truncate(text) = text&.truncate(INSTRUCTIONS_LIMIT)
-
-    def truncated?(text) = text.present? && text.length > INSTRUCTIONS_LIMIT
   end
 end

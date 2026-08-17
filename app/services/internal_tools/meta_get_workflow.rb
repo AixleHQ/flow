@@ -31,7 +31,10 @@ module InternalTools
           id: step.id,
           name: step.name,
           position: step.position,
-          instructions: step.instructions&.truncate(500),
+          # Whole text, like sub-steps below: a 500-char cut here made every
+          # meta_update_workflow_step that echoed instructions back a silent
+          # truncation of the step it was editing.
+          instructions: step.instructions,
           agent: step.agent ? { id: step.agent.id, title: step.agent.title } : nil,
           allow_non_interactive: step.allow_non_interactive,
           skip_policy: step.skip_policy,
