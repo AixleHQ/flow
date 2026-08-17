@@ -1669,7 +1669,7 @@ describe('Projects/Board/BoardPage', () => {
     fetchSpy.mockRestore();
   });
 
-  it('filters tasks by tag via the Tags menu', async () => {
+  it('filters tasks by tag via the Tags combobox', async () => {
     const frontend = makeTask({ id: 1, title: 'Frontend task', boardColumnId: 100, tags: ['frontend'] });
     const backend = makeTask({ id: 2, title: 'Backend task', boardColumnId: 200, tags: ['backend'] });
     const fetchSpy = stubColumnTasks([frontend]);
@@ -1684,7 +1684,7 @@ describe('Projects/Board/BoardPage', () => {
     });
 
     await userEvent.click(screen.getByRole('button', { name: /Tags: All/i }));
-    await userEvent.click(await screen.findByRole('menuitem', { name: 'frontend' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'frontend' }));
 
     // `tags_match=all` is what makes the board's multi-tag filter mean "carries all of these".
     await waitFor(() =>
@@ -1695,6 +1695,143 @@ describe('Projects/Board/BoardPage', () => {
     );
     expect(await screen.findByText('Frontend task')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Backend task')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
+  });
+
+  // The board's whole tag vocabulary, of which the loaded page carries only 'frontend'.
+  const taggedProps = {
+    ...populatedProps,
+    tasks: [makeTask({ id: 1, title: 'Frontend task', boardColumnId: 100, tags: ['frontend', 'design'] })],
+    boardTags: ['backend', 'design', 'frontend', 'offscreen-only'],
+  };
+
+  it('narrows the tag options as you type in the Tags search box', async () => {
+    renderAuthedPage(<BoardPage />, { props: taggedProps });
+
+    await userEvent.click(screen.getByRole('button', { name: /Tags: All/i }));
+    await userEvent.type(await screen.findByPlaceholderText('Search tags'), 'back');
+
+    expect(screen.getByRole('option', { name: 'backend' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'frontend' })).not.toBeInTheDocument();
+
+    // A query that matches nothing says so rather than showing a blank dropdown.
+    await userEvent.type(screen.getByPlaceholderText('Search tags'), 'zzz');
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    expect(screen.getByText('No tags found')).toBeInTheDocument();
+  });
+
+  it('offers a tag no loaded card carries, since the options come from the board', async () => {
+    renderAuthedPage(<BoardPage />, { props: taggedProps });
+
+    await userEvent.click(screen.getByRole('button', { name: /Tags: All/i }));
+
+    expect(await screen.findByRole('option', { name: 'offscreen-only' })).toBeInTheDocument();
+  });
+
+  it('picks a tag with the keyboard from the Tags combobox', async () => {
+    const fetchSpy = stubColumnTasks([]);
+    renderAuthedPage(<BoardPage />, { props: taggedProps });
+
+    await userEvent.click(screen.getByRole('button', { name: /Tags: All/i }));
+    await userEvent.type(await screen.findByPlaceholderText('Search tags'), 'back');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+
+    expect(screen.getByRole('button', { name: /Tags: backend/i })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('tags%5B%5D=backend'), expect.anything()),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('clears every selected tag from the Tags combobox footer', async () => {
+    const fetchSpy = stubColumnTasks([]);
+    renderAuthedPage(<BoardPage />, { props: taggedProps });
+
+    await userEvent.click(screen.getByRole('button', { name: /Tags: All/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'design' }));
+    expect(screen.getByRole('button', { name: /Tags: design/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear tags' }));
+
+    expect(screen.getByRole('button', { name: /Tags: All/i })).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('filters the board by a tag clicked on a card, and unfilters on a second click', async () => {
+    const frontend = makeTask({ id: 1, title: 'Frontend task', boardColumnId: 100, tags: ['frontend', 'design'] });
+    const fetchSpy = stubColumnTasks([frontend]);
+
+    renderAuthedPage(<BoardPage />, { props: { ...taggedProps, tasks: [frontend] } });
+
+    const card = screen.getByText('Frontend task').closest('[class*="Paper-root"]') as HTMLElement;
+    await userEvent.click(within(card).getByRole('button', { name: 'frontend' }));
+
+    expect(screen.getByRole('button', { name: /Tags: frontend/i })).toBeInTheDocument();
+    // Clicking a tag filters the board instead of opening the task.
+    expect(router.get).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('tags%5B%5D=frontend'), expect.anything()),
+    );
+
+    const filteredCard = screen.getByText('Frontend task').closest('[class*="Paper-root"]') as HTMLElement;
+    await userEvent.click(within(filteredCard).getByRole('button', { name: 'frontend' }));
+
+    expect(screen.getByRole('button', { name: /Tags: All/i })).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('pulls a filtered tag into the visible three on a card that would otherwise hide it', async () => {
+    const overflowing = makeTask({
+      id: 1,
+      title: 'Overflowing task',
+      boardColumnId: 100,
+      tags: ['a', 'b', 'c', 'rare'],
+    });
+    const fetchSpy = stubColumnTasks([overflowing]);
+
+    renderAuthedPage(<BoardPage />, {
+      props: { ...populatedProps, tasks: [overflowing], boardTags: ['a', 'b', 'c', 'rare'] },
+    });
+
+    // 'rare' is the 4th tag, so it starts collapsed into the "+1" overflow badge.
+    const card = () => screen.getByText('Overflowing task').closest('[class*="Paper-root"]') as HTMLElement;
+    expect(within(card()).queryByRole('button', { name: 'rare' })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /Tags: All/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'rare' }));
+
+    // Filtering by it moves it to the front, so it stays clickable — including to clear the filter.
+    // The card re-renders from the server's filtered page, hence the wait.
+    await waitFor(() =>
+      expect(within(card()).getByRole('button', { name: 'rare' })).toHaveAttribute('aria-pressed', 'true'),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('autocompletes an existing board tag when tagging a task in the sidebar', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
+    const untagged = makeTask({ id: 3, title: 'Untagged task', boardColumnId: 100, tags: [] });
+
+    renderAuthedPage(<BoardPage />, {
+      props: { ...taggedProps, tasks: [untagged], selectedTask: untagged },
+    });
+
+    const drawer = screen.getAllByRole('dialog')[0];
+    await userEvent.click(within(drawer).getByRole('button', { name: '+ Add' }));
+    await userEvent.type(within(drawer).getByRole('textbox', { name: 'Tag name' }), 'off');
+    await userEvent.click(await screen.findByRole('option', { name: 'offscreen-only' }));
+
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/tasks/3');
+      expect(call).toBeTruthy();
+      expect((call![1] as RequestInit).method).toBe('PATCH');
+      expect(JSON.parse((call![1] as RequestInit).body as string).boardTask.tags).toEqual(['offscreen-only']);
+    });
 
     fetchSpy.mockRestore();
   });
