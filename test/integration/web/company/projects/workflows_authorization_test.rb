@@ -7,8 +7,8 @@ require "test_helper"
 #
 # Policy (Web::Company::Projects::WorkflowsPolicy):
 #   reads  (index/builder)                         => project_accessible?
-#   writes (create/destroy/publish/unpublish/      => project_writable?
-#           duplicate)
+#   writes (create/update/destroy/publish/         => project_writable?
+#           unpublish/duplicate)
 # Inaccessible project (stranger / foreign admin) => 404 (current_project's scoped
 # `.find` raises RecordNotFound before the policy). A project has no auto-created
 # workflow, so the fixture is built here (scope: @project => visible_for_project).
@@ -19,8 +19,8 @@ require "test_helper"
 # user_for(role)) — the guard then passes for every policy-allowed role and the
 # assertion reflects the pure authorization outcome (302 redirect, no alert).
 #
-# The policy also declares show?/update?, but this controller exposes no routes
-# for them, so there is nothing to exercise.
+# The policy also declares show?, but this controller exposes no route for it
+# (the workflow's own screen is `builder`), so there is nothing to exercise.
 class Web::Company::Projects::WorkflowsAuthorizationTest < ActionDispatch::IntegrationTest
   include AuthorizationMatrix
 
@@ -43,6 +43,16 @@ class Web::Company::Projects::WorkflowsAuthorizationTest < ActionDispatch::Integ
     assert_project_write do
       post company_project_workflows_path(@project),
            params: { workflow: { name: "Authz WF #{SecureRandom.hex(4)}", description: "x" } }
+    end
+  end
+
+  # A rename per role iteration would collide on the name-uniqueness validation,
+  # which fails the write without ever reaching the policy — so each role edits
+  # its own throwaway workflow.
+  test "update is a project write" do
+    assert_project_write do
+      patch company_project_workflow_path(@project, create(:workflow, scope: @project)),
+            params: { workflow: { description: "authz edit" } }
     end
   end
 

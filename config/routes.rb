@@ -287,7 +287,7 @@ Rails.application.routes.draw do
               end
             end
           end
-          resources :workflows, only: %i[index create destroy] do
+          resources :workflows, only: %i[index create update destroy] do
             member do
               get :builder
               post :publish

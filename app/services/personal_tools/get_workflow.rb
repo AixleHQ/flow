@@ -28,6 +28,8 @@ module PersonalTools
               base_mcp_server_ids: workflow.base_mcp_server_ids,
               base_repository_ids: workflow.base_repository_ids,
               base_config_item_ids: workflow.base_config_item_ids,
+              base_asset_ids: workflow.base_asset_ids,
+              inherit_all_project_resources: workflow.inherit_all_project_resources,
               steps_count: steps.size, steps: steps)
     end
 
