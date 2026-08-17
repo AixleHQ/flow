@@ -28,12 +28,14 @@ import {
   Button,
   Card,
   Checkbox,
+  Combobox,
   Drawer,
   Group,
   Loader,
   Menu,
   Modal,
   Paper,
+  ScrollArea,
   Select,
   SimpleGrid,
   Skeleton,
@@ -45,6 +47,7 @@ import {
   ThemeIcon,
   Tooltip,
   UnstyledButton,
+  useCombobox,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { useDebouncedValue } from '@mantine/hooks';
@@ -374,11 +377,15 @@ function SortableTaskCard({
   href,
   onClick,
   onRetry,
+  onTagClick,
+  activeTags,
 }: {
   task: Task;
   href?: string;
   onClick?: (t: Task) => void;
   onRetry?: (task: Task) => void;
+  onTagClick?: (tag: string) => void;
+  activeTags?: string[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `task-${task.id}`,
@@ -398,7 +405,14 @@ function SortableTaskCard({
 
   return (
     <Box ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TaskCardUI task={task} href={href} onClick={onClick} onRetry={onRetry} />
+      <TaskCardUI
+        task={task}
+        href={href}
+        onClick={onClick}
+        onRetry={onRetry}
+        onTagClick={onTagClick}
+        activeTags={activeTags}
+      />
     </Box>
   );
 }
@@ -598,15 +612,26 @@ function TaskCardUI({
   onClick,
   isDragOverlay,
   onRetry,
+  onTagClick,
+  activeTags,
 }: {
   task: Task;
   href?: string;
   onClick?: (t: Task) => void;
   isDragOverlay?: boolean;
   onRetry?: (task: Task) => void;
+  onTagClick?: (tag: string) => void;
+  activeTags?: string[];
 }) {
-  const visibleTags = (task.tags ?? []).slice(0, 3);
-  const overflowCount = (task.tags ?? []).length - 3;
+  // A card shows at most three tags. Whichever ones the board is filtered by come first, so the
+  // filter that put this card on screen is always the one you can click to take it back off.
+  const cardTags = (activeTags ?? []).length
+    ? [...(task.tags ?? [])].sort(
+        (a, b) => Number((activeTags ?? []).includes(b)) - Number((activeTags ?? []).includes(a)),
+      )
+    : (task.tags ?? []);
+  const visibleTags = cardTags.slice(0, 3);
+  const overflowCount = cardTags.length - 3;
 
   const ciSummary = ciGateSummary(task);
   const latestRun = (task.recentWorkflowRuns ?? [])[0] ?? null;
@@ -767,11 +792,40 @@ function TaskCardUI({
             {task.taskType}
           </Badge>
         )}
-        {visibleTags.map((tag) => (
-          <Badge key={tag} size="xs" variant="outline" color="gray" style={{ fontSize: 10 }}>
-            {tag}
-          </Badge>
-        ))}
+        {visibleTags.map((tag) => {
+          const isFiltered = (activeTags ?? []).includes(tag);
+          if (!onTagClick) {
+            return (
+              <Badge key={tag} size="xs" variant="outline" color="gray" style={{ fontSize: 10 }}>
+                {tag}
+              </Badge>
+            );
+          }
+          return (
+            // A tag on a card is the shortest path to "show me the other tasks like this one", so it
+            // toggles the board's tag filter. The card itself is a link and a drag handle, hence both
+            // the click (open task) and the pointerdown (start drag) stop here.
+            <Badge
+              key={tag}
+              component="button"
+              type="button"
+              size="xs"
+              variant={isFiltered ? 'filled' : 'outline'}
+              color="gray"
+              aria-pressed={isFiltered}
+              title={isFiltered ? `Remove tag filter ${tag}` : `Filter board by tag ${tag}`}
+              onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+              onClick={(e: React.MouseEvent) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onTagClick(tag);
+              }}
+              style={{ fontSize: 10, cursor: 'pointer' }}
+            >
+              {tag}
+            </Badge>
+          );
+        })}
         {overflowCount > 0 && (
           <Badge size="xs" variant="outline" color="gray" style={{ fontSize: 10 }}>
             +{overflowCount}
@@ -875,6 +929,8 @@ function BoardColumn({
   onAddTask,
   onTaskClick,
   onRetryTask,
+  onTagClick,
+  activeTags,
   collapsed,
   onToggleCollapse,
   onMoveLeft,
@@ -897,6 +953,8 @@ function BoardColumn({
   onAddTask: (columnId: number) => void;
   onTaskClick: (task: Task) => void;
   onRetryTask: (task: Task) => void;
+  onTagClick: (tag: string) => void;
+  activeTags: string[];
   collapsed: boolean;
   onToggleCollapse: (id: number) => void;
   onMoveLeft?: () => void;
@@ -1324,6 +1382,8 @@ function BoardColumn({
                 href={taskHref(task)}
                 onClick={onTaskClick}
                 onRetry={onRetryTask}
+                onTagClick={onTagClick}
+                activeTags={activeTags}
               />
             ))
           )}
@@ -1484,28 +1544,38 @@ function InlineTagsEditor({
   tags,
   onChange,
   disabled,
+  suggestions,
 }: {
   tags: string[];
   onChange: (tags: string[]) => void;
   disabled?: boolean;
+  suggestions?: string[];
 }) {
   const [inputVisible, setInputVisible] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const combobox = useCombobox({ onDropdownClose: () => combobox.resetSelectedOption() });
+
+  // Tags the board already uses, minus the ones on this task — picking from these is what keeps
+  // "frontend" from silently becoming "front-end" on the next task.
+  const options = useMemo(() => {
+    const query = inputValue.trim().toLowerCase();
+    return (suggestions ?? []).filter((s) => !tags.includes(s) && (query === '' || s.toLowerCase().includes(query)));
+  }, [suggestions, tags, inputValue]);
 
   const showInput = () => {
     setInputVisible(true);
     setTimeout(() => inputRef.current?.focus(), 0);
   };
 
-  const commitTag = () => {
-    const trimmed = inputValue.trim();
-    if (trimmed && !tags.includes(trimmed)) {
-      onChange([...tags, trimmed]);
-    }
+  const addTag = (tag: string) => {
+    if (tag && !tags.includes(tag)) onChange([...tags, tag]);
     setInputValue('');
     setInputVisible(false);
+    combobox.closeDropdown();
   };
+
+  const commitTag = () => addTag(inputValue.trim());
 
   const removeTag = (tag: string) => onChange(tags.filter((t) => t !== tag));
 
@@ -1596,39 +1666,65 @@ function InlineTagsEditor({
         </Box>
       )}
       {!disabled && inputVisible && (
-        <input
-          ref={inputRef}
-          value={inputValue}
-          onChange={(e) => setInputValue(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              commitTag();
-            }
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              setInputValue('');
-              setInputVisible(false);
-            }
-          }}
-          onBlur={() => {
-            // Only commit on blur if still in input mode (Escape key sets inputVisible=false)
-            if (inputVisible) commitTag();
-          }}
-          placeholder="Tag name"
-          style={{
-            width: 120,
-            background: 'var(--app-bg-paper)',
-            border: '1px solid var(--app-primary)',
-            borderRadius: 5,
-            fontFamily: 'inherit',
-            fontSize: 12,
-            padding: '4px 10px',
-            lineHeight: 1,
-            color: 'var(--mantine-color-text)',
-            outline: 'none',
-          }}
-        />
+        <Combobox store={combobox} position="bottom-start" shadow="md" withinPortal onOptionSubmit={addTag}>
+          <Combobox.Target>
+            <input
+              ref={inputRef}
+              value={inputValue}
+              aria-label="Tag name"
+              onFocus={() => combobox.openDropdown()}
+              onChange={(e) => {
+                setInputValue(e.currentTarget.value);
+                combobox.openDropdown();
+                combobox.resetSelectedOption();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  // An arrow-key-highlighted suggestion wins over the raw text: Mantine's own
+                  // handler runs right after this one and submits the option.
+                  if (combobox.getSelectedOptionIndex() !== -1) return;
+                  e.preventDefault();
+                  commitTag();
+                }
+                if (e.key === 'Escape') {
+                  // First Escape dismisses the suggestions, a second one leaves the input.
+                  if (combobox.dropdownOpened) return;
+                  e.preventDefault();
+                  setInputValue('');
+                  setInputVisible(false);
+                }
+              }}
+              onBlur={() => {
+                // Only commit on blur if still in input mode (Escape key sets inputVisible=false)
+                if (inputVisible) commitTag();
+              }}
+              placeholder="Tag name"
+              style={{
+                width: 120,
+                background: 'var(--app-bg-paper)',
+                border: '1px solid var(--app-primary)',
+                borderRadius: 5,
+                fontFamily: 'inherit',
+                fontSize: 12,
+                padding: '4px 10px',
+                lineHeight: 1,
+                color: 'var(--mantine-color-text)',
+                outline: 'none',
+              }}
+            />
+          </Combobox.Target>
+          <Combobox.Dropdown hidden={options.length === 0}>
+            <Combobox.Options>
+              <ScrollArea.Autosize mah={180} type="scroll">
+                {options.map((tag) => (
+                  <Combobox.Option value={tag} key={tag}>
+                    <Text size="xs">{tag}</Text>
+                  </Combobox.Option>
+                ))}
+              </ScrollArea.Autosize>
+            </Combobox.Options>
+          </Combobox.Dropdown>
+        </Combobox>
       )}
     </Box>
   );
@@ -1640,6 +1736,7 @@ function TaskDetailSidebar({
   task,
   allTasks,
   epics,
+  knownTags,
   onClose,
   onDelete,
   onOpenTaskId,
@@ -1658,6 +1755,8 @@ function TaskDetailSidebar({
   allTasks: Task[];
   /** Every epic on the board, for the Parent Epic picker. */
   epics: Array<{ id: number; title: string }>;
+  /** Every tag on the board, offered as autocomplete when tagging this task. */
+  knownTags: string[];
   onClose: () => void;
   onDelete: (taskId: number) => void;
   /** Opens a task by id — the board may hold no card for it (an unloaded child or parent). */
@@ -2283,6 +2382,7 @@ function TaskDetailSidebar({
                 tags={task.tags ?? []}
                 onChange={(tags) => saveField('tags', tags)}
                 disabled={!canExecute}
+                suggestions={knownTags}
               />
 
               <Text size="xs" c="dimmed">
@@ -3711,6 +3811,107 @@ function BoardPresetPicker({ projectId, presets }: { projectId: number; presets:
   );
 }
 
+// --- Tag filter ---
+
+// A board accumulates tags without bound, so the filter is a searchable combobox rather than a
+// plain menu: type to narrow, arrows + Enter to pick, and the option list scrolls instead of
+// growing past the viewport — every tag stays reachable no matter how many there are.
+function TagFilterCombobox({
+  allTags,
+  selected,
+  onToggle,
+  onClear,
+}: {
+  allTags: string[];
+  selected: string[];
+  onToggle: (tag: string) => void;
+  onClear: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const combobox = useCombobox({
+    onDropdownClose: () => {
+      combobox.resetSelectedOption();
+      setSearch('');
+    },
+    // Focus the search box on open so typing filters immediately, without a second click.
+    onDropdownOpen: () => combobox.focusSearchInput(),
+  });
+
+  const matches = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return query ? allTags.filter((tag) => tag.toLowerCase().includes(query)) : allTags;
+  }, [allTags, search]);
+
+  const label = selected.length === 0 ? 'All' : selected.length === 1 ? selected[0] : `${selected.length} selected`;
+
+  return (
+    <Combobox
+      store={combobox}
+      width={240}
+      position="bottom-start"
+      shadow="md"
+      withinPortal
+      // Tags filter as a set, so submitting an option toggles it and leaves the dropdown open —
+      // several tags can be picked in one pass.
+      onOptionSubmit={(tag) => onToggle(tag)}
+    >
+      <Combobox.Target targetType="button">
+        <Button
+          variant="default"
+          size="xs"
+          leftSection={<IconTag size={12} />}
+          onClick={() => combobox.toggleDropdown()}
+          styles={{
+            root: {
+              fontWeight: 400,
+              color: selected.length > 0 ? 'var(--mantine-color-text)' : 'var(--mantine-color-dimmed)',
+            },
+          }}
+        >
+          Tags: {label}
+        </Button>
+      </Combobox.Target>
+
+      <Combobox.Dropdown>
+        <Combobox.Search
+          value={search}
+          onChange={(e) => setSearch(e.currentTarget.value)}
+          placeholder="Search tags"
+          aria-label="Search tags"
+        />
+        <Combobox.Options>
+          <ScrollArea.Autosize mah={240} type="scroll">
+            {matches.length === 0 ? (
+              <Combobox.Empty>No tags found</Combobox.Empty>
+            ) : (
+              matches.map((tag) => {
+                const isSelected = selected.includes(tag);
+                return (
+                  <Combobox.Option value={tag} key={tag} active={isSelected}>
+                    <Group gap={6} wrap="nowrap">
+                      <IconCheck size={12} style={{ flexShrink: 0, visibility: isSelected ? 'visible' : 'hidden' }} />
+                      <Text size="xs" fw={isSelected ? 600 : 400} style={{ wordBreak: 'break-word' }}>
+                        {tag}
+                      </Text>
+                    </Group>
+                  </Combobox.Option>
+                );
+              })
+            )}
+          </ScrollArea.Autosize>
+        </Combobox.Options>
+        {selected.length > 0 && (
+          <Combobox.Footer>
+            <Button variant="subtle" color="gray" size="compact-xs" onClick={onClear}>
+              Clear tags
+            </Button>
+          </Combobox.Footer>
+        )}
+      </Combobox.Dropdown>
+    </Combobox>
+  );
+}
+
 // --- View Preset Menu ---
 
 function ViewPresetMenu({
@@ -4097,6 +4298,17 @@ const BoardPage = () => {
   // reach a tag that only exists further down a column.
   const allTags = useMemo(() => [...(boardTags ?? [])].sort(), [boardTags]);
 
+  // Shared by the toolbar combobox and the tag chips on cards, so both paths add and remove the
+  // same filter entry — clicking a tag twice (anywhere) clears it.
+  const toggleTagFilter = useCallback((tag: string) => {
+    setFilters((f) => ({
+      ...f,
+      tags: f.tags.includes(tag) ? f.tags.filter((t) => t !== tag) : [...f.tags, tag],
+    }));
+  }, []);
+
+  const clearTagFilter = useCallback(() => setFilters((f) => ({ ...f, tags: [] })), []);
+
   // Filtering itself is server-side (see useBoardTaskPages); the loaded tasks only need bucketing.
   const tasksByColumn = useMemo(() => {
     const map: Record<number, Task[]> = {};
@@ -4445,53 +4657,12 @@ const BoardPage = () => {
 
           {/* Tags — only when there are tags */}
           {allTags.length > 0 && (
-            <Menu shadow="md" width={200} position="bottom-start" closeOnItemClick={false}>
-              <Menu.Target>
-                <Button
-                  variant="default"
-                  size="xs"
-                  leftSection={<IconTag size={12} />}
-                  styles={{
-                    root: {
-                      fontWeight: 400,
-                      color: filters.tags.length > 0 ? 'var(--mantine-color-text)' : 'var(--mantine-color-dimmed)',
-                    },
-                  }}
-                >
-                  Tags:{' '}
-                  {filters.tags.length === 0
-                    ? 'All'
-                    : filters.tags.length === 1
-                      ? filters.tags[0]
-                      : `${filters.tags.length} selected`}
-                </Button>
-              </Menu.Target>
-              <Menu.Dropdown>
-                {allTags.map((tag) => (
-                  <Menu.Item
-                    key={tag}
-                    onClick={() =>
-                      setFilters((f) => ({
-                        ...f,
-                        tags: f.tags.includes(tag) ? f.tags.filter((t) => t !== tag) : [...f.tags, tag],
-                      }))
-                    }
-                    rightSection={filters.tags.includes(tag) ? <IconCheck size={12} /> : null}
-                    fw={filters.tags.includes(tag) ? 600 : 400}
-                  >
-                    {tag}
-                  </Menu.Item>
-                ))}
-                {filters.tags.length > 0 && (
-                  <>
-                    <Menu.Divider />
-                    <Menu.Item color="gray" onClick={() => setFilters((f) => ({ ...f, tags: [] }))}>
-                      Clear tags
-                    </Menu.Item>
-                  </>
-                )}
-              </Menu.Dropdown>
-            </Menu>
+            <TagFilterCombobox
+              allTags={allTags}
+              selected={filters.tags}
+              onToggle={toggleTagFilter}
+              onClear={clearTagFilter}
+            />
           )}
 
           {/* Show archived toggle */}
@@ -4580,6 +4751,8 @@ const BoardPage = () => {
                   onAddTask={openCreateForColumn}
                   onTaskClick={openTask}
                   onRetryTask={handleRetryTask}
+                  onTagClick={toggleTagFilter}
+                  activeTags={filters.tags}
                   collapsed={collapsedColumns.has(col.id)}
                   onToggleCollapse={handleToggleCollapse}
                   onMoveLeft={
@@ -4696,6 +4869,7 @@ const BoardPage = () => {
         task={selectedTask}
         allTasks={localTasks}
         epics={epics ?? NO_EPICS}
+        knownTags={allTags}
         onClose={closeTask}
         onDelete={handleDeleteTask}
         onOpenTaskId={openTaskById}
