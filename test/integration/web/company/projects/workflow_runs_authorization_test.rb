@@ -32,8 +32,13 @@ class Web::Company::Projects::WorkflowRunsAuthorizationTest < ActionDispatch::In
 
   teardown { teardown_authz }
 
-  test "index is a project read" do
-    assert_project_read { get company_project_workflow_runs_path(@project) }
+  # Still a project read, but the action now redirects into the unified
+  # Sessions & Runs list instead of rendering — every role that could read the
+  # old list gets the redirect, and the ones that could not are still scoped out.
+  test "index is a project read that redirects to the unified list" do
+    assert_role_matrix(project_read_expectations, transport: :web, allowed_status: :redirect) do
+      get company_project_workflow_runs_path(@project)
+    end
   end
 
   test "show is a project read" do

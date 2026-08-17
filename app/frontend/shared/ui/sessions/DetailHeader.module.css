@@ -1,0 +1,217 @@
+/*
+ * The `.phead` pattern from the handoff — one header for run detail, session
+ * detail and both running views:
+ *
+ *   breadcrumb → title + status chip + #id → description → meta line → stats
+ *
+ * Runs used to show a "Created" date and no runtime logo while sessions showed
+ * neither breadcrumb nor stats; the same component now reads across all states
+ * and only the status differs.
+ */
+.head {
+  background: var(--app-bg-paper);
+  border-bottom: 1px solid var(--app-border-default);
+  padding: 20px 28px 18px;
+}
+
+.backRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.crumbs {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.crumb {
+  color: var(--app-text-tertiary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.12s;
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  padding: 0;
+}
+
+.crumb:hover {
+  color: var(--app-primary-strong);
+}
+
+.crumbCurrent {
+  color: var(--app-text-secondary);
+  cursor: default;
+  white-space: nowrap;
+}
+
+.crumbSep {
+  color: var(--app-text-tertiary);
+  flex: none;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--app-text-primary);
+  margin: 0;
+}
+
+.idx {
+  font-family: var(--app-font-mono);
+  font-size: 14px;
+  color: var(--app-text-tertiary);
+}
+
+.desc {
+  font-size: 13px;
+  color: var(--app-text-tertiary);
+  line-height: 1.55;
+  max-width: 760px;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.metaItem {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.metaItem + .metaItem::before {
+  content: '';
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--app-text-tertiary);
+  margin-right: 10px;
+}
+
+.metaKey {
+  color: var(--app-text-tertiary);
+}
+
+.metaValue {
+  font-weight: 500;
+  color: var(--app-text-primary);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(130px, 180px));
+  gap: 12px;
+  margin: 16px 0 0;
+}
+
+.stat {
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-card);
+  padding: 12px 15px;
+}
+
+.statKey {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+  margin-bottom: 5px;
+}
+
+.statValue {
+  font-family: var(--app-font-mono);
+  font-size: 15px;
+  color: var(--app-text-primary);
+}
+
+/* Dates and model chips are prose, not data — they leave the mono face. */
+.statValueSans {
+  font-family: var(--app-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tokenLine {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  flex-wrap: wrap;
+}
+
+.tokenLineKey {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+  margin-right: 4px;
+}
+
+.tokenLine b {
+  font-family: var(--app-font-mono);
+  font-weight: 500;
+  color: var(--app-text-primary);
+}
+
+.tokenLineSep {
+  color: var(--app-text-tertiary);
+}
+
+@media (max-width: 900px) {
+  .head {
+    padding: 16px 16px 14px;
+  }
+
+  .stats {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .title {
+    font-size: 19px;
+  }
+}

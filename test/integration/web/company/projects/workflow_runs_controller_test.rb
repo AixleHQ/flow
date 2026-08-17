@@ -11,11 +11,11 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     sign_in_as(@user)
   end
 
-  test "index renders workflow runs page" do
+  test "index redirects into the unified sessions and runs list" do
     create_list(:workflow_run, 2, workflow: @workflow, project: @project, user: @user)
 
     get company_project_workflow_runs_path(@project)
-    assert_inertia_page "Projects/WorkflowRuns/WorkflowRunsPage"
+    assert_redirected_to company_project_sessions_path(@project, type: "run")
   end
 
   test "show renders workflow run page" do
@@ -61,6 +61,42 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     assert_response :redirect
   end
 
+  test "approve_step targets the given step_run_id when a run has more than one active step" do
+    step_a = create(:step, workflow: @workflow, position: 1)
+    step_b = create(:step, workflow: @workflow, position: 2)
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
+    create(:step_run, workflow_run: run, step: step_a, state: "running")
+    second_step_run = create(:step_run, workflow_run: run, step: step_b, state: "waiting_input")
+
+    WorkflowService.expects(:approve_step).with(step_run: second_step_run)
+
+    post approve_step_company_project_workflow_run_path(@project, run), params: { step_run_id: second_step_run.id }
+    assert_response :redirect
+  end
+
+  test "skip_step targets the given step_run_id when a run has more than one active step" do
+    step_a = create(:step, workflow: @workflow, position: 1)
+    step_b = create(:step, workflow: @workflow, position: 2)
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
+    create(:step_run, workflow_run: run, step: step_a, state: "running")
+    second_step_run = create(:step_run, workflow_run: run, step: step_b, state: "waiting_input")
+
+    WorkflowService.expects(:skip_step).with(step_run: second_step_run, reason: "not needed")
+
+    post skip_step_company_project_workflow_run_path(@project, run),
+         params: { step_run_id: second_step_run.id, reason: "not needed" }
+    assert_response :redirect
+  end
+
+  test "retry_step 404s when step_run_id belongs to a different run" do
+    other_run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+    foreign_step_run = create(:step_run, :failed, workflow_run: other_run)
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
+
+    post retry_step_company_project_workflow_run_path(@project, run), params: { step_run_id: foreign_step_run.id }
+    assert_response :not_found
+  end
+
   test "skip_step redirects" do
     step = create(:step, workflow: @workflow, position: 1)
     run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
@@ -78,7 +114,7 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     sign_in_as(viewer)
 
     get company_project_workflow_runs_path(@project)
-    assert_inertia_page "Projects/WorkflowRuns/WorkflowRunsPage"
+    assert_redirected_to company_project_sessions_path(@project, type: "run")
 
     post company_project_workflow_runs_path(@project), params: {
       workflow_run: { workflow_id: @workflow.id, mode: "non_interactive" }

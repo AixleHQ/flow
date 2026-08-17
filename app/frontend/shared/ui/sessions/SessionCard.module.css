@@ -1,0 +1,252 @@
+/*
+ * `.sess-card` — one session inside a run, on both the finished run detail and
+ * the live running-run view. Collapsed it shows an excerpt; expanded it swaps
+ * the excerpt for prompt / steps / result / error sections.
+ *
+ * Terminology, per the handoff: units inside a run are Sessions (was "Steps");
+ * the checklist inside a session is Steps (was "Sub-steps").
+ */
+.card {
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-card);
+  padding: 18px 20px;
+  transition: border-color 0.12s;
+}
+
+.card:hover {
+  border-color: var(--app-border-strong);
+}
+
+.live {
+  border-color: var(--app-accent-muted);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.caret {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--app-text-tertiary);
+  flex: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.caret svg {
+  transition: transform 0.15s ease;
+}
+
+.caretOpen svg {
+  transform: rotate(90deg);
+}
+
+.stepNo {
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+}
+
+.title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text-primary);
+  min-width: 0;
+}
+
+/* Ghost/link tier — "Open session →". */
+.go {
+  margin-left: auto;
+  color: var(--app-primary-strong);
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-family: inherit;
+  text-decoration: none;
+}
+
+.go:hover {
+  text-decoration: underline;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--app-text-secondary);
+}
+
+.num {
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+}
+
+.dim {
+  color: var(--app-text-tertiary);
+}
+
+.excerpt {
+  font-size: 13px;
+  color: var(--app-text-secondary);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.expand {
+  margin-top: 16px;
+  border-top: 1px solid var(--app-border-default);
+  padding-top: 4px;
+}
+
+.section {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--app-border-default);
+}
+
+.section:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.sectionHead {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+  margin-bottom: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.sectionCount {
+  font-family: var(--app-font-mono);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.prompt {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--app-text-primary);
+  white-space: pre-wrap;
+}
+
+.note {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--app-text-secondary);
+  white-space: pre-wrap;
+}
+
+/* Step checklist rows. */
+.sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--app-border-default);
+}
+
+.sub:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.subIcon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.subLabel {
+  font-size: 13px;
+  color: var(--app-text-primary);
+  min-width: 0;
+}
+
+.subState {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 2px solid var(--app-warning-fg);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: sessionCardSpin 0.7s linear infinite;
+}
+
+.pendingRing {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  border: 2px solid var(--app-border-strong);
+  border-radius: 50%;
+}
+
+.errorBox {
+  border: 1px solid var(--app-danger-border);
+  background: var(--app-danger-bg);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--app-text-secondary);
+  white-space: pre-wrap;
+}
+
+@keyframes sessionCardSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}

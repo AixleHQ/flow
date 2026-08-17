@@ -1,234 +1,134 @@
-/* ── Workflow Run Show Page ─────────────────────── */
+/* ── Workflow run detail ────────────────────────────
+ *
+ * One layout for finished and running runs: the shared DetailHeader, the
+ * Sessions/Assets tabs, and a body that is either a stacked list of session
+ * cards or — while the run is live — that same list beside the console of the
+ * session currently producing output. The Assets tab replaces the whole area,
+ * so the console is hidden rather than left ticking beside a file list.
+ */
 
 .root {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 120px);
-  overflow: hidden;
+  min-height: 0;
 }
 
-/* ── Header ─────────────────────────────────────── */
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  /* wrap, not nowrap: with a fixed-width right group and a long workflow name,
-     the two sides used to draw on top of each other at narrow widths. */
-  flex-wrap: wrap;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--app-border-default);
-  background: var(--app-bg-paper);
-  flex-shrink: 0;
-  gap: 8px 12px;
+.body {
+  padding: 20px 28px 48px;
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
 }
 
-.headerLeft {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  min-width: 0;
-  flex: 1 1 240px;
+/* The live view needs the full width for its two columns. */
+.bodyWide {
+  max-width: none;
+  margin: 0;
 }
 
-.headerRight {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+.split {
+  display: grid;
+  grid-template-columns: minmax(340px, 440px) 1fr;
+  gap: 20px;
+  align-items: start;
 }
 
-.headerMeta {
+.list {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 12px;
 }
 
-@media (max-width: 640px) {
-  .header {
-    align-items: flex-start;
-  }
-
-  .headerRight {
-    flex-basis: 100%;
-  }
-}
-
-/* ── Content Area ──────────────────────────────── */
-
-.content {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-/* ── Steps Sidebar ─────────────────────────────── */
-
-.stepsSidebar {
-  width: 320px;
-  flex-shrink: 0;
-  border-right: 1px solid var(--app-border-default);
+.consoleStack {
+  position: sticky;
+  top: 20px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 16px;
 }
 
-.stepsHeader {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--app-border-default);
-  background: var(--app-bg-paper);
-  flex-shrink: 0;
+.console {
+  height: 520px;
 }
 
-.stepsList {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.stepItem {
-  padding: 10px 12px;
-  border-radius: var(--mantine-radius-sm);
-  cursor: pointer;
-  transition: background-color 0.15s;
-  border-left: 3px solid transparent;
-  margin-bottom: 2px;
-}
-
-.stepItem:hover {
-  background: var(--app-bg-elevated);
-}
-
-.stepItemActive {
-  background: var(--app-bg-elevated);
-}
-
-/* ── DAG Wave Connectors ───────────────────────── */
-
-.waveConnector {
+.paneHead {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px 4px 14px;
-  border-top: 1px dashed var(--app-border-default);
-  margin-top: 4px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
-.parallelLabel {
-  padding: 2px 12px 2px 42px;
-}
-
-.stepIcon {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--app-on-primary);
-  flex-shrink: 0;
+.paneCount {
   font-size: 12px;
+  color: var(--app-text-tertiary);
+  font-family: var(--app-font-mono);
 }
 
-.subStepRow {
+.assetRow {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-card);
 }
 
-.subStepDot {
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--app-on-primary);
-  font-size: 9px;
-  flex-shrink: 0;
+.assetRow + .assetRow {
+  margin-top: 10px;
 }
 
-/* ── Detail Panel (right) ──────────────────────── */
-
-.detailPanel {
+.assetMeta {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.detailContent {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 24px;
-}
-
-.detailEmpty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* ── Parallel Step Tabs ────────────────────────── */
-
-.parallelTabs {
-  display: flex;
-  border-bottom: 1px solid var(--app-border-default);
-  background: var(--app-bg-deep);
-  flex-shrink: 0;
-  overflow: hidden;
-}
-
-.parallelTab {
-  all: unset;
-  display: flex;
-  align-items: center;
-  padding: 8px 16px;
-  cursor: pointer;
-  border-right: 1px solid var(--app-border-default);
-  border-bottom: 2px solid transparent;
-  transition: background-color 0.15s, border-color 0.15s;
-  white-space: nowrap;
   min-width: 0;
 }
 
-.parallelTab:hover {
-  background: var(--app-bg-elevated);
-}
-
-.parallelTabActive {
-  background: var(--app-bg-paper);
-  border-bottom-color: var(--app-primary);
-}
-
-/* ── Step Info Bar ─────────────────────────────── */
-
-.stepInfoBar {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--app-border-default);
-  background: var(--app-bg-paper);
-  flex-shrink: 0;
-}
-
-/* ── Terminal Area ─────────────────────────────── */
-
-.terminalArea {
-  flex: 1;
-  position: relative;
-  /* xterm canvas: black by contract, not a themed surface. */
-  background: var(--app-terminal-bg);
+.assetName {
+  font-size: 13px;
+  color: var(--app-text-primary);
+  font-family: var(--app-font-mono);
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.terminalIframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  position: relative;
-  z-index: 1;
+.assetSub {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  margin-top: 1px;
+}
+
+.assetActions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--app-text-tertiary);
+  padding: 40px 4px;
+  text-align: center;
+}
+
+.actionBar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--app-accent-muted);
+  border-radius: 8px;
+  background: var(--app-action-selected);
+}
+
+.actionBarText {
+  font-size: 13px;
+  color: var(--app-text-primary);
+  margin-right: auto;
 }
 
 .terminalLoading {
@@ -240,112 +140,21 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.85);
+  background: var(--app-terminal-bg);
 }
 
-/* ── Step Detail Sections ──────────────────────── */
+@media (max-width: 1100px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
 
-.sectionLabel {
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  .console {
+    position: static;
+  }
 }
 
-.actionBar {
-  padding: 10px 16px;
-  border-top: 1px solid var(--app-border-default);
-  background: var(--app-bg-paper);
-  flex-shrink: 0;
-}
-
-/* ── Assets Tab ────────────────────────────────── */
-
-.assetsGrid {
-  display: grid;
-  gap: 8px;
-}
-
-.assetCard {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  border-radius: var(--mantine-radius-sm);
-  border: 1px solid var(--app-border-default);
-  transition: border-color 0.15s;
-}
-
-.assetCard:hover {
-  border-color: var(--mantine-color-brand-6);
-}
-
-/* ── Status Bar ────────────────────────────────── */
-
-.statusBar {
-  padding: 6px 16px;
-  border-top: 1px solid var(--app-border-default);
-  background: var(--app-bg-deep);
-  flex-shrink: 0;
-}
-
-/* ── Pulse Animation ───────────────────────────── */
-
-@keyframes wfRunPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.05); }
-}
-
-.pulse {
-  animation: wfRunPulse 2s ease-in-out infinite;
-}
-
-/* ── Live Indicator ────────────────────────────── */
-
-@keyframes liveBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-.liveDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--app-primary);
-  animation: liveBlink 1.5s ease-in-out infinite;
-  flex-shrink: 0;
-}
-
-/* ── Elapsed ───────────────────────────────────── */
-
-.elapsed {
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Completion Card ───────────────────────────── */
-
-.completedCenter {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 40px 24px;
-  overflow: auto;
-}
-
-.completedCard {
-  width: 100%;
-  max-width: 600px;
-}
-
-.tokenGrid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 16px;
-}
-
-.tokenTotal {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--app-border-subtle);
+@media (max-width: 900px) {
+  .body {
+    padding: 16px 16px 40px;
+  }
 }

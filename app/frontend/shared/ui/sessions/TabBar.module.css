@@ -1,0 +1,63 @@
+/* `.tab-bar` — flush with the bottom edge of the detail header. */
+.bar {
+  background: var(--app-bg-paper);
+  border-bottom: 1px solid var(--app-border-default);
+  display: flex;
+  padding: 0 28px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.bar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Inside the header the bar carries no background of its own. */
+.inline {
+  background: transparent;
+  margin: 16px -28px 0;
+}
+
+.tab {
+  padding: 9px 14px;
+  font-size: 14px;
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition:
+    color 0.12s,
+    border-color 0.12s;
+  user-select: none;
+  background: transparent;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--app-text-primary);
+}
+
+.active {
+  color: var(--app-primary-strong);
+  border-bottom-color: var(--app-primary);
+  font-weight: 500;
+}
+
+.count {
+  font-family: var(--app-font-mono);
+  font-size: 10px;
+  color: var(--app-text-tertiary);
+  margin-left: 4px;
+}
+
+@media (max-width: 900px) {
+  .bar {
+    padding: 0 16px;
+  }
+
+  .inline {
+    margin: 16px -16px 0;
+  }
+}

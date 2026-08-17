@@ -16,7 +16,6 @@ import {
   IconLayoutSidebar,
   IconLogout,
   IconMenu2,
-  IconPlayerPlay,
   IconPlug,
   IconPlugConnected,
   IconRobot,
@@ -50,7 +49,6 @@ import {
   companyProjectSettingsPath,
   companyProjectSkillsPath,
   companyProjectToolsPath,
-  companyProjectWorkflowRunsPath,
   companyProjectWorkflowsPath,
   companyProjectsPath,
   companySessionsPath,
@@ -108,8 +106,8 @@ const buildProjectNavGroups = (projectId: string): NavGroup[] => [
     items: [
       { label: 'Tasks', icon: <IconCheckbox size={18} />, path: companyProjectBoardPath(projectId) },
       { label: 'Workflows', icon: <IconGitMerge size={18} />, path: companyProjectWorkflowsPath(projectId) },
-      { label: 'Runs', icon: <IconPlayerPlay size={18} />, path: companyProjectWorkflowRunsPath(projectId) },
-      { label: 'Sessions', icon: <IconTerminal2 size={18} />, path: companyProjectSessionsPath(projectId) },
+      // One entry: agent sessions and workflow runs share a single list.
+      { label: 'Sessions & Runs', icon: <IconTerminal2 size={18} />, path: companyProjectSessionsPath(projectId) },
       { label: 'Assets', icon: <IconFiles size={18} />, path: companyProjectAssetsPath(projectId) },
     ],
   },

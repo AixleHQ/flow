@@ -1,4 +1,9 @@
-/* ── Session Show Content ──────────────────────── */
+/* ── Session detail ─────────────────────────────────
+ *
+ * Header (shared with runs) + the embedded workspace frame. The transcript card
+ * that used to sit under a second header is gone: a finished session now shows
+ * the same frame a running one does, read-only.
+ */
 
 .root {
   flex: 1;
@@ -9,33 +14,6 @@
   min-height: 0;
 }
 
-/* ── Header ─────────────────────────────────────── */
-
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--app-border-default);
-  background: var(--app-bg-paper);
-  flex-shrink: 0;
-  gap: 12px;
-}
-
-.headerLeft {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.headerRight {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
 .errorTruncated {
   max-width: 300px;
   overflow: hidden;
@@ -43,11 +21,38 @@
   white-space: nowrap;
 }
 
-/* ── Panels ─────────────────────────────────────── */
+/* ── Body ───────────────────────────────────────── */
 
-.panelContainer {
+.body {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 28px 28px;
+  overflow-y: auto;
+}
+
+/* A live session gets the whole viewport for its workspace; a finished one
+   scrolls, because the panels below it matter as much as the replay. */
+.bodyLive {
   overflow: hidden;
+  padding-bottom: 20px;
+}
+
+.frame {
+  min-height: 460px;
+}
+
+.frameLive {
+  flex: 1;
+  min-height: 0;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
 
 .panelFrame {
@@ -92,10 +97,10 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.85);
+  background: var(--app-terminal-bg);
 }
 
-/* ── Resize Handle ──────────────────────────────── */
+/* ── Resize handle ──────────────────────────────── */
 
 .resizeHandle {
   width: 6px;
@@ -110,7 +115,7 @@
 
 .resizeHandle:hover,
 .resizeHandle[data-resize-handle-active] {
-  background: var(--mantine-color-blue-6);
+  background: var(--app-primary);
 }
 
 .collapseBtn {
@@ -127,8 +132,6 @@
   opacity: 1;
 }
 
-/* ── Collapse Strip ─────────────────────────────── */
-
 .collapseStrip {
   display: flex;
   align-items: center;
@@ -136,63 +139,61 @@
   border-right: 1px solid var(--app-border-default);
 }
 
-/* ── Waiting / Completed States ─────────────────── */
+/* ── Panels below the frame (finished sessions) ─── */
 
-.centeredState {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 32px;
-  overflow: auto;
+.panel {
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-card);
+  padding: 20px 22px;
 }
 
-.completionCard {
-  width: 100%;
-  max-width: 560px;
+.panelTitle {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+  margin: 0 0 14px;
 }
 
-/* ── Summary Grid ───────────────────────────────── */
-
-.summaryRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
+.promptBody {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--app-text-secondary);
+  white-space: pre-wrap;
+  margin: 0;
 }
 
-.tokenGrid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 16px;
+.errorBox {
+  border: 1px solid var(--app-danger-border);
+  background: var(--app-danger-bg);
+  border-radius: 6px;
+  padding: 12px 14px;
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--app-text-secondary);
+  white-space: pre-wrap;
 }
-
-.tokenGridWide {
-  grid-template-columns: auto 1fr 20px auto 1fr;
-}
-
-.tokenTotal {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--app-border-subtle);
-}
-
-/* ── Elapsed Timer ──────────────────────────────── */
 
 .elapsed {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Finishing Overlay ──────────────────────────── */
-
 .finishingOverlay {
   position: fixed;
   inset: 0;
   z-index: 400;
-  background: rgba(0, 0, 0, 0.7);
+  background: var(--app-bg-default);
+  opacity: 0.94;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+@media (max-width: 900px) {
+  .body {
+    padding: 16px 16px 24px;
+  }
 }

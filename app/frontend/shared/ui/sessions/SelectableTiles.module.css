@@ -1,0 +1,142 @@
+/*
+ * The two selectable tile shapes both create drawers use, in the same order:
+ * Agent runtime (`.rt`) then Execution mode (`.mode-opt`). New Session and Run
+ * Workflow used to disagree about both the control and the ordering, so the
+ * two flows read as unrelated features.
+ */
+
+.section {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--app-text-secondary);
+  margin: 22px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--app-border-default);
+}
+
+.sectionFirst {
+  margin-top: 0;
+}
+
+.sectionIcon {
+  color: var(--app-primary-strong);
+  display: flex;
+}
+
+/* ── Runtime tiles ── */
+.runtimeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.runtime {
+  position: relative;
+  border: 1px solid var(--app-border-default);
+  border-radius: 6px;
+  background: var(--app-bg-card);
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background-color 0.12s;
+  width: 100%;
+  font-family: inherit;
+}
+
+.runtime:hover:not(.disabled) {
+  border-color: var(--app-border-strong);
+}
+
+.runtimeSelected {
+  border-color: var(--app-primary);
+  background: var(--app-action-selected);
+}
+
+.runtimeName {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--app-text-primary);
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.setup {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--app-warning-fg);
+  flex: none;
+}
+
+.tick {
+  color: var(--app-primary-strong);
+  flex: none;
+  display: flex;
+}
+
+/* ── Mode cards ── */
+.modeGrid {
+  display: grid;
+  gap: 8px;
+}
+
+.mode {
+  position: relative;
+  border: 1px solid var(--app-border-default);
+  border-radius: 6px;
+  background: var(--app-bg-card);
+  padding: 11px 12px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background-color 0.12s;
+  font-family: inherit;
+  width: 100%;
+}
+
+.mode:hover {
+  border-color: var(--app-border-strong);
+}
+
+.modeSelected {
+  border-color: var(--app-primary);
+  background: var(--app-action-selected);
+}
+
+.modeTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text-primary);
+}
+
+.modeDesc {
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+  margin-top: 2px;
+}
+
+.modeTick {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  color: var(--app-primary-strong);
+  display: flex;
+}

@@ -1,276 +1,128 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import {
-  ActionIcon,
-  Alert,
-  Anchor,
-  Badge,
-  Box,
-  Button,
-  Card,
-  Group,
-  Loader,
-  Modal,
-  Progress,
-  ScrollArea,
-  Stack,
-  Text,
-  Textarea,
-  TextInput,
-  Tooltip,
-} from '@mantine/core';
-import {
-  IconAlertTriangle,
-  IconArrowLeft,
-  IconArrowRight,
-  IconCheck,
-  IconChevronRight,
-  IconClock,
-  IconDownload,
-  IconPlayerPlay,
-  IconPlayerStop,
-  IconTerminal2,
-  IconUpload,
-  IconX,
-} from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Anchor, Button, Group, Loader, Modal, Stack, Text, Textarea, TextInput } from '@mantine/core';
+import { IconAlertTriangle, IconDownload, IconFile, IconPlayerStop, IconUpload } from '@tabler/icons-react';
+import { formatDistanceToNow } from 'date-fns';
+import { useCallback, useMemo, useState } from 'react';
+
+import type StepRun from 'types/generated/StepRun';
+import type WorkflowRun from 'types/generated/WorkflowRun';
+import type WorkflowRunAsset from 'types/generated/WorkflowRunAsset';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
 import {
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
 } from 'shared/routes';
-import { StatusBadge } from 'shared/ui/StatusBadge';
+import { ConsoleFrame, DetailHeader, SessionCard, TabBar, type SessionCardData } from 'shared/ui/sessions';
 
-import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
+import { persistentProjectLayoutNoPadding, setPageLayout } from '../ProjectLayout';
 
 import classes from './ShowPage.module.css';
 
 // ── Types ──────────────────────────────────────────
 
-interface SubStepRun {
-  id: number;
-  state: string;
-  subStepName: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-}
-
-interface PastFailure {
-  errorMessage: string | null;
-  failedAt: string | null;
-}
-
-interface StepRun {
-  id: number;
-  stepId: number;
-  stepName: string | null;
-  stepPosition: number | null;
-  state: string;
-  stepNote: string | null;
-  errorMessage: string | null;
-  errorCategory: string | null;
-  terminalSessionId: number | null;
-  terminalSessionState: string | null;
-  allowNonInteractive: boolean;
-  startedAt: string | null;
-  completedAt: string | null;
-  terminalUrl: string | null;
-  ideUrl: string | null;
-  dependsOnStepIds: number[];
-  dependsOnNames: string[];
-  subStepRuns: SubStepRun[];
-  pastFailures?: PastFailure[];
-}
-
-interface WorkflowRunAsset {
-  id: number;
-  name: string;
-  contentType: string | null;
-  fileSize: number | null;
-  stepName: string | null;
-  downloadUrl: string | null;
-}
-
-interface WorkflowRun {
-  id: number;
-  workflowId: number;
-  workflowName: string;
-  state: string;
-  mode: string;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
-  stepsCompleted: number;
-  stepsTotal: number;
-  stepRuns: StepRun[];
-  agentType: string | null;
-  userName: string | null;
-  costCents: number;
-  failureReason: string | null;
-  failedAccountName: string | null;
-}
-
-interface Project {
-  id: number;
-  name: string;
-}
-
 interface Props {
-  project: Project;
+  project: { id: number; name: string };
   run: WorkflowRun;
   assets: WorkflowRunAsset[];
   cableStream: string;
 }
 
-// ── Constants ──────────────────────────────────────
-
-const STATE_COLORS: Record<string, string> = {
-  pending: 'gray',
-  running: 'blue',
-  in_progress: 'cyan',
-  completed: 'green',
-  failed: 'red',
-  cancelled: 'gray',
-  paused: 'yellow',
-  waiting_input: 'orange',
-  skipped: 'gray',
-};
-
 const ACTIVE_STATES = new Set(['pending', 'running', 'paused', 'waiting_input']);
 
-const MODE_LABELS: Record<string, string> = {
-  interactive: 'Interactive',
-  non_interactive: 'Auto-run',
-  mixed: 'Custom',
+const RUN_STATE_LABELS: Record<string, string> = {
+  completed: 'Completed',
+  running: 'Running',
+  paused: 'Paused',
+  failed: 'Failed',
+  cancelled: 'Cancelled',
+  pending: 'Pending',
 };
 
-// ── Helpers ────────────────────────────────────────
-
-function subStepLabel(ss: SubStepRun, fallback: string): string {
-  return ss.subStepName || fallback;
+/** Sessions inside a run are numbered; their checklist items are the steps. */
+function toCardData(stepRun: StepRun, index: number): SessionCardData {
+  return {
+    id: stepRun.id,
+    ordinal: `Session ${index + 1}`,
+    title: stepRun.stepName ?? `Step ${stepRun.stepPosition ?? index + 1}`,
+    state: stepRun.state,
+    terminalSessionId: stepRun.terminalSessionId,
+    agentType: stepRun.agentType ?? null,
+    totalTokens: stepRun.totalTokens,
+    costCents: stepRun.costCents,
+    startedAt: stepRun.startedAt,
+    completedAt: stepRun.completedAt,
+    excerpt: stepRun.stepNote ?? stepRun.initialPrompt ?? null,
+    prompt: stepRun.initialPrompt ?? null,
+    note: stepRun.stepNote,
+    errorMessage: stepRun.errorMessage,
+    steps: stepRun.subStepRuns.map((ss) => ({
+      id: ss.id,
+      label: ss.subStepName ?? `Step #${ss.id}`,
+      state: ss.state ?? 'pending',
+    })),
+  };
 }
 
-function stepIcon(state: string) {
-  if (state === 'completed') return <IconCheck size={14} />;
-  if (state === 'failed') return <IconX size={14} />;
-  if (state === 'running') return <IconPlayerPlay size={14} />;
-  if (state === 'waiting_input') return <IconClock size={14} />;
-  return <IconClock size={14} />;
-}
-
-function formatDuration(startedAt: string | null, completedAt: string | null): string {
-  if (!startedAt) return '—';
-  const start = new Date(startedAt);
-  const end = completedAt ? new Date(completedAt) : new Date();
-  const seconds = Math.round((end.getTime() - start.getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-}
-
-function formatFileSize(bytes: number | null): string {
-  if (!bytes) return '—';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatCost(cents: number): string {
-  if (!cents || cents === 0) return '—';
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-// ── DAG Waves ──────────────────────────────────────
-
-interface Wave {
-  label: string;
-  steps: StepRun[];
-}
-
-function computeWaves(steps: StepRun[]): Wave[] {
-  const assigned = new Map<number, number>();
-  const waves: Wave[] = [];
-  let remaining = [...steps];
-
-  while (remaining.length > 0) {
-    const waveIndex = waves.length;
-    const currentWave: StepRun[] = [];
-
-    for (const step of remaining) {
-      const deps = step.dependsOnStepIds ?? [];
-      const allDepsAssigned = deps.every((depId) => assigned.has(depId) && assigned.get(depId)! < waveIndex);
-      if (allDepsAssigned) currentWave.push(step);
-    }
-
-    if (currentWave.length === 0) {
-      waves.push({ label: 'Remaining', steps: remaining });
-      break;
-    }
-
-    for (const step of currentWave) assigned.set(step.stepId, waveIndex);
-
-    const label =
-      waveIndex === 0
-        ? currentWave.length > 1
-          ? 'Parallel start'
-          : 'Start'
-        : `After ${[...new Set(currentWave.flatMap((s) => s.dependsOnNames))].join(', ')}`;
-
-    waves.push({ label, steps: currentWave });
-    remaining = remaining.filter((s) => !assigned.has(s.stepId));
-  }
-
-  return waves;
-}
-
-// ── Live Duration ──────────────────────────────────
-
-function LiveDuration({ startedAt }: { startedAt: string }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const seconds = Math.max(0, Math.round((now - new Date(startedAt).getTime()) / 1000));
-  const text =
-    seconds < 60
-      ? `${seconds}s`
-      : seconds < 3600
-        ? `${Math.floor(seconds / 60)}m ${seconds % 60}s`
-        : `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+/** One live step's terminal — tracks its own "connecting…" state so several can load independently. */
+function StepConsole({ step, label }: { step: StepRun; label: string }) {
+  const [termLoaded, setTermLoaded] = useState(false);
 
   return (
-    <Text size="xs" c="brand" ff="monospace" className={classes.elapsed}>
-      {text}
-    </Text>
+    <ConsoleFrame className={classes.console} label={label} live>
+      {step.terminalUrl ? (
+        <>
+          {!termLoaded && (
+            <div className={classes.terminalLoading}>
+              <Loader size="md" />
+              <Text size="sm" c="dimmed">
+                Connecting to terminal…
+              </Text>
+            </div>
+          )}
+          <iframe
+            key={step.terminalUrl}
+            src={step.terminalUrl}
+            title="Terminal"
+            allow="clipboard-read; clipboard-write"
+            onLoad={() => setTermLoaded(true)}
+          />
+        </>
+      ) : (
+        <div className={classes.terminalLoading}>
+          <Loader size="md" />
+          <Text size="sm" c="dimmed">
+            Session starting…
+          </Text>
+        </div>
+      )}
+    </ConsoleFrame>
   );
 }
-
-// ── Main Component ─────────────────────────────────
 
 const WorkflowRunShowPage = () => {
   const { project, run, assets, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
 
   const isActive = ACTIVE_STATES.has(run.state);
   const isTerminal = run.state === 'completed' || run.state === 'failed' || run.state === 'cancelled';
+  const now = useElapsedTimer(isActive);
 
-  const [selectedStepId, setSelectedStepId] = useState<number | null>(null);
-  const [view, setView] = useState<'steps' | 'assets'>('steps');
-  const [skipOpen, setSkipOpen] = useState(false);
+  const [tab, setTab] = useState<'sessions' | 'assets'>('sessions');
+  const [skipStepId, setSkipStepId] = useState<number | null>(null);
   const [skipReason, setSkipReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
   const [promoteOpen, setPromoteOpen] = useState<{ assetId: number | null; name: string } | null>(null);
   const [promoteFolder, setPromoteFolder] = useState('');
   const [promoteLoading, setPromoteLoading] = useState(false);
 
-  useInertiaCableStream(cableStream, {
-    only: ['run', 'assets'],
-    enabled: !isTerminal,
-  });
+  useInertiaCableStream(cableStream, { only: ['run', 'assets'], enabled: !isTerminal });
 
   const basePath = `/company/projects/${project.id}`;
+  const workflowName = run.workflowName ?? 'Workflow run';
   const runPath = `${basePath}/workflow_runs/${run.id}`;
 
   const sortedSteps = useMemo(
@@ -278,95 +130,21 @@ const WorkflowRunShowPage = () => {
     [run.stepRuns],
   );
 
-  const selectedStep = useMemo(
-    () => sortedSteps.find((s) => s.id === selectedStepId) ?? null,
-    [sortedSteps, selectedStepId],
-  );
-
-  const activeSteps = useMemo(
+  // A DAG run can have several steps producing output or waiting on approval
+  // at once — every one of them gets its own console and action bar, not just
+  // whichever the old single-"current step" model happened to pick.
+  const liveSteps = useMemo(
     () => sortedSteps.filter((s) => s.state === 'running' || s.state === 'waiting_input'),
     [sortedSteps],
   );
 
-  const waves = useMemo(() => computeWaves(sortedSteps), [sortedSteps]);
-  const hasDag = waves.length > 1 || waves.some((w) => w.steps.length > 1);
+  const failedSteps = useMemo(() => sortedSteps.filter((s) => s.state === 'failed'), [sortedSteps]);
+  const failedStep = failedSteps[0] ?? null;
 
-  const progressPct = run.stepsTotal > 0 ? (run.stepsCompleted / run.stepsTotal) * 100 : 0;
-
-  // Auto-select: pick first active step on mount, or when no step is selected
-  useEffect(() => {
-    if (selectedStepId && sortedSteps.some((s) => s.id === selectedStepId)) return;
-    const active = sortedSteps.find((s) => s.state === 'running' || s.state === 'waiting_input');
-    setSelectedStepId(active?.id ?? sortedSteps[0]?.id ?? null);
-  }, [sortedSteps]);
-
-  // ── Actions ────────────────────────────────────
-
-  const handleCancel = useCallback(() => {
+  const post = useCallback((path: string, data: Parameters<typeof router.post>[1] = {}) => {
     setActionLoading(true);
-    router.post(
-      `${runPath}/cancel`,
-      {},
-      {
-        preserveScroll: true,
-        onFinish: () => setActionLoading(false),
-      },
-    );
-  }, [runPath]);
-
-  const handleApprove = useCallback(() => {
-    setActionLoading(true);
-    router.post(
-      `${runPath}/approve_step`,
-      {},
-      {
-        preserveScroll: true,
-        onFinish: () => setActionLoading(false),
-      },
-    );
-  }, [runPath]);
-
-  const handleSkip = useCallback(() => {
-    setActionLoading(true);
-    router.post(
-      `${runPath}/skip_step`,
-      { reason: skipReason || null },
-      {
-        preserveScroll: true,
-        onFinish: () => {
-          setActionLoading(false);
-          setSkipOpen(false);
-          setSkipReason('');
-        },
-      },
-    );
-  }, [runPath, skipReason]);
-
-  const handleRetry = useCallback(() => {
-    setActionLoading(true);
-    router.post(
-      `${runPath}/retry_step`,
-      {},
-      {
-        preserveScroll: true,
-        onFinish: () => setActionLoading(false),
-      },
-    );
-  }, [runPath]);
-
-  const handleRerun = useCallback(() => {
-    setActionLoading(true);
-    router.post(
-      `${basePath}/workflow_runs`,
-      {
-        workflowRun: {
-          workflowId: run.workflowId,
-          mode: run.mode,
-        },
-      },
-      { onFinish: () => setActionLoading(false) },
-    );
-  }, [basePath, run.workflowId, run.mode]);
+    router.post(path, data, { preserveScroll: true, onFinish: () => setActionLoading(false) });
+  }, []);
 
   const handleFinishSession = useCallback(async (sessionId: number) => {
     setActionLoading(true);
@@ -398,482 +176,120 @@ const WorkflowRunShowPage = () => {
     }
   }, [project.id, run.id, promoteOpen, promoteFolder]);
 
-  const stepIsInteractive = run.mode === 'interactive' || (run.mode === 'mixed' && !selectedStep?.allowNonInteractive);
-  const canFinishSession = selectedStep?.state === 'running' && selectedStep.terminalSessionId && stepIsInteractive;
+  const stepIsInteractive = useCallback(
+    (step: StepRun) => run.mode === 'interactive' || (run.mode === 'mixed' && !step.allowNonInteractive),
+    [run.mode],
+  );
+  const canFinishSession = useCallback(
+    (step: StepRun) => step.state === 'running' && !!step.terminalSessionId && stepIsInteractive(step),
+    [stepIsInteractive],
+  );
 
-  // Group assets by step
-  const assetsByStep = useMemo(() => {
-    const map: Record<string, WorkflowRunAsset[]> = {};
-    for (const a of assets) {
-      const key = a.stepName ?? 'Unknown Step';
-      (map[key] ??= []).push(a);
-    }
-    return map;
-  }, [assets]);
+  // Failed runs swap "Started" for where they stopped — the one fact you open a
+  // failed run to learn.
+  const stats = [
+    { label: 'Sessions', value: `${run.stepsCompleted}/${run.stepsTotal}` },
+    { label: 'Duration', value: formatDuration(run.startedAt, run.completedAt, run.state, now) },
+    { label: 'Cost', value: formatCost(run.costCents), color: costColor(run.costCents) },
+    run.state === 'failed' && failedStep
+      ? {
+          label: 'Failed at',
+          value:
+            failedSteps.length > 1
+              ? `${failedSteps.length} steps`
+              : `${failedStep.stepName ?? `Step ${failedStep.stepPosition}`}`,
+          sans: true,
+        }
+      : {
+          label: 'Started',
+          value: formatDistanceToNow(new Date(run.startedAt ?? run.createdAt), { addSuffix: true }),
+          sans: true,
+        },
+  ];
 
-  // ── Render ─────────────────────────────────────
+  const liveStepIds = useMemo(() => new Set(liveSteps.map((s) => s.id)), [liveSteps]);
 
-  const renderStepItem = (step: StepRun) => {
-    const isSelected = step.id === selectedStepId;
-    const color = STATE_COLORS[step.state] ?? 'gray';
+  const sessionCards = sortedSteps.map((step, i) => (
+    <SessionCard
+      key={step.id}
+      data={toCardData(step, i)}
+      live={isActive && liveStepIds.has(step.id)}
+      defaultOpen={isActive ? liveStepIds.has(step.id) : step.state === 'failed'}
+      sessionHref={step.terminalSessionId ? `${basePath}/sessions/${step.terminalSessionId}` : null}
+    />
+  ));
+
+  const renderConsoles = () => {
+    if (liveSteps.length === 0) return null;
 
     return (
-      <Box key={step.id}>
-        <div
-          className={`${classes.stepItem} ${isSelected ? classes.stepItemActive : ''}`}
-          style={{ borderLeftColor: `var(--mantine-color-${color}-6)` }}
-          onClick={() => setSelectedStepId(step.id)}
-        >
-          <Group gap="sm" wrap="nowrap">
-            <div className={classes.stepIcon} style={{ backgroundColor: `var(--mantine-color-${color}-6)` }}>
-              {stepIcon(step.state)}
-            </div>
-            <Box style={{ flex: 1, minWidth: 0 }}>
-              <Group gap="xs" wrap="nowrap">
-                <Text size="sm" fw={500} truncate>
-                  {step.stepName ?? `Step ${step.stepPosition}`}
-                </Text>
-                <Badge
-                  size="xs"
-                  color={color}
-                  variant="outline"
-                  className={step.state === 'running' ? classes.pulse : undefined}
-                >
-                  {step.state}
-                </Badge>
-                {(step.pastFailures?.length ?? 0) > 0 && (
-                  <Tooltip label={`${step.pastFailures!.length} past failure(s)`}>
-                    <Badge size="xs" color="red" variant="filled" style={{ minWidth: 18, padding: '0 4px' }}>
-                      {step.pastFailures!.length}
-                    </Badge>
-                  </Tooltip>
-                )}
-              </Group>
-              {step.state === 'running' && step.startedAt ? (
-                <LiveDuration startedAt={step.startedAt} />
-              ) : step.startedAt ? (
-                <Text size="xs" c="dimmed" ff="monospace">
-                  {formatDuration(step.startedAt, step.completedAt)}
-                </Text>
-              ) : null}
-              {step.state === 'pending' && step.dependsOnNames.length > 0 && (
-                <Text size="xs" c="dimmed">
-                  waits for {step.dependsOnNames.join(', ')}
-                </Text>
-              )}
-            </Box>
-            {step.terminalSessionId && (
-              <Tooltip label={`Open session #${step.terminalSessionId}`}>
-                <ActionIcon
-                  variant="subtle"
-                  size="xs"
-                  onClick={(e: React.MouseEvent) => {
-                    e.stopPropagation();
-                    router.visit(`${basePath}/sessions/${step.terminalSessionId}`);
-                  }}
-                >
-                  <IconChevronRight size={14} />
-                </ActionIcon>
-              </Tooltip>
-            )}
-          </Group>
-
-          {step.subStepRuns.length > 0 && (
-            <Group gap={4} mt={6} ml={36} wrap="wrap">
-              {step.subStepRuns.map((ss) => (
-                <StatusBadge
-                  key={ss.id}
-                  size="xs"
-                  state={ss.state}
-                  className={ss.state === 'in_progress' ? classes.pulse : undefined}
-                >
-                  {subStepLabel(ss, `#${ss.id}`)}
-                </StatusBadge>
-              ))}
-            </Group>
-          )}
-
-          {step.errorMessage && (
-            <Text size="xs" c="var(--app-danger-fg)" mt={4} ml={36} lineClamp={2}>
-              {step.errorMessage}
-            </Text>
-          )}
-        </div>
-      </Box>
+      <div className={classes.consoleStack}>
+        {liveSteps.map((step) => (
+          <StepConsole
+            key={step.id}
+            step={step}
+            label={`Session ${sortedSteps.indexOf(step) + 1} · ${step.stepName ?? 'Step'}`}
+          />
+        ))}
+      </div>
     );
   };
 
-  const [termLoaded, setTermLoaded] = useState(false);
-
-  // Reset terminal loaded state when selected step changes
-  useEffect(() => {
-    setTermLoaded(false);
-  }, [selectedStepId]);
-
-  const sessionState = selectedStep?.terminalSessionState;
-  const sessionReady = sessionState === 'ready';
-  const sessionStarting = sessionState === 'not_started' || sessionState === 'running';
-  const sessionFinished = sessionState === 'finished' || sessionState === 'failed';
-  const hasTerminal = selectedStep?.terminalUrl != null && sessionReady;
-
-  const renderStepDetail = () => {
-    if (!selectedStep) {
-      return (
-        <div className={classes.detailEmpty}>
-          <Stack align="center" gap="sm">
-            <Text size="lg" c="dimmed">
-              {sortedSteps.length === 0 ? 'No steps yet' : 'Select a step'}
-            </Text>
-          </Stack>
-        </div>
-      );
+  const renderAssets = () => {
+    if (assets.length === 0) {
+      return <div className={classes.empty}>No assets yet — they&apos;ll appear here as sessions produce them.</div>;
     }
-
-    const color = STATE_COLORS[selectedStep.state] ?? 'gray';
-    const stepIsRunning = selectedStep.state === 'running';
 
     return (
       <>
-        {/* Parallel active steps tabs — only when multiple steps are active */}
-        {activeSteps.length > 1 && (
-          <div className={classes.parallelTabs}>
-            <ScrollArea type="never" offsetScrollbars={false}>
-              <Group gap={0} wrap="nowrap">
-                {activeSteps.map((as) => {
-                  const isCurrent = as.id === selectedStepId;
-                  const asColor = STATE_COLORS[as.state] ?? 'gray';
-                  return (
-                    <button
-                      key={as.id}
-                      type="button"
-                      className={`${classes.parallelTab} ${isCurrent ? classes.parallelTabActive : ''}`}
-                      onClick={() => setSelectedStepId(as.id)}
-                    >
-                      <Group gap={6} wrap="nowrap">
-                        <div className={classes.liveDot} />
-                        <Text size="xs" fw={isCurrent ? 600 : 400} truncate>
-                          {as.stepName ?? `Step ${as.stepPosition}`}
-                        </Text>
-                        <Badge size="xs" color={asColor} variant="outline" className={classes.pulse}>
-                          {as.state}
-                        </Badge>
-                        {as.startedAt && <LiveDuration startedAt={as.startedAt} />}
-                      </Group>
-                    </button>
-                  );
-                })}
-              </Group>
-            </ScrollArea>
-          </div>
-        )}
-
-        {/* Step info bar */}
-        <div className={classes.stepInfoBar}>
-          <Group justify="space-between" wrap="nowrap">
-            <Group gap="sm" wrap="nowrap" style={{ minWidth: 0 }}>
-              <Text fw={600} size="sm" truncate>
-                {selectedStep.stepName ?? `Step ${selectedStep.stepPosition}`}
-              </Text>
-              <Badge color={color} size="sm" variant="light" className={stepIsRunning ? classes.pulse : undefined}>
-                {selectedStep.state}
-              </Badge>
-              {stepIsRunning && selectedStep.startedAt && (
-                <Group gap={6} wrap="nowrap">
-                  <div className={classes.liveDot} />
-                  <LiveDuration startedAt={selectedStep.startedAt} />
-                </Group>
-              )}
-              {!stepIsRunning && selectedStep.startedAt && (
-                <Text size="xs" c="dimmed" ff="monospace">
-                  {formatDuration(selectedStep.startedAt, selectedStep.completedAt)}
-                </Text>
-              )}
-            </Group>
-            <Group gap="xs" wrap="nowrap" />
-          </Group>
-
-          {/* Dependency info for pending steps */}
-          {selectedStep.dependsOnNames.length > 0 && selectedStep.state === 'pending' && (
-            <Group gap={4} mt={4}>
-              <Text size="xs" c="dimmed">
-                Waiting for:
-              </Text>
-              {selectedStep.dependsOnNames.map((name) => (
-                <Badge key={name} size="xs" variant="outline" color="yellow">
-                  {name}
-                </Badge>
-              ))}
-            </Group>
-          )}
+        <div className={classes.paneHead}>
+          <span className={classes.paneCount}>
+            {assets.length} {assets.length === 1 ? 'file' : 'files'}
+          </span>
+          <Button
+            size="xs"
+            variant="light"
+            leftSection={<IconUpload size={14} />}
+            onClick={() => setPromoteOpen({ assetId: null, name: 'All artifacts' })}
+          >
+            Promote all to project
+          </Button>
         </div>
-
-        {/* Terminal / IDE area for running steps */}
-        {hasTerminal ? (
-          <div className={classes.terminalArea}>
-            {!termLoaded && (
-              <div className={classes.terminalLoading}>
-                <Loader size="md" />
-                <Text size="sm" c="dimmed">
-                  Connecting to terminal...
-                </Text>
+        {assets.map((asset) => (
+          <div className={classes.assetRow} key={asset.id}>
+            <IconFile size={17} color="var(--app-text-tertiary)" />
+            <div className={classes.assetMeta}>
+              <div className={classes.assetName}>{asset.name}</div>
+              <div className={classes.assetSub}>
+                {asset.contentType ?? 'unknown type'}
+                {asset.fileSize ? ` · ${formatFileSize(asset.fileSize)}` : ''}
+                {asset.stepName ? ` · ${asset.stepName}` : ''}
               </div>
-            )}
-            <iframe
-              key={selectedStep.terminalUrl}
-              src={selectedStep.terminalUrl!}
-              title="Terminal"
-              allow="clipboard-read; clipboard-write"
-              className={classes.terminalIframe}
-              onLoad={() => setTermLoaded(true)}
-            />
-          </div>
-        ) : sessionStarting && stepIsRunning ? (
-          <div className={classes.terminalArea}>
-            <div className={classes.terminalLoading}>
-              <Loader size="md" />
-              <Text size="sm" c="dimmed">
-                Session starting...
-              </Text>
-              <Badge size="sm" variant="outline" color="blue">
-                {sessionState}
-              </Badge>
+            </div>
+            <div className={classes.assetActions}>
+              {asset.downloadUrl && (
+                <Button
+                  size="xs"
+                  variant="default"
+                  component="a"
+                  href={asset.downloadUrl}
+                  target="_blank"
+                  leftSection={<IconDownload size={12} />}
+                >
+                  Download
+                </Button>
+              )}
+              <Button
+                size="xs"
+                variant="default"
+                onClick={() => setPromoteOpen({ assetId: asset.id, name: asset.name })}
+              >
+                Promote
+              </Button>
             </div>
           </div>
-        ) : (
-          <div className={classes.detailContent}>
-            <Stack gap="lg">
-              {/* Session finished banner */}
-              {sessionFinished && selectedStep.terminalSessionId && (
-                <Card withBorder p="sm" bg="var(--app-bg-elevated)">
-                  <Group justify="space-between">
-                    <Group gap="sm">
-                      <IconTerminal2 size={18} style={{ opacity: 0.5 }} />
-                      <Text size="sm" fw={500}>
-                        Session #{selectedStep.terminalSessionId} finished
-                      </Text>
-                      <Badge size="xs" color={sessionState === 'failed' ? 'red' : 'green'} variant="outline">
-                        {sessionState}
-                      </Badge>
-                    </Group>
-                    <Button
-                      variant="subtle"
-                      size="xs"
-                      rightSection={<IconChevronRight size={14} />}
-                      onClick={() => router.visit(`${basePath}/sessions/${selectedStep.terminalSessionId}`)}
-                    >
-                      View Session
-                    </Button>
-                  </Group>
-                </Card>
-              )}
-
-              {/* Note */}
-              {selectedStep.stepNote && (
-                <Box>
-                  <Text size="xs" fw={600} c="dimmed" className={classes.sectionLabel} mb={4}>
-                    Note
-                  </Text>
-                  <Text size="sm" style={{ fontStyle: 'italic', whiteSpace: 'pre-wrap' }}>
-                    {selectedStep.stepNote}
-                  </Text>
-                </Box>
-              )}
-
-              {/* Sub-steps detail */}
-              {selectedStep.subStepRuns.length > 0 && (
-                <Box>
-                  <Text size="xs" fw={600} c="dimmed" className={classes.sectionLabel} mb={8}>
-                    Sub-steps ({selectedStep.subStepRuns.filter((s) => s.state === 'completed').length}/
-                    {selectedStep.subStepRuns.length})
-                  </Text>
-                  <Stack gap={6}>
-                    {selectedStep.subStepRuns.map((ss) => (
-                      <div key={ss.id} className={classes.subStepRow}>
-                        <div
-                          className={classes.subStepDot}
-                          style={{ backgroundColor: `var(--mantine-color-${STATE_COLORS[ss.state] ?? 'gray'}-6)` }}
-                        >
-                          {ss.state === 'completed' ? '✓' : ss.state === 'in_progress' ? '●' : '·'}
-                        </div>
-                        <Text size="sm" style={{ flex: 1 }}>
-                          {subStepLabel(ss, `Sub-step #${ss.id}`)}
-                        </Text>
-                        {ss.startedAt && (
-                          <Text size="xs" c="dimmed" ff="monospace">
-                            {formatDuration(ss.startedAt, ss.completedAt)}
-                          </Text>
-                        )}
-                      </div>
-                    ))}
-                  </Stack>
-                </Box>
-              )}
-
-              {/* Past failures */}
-              {(selectedStep.pastFailures?.length ?? 0) > 0 && (
-                <Box>
-                  <Text size="xs" fw={600} c="var(--app-danger-fg)" className={classes.sectionLabel} mb={4}>
-                    Past Failures ({selectedStep.pastFailures!.length})
-                  </Text>
-                  <Stack gap={4}>
-                    {selectedStep.pastFailures!.map((f, i) => (
-                      <Text key={i} size="xs" c="var(--app-danger-fg)">
-                        {f.errorMessage ?? 'Unknown error'}
-                      </Text>
-                    ))}
-                  </Stack>
-                </Box>
-              )}
-
-              {/* Error */}
-              {selectedStep.errorMessage && selectedStep.state === 'failed' && (
-                <Card withBorder p="sm" bg="var(--mantine-color-red-light)">
-                  <Text size="xs" fw={600} c="var(--app-danger-fg)" mb={4}>
-                    Step Failed
-                  </Text>
-                  <Text size="sm" c="var(--app-danger-fg)" style={{ whiteSpace: 'pre-wrap' }}>
-                    {selectedStep.errorMessage}
-                  </Text>
-                </Card>
-              )}
-
-              {/* Waiting state */}
-              {selectedStep.state === 'pending' && (
-                <Stack align="center" gap="sm" py="xl">
-                  <IconTerminal2 size={32} style={{ opacity: 0.3 }} />
-                  <Text size="sm" c="dimmed">
-                    Waiting to start...
-                  </Text>
-                </Stack>
-              )}
-            </Stack>
-          </div>
-        )}
-
-        {/* Action bar */}
-        {isActive &&
-          (canFinishSession || selectedStep.state === 'waiting_input' || selectedStep.state === 'failed') && (
-            <div className={classes.actionBar}>
-              {/* Approving a gate is the one irreversible human decision in a
-                  run. It used to be an `xs` button in a row of four equally
-                  weighted `xs` buttons, with Skip as easy to hit as Approve.
-                  Approve is now the only filled, full-size action; the escape
-                  hatches are subtle and pushed to the right. */}
-              <Group gap="sm" justify="space-between" wrap="wrap">
-                <Group gap="sm">
-                  {selectedStep.state === 'waiting_input' && (
-                    <Button size="sm" onClick={handleApprove} loading={actionLoading}>
-                      Approve &amp; Continue
-                    </Button>
-                  )}
-                  {canFinishSession && (
-                    <Button
-                      size="sm"
-                      variant={selectedStep.state === 'waiting_input' ? 'default' : 'filled'}
-                      onClick={() => handleFinishSession(selectedStep.terminalSessionId!)}
-                      loading={actionLoading}
-                    >
-                      Finish Agent Session
-                    </Button>
-                  )}
-                </Group>
-                <Group gap={4}>
-                  {selectedStep.state === 'waiting_input' && (
-                    <>
-                      <Button size="xs" variant="subtle" color="gray" onClick={() => setSkipOpen(true)}>
-                        Skip
-                      </Button>
-                      <Button size="xs" variant="subtle" color="gray" onClick={handleRetry} loading={actionLoading}>
-                        Retry
-                      </Button>
-                    </>
-                  )}
-                  {selectedStep.state === 'failed' && (
-                    <Button size="sm" variant="default" onClick={handleRetry} loading={actionLoading}>
-                      Retry Step
-                    </Button>
-                  )}
-                </Group>
-              </Group>
-            </div>
-          )}
+        ))}
       </>
-    );
-  };
-
-  const renderAssetsView = () => {
-    if (assets.length === 0) {
-      return (
-        <div className={classes.detailEmpty}>
-          <Text c="dimmed">No workflow assets</Text>
-        </div>
-      );
-    }
-
-    return (
-      <div className={classes.detailContent}>
-        <Stack gap="lg">
-          <Group justify="flex-end">
-            <Button
-              size="xs"
-              variant="outline"
-              leftSection={<IconUpload size={14} />}
-              onClick={() => setPromoteOpen({ assetId: null, name: 'All Artifacts' })}
-            >
-              Promote All to Project
-            </Button>
-          </Group>
-          {Object.entries(assetsByStep).map(([stepName, stepAssets]) => (
-            <Box key={stepName}>
-              <Group gap="sm" mb="xs">
-                <Text size="sm" fw={600}>
-                  {stepName}
-                </Text>
-                <Badge size="xs" variant="outline">
-                  {stepAssets.length} file(s)
-                </Badge>
-              </Group>
-              <div className={classes.assetsGrid}>
-                {stepAssets.map((a) => (
-                  <div key={a.id} className={classes.assetCard}>
-                    <Box style={{ minWidth: 0 }}>
-                      <Text size="sm" fw={500} truncate>
-                        {a.name}
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        {a.contentType ?? ''}
-                        {a.fileSize ? ` · ${formatFileSize(a.fileSize)}` : ''}
-                      </Text>
-                    </Box>
-                    <Group gap="xs" wrap="nowrap">
-                      {a.downloadUrl && (
-                        <Button
-                          size="xs"
-                          variant="light"
-                          leftSection={<IconDownload size={12} />}
-                          component="a"
-                          href={a.downloadUrl}
-                          target="_blank"
-                        >
-                          Download
-                        </Button>
-                      )}
-                      <Button
-                        size="xs"
-                        variant="subtle"
-                        leftSection={<IconUpload size={12} />}
-                        onClick={() => setPromoteOpen({ assetId: a.id, name: a.name })}
-                      >
-                        Promote
-                      </Button>
-                    </Group>
-                  </div>
-                ))}
-              </div>
-            </Box>
-          ))}
-        </Stack>
-      </div>
     );
   };
 
@@ -881,68 +297,47 @@ const WorkflowRunShowPage = () => {
     <>
       <Head title={`Run #${run.id} — ${project.name}`} />
       <div className={classes.root}>
-        {/* ── Header ─────────────────────────────── */}
-        <div className={classes.header}>
-          <div className={classes.headerLeft}>
-            <ActionIcon variant="subtle" size="sm" onClick={() => router.visit(`${basePath}/workflow_runs`)}>
-              <IconArrowLeft size={16} />
-            </ActionIcon>
-            <Text fw={600} size="sm" truncate style={{ minWidth: 0 }}>
-              {run.workflowName}
-            </Text>
-            <StatusBadge state={run.state} size="sm" className={run.state === 'running' ? classes.pulse : undefined} />
-            <Text size="xs" c="dimmed" ff="monospace">
-              #{run.id}
-            </Text>
-            {isActive && (
-              <Group gap={6}>
-                <div className={classes.liveDot} />
-                {run.startedAt && <LiveDuration startedAt={run.startedAt} />}
-              </Group>
-            )}
-          </div>
-          <div className={classes.headerRight}>
-            <div className={classes.headerMeta}>
-              <Text size="xs" c="dimmed" ff="monospace">
-                {run.stepsCompleted}/{run.stepsTotal} steps
-              </Text>
-              {!isActive && run.startedAt && (
-                <Text size="xs" c="dimmed" ff="monospace">
-                  {formatDuration(run.startedAt, run.completedAt)}
-                </Text>
-              )}
-              {run.costCents > 0 && (
-                <Text size="xs" c="var(--app-success-fg)" ff="monospace" fw={600}>
-                  {formatCost(run.costCents)}
-                </Text>
-              )}
-              {run.mode && (
-                <Badge size="xs" variant="outline" color="gray">
-                  {MODE_LABELS[run.mode] ?? run.mode}
-                </Badge>
-              )}
-            </div>
-            {!isTerminal && (
+        <DetailHeader
+          crumbs={[
+            { label: 'Sessions & Runs', href: `${basePath}/sessions` },
+            { label: `${workflowName} · Run #${run.id}` },
+          ]}
+          title={workflowName}
+          state={run.state}
+          statusLabel={RUN_STATE_LABELS[run.state]}
+          identifier={`Run #${run.id}`}
+          description={run.workflowDescription}
+          agentType={run.agentType}
+          userName={run.userName}
+          mode={run.mode}
+          stats={stats}
+          formatTokenValue={formatTokens}
+          actions={
+            !isTerminal && (
               <Button
-                size="xs"
-                variant="outline"
-                color="red"
-                onClick={handleCancel}
-                loading={actionLoading}
+                variant="default"
                 leftSection={<IconPlayerStop size={14} />}
+                loading={actionLoading}
+                onClick={() => post(`${runPath}/cancel`)}
               >
-                Cancel
+                Cancel run
               </Button>
-            )}
-          </div>
-        </div>
+            )
+          }
+          tabs={
+            <TabBar
+              inline
+              aria-label="Run detail"
+              value={tab}
+              onChange={setTab}
+              tabs={[
+                { value: 'sessions', label: 'Sessions', count: run.stepsTotal },
+                { value: 'assets', label: 'Assets', count: assets.length },
+              ]}
+            />
+          }
+        />
 
-        {/* ── Progress Bar ───────────────────────── */}
-        {isActive && run.stepsTotal > 0 && (
-          <Progress value={progressPct} size="xs" color={run.state === 'running' ? 'brand' : 'yellow'} radius={0} />
-        )}
-
-        {/* ── Quota Error Banner ──────────────────── */}
         {run.failureReason === 'quota_exceeded' && (
           <Alert
             icon={<IconAlertTriangle size={16} />}
@@ -956,107 +351,106 @@ const WorkflowRunShowPage = () => {
                 account and re-run, or switch to a different connected account.
               </Text>
               <Group gap="xs">
-                <Button size="xs" variant="light" color="orange" onClick={handleRerun} loading={actionLoading}>
-                  Re-run Workflow
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="orange"
+                  loading={actionLoading}
+                  onClick={() =>
+                    post(`${basePath}/workflow_runs`, {
+                      workflowRun: { workflowId: run.workflowId, mode: run.mode },
+                    })
+                  }
+                >
+                  Re-run workflow
                 </Button>
                 <Anchor size="xs" href="/profile">
-                  Manage Accounts
+                  Manage accounts
                 </Anchor>
               </Group>
             </Stack>
           </Alert>
         )}
 
-        {/* ── Content ────────────────────────────── */}
-        <div className={classes.content}>
-          {/* Steps sidebar */}
-          <div className={classes.stepsSidebar}>
-            <div className={classes.stepsHeader}>
-              <Group justify="space-between">
-                <Group gap="xs">
-                  <Button size="xs" variant={view === 'steps' ? 'filled' : 'subtle'} onClick={() => setView('steps')}>
-                    Steps
-                  </Button>
-                  <Button
-                    size="xs"
-                    variant={view === 'assets' ? 'filled' : 'subtle'}
-                    onClick={() => setView('assets')}
-                    disabled={isActive && assets.length === 0}
-                  >
-                    Assets{assets.length > 0 ? ` (${assets.length})` : ''}
-                  </Button>
-                </Group>
-              </Group>
-            </div>
-            <ScrollArea className={classes.stepsList}>
-              {sortedSteps.length === 0 ? (
-                <Text c="dimmed" ta="center" py="xl" size="sm">
-                  No steps
-                </Text>
-              ) : hasDag ? (
-                <Stack gap={0}>
-                  {waves.map((wave, wi) => (
-                    <Box key={wi}>
-                      {wi > 0 && (
-                        <div className={classes.waveConnector}>
-                          <IconArrowRight size={12} style={{ opacity: 0.4 }} />
-                          <Text size="xs" c="dimmed" truncate>
-                            {wave.label}
-                          </Text>
-                        </div>
+        <div
+          className={isActive && tab === 'sessions' ? `${classes.body} ${classes.bodyWide}` : classes.body}
+          role="tabpanel"
+        >
+          {tab === 'assets' ? (
+            renderAssets()
+          ) : sortedSteps.length === 0 ? (
+            <div className={classes.empty}>This run has no sessions yet.</div>
+          ) : (
+            <>
+              {/* Every step that needs a human decision gets its own bar — a
+                  parallel run can have more than one waiting at once. */}
+              {isActive &&
+                liveSteps
+                  .filter((step) => step.state === 'waiting_input' || canFinishSession(step))
+                  .map((step) => (
+                    <div className={classes.actionBar} key={step.id}>
+                      <span className={classes.actionBarText}>
+                        {step.state === 'waiting_input'
+                          ? `"${step.stepName ?? 'This session'}" is waiting for your approval.`
+                          : `"${step.stepName ?? 'This session'}" is running interactively.`}
+                      </span>
+                      {step.state === 'waiting_input' && (
+                        <>
+                          <Button
+                            loading={actionLoading}
+                            onClick={() => post(`${runPath}/approve_step`, { step_run_id: step.id })}
+                          >
+                            Approve &amp; continue
+                          </Button>
+                          <Button variant="subtle" color="gray" onClick={() => setSkipStepId(step.id)}>
+                            Skip
+                          </Button>
+                          <Button
+                            variant="subtle"
+                            color="gray"
+                            loading={actionLoading}
+                            onClick={() => post(`${runPath}/retry_step`, { step_run_id: step.id })}
+                          >
+                            Retry
+                          </Button>
+                        </>
                       )}
-                      {wave.steps.length > 1 && (
-                        <div className={classes.parallelLabel}>
-                          <Badge size="xs" variant="outline" color="brand">
-                            {wave.steps.length} parallel
-                          </Badge>
-                        </div>
+                      {canFinishSession(step) && step.state !== 'waiting_input' && (
+                        <Button loading={actionLoading} onClick={() => handleFinishSession(step.terminalSessionId!)}>
+                          Finish session
+                        </Button>
                       )}
-                      {wave.steps.map((step) => renderStepItem(step))}
-                    </Box>
+                    </div>
                   ))}
-                </Stack>
+
+              {!isActive &&
+                failedSteps.map((step) => (
+                  <div className={classes.actionBar} key={step.id}>
+                    <span className={classes.actionBarText}>&quot;{step.stepName ?? 'A session'}&quot; failed.</span>
+                    <Button
+                      variant="default"
+                      loading={actionLoading}
+                      onClick={() => post(`${runPath}/retry_step`, { step_run_id: step.id })}
+                    >
+                      Retry session
+                    </Button>
+                  </div>
+                ))}
+
+              {isActive && liveSteps.length > 0 ? (
+                <div className={classes.split}>
+                  <div className={classes.list}>{sessionCards}</div>
+                  {renderConsoles()}
+                </div>
               ) : (
-                <Stack gap={0}>{sortedSteps.map((step) => renderStepItem(step))}</Stack>
+                <div className={classes.list}>{sessionCards}</div>
               )}
-            </ScrollArea>
-          </div>
-
-          {/* Detail panel */}
-          <div className={classes.detailPanel}>{view === 'steps' ? renderStepDetail() : renderAssetsView()}</div>
-        </div>
-
-        {/* ── Status Bar ─────────────────────────── */}
-        <div className={classes.statusBar}>
-          <Group gap="lg" justify="center">
-            {run.agentType && (
-              <Text size="xs" c="dimmed">
-                Agent:{' '}
-                <Text span fw={500}>
-                  {run.agentType}
-                </Text>
-              </Text>
-            )}
-            {run.userName && (
-              <Text size="xs" c="dimmed">
-                User:{' '}
-                <Text span fw={500}>
-                  {run.userName}
-                </Text>
-              </Text>
-            )}
-            <Text size="xs" c="dimmed">
-              Created:{' '}
-              <Text span fw={500}>
-                {new Date(run.createdAt).toLocaleString()}
-              </Text>
-            </Text>
-          </Group>
+            </>
+          )}
         </div>
       </div>
 
-      {/* ── Skip Modal ───────────────────────────── */}
-      <Modal opened={skipOpen} onClose={() => setSkipOpen(false)} title="Skip Step" centered size="sm">
+      <Modal opened={skipStepId != null} onClose={() => setSkipStepId(null)} title="Skip session" centered size="sm">
         <Textarea
           label="Reason (optional)"
           value={skipReason}
@@ -1066,20 +460,26 @@ const WorkflowRunShowPage = () => {
           mb="md"
         />
         <Group justify="flex-end">
-          <Button variant="outline" onClick={() => setSkipOpen(false)}>
+          <Button variant="default" onClick={() => setSkipStepId(null)}>
             Cancel
           </Button>
-          <Button onClick={handleSkip} loading={actionLoading}>
-            Skip Step
+          <Button
+            loading={actionLoading}
+            onClick={() => {
+              post(`${runPath}/skip_step`, { reason: skipReason || null, step_run_id: skipStepId });
+              setSkipStepId(null);
+              setSkipReason('');
+            }}
+          >
+            Skip session
           </Button>
         </Group>
       </Modal>
 
-      {/* ── Promote Modal ────────────────────────── */}
       <Modal
         opened={!!promoteOpen}
         onClose={() => setPromoteOpen(null)}
-        title={promoteOpen?.assetId ? `Promote "${promoteOpen.name}"` : 'Promote All Artifacts'}
+        title={promoteOpen?.assetId ? `Promote "${promoteOpen.name}"` : 'Promote all artifacts'}
         centered
         size="sm"
       >
@@ -1094,7 +494,7 @@ const WorkflowRunShowPage = () => {
           mb="md"
         />
         <Group justify="flex-end">
-          <Button variant="outline" onClick={() => setPromoteOpen(null)}>
+          <Button variant="default" onClick={() => setPromoteOpen(null)}>
             Cancel
           </Button>
           <Button onClick={handlePromote} loading={promoteLoading}>
@@ -1106,6 +506,6 @@ const WorkflowRunShowPage = () => {
   );
 };
 
-setPageLayout(WorkflowRunShowPage, persistentProjectLayout);
+setPageLayout(WorkflowRunShowPage, persistentProjectLayoutNoPadding);
 
 export default WorkflowRunShowPage;

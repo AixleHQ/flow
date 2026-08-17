@@ -1,0 +1,81 @@
+/*
+ * The `.st` status tag from the Sessions & Runs handoff: a 10px uppercase
+ * label preceded by a 6px tone dot. Status always carries the word, never the
+ * colour alone — the dot is redundant reinforcement, not the signal.
+ */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--app-border-default);
+  background: var(--app-action-hover);
+  color: var(--app-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  justify-self: start;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: currentcolor;
+}
+
+.success {
+  color: var(--app-success-fg);
+}
+
+.danger {
+  color: var(--app-danger-fg);
+}
+
+.running {
+  color: var(--app-warning-fg);
+}
+
+.running .dot {
+  animation: statusPulse 1.4s ease-in-out infinite;
+}
+
+.neutral {
+  color: var(--app-text-tertiary);
+}
+
+.info {
+  color: var(--app-info-fg);
+}
+
+.warning {
+  color: var(--app-warning-fg);
+}
+
+/* Plain variant — no dot, used for model chips in the stat cards. */
+.plain {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+
+@keyframes statusPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .running .dot {
+    animation: none;
+  }
+}

@@ -1,0 +1,379 @@
+/*
+ * The unified Sessions & Runs list.
+ *
+ * A CSS grid rather than a table: the row and the nested step rows have to
+ * share one column ruler so a child session's cost lines up under its run's,
+ * and the responsive rules drop whole columns by priority (tokens first, then
+ * user) rather than letting everything shrink to unreadable.
+ */
+
+.head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--app-text-tertiary);
+  margin: 3px 0 0;
+}
+
+/* ── Typebar: type toggle on the left, count + create actions on the right ── */
+.typebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.typebarRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seg {
+  display: inline-flex;
+  background: var(--app-bg-paper);
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.segButton {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+  white-space: nowrap;
+}
+
+.segButton:hover {
+  color: var(--app-text-primary);
+}
+
+.segButtonOn {
+  background: var(--app-bg-card);
+  color: var(--app-text-primary);
+  box-shadow: inset 0 0 0 1px var(--app-border-default);
+}
+
+.count {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  font-family: var(--app-font-mono);
+  white-space: nowrap;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── Table ── */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--app-bg-card);
+  min-width: 900px;
+}
+
+.thead,
+.row,
+.subRow {
+  display: grid;
+  grid-template-columns: 34px 118px minmax(200px, 1.3fr) 232px 150px 88px 74px 88px 118px 34px;
+  align-items: center;
+}
+
+.thead {
+  padding: 0 12px;
+  height: 40px;
+  border-bottom: 1px solid var(--app-border-default);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+}
+
+.right {
+  text-align: right;
+}
+
+.row {
+  padding: 0 12px;
+  height: 54px;
+  border-bottom: 1px solid var(--app-border-default);
+  cursor: pointer;
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row:hover {
+  background: var(--app-action-hover);
+}
+
+.rowStatic {
+  cursor: default;
+}
+
+.rowStatic:hover {
+  background: transparent;
+}
+
+.caret {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--app-text-tertiary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+.caret svg {
+  transition: transform 0.15s ease;
+}
+
+.caretOpen svg {
+  transform: rotate(90deg);
+}
+
+.name {
+  min-width: 0;
+  padding-right: 16px;
+}
+
+.nameTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nameSub {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-family: var(--app-font-mono);
+}
+
+.nameSubSep {
+  color: var(--app-text-tertiary);
+  font-family: var(--app-font-body);
+}
+
+.agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 12px;
+}
+
+.agentLabel {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 12px;
+}
+
+.num {
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+}
+
+.dim {
+  color: var(--app-text-tertiary);
+}
+
+.ago {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  white-space: nowrap;
+  padding-left: 24px;
+}
+
+.link {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--app-text-tertiary);
+  background: transparent;
+  border: 0;
+}
+
+.link:hover {
+  color: var(--app-primary-strong);
+  background: var(--app-action-selected);
+}
+
+/* ── Nested step sessions ── */
+.subRows {
+  background: var(--app-bg-default);
+  border-bottom: 1px solid var(--app-border-default);
+}
+
+.subRow {
+  padding: 0 12px;
+  height: 46px;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+}
+
+.subRow + .subRow {
+  border-top: 1px solid var(--app-border-default);
+}
+
+.subRow:hover {
+  background: var(--app-action-hover);
+}
+
+.subRow .name {
+  position: relative;
+  padding-left: 20px;
+}
+
+.subRow .name::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-left: 1px solid var(--app-border-strong);
+  border-bottom: 1px solid var(--app-border-strong);
+  border-bottom-left-radius: 3px;
+  transform: translateY(-75%);
+}
+
+.subRow .nameTitle {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--app-text-secondary);
+}
+
+.empty {
+  padding: 48px;
+  text-align: center;
+  color: var(--app-text-tertiary);
+  font-size: 13px;
+}
+
+/* Responsive column priority: tokens go first, then user. */
+@media (max-width: 1500px) {
+  .thead,
+  .row,
+  .subRow {
+    grid-template-columns: 34px 118px minmax(200px, 1.3fr) 232px 150px 74px 88px 118px 34px;
+  }
+
+  .thead > *:nth-child(6),
+  .row > *:nth-child(6),
+  .subRow > *:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 1300px) {
+  .thead,
+  .row,
+  .subRow {
+    grid-template-columns: 34px 118px minmax(180px, 1.3fr) 200px 74px 84px 132px 34px;
+  }
+
+  .thead > *:nth-child(5),
+  .row > *:nth-child(5),
+  .subRow > *:nth-child(5),
+  .thead > *:nth-child(6),
+  .row > *:nth-child(6),
+  .subRow > *:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .typebar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .typebarRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+}

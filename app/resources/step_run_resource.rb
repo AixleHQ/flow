@@ -35,6 +35,28 @@ class StepRunResource < ApplicationResource
     sr.terminal_session&.state
   end
 
+  # The session card inside a run reports the same four numbers the list row
+  # does, so a run reads as the sum of its sessions rather than as a black box.
+  typelize :string?
+  attribute :agent_type do |sr|
+    sr.terminal_session&.agent_type
+  end
+
+  typelize :number
+  attribute :total_tokens do |sr|
+    sr.terminal_session&.total_tokens.to_i
+  end
+
+  typelize :number
+  attribute :cost_cents do |sr|
+    sr.terminal_session&.cost_cents.to_i
+  end
+
+  typelize :string?
+  attribute :initial_prompt do |sr|
+    sr.terminal_session&.initial_prompt
+  end
+
   typelize :string?
   attribute :terminal_url do |sr|
     ts = sr.terminal_session

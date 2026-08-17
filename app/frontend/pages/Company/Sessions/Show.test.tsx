@@ -1,8 +1,7 @@
 import '@testing-library/jest-dom/vitest';
-import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import { renderAuthedPage, screen, within } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import SessionShowPage from './Show';
@@ -54,22 +53,26 @@ function buildSession(overrides: Partial<TerminalSession> = {}): TerminalSession
 }
 
 describe('Company/Sessions/Show', () => {
-  it('renders the header with the agent label, live state badge and primary actions for an active session', () => {
+  it('renders the detail header with runtime, live status and the Finish action', () => {
     renderAuthedPage(<SessionShowPage />, {
       props: { session: buildSession({ state: 'running' }), cableStream: 'stream-token' },
     });
 
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
-    // The state can surface in both the header badge and the waiting panel.
-    expect(screen.getAllByText('Running').length).toBeGreaterThan(0);
+    // "running" is the container starting; the agent is not working yet, so the
+    // header chip and the waiting panel agree.
+    expect(screen.getAllByText('Starting').length).toBeGreaterThan(0);
     expect(screen.getByText('#4242')).toBeInTheDocument();
-    // An active, non-finishing session exposes the Finish action.
-    expect(screen.getByRole('button', { name: 'Finish' })).toBeInTheDocument();
-    // Company-level session creation was removed; the header omits the "New Session" button.
-    expect(screen.queryByRole('button', { name: 'New Session' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Finish session' })).toBeInTheDocument();
+    // Company-level session creation was removed; the header omits it.
+    expect(screen.queryByRole('button', { name: /new session/i })).not.toBeInTheDocument();
+    // The company list keeps its own breadcrumb label (the sidebar has a
+    // same-named link, so scope the query to the breadcrumb).
+    const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(breadcrumb).getByRole('link', { name: 'Sessions' })).toHaveAttribute('href', '/company/sessions');
   });
 
-  it('renders the completion card with cost summary and review action for a finished session with pending outputs', () => {
+  it('reports cost, models and pending outputs for a finished session', () => {
     renderAuthedPage(<SessionShowPage />, {
       props: {
         session: buildSession({
@@ -86,28 +89,15 @@ describe('Company/Sessions/Show', () => {
       },
     });
 
-    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getByText('Finished')).toBeInTheDocument();
     expect(screen.getByText('Cost')).toBeInTheDocument();
     expect(screen.getByText('$12.34')).toBeInTheDocument();
     expect(screen.getByText('claude-opus')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Review Outputs \(3 files\)/ })).toBeInTheDocument();
-    // Finished sessions do not offer the Finish action.
-    expect(screen.queryByRole('button', { name: 'Finish' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /review outputs/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Finish session' })).not.toBeInTheDocument();
   });
 
-  it('navigates back to all sessions from the completion card', async () => {
-    renderAuthedPage(<SessionShowPage />, {
-      props: {
-        session: buildSession({ state: 'finished', finishedAt: '2026-06-26T10:05:00Z' }),
-        cableStream: 'stream-token',
-      },
-    });
-
-    await userEvent.click(screen.getByRole('button', { name: 'All Sessions' }));
-    expect(router.visit).toHaveBeenCalledWith('/company/sessions');
-  });
-
-  it('shows a failed badge and the error message for a failed session', () => {
+  it('shows a failed status and the error message for a failed session', () => {
     renderAuthedPage(<SessionShowPage />, {
       props: {
         session: buildSession({
@@ -119,7 +109,6 @@ describe('Company/Sessions/Show', () => {
       },
     });
 
-    // The state now reads the same in the header badge and the completion card.
     expect(screen.getAllByText('Failed').length).toBeGreaterThan(0);
     expect(screen.getByText('Container exited unexpectedly')).toBeInTheDocument();
   });

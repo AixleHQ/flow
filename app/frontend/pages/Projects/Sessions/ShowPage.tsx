@@ -2,18 +2,22 @@ import { Head, usePage } from '@inertiajs/react';
 
 import type TerminalSession from 'types/generated/TerminalSession';
 
-import { SessionShowContent } from 'shared/components/SessionShowContent/SessionShowContent';
+import {
+  SessionShowContent,
+  type SessionWorkflowContext,
+} from 'shared/components/SessionShowContent/SessionShowContent';
 
 import { persistentProjectLayoutNoPadding, setPageLayout } from '../ProjectLayout';
 
 interface Props {
   project: { id: number; name: string };
   session: TerminalSession;
+  workflowContext: SessionWorkflowContext | null;
   cableStream: string;
 }
 
 const ProjectSessionShowPage = () => {
-  const { project, session, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, session, workflowContext, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
   const basePath = `/company/projects/${project.id}/sessions`;
 
   return (
@@ -22,6 +26,7 @@ const ProjectSessionShowPage = () => {
       <SessionShowContent
         session={session}
         cableStream={cableStream}
+        workflowContext={workflowContext}
         context={{
           backPath: basePath,
           newSessionPath: `${basePath}/new`,

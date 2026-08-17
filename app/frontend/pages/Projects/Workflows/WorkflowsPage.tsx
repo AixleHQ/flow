@@ -19,7 +19,7 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
 
-import { RunWorkflowModal } from 'shared/components/RunWorkflowModal';
+import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { builderCompanyProjectWorkflowPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -547,12 +547,11 @@ const WorkflowsPage = () => {
       </Modal>
 
       {runWorkflow && (
-        <RunWorkflowModal
+        <RunWorkflowDrawer
           opened={!!runWorkflow}
           onClose={() => setRunWorkflow(null)}
-          workflowId={runWorkflow.id}
-          workflowName={runWorkflow.name}
-          steps={runWorkflow.steps}
+          workflows={[{ id: runWorkflow.id, name: runWorkflow.name, steps: runWorkflow.steps }]}
+          initialWorkflowId={runWorkflow.id}
           projectId={project.id}
           configuredAgents={configuredAgents}
           defaultAgentRuntime={defaultAgentRuntime}

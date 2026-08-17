@@ -1,0 +1,17 @@
+/*
+ * The accent-tinted square that marks an automated run. Accent is reserved for
+ * interactive/automation elements, which is exactly what this is.
+ */
+.tag {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  border: 1px solid var(--app-accent-muted);
+  background: var(--app-action-selected);
+  color: var(--app-primary-strong);
+  flex: none;
+}

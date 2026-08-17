@@ -16,7 +16,7 @@ describe('Projects/Sessions/NewPage', () => {
   it('renders the session form with the Start button disabled when no agent runtime is configured', () => {
     renderAuthedPage(<NewPage />, { props: { project } });
 
-    expect(screen.getByText('Agent Runtime')).toBeInTheDocument();
+    expect(screen.getByText('Agent runtime')).toBeInTheDocument();
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
 
     const startButton = screen.getByRole('button', { name: /Start Session/i });
@@ -103,7 +103,7 @@ describe('Projects/Sessions/NewPage', () => {
     expect(startButton).toBeEnabled();
 
     // Switching to Automatic requires a prompt before the session can start.
-    await userEvent.click(screen.getByRole('radio', { name: 'Automatic' }));
+    await userEvent.click(screen.getByRole('radio', { name: /Automatic/ }));
     expect(screen.getByPlaceholderText('Describe the task for the agent...')).toBeInTheDocument();
     expect(startButton).toBeDisabled();
 

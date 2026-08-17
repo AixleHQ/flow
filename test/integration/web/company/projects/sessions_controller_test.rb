@@ -10,9 +10,9 @@ class Web::Company::Projects::SessionsControllerTest < ActionDispatch::Integrati
     sign_in_as(@user)
   end
 
-  test "index renders sessions page" do
+  test "index renders the unified sessions and runs page" do
     get company_project_sessions_path(@project)
-    assert_inertia_page "Projects/Sessions/SessionsPage"
+    assert_inertia_page "Projects/Sessions/SessionsRunsPage"
   end
 
   test "new renders new session page" do
