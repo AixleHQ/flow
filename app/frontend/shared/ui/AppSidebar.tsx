@@ -62,8 +62,26 @@ import { ColorSchemeToggle } from './ColorSchemeToggle';
 import type { SharedMembership, SharedPermissions, SharedProject, SharedProps } from './types';
 
 const SIDEBAR_WIDTH = 220;
-const SIDEBAR_COLLAPSED_WIDTH = 52;
+const SIDEBAR_COLLAPSED_WIDTH = 60;
 const STORAGE_KEY = 'sidebar-collapsed';
+const GROUPS_STORAGE_KEY = 'sidebar-collapsed-groups';
+
+const readCollapsedGroups = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(GROUPS_STORAGE_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
+const writeCollapsedGroups = (groups: Set<string>) => {
+  try {
+    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify([...groups]));
+  } catch {
+    // localStorage unavailable (private browsing, quota exceeded)
+  }
+};
 
 const getInitials = (name: string): string => {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -269,14 +287,13 @@ function AiBanner({ collapsed, projectId }: AiBannerProps) {
 
   return (
     <div className={classes.aiBanner}>
-      <div className={`${classes.aiBannerIcon} ${classes.aiBannerIconStacked}`}>
-        <IconWand size={16} />
+      <div className={classes.aiBannerCard}>
+        <button type="button" onClick={handleClick} className={classes.aiBannerCta}>
+          <IconSparkles size={13} />
+          <span>Build with AI</span>
+        </button>
+        <div className={classes.aiBannerCap}>Tasks, boards, and workflows — from one prompt.</div>
       </div>
-      <div className={classes.aiBannerTitle}>AI Builder</div>
-      <div className={classes.aiBannerBody}>Tasks, boards, and workflows — connected, from one prompt.</div>
-      <button type="button" onClick={handleClick} className={classes.aiBannerCta}>
-        <IconSparkles size={13} />✦ Build with AI
-      </button>
     </div>
   );
 }
@@ -287,10 +304,12 @@ interface SidebarNavProps {
   groups: NavGroup[];
   collapsed: boolean;
   isAdmin: boolean;
+  collapsedGroups: Set<string>;
+  toggleGroup: (label: string) => void;
   onNavigate?: () => void;
 }
 
-function SidebarNav({ groups, collapsed, isAdmin, onNavigate }: SidebarNavProps) {
+function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, onNavigate }: SidebarNavProps) {
   // Read the path from Inertia, not `window.location`. AuthLayout is a
   // persistent layout for project pages, so the sidebar can survive a visit
   // without re-rendering — reading `window.location.pathname` at render time
@@ -303,54 +322,68 @@ function SidebarNav({ groups, collapsed, isAdmin, onNavigate }: SidebarNavProps)
         const visibleItems = group.items.filter((item) => !item.adminOnly || isAdmin);
         if (visibleItems.length === 0) return null;
 
+        // In the icon rail, groups always show every icon — there's no room for a
+        // label to click, so per-group collapse only applies to the expanded sidebar.
+        const groupCollapsed = !collapsed && group.label !== undefined && collapsedGroups.has(group.label);
+
         return (
           <Fragment key={groupIdx}>
             {group.label && (
-              <div className={`${classes.navGroupLabel} ${collapsed ? classes.navGroupLabelCollapsed : ''}`}>
-                {group.label}
-              </div>
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.label as string)}
+                aria-expanded={!groupCollapsed}
+                className={`${classes.navGroupLabel} ${collapsed ? classes.navGroupLabelCollapsed : ''}`}
+              >
+                <span>{group.label}</span>
+                <IconChevronDown
+                  size={12}
+                  className={`${classes.groupCaret} ${groupCollapsed ? classes.groupCaretCollapsed : ''}`}
+                />
+              </button>
             )}
-            {visibleItems.map((item, itemIdx) => {
-              const isActive = currentPath === item.path || currentPath.startsWith(item.path + '/');
-              const isOverview = groupIdx === 0 && itemIdx === 0 && !group.label;
+            {!groupCollapsed &&
+              visibleItems.map((item, itemIdx) => {
+                const isActive = currentPath === item.path || currentPath.startsWith(item.path + '/');
+                const isOverview = groupIdx === 0 && itemIdx === 0 && !group.label;
 
-              if (collapsed) {
-                const iconEl = <span className={classes.navItemIconCollapsed}>{item.icon}</span>;
+                if (collapsed) {
+                  const iconEl = <span className={classes.navItemIconCollapsed}>{item.icon}</span>;
+                  return (
+                    <Tooltip key={item.path} label={item.label} position="right" withArrow>
+                      <Link
+                        href={item.path}
+                        onClick={onNavigate}
+                        aria-label={item.label}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={[
+                          isOverview ? classes.navOverview : classes.navItem,
+                          isOverview ? classes.navOverviewCollapsed : classes.navItemCollapsed,
+                          isActive ? (isOverview ? classes.navOverviewActive : classes.navItemActive) : '',
+                        ].join(' ')}
+                      >
+                        {iconEl}
+                      </Link>
+                    </Tooltip>
+                  );
+                }
+
                 return (
-                  <Tooltip key={item.path} label={item.label} position="right" withArrow>
-                    <Link
-                      href={item.path}
-                      onClick={onNavigate}
-                      aria-label={item.label}
-                      aria-current={isActive ? 'page' : undefined}
-                      className={[
-                        isOverview ? classes.navOverview : classes.navItem,
-                        isOverview ? classes.navOverviewCollapsed : classes.navItemCollapsed,
-                        isActive ? (isOverview ? classes.navOverviewActive : classes.navItemActive) : '',
-                      ].join(' ')}
-                    >
-                      {iconEl}
-                    </Link>
-                  </Tooltip>
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    onClick={onNavigate}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={[
+                      isOverview ? classes.navOverview : classes.navItem,
+                      isActive ? (isOverview ? classes.navOverviewActive : classes.navItemActive) : '',
+                    ].join(' ')}
+                  >
+                    <span className={classes.navItemIcon}>{item.icon}</span>
+                    <span className={classes.navItemLabel}>{item.label}</span>
+                  </Link>
                 );
-              }
-
-              return (
-                <Link
-                  key={item.path}
-                  href={item.path}
-                  onClick={onNavigate}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={[
-                    isOverview ? classes.navOverview : classes.navItem,
-                    isActive ? (isOverview ? classes.navOverviewActive : classes.navItemActive) : '',
-                  ].join(' ')}
-                >
-                  <span className={classes.navItemIcon}>{item.icon}</span>
-                  <span className={classes.navItemLabel}>{item.label}</span>
-                </Link>
-              );
-            })}
+              })}
           </Fragment>
         );
       })}
@@ -613,6 +646,20 @@ function SidebarContent({
 
   const navGroups = context === 'project' && projectId ? buildProjectNavGroups(projectId) : companyNavGroups;
 
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => readCollapsedGroups());
+  const toggleGroup = useCallback((label: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      writeCollapsedGroups(next);
+      return next;
+    });
+  }, []);
+
   return (
     <>
       <SidebarWorkspaceSwitcher
@@ -625,7 +672,14 @@ function SidebarContent({
       />
 
       <ScrollArea className={classes.scrollArea} type="never">
-        <SidebarNav groups={navGroups} collapsed={collapsed} isAdmin={isAdmin} onNavigate={onNavigate} />
+        <SidebarNav
+          groups={navGroups}
+          collapsed={collapsed}
+          isAdmin={isAdmin}
+          collapsedGroups={collapsedGroups}
+          toggleGroup={toggleGroup}
+          onNavigate={onNavigate}
+        />
       </ScrollArea>
 
       {currentUser?.needsAgentSetup && <AgentSetupNudge collapsed={collapsed} />}

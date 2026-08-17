@@ -35,6 +35,10 @@
 /* ── Nav group label ─────────────────────────────────────────────────────── */
 
 .navGroupLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -44,8 +48,16 @@
   margin: 12px 0 4px;
   white-space: nowrap;
   overflow: hidden;
-  transition: opacity 0.15s;
-  display: block;
+  transition: opacity 0.15s, color 0.12s;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 5px;
+  font-family: inherit;
+}
+
+.navGroupLabel:hover {
+  color: var(--app-text-secondary);
 }
 
 .navGroupLabelCollapsed {
@@ -54,6 +66,18 @@
   height: 4px;
   margin: 8px 0 2px;
   overflow: hidden;
+  pointer-events: none;
+}
+
+.groupCaret {
+  display: flex;
+  opacity: 0.6;
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+
+.groupCaretCollapsed {
+  transform: rotate(-90deg);
 }
 
 /* ── Nav overview item (first "Overview" item) ───────────────────────────── */
@@ -145,7 +169,7 @@
 }
 
 .navItemIconCollapsed {
-  width: var(--sb-col-width, 52px);
+  width: var(--sb-col-width, 60px);
   text-align: center;
   margin: 0 auto;
   flex-shrink: 0;
@@ -771,12 +795,15 @@
 }
 
 .aiBanner {
-  margin: 8px 10px 4px;
-  padding: 13px;
+  padding: 10px 10px 4px;
+  flex-shrink: 0;
+}
+
+.aiBannerCard {
   border: 1px solid var(--app-border-default);
   border-radius: 8px;
-  background: var(--app-bg-paper);
-  flex-shrink: 0;
+  background: var(--app-bg-card);
+  padding: 10px;
 }
 
 .aiBannerIcon {
@@ -792,25 +819,6 @@
   transition: background 0.12s, border-color 0.12s;
 }
 
-.aiBannerIconStacked {
-  margin-bottom: 10px;
-}
-
-.aiBannerTitle {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--app-text-primary);
-  letter-spacing: -0.01em;
-  margin-bottom: 4px;
-}
-
-.aiBannerBody {
-  font-size: 11px;
-  color: var(--app-text-secondary);
-  line-height: 1.45;
-  margin-bottom: 12px;
-}
-
 .aiBannerCta {
   background: var(--app-cta-invert-bg);
   color: var(--app-cta-invert-fg);
@@ -818,19 +826,27 @@
   width: 100%;
   border: 1px solid transparent;
   cursor: pointer;
-  padding: 8px 12px;
+  padding: 9px 12px;
   font-size: 12px;
   font-weight: 600;
   font-family: inherit;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   transition: background 0.12s;
 }
 
 .aiBannerCta:hover {
   background: var(--app-cta-invert-bg-hover);
+}
+
+.aiBannerCap {
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+  line-height: 1.45;
+  margin-top: 9px;
+  text-align: center;
 }
 
 @media (prefers-reduced-motion: reduce) {
