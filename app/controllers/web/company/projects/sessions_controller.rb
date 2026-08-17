@@ -118,9 +118,9 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
   # The Run Workflow drawer needs each workflow's steps to render the Custom
   # execution mode, so the list is shallow-serialized with them.
   def runnable_workflows
-    Workflow.visible_for_project(current_project).includes(:steps).map do |workflow|
+    Workflow.visible_for_project(current_project).includes(steps: :sub_steps).map do |workflow|
       WorkflowResource.new(workflow).to_h.merge(
-        steps: workflow.steps.not_deleted.map { |s| StepResource.new(s).to_h }
+        steps: workflow.visible_steps.map { |s| StepResource.new(s).to_h }
       )
     end
   end

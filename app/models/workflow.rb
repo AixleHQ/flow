@@ -40,6 +40,15 @@ class Workflow < ApplicationRecord
     active.where(scope_type: "Project", scope_id: company.project_ids)
   }
 
+  # The steps a caller should render, preload-safe. `steps.not_deleted` builds a fresh
+  # relation, which throws away a preloaded `:steps` association and re-queries — one
+  # query per workflow on any page that lists workflows, plus one per step for
+  # `sub_steps`. Filtering the loaded records in Ruby keeps the preload (and its
+  # `default_scope` position order).
+  def visible_steps
+    association(:steps).loaded? ? steps.reject(&:deleted?) : steps.not_deleted.to_a
+  end
+
   def soft_delete!
     if column_workflow_bindings.any?
       bound = column_workflow_bindings.includes(board_column: { board: :project })
