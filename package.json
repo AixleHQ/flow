@@ -94,6 +94,10 @@
     "zod": "^4.4.3",
     "zustand": "^5.0.14"
   },
+  "resolutions": {
+    "@codemirror/state": "^6.7.1",
+    "@codemirror/view": "^6.43.8"
+  },
   "scripts": {
     "tsc": "tsc",
     "lint": "eslint --ext .ts,.tsx app/frontend",
