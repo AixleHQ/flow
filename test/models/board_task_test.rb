@@ -231,6 +231,16 @@ class BoardTaskTest < ActiveSupport::TestCase
     assert_equal [ first.id, second.id ], BoardTask.where(board_column: @col1).in_board_order.map(&:id)
   end
 
+  test "in_flat_board_order reads columns left to right and tasks top to bottom" do
+    # Positions restart per column, so `in_board_order` alone would tie every
+    # first-in-column task against every other and leave the order to the planner.
+    done = BoardTask.create!(title: "Done first", board: @board, board_column: @col2, position: 1)
+    backlog_second = BoardTask.create!(title: "Backlog second", board: @board, board_column: @col1, position: 2)
+    backlog_first = BoardTask.create!(title: "Backlog first", board: @board, board_column: @col1, position: 1)
+
+    assert_equal [ backlog_first.id, backlog_second.id, done.id ], BoardTask.in_flat_board_order.map(&:id)
+  end
+
   test "tags_contains requires every listed tag while tags_overlap needs only one" do
     both = BoardTask.create!(title: "Both", board: @board, board_column: @col1, tags: %w[api ui])
     one = BoardTask.create!(title: "One", board: @board, board_column: @col1, tags: %w[api])

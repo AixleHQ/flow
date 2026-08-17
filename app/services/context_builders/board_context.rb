@@ -59,7 +59,8 @@ module ContextBuilders
       lines << "### Board Tools"
       lines << ""
       lines << "- **board_get_board_info** — get board details with all columns"
-      lines << "- **board_list_tasks** — list tasks on the board (filter by column_name, status)"
+      lines << "- **board_list_tasks** — list a page of tasks, without descriptions " \
+               "(filter by column_name/tag/task_type/assignee_id; paginate with limit/offset)"
       lines << "- **board_get_task** — get full task details by task_id"
       lines << "- **board_get_comments** — get comments for a task"
       lines << "- **board_get_task_assets** — get assets attached to a task"

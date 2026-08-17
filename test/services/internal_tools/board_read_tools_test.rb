@@ -25,31 +25,80 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
 
   # === board_list_tasks ===
 
-  test "board_list_tasks returns all tasks" do
-    result = InternalTools::BoardListTasks.new(params: {}, session: @session).execute
+  def list_tasks(**params)
+    result = InternalTools::BoardListTasks.new(params: params, session: @session).execute
     assert_equal 0, result[:exit_code]
-    data = JSON.parse(result[:stdout])
-    assert_equal 1, data.size
-    assert_equal "Test task", data.first["title"]
-    assert_equal @task.id, data.first["id"]
+    JSON.parse(result[:stdout])
+  end
+
+  test "board_list_tasks returns a page of tasks with the board's total" do
+    data = list_tasks
+    assert_equal 1, data["total"]
+    assert_equal 0, data["offset"]
+    assert_equal InternalTools::BoardListTasks::DEFAULT_LIMIT, data["limit"]
+    assert_equal false, data["has_more"] # rubocop:disable Minitest/RefuteFalse
+    assert_equal 1, data["tasks"].size
+    assert_equal "Test task", data["tasks"].first["title"]
+    assert_equal @task.id, data["tasks"].first["id"]
+  end
+
+  test "board_list_tasks omits descriptions and points at board_get_task instead" do
+    row = list_tasks["tasks"].first
+
+    assert_not row.key?("description")
+    # Everything a card needs to be read without the description is still there.
+    assert_equal [ "frontend" ], row["tags"]
+    assert_equal 0, row["comments_count"]
+    assert_equal [], row["pending_gates"]
+  end
+
+  test "board_list_tasks pages through the board in a stable column-then-position order" do
+    # A second column's tasks reuse positions 1..n, which is what an unstable
+    # order would interleave differently on every page.
+    second = create(:board_task, board: @board, board_column: @col1, title: "Second")
+    third = create(:board_task, board: @board, board_column: @col2, title: "Third")
+
+    first_page = list_tasks(limit: 2)
+    assert_equal [ @task.title, second.title ], first_page["tasks"].map { |t| t["title"] }
+    assert_equal 3, first_page["total"]
+    assert first_page["has_more"]
+
+    second_page = list_tasks(limit: 2, offset: 2)
+    assert_equal [ third.title ], second_page["tasks"].map { |t| t["title"] }
+    assert_equal 3, second_page["total"]
+    assert_equal false, second_page["has_more"] # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "board_list_tasks caps the page size and floors the offset" do
+    data = list_tasks(limit: 5_000, offset: -10)
+
+    assert_equal InternalTools::BoardListTasks::MAX_LIMIT, data["limit"]
+    assert_equal 0, data["offset"]
+  end
+
+  test "board_list_tasks counts the whole filtered set, not the page" do
+    create_list(:board_task, 4, board: @board, board_column: @col2, tags: [ "frontend" ])
+
+    data = list_tasks(tag: "frontend", limit: 2)
+
+    assert_equal 5, data["total"]
+    assert_equal 2, data["tasks"].size
+    assert data["has_more"]
   end
 
   test "board_list_tasks filters by column_name" do
     create(:board_task, board: @board, board_column: @col2, title: "Dev task")
 
-    result = InternalTools::BoardListTasks.new(params: { column_name: "In Dev" }, session: @session).execute
-    data = JSON.parse(result[:stdout])
-    assert_equal 1, data.size
-    assert_equal "Dev task", data.first["title"]
+    data = list_tasks(column_name: "In Dev")
+    assert_equal 1, data["total"]
+    assert_equal [ "Dev task" ], data["tasks"].map { |t| t["title"] }
   end
 
   test "board_list_tasks filters by tag" do
     create(:board_task, board: @board, board_column: @col1, title: "Other task", tags: [ "backend" ])
 
-    result = InternalTools::BoardListTasks.new(params: { tag: "frontend" }, session: @session).execute
-    data = JSON.parse(result[:stdout])
-    assert_equal 1, data.size
-    assert_equal "Test task", data.first["title"]
+    data = list_tasks(tag: "frontend")
+    assert_equal [ "Test task" ], data["tasks"].map { |t| t["title"] }
   end
 
   test "board_list_tasks does not produce N+1 queries" do
