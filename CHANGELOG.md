@@ -4,7 +4,8 @@ All notable changes to Aixle Flow are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project aims to follow [Semantic Versioning](https://semver.org/) once
-tagged releases begin.
+tagged releases begin. User-visible entries are tagged with a product area from
+[docs/product/changelog-product-areas.md](docs/product/changelog-product-areas.md).
 
 > Versioning and tagged releases begin with the open-source launch. The first
 > tag will be **`v0.1.0`** (the project is pre-1.0), cut from the *Unreleased*
