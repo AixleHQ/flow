@@ -46,6 +46,15 @@ class BoardTask < ApplicationRecord
   # offset pagination from re-serving or skipping a row between pages.
   scope :in_board_order, -> { order(:position, :id) }
 
+  # Reading order for a flat listing that spans columns: columns left to right,
+  # tasks top to bottom inside each one. `in_board_order` cannot do this job by
+  # itself — `position` restarts per column, so rows of different columns would
+  # interleave in whatever order the planner felt like, and offset pagination
+  # over an unstable order re-serves some tasks while never showing others.
+  scope :in_flat_board_order, -> {
+    joins(:board_column).order("board_columns.position ASC, board_tasks.position ASC, board_tasks.id ASC")
+  }
+
   # The first `limit` tasks of *every* column, in one query — what keeps the board's
   # initial payload bounded on a board with hundreds of tasks per column. Ranking
   # happens in a window function because SQL has no per-group LIMIT.

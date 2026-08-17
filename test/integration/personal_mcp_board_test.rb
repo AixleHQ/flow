@@ -68,6 +68,30 @@ class PersonalMCPBoardTest < ActionDispatch::IntegrationTest
     assert_equal [ "First task", archived.title ].sort, listed_titles.sort
   end
 
+  test "list_board_tasks pages the board and reports the unpaginated total" do
+    second = create(:board_task, board: @board, board_column: @todo, title: "Second task")
+    create(:board_task, board: @board, board_column: @done, title: "Third task")
+
+    first_page = payload(call_tool("list_board_tasks", { project_id: @project.id, limit: 2 }))
+    assert_equal [ "First task", second.title ], first_page["tasks"].map { |t| t["title"] }
+    assert_equal 3, first_page["total"]
+    assert_equal 2, first_page["limit"]
+    assert first_page["has_more"]
+
+    last_page = payload(call_tool("list_board_tasks", { project_id: @project.id, limit: 2, offset: 2 }))
+    assert_equal [ "Third task" ], last_page["tasks"].map { |t| t["title"] }
+    assert_equal false, last_page["has_more"] # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "list_board_tasks rows carry no description" do
+    @task.update!(description: "a long brief nobody asked for")
+
+    row = payload(call_tool("list_board_tasks", { project_id: @project.id }))["tasks"].first
+
+    assert_not row.key?("description")
+    assert_equal "To Do", row["column"]
+  end
+
   test "get_board_task returns full detail with snake_case keys" do
     task = payload(call_tool("get_board_task", { project_id: @project.id, task_id: @task.id }))
     assert_equal "First task", task["title"]
