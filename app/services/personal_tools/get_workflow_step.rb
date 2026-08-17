@@ -4,9 +4,10 @@ module PersonalTools
   class GetWorkflowStep < Base
     tool do
       display_name "Get Workflow Step"
-      description "Return one workflow step in full: the complete, untruncated instructions plus every " \
-                  "wiring field (agent, tools, skills, MCP servers, dependencies, BMAD, retries, assets) " \
-                  "and its sub-steps. Use this before editing a step — get_workflow truncates instructions."
+      description "Return one workflow step with every wiring field (agent, tools, skills, MCP servers, " \
+                  "config items, dependencies, BMAD, retries, failure and skip policy, preferred model, " \
+                  "asset specs) and its sub-steps. get_workflow already carries instructions in full; " \
+                  "this adds the fields it leaves out."
       audience :user
       tags :workflows
       read_only

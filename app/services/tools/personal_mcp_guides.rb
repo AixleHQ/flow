@@ -39,8 +39,8 @@ module Tools
       - Start from `list_companies` / `list_projects`. Every id you pass comes
         from a list tool — never invent one, never carry an id across projects.
       - Read before you write: `get_workflow`, `get_workflow_step`, `get_agent`,
-        `get_skill`, `get_mcp_server`. `get_workflow` truncates step
-        instructions; `get_workflow_step` returns them in full.
+        `get_skill`, `get_mcp_server`. `get_workflow` carries step instructions
+        in full; `get_workflow_step` adds one step's remaining wiring.
       - Every id list on an update (`tool_ids`, `skill_ids`, `mcp_server_ids`,
         `depends_on_step_ids`, the workflow's `base_*` lists) REPLACES the
         current one. Read the current value first, then send the whole list.
@@ -127,9 +127,8 @@ module Tools
           #{sections.compact.join("\n").rstrip}
 
           Two rules worth repeating, because they are what usually goes wrong:
-          read a workflow step with `get_workflow_step` before editing it (the
-          listing truncates instructions), and remember that an id list on an
-          update replaces the current one wholesale.
+          read a workflow step before editing it, and remember that an id list
+          on an update replaces the current one wholesale.
         TEXT
       end
 
@@ -294,9 +293,9 @@ module Tools
           Rules:
           - Ask the user before destructive actions (`delete_workflow`,
             `delete_workflow_step`, `delete_sub_step`, `delete_workflow_trigger`).
-          - `get_workflow` truncates step instructions. Read a step with
-            `get_workflow_step` before editing it, or you will overwrite text you
-            never saw. The same applies to every id list (`tool_ids`, `skill_ids`,
+          - Read a step (`get_workflow`, or `get_workflow_step` for its full
+            wiring) before editing it, or you will overwrite text you never saw.
+            The same applies to every id list (`tool_ids`, `skill_ids`,
             `mcp_server_ids`, `depends_on_step_ids`, and the workflow's `base_*`
             lists): an update REPLACES the list, so read the current value first.
           - The off-board trigger kinds (slack, schedule, webhook, event) fire with
