@@ -18,8 +18,8 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
     steps = TaskWorkflowRunResource.new(@run.reload).to_h["steps"]
 
     assert_equal 1, steps.length
-    assert_equal "Implementation", steps.first[:name]
-    assert_equal session.id, steps.first[:terminalSessionId]
+    assert_equal "Implementation", steps.first["name"]
+    assert_equal session.id, steps.first["terminalSessionId"]
   end
 
   test "steps report a nil terminal session id when no session was started" do
@@ -28,7 +28,7 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
 
     steps = TaskWorkflowRunResource.new(@run.reload).to_h["steps"]
 
-    assert_nil steps.first[:terminalSessionId]
+    assert_nil steps.first["terminalSessionId"]
   end
 
   test "steps keep creation order so the drawer can pick the most recent session" do
@@ -40,6 +40,6 @@ class TaskWorkflowRunResourceTest < ActiveSupport::TestCase
     steps = TaskWorkflowRunResource.new(@run.reload).to_h["steps"]
 
     assert_equal [ first.terminal_session_id, second.terminal_session_id ],
-                 steps.map { |s| s[:terminalSessionId] }
+                 steps.map { |s| s["terminalSessionId"] }
   end
 end

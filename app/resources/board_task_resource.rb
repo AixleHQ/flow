@@ -5,14 +5,14 @@ class BoardTaskResource < ApplicationResource
   # only there so a card that was re-run all day cannot bloat the board payload.
   CI_GATE_LIMIT = 5
 
-  # Shared shape of both gate collections below. Nested keys are serialized as
-  # written here (only top-level attribute names are camelized by Alba); the
-  # Inertia prop transformer camelizes the whole tree for the web client.
-  GATE_TYPE = "Array<{ id: number; gate_type: string; status: string; ci_status: string; " \
+  # Shared shape of both gate collections below. Nested keys are camelized for the
+  # web client (see `ApplicationResource#to_h`), so they are written camelCase here;
+  # the agent-facing `snake_keys` payload keeps the Ruby spelling below.
+  GATE_TYPE = "Array<{ id: number; gateType: string; status: string; ciStatus: string; " \
               "conclusion: string | null; metadata: Record<string, unknown>; " \
-              "source: Record<string, unknown>; age_seconds: number; expires_at: string; " \
-              "expired: boolean; diagnostic_reason: string | null; created_at: string; " \
-              "resolved_at: string | null }>"
+              "source: Record<string, unknown>; ageSeconds: number; expiresAt: string; " \
+              "expired: boolean; diagnosticReason: string | null; createdAt: string; " \
+              "resolvedAt: string | null }>"
 
   # One gate as the board and the agent tools see it. `age_seconds`/`expires_at`
   # make a wait legible (how long, and how much longer), `source` names the
@@ -65,7 +65,7 @@ class BoardTaskResource < ApplicationResource
     task.has_attribute?(:assets_count) ? task[:assets_count].to_i : task.task_assets.size
   end
 
-  typelize "Array<{ id: number; state: string; created_at: string }>"
+  typelize "Array<{ id: number; state: string; createdAt: string }>"
   attribute :recent_workflow_runs do |task|
     task.workflow_runs.sort_by(&:created_at).last(5).reverse.map do |run|
       { id: run.id, state: run.state, created_at: run.created_at.iso8601 }

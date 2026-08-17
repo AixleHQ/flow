@@ -225,8 +225,8 @@ interface Task {
   // parent epic even when the epic is archived and therefore absent from the board's task list.
   parentTaskTitle?: string | null;
   // Also detail-payload-only: an epic's children, which a board holding one page per column can
-  // no longer be filtered for. Nested keys stay snake_case, as Alba serializes them.
-  childTasks?: Array<{ id: number; title: string; task_type: string }>;
+  // no longer be filtered for.
+  childTasks?: Array<{ id: number; title: string; taskType: string }>;
   tags: string[];
   archived: boolean;
   commentsCount: number;
@@ -1812,7 +1812,7 @@ function TaskDetailSidebar({
   // has not received the detail payload yet (a card opened straight from a partial reload).
   const childTasks = useMemo(() => {
     if (task?.childTasks) {
-      return task.childTasks.map((c) => ({ id: c.id, title: c.title, taskType: c.task_type }));
+      return task.childTasks.map((c) => ({ id: c.id, title: c.title, taskType: c.taskType }));
     }
     return allTasks
       .filter((t) => t.parentTaskId === task?.id)

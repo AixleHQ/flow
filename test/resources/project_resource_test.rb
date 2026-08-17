@@ -12,7 +12,7 @@ class ProjectResourceTest < ActiveSupport::TestCase
   test "members lists the owner first, with initials from their full name" do
     hash = ProjectResource.new(@project, params: { with_members: true }).to_h
 
-    assert_equal [ { id: @owner.id, initials: "AL" } ], hash["members"]
+    assert_equal [ { "id" => @owner.id, "initials" => "AL" } ], hash["members"]
   end
 
   test "members is empty unless with_members is requested, to avoid N+1 in the sidebar's project list" do
@@ -28,7 +28,7 @@ class ProjectResourceTest < ActiveSupport::TestCase
     hash = ProjectResource.new(@project, params: { with_members: true }).to_h
 
     assert_equal 4, hash["members"].length
-    assert_equal @owner.id, hash["members"].first[:id]
+    assert_equal @owner.id, hash["members"].first["id"]
   end
 
   test "members_count includes the owner plus all collaborators, not just the preview" do

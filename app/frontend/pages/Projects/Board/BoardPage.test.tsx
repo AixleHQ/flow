@@ -41,14 +41,14 @@ const columns = [
 const makeTask = (overrides: Partial<BoardTask> = {}): BoardTask =>
   buildBoardTask({ title: 'Untitled', taskType: 'story', commentsCount: 0, assigneeName: undefined, ...overrides });
 
-// Typelizer spells BoardTask's nested run/gate keys snake_case (`created_at`, `gate_type`), but the
-// real payload — and therefore BoardPage — reads them camelCase. These two bridge that mismatch so
-// the casts live in one place instead of being repeated inline at every call site.
+// A run and a gate as a task payload carries them: narrower than the standalone TaskWorkflowRun
+// resource, and with a gate's optional fields left to the call site. These two keep the shaping in
+// one place instead of repeating it inline at every call site.
 type BoardTaskRun = BoardTask['recentWorkflowRuns'][number];
 type BoardTaskGate = BoardTask['pendingGates'][number];
 
 const runOf = (overrides: Parameters<typeof buildTaskWorkflowRun>[0] = {}): BoardTaskRun =>
-  buildTaskWorkflowRun(overrides) as unknown as BoardTaskRun;
+  buildTaskWorkflowRun(overrides);
 
 const gatesOf = (
   ...gates: Array<{ id: number; gateType: string; createdAt: string } & Record<string, unknown>>
@@ -1554,12 +1554,12 @@ describe('Projects/Board/BoardPage', () => {
 
   it("lists an epic's children from the task payload, including ones no column has loaded", async () => {
     // The board holds one page per column, so the children cannot be found by filtering `tasks`;
-    // TaskDetailResource ships them with the epic. Alba leaves nested keys snake_case.
+    // TaskDetailResource ships them with the epic, nested keys camelized like every other payload.
     const selectedEpic = {
       ...epic,
       childTasks: [
-        { id: 51, title: 'Add card form', task_type: 'story' },
-        { id: 77, title: 'Unloaded child', task_type: 'bug' },
+        { id: 51, title: 'Add card form', taskType: 'story' },
+        { id: 77, title: 'Unloaded child', taskType: 'bug' },
       ],
     };
 
@@ -1569,6 +1569,10 @@ describe('Projects/Board/BoardPage', () => {
 
     const drawer = screen.getAllByRole('dialog')[0];
     expect(within(drawer).getByText('Child Tasks (2)')).toBeInTheDocument();
+    // Each child is labelled with its type; reading the wrong key left that undefined and took the
+    // whole drawer down with it.
+    expect(within(drawer).getByRole('button', { name: /story Add card form/ })).toBeInTheDocument();
+    expect(within(drawer).getByRole('button', { name: /bug Unloaded child/ })).toBeInTheDocument();
 
     await userEvent.click(within(drawer).getByRole('button', { name: /Unloaded child/ }));
     expect(router.get).toHaveBeenCalledWith(
@@ -1695,6 +1699,38 @@ describe('Projects/Board/BoardPage', () => {
     );
     expect(await screen.findByText('Frontend task')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Backend task')).not.toBeInTheDocument());
+
+    fetchSpy.mockRestore();
+  });
+
+  it('renders a filtered card that carries a gate, whose payload came from the server', async () => {
+    // Filtering re-reads every column from the API, so the cards are rebuilt from that response
+    // rather than the props. A gate is the part of a card with nested keys, which is where the two
+    // payloads used to disagree — the card read `gateType` off a gate the API spelled `gate_type`
+    // and the board went down with it.
+    const gated = makeTask({
+      id: 1,
+      title: 'Frontend task',
+      boardColumnId: 100,
+      tags: ['frontend'],
+      ciGates: gatesOf({
+        id: 9,
+        gateType: 'github_checks_completed',
+        createdAt: '2026-01-02T00:00:00Z',
+        ciStatus: 'pending',
+      }),
+    });
+    const fetchSpy = stubColumnTasks([gated]);
+
+    renderAuthedPage(<BoardPage />, {
+      props: { ...populatedProps, tasks: [gated], boardTags: ['frontend'] },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Tags: All/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'frontend' }));
+
+    expect(await screen.findByText('Frontend task')).toBeInTheDocument();
+    expect(await screen.findByText('CI pending')).toBeInTheDocument();
 
     fetchSpy.mockRestore();
   });
@@ -2138,11 +2174,7 @@ describe('Projects/Board/BoardPage', () => {
             id: 1,
             title: 'Wire up authentication',
             boardColumnId: 100,
-            recentWorkflowRuns: [buildTaskWorkflowRun({ state: 'running' })] as unknown as {
-              id: number;
-              state: string;
-              created_at: string;
-            }[],
+            recentWorkflowRuns: [runOf({ state: 'running' })],
           }),
         ],
       },
