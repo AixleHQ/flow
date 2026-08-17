@@ -15,8 +15,9 @@ they know how agents, containers, or orchestration work.
   what the person does · what they see afterwards.*
 - Use the names from the product UI, not internal engineering names
   (see [Terminology notes](#terminology-notes) at the end).
-- The existing in-app docs at `/docs` are too technical for this guide — do not
-  reuse their structure or copy.
+- The existing in-app documentation (linked from the public site as
+  **Documentation**) is too technical for this guide — do not reuse its
+  structure or copy.
 
 ---
 
@@ -40,12 +41,15 @@ Open with the loop, not a feature list.
 
 The reader goes from an invite email to their first open project.
 
-- **Getting in.** Accept an invitation or sign in. First-run onboarding: role
-  and language.
-- **Connect an agent.** In **Profile**, connect the account of the agent
-  product you already use (Claude Code, Cursor CLI, Codex, Gemini CLI, or
-  Grok). Nothing can run on your behalf until this is done — say this plainly
-  and early.
+- **Getting in.** Accept an invitation or sign in. First-run onboarding walks
+  through role, language, and connecting an agent (the agent step is skipped
+  for viewer-only users).
+- **Connect an agent.** During onboarding — or any time later in **Profile** —
+  connect the account of the agent product you already use (Claude Code,
+  Cursor CLI, Codex, Gemini CLI, or Grok). Nothing can run on your behalf
+  until this is done — say this plainly and early.
+- **Your Profile.** Besides agent credentials, Profile shows your personal
+  usage and personal settings.
 - **Find your work.** Open **Projects**, pick a project, land on **Overview**.
 - **More than one company?** The workspace switcher moves you between
   companies; each company has its own projects, members, and analytics.
@@ -133,7 +137,7 @@ also run on their own).
   rules it follows. A persona is not a product choice — the same persona can
   run on any of the supported runtimes (Claude Code, Cursor CLI, Codex, Gemini
   CLI, Grok).
-- **When to use it.** To make agent behaviour consistent across workflows —
+- **When to use it.** To make agent behavior consistent across workflows —
   "our reviewer", "our implementer" — instead of re-writing instructions per
   step.
 - **What you do.** Create a persona, write its instructions and rules, pick it
@@ -149,8 +153,8 @@ also run on their own).
 - **When to use it.** Your internal service, an odd API, a one-off script.
 - **What you do.** Define the wrapper once; agents in this project can then
   call it during runs.
-- *Afterwards:* the wrapper shows up as a capability agents actually use in
-  their logs.
+- *Afterwards:* the wrapper shows up in run logs as a capability the agents
+  actually called.
 
 ## 10. Skills
 
@@ -187,9 +191,10 @@ also run on their own).
 ## 13. AI Builder
 
 - **What it is.** Describe a process in plain language; the product builds the
-  tasks, board setup, and workflows from that prompt. (The sidebar button says
-  **AI Builder / Build with AI**; the builder's own pages are titled **Aixle
-  Builder** — the guide should show both once, then stick to one.)
+  tasks, board setup, and workflows from that prompt. (This guide uses **AI
+  Builder**, matching the sidebar entry point; the builder's own pages — and
+  the changelog taxonomy — say **Aixle Builder**. Show both names once, then
+  stick to AI Builder.)
 - **When to use it.** Setting up a new process — instead of configuring
   columns, workflows, and steps by hand.
 - **What you do.** Write what you want to automate; review what the builder
@@ -235,7 +240,8 @@ Round off with the shared layer above projects.
 - **Workflow Catalog** — reusable workflows the team can copy into any
   project.
 - **Company Assets** and **Company Members** — workspace-level files and
-  people.
+  people. Company Assets, like company Analytics and Sessions, is visible to
+  admins only.
 - Switching companies when you belong to more than one workspace.
 
 ---
@@ -250,11 +256,11 @@ screen it touches, so the reader can replay it.
 A lead links a repository (Integrations → Repositories), binds the
 "Implementation" column of a **Dev Team** board to an implementation workflow,
 and writes a card describing a small feature. They drag the card into the
-column. The workflow starts: one step plans, a parallel pair implements and
-writes tests, a final step waits for a human. The lead watches the run in
+column. The workflow starts: one step plans, two parallel steps implement and
+write tests, a final step waits for a human. The lead watches the run in
 **Runs**, reads the diff summary the agent posted to the card, approves the
-waiting step — and a pull request appears in the linked repo. Cost of the whole
-run is on the card and in Analytics.
+waiting step — and a pull request appears in the linked repo. The cost of the
+whole run is on the card and in Analytics.
 
 ### Story 2 — build a workflow from one prompt
 

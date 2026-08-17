@@ -26,14 +26,15 @@ Supported agent runtimes: Claude Code, Cursor CLI, Codex, Gemini CLI, Grok.
 ## Product areas (changelog taxonomy)
 
 Use the names in **bold** in changelog entries. They match what people see in
-the product.
+the product — or, where no single sidebar label exists (sign-in, triggers),
+they name a flow users would recognize.
 
 ### Workspace
 
 | Area | What it covers |
 | --- | --- |
 | **Companies & projects** | Workspaces, switching between companies, creating and listing projects |
-| **Sign-in & onboarding** | Login, invitations, first-run setup, role, language |
+| **Sign-in & onboarding** | Login, invitations, first-run setup: role, language, connecting an agent |
 | **Profile** | Personal agent credentials (connecting a runtime account), personal usage, personal access so Aixle can be used from an external agent |
 
 ### Project — Work
@@ -42,7 +43,7 @@ the product.
 | --- | --- |
 | **Overview** | Project home: activity, task distribution, spend, workflow run status |
 | **Tasks** | The board: columns, cards, subtasks, comments, attachments, waits, activity. Column → workflow binding (auto or manual). Board templates (Simple Kanban, Dev Team, Full SDLC) offered on an empty board |
-| **Workflows** | Named processes made of steps: instructions, which agent runs, dependencies, on-failure behaviour (fail / retry / skip), human approval, inputs/outputs. Publishing and duplicating |
+| **Workflows** | Named processes made of steps: instructions, which agent runs, dependencies, on-failure behavior (fail / retry / skip), human approval, inputs/outputs. Publishing and duplicating |
 | **Triggers & gates** | When a workflow starts (task enters column, manual run, schedule, Slack message, inbound webhook) and what can pause a run (waiting on a check or a person) |
 | **Runs** | Workflow runs, live and past: step timeline, parallel waves, approve / retry / skip, cost |
 | **Sessions** | Individual agent sessions: status, log, cost, tokens, artifacts |
@@ -63,7 +64,7 @@ the product.
 
 | Area | What it covers |
 | --- | --- |
-| **Secrets & variables** | Credentials and config values agents and connectors use |
+| **Secrets & Variables** | Credentials and config values agents and connectors use |
 | **Members** | Who is on the project and with what access (roles: Admin, Employee, Viewer) |
 | **Analytics** | Spend, sessions, tokens, success — by project, agent, and source |
 | **Settings** | Project name, language, archive, delete |
@@ -88,7 +89,7 @@ the product.
 
 | Area | What it covers |
 | --- | --- |
-| **Docs** | Product documentation at `/docs` (linked from the public site) |
+| **Docs** | The in-product documentation, linked from the public site as **Documentation** |
 
 ## How the pieces fit (for changelog writers)
 
