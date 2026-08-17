@@ -48,12 +48,15 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     tool = create(:tool, scope: @project)
     skill = create(:skill, scope: @project)
     server = create(:mcp_server, scope: @project)
+    asset = create(:asset, scope: @project)
 
     updated = payload(call_tool("update_workflow",
                                 { project_id: @project.id, workflow_id: @workflow.id,
                                   name: "Renamed", description: "new description",
                                   base_tool_ids: [ tool.id ], base_skill_ids: [ skill.id ],
-                                  base_mcp_server_ids: [ server.id ] }))
+                                  base_mcp_server_ids: [ server.id ],
+                                  base_asset_ids: [ asset.id ],
+                                  inherit_all_project_resources: true }))
     assert_equal "Renamed", updated["name"]
     assert_includes updated["updated_fields"], "base_tool_ids"
 
@@ -63,11 +66,27 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert_equal [ tool.id ], detail["base_tool_ids"]
     assert_equal [ skill.id ], detail["base_skill_ids"]
     assert_equal [ server.id ], detail["base_mcp_server_ids"]
+    assert_equal [ asset.id ], detail["base_asset_ids"]
+    assert detail["inherit_all_project_resources"]
     assert_nil detail["published_at"]
 
     nothing = call_tool("update_workflow", { project_id: @project.id, workflow_id: @workflow.id })
     assert error?(nothing)
     assert_match(/no fields/i, text(nothing))
+  end
+
+  # The flag lives in the config JSON, which does no ActiveRecord casting: stored
+  # unconverted, a false would land as a truthy value and quietly grant every
+  # step every resource in the project.
+  test "update_workflow turns inherit_all_project_resources back off" do
+    @workflow.merge_config!(inherit_all_project_resources: true)
+
+    updated = payload(call_tool("update_workflow",
+                                { project_id: @project.id, workflow_id: @workflow.id,
+                                  inherit_all_project_resources: false }))
+
+    assert_not updated["inherit_all_project_resources"]
+    assert_not @workflow.reload.inherit_all_project_resources
   end
 
   test "get_workflow returns long instructions in full and get_workflow_step adds the wiring" do

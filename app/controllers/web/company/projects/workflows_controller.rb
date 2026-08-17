@@ -95,6 +95,19 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
     end
   end
 
+  # The Edit dialog on the workflows page. Goes through WorkflowService so a
+  # `config` edit merges into the existing hash instead of replacing it — the
+  # same write the builder's autosave performs through the API.
+  def update
+    workflow = current_project.workflows.active.find(params[:id])
+
+    if WorkflowService.update(workflow: workflow, params: workflow_params)
+      redirect_to company_project_workflows_path(current_project), notice: "Workflow updated"
+    else
+      redirect_to company_project_workflows_path(current_project), alert: workflow.errors.full_messages.join(", ")
+    end
+  end
+
   def destroy
     workflow = current_project.workflows.find(params[:id])
     workflow.destroy
