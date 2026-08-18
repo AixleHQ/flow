@@ -112,13 +112,6 @@ export function SessionCard({ data, sessionHref, defaultOpen = false, live = fal
 
       {open && (
         <div className={classes.expand}>
-          {data.prompt && (
-            <section className={classes.section}>
-              <h4 className={classes.sectionHead}>Prompt</h4>
-              <p className={classes.prompt}>{data.prompt}</p>
-            </section>
-          )}
-
           {data.steps.length > 0 && (
             <section className={classes.section}>
               <h4 className={classes.sectionHead}>
@@ -138,6 +131,13 @@ export function SessionCard({ data, sessionHref, defaultOpen = false, live = fal
                   </span>
                 </div>
               ))}
+            </section>
+          )}
+
+          {data.prompt && (
+            <section className={classes.section}>
+              <h4 className={classes.sectionHead}>Prompt</h4>
+              <p className={classes.prompt}>{data.prompt}</p>
             </section>
           )}
 
