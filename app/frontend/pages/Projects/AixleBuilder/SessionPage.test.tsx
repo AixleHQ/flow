@@ -176,7 +176,7 @@ describe('Projects/AixleBuilder/SessionPage', () => {
     expect(screen.getByText('Starting container...')).toBeInTheDocument();
   });
 
-  it('shows the session-state line and error message in the main panel when not active and not terminal', () => {
+  it('hides the main panel empty state while the finishing overlay is shown', () => {
     renderAuthedPage(<SessionPage />, {
       props: {
         project,
@@ -193,8 +193,8 @@ describe('Projects/AixleBuilder/SessionPage', () => {
       },
     });
 
-    expect(screen.getByText('Session finishing')).toBeInTheDocument();
-    expect(screen.getByText('Container exited unexpectedly')).toBeInTheDocument();
+    expect(screen.queryByText('Session finishing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Container exited unexpectedly')).not.toBeInTheDocument();
   });
 
   it('shows the finishing overlay when the session state is finishing', () => {
