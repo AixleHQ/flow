@@ -184,7 +184,7 @@ describe('AppSidebar', () => {
     const user = userEvent.setup();
     renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />);
 
-    expect(screen.getByText('AI Builder')).toBeInTheDocument();
+    expect(screen.getByText('Tasks, boards, and workflows — from one prompt.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /Build with AI/ }));
 
     expect(router.visit).toHaveBeenCalledWith('/company/projects/7/aixle_builder');
@@ -237,6 +237,47 @@ describe('AppSidebar', () => {
 
     // After collapsing, the button flips to the expand affordance.
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument();
+  });
+
+  it('collapses and re-expands a nav group, hiding and showing its items', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />);
+
+    // All groups are expanded by default.
+    expect(screen.getByRole('link', { name: 'Tasks' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Work' }));
+    expect(screen.queryByRole('link', { name: 'Tasks' })).not.toBeInTheDocument();
+    // Other groups are unaffected.
+    expect(screen.getByRole('link', { name: 'Agents' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Work' }));
+    expect(screen.getByRole('link', { name: 'Tasks' })).toBeInTheDocument();
+  });
+
+  it('persists a collapsed nav group across remounts', async () => {
+    const user = userEvent.setup();
+    const { unmount } = renderAuthedPage(
+      <AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Work' }));
+    expect(screen.queryByRole('link', { name: 'Tasks' })).not.toBeInTheDocument();
+    unmount();
+
+    renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />);
+    expect(screen.queryByRole('link', { name: 'Tasks' })).not.toBeInTheDocument();
+  });
+
+  it('shows every item in the icon rail even when its group is collapsed', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<AppSidebar projectId="7" context="project" projects={projects} currentProjectId="7" />);
+
+    await user.click(screen.getByRole('button', { name: 'Work' }));
+    expect(screen.queryByRole('link', { name: 'Tasks' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    expect(screen.getByRole('link', { name: 'Tasks' })).toBeInTheDocument();
   });
 
   // The company switcher is a Slack-style rail left of the sidebar. A
