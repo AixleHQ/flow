@@ -178,6 +178,8 @@ const SessionPage = () => {
   // ── Render: Terminal panel ─────────────────────
 
   const renderMainPanel = () => {
+    if (finishRequested || isFinishing) return null;
+
     if (!canShowTerminal) {
       return (
         <div className={classes.mainPanel}>
