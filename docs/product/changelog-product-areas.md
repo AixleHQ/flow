@@ -6,8 +6,9 @@
 > release reads as a change to a named part of the product — not as a list of
 > tickets.
 >
-> **Snapshot date:** 2026-08-17. Area names are verified against the product
-> UI (sidebar labels and page titles), not internal engineering names.
+> **Snapshot date:** 2026-08-20. Area names are verified against the product
+> UI on `develop` (sidebar labels, page titles, and on-screen control copy),
+> not internal engineering names.
 
 ## What Aixle Flow is
 
@@ -44,9 +45,8 @@ they name a flow users would recognize.
 | **Overview** | Project home: activity, task distribution, spend, workflow run status |
 | **Tasks** | The board: columns, cards, subtasks, comments, attachments, waits, activity. Column → workflow binding (auto or manual). Board templates (Simple Kanban, Dev Team, Full SDLC) offered on an empty board |
 | **Workflows** | Named processes made of steps: instructions, which agent runs, dependencies, on-failure behavior (fail / retry / skip), human approval, inputs/outputs. Publishing and duplicating |
-| **Triggers & gates** | When a workflow starts (task enters column, manual run, schedule, Slack message, inbound webhook) and what can pause a run (waiting on a check or a person) |
-| **Runs** | Workflow runs, live and past: step timeline, parallel waves, approve / retry / skip, cost |
-| **Sessions** | Individual agent sessions: status, log, cost, tokens, artifacts |
+| **Triggers & gates** | When a workflow starts (task enters column, manual run, schedule, Slack message, incoming webhook) and what can pause a run: a gate waiting on CI (waiting / passed / failed / stale) or a step waiting on a person |
+| **Sessions & Runs** | One list for both: workflow runs (step timeline, parallel waves, approve / retry / skip, cost) and the agent sessions inside them (status, live terminal, log, tokens, artifacts, cost) |
 | **Assets** | Files the team uploads and files agents produce; versioning and review |
 
 ### Project — Resources
@@ -58,7 +58,7 @@ they name a flow users would recognize.
 | **Skills** | Reusable know-how installed from a catalog or written by hand |
 | **Connectors** | External tool servers agents can call, from a catalog or added by hand |
 | **Repositories** | Linked Git repos the agent can work in and push to |
-| **Integrations** | GitHub, GitLab, Linear, and similar connections |
+| **Integrations** | Connected accounts: GitHub, GitLab, Linear, Slack, Coder |
 
 ### Project — Admin
 
@@ -94,8 +94,8 @@ they name a flow users would recognize.
 ## How the pieces fit (for changelog writers)
 
 Tasks (board) → card enters a bound column → Workflow starts → each Step is one
-Agent session → results, status, and cost come back to the board, to Runs, and
-to Sessions.
+Agent session → results, status, and cost come back to the board and to
+Sessions & Runs.
 
 Agents do not work in a vacuum. A run can receive: the card (title,
 description, comments, files, column purpose), workflow instructions, skills,
@@ -111,9 +111,43 @@ wrappers, connectors, repositories, and secrets.
    `Added — Tasks: attach files directly to a card`.
 4. Do not mention implementation. If the only change is internal and users
    cannot see it, it does not belong in the product changelog.
-5. Keep this snapshot as the baseline. When a release adds a new area (a new
+5. Repository-level changes that a *contributor* must know about — licensing,
+   governance, community health files, contribution rules — stay in
+   `CHANGELOG.md` untagged. They are not product areas, and forcing one on
+   them would be a lie about where the change shows up.
+6. Keep this snapshot as the baseline. When a release adds a new area (a new
    nav item or a new first-class object), update this snapshot in the same
-   change as the changelog entry.
+   change as the changelog entry — and add the matching chapter to
+   [user-guide-outline.md](./user-guide-outline.md).
+
+## Area → guide chapter
+
+Every area above is documented in one chapter of
+[user-guide-outline.md](./user-guide-outline.md). Keep the two in step.
+
+| Area | Chapter |
+| --- | --- |
+| Companies & projects | 20. The company workspace |
+| Sign-in & onboarding | 2. Your first session |
+| Profile | 2. Your first session |
+| Overview | 4. Overview |
+| Tasks | 5. Tasks — the board |
+| Workflows | 6. Workflows |
+| Triggers & gates | 7. Triggers & gates |
+| Sessions & Runs | 8. Sessions & Runs |
+| Assets | 9. Assets |
+| Agents | 10. Agents |
+| Wrappers | 11. Wrappers |
+| Skills | 12. Skills |
+| Connectors | 13. Connectors |
+| Repositories, Integrations | 14. Repositories & Integrations |
+| Aixle Builder | 15. AI Builder |
+| Members | 16. Team |
+| Secrets & Variables | 17. Secrets & Variables |
+| Analytics | 18. Analytics |
+| Settings | 19. Settings |
+| Workflow Catalog, Company analytics / sessions / assets / members | 20. The company workspace |
+| Docs | Not a chapter — the operator portal at `/docs` is a separate document set |
 
 ## Out of scope
 
