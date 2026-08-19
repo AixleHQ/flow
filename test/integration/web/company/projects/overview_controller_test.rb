@@ -14,4 +14,16 @@ class Web::Company::Projects::OverviewControllerTest < ActionDispatch::Integrati
     get company_project_overview_index_path(@project)
     assert_inertia_page "Projects/Overview/OverviewPage"
   end
+
+  test "summary reports the count of currently running sessions" do
+    create(:terminal_session, :agent_session, project: @project, user: @user, state: "not_started")
+    create(:terminal_session, :agent_session, project: @project, user: @user, state: "running")
+    create(:terminal_session, :agent_session, project: @project, user: @user, state: "ready")
+
+    get company_project_overview_index_path(@project)
+
+    assert_inertia_props do |props|
+      props[:summary][:sessionsLaunched] == 3 && props[:summary][:sessionsRunning] == 2
+    end
+  end
 end
