@@ -1,0 +1,334 @@
+/* ── Project Overview redesign (issue #522) ──────────────────────────
+ * KPI row + two-column (Recent Activity / Workflow Runs donut) + Board Task
+ * Distribution bar list. Sizes/spacing/radii are taken from the reference
+ * mockup; colors are mapped onto the app's existing --app-* theme tokens so
+ * light/dark both work (the mockup only specified a dark palette).
+ */
+
+.kpiRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.kpiCard {
+  background: var(--app-bg-card);
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kpiTop {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--app-text-tertiary);
+  margin-bottom: 14px;
+}
+
+.kpiLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--app-text-secondary);
+}
+
+.kpiValue {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--app-text-primary);
+  font-family: var(--app-font-heading);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.kpiValueMono {
+  font-family: var(--app-font-mono);
+  font-weight: 600;
+}
+
+.kpiDelta {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--app-warning-fg);
+  display: inline-block;
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 var(--app-warning-border);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(0, 0, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: stretch;
+}
+
+.panel {
+  background: var(--app-bg-card);
+  border: 1px solid var(--app-border-default);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.sectionTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text-primary);
+  font-family: var(--app-font-heading);
+  letter-spacing: -0.01em;
+}
+
+/* Recent Activity list */
+.actList {
+  display: flex;
+  flex-direction: column;
+}
+
+.actItem {
+  display: flex;
+  gap: 11px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--app-border-default);
+}
+
+.actItemLast {
+  display: flex;
+  gap: 11px;
+  padding: 11px 0 0;
+}
+
+.actDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.actBody {
+  flex: 1;
+  min-width: 0;
+}
+
+.actTxt {
+  font-size: 13px;
+  color: var(--app-text-primary);
+  line-height: 1.45;
+}
+
+.actMeta {
+  font-size: 11px;
+  color: var(--app-text-tertiary);
+  margin-top: 2px;
+}
+
+.emptyState {
+  font-size: 13px;
+  color: var(--app-text-tertiary);
+  padding: 10px 0;
+}
+
+/* Workflow Runs — donut + legend */
+.runsBody {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 36px;
+  padding: 8px 0;
+}
+
+.donutCenter {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.donutNum {
+  font-size: 26px;
+  font-weight: 700;
+  font-family: var(--app-font-heading);
+  color: var(--app-text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.donutCap {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+  margin-top: 3px;
+}
+
+.runsInfo {
+  width: 100%;
+  max-width: 300px;
+}
+
+.rhTotal {
+  font-size: 13px;
+  color: var(--app-text-secondary);
+}
+
+.rhTotalValue {
+  color: var(--app-text-primary);
+  font-weight: 600;
+}
+
+.rhNote {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  margin-top: 5px;
+  line-height: 1.4;
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.legRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+}
+
+.legDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.legName {
+  color: var(--app-text-secondary);
+  flex: 1;
+}
+
+.legVal {
+  color: var(--app-text-primary);
+  font-weight: 600;
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+}
+
+.legPct {
+  color: var(--app-text-tertiary);
+  font-size: 11px;
+  width: 34px;
+  text-align: right;
+  font-family: var(--app-font-mono);
+}
+
+/* Board Task Distribution — horizontal bar list */
+.hbarList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hbarRow {
+  display: grid;
+  grid-template-columns: 150px 1fr 34px;
+  align-items: center;
+  gap: 14px;
+}
+
+.hbarName {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hbarTrack {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--app-bg-elevated);
+  overflow: hidden;
+}
+
+.hbarFill {
+  height: 100%;
+  border-radius: 4px;
+}
+
+.hbarCount {
+  font-family: var(--app-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text-primary);
+  text-align: right;
+}
+
+@media (max-width: 1100px) {
+  .twoCol {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .kpiRow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .runsBody {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .hbarRow {
+    grid-template-columns: 96px 1fr 30px;
+    gap: 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpiRow {
+    grid-template-columns: 1fr;
+  }
+}
