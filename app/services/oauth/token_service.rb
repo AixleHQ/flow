@@ -78,7 +78,7 @@ module Oauth
       return unless cred.expired?(skew)
       return unless cred.refreshable?
 
-      fresh(cred)
+      fresh(cred, skew: skew)
     rescue ReauthRequired
       # Already caught by preflight — do not re-raise here, session start will
       # surface it through the normal token injection path.
@@ -86,8 +86,8 @@ module Oauth
     end
 
     # Ensure `cred` yields a fresh token; refresh under lock if near expiry.
-    def fresh(cred)
-      return cred.access_token unless cred.expired?(REFRESH_SKEW)
+    def fresh(cred, skew: REFRESH_SKEW)
+      return cred.access_token unless cred.expired?(skew)
 
       # Nothing to refresh from. Record it like any other refresh failure so the
       # credential escalates to status:error (and notifies the owner to reconnect)
@@ -103,7 +103,7 @@ module Oauth
       cred.with_lock do
         cred.reload
         # A concurrent request may have refreshed while we waited on the lock.
-        break unless cred.expired?(REFRESH_SKEW)
+        break unless cred.expired?(skew)
 
         resp = perform_refresh!(cred)
         # Never downgrade: only persist if the new expiry is >= the stored one.
@@ -111,7 +111,7 @@ module Oauth
         cred.apply_token_response!(resp) if new_exp.nil? || cred.expires_at.nil? || new_exp >= cred.expires_at
       end
 
-      raise ReauthRequired.new(cred) if cred.access_token.blank? || cred.expired?(REFRESH_SKEW)
+      raise ReauthRequired.new(cred) if cred.access_token.blank? || cred.expired?(skew)
 
       cred.access_token
     rescue ReauthRequired
