@@ -68,4 +68,8 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
 ## Related documentation elsewhere
 
 - `references/aixle-system-reference.md` — agent-facing platform reference (domain model, runtimes, container layout)
-- `app/frontend/pages/Docs/data/pages/` — end-user product docs rendered in the app
+- `app/frontend/pages/Docs/data/pages/` — the markdown the `/docs` portal renders. Two sections:
+  **Using Flow** (the product guide: what a user does on each screen) and **User guide /
+  Reference** (operator material: install, runtimes, MCP, API). Adding a page there means
+  registering it in `navStructure.ts`, `data/pages/index.ts`, `data/searchIndex.ts`, and the
+  allow-list in `Web::DocsController`
