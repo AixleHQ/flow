@@ -2,6 +2,7 @@ import { router } from '@inertiajs/react';
 import {
   Avatar,
   Badge,
+  Box,
   Button,
   Card,
   Center,
@@ -9,7 +10,6 @@ import {
   Group,
   Loader,
   Modal,
-  SimpleGrid,
   Text,
   TextInput,
 } from '@mantine/core';
@@ -47,12 +47,17 @@ const monogram = (connector: Connector): string => {
   return (words[0][0] + words[1][0]).toUpperCase();
 };
 
+// Neutral source badges (Hosted / NPM / PyPI / …) — no color coding by
+// installability, per the design spec.
+const REGISTRY_LABELS: Record<string, string> = { hosted: 'Hosted', npm: 'NPM', pypi: 'PyPI', package: 'Package' };
+
 const transportSummary = (connector: Connector): string => {
   const supported = connector.targets.filter((t) => t.supported);
-  if (supported.length === 0) return 'unavailable';
-  return Array.from(
+  if (supported.length === 0) return 'Unavailable';
+  const kinds = Array.from(
     new Set(supported.map((t) => (t.kind === 'remote' ? 'hosted' : (t.registryType ?? 'package')))),
-  ).join(', ');
+  );
+  return kinds.map((kind) => REGISTRY_LABELS[kind] ?? kind.charAt(0).toUpperCase() + kind.slice(1)).join(' · ');
 };
 
 // Browsing the public connector catalog: the same MCP servers the manual form
@@ -99,7 +104,7 @@ export const ConnectorCatalogModal: FC<ConnectorCatalogModalProps> = ({
 
   return (
     <>
-      <Modal opened={opened} onClose={onClose} title="Connectors" size="90%">
+      <Modal opened={opened} onClose={onClose} title="Browse connectors" fullScreen>
         <TextInput
           placeholder="Search connectors — try 'issue tracker' or 'database'"
           aria-label="Search connectors"
@@ -113,6 +118,7 @@ export const ConnectorCatalogModal: FC<ConnectorCatalogModalProps> = ({
               search && <CloseButton size="sm" aria-label="Clear search" onClick={() => changeSearch('')} />
             )
           }
+          maw={480}
           mb="md"
         />
 
@@ -142,19 +148,22 @@ export const ConnectorCatalogModal: FC<ConnectorCatalogModalProps> = ({
             )}
           </Center>
         ) : (
-          <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="sm">
+          <Box style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
             {connectors.map((connector) => (
               <Card
                 key={connector.id}
                 padding="md"
                 radius="md"
                 withBorder
+                onClick={connector.installable ? () => setInstalling(connector) : undefined}
                 style={{
                   borderColor: 'var(--app-border-default)',
                   backgroundColor: 'var(--app-bg-paper)',
                   display: 'flex',
                   flexDirection: 'column',
                   minHeight: 150,
+                  cursor: connector.installable ? 'pointer' : 'default',
+                  opacity: connector.installable ? 1 : 0.55,
                 }}
               >
                 <Group justify="space-between" align="flex-start" wrap="nowrap" mb={6}>
@@ -172,7 +181,7 @@ export const ConnectorCatalogModal: FC<ConnectorCatalogModalProps> = ({
                         deprecated
                       </Badge>
                     )}
-                    <Badge size="xs" variant="light" color={connector.installable ? 'teal' : 'gray'}>
+                    <Badge size="xs" variant="light" color="gray">
                       {transportSummary(connector)}
                     </Badge>
                   </Group>
@@ -188,7 +197,7 @@ export const ConnectorCatalogModal: FC<ConnectorCatalogModalProps> = ({
                       heading already IS the registry name — printing it twice
                       just wastes the row. */}
                   {connector.pickerName !== connector.name && (
-                    <Text fz={11} c="dimmed" ff="JetBrains Mono, monospace" truncate>
+                    <Text fz={11} c="dimmed" truncate>
                       {connector.name}
                     </Text>
                   )}
@@ -202,18 +211,26 @@ export const ConnectorCatalogModal: FC<ConnectorCatalogModalProps> = ({
                   <Text fz={11} c="dimmed">
                     {connector.version ? `v${connector.version}` : ''}
                   </Text>
-                  <Button
-                    size="xs"
-                    variant="light"
-                    disabled={!connector.installable}
-                    onClick={() => setInstalling(connector)}
-                  >
-                    {connector.installable ? 'Install' : 'Unavailable'}
-                  </Button>
+                  {connector.installable ? (
+                    <Button
+                      size="xs"
+                      variant="light"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInstalling(connector);
+                      }}
+                    >
+                      Install
+                    </Button>
+                  ) : (
+                    <Text fz={12} c="dimmed">
+                      Unavailable
+                    </Text>
+                  )}
                 </Group>
               </Card>
             ))}
-          </SimpleGrid>
+          </Box>
         )}
 
         {catalogSyncedAt && (

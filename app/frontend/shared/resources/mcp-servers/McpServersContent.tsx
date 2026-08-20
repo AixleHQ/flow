@@ -1,7 +1,6 @@
 import {
   ActionIcon,
   Alert,
-  Badge,
   Box,
   Button,
   Group,
@@ -14,6 +13,7 @@ import {
 import {
   IconAlertTriangle,
   IconEdit,
+  IconPhoto,
   IconPlug,
   IconPlugConnected,
   IconPlus,
@@ -25,6 +25,7 @@ import { useMemo, useState } from 'react';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
+import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge, type StatusTone } from 'shared/ui/StatusBadge';
 
 import { ConnectorCatalogModal } from '../connectors/ConnectorCatalogModal';
@@ -179,14 +180,14 @@ export function McpServersContent({
         actions={
           canExecute && (
             <>
+              <Button variant="default" leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
+                Add manually
+              </Button>
               {catalogAvailable && (
                 <Button leftSection={<IconPlugConnected size={16} />} onClick={() => setCatalogOpen(true)}>
                   Browse connectors
                 </Button>
               )}
-              <Button variant="default" leftSection={<IconPlus size={16} />} onClick={() => setFormModalOpen(true)}>
-                Add manually
-              </Button>
             </>
           )
         }
@@ -233,6 +234,9 @@ export function McpServersContent({
             { label: 'Custom', value: 'custom' },
           ]}
         />
+        <ResourceCount>
+          {filtered.length} {filtered.length === 1 ? 'connector' : 'connectors'}
+        </ResourceCount>
       </Group>
 
       {filtered.length === 0 ? (
@@ -258,96 +262,98 @@ export function McpServersContent({
           />
         </Box>
       ) : (
-        <Box
-          style={{
-            border: '1px solid var(--app-border-default)',
-            borderRadius: 'var(--mantine-radius-md)',
-            overflow: 'hidden',
-          }}
-        >
-          <Table highlightOnHover>
+        <ResourceTableShell>
+          <Table highlightOnHover layout="fixed">
             <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
               <Table.Tr>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Name
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    URL
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Transport
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Scope
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Status
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Connection
-                  </Text>
-                </Table.Th>
-                <Table.Th w={100}>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" ta="right" style={{ letterSpacing: 0.5 }}>
-                    Actions
-                  </Text>
-                </Table.Th>
+                {/* Fixed layout, with every other column pinned to a width — Name is
+                    the one column whose content is genuinely unbounded (long server
+                    names, long URLs), so it is the one left to claim the remainder
+                    and truncate in place instead of squeezing its neighbors. */}
+                <ResourceTh>Name</ResourceTh>
+                <ResourceTh w={110}>Transport</ResourceTh>
+                <ResourceTh w={110}>Scope</ResourceTh>
+                <ResourceTh w={120}>Status</ResourceTh>
+                <ResourceTh w={140}>Connection</ResourceTh>
+                <ResourceTh align="right" w={100}>
+                  Actions
+                </ResourceTh>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
               {filtered.map((server) => {
                 const canEdit = canExecute && canEditServer(server);
+                // A row installed from the catalog gets the shared placeholder tile —
+                // the same frame the browse cards use, until real logos are wired in
+                // there too. A hand-authored server gets a plain plug glyph instead,
+                // since there is no publisher icon to stand in for.
+                const fromCatalog = !!server.connectorName;
                 return (
                   <Table.Tr key={server.id}>
                     <Table.Td>
-                      <Group gap={6} wrap="nowrap">
-                        <Text fz={14} fw={500} c="var(--app-text-primary)">
-                          {server.name}
-                        </Text>
-                        <ServerHealthIcons
-                          server={server}
-                          onReviewDrift={setDriftServer}
-                          onReviewUpdate={canEdit ? setUpdateServer : undefined}
-                        />
+                      <Group gap={11} wrap="nowrap" style={{ minWidth: 0 }}>
+                        <Box
+                          w={30}
+                          h={30}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            backgroundColor: 'var(--app-bg-deep)',
+                            borderRadius: 'var(--mantine-radius-sm)',
+                            color: 'var(--app-text-secondary)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {fromCatalog ? <IconPhoto size={15} /> : <IconPlug size={15} />}
+                        </Box>
+                        <Box style={{ minWidth: 0 }}>
+                          <Group gap={6} wrap="nowrap">
+                            <Text fz={14} fw={500} c="var(--app-text-primary)" truncate style={{ minWidth: 0 }}>
+                              {server.name}
+                            </Text>
+                            <ServerHealthIcons
+                              server={server}
+                              onReviewDrift={setDriftServer}
+                              onReviewUpdate={canEdit ? setUpdateServer : undefined}
+                            />
+                          </Group>
+                          <Text fz={12} c="var(--app-text-tertiary)" truncate maw={300}>
+                            {server.url || '—'}
+                          </Text>
+                        </Box>
                       </Group>
                     </Table.Td>
                     <Table.Td>
-                      <Text
-                        fz={13}
-                        c="dimmed"
-                        maw={300}
-                        style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                      >
-                        {server.url || '—'}
-                      </Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge variant="outline" size="sm">
+                      <StatusBadge tone="neutral" size="sm">
                         {server.transport.toUpperCase()}
-                      </Badge>
+                      </StatusBadge>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={server.scopeIndicator === 'internal' ? 'violet' : 'teal'} size="sm" variant="light">
+                      <StatusBadge tone="neutral" size="sm">
                         {server.scopeIndicator === 'internal' ? 'System' : 'Project'}
-                      </Badge>
+                      </StatusBadge>
                     </Table.Td>
                     {/* Status is what the server IS; Connection is what YOU
                         still have to do about it. They used to share one column,
                         so an "Enabled" green sat next to a "Connected" green
                         meaning two different things. */}
                     <Table.Td>
-                      <StatusBadge state={server.enabled ? 'enabled' : 'disabled'} size="sm" />
+                      <StatusBadge
+                        state={server.enabled ? 'enabled' : 'disabled'}
+                        size="sm"
+                        leftSection={
+                          <Box
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: 'currentColor',
+                              flexShrink: 0,
+                            }}
+                          />
+                        }
+                      />
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4}>
@@ -420,7 +426,7 @@ export function McpServersContent({
               })}
             </Table.Tbody>
           </Table>
-        </Box>
+        </ResourceTableShell>
       )}
 
       <McpServerFormModal

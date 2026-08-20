@@ -146,7 +146,7 @@ describe('shared/resources/connectors/ConnectorCatalogModal', () => {
     );
   });
 
-  it('disables install for a connector with no runnable target', async () => {
+  it('marks an unavailable connector with a label instead of an install button', async () => {
     const catalog = await openCatalog([
       connector({
         installable: false,
@@ -154,7 +154,21 @@ describe('shared/resources/connectors/ConnectorCatalogModal', () => {
       }),
     ]);
 
-    expect(within(catalog).getByRole('button', { name: 'Unavailable' })).toBeDisabled();
+    // "Unavailable" renders twice — the source badge and the footer label,
+    // mirroring the reference design.
+    expect(within(catalog).getAllByText('Unavailable').length).toBe(2);
+    expect(within(catalog).queryByRole('button', { name: /install/i })).not.toBeInTheDocument();
+  });
+
+  it('truncates a long connector name and description instead of breaking the card', async () => {
+    const longName = 'a'.repeat(120);
+    const longDescription = 'word-that-never-breaks-'.repeat(20);
+    const catalog = await openCatalog([connector({ pickerName: longName, description: longDescription })]);
+
+    const nameEl = within(catalog).getByText(longName);
+    const descriptionEl = within(catalog).getByText(longDescription);
+    expect(nameEl).toHaveAttribute('data-truncate', 'end');
+    expect(descriptionEl).toHaveAttribute('data-line-clamp', 'true');
   });
 
   it('marks a deprecated connector', async () => {

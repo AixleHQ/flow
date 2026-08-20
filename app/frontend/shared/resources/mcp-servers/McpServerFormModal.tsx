@@ -5,8 +5,8 @@ import {
   Badge,
   Box,
   Button,
+  Drawer,
   Group,
-  Modal,
   NativeSelect,
   PasswordInput,
   Stack,
@@ -246,7 +246,13 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
   };
 
   return (
-    <Modal opened={opened} onClose={onClose} title={isEdit ? 'Edit MCP Server' : 'Add MCP Server'} size="lg">
+    <Drawer
+      opened={opened}
+      onClose={onClose}
+      title={isEdit ? 'Edit MCP Server' : 'Add MCP Server'}
+      position="right"
+      size={460}
+    >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
           <TextInput
@@ -505,6 +511,6 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
           </Group>
         </Stack>
       </form>
-    </Modal>
+    </Drawer>
   );
 };
