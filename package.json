@@ -25,12 +25,12 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
     "eslint-plugin-testing-library": "^7.16.2",
-    "globals": "^17.9.0",
+    "globals": "^17.11.0",
     "jsdom": "^30",
     "license-checker-rseidelsohn": "^5.0.1",
     "prettier": "^3.9.6",
     "prettier-plugin-packagejson": "^3.0.0",
-    "sass-embedded": "^1.100.0",
+    "sass-embedded": "^1.102.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.67.0",
     "vite": "^8.2.1",
@@ -39,7 +39,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@codemirror/view": "^6.43.8",
+    "@codemirror/view": "^6.43.9",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -71,7 +71,7 @@
     "@xterm/xterm": "^6.0.0",
     "cronstrue": "^3.24.0",
     "date-fns": "^4.4.0",
-    "dayjs": "^1.11.21",
+    "dayjs": "^1.11.22",
     "emoji-mart": "^5.6.0",
     "eslint-import-resolver-typescript": "4.4.5",
     "lodash": "^4.18.1",
@@ -82,7 +82,7 @@
     "react-dom": "^19.2.8",
     "react-is": "^19.2.8",
     "react-markdown": "^10.1.0",
-    "react-resizable-panels": "^4.12.2",
+    "react-resizable-panels": "^4.12.3",
     "react-syntax-highlighter": "^16.1.1",
     "react-zoom-pan-pinch": "^4.0.4",
     "recharts": "^3.10.1",
@@ -92,11 +92,11 @@
     "remark-gfm": "^4.0.1",
     "use-debounce": "^10.1.0",
     "zod": "^4.4.3",
-    "zustand": "^5.0.14"
+    "zustand": "^5.0.15"
   },
   "resolutions": {
     "@codemirror/state": "^6.7.1",
-    "@codemirror/view": "^6.43.8"
+    "@codemirror/view": "^6.43.9"
   },
   "scripts": {
     "tsc": "tsc",
