@@ -79,18 +79,18 @@ module Api
           def bulk_actions
             action_type = params[:action_type]
             unless action_type.present?
-              render json: { errors: ["action_type is required"] }, status: :bad_request and return
+              render json: { errors: [ "action_type is required" ] }, status: :bad_request and return
             end
 
             action = action_type.to_sym
 
             unless TaskService::BULK_ACTIONS.include?(action)
-              render json: { errors: ["Unknown action"] }, status: :bad_request and return
+              render json: { errors: [ "Unknown action" ] }, status: :bad_request and return
             end
 
             task_ids = Array(params[:task_ids]).map(&:to_i)
             if task_ids.empty?
-              render json: { errors: ["task_ids is required"] }, status: :bad_request and return
+              render json: { errors: [ "task_ids is required" ] }, status: :bad_request and return
             end
 
             tasks = current_board.board_tasks.where(id: task_ids)
@@ -99,17 +99,17 @@ module Api
             when :move_to_column
               col_id = params[:column_id]
               unless col_id.present?
-                render json: { errors: ["column_id is required"] }, status: :bad_request and return
+                render json: { errors: [ "column_id is required" ] }, status: :bad_request and return
               end
               col = current_board.board_columns.find_by(id: col_id)
               unless col
-                render json: { errors: ["Column not found"] }, status: :not_found and return
+                render json: { errors: [ "Column not found" ] }, status: :not_found and return
               end
               col
             when :move_to_done
               done_col = current_board.board_columns.order(:position).last
               unless done_col
-                render json: { errors: ["Board has no Done column"] }, status: :unprocessable_entity and return
+                render json: { errors: [ "Board has no Done column" ] }, status: :unprocessable_entity and return
               end
               done_col
             end

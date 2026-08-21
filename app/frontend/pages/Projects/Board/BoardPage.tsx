@@ -150,11 +150,11 @@ import styles from './BoardPage.module.css';
 import { CHIP_TOOLTIP_PROPS } from './chipTooltip';
 import { GATE_CHIP_WIDTH, GateStatusChip } from './GateStatusChip';
 import { LatestRunTile } from './LatestRunTile';
+import { SelectionBar } from './SelectionBar';
 import { WORKFLOW_ACTIVE_STATES, type TaskWorkflowRun } from './taskRuns';
 import { TaskRunsPanel } from './TaskRunsPanel';
 import { useBoardDnd } from './useBoardDnd';
 import { useBoardTaskPages } from './useBoardTaskPages';
-import { SelectionBar } from './SelectionBar';
 import { useBulkActions } from './useBulkActions';
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
@@ -4450,7 +4450,6 @@ const BoardPage = () => {
     },
     [project.id, closeTask],
   );
-
 
   // Drag-and-drop (task moves + column reorder) lives in useBoardDnd so its behaviour is
   // testable without element geometry, which jsdom cannot provide for dnd-kit's sensors.

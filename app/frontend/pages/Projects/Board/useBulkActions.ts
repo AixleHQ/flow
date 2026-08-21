@@ -14,10 +14,14 @@ interface BulkActionResult {
 
 function actionLabel(action: BulkAction): string {
   switch (action) {
-    case 'delete': return 'Deleted';
-    case 'archive': return 'Archived';
-    case 'move_to_done': return 'Moved';
-    case 'move_to_column': return 'Moved';
+    case 'delete':
+      return 'Deleted';
+    case 'archive':
+      return 'Archived';
+    case 'move_to_done':
+      return 'Moved';
+    case 'move_to_column':
+      return 'Moved';
   }
 }
 

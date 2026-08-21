@@ -20,28 +20,40 @@ interface SelectionBarProps {
 
 function actionTitle(action: BulkAction): string {
   switch (action) {
-    case 'delete': return 'Delete tasks';
-    case 'archive': return 'Archive tasks';
-    case 'move_to_done': return 'Move to Done';
-    case 'move_to_column': return 'Move to column';
+    case 'delete':
+      return 'Delete tasks';
+    case 'archive':
+      return 'Archive tasks';
+    case 'move_to_done':
+      return 'Move to Done';
+    case 'move_to_column':
+      return 'Move to column';
   }
 }
 
 function actionMessage(action: BulkAction, count: number): string {
   switch (action) {
-    case 'delete': return `Delete ${count} task${count === 1 ? '' : 's'}? This cannot be undone.`;
-    case 'archive': return `Archive ${count} task${count === 1 ? '' : 's'}?`;
-    case 'move_to_done': return `Move ${count} task${count === 1 ? '' : 's'} to the Done column?`;
-    case 'move_to_column': return `Move ${count} task${count === 1 ? '' : 's'} to this column?`;
+    case 'delete':
+      return `Delete ${count} task${count === 1 ? '' : 's'}? This cannot be undone.`;
+    case 'archive':
+      return `Archive ${count} task${count === 1 ? '' : 's'}?`;
+    case 'move_to_done':
+      return `Move ${count} task${count === 1 ? '' : 's'} to the Done column?`;
+    case 'move_to_column':
+      return `Move ${count} task${count === 1 ? '' : 's'} to this column?`;
   }
 }
 
 function actionLabel(action: BulkAction): string {
   switch (action) {
-    case 'delete': return 'Delete';
-    case 'archive': return 'Archive';
-    case 'move_to_done': return 'Move to Done';
-    case 'move_to_column': return 'Move';
+    case 'delete':
+      return 'Delete';
+    case 'archive':
+      return 'Archive';
+    case 'move_to_done':
+      return 'Move to Done';
+    case 'move_to_column':
+      return 'Move';
   }
 }
 
@@ -100,13 +112,7 @@ export function SelectionBar({ selectedCount, columns, canExecute, onAction, onC
         <Badge size="sm" variant="filled" color="blue">
           {selectedCount} selected
         </Badge>
-        <ActionIcon
-          size="xs"
-          variant="subtle"
-          color="gray"
-          aria-label="Clear selection"
-          onClick={onClear}
-        >
+        <ActionIcon size="xs" variant="subtle" color="gray" aria-label="Clear selection" onClick={onClear}>
           <IconX size={12} />
         </ActionIcon>
       </Group>

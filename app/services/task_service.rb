@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class TaskService
+  BULK_ACTIONS = %i[delete archive move_to_done move_to_column].freeze
+
   class << self
     def create(board:, params:, actor:)
       task = board.board_tasks.build(params)
@@ -112,8 +114,6 @@ class TaskService
 
       task.reload
     end
-
-    BULK_ACTIONS = %i[delete archive move_to_done move_to_column].freeze
 
     def bulk_action(action:, tasks:, actor:, to_column: nil)
       succeeded = []

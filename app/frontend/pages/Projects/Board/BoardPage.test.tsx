@@ -2338,10 +2338,10 @@ describe('Projects/Board/BoardPage', () => {
   it('shows a partial-success notification when some tasks are skipped', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       if (String(input).includes('bulk_actions')) {
-        return new Response(
-          JSON.stringify({ succeeded: [2], skipped: [{ task_id: 1, reason: 'active_run' }] }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
-        );
+        return new Response(JSON.stringify({ succeeded: [2], skipped: [{ task_id: 1, reason: 'active_run' }] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
       return new Response('{}', { status: 200 });
     });
