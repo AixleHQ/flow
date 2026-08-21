@@ -69,4 +69,11 @@ class Api::V1::Projects::Board::TasksAuthorizationTest < ActionDispatch::Integra
       post trigger_workflow_api_v1_project_task_path(@project, @task), as: :json
     end
   end
+
+  test "bulk_actions is a project write" do
+    assert_project_write(transport: :api) do
+      post bulk_actions_api_v1_project_tasks_path(@project),
+           params: { action_type: "delete", task_ids: [ @task.id ] }, as: :json
+    end
+  end
 end

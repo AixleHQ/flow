@@ -77,7 +77,12 @@ module Api
 
           # @summary Apply a bulk action to multiple board tasks
           def bulk_actions
-            action = params[:action_type].to_sym
+            action_type = params[:action_type]
+            unless action_type.present?
+              render json: { errors: ["action_type is required"] }, status: :bad_request and return
+            end
+
+            action = action_type.to_sym
 
             unless TaskService::BULK_ACTIONS.include?(action)
               render json: { errors: ["Unknown action"] }, status: :bad_request and return

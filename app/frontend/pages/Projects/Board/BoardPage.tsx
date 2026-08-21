@@ -627,6 +627,7 @@ function TaskCardUI({
   activeTags,
   isSelected,
   onToggleSelect,
+  selectionMode,
 }: {
   task: Task;
   href?: string;

@@ -303,6 +303,87 @@ module Api
           assert_equal @col2.id, @task.reload.board_column_id
         end
 
+        # === bulk_actions ===
+
+        test "bulk_actions deletes all tasks when none have active runs" do
+          t2 = create(:board_task, board: @board, board_column: @col1)
+
+          post :bulk_actions, params: {
+            project_id: @project.id,
+            action_type: "delete",
+            task_ids: [ @task.id, t2.id ]
+          }, as: :json
+
+          assert_response :success
+          body = JSON.parse(response.body)
+          assert_equal [ @task.id, t2.id ].sort, body["succeeded"].sort
+          assert_empty body["skipped"]
+          assert_not BoardTask.exists?(@task.id)
+          assert_not BoardTask.exists?(t2.id)
+        end
+
+        test "bulk_actions skips tasks with an active workflow run" do
+          create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: @task, state: "running")
+          t2 = create(:board_task, board: @board, board_column: @col1)
+
+          post :bulk_actions, params: {
+            project_id: @project.id,
+            action_type: "delete",
+            task_ids: [ @task.id, t2.id ]
+          }, as: :json
+
+          assert_response :success
+          body = JSON.parse(response.body)
+          assert_equal [ t2.id ], body["succeeded"]
+          assert_equal 1, body["skipped"].length
+          assert_equal @task.id, body["skipped"].first["task_id"]
+          assert_equal "active_run", body["skipped"].first["reason"]
+          assert BoardTask.exists?(@task.id)
+        end
+
+        test "bulk_actions returns 400 when action_type is missing" do
+          post :bulk_actions, params: {
+            project_id: @project.id,
+            task_ids: [ @task.id ]
+          }, as: :json
+
+          assert_response :bad_request
+          assert_includes JSON.parse(response.body)["errors"], "action_type is required"
+        end
+
+        test "bulk_actions returns 400 for unknown action_type" do
+          post :bulk_actions, params: {
+            project_id: @project.id,
+            action_type: "nuke",
+            task_ids: [ @task.id ]
+          }, as: :json
+
+          assert_response :bad_request
+          assert_includes JSON.parse(response.body)["errors"], "Unknown action"
+        end
+
+        test "bulk_actions returns 400 when task_ids is empty" do
+          post :bulk_actions, params: {
+            project_id: @project.id,
+            action_type: "delete",
+            task_ids: []
+          }, as: :json
+
+          assert_response :bad_request
+          assert_includes JSON.parse(response.body)["errors"], "task_ids is required"
+        end
+
+        test "bulk_actions returns 400 when move_to_column is missing column_id" do
+          post :bulk_actions, params: {
+            project_id: @project.id,
+            action_type: "move_to_column",
+            task_ids: [ @task.id ]
+          }, as: :json
+
+          assert_response :bad_request
+          assert_includes JSON.parse(response.body)["errors"], "column_id is required"
+        end
+
         # === viewer (read-only) enforcement ===
 
         class ViewerTest < ActionController::TestCase
@@ -362,6 +443,15 @@ module Api
 
           test "viewer trigger_workflow is forbidden" do
             post :trigger_workflow, params: { project_id: @project.id, id: @task.id }
+            assert_response :forbidden
+          end
+
+          test "viewer bulk_actions is forbidden" do
+            post :bulk_actions, params: {
+              project_id: @project.id,
+              action_type: "delete",
+              task_ids: [ @task.id ]
+            }, as: :json
             assert_response :forbidden
           end
         end

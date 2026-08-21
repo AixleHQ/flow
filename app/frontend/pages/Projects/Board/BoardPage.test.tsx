@@ -2252,4 +2252,113 @@ describe('Projects/Board/BoardPage', () => {
     // No modal overlay backdrop rendered (withOverlay=false means no .mantine-Overlay-root).
     expect(document.querySelector('.mantine-Overlay-root')).toBeNull();
   });
+
+  // --- bulk selection ---
+
+  it('shows selection checkboxes for non-view-only users', () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    expect(screen.getByRole('checkbox', { name: 'Select Wire up authentication' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select Render dashboard charts' })).toBeInTheDocument();
+  });
+
+  it('does not show selection checkboxes for view-only users', () => {
+    renderAuthedPage(<BoardPage />, {
+      props: { ...populatedProps, projectPermissions: { canExecute: false, canManage: false } },
+    });
+
+    expect(screen.queryByRole('checkbox', { name: /Select/ })).not.toBeInTheDocument();
+  });
+
+  it('shows SelectionBar after selecting a task card', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
+
+    expect(await screen.findByText('1 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Move to Done' })).toBeInTheDocument();
+  });
+
+  it('clears selection when the × button in SelectionBar is clicked', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
+    expect(await screen.findByText('1 selected')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+
+    await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument());
+  });
+
+  it('opens a confirm modal when Delete is clicked in the SelectionBar', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
+    await screen.findByText('1 selected');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    const modal = await screen.findByRole('dialog', { name: /delete tasks/i });
+    expect(within(modal).getByText(/Delete 1 task\? This cannot be undone/i)).toBeInTheDocument();
+  });
+
+  it('POSTs to bulk_actions when delete is confirmed and shows success notification', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).includes('bulk_actions')) {
+        return new Response(JSON.stringify({ succeeded: [1], skipped: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
+    await screen.findByText('1 selected');
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    const modal = await screen.findByRole('dialog', { name: /delete tasks/i });
+    await userEvent.click(within(modal).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('bulk_actions'),
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    expect(await screen.findByText(/Deleted 1 task/)).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
+
+  it('shows a partial-success notification when some tasks are skipped', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).includes('bulk_actions')) {
+        return new Response(
+          JSON.stringify({ succeeded: [2], skipped: [{ task_id: 1, reason: 'active_run' }] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Render dashboard charts' }));
+    await screen.findByText('2 selected');
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    const modal = await screen.findByRole('dialog', { name: /delete tasks/i });
+    await userEvent.click(within(modal).getByRole('button', { name: 'Delete' }));
+
+    expect(await screen.findByText(/Partial success/i)).toBeInTheDocument();
+    expect(await screen.findByText(/1 skipped/i)).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
+  });
 });
