@@ -1,6 +1,8 @@
 import { router, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 
+import { ConfigItemOption } from 'shared/components/SessionNewForm';
+
 export interface NamedItem {
   id: number;
   name: string;
@@ -29,6 +31,7 @@ export interface CreateOptions {
   configuredAgents: string[];
   defaultAgentRuntime: string | null;
   workflows: WorkflowOption[];
+  configItems: ConfigItemOption[];
   costHint?: { avgCostCentsByRuntime: Record<string, number>; monthToDateCents: number };
 }
 
@@ -43,7 +46,7 @@ export function useCreateOptions(opened: boolean): CreateOptions | null {
 
   useEffect(() => {
     if (!opened || createOptions) return;
-    router.reload({ only: ['createOptions'] });
+    router.reload({ only: ['create_options'] });
   }, [opened, createOptions]);
 
   return createOptions ?? null;
