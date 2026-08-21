@@ -73,7 +73,8 @@ export function SelectionBar({ selectedCount, columns, canExecute, onAction, onC
     });
   };
 
-  const lastColumn = [...columns].sort((a, b) => 0)[columns.length - 1];
+  // "Move to Done" targets the last column by position (the rightmost column on the board).
+  const lastColumn = columns.length > 0 ? columns[columns.length - 1] : undefined;
 
   return (
     <Paper
