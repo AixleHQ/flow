@@ -39,6 +39,7 @@ export function NewSessionDrawer({ projectId, opened, onClose }: Props) {
           mcpServers={options.mcpServers}
           repositories={options.repositories}
           assets={options.assets}
+          configItems={options.configItems}
           costHint={options.costHint}
           onCreatedPath={(sessionId, id) => `/company/projects/${id}/sessions/${sessionId}`}
           fallbackPath={`/company/projects/${projectId}/sessions`}
