@@ -154,6 +154,8 @@ import { WORKFLOW_ACTIVE_STATES, type TaskWorkflowRun } from './taskRuns';
 import { TaskRunsPanel } from './TaskRunsPanel';
 import { useBoardDnd } from './useBoardDnd';
 import { useBoardTaskPages } from './useBoardTaskPages';
+import { SelectionBar } from './SelectionBar';
+import { useBulkActions } from './useBulkActions';
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
 const AUTHOR_TYPES = [
@@ -379,6 +381,9 @@ function SortableTaskCard({
   onRetry,
   onTagClick,
   activeTags,
+  isSelected,
+  onToggleSelect,
+  selectionMode,
 }: {
   task: Task;
   href?: string;
@@ -386,6 +391,9 @@ function SortableTaskCard({
   onRetry?: (task: Task) => void;
   onTagClick?: (tag: string) => void;
   activeTags?: string[];
+  isSelected?: boolean;
+  onToggleSelect?: (id: number, checked: boolean) => void;
+  selectionMode?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `task-${task.id}`,
@@ -412,6 +420,9 @@ function SortableTaskCard({
         onRetry={onRetry}
         onTagClick={onTagClick}
         activeTags={activeTags}
+        isSelected={isSelected}
+        onToggleSelect={onToggleSelect}
+        selectionMode={selectionMode}
       />
     </Box>
   );
@@ -614,6 +625,8 @@ function TaskCardUI({
   onRetry,
   onTagClick,
   activeTags,
+  isSelected,
+  onToggleSelect,
 }: {
   task: Task;
   href?: string;
@@ -622,7 +635,12 @@ function TaskCardUI({
   onRetry?: (task: Task) => void;
   onTagClick?: (tag: string) => void;
   activeTags?: string[];
+  isSelected?: boolean;
+  onToggleSelect?: (id: number, checked: boolean) => void;
+  selectionMode?: boolean;
 }) {
+  const [cardHovered, setCardHovered] = useState(false);
+
   // A card shows at most three tags. Whichever ones the board is filtered by come first, so the
   // filter that put this card on screen is always the one you can click to take it back off.
   const cardTags = (activeTags ?? []).length
@@ -688,14 +706,36 @@ function TaskCardUI({
       onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
         (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-brand-4)';
         (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-paper)';
+        setCardHovered(true);
       }}
       onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
         (e.currentTarget as HTMLElement).style.borderColor = 'var(--app-border-strong)';
         (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-elevated)';
+        setCardHovered(false);
       }}
     >
-      {/* Title row with priority dot */}
+      {/* Title row with selection checkbox, priority dot */}
       <Group gap={4} align="flex-start" wrap="nowrap">
+        {onToggleSelect && (
+          <Box
+            className={[
+              styles.selectionCheckboxWrapper,
+              isSelected || selectionMode || cardHovered ? styles.selectionCheckboxVisible : '',
+            ].join(' ')}
+            onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+            onClick={(e: React.MouseEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          >
+            <Checkbox
+              size="xs"
+              checked={!!isSelected}
+              onChange={(e) => onToggleSelect(task.id, e.currentTarget.checked)}
+              aria-label={`Select ${task.title}`}
+            />
+          </Box>
+        )}
         {task.priority && (
           <Tooltip label={task.priority}>
             <Box
@@ -940,6 +980,9 @@ function BoardColumn({
   isFiltered,
   isDropTarget,
   canExecute,
+  selectedIds,
+  onToggleSelect,
+  selectionMode,
 }: {
   column: Column;
   /** The pages of this column the client has loaded — not necessarily all of it. */
@@ -964,6 +1007,9 @@ function BoardColumn({
   isFiltered: boolean;
   isDropTarget: boolean;
   canExecute: boolean;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number, checked: boolean) => void;
+  selectionMode?: boolean;
 }) {
   const {
     setNodeRef,
@@ -1384,6 +1430,9 @@ function BoardColumn({
                 onRetry={onRetryTask}
                 onTagClick={onTagClick}
                 activeTags={activeTags}
+                isSelected={selectedIds?.has(task.id)}
+                onToggleSelect={onToggleSelect}
+                selectionMode={selectionMode}
               />
             ))
           )}
@@ -4248,6 +4297,21 @@ const BoardPage = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  const toggleSelect = useCallback((id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const { execute: executeBulkAction } = useBulkActions({ projectId: project.id, onSuccess: clearSelection });
+
   // Opening by id, for a task the board may not hold a card for — an epic's child or parent that
   // lives on a page no column has loaded.
   const openTaskById = useCallback(
@@ -4385,6 +4449,7 @@ const BoardPage = () => {
     },
     [project.id, closeTask],
   );
+
 
   // Drag-and-drop (task moves + column reorder) lives in useBoardDnd so its behaviour is
   // testable without element geometry, which jsdom cannot provide for dnd-kit's sensors.
@@ -4788,6 +4853,9 @@ const BoardPage = () => {
                   isFiltered={hasActiveFilters}
                   isDropTarget={hoverColumnId === col.id}
                   canExecute={canExecute}
+                  selectedIds={selectedIds}
+                  onToggleSelect={canExecute ? toggleSelect : undefined}
+                  selectionMode={canExecute && selectedIds.size > 0}
                 />
               ))}
             </SortableContext>
@@ -4864,6 +4932,14 @@ const BoardPage = () => {
           onClose={() => setActivityOpen(false)}
         />
       </Box>
+
+      <SelectionBar
+        selectedCount={selectedIds.size}
+        columns={localColumns}
+        canExecute={canExecute}
+        onAction={(action, columnId) => executeBulkAction(action, [...selectedIds], columnId)}
+        onClear={clearSelection}
+      />
 
       <TaskDetailSidebar
         task={selectedTask}

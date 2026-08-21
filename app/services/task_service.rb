@@ -113,6 +113,34 @@ class TaskService
       task.reload
     end
 
+    BULK_ACTIONS = %i[delete archive move_to_done move_to_column].freeze
+
+    def bulk_action(action:, tasks:, actor:, to_column: nil)
+      succeeded = []
+      skipped   = []
+
+      tasks.each do |task|
+        if task.workflow_runs.where(state: %w[pending running paused]).exists?
+          skipped << { task_id: task.id, reason: "active_run" }
+          next
+        end
+
+        case action
+        when :delete        then destroy(task: task, actor: actor)
+        when :archive       then archive(task: task, actor: actor)
+        when :move_to_done,
+             :move_to_column then move(task: task, to_column: to_column, actor: actor)
+        end
+
+        succeeded << task.id
+      rescue => e
+        Rails.logger.warn("[TaskService] bulk_action #{action} failed for task #{task.id}: #{e.message}")
+        skipped << { task_id: task.id, reason: "error" }
+      end
+
+      { succeeded: succeeded, skipped: skipped }
+    end
+
     def add_comment(task:, params:, actor:)
       comment = task.task_comments.build(params)
       comment.author = actor

@@ -148,6 +148,18 @@
   color: var(--mantine-color-red-6) !important;
 }
 
+/* Selection checkbox on task cards — fades in on hover or when any card is selected */
+.selectionCheckboxWrapper {
+  flex-shrink: 0;
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.selectionCheckboxWrapper.selectionCheckboxVisible {
+  opacity: 1;
+}
+
 /* Task detail panel — title ghost input */
 .ptTitle {
   width: 100%;
