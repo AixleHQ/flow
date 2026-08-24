@@ -214,7 +214,7 @@ const WorkflowRunShowPage = () => {
       key={step.id}
       data={toCardData(step, i)}
       live={isActive && liveStepIds.has(step.id)}
-      defaultOpen={isActive ? liveStepIds.has(step.id) : step.state === 'failed'}
+      defaultOpen={isActive ? liveStepIds.has(step.id) : isTerminal || step.state === 'failed'}
       sessionHref={step.terminalSessionId ? `${basePath}/sessions/${step.terminalSessionId}` : null}
     />
   ));
