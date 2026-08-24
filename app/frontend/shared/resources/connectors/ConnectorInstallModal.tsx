@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Alert, Badge, Button, Code, Group, Modal, Radio, Stack, Text } from '@mantine/core';
+import { Alert, Badge, Button, Code, Drawer, Group, Radio, Stack, Text } from '@mantine/core';
 import { IconAlertTriangle, IconLock } from '@tabler/icons-react';
 import { useEffect, useMemo, useState, type FC } from 'react';
 
@@ -68,7 +68,13 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
   const blockedReason = connector?.targets.find((t) => !t.supported)?.unsupportedReason;
 
   return (
-    <Modal opened={!!connector} onClose={onClose} title={`Install ${connector?.pickerName ?? ''}`} size="lg">
+    <Drawer
+      opened={!!connector}
+      onClose={onClose}
+      title={`Install · ${connector?.pickerName ?? ''}`}
+      position="right"
+      size={460}
+    >
       {connector && (
         <Stack gap="md">
           {connector.description && (
@@ -185,6 +191,6 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
           </Group>
         </Stack>
       )}
-    </Modal>
+    </Drawer>
   );
 };

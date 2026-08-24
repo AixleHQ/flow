@@ -358,6 +358,47 @@ describe('McpServersContent', () => {
     expect(screen.queryByText('Company')).not.toBeInTheDocument();
   });
 
+  it('shows a photo placeholder icon for a catalog-installed row and a plug icon for a hand-added row', () => {
+    renderPage(
+      <McpServersContent
+        {...baseProps}
+        mcpServers={[
+          makeServer({ id: 1, name: 'From catalog', connectorName: 'io.github.acme/mcp' }),
+          makeServer({ id: 2, name: 'Hand added', connectorName: null }),
+        ]}
+      />,
+    );
+
+    const catalogRow = screen.getByText('From catalog').closest('tr') as HTMLElement;
+    const manualRow = screen.getByText('Hand added').closest('tr') as HTMLElement;
+    expect(catalogRow.querySelector('.tabler-icon-photo')).not.toBeNull();
+    expect(catalogRow.querySelector('.tabler-icon-plug')).toBeNull();
+    expect(manualRow.querySelector('.tabler-icon-plug')).not.toBeNull();
+    expect(manualRow.querySelector('.tabler-icon-photo')).toBeNull();
+  });
+
+  it('truncates a very long name and URL instead of breaking the row layout', () => {
+    const longName = 'a'.repeat(120);
+    const longUrl = `https://mcp.example.com/${'segment-'.repeat(30)}`;
+    renderPage(<McpServersContent {...baseProps} mcpServers={[makeServer({ id: 1, name: longName, url: longUrl })]} />);
+
+    const nameEl = screen.getByText(longName);
+    const urlEl = screen.getByText(longUrl);
+    expect(nameEl).toHaveAttribute('data-truncate', 'end');
+    expect(urlEl).toHaveAttribute('data-truncate', 'end');
+  });
+
+  it('shows a pluralized connector count in the toolbar', () => {
+    renderPage(
+      <McpServersContent
+        {...baseProps}
+        mcpServers={[makeServer({ id: 1, name: 'playwright' }), makeServer({ id: 2, name: 'context7' })]}
+      />,
+    );
+
+    expect(screen.getByText('2 connectors')).toBeInTheDocument();
+  });
+
   it('renders edit and delete icons for every custom server', () => {
     const { container } = renderPage(
       <McpServersContent
