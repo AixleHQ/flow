@@ -4,7 +4,7 @@ module PersonalTools
   class CreateRepository < Base
     tool do
       display_name "Create Repository"
-      description "Attach a git repository to a project (requires company admin)."
+      description "Attach a git repository to a project."
       audience :user
       tags :resources
       param :project_id, type: :integer, description: "Project id.", required: true

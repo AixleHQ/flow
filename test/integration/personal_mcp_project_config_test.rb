@@ -40,7 +40,7 @@ class PersonalMCPProjectConfigTest < ActionDispatch::IntegrationTest
     assert_not ConfigItem.exists?(id)
   end
 
-  test "repository CRUD (company admin)" do
+  test "repository CRUD" do
     integration = create(:integration, company: @company, project: @project, provider: :github,
                          status: :active, connected_by: @user)
     created = payload(call_tool("create_repository",
@@ -69,12 +69,27 @@ class PersonalMCPProjectConfigTest < ActionDispatch::IntegrationTest
     assert_equal @company, project.company
   end
 
-  test "a non-admin cannot manage repositories" do
+  # Attaching a repository is a plain project write, so a collaborator without
+  # the company admin role manages them; only the read-only viewer is refused.
+  test "a collaborator without the admin role can manage repositories" do
+    integration = create(:integration, company: @company, project: @project, provider: :github,
+                         status: :active, connected_by: @user)
     member = create(:user, company: @company)
     @project.add_collaborator(member)
     mtoken = member.regenerate_mcp_token!
 
-    body = call_tool("create_repository", { project_id: @project.id, full_name: "o/r" }, token: mtoken)
+    body = call_tool("create_repository",
+                     { project_id: @project.id, full_name: "o/r", integration_id: integration.id },
+                     token: mtoken)
+    assert_not error?(body)
+  end
+
+  test "a read-only viewer cannot manage repositories" do
+    viewer = create(:user, :viewer, company: @company, email: "client@external.com")
+    @project.add_collaborator(viewer)
+    vtoken = viewer.regenerate_mcp_token!
+
+    body = call_tool("create_repository", { project_id: @project.id, full_name: "o/r" }, token: vtoken)
     assert error?(body)
     assert_match(/not allowed/i, body.dig("result", "content").map { |c| c["text"] }.join(" "))
   end
