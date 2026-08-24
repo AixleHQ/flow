@@ -716,7 +716,7 @@ function TaskCardUI({
       }}
     >
       {/* Title row with selection checkbox, priority dot */}
-      <Group gap={4} align="flex-start" wrap="nowrap">
+      <Group gap={8} align="flex-start" wrap="nowrap">
         {onToggleSelect && (
           <Box
             className={[
@@ -725,7 +725,6 @@ function TaskCardUI({
             ].join(' ')}
             onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
             onClick={(e: React.MouseEvent) => {
-              e.preventDefault();
               e.stopPropagation();
             }}
           >
