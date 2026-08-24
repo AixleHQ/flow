@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class TaskService
-  BULK_ACTIONS = %i[delete archive move_to_done move_to_column].freeze
+  BULK_ACTIONS = %i[delete archive move_to_column].freeze
 
   class << self
     def create(board:, params:, actor:)
@@ -128,8 +128,7 @@ class TaskService
         case action
         when :delete        then destroy(task: task, actor: actor)
         when :archive       then archive(task: task, actor: actor)
-        when :move_to_done,
-             :move_to_column then move(task: task, to_column: to_column, actor: actor)
+        when :move_to_column then move(task: task, to_column: to_column, actor: actor)
         end
 
         succeeded << task.id

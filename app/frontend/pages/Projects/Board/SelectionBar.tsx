@@ -1,8 +1,8 @@
 import { ActionIcon, Alert, Badge, Button, Group, Menu, Paper, Stack, Text } from '@mantine/core';
 import { modals } from '@mantine/modals';
-import { IconAlertTriangle, IconArchive, IconCircleCheck, IconTrash, IconX } from '@tabler/icons-react';
+import { IconAlertTriangle, IconArchive, IconTrash, IconX } from '@tabler/icons-react';
 
-export type BulkAction = 'delete' | 'archive' | 'move_to_done' | 'move_to_column';
+export type BulkAction = 'delete' | 'archive' | 'move_to_column';
 
 interface BulkColumn {
   id: number;
@@ -24,8 +24,6 @@ function actionTitle(action: BulkAction): string {
       return 'Delete tasks';
     case 'archive':
       return 'Archive tasks';
-    case 'move_to_done':
-      return 'Move to Done';
     case 'move_to_column':
       return 'Move to column';
   }
@@ -37,8 +35,6 @@ function actionMessage(action: BulkAction, count: number): string {
       return `Delete ${count} task${count === 1 ? '' : 's'}? This cannot be undone.`;
     case 'archive':
       return `Archive ${count} task${count === 1 ? '' : 's'}?`;
-    case 'move_to_done':
-      return `Move ${count} task${count === 1 ? '' : 's'} to the Done column?`;
     case 'move_to_column':
       return `Move ${count} task${count === 1 ? '' : 's'} to this column?`;
   }
@@ -50,8 +46,6 @@ function actionLabel(action: BulkAction): string {
       return 'Delete';
     case 'archive':
       return 'Archive';
-    case 'move_to_done':
-      return 'Move to Done';
     case 'move_to_column':
       return 'Move';
   }
@@ -84,9 +78,6 @@ export function SelectionBar({ selectedCount, columns, canExecute, onAction, onC
       onConfirm: () => onAction(action, targetColumn?.id),
     });
   };
-
-  // "Move to Done" targets the last column by position (the rightmost column on the board).
-  const lastColumn = columns.length > 0 ? columns[columns.length - 1] : undefined;
 
   return (
     <Paper
@@ -136,16 +127,6 @@ export function SelectionBar({ selectedCount, columns, canExecute, onAction, onC
           onClick={() => confirmBulkAction('archive')}
         >
           Archive
-        </Button>
-
-        <Button
-          size="compact-sm"
-          variant="light"
-          color="green"
-          leftSection={<IconCircleCheck size={13} />}
-          onClick={() => confirmBulkAction('move_to_done', lastColumn)}
-        >
-          Move to Done
         </Button>
 
         <Menu shadow="md" position="top-end" withinPortal>

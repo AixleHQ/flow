@@ -106,12 +106,6 @@ module Api
                 render json: { errors: [ "Column not found" ] }, status: :not_found and return
               end
               col
-            when :move_to_done
-              done_col = current_board.board_columns.order(:position).last
-              unless done_col
-                render json: { errors: [ "Board has no Done column" ] }, status: :unprocessable_entity and return
-              end
-              done_col
             end
 
             result = TaskService.bulk_action(action: action, tasks: tasks, actor: current_user, to_column: to_column)

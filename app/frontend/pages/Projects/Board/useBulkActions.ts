@@ -18,8 +18,6 @@ function actionLabel(action: BulkAction): string {
       return 'Deleted';
     case 'archive':
       return 'Archived';
-    case 'move_to_done':
-      return 'Moved';
     case 'move_to_column':
       return 'Moved';
   }
