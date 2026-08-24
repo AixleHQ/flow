@@ -113,6 +113,25 @@ module Web
           assert_not p.destroy?
         end
 
+        # Repositories used to require the company admin role, which left a
+        # project owner able to connect the GitHub integration but not attach a
+        # repository from it. They are a plain project write now.
+        test "RepositoriesPolicy: project owner without the admin role can write" do
+          p = RepositoriesPolicy.new(context_for(@owner), nil)
+          assert p.index?
+          assert p.create?
+          assert p.update?
+          assert p.destroy?
+        end
+
+        test "RepositoriesPolicy: viewer reads allowed, writes denied" do
+          p = RepositoriesPolicy.new(context_for(@viewer), nil)
+          assert p.index?
+          assert_not p.create?
+          assert_not p.update?
+          assert_not p.destroy?
+        end
+
         test "AgentsPolicy/ToolsPolicy: viewer writes denied" do
           assert_not AgentsPolicy.new(context_for(@viewer), nil).create?
           assert_not ToolsPolicy.new(context_for(@viewer), nil).create?

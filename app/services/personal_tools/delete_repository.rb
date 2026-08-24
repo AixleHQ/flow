@@ -4,7 +4,7 @@ module PersonalTools
   class DeleteRepository < Base
     tool do
       display_name "Delete Repository"
-      description "Detach a repository from a project (requires company admin)."
+      description "Detach a repository from a project."
       audience :user
       tags :resources
       param :project_id, type: :integer, description: "Project id.", required: true

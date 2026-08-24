@@ -4,7 +4,7 @@ module PersonalTools
   class UpdateRepository < Base
     tool do
       display_name "Update Repository"
-      description "Update a project repository's branch, purpose or description (requires company admin)."
+      description "Update a project repository's branch, purpose or description."
       audience :user
       tags :resources
       param :project_id, type: :integer, description: "Project id.", required: true
