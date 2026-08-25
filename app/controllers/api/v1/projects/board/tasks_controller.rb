@@ -75,6 +75,48 @@ module Api
             render json: BoardTaskResource.new(task).to_h
           end
 
+          # @summary Apply a bulk action to multiple board tasks
+          def bulk_actions
+            action_type = params[:action_type]
+            unless action_type.present?
+              render json: { errors: [ "action_type is required" ] }, status: :bad_request and return
+            end
+
+            action = action_type.to_sym
+
+            unless TaskService::BULK_ACTIONS.include?(action)
+              render json: { errors: [ "Unknown action" ] }, status: :bad_request and return
+            end
+
+            task_ids = Array(params[:task_ids]).map(&:to_i)
+            if task_ids.empty?
+              render json: { errors: [ "task_ids is required" ] }, status: :bad_request and return
+            end
+
+            tasks = current_board.board_tasks.where(id: task_ids)
+
+            to_column = case action
+            when :move_to_column
+              col_id = params[:column_id]
+              unless col_id.present?
+                render json: { errors: [ "column_id is required" ] }, status: :bad_request and return
+              end
+              col = current_board.board_columns.find_by(id: col_id)
+              unless col
+                render json: { errors: [ "Column not found" ] }, status: :not_found and return
+              end
+              col
+            end
+
+            extra_params = {
+              priority: params[:priority],
+              assignee_id: params[:assignee_id].present? ? params[:assignee_id].to_i : nil,
+              tag: params[:tag]
+            }
+            result = TaskService.bulk_action(action: action, tasks: tasks, actor: current_user, to_column: to_column, extra_params: extra_params)
+            render json: result
+          end
+
           # @summary List workflow runs for a board task
           def workflow_runs
             task = current_board.board_tasks.find(params[:id])

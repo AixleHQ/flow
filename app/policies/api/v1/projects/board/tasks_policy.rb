@@ -15,6 +15,7 @@ module Api
           def archive? = project_writable?
           def unarchive? = project_writable?
           def trigger_workflow? = project_writable?
+          def bulk_actions? = project_writable?
         end
       end
     end

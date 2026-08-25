@@ -132,6 +132,9 @@ Rails.application.routes.draw do
             end
             resources :activities, only: %i[index]
             resources :tasks do
+              collection do
+                post :bulk_actions
+              end
               member do
                 patch :move
                 patch :archive

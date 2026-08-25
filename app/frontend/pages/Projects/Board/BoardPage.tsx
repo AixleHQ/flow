@@ -84,6 +84,7 @@ import {
   IconListDetails,
   IconLink,
   IconMessage,
+  IconMinus,
   IconPencil,
   IconPlus,
   IconRefresh,
@@ -150,10 +151,12 @@ import styles from './BoardPage.module.css';
 import { CHIP_TOOLTIP_PROPS } from './chipTooltip';
 import { GATE_CHIP_WIDTH, GateStatusChip } from './GateStatusChip';
 import { LatestRunTile } from './LatestRunTile';
+import { SelectionBar } from './SelectionBar';
 import { WORKFLOW_ACTIVE_STATES, type TaskWorkflowRun } from './taskRuns';
 import { TaskRunsPanel } from './TaskRunsPanel';
 import { useBoardDnd } from './useBoardDnd';
 import { useBoardTaskPages } from './useBoardTaskPages';
+import { useBulkActions } from './useBulkActions';
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
 const AUTHOR_TYPES = [
@@ -379,6 +382,9 @@ function SortableTaskCard({
   onRetry,
   onTagClick,
   activeTags,
+  isSelected,
+  onToggleSelect,
+  selectionMode,
 }: {
   task: Task;
   href?: string;
@@ -386,6 +392,9 @@ function SortableTaskCard({
   onRetry?: (task: Task) => void;
   onTagClick?: (tag: string) => void;
   activeTags?: string[];
+  isSelected?: boolean;
+  onToggleSelect?: (id: number, checked: boolean) => void;
+  selectionMode?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `task-${task.id}`,
@@ -412,6 +421,9 @@ function SortableTaskCard({
         onRetry={onRetry}
         onTagClick={onTagClick}
         activeTags={activeTags}
+        isSelected={isSelected}
+        onToggleSelect={onToggleSelect}
+        selectionMode={selectionMode}
       />
     </Box>
   );
@@ -614,6 +626,9 @@ function TaskCardUI({
   onRetry,
   onTagClick,
   activeTags,
+  isSelected,
+  onToggleSelect,
+  selectionMode,
 }: {
   task: Task;
   href?: string;
@@ -622,6 +637,9 @@ function TaskCardUI({
   onRetry?: (task: Task) => void;
   onTagClick?: (tag: string) => void;
   activeTags?: string[];
+  isSelected?: boolean;
+  onToggleSelect?: (id: number, checked: boolean) => void;
+  selectionMode?: boolean;
 }) {
   // A card shows at most three tags. Whichever ones the board is filtered by come first, so the
   // filter that put this card on screen is always the one you can click to take it back off.
@@ -654,14 +672,23 @@ function TaskCardUI({
 
   const isLink = !isDragOverlay && !!href;
   const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (e.defaultPrevented) return;
     if (!isLink) {
       onClick?.(task);
       return;
     }
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     onClick?.(task);
   };
+
+  const cardClasses = [
+    styles.taskCard,
+    selectionMode || isSelected ? styles.taskCardSelectionMode : '',
+    isSelected ? styles.taskCardSelected : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <Paper
@@ -674,6 +701,7 @@ function TaskCardUI({
       withBorder
       bg="var(--app-bg-elevated)"
       onClick={handleClick}
+      className={cardClasses}
       style={{
         cursor: 'pointer',
         transition: 'border-color 0.15s, background-color 0.15s',
@@ -686,16 +714,39 @@ function TaskCardUI({
         padding: '12px 13px',
       }}
       onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
-        (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-brand-4)';
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-paper)';
+        if (!isSelected) {
+          (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-brand-4)';
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-paper)';
+        }
       }}
       onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
-        (e.currentTarget as HTMLElement).style.borderColor = 'var(--app-border-strong)';
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-elevated)';
+        if (!isSelected) {
+          (e.currentTarget as HTMLElement).style.borderColor = 'var(--app-border-strong)';
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-elevated)';
+        }
       }}
     >
-      {/* Title row with priority dot */}
-      <Group gap={4} align="flex-start" wrap="nowrap">
+      {/* Absolutely-positioned selection checkbox — slides in on hover or selection mode */}
+      {onToggleSelect && (
+        <Box
+          component="button"
+          role="checkbox"
+          className={[styles.taskCardCheck, isSelected ? styles.taskCardCheckSelected : ''].filter(Boolean).join(' ')}
+          aria-label={`Select ${task.title}`}
+          aria-checked={!!isSelected}
+          onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+          onClick={(e: React.MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onToggleSelect(task.id, !isSelected);
+          }}
+        >
+          {isSelected && <IconCheck size={10} />}
+        </Box>
+      )}
+
+      {/* Title row — padding-left animates in when checkbox is shown */}
+      <Group gap={8} align="flex-start" wrap="nowrap" className={styles.taskCardTop}>
         {task.priority && (
           <Tooltip label={task.priority}>
             <Box
@@ -940,6 +991,10 @@ function BoardColumn({
   isFiltered,
   isDropTarget,
   canExecute,
+  selectedIds,
+  onToggleSelect,
+  onToggleColumn,
+  selectionMode,
 }: {
   column: Column;
   /** The pages of this column the client has loaded — not necessarily all of it. */
@@ -964,6 +1019,10 @@ function BoardColumn({
   isFiltered: boolean;
   isDropTarget: boolean;
   canExecute: boolean;
+  selectedIds?: Set<number>;
+  onToggleSelect?: (id: number, checked: boolean) => void;
+  onToggleColumn?: (columnId: number, taskIds: number[], select: boolean) => void;
+  selectionMode?: boolean;
 }) {
   const {
     setNodeRef,
@@ -1191,8 +1250,38 @@ function BoardColumn({
         >
           <IconChevronDown size={15} />
         </ActionIcon>
-        {/* Left: name (drag handle) + count + bolt chip */}
+        {/* Left: column tri-state checkbox (selection mode) + name (drag handle) + count + bolt chip */}
         <Group gap={6} style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+          {selectionMode &&
+            onToggleColumn &&
+            (() => {
+              const colTaskIds = tasks.map((t) => t.id);
+              const selectedInCol = colTaskIds.filter((id) => selectedIds?.has(id)).length;
+              const allSelected = colTaskIds.length > 0 && selectedInCol === colTaskIds.length;
+              const someSelected = selectedInCol > 0 && !allSelected;
+              return (
+                <Box
+                  component="button"
+                  className={[
+                    styles.colHeaderCheck,
+                    styles.colHeaderCheckVisible,
+                    allSelected ? styles.colHeaderCheckOn : someSelected ? styles.colHeaderCheckSome : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  aria-label={`Toggle all tasks in ${column.name}`}
+                  aria-pressed={allSelected}
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    onToggleColumn(column.id, colTaskIds, !allSelected);
+                  }}
+                  onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
+                >
+                  {allSelected && <IconCheck size={10} />}
+                  {someSelected && <IconMinus size={10} />}
+                </Box>
+              );
+            })()}
           {renaming ? (
             <TextInput
               ref={renameInputRef}
@@ -1369,7 +1458,7 @@ function BoardColumn({
 
       {/* Task list — one page at a time, extended as it is scrolled */}
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-        <Box onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px', minHeight: 60 }}>
+        <Box onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 12px', minHeight: 60 }}>
           {tasks.length === 0 && !loadingMore ? (
             <Text size="xs" c="dimmed" ta="center" py="xl">
               {isFiltered ? 'No matching tasks' : 'No tasks yet'}
@@ -1384,6 +1473,9 @@ function BoardColumn({
                 onRetry={onRetryTask}
                 onTagClick={onTagClick}
                 activeTags={activeTags}
+                isSelected={selectedIds?.has(task.id)}
+                onToggleSelect={onToggleSelect}
+                selectionMode={selectionMode}
               />
             ))
           )}
@@ -4248,6 +4340,40 @@ const BoardPage = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  const toggleSelect = useCallback((id: number, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const {
+    execute: executeBulkAction,
+    bulkSetPriority,
+    bulkAssign,
+    bulkAddTag,
+  } = useBulkActions({
+    projectId: project.id,
+    onSuccess: clearSelection,
+  });
+
+  const toggleColumn = useCallback((_columnId: number, taskIds: number[], select: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of taskIds) {
+        if (select) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }, []);
+
   // Opening by id, for a task the board may not hold a card for — an epic's child or parent that
   // lives on a page no column has loaded.
   const openTaskById = useCallback(
@@ -4724,6 +4850,20 @@ const BoardPage = () => {
           )}
         </Group>
 
+        {/* Selection toolbar — second row, visible only when tasks are selected */}
+        <SelectionBar
+          selectedCount={selectedIds.size}
+          selectedIds={selectedIds}
+          columns={localColumns}
+          members={members}
+          canExecute={canExecute}
+          onAction={(action, columnId) => executeBulkAction(action, [...selectedIds], columnId)}
+          onBulkPriority={(priority) => bulkSetPriority([...selectedIds], priority)}
+          onBulkAssign={(assigneeId) => bulkAssign([...selectedIds], assigneeId)}
+          onBulkTag={(tag) => bulkAddTag([...selectedIds], tag)}
+          onClear={clearSelection}
+        />
+
         {/* Board area */}
         <DndContext
           sensors={sensors}
@@ -4788,6 +4928,10 @@ const BoardPage = () => {
                   isFiltered={hasActiveFilters}
                   isDropTarget={hoverColumnId === col.id}
                   canExecute={canExecute}
+                  selectedIds={selectedIds}
+                  onToggleSelect={canExecute ? toggleSelect : undefined}
+                  onToggleColumn={canExecute ? toggleColumn : undefined}
+                  selectionMode={canExecute && selectedIds.size > 0}
                 />
               ))}
             </SortableContext>
