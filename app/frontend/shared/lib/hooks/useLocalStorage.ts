@@ -12,7 +12,7 @@ import { Dispatch, SetStateAction, useEffect, useRef, useState } from 'react';
  * @param serialize - optional custom serializer (defaults to JSON.stringify)
  * @param deserialize - optional custom deserializer (defaults to JSON.parse)
  */
-export function useLocalStorage<T>(
+function useLocalStorage<T>(
   key: string | null,
   defaultValue: T,
   serialize: (value: T) => string = JSON.stringify,

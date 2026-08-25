@@ -18,7 +18,7 @@ import { useDebouncedCallback } from '@mantine/hooks';
 import { IconAlertTriangle, IconSearch, IconSparkles } from '@tabler/icons-react';
 import { useState, type FC } from 'react';
 
-export interface AuditProvider {
+interface AuditProvider {
   provider: string;
   risk: string | null;
   score: number | null;

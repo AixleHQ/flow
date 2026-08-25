@@ -1,4 +1,3 @@
-import { Head } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
@@ -15,25 +14,6 @@ export function setPageLayout(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (page as any).layout = layout;
 }
-
-export interface ProjectLayoutProps {
-  projectId: number;
-  projectName: string;
-  currentTab: string;
-  title?: string;
-  children: ReactNode;
-}
-
-/**
- * Wrapper component for backward compatibility — still used by pages that
- * haven't migrated to persistent layout yet.
- */
-export const ProjectLayout = ({ projectId, projectName, currentTab, title, children }: ProjectLayoutProps) => (
-  <AuthLayout projectId={String(projectId)} currentTab={currentTab}>
-    <Head title={title ? `${title} — ${projectName}` : projectName} />
-    {children}
-  </AuthLayout>
-);
 
 /**
  * Persistent layout for Inertia v3: pass a component reference (not a render

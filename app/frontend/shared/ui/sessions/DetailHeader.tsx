@@ -19,7 +19,7 @@ export interface HeaderStat {
   color?: string;
 }
 
-export interface TokenBreakdown {
+interface TokenBreakdown {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;

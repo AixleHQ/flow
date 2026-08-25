@@ -20,7 +20,7 @@ export interface AgentCredential {
 
 // A membership role is always company-scoped — super_admin is platform-level
 // and only ever appears in SharedUser.currentRole.
-export type MembershipRole = Exclude<UserRole, 'super_admin'>;
+type MembershipRole = Exclude<UserRole, 'super_admin'>;
 
 export interface SharedMembership {
   id: number;

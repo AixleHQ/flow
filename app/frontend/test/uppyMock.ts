@@ -8,7 +8,7 @@
  */
 type UppyListener = (...args: never[]) => void;
 
-export const uppyState: { listeners: Map<string, UppyListener[]> } = { listeners: new Map() };
+const uppyState: { listeners: Map<string, UppyListener[]> } = { listeners: new Map() };
 
 export function recordUppyListener(event: string, listener: UppyListener): void {
   const existing = uppyState.listeners.get(event) ?? [];

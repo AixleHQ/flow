@@ -13,7 +13,7 @@ import type {
 // tests must seed these. buildSharedProps() is the canonical, type-checked default — spread it into
 // renderPage(..., { props: { ...buildSharedProps(), ...pageSpecificProps } }) or use renderAuthedPage().
 
-export const buildSharedCompany = (overrides: Partial<SharedCompany> = {}): SharedCompany => ({
+const buildSharedCompany = (overrides: Partial<SharedCompany> = {}): SharedCompany => ({
   id: 1,
   name: 'Test Company',
   emailDomain: 'example.com',
@@ -23,7 +23,7 @@ export const buildSharedCompany = (overrides: Partial<SharedCompany> = {}): Shar
   ...overrides,
 });
 
-export const buildSharedMembership = (overrides: Partial<SharedMembership> = {}): SharedMembership => ({
+const buildSharedMembership = (overrides: Partial<SharedMembership> = {}): SharedMembership => ({
   id: 1,
   role: 'admin',
   state: 'active',
@@ -54,7 +54,7 @@ export const buildSharedUser = (overrides: Partial<SharedUser> = {}): SharedUser
   ...overrides,
 });
 
-export const buildSharedSettings = (overrides: Partial<SharedSettings> = {}): SharedSettings => ({
+const buildSharedSettings = (overrides: Partial<SharedSettings> = {}): SharedSettings => ({
   env: 'test',
   domain: 'localhost',
   githubAppSlug: null,

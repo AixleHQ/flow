@@ -26,7 +26,7 @@ export interface TaskWorkflowRun {
 export const WORKFLOW_ACTIVE_STATES = new Set(['pending', 'running', 'paused']);
 
 // Step states that mean "there is something live to look at right now".
-export const STEP_ACTIVE_STATES = new Set(['running', 'waiting_input']);
+const STEP_ACTIVE_STATES = new Set(['running', 'waiting_input']);
 
 // A run has one session per step, so "jump into the session" needs a single target.
 // Prefer the session of a step that is still active — that is the one the user is

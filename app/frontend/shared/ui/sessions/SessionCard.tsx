@@ -8,7 +8,7 @@ import { AgentLogo, agentLabel } from './AgentLogo';
 import classes from './SessionCard.module.css';
 import { StatusTag } from './StatusTag';
 
-export interface SessionCardStep {
+interface SessionCardStep {
   id: number;
   label: string;
   state: string;

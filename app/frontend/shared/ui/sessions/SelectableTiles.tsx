@@ -76,7 +76,7 @@ export function RuntimeTiles({
   );
 }
 
-export interface ModeOption<T extends string> {
+interface ModeOption<T extends string> {
   value: T;
   title: string;
   description: string;
