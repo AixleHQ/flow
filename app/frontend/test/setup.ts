@@ -143,7 +143,13 @@ vi.mock('@inertiajs/react', async (importOriginal) => {
     router: {
       visit: vi.fn(),
       post: vi.fn(),
-      get: vi.fn(),
+      // Resolves its visit's onFinish synchronously so components tracking "request in flight"
+      // state (e.g. a loading skeleton keyed off onFinish) don't get stuck mid-test. Args are
+      // still recorded on the mock as usual for assertions.
+      get: vi.fn((...args: unknown[]) => {
+        const options = args[2] as { onFinish?: () => void } | undefined;
+        options?.onFinish?.();
+      }),
       put: vi.fn(),
       patch: vi.fn(),
       delete: vi.fn(),

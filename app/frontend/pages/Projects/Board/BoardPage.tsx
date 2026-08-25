@@ -1837,8 +1837,92 @@ function InlineTagsEditor({
 
 // --- Task Detail Sidebar ---
 
+// Placeholder tab labels/widths — approximate real tab text ("Details", "Runs (3)", …) closely
+// enough that the row's height and horizontal rhythm don't visibly shift once real tabs replace it.
+const SKELETON_TAB_WIDTHS = [50, 70, 90, 60, 60, 70];
+
+// Shown in place of the task detail panel while its data is still in flight (opening a card, or
+// switching to a different one). Mirrors the real panel's header bar, tab row, and Details-tab
+// layout — same paddings, same block sizes — so swapping in the loaded content changes what's
+// drawn, not the panel's shape: no layout jump, no scroll reset, nothing to flash past.
+function TaskDetailSkeleton({ onClose }: { onClose: () => void }) {
+  return (
+    <>
+      {/* Panel bar — same height/padding as the real one; only Close stays interactive. */}
+      <Box
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          padding: '12px 16px',
+          borderBottom: '1px solid var(--app-border-default)',
+          flexShrink: 0,
+        }}
+      >
+        <Skeleton height={20} width={20} radius="sm" />
+        <Box style={{ flex: 1 }} />
+        <Skeleton height={20} width={20} radius="sm" />
+        <Skeleton height={20} width={20} radius="sm" />
+        <ActionIcon variant="subtle" size="sm" title="Close" onClick={onClose}>
+          <IconX size={16} />
+        </ActionIcon>
+      </Box>
+
+      {/* Tab row */}
+      <Box
+        style={{
+          display: 'flex',
+          borderBottom: '1px solid var(--app-border-default)',
+          paddingLeft: 16,
+          paddingRight: 16,
+          flexShrink: 0,
+        }}
+      >
+        {SKELETON_TAB_WIDTHS.map((width, i) => (
+          <Box key={i} style={{ padding: '9px 11px' }}>
+            <Skeleton height={14} width={width} />
+          </Box>
+        ))}
+      </Box>
+
+      {/* Details tab: title, chips, description, then a properties list. */}
+      <Box style={{ flex: 1, overflow: 'auto', padding: 20 }}>
+        <Box style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 18 }}>
+          <Skeleton height={26} width="65%" />
+          <Box style={{ display: 'flex', gap: 7 }}>
+            <Skeleton height={20} width={64} radius="sm" />
+            <Skeleton height={20} width={78} radius="sm" />
+          </Box>
+          <Skeleton height={13} width="100%" />
+          <Skeleton height={13} width="80%" />
+        </Box>
+
+        <Box>
+          <Skeleton height={11} width={100} mb={14} />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Box
+              key={i}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '11px 0',
+                borderBottom: '1px solid rgba(41,39,38,0.4)',
+              }}
+            >
+              <Skeleton height={12} width={70} />
+              <Skeleton height={12} width={130} />
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    </>
+  );
+}
+
 function TaskDetailSidebar({
   task,
+  pendingTaskId,
   allTasks,
   epics,
   knownTags,
@@ -1856,6 +1940,8 @@ function TaskDetailSidebar({
   canExecute,
 }: {
   task: Task | null;
+  /** A task id whose props are still in flight — draws the skeleton until it resolves. */
+  pendingTaskId: number | null;
   /** The pages the board holds — a fallback source, not the whole board. */
   allTasks: Task[];
   /** Every epic on the board, for the Parent Epic picker. */
@@ -2093,7 +2179,31 @@ function TaskDetailSidebar({
     [projectId, task],
   );
 
-  if (!task) return null;
+  // Nothing open and nothing requested — stay unmounted, same as before.
+  if (!task && pendingTaskId === null) return null;
+
+  // A click landed and the request for it hasn't resolved yet (opening fresh, or switching from
+  // whatever task — if any — was already showing). Keep the drawer's own chrome (size, padding,
+  // header/tabs shape) so the real content that replaces this doesn't shift anything when it
+  // lands, and skip straight to skeleton content instead of a stale or empty panel.
+  if (!task || (pendingTaskId !== null && pendingTaskId !== task.id)) {
+    return (
+      <Drawer
+        opened
+        onClose={onClose}
+        position="right"
+        size={wide ? '50vw' : 620}
+        withCloseButton={false}
+        padding={0}
+        styles={{
+          content: { display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+          body: { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+        }}
+      >
+        <TaskDetailSkeleton onClose={onClose} />
+      </Drawer>
+    );
+  }
 
   const taskColumn = columns.find((c) => c.id === task.boardColumnId);
   const columnWorkflowBinding = taskColumn?.workflowBinding ?? null;
@@ -4387,6 +4497,11 @@ const BoardPage = () => {
     });
   }, []);
 
+  // The task id a click just requested but whose props haven't landed yet — drives the sidebar
+  // skeleton below. Cleared on the request's own `onFinish`, guarded by id so a stale response
+  // for an already-superseded click can't clear a newer one's pending state.
+  const [pendingTaskId, setPendingTaskId] = useState<number | null>(null);
+
   // Opening by id, for a task the board may not hold a card for — an epic's child or parent that
   // lives on a page no column has loaded.
   //
@@ -4395,14 +4510,35 @@ const BoardPage = () => {
   // click re-ran the full board query set (issue #563).
   const openTaskById = useCallback(
     (taskId: number) => {
-      router.get(boardUrl, { task: taskId }, { preserveState: true, preserveScroll: true, only: TASK_DETAIL_PROPS });
+      setPendingTaskId(taskId);
+      router.get(
+        boardUrl,
+        { task: taskId },
+        {
+          preserveState: true,
+          preserveScroll: true,
+          only: TASK_DETAIL_PROPS,
+          onFinish: () => setPendingTaskId((id) => (id === taskId ? null : id)),
+        },
+      );
     },
     [boardUrl],
   );
 
   const openTask = useCallback(
     (task: Task | null) => {
-      router.get(boardUrl, { task: task?.id }, { preserveState: true, preserveScroll: true, only: TASK_DETAIL_PROPS });
+      const taskId = task?.id ?? null;
+      setPendingTaskId(taskId);
+      router.get(
+        boardUrl,
+        { task: taskId },
+        {
+          preserveState: true,
+          preserveScroll: true,
+          only: TASK_DETAIL_PROPS,
+          onFinish: () => setPendingTaskId((id) => (id === taskId ? null : id)),
+        },
+      );
     },
     [boardUrl],
   );
@@ -4412,6 +4548,7 @@ const BoardPage = () => {
   const taskHref = useCallback((task: Task) => `${boardUrl}?task=${task.id}`, [boardUrl]);
 
   const closeTask = useCallback(() => {
+    setPendingTaskId(null);
     router.get(boardUrl, {}, { preserveState: true, preserveScroll: true, only: TASK_DETAIL_PROPS });
   }, [boardUrl]);
 
@@ -5028,6 +5165,7 @@ const BoardPage = () => {
 
       <TaskDetailSidebar
         task={selectedTask}
+        pendingTaskId={pendingTaskId}
         allTasks={localTasks}
         epics={epics ?? NO_EPICS}
         knownTags={allTags}
