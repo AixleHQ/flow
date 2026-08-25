@@ -672,11 +672,12 @@ function TaskCardUI({
 
   const isLink = !isDragOverlay && !!href;
   const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+    if (e.defaultPrevented) return;
     if (!isLink) {
       onClick?.(task);
       return;
     }
-    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     e.preventDefault();
     onClick?.(task);
   };
@@ -735,6 +736,7 @@ function TaskCardUI({
           aria-checked={!!isSelected}
           onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
           onClick={(e: React.MouseEvent) => {
+            e.preventDefault();
             e.stopPropagation();
             onToggleSelect(task.id, !isSelected);
           }}
@@ -1456,7 +1458,7 @@ function BoardColumn({
 
       {/* Task list — one page at a time, extended as it is scrolled */}
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-        <Box onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px', minHeight: 60 }}>
+        <Box onScroll={handleScroll} style={{ flex: 1, overflowY: 'auto', padding: '8px 12px 12px', minHeight: 60 }}>
           {tasks.length === 0 && !loadingMore ? (
             <Text size="xs" c="dimmed" ta="center" py="xl">
               {isFiltered ? 'No matching tasks' : 'No tasks yet'}

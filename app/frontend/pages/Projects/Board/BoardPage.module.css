@@ -165,6 +165,8 @@
 
 /* Checkbox — 16×16 native square, absolutely positioned, hidden at rest */
 .taskCardCheck {
+  appearance: none;
+  -webkit-appearance: none;
   position: absolute;
   top: 12px;
   left: 12px;
@@ -183,6 +185,7 @@
   transition: opacity 0.12s, background 0.12s, border-color 0.12s, color 0.12s;
   pointer-events: none;
   z-index: 3;
+  padding: 0;
 }
 
 .taskCard:hover .taskCardCheck,
@@ -201,7 +204,7 @@
   pointer-events: auto !important;
   background: var(--mantine-color-brand-6) !important;
   border-color: var(--mantine-color-brand-6) !important;
-  color: #fff !important;
+  color: #0a0908 !important;
 }
 
 /* Selected card accent tint */
@@ -212,6 +215,8 @@
 
 /* Column tri-state checkbox in header */
 .colHeaderCheck {
+  appearance: none;
+  -webkit-appearance: none;
   width: 16px;
   height: 16px;
   border-radius: 4px;
@@ -227,6 +232,7 @@
   opacity: 0;
   transition: opacity 0.12s, background 0.12s, border-color 0.12s, color 0.12s;
   pointer-events: none;
+  padding: 0;
 }
 
 .colHeaderCheckVisible {
@@ -241,7 +247,7 @@
 .colHeaderCheckOn {
   background: var(--mantine-color-brand-6) !important;
   border-color: var(--mantine-color-brand-6) !important;
-  color: #fff !important;
+  color: #0a0908 !important;
 }
 
 .colHeaderCheckSome {

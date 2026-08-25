@@ -3,11 +3,16 @@ import { modals } from '@mantine/modals';
 import {
   IconAlertTriangle,
   IconArchive,
+  IconArrowRight,
+  IconBolt,
+  IconCheckbox,
   IconChevronDown,
+  IconColumns,
   IconFlag,
   IconTag,
   IconTrash,
   IconUser,
+  IconUserOff,
   IconX,
 } from '@tabler/icons-react';
 
@@ -52,6 +57,59 @@ function avatarInitials(name: string) {
     .toUpperCase()
     .slice(0, 2);
 }
+
+// Matches .pop from the reference HTML
+const menuStyles = {
+  dropdown: {
+    background: 'var(--app-bg-elevated)',
+    border: '1px solid var(--app-border-strong)',
+    borderRadius: 8,
+    padding: 4,
+    minWidth: 220,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+  },
+  // Matches .pop-head
+  label: {
+    fontSize: 10,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase' as const,
+    color: 'var(--mantine-color-dimmed)',
+    fontWeight: 600,
+    padding: '7px 10px 4px',
+  },
+  // Matches .pop-item
+  item: {
+    padding: '7px 10px',
+    borderRadius: 5,
+    fontSize: 13,
+    color: 'var(--app-text-secondary)',
+  },
+  // Matches .pop-div
+  divider: {
+    borderColor: 'var(--app-border-default)',
+    margin: '3px 0',
+  },
+};
+
+const btnStyle = {
+  root: {
+    height: 32,
+    padding: '0 10px',
+    fontSize: 12,
+    fontWeight: 500,
+    color: 'var(--app-text-secondary)',
+    border: '1px solid var(--app-border-default)',
+    borderRadius: 5,
+    backgroundColor: 'transparent',
+  },
+};
+
+const dangerBtnStyle = {
+  root: {
+    ...btnStyle.root,
+    color: 'var(--mantine-color-red-6)',
+  },
+};
 
 export function SelectionBar({
   selectedCount,
@@ -112,7 +170,7 @@ export function SelectionBar({
           <TextInput
             label="Tag name"
             placeholder="e.g. needs-review"
-            autoFocus
+            data-autofocus
             onChange={(e) => {
               tagValue = e.currentTarget.value;
             }}
@@ -148,29 +206,9 @@ export function SelectionBar({
     });
   };
 
-  const btnStyle = {
-    root: {
-      height: 32,
-      padding: '0 10px',
-      fontSize: 12,
-      fontWeight: 500,
-      color: 'var(--app-text-secondary)',
-      border: '1px solid var(--app-border-default)',
-      borderRadius: 5,
-      backgroundColor: 'transparent',
-    },
-  };
-
-  const dangerBtnStyle = {
-    root: {
-      ...btnStyle.root,
-      color: 'var(--mantine-color-red-6)',
-    },
-  };
-
   return (
     <Group gap={8} mb="sm" wrap="nowrap" align="center" style={{ flexShrink: 0 }}>
-      {/* Count badge */}
+      {/* Count badge — matches .sb-count */}
       <Group
         gap={6}
         align="center"
@@ -183,37 +221,56 @@ export function SelectionBar({
           flexShrink: 0,
         }}
       >
+        <IconCheckbox size={14} color="var(--mantine-color-brand-6)" />
         <Text size="xs" fw={600} c="brand">
           {selectedCount} selected
         </Text>
       </Group>
 
-      {/* Separator */}
+      {/* Separator — matches .sb-sep */}
       <div style={{ width: 1, height: 20, backgroundColor: 'var(--app-border-default)', flexShrink: 0 }} />
 
-      {/* Move to → */}
-      <Menu shadow="md" position="bottom-start" withinPortal>
+      {/* Move to — items match .pop-item with ti-columns icon + auto-flag on right */}
+      <Menu shadow="md" position="bottom-start" withinPortal styles={menuStyles}>
         <Menu.Target>
-          <Button size="xs" variant="default" rightSection={<IconChevronDown size={11} />} styles={btnStyle}>
+          <Button
+            size="xs"
+            variant="default"
+            leftSection={<IconArrowRight size={12} />}
+            rightSection={<IconChevronDown size={11} />}
+            styles={btnStyle}
+          >
             Move to
           </Button>
         </Menu.Target>
         <Menu.Dropdown>
+          <Menu.Label>
+            Move {selectedCount} task{selectedCount === 1 ? '' : 's'} to
+          </Menu.Label>
           {columns.map((col) => (
-            <Menu.Item key={col.id} onClick={() => confirmMoveToColumn(col)}>
+            <Menu.Item
+              key={col.id}
+              leftSection={<IconColumns size={13} color="var(--mantine-color-dimmed)" />}
+              rightSection={
+                col.workflowBinding?.triggerMode === 'auto' ? (
+                  <Group gap={3} align="center" wrap="nowrap">
+                    <IconBolt size={11} color="var(--mantine-color-brand-6)" />
+                    <Text size="xs" fw={600} c="brand" style={{ letterSpacing: '0.03em' }}>
+                      Runs
+                    </Text>
+                  </Group>
+                ) : undefined
+              }
+              onClick={() => confirmMoveToColumn(col)}
+            >
               {col.name}
-              {col.workflowBinding?.triggerMode === 'auto' && (
-                <Text span size="xs" c="brand" fw={600} ml={8}>
-                  Runs
-                </Text>
-              )}
             </Menu.Item>
           ))}
         </Menu.Dropdown>
       </Menu>
 
       {/* Priority */}
-      <Menu shadow="md" position="bottom-start" withinPortal>
+      <Menu shadow="md" position="bottom-start" withinPortal styles={menuStyles}>
         <Menu.Target>
           <Button
             size="xs"
@@ -228,7 +285,11 @@ export function SelectionBar({
         <Menu.Dropdown>
           <Menu.Label>Set priority</Menu.Label>
           {PRIORITY_OPTIONS.map(({ value, label }) => (
-            <Menu.Item key={label} leftSection={<IconFlag size={13} />} onClick={() => onBulkPriority(value)}>
+            <Menu.Item
+              key={label}
+              leftSection={<IconFlag size={13} color="var(--mantine-color-dimmed)" />}
+              onClick={() => onBulkPriority(value)}
+            >
               {label}
             </Menu.Item>
           ))}
@@ -237,7 +298,7 @@ export function SelectionBar({
 
       {/* Assign */}
       {members.length > 0 && (
-        <Menu shadow="md" position="bottom-start" withinPortal>
+        <Menu shadow="md" position="bottom-start" withinPortal styles={menuStyles}>
           <Menu.Target>
             <Button
               size="xs"
@@ -252,19 +313,20 @@ export function SelectionBar({
           <Menu.Dropdown>
             <Menu.Label>Assign to</Menu.Label>
             {members.map((m) => (
-              <Menu.Item key={m.id} onClick={() => onBulkAssign(m.id)}>
-                <Group gap={8} align="center">
+              <Menu.Item
+                key={m.id}
+                leftSection={
                   <div
                     style={{
-                      width: 20,
-                      height: 20,
+                      width: 18,
+                      height: 18,
                       borderRadius: '50%',
                       backgroundColor: 'color-mix(in srgb, var(--mantine-color-brand-6) 12%, transparent)',
                       border: '1px solid color-mix(in srgb, var(--mantine-color-brand-6) 30%, transparent)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      fontSize: 9,
+                      fontSize: 8,
                       fontWeight: 700,
                       color: 'var(--mantine-color-brand-6)',
                       flexShrink: 0,
@@ -272,12 +334,17 @@ export function SelectionBar({
                   >
                     {avatarInitials(m.name)}
                   </div>
-                  {m.name}
-                </Group>
+                }
+                onClick={() => onBulkAssign(m.id)}
+              >
+                {m.name}
               </Menu.Item>
             ))}
             <Menu.Divider />
-            <Menu.Item leftSection={<IconUser size={13} />} onClick={() => onBulkAssign(null)}>
+            <Menu.Item
+              leftSection={<IconUserOff size={13} color="var(--mantine-color-dimmed)" />}
+              onClick={() => onBulkAssign(null)}
+            >
               Unassign
             </Menu.Item>
           </Menu.Dropdown>
@@ -300,7 +367,7 @@ export function SelectionBar({
         Archive
       </Button>
 
-      {/* Delete */}
+      {/* Delete — matches .btn.danger */}
       <Button
         size="xs"
         variant="default"
@@ -314,14 +381,14 @@ export function SelectionBar({
       {/* Spacer */}
       <div style={{ flex: 1 }} />
 
-      {/* Cancel */}
+      {/* Cancel — matches .sb-cancel */}
       <Button
         size="xs"
-        variant="subtle"
+        variant="default"
         leftSection={<IconX size={12} />}
-        color="gray"
-        onClick={onClear}
+        styles={btnStyle}
         aria-label="Clear selection"
+        onClick={onClear}
       >
         Cancel
       </Button>
