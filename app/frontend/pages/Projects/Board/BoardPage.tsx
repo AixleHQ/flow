@@ -158,6 +158,19 @@ import { useBoardDnd } from './useBoardDnd';
 import { useBoardTaskPages } from './useBoardTaskPages';
 import { useBulkActions } from './useBulkActions';
 
+// Props a task-open/close visit needs — everything the sidebar renders, and nothing about
+// the board list itself. Passed as Inertia's `only` so opening a card doesn't re-run the
+// board/columns/tags/epics/members/workflows/view_presets queries on every click.
+const TASK_DETAIL_PROPS = [
+  'selected_task',
+  'task_comments',
+  'task_assets',
+  'task_activities',
+  'task_workflow_runs',
+  'task_statistics',
+  'task_cable_stream',
+];
+
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
 const AUTHOR_TYPES = [
   { value: '', label: 'All' },
@@ -4376,16 +4389,20 @@ const BoardPage = () => {
 
   // Opening by id, for a task the board may not hold a card for — an epic's child or parent that
   // lives on a page no column has loaded.
+  //
+  // Scoped to just the selected task's own props: the board list, columns, tags, epics,
+  // members, etc. don't move when a card is opened or closed. Without this `only`, every
+  // click re-ran the full board query set (issue #563).
   const openTaskById = useCallback(
     (taskId: number) => {
-      router.get(boardUrl, { task: taskId }, { preserveState: true, preserveScroll: true });
+      router.get(boardUrl, { task: taskId }, { preserveState: true, preserveScroll: true, only: TASK_DETAIL_PROPS });
     },
     [boardUrl],
   );
 
   const openTask = useCallback(
     (task: Task | null) => {
-      router.get(boardUrl, { task: task?.id }, { preserveState: true, preserveScroll: true });
+      router.get(boardUrl, { task: task?.id }, { preserveState: true, preserveScroll: true, only: TASK_DETAIL_PROPS });
     },
     [boardUrl],
   );
@@ -4395,7 +4412,7 @@ const BoardPage = () => {
   const taskHref = useCallback((task: Task) => `${boardUrl}?task=${task.id}`, [boardUrl]);
 
   const closeTask = useCallback(() => {
-    router.get(boardUrl, {}, { preserveState: true, preserveScroll: true });
+    router.get(boardUrl, {}, { preserveState: true, preserveScroll: true, only: TASK_DETAIL_PROPS });
   }, [boardUrl]);
 
   const pointerSensor = useSensor(PointerSensor, { activationConstraint: { distance: 8 } });
