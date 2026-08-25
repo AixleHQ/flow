@@ -19,11 +19,3 @@ export const CHART_SERIES = [
   'var(--app-chart-6)',
   'var(--app-chart-7)',
 ] as const;
-
-/** Series color by index, wrapping around the ramp. */
-export const chartColor = (index: number): string => CHART_SERIES[index % CHART_SERIES.length];
-
-/** Semantic single-series colors, for charts that measure one known quantity. */
-export const CHART_COST = 'var(--app-chart-1)';
-export const CHART_TOKENS = 'var(--app-chart-6)';
-export const CHART_SESSIONS = 'var(--app-chart-2)';

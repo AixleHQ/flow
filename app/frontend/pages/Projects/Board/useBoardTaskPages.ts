@@ -15,7 +15,7 @@ export interface PagedTask {
   boardColumnId: number;
 }
 
-export interface PagedColumn {
+interface PagedColumn {
   id: number;
   /** Total active tasks in the column, from the board props (BoardColumnResource#tasks_count). */
   tasksCount?: number;

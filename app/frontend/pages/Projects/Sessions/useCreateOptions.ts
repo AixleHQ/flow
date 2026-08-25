@@ -3,12 +3,12 @@ import { useEffect } from 'react';
 
 import { ConfigItemOption } from 'shared/components/SessionNewForm';
 
-export interface NamedItem {
+interface NamedItem {
   id: number;
   name: string;
 }
 
-export interface WorkflowOption {
+interface WorkflowOption {
   id: number;
   name: string;
   steps: {

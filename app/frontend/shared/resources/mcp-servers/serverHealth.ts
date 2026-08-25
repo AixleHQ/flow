@@ -6,7 +6,7 @@ import type { McpServer } from './McpServersContent';
 // Only `drift` is an incident: a server's tool declarations moved after the
 // install was approved, which is the shape of a rug-pull. The rest are standing
 // facts about a working server — worth surfacing, never worth shouting about.
-export type ServerHealthLevel = 'critical' | 'warning' | 'info';
+type ServerHealthLevel = 'critical' | 'warning' | 'info';
 
 export interface ServerHealthSignal {
   kind: 'drift' | 'delisted' | 'unpinned' | 'unverified' | 'update';
@@ -92,6 +92,6 @@ export const serverHealthSignals = (server: McpServer): ServerHealthSignal[] => 
   return signals;
 };
 
-export const hasDrift = (server: McpServer): boolean => !!server.toolDrift;
+const hasDrift = (server: McpServer): boolean => !!server.toolDrift;
 
 export const driftedServers = (servers: McpServer[]): McpServer[] => servers.filter(hasDrift);

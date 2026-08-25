@@ -3,7 +3,7 @@ import { IconBolt } from '@tabler/icons-react';
 
 import classes from './ModeTag.module.css';
 
-export const MODE_LABELS: Record<string, string> = {
+const MODE_LABELS: Record<string, string> = {
   interactive: 'Interactive',
   non_interactive: 'Auto-run',
   automatic: 'Automatic',
@@ -17,7 +17,7 @@ export function modeLabel(mode: string | null | undefined): string {
 }
 
 /** Modes that run without a human in the loop, and so earn the bolt. */
-export function isAutomated(mode: string | null | undefined): boolean {
+function isAutomated(mode: string | null | undefined): boolean {
   return mode === 'non_interactive' || mode === 'automatic';
 }
 

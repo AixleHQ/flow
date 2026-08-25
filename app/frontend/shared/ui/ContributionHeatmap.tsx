@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 
 import { intensityLevel } from './contributionHeatmapUtils';
 
-export interface HeatmapDay {
+interface HeatmapDay {
   date: string; // ISO yyyy-mm-dd
   count: number;
 }
@@ -137,5 +137,3 @@ export function ContributionHeatmap({ days, weeks = 53 }: ContributionHeatmapPro
     </Box>
   );
 }
-
-export default ContributionHeatmap;

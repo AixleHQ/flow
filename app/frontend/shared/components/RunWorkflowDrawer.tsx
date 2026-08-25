@@ -8,7 +8,7 @@ import { FormSection, ModeCards, RuntimeTiles, StatusTag } from 'shared/ui/sessi
 
 import classes from './RunWorkflowDrawer.module.css';
 
-export interface RunWorkflowStep {
+interface RunWorkflowStep {
   id: number;
   name: string;
   position: number;

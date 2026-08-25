@@ -1,6 +1,6 @@
 import classes from './TabBar.module.css';
 
-export interface TabDef<T extends string> {
+interface TabDef<T extends string> {
   value: T;
   label: string;
   /** Rendered small and mono after the label, e.g. the asset count. */

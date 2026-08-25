@@ -4,14 +4,14 @@ import { IconRefresh } from '@tabler/icons-react';
 import { useState } from 'react';
 
 /** One rolling quota window as the vendor reports it. `utilization` is a percentage (0-100). */
-export interface UsageWindow {
+interface UsageWindow {
   key: string;
   utilization: number;
   resetsAt: string | null;
 }
 
 /** Pay-as-you-go spend on top of the plan. Fields stay null until something is consumed. */
-export interface ExtraUsage {
+interface ExtraUsage {
   enabled: boolean;
   utilization: number | null;
   monthlyLimit: number | null;
@@ -204,5 +204,3 @@ export function UsageLimitsCard({ entries }: { entries: UsageLimitsEntry[] }) {
     </Card>
   );
 }
-
-export default UsageLimitsCard;

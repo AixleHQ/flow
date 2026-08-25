@@ -36,7 +36,7 @@ interface Step {
   subSteps: SubStep[];
 }
 
-export type SelectionMode = 'session' | 'step';
+type SelectionMode = 'session' | 'step';
 export interface Selection {
   mode: SelectionMode;
   sessionId: number;
