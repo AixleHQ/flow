@@ -12,18 +12,11 @@ const expand = () => userEvent.click(screen.getByRole('button', { name: /termina
 // the stubbed terminal rather than rendering pixels.
 const write = vi.fn();
 const dispose = vi.fn();
-const loadAddon = vi.fn();
 const open = vi.fn();
-const fit = vi.fn();
 
 vi.mock('@xterm/xterm', () => ({
   Terminal: vi.fn(function Terminal() {
-    return { loadAddon, open, write, dispose };
-  }),
-}));
-vi.mock('@xterm/addon-fit', () => ({
-  FitAddon: vi.fn(function FitAddon() {
-    return { fit };
+    return { open, write, dispose };
   }),
 }));
 vi.mock('@xterm/xterm/css/xterm.css', () => ({}));
@@ -34,8 +27,6 @@ describe('SessionTerminalReplay', () => {
   beforeEach(() => {
     write.mockClear();
     open.mockClear();
-    loadAddon.mockClear();
-    fit.mockClear();
     vi.mocked(Terminal).mockClear();
   });
 
