@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class TaskService
-  BULK_ACTIONS = %i[delete archive move_to_column].freeze
+  BULK_ACTIONS = %i[delete archive move_to_column set_priority set_assignee add_tag].freeze
 
   class << self
     def create(board:, params:, actor:)
@@ -115,7 +115,7 @@ class TaskService
       task.reload
     end
 
-    def bulk_action(action:, tasks:, actor:, to_column: nil)
+    def bulk_action(action:, tasks:, actor:, to_column: nil, extra_params: {})
       succeeded = []
       skipped   = []
 
@@ -129,6 +129,9 @@ class TaskService
         when :delete        then destroy(task: task, actor: actor)
         when :archive       then archive(task: task, actor: actor)
         when :move_to_column then move(task: task, to_column: to_column, actor: actor)
+        when :set_priority  then task.update!(priority: extra_params[:priority])
+        when :set_assignee  then task.update!(assignee_id: extra_params[:assignee_id])
+        when :add_tag       then task.update!(tags: (task.tags + [ extra_params[:tag] ]).uniq)
         end
 
         succeeded << task.id

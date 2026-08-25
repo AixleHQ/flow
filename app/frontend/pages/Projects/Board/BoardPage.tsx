@@ -84,6 +84,7 @@ import {
   IconListDetails,
   IconLink,
   IconMessage,
+  IconMinus,
   IconPencil,
   IconPlus,
   IconRefresh,
@@ -640,8 +641,6 @@ function TaskCardUI({
   onToggleSelect?: (id: number, checked: boolean) => void;
   selectionMode?: boolean;
 }) {
-  const [cardHovered, setCardHovered] = useState(false);
-
   // A card shows at most three tags. Whichever ones the board is filtered by come first, so the
   // filter that put this card on screen is always the one you can click to take it back off.
   const cardTags = (activeTags ?? []).length
@@ -682,6 +681,14 @@ function TaskCardUI({
     onClick?.(task);
   };
 
+  const cardClasses = [
+    styles.taskCard,
+    selectionMode || isSelected ? styles.taskCardSelectionMode : '',
+    isSelected ? styles.taskCardSelected : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+
   return (
     <Paper
       component={isLink ? 'a' : 'div'}
@@ -693,6 +700,7 @@ function TaskCardUI({
       withBorder
       bg="var(--app-bg-elevated)"
       onClick={handleClick}
+      className={cardClasses}
       style={{
         cursor: 'pointer',
         transition: 'border-color 0.15s, background-color 0.15s',
@@ -705,37 +713,38 @@ function TaskCardUI({
         padding: '12px 13px',
       }}
       onMouseEnter={(e: React.MouseEvent<HTMLElement>) => {
-        (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-brand-4)';
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-paper)';
-        setCardHovered(true);
+        if (!isSelected) {
+          (e.currentTarget as HTMLElement).style.borderColor = 'var(--mantine-color-brand-4)';
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-paper)';
+        }
       }}
       onMouseLeave={(e: React.MouseEvent<HTMLElement>) => {
-        (e.currentTarget as HTMLElement).style.borderColor = 'var(--app-border-strong)';
-        (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-elevated)';
-        setCardHovered(false);
+        if (!isSelected) {
+          (e.currentTarget as HTMLElement).style.borderColor = 'var(--app-border-strong)';
+          (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--app-bg-elevated)';
+        }
       }}
     >
-      {/* Title row with selection checkbox, priority dot */}
-      <Group gap={8} align="flex-start" wrap="nowrap">
-        {onToggleSelect && (
-          <Box
-            className={[
-              styles.selectionCheckboxWrapper,
-              isSelected || selectionMode || cardHovered ? styles.selectionCheckboxVisible : '',
-            ].join(' ')}
-            onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
-            onClick={(e: React.MouseEvent) => {
-              e.stopPropagation();
-            }}
-          >
-            <Checkbox
-              size="xs"
-              checked={!!isSelected}
-              onChange={(e) => onToggleSelect(task.id, e.currentTarget.checked)}
-              aria-label={`Select ${task.title}`}
-            />
-          </Box>
-        )}
+      {/* Absolutely-positioned selection checkbox — slides in on hover or selection mode */}
+      {onToggleSelect && (
+        <Box
+          component="button"
+          role="checkbox"
+          className={[styles.taskCardCheck, isSelected ? styles.taskCardCheckSelected : ''].filter(Boolean).join(' ')}
+          aria-label={`Select ${task.title}`}
+          aria-checked={!!isSelected}
+          onPointerDown={(e: React.PointerEvent) => e.stopPropagation()}
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            onToggleSelect(task.id, !isSelected);
+          }}
+        >
+          {isSelected && <IconCheck size={10} />}
+        </Box>
+      )}
+
+      {/* Title row — padding-left animates in when checkbox is shown */}
+      <Group gap={8} align="flex-start" wrap="nowrap" className={styles.taskCardTop}>
         {task.priority && (
           <Tooltip label={task.priority}>
             <Box
@@ -982,6 +991,7 @@ function BoardColumn({
   canExecute,
   selectedIds,
   onToggleSelect,
+  onToggleColumn,
   selectionMode,
 }: {
   column: Column;
@@ -1009,6 +1019,7 @@ function BoardColumn({
   canExecute: boolean;
   selectedIds?: Set<number>;
   onToggleSelect?: (id: number, checked: boolean) => void;
+  onToggleColumn?: (columnId: number, taskIds: number[], select: boolean) => void;
   selectionMode?: boolean;
 }) {
   const {
@@ -1237,8 +1248,38 @@ function BoardColumn({
         >
           <IconChevronDown size={15} />
         </ActionIcon>
-        {/* Left: name (drag handle) + count + bolt chip */}
+        {/* Left: column tri-state checkbox (selection mode) + name (drag handle) + count + bolt chip */}
         <Group gap={6} style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+          {selectionMode &&
+            onToggleColumn &&
+            (() => {
+              const colTaskIds = tasks.map((t) => t.id);
+              const selectedInCol = colTaskIds.filter((id) => selectedIds?.has(id)).length;
+              const allSelected = colTaskIds.length > 0 && selectedInCol === colTaskIds.length;
+              const someSelected = selectedInCol > 0 && !allSelected;
+              return (
+                <Box
+                  component="button"
+                  className={[
+                    styles.colHeaderCheck,
+                    styles.colHeaderCheckVisible,
+                    allSelected ? styles.colHeaderCheckOn : someSelected ? styles.colHeaderCheckSome : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  aria-label={`Toggle all tasks in ${column.name}`}
+                  aria-pressed={allSelected}
+                  onClick={(e: React.MouseEvent) => {
+                    e.stopPropagation();
+                    onToggleColumn(column.id, colTaskIds, !allSelected);
+                  }}
+                  onMouseDown={(e: React.MouseEvent) => e.stopPropagation()}
+                >
+                  {allSelected && <IconCheck size={10} />}
+                  {someSelected && <IconMinus size={10} />}
+                </Box>
+              );
+            })()}
           {renaming ? (
             <TextInput
               ref={renameInputRef}
@@ -4310,7 +4351,26 @@ const BoardPage = () => {
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
 
-  const { execute: executeBulkAction } = useBulkActions({ projectId: project.id, onSuccess: clearSelection });
+  const {
+    execute: executeBulkAction,
+    bulkSetPriority,
+    bulkAssign,
+    bulkAddTag,
+  } = useBulkActions({
+    projectId: project.id,
+    onSuccess: clearSelection,
+  });
+
+  const toggleColumn = useCallback((_columnId: number, taskIds: number[], select: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const id of taskIds) {
+        if (select) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }, []);
 
   // Opening by id, for a task the board may not hold a card for — an epic's child or parent that
   // lives on a page no column has loaded.
@@ -4788,6 +4848,20 @@ const BoardPage = () => {
           )}
         </Group>
 
+        {/* Selection toolbar — second row, visible only when tasks are selected */}
+        <SelectionBar
+          selectedCount={selectedIds.size}
+          selectedIds={selectedIds}
+          columns={localColumns}
+          members={members}
+          canExecute={canExecute}
+          onAction={(action, columnId) => executeBulkAction(action, [...selectedIds], columnId)}
+          onBulkPriority={(priority) => bulkSetPriority([...selectedIds], priority)}
+          onBulkAssign={(assigneeId) => bulkAssign([...selectedIds], assigneeId)}
+          onBulkTag={(tag) => bulkAddTag([...selectedIds], tag)}
+          onClear={clearSelection}
+        />
+
         {/* Board area */}
         <DndContext
           sensors={sensors}
@@ -4854,6 +4928,7 @@ const BoardPage = () => {
                   canExecute={canExecute}
                   selectedIds={selectedIds}
                   onToggleSelect={canExecute ? toggleSelect : undefined}
+                  onToggleColumn={canExecute ? toggleColumn : undefined}
                   selectionMode={canExecute && selectedIds.size > 0}
                 />
               ))}
@@ -4931,14 +5006,6 @@ const BoardPage = () => {
           onClose={() => setActivityOpen(false)}
         />
       </Box>
-
-      <SelectionBar
-        selectedCount={selectedIds.size}
-        columns={localColumns}
-        canExecute={canExecute}
-        onAction={(action, columnId) => executeBulkAction(action, [...selectedIds], columnId)}
-        onClear={clearSelection}
-      />
 
       <TaskDetailSidebar
         task={selectedTask}

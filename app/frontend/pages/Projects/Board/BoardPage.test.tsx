@@ -2278,7 +2278,7 @@ describe('Projects/Board/BoardPage', () => {
     expect(await screen.findByText('1 selected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Move to column' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Move to/i })).toBeInTheDocument();
   });
 
   it('clears selection when the × button in SelectionBar is clicked', async () => {

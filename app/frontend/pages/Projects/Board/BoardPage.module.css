@@ -148,16 +148,106 @@
   color: var(--mantine-color-red-6) !important;
 }
 
-/* Selection checkbox on task cards — fades in on hover or when any card is selected */
-.selectionCheckboxWrapper {
-  flex-shrink: 0;
-  margin-top: 2px;
-  opacity: 0;
-  transition: opacity 0.12s;
+/* Task card — position relative so the absolutely-placed checkbox can anchor to it */
+.taskCard {
+  position: relative;
 }
 
-.selectionCheckboxWrapper.selectionCheckboxVisible {
+/* Title row — gains left padding when card is hovered or in selection mode */
+.taskCardTop {
+  transition: padding-left 0.12s;
+}
+
+.taskCard:hover .taskCardTop,
+.taskCardSelectionMode .taskCardTop {
+  padding-left: 24px;
+}
+
+/* Checkbox — 16×16 native square, absolutely positioned, hidden at rest */
+.taskCardCheck {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--app-border-strong);
+  background: var(--app-bg-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  font-size: 11px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s, border-color 0.12s, color 0.12s;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.taskCard:hover .taskCardCheck,
+.taskCardSelectionMode .taskCardCheck {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.taskCardCheck:hover {
+  border-color: var(--app-text-secondary);
+}
+
+/* Selected state */
+.taskCardCheckSelected {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  background: var(--mantine-color-brand-6) !important;
+  border-color: var(--mantine-color-brand-6) !important;
+  color: #fff !important;
+}
+
+/* Selected card accent tint */
+.taskCardSelected {
+  border-color: var(--mantine-color-brand-5) !important;
+  background-color: color-mix(in srgb, var(--mantine-color-brand-5) 8%, var(--app-bg-elevated)) !important;
+}
+
+/* Column tri-state checkbox in header */
+.colHeaderCheck {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--app-border-strong);
+  background: var(--app-bg-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s, border-color 0.12s, color 0.12s;
+  pointer-events: none;
+}
+
+.colHeaderCheckVisible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.colHeaderCheck:hover {
+  border-color: var(--app-text-secondary);
+}
+
+.colHeaderCheckOn {
+  background: var(--mantine-color-brand-6) !important;
+  border-color: var(--mantine-color-brand-6) !important;
+  color: #fff !important;
+}
+
+.colHeaderCheckSome {
+  background: color-mix(in srgb, var(--mantine-color-brand-6) 20%, var(--app-bg-default)) !important;
+  border-color: var(--mantine-color-brand-5) !important;
+  color: var(--mantine-color-brand-5) !important;
 }
 
 /* Task detail panel — title ghost input */

@@ -108,7 +108,12 @@ module Api
               col
             end
 
-            result = TaskService.bulk_action(action: action, tasks: tasks, actor: current_user, to_column: to_column)
+            extra_params = {
+              priority: params[:priority],
+              assignee_id: params[:assignee_id].present? ? params[:assignee_id].to_i : nil,
+              tag: params[:tag]
+            }
+            result = TaskService.bulk_action(action: action, tasks: tasks, actor: current_user, to_column: to_column, extra_params: extra_params)
             render json: result
           end
 
