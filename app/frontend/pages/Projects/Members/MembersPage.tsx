@@ -4,6 +4,7 @@ import { modals } from '@mantine/modals';
 import { IconCrown, IconPlus, IconSearch, IconTrash, IconUsers } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import { getInitials } from 'shared/lib/getInitials';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
@@ -30,14 +31,6 @@ interface Props {
   companyUsers: User[];
   ownerId: number;
 }
-
-const getInitials = (name: string) =>
-  name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
 
 const MembersPage = () => {
   const { project, members, companyUsers, ownerId } = usePage<{ props: Props }>().props as unknown as Props;

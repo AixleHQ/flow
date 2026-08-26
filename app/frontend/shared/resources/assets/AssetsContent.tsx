@@ -24,6 +24,8 @@ import type { Body, Meta } from '@uppy/core';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { formatDateMedium } from 'shared/lib/formatDate';
+import { formatFileSize } from 'shared/lib/formatFileSize';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { downloadApiV1CompanyAssetPath, downloadApiV1ProjectAssetPath } from 'shared/routes';
 import { EmptyState } from 'shared/ui/EmptyState';
@@ -65,22 +67,6 @@ interface AssetsContentProps {
   apiBasePath: string;
   createEndpoint?: string;
   projectId?: number;
-}
-
-function formatFileSize(bytes: number | null): string {
-  if (!bytes) return '—';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 }
 
 const SCOPE_COLORS: Record<string, string> = {
@@ -460,7 +446,7 @@ export function AssetsContent({
                   )}
                   <Table.Td>
                     <Text fz={13} c="dimmed">
-                      {formatDate(asset.updatedAt)}
+                      {formatDateMedium(asset.updatedAt)}
                     </Text>
                   </Table.Td>
                   <Table.Td>
@@ -672,7 +658,7 @@ export function AssetsContent({
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Text fz={13}>{v.createdAt ? formatDate(v.createdAt) : '—'}</Text>
+                      <Text fz={13}>{v.createdAt ? formatDateMedium(v.createdAt) : '—'}</Text>
                     </Table.Td>
                     <Table.Td>
                       <Text fz={13} ff="JetBrains Mono, monospace" c="dimmed">

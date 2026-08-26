@@ -30,6 +30,7 @@ import {
 import { Fragment, useCallback, useMemo, useState } from 'react';
 
 import { CreateProjectModal } from 'pages/Projects/CreateProjectModal';
+import { getInitials } from 'shared/lib/getInitials';
 import {
   companyAssetsPath,
   companyMembersPath,
@@ -81,13 +82,6 @@ const writeCollapsedGroups = (groups: Set<string>) => {
   } catch {
     // localStorage unavailable (private browsing, quota exceeded)
   }
-};
-
-const getInitials = (name: string): string => {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return 'U';
-  if (parts.length === 1) return (parts[0][0] ?? 'U').toUpperCase();
-  return ((parts[0][0] ?? 'U') + (parts[parts.length - 1][0] ?? 'U')).toUpperCase();
 };
 
 // True for the clicks the browser handles itself on a link — Cmd/Ctrl+click (new tab),

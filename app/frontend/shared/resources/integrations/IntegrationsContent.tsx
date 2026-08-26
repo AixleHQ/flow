@@ -36,6 +36,7 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
+import { formatDateMedium } from 'shared/lib/formatDate';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
 import { EmptyState } from 'shared/ui/EmptyState';
@@ -93,9 +94,6 @@ const SCOPE_COLORS: Record<string, string> = {
 
 // Mirrors the server-side fallback in Coder::LockService#ttl_minutes.
 const DEFAULT_CODER_LOCK_TTL = 120;
-
-const formatDate = (d: string) =>
-  new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
 export const IntegrationsContent = ({ integrations, basePath, title }: IntegrationsContentProps) => {
   const { canExecute } = useProjectPermissions();
@@ -533,7 +531,7 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                     </Table.Td>
                     <Table.Td>
                       <Text fz={13} c="dimmed">
-                        {integration.connectedBy.name} · {formatDate(integration.createdAt)}
+                        {integration.connectedBy.name} · {formatDateMedium(integration.createdAt)}
                       </Text>
                     </Table.Td>
                     <Table.Td>

@@ -28,6 +28,8 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import { formatDateMedium } from 'shared/lib/formatDate';
+import { getInitials } from 'shared/lib/getInitials';
 import type { SharedProps, UserRole } from 'shared/ui';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -108,11 +110,6 @@ function RoleTag({ role }: { role: UserRole }) {
   );
 }
 
-const formatDate = (d: string | null) => {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-};
-
 const ROLE_FILTER_OPTIONS = [
   { value: 'all', label: 'All Roles' },
   { value: 'admin', label: 'Admins' },
@@ -126,12 +123,6 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'suspended', label: 'Suspended' },
   { value: 'all', label: 'All Statuses' },
 ];
-
-const getInitials = (name: string): string => {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-};
 
 export const MembersContent = ({ users, basePath, title, subtitle, showRoleActions = true }: MembersContentProps) => {
   const { currentUser, permissions } = usePage<SharedProps>().props;
@@ -335,7 +326,7 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
                     </Table.Td>
                     <Table.Td>
                       <Text size="sm" c="var(--app-text-primary)">
-                        {formatDate(user.invitedAt ?? user.createdAt)}
+                        {formatDateMedium(user.invitedAt ?? user.createdAt)}
                       </Text>
                       <Text size="xs" c="dimmed">
                         {user.invitedBy ? `by ${user.invitedBy.name}` : 'Self-registered'}
