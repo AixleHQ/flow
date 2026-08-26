@@ -6,7 +6,7 @@ import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import McpServersPage from 'pages/Projects/McpServers/McpServersPage';
 
-import type { McpServer } from './McpServersContent';
+import type { McpServer } from './types';
 
 // Drift surfacing is exercised through the real MCP servers page: the point of
 // the feature is that someone scanning their server list notices, so testing

@@ -1,4 +1,4 @@
-import type { McpServer } from './McpServersContent';
+import type { McpServer } from './types';
 
 // Health signals a catalog-installed MCP server can carry, ordered by how much
 // they should interrupt someone scanning a table.
