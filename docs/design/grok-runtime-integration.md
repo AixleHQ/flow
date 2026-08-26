@@ -138,7 +138,7 @@ so the picker is never empty.
 - **Skills:** skills.sh knows Grok as agent id `grok` with global directory
   `~/.grok/skills`, so registry installs and hand-written skills both land
   where the CLI looks.
-- **BMAD:** BMAD 6.10.0 has no `grok` platform, so `grok` maps to
+- **BMAD:** BMAD 6.11.0 has no `grok` platform, so `grok` maps to
   `claude-code`. This is not a stand-in for a missing platform: Grok's
   `[compat.claude]` cells are on by default and scan `.claude/skills`,
   `.claude/rules`, and `CLAUDE.md`, so the claude-code install is exactly
