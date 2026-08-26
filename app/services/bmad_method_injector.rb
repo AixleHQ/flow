@@ -48,7 +48,9 @@ class BmadMethodInjector
   # skill target directories (cursor/codex/gemini moved to .agents/skills in 6.6.0).
   # Since 6.10.0 bmb/cis/wds are external modules fetched from GitHub during
   # install, so the container needs outbound access to github.com.
-  BMAD_METHOD_VERSION = "6.10.0"
+  # 6.11.0 marks wds deprecated: it is hidden from the interactive picker but
+  # still installs when named explicitly via --modules, which is how we drive it.
+  BMAD_METHOD_VERSION = "6.11.0"
 
   INSTALL_TIMEOUT = 300
 

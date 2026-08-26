@@ -7,7 +7,7 @@ import { apiFetch } from 'shared/lib/apiFetch';
 import { TIMEZONE_OPTIONS } from 'shared/lib/timezones';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 
-import type { Trigger } from './TriggersTab';
+import type { Trigger } from './types';
 
 interface ColumnOption {
   id: number;

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { formatFileSize } from 'shared/lib/formatFileSize';
 
-import type { Asset } from './AssetsContent';
+import type { Asset } from './types';
 
 interface AssetPreviewModalProps {
   asset: Asset | null;

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { TriggerFormPanel } from './TriggerFormPanel';
-import type { Trigger } from './TriggersTab';
+import type { Trigger } from './types';
 
 // TriggerFormPanel takes plain props (no usePage/useForm read) and talks to the backend through
 // apiFetch() -> the global fetch() the test setup stubs. `defaultKind` seeds the create-mode kind and
