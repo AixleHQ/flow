@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { AssetPreviewModal } from './AssetPreviewModal';
-import type { Asset } from './AssetsContent';
+import type { Asset } from './types';
 
 function makeAsset(overrides: Partial<Asset> = {}): Asset {
   return {

@@ -3,7 +3,7 @@ import { Alert, Button, Code, Group, Modal, Stack, Text } from '@mantine/core';
 import { IconArrowUpCircle } from '@tabler/icons-react';
 import { useState, type FC } from 'react';
 
-import type { McpServer } from './McpServersContent';
+import type { McpServer } from './types';
 
 interface ConnectorUpdateModalProps {
   server: McpServer | null;

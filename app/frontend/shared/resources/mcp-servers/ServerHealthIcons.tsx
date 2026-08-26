@@ -8,8 +8,8 @@ import {
 } from '@tabler/icons-react';
 import type { FC } from 'react';
 
-import type { McpServer } from './McpServersContent';
 import { serverHealthSignals, type ServerHealthSignal } from './serverHealth';
+import type { McpServer } from './types';
 
 // Health reads as one glyph per fact, sitting with the server's name. In a
 // dense table the alternative — a badge per condition — would double the row's

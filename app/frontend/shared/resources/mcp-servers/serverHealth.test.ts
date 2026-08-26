@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import type { McpServer } from './McpServersContent';
 import { driftedServers, serverHealthSignals } from './serverHealth';
+import type { McpServer } from './types';
 
 const server = (overrides: Partial<McpServer> = {}): McpServer => ({
   id: 1,

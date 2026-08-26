@@ -3,7 +3,7 @@ import { Alert, Button, Code, Group, List, Modal, Stack, Text } from '@mantine/c
 import { IconAlertTriangle } from '@tabler/icons-react';
 import { useState, type FC } from 'react';
 
-import type { McpServer } from './McpServersContent';
+import type { McpServer } from './types';
 
 interface ToolDriftModalProps {
   server: McpServer | null;

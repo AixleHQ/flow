@@ -2,7 +2,7 @@ import { Badge, Box, Button, Center, Code, Group, Loader, Modal, Stack, Text } f
 import { IconDownload, IconFile } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 
-import type { Asset } from './AssetsContent';
+import type { Asset } from './types';
 
 interface AssetPreviewModalProps {
   asset: Asset | null;
