@@ -267,6 +267,26 @@ describe('Projects/Board/BoardPage', () => {
     );
   });
 
+  it('scopes the task-open visit to only the selected task props, not the whole board (issue #563)', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByText('Wire up authentication'));
+
+    const [, , options] = vi.mocked(router.get).mock.calls[0];
+    expect(options?.only).toEqual(
+      expect.arrayContaining([
+        'selected_task',
+        'task_comments',
+        'task_assets',
+        'task_activities',
+        'task_workflow_runs',
+        'task_statistics',
+      ]),
+    );
+    // Board-list props must NOT be in the list — re-requesting them on every click is the bug.
+    expect(options?.only).not.toEqual(expect.arrayContaining(['tasks', 'columns', 'board_tags', 'epics']));
+  });
+
   it('renders each task card as a real link pointing to that task', () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
