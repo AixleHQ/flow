@@ -34,6 +34,7 @@ import cronstrue from 'cronstrue';
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { TIMEZONE_OPTIONS } from 'shared/lib/timezones';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 
 interface ColumnOption {
@@ -76,32 +77,6 @@ const KIND_META: Record<string, { label: string; color: string; icon: typeof Ico
   schedule: { label: 'Schedule', color: 'green', icon: IconBolt },
   event: { label: 'Event', color: 'blue', icon: IconBolt },
 };
-
-// IANA timezone list from the runtime (falls back to UTC if unsupported).
-const TIMEZONES: string[] = (() => {
-  try {
-    const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
-    return intl.supportedValuesOf?.('timeZone') ?? ['UTC'];
-  } catch {
-    return ['UTC'];
-  }
-})();
-
-// Append the current UTC offset to a timezone, e.g. "Europe/Belgrade (UTC+02:00)".
-function tzLabel(tz: string): string {
-  try {
-    const raw =
-      new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
-        .formatToParts(new Date())
-        .find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
-    const offset = raw === 'GMT' ? 'UTC+00:00' : raw.replace('GMT', 'UTC');
-    return `${tz} (${offset})`;
-  } catch {
-    return tz;
-  }
-}
-
-const TIMEZONE_OPTIONS = TIMEZONES.map((tz) => ({ value: tz, label: tzLabel(tz) }));
 
 // Human-readable description of a cron expression (e.g. "At 09:00, Monday through Friday").
 function describeCron(expr: string): { ok: boolean; text: string } {

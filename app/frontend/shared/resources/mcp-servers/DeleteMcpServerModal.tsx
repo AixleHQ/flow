@@ -1,6 +1,7 @@
-import { router } from '@inertiajs/react';
-import { Box, Button, Group, Modal, Text } from '@mantine/core';
-import { useState, type FC } from 'react';
+import { Text } from '@mantine/core';
+import { type FC } from 'react';
+
+import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
 
 interface McpServer {
   id: number;
@@ -15,39 +16,24 @@ interface DeleteMcpServerModalProps {
 }
 
 export const DeleteMcpServerModal: FC<DeleteMcpServerModalProps> = ({ opened, onClose, server, basePath }) => {
-  const [loading, setLoading] = useState(false);
-
   if (!server) return null;
 
-  const handleDelete = () => {
-    setLoading(true);
-    router.delete(`${basePath}/${server.id}`, {
-      preserveScroll: true,
-      onFinish: () => setLoading(false),
-      onSuccess: () => onClose(),
-    });
-  };
-
   return (
-    <Modal opened={opened} onClose={onClose} title="Delete MCP Server" size="sm">
-      <Box>
-        <Text fz={14} c="dimmed" mb="md">
+    <ConfirmDeleteModal
+      opened={opened}
+      onClose={onClose}
+      title="Delete MCP Server"
+      itemId={server.id}
+      basePath={basePath}
+      description={
+        <>
           Are you sure you want to delete{' '}
           <Text span fw={600} c="var(--app-text-primary)">
             {server.name}
           </Text>
           ? This action cannot be undone.
-        </Text>
-
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose} disabled={loading}>
-            Cancel
-          </Button>
-          <Button color="red" onClick={handleDelete} loading={loading}>
-            Delete
-          </Button>
-        </Group>
-      </Box>
-    </Modal>
+        </>
+      }
+    />
   );
 };

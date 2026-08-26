@@ -33,6 +33,7 @@ import {
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { formatCostCents, formatTokens } from 'shared/lib/formatUsage';
 import { CHART_SERIES } from 'shared/theme/chartPalette';
 import { type SharedProps } from 'shared/ui';
 import { ContributionHeatmap } from 'shared/ui/ContributionHeatmap';
@@ -150,19 +151,6 @@ const chartTooltipStyle = {
   fontSize: 12,
   color: 'var(--app-text-primary)',
 };
-
-function formatCostCents(cents: number): string {
-  const d = (cents ?? 0) / 100;
-  if (d >= 1000) return `$${(d / 1000).toFixed(1)}k`;
-  return `$${d.toFixed(2)}`;
-}
-
-function formatTokens(n: number): string {
-  if (!n) return '0';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
 
 function tickIntervalForPeriod(period: Period): number {
   const days = period === '7d' ? 7 : period === '30d' ? 30 : period === '90d' ? 90 : 365;

@@ -28,3 +28,9 @@ export function formatTime(value: string | null | undefined): string {
   const d = parseDate(value);
   return d ? d.toLocaleTimeString() : '—';
 }
+
+/** e.g. "Feb 28, 2026" */
+export function formatDateMedium(value: string | null | undefined): string {
+  const d = parseDate(value);
+  return d ? d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
+}

@@ -4,6 +4,7 @@ import cronstrue from 'cronstrue';
 import { useCallback, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { TIMEZONE_OPTIONS } from 'shared/lib/timezones';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 
 import type { Trigger } from './TriggersTab';
@@ -31,30 +32,6 @@ interface TriggerFormPanelProps {
 }
 
 type Kind = 'column' | 'slack' | 'webhook' | 'schedule';
-
-const IANA_TIMEZONES: string[] = (() => {
-  try {
-    const intl = Intl as typeof Intl & { supportedValuesOf?: (key: string) => string[] };
-    return intl.supportedValuesOf?.('timeZone') ?? ['UTC'];
-  } catch {
-    return ['UTC'];
-  }
-})();
-
-function tzLabel(tz: string): string {
-  try {
-    const raw =
-      new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
-        .formatToParts(new Date())
-        .find((p) => p.type === 'timeZoneName')?.value ?? 'GMT';
-    const offset = raw === 'GMT' ? 'UTC+00:00' : raw.replace('GMT', 'UTC');
-    return `${tz} (${offset})`;
-  } catch {
-    return tz;
-  }
-}
-
-const TIMEZONE_OPTIONS = IANA_TIMEZONES.map((tz) => ({ value: tz, label: tzLabel(tz) }));
 
 function describeCron(expr: string): { ok: boolean; text: string } {
   const value = expr.trim();

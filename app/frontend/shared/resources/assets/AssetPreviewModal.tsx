@@ -2,28 +2,15 @@ import { Badge, Box, Button, Center, Code, Group, Loader, Modal, Stack, Text } f
 import { IconDownload, IconFile } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 
+import { formatDateMedium } from 'shared/lib/formatDate';
+import { formatFileSize } from 'shared/lib/formatFileSize';
+
 import type { Asset } from './AssetsContent';
 
 interface AssetPreviewModalProps {
   asset: Asset | null;
   onClose: () => void;
   downloadUrl: string;
-}
-
-function formatFileSize(bytes: number | null): string {
-  if (!bytes) return '—';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
-}
-
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
 }
 
 type PreviewType = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'markdown' | 'svg' | 'unsupported';
@@ -312,7 +299,7 @@ export function AssetPreviewModal({ asset, onClose, downloadUrl }: AssetPreviewM
               &middot;
             </Text>
             <Text fz={12} c="dimmed">
-              {formatDate(asset.updatedAt)}
+              {formatDateMedium(asset.updatedAt)}
             </Text>
             <Text fz={12} c="dimmed">
               &middot;

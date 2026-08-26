@@ -32,6 +32,8 @@ import { AuthLayout } from 'layouts/AuthLayout';
 
 import { getConsumer } from 'shared/lib/actionCableConsumer';
 import { apiFetch } from 'shared/lib/apiFetch';
+import { formatDateMedium } from 'shared/lib/formatDate';
+import { getInitials } from 'shared/lib/getInitials';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { AwsConnectionModal } from 'shared/resources/cloud-connections/AwsConnectionModal';
 import {
@@ -123,11 +125,6 @@ const AGENT_STATUS_BADGE: Record<AgentCredential['connectionStatus'], { tone: St
   active: { tone: 'success', label: 'Connected' },
   expiring: { tone: 'warning', label: 'Expiring soon' },
   expired: { tone: 'danger', label: 'Expired' },
-};
-
-const formatDate = (d: string | null) => {
-  if (!d) return '';
-  return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 };
 
 const getAgentInfo = (type: AgentType) => AVAILABLE_AGENTS.find((a) => a.type === type)!;
@@ -323,18 +320,6 @@ function AgentDefaultsSection({ profile, agentModels }: { profile: SharedUser; a
       </Stack>
     </Card>
   );
-}
-
-// "Acme Robotics" -> "AR". Duplicated locally rather than shared: the same
-// small helper is copy-pasted across AppSidebar/MembersContent/etc rather
-// than centralized, so this follows the existing pattern.
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  return parts
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
 }
 
 function CompaniesSection({
@@ -935,9 +920,9 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                   </Text>
                   {isConfigured && credential && (
                     <Text size="xs" c="dimmed" mt={4}>
-                      Configured {formatDate(credential.createdAt)}
-                      {credential.lastUsedAt && ` · Last used ${formatDate(credential.lastUsedAt)}`}
-                      {credential.expiresAt && ` · Expires ${formatDate(credential.expiresAt)}`}
+                      Configured {formatDateMedium(credential.createdAt)}
+                      {credential.lastUsedAt && ` · Last used ${formatDateMedium(credential.lastUsedAt)}`}
+                      {credential.expiresAt && ` · Expires ${formatDateMedium(credential.expiresAt)}`}
                     </Text>
                   )}
                   {/* Billing target lives in the card body, not among the action buttons: it is
