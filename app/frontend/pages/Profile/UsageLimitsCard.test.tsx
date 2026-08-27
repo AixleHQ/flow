@@ -34,8 +34,8 @@ describe('UsageLimitsCard', () => {
 
     expect(screen.getByText('Current session (5 hours)')).toBeInTheDocument();
     expect(screen.getByText('Current week (all models)')).toBeInTheDocument();
-    expect(screen.getByText('33%')).toBeInTheDocument();
-    expect(screen.getByText('13%')).toBeInTheDocument();
+    expect(screen.getByText('33% used · 67% remaining')).toBeInTheDocument();
+    expect(screen.getByText('13% used · 87% remaining')).toBeInTheDocument();
   });
 
   it('shows model-scoped weeklies and extra usage when the account has them', () => {
@@ -47,7 +47,7 @@ describe('UsageLimitsCard', () => {
     renderPage(<UsageLimitsCard entries={[entry]} />);
 
     expect(screen.getByText('Current week (Opus)')).toBeInTheDocument();
-    expect(screen.getByText('91%')).toBeInTheDocument();
+    expect(screen.getByText('91% used · 9% remaining')).toBeInTheDocument();
     expect(screen.getByText('Extra usage this month')).toBeInTheDocument();
     expect(screen.getByText('25 / 100 credits')).toBeInTheDocument();
   });
@@ -80,6 +80,38 @@ describe('UsageLimitsCard', () => {
 
     rerender(<UsageLimitsCard entries={[buildEntry(), buildEntry({ agentType: 'codex' })]} />);
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
+    expect(screen.getByText('OpenAI Codex')).toBeInTheDocument();
+  });
+
+  it('renders Codex windows using the exact upstream period and reports remaining usage', () => {
+    renderPage(
+      <UsageLimitsCard
+        entries={[
+          buildEntry({
+            agentType: 'codex',
+            windows: [
+              { key: 'codex_primary', utilization: 42, resetsAt: '2026-08-16T14:00:00Z', windowDurationMins: 300 },
+              { key: 'codex_secondary', utilization: 5, resetsAt: '2026-08-23T12:00:00Z', windowDurationMins: 10080 },
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    expect(screen.getByText('Usage window (5 hours)')).toBeInTheDocument();
+    expect(screen.getByText('Usage window (1 week)')).toBeInTheDocument();
+    expect(screen.getByText('42% used · 58% remaining')).toBeInTheDocument();
+    expect(screen.getByText('5% used · 95% remaining')).toBeInTheDocument();
+  });
+
+  it('uses provider-specific authentication and error messages', () => {
+    const { rerender } = renderPage(
+      <UsageLimitsCard entries={[buildEntry({ agentType: 'codex', status: 'unauthorized', windows: [] })]} />,
+    );
+    expect(screen.getByText(/OpenAI Codex sign-in no longer works/i)).toBeInTheDocument();
+
+    rerender(<UsageLimitsCard entries={[buildEntry({ agentType: 'codex', status: 'unavailable', windows: [] })]} />);
+    expect(screen.getByText(/Couldn't reach OpenAI/i)).toBeInTheDocument();
   });
 });
 

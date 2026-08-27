@@ -8,6 +8,7 @@ interface UsageWindow {
   key: string;
   utilization: number;
   resetsAt: string | null;
+  windowDurationMins?: number | null;
 }
 
 /** Pay-as-you-go spend on top of the plan. Fields stay null until something is consumed. */
@@ -36,13 +37,29 @@ const WINDOW_LABELS: Record<string, string> = {
 
 const AGENT_LABELS: Record<string, string> = {
   claude_code: 'Claude Code',
+  codex: 'OpenAI Codex',
 };
 
-const STATUS_MESSAGES: Record<Exclude<UsageLimitsEntry['status'], 'ok'>, string> = {
-  unauthorized: 'Your Claude sign-in no longer works — re-authenticate above to see your limits.',
-  rate_limited: 'Anthropic is throttling usage checks right now. Try again in a minute.',
-  unavailable: "Couldn't reach Anthropic for usage limits.",
+const VENDOR_LABELS: Record<string, string> = {
+  claude_code: 'Anthropic',
+  codex: 'OpenAI',
 };
+
+function statusMessage(entry: UsageLimitsEntry): string {
+  const vendor = VENDOR_LABELS[entry.agentType] ?? 'The provider';
+  if (entry.status === 'unauthorized')
+    return `Your ${AGENT_LABELS[entry.agentType] ?? entry.agentType} sign-in no longer works — re-authenticate above to see your limits.`;
+  if (entry.status === 'rate_limited') return `${vendor} is throttling usage checks right now. Try again in a minute.`;
+  return `Couldn't reach ${vendor} for usage limits.`;
+}
+
+function durationLabel(minutes?: number | null): string | null {
+  if (!minutes) return null;
+  if (minutes % 10_080 === 0) return `${minutes / 10_080} week${minutes === 10_080 ? '' : 's'}`;
+  if (minutes % 1_440 === 0) return `${minutes / 1_440} day${minutes === 1_440 ? '' : 's'}`;
+  if (minutes % 60 === 0) return `${minutes / 60} hour${minutes === 60 ? '' : 's'}`;
+  return `${minutes} minutes`;
+}
 
 // A quota is worth noticing well before it runs out: amber from 70%, red from 90%.
 function utilizationColor(utilization: number): string {
@@ -67,8 +84,10 @@ export function formatResetsIn(iso: string | null, now: number = Date.now()): st
 }
 
 function WindowRow({ quota }: { quota: UsageWindow }) {
-  const label = WINDOW_LABELS[quota.key] ?? quota.key.replace(/_/g, ' ');
+  const duration = durationLabel(quota.windowDurationMins);
+  const label = WINDOW_LABELS[quota.key] ?? (duration ? `Usage window (${duration})` : quota.key.replace(/_/g, ' '));
   const percent = Math.min(100, Math.max(0, Math.round(quota.utilization)));
+  const remaining = 100 - percent;
   const resets = formatResetsIn(quota.resetsAt);
 
   return (
@@ -78,7 +97,7 @@ function WindowRow({ quota }: { quota: UsageWindow }) {
           {label}
         </Text>
         <Text size="sm" fw={600} c={utilizationColor(quota.utilization)}>
-          {percent}%
+          {percent}% used · {remaining}% remaining
         </Text>
       </Group>
       <Progress
@@ -128,7 +147,7 @@ function EntryBody({ entry }: { entry: UsageLimitsEntry }) {
   if (entry.status !== 'ok') {
     return (
       <Alert color={entry.status === 'unauthorized' ? 'red' : 'yellow'} variant="light" p="sm">
-        <Text size="sm">{STATUS_MESSAGES[entry.status]}</Text>
+        <Text size="sm">{statusMessage(entry)}</Text>
       </Alert>
     );
   }
@@ -178,7 +197,7 @@ export function UsageLimitsCard({ entries }: { entries: UsageLimitsEntry[] }) {
             Usage limits
           </Title>
           <Text size="sm" c="dimmed">
-            How much of your subscription&apos;s rolling quotas this sign-in has used. Limits belong to the Anthropic
+            Usage and remaining allowance for each connected runtime subscription. Limits belong to the provider
             account, not to this company.
           </Text>
         </Box>

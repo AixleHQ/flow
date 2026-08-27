@@ -40,6 +40,9 @@ module Codex
     class UnauthorizedError < HTTPError; end
 
     MODELS_URL = "https://chatgpt.com/backend-api/codex/models"
+    # Codex model discovery lives under `/codex`, but the subscription quota
+    # endpoint used by the CLI's `/status` view lives under `/wham`.
+    USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
     OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
     OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 
@@ -88,6 +91,13 @@ module Codex
         )
 
         Array(body["models"]).filter_map { |raw| build_model(raw) }
+      end
+
+      # The same subscription limits shown by Codex's `/status` view.
+      def usage(access_token:, account_id: nil)
+        headers = { "Authorization" => "Bearer #{access_token}" }
+        headers["ChatGPT-Account-Id"] = account_id if account_id.present?
+        json_get(USAGE_URL, params: {}, headers:, op: "usage")
       end
 
       # Exchange a refresh token for a fresh access token.
