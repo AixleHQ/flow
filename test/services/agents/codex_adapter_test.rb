@@ -242,13 +242,25 @@ module Agents
         }
       })
 
-      usage = @adapter.fetch_subscription_usage({ "tokens" => { "access_token" => "tok" }, "account_id" => "acct-1" })
+      usage = @adapter.fetch_subscription_usage({
+        "tokens" => { "access_token" => "tok", "account_id" => "acct-1" }
+      })
 
       assert_equal "ok", usage[:status]
       assert_equal %w[codex_primary codex_secondary], usage[:windows].pluck(:key)
       assert_equal [ 300.0, 10_080.0 ], usage[:windows].pluck(:window_duration_mins)
       assert_equal "2024-08-30T06:40:00Z", usage[:windows].first[:resets_at]
       assert_equal({ enabled: true, utilization: 32.0, monthly_limit: 25_000, used_credits: 8_000 }, usage[:extra_usage])
+    end
+
+    test "fetch_subscription_usage accepts the legacy top-level account id" do
+      Codex::Api.expects(:usage).with(access_token: "tok", account_id: "legacy-acct").returns({})
+
+      usage = @adapter.fetch_subscription_usage({
+        "tokens" => { "access_token" => "tok" }, "account_id" => "legacy-acct"
+      })
+
+      assert_equal "ok", usage[:status]
     end
 
     test "fetch_subscription_usage exposes authentication, throttling, and transport states" do

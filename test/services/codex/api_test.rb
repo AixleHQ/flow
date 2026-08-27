@@ -6,6 +6,19 @@ module Codex
   # Contract test for the Codex transport layer: the request it sends, the shape
   # it returns, and how each failure mode maps onto the error hierarchy.
   class ApiTest < ActiveSupport::TestCase
+    test "usage calls the CLI subscription endpoint with the OAuth account header" do
+      request = stub_request(:get, "https://chatgpt.com/backend-api/wham/usage")
+                .with(headers: {
+                  "Authorization" => "Bearer token",
+                  "ChatGPT-Account-Id" => "account-1"
+                })
+                .to_return(status: 200, body: { rate_limit: {} }.to_json,
+                           headers: { "Content-Type" => "application/json" })
+
+      assert_equal({ "rate_limit" => {} }, Api.usage(access_token: "token", account_id: "account-1"))
+      assert_requested request
+    end
+
     # =========================================================================
     # models
     # =========================================================================

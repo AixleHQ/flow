@@ -250,7 +250,11 @@ module Agents
       access_token = credentials.dig("tokens", "access_token")
       return nil if access_token.blank?
 
-      body = Codex::Api.usage(access_token:, account_id: credentials["account_id"])
+      # Current Codex auth.json stores account_id beside the OAuth tokens. Keep
+      # accepting the former top-level shape for credentials captured by older
+      # CLI releases.
+      account_id = credentials.dig("tokens", "account_id").presence || credentials["account_id"]
+      body = Codex::Api.usage(access_token:, account_id:)
       rate_limit = body["rate_limit"] || {}
       windows = %w[primary_window secondary_window].filter_map do |key|
         window = rate_limit[key]
