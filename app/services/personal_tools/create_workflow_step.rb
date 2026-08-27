@@ -12,6 +12,10 @@ module PersonalTools
       param :name, type: :string, description: "Step name.", required: true
       param :instructions, type: :string, description: "Task-specific instructions (markdown)."
       param :agent_id, type: :integer, description: "Agent id to run this step."
+      runtime = param :required_agent_runtime, type: :string,
+                      description: "Runtime required for this step. Omit or pass null to use normal runtime resolution.",
+                      enum: Step::SUPPORTED_AGENT_RUNTIMES + [ nil ]
+      runtime["type"] = %w[string null]
       param :position, type: :integer, description: "0-based position; auto-assigned if omitted."
       param :tool_ids, type: :array,
             description: "Tool ids available in this step. Replaces the whole list — read the current value " \
@@ -39,7 +43,7 @@ module PersonalTools
       param :allow_non_interactive, type: :boolean, description: "Allow this step to run without a human in the loop."
     end
 
-    OPTIONAL = %i[tool_ids skill_ids mcp_server_ids config_item_ids depends_on_step_ids
+    OPTIONAL = %i[required_agent_runtime tool_ids skill_ids mcp_server_ids config_item_ids depends_on_step_ids
                 bmad_enabled allow_non_interactive].freeze
 
     def execute
@@ -57,7 +61,8 @@ module PersonalTools
               tool_ids: step.tool_ids, skill_ids: step.skill_ids, mcp_server_ids: step.mcp_server_ids,
               config_item_ids: step.config_item_ids,
               depends_on_step_ids: step.depends_on_step_ids, bmad_enabled: step.bmad_enabled,
-              allow_non_interactive: step.allow_non_interactive)
+              allow_non_interactive: step.allow_non_interactive,
+              required_agent_runtime: step.required_agent_runtime)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create step: #{e.message}")
     end

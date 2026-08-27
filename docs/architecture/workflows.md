@@ -183,7 +183,7 @@ class Step < ApplicationRecord
   #
   # depends_on_step_ids: jsonb (DAG — ids of sibling steps this step depends on)
   # preferred_model: string (optional model override, e.g. "claude-sonnet-4")
-  # required_agent_runtime: string (optional — claude_code, cursor_cli, gemini_cli, codex, grok)
+  # required_agent_runtime: string (optional — claude_code, cursor_cli, gemini_cli, codex)
   # bmad_enabled: boolean (default: false — inject BMAD-method context)
   # tool_ids / mcp_server_ids / skill_ids / asset_ids: jsonb (resources available in this step)
   # mount_repositories: boolean (default: true)

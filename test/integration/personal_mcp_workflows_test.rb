@@ -155,6 +155,56 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     assert step.allow_non_interactive
   end
 
+  test "workflow step runtime creates, updates, clears and reads back without changing other fields" do
+    agent = create(:agent, scope: @project)
+    tool = create(:tool, scope: @project)
+    created = payload(call_tool("create_workflow_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, name: "Runtime step",
+                                  instructions: "keep me", agent_id: agent.id, tool_ids: [ tool.id ],
+                                  required_agent_runtime: "claude_code" }))
+
+    assert_equal "claude_code", created["required_agent_runtime"]
+    step = Step.find(created["id"])
+    original = step.attributes.slice("name", "instructions", "agent_id", "tool_ids", "skill_ids",
+                                     "mcp_server_ids", "config_item_ids", "depends_on_step_ids",
+                                     "bmad_enabled", "allow_non_interactive")
+
+    updated = payload(call_tool("update_workflow_step",
+                                { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                                  required_agent_runtime: "codex" }))
+    assert_equal [ "required_agent_runtime" ], updated["updated_fields"]
+    assert_equal original, step.reload.attributes.slice(*original.keys)
+
+    read_back = payload(call_tool("get_workflow_step",
+                                  { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id }))
+    assert_equal "codex", read_back["required_agent_runtime"]
+
+    payload(call_tool("update_workflow_step",
+                      { project_id: @project.id, workflow_id: @workflow.id, step_id: step.id,
+                        required_agent_runtime: nil }))
+    assert_nil step.reload.required_agent_runtime
+  end
+
+  test "workflow step runtime schema and persistence reject unsupported values" do
+    create_schema = PersonalTools::CreateWorkflowStep.tool_definition.input_schema
+    update_schema = PersonalTools::UpdateWorkflowStep.tool_definition.input_schema
+
+    [ create_schema, update_schema ].each do |schema|
+      runtime = schema.dig("properties", "required_agent_runtime")
+      assert_equal %w[string null], runtime["type"]
+      assert_equal Step::SUPPORTED_AGENT_RUNTIMES + [ nil ], runtime["enum"]
+    end
+
+    invalid = call_tool("create_workflow_step",
+                        { project_id: @project.id, workflow_id: @workflow.id, name: "Bad runtime",
+                          required_agent_runtime: "unsupported" })
+    assert error?(invalid)
+    assert_match(/required_agent_runtime/, text(invalid))
+
+    step = create(:step, workflow: @workflow)
+    assert_not step.update(required_agent_runtime: "unsupported")
+  end
+
   test "duplicate_workflow copies steps and reports what needs manual setup" do
     step = create(:step, workflow: @workflow, name: "S1", instructions: "work")
     create(:sub_step, step: step, name: "check A")
