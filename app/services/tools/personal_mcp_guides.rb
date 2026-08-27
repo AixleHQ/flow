@@ -335,6 +335,9 @@ module Tools
           Wiring:
           - `agent_id` (from `list_agents`) picks who runs the step. `get_agent`
             returns that agent's full persona when the title isn't enough.
+          - `required_agent_runtime` pins the step to `claude_code`, `cursor_cli`,
+            `codex`, or `gemini_cli`. Pass null in `update_workflow_step` to return
+            to normal runtime resolution.
           - `tool_ids` / `skill_ids` / `mcp_server_ids` grant capabilities — attach
             only what the step needs (list them with list_project_tools / list_skills /
             list_mcp_servers, and read a skill's content with `get_skill` before
