@@ -9,7 +9,9 @@ class QuotaErrorDetector
       /insufficient_quota/i,
       /billing_hard_limit/i,
       /Add funds:.*platform\.claude\.com/i,
-      /individual spend limit/i
+      /individual spend limit/i,
+      /workspace API usage limits/i,
+      /You will regain access on/i
     ],
     gemini: [
       /Usage limit reached/i,

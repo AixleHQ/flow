@@ -6,6 +6,19 @@ module Codex
   # Contract test for the Codex transport layer: the request it sends, the shape
   # it returns, and how each failure mode maps onto the error hierarchy.
   class ApiTest < ActiveSupport::TestCase
+    test "usage calls the CLI subscription endpoint with the OAuth account header" do
+      request = stub_request(:get, "https://chatgpt.com/backend-api/wham/usage")
+                .with(headers: {
+                  "Authorization" => "Bearer token",
+                  "ChatGPT-Account-Id" => "account-1"
+                })
+                .to_return(status: 200, body: { rate_limit: {} }.to_json,
+                           headers: { "Content-Type" => "application/json" })
+
+      assert_equal({ "rate_limit" => {} }, Api.usage(access_token: "token", account_id: "account-1"))
+      assert_requested request
+    end
+
     # =========================================================================
     # models
     # =========================================================================
@@ -106,6 +119,29 @@ module Codex
       stub_request(:get, models_url).to_raise(Faraday::ConnectionFailed.new("no route"))
 
       assert_raises(Api::TransportError) { Api.models(access_token: "tok") }
+    end
+
+    # =========================================================================
+    # usage
+    # =========================================================================
+
+    test "usage sends the bearer token and ChatGPT account id" do
+      request = stub_request(:get, Api::USAGE_URL)
+        .with(headers: { "Authorization" => "Bearer tok", "ChatGPT-Account-Id" => "acct-1" })
+        .to_return(json_response({ "rate_limit" => {} }))
+
+      assert_equal({ "rate_limit" => {} }, Api.usage(access_token: "tok", account_id: "acct-1"))
+      assert_requested request
+    end
+
+    test "usage omits an absent account id and preserves HTTP failures" do
+      request = stub_request(:get, Api::USAGE_URL)
+        .with(headers: { "Authorization" => "Bearer tok" })
+        .to_return(status: 429, body: "slow down")
+
+      error = assert_raises(Api::HTTPError) { Api.usage(access_token: "tok") }
+      assert_equal 429, error.status
+      assert_requested request
     end
 
     # =========================================================================
