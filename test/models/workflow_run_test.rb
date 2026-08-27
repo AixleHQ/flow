@@ -49,24 +49,6 @@ class WorkflowRunTest < ActiveSupport::TestCase
     assert_equal "running", run.state
   end
 
-  test "state transitions: failed -> running clears completion and failure info" do
-    run = create(:workflow_run, :running, project: @project, workflow: @workflow, user: @project.owner)
-    credential = create(:agent_credential, user: @admin, agent_type: "claude_code")
-    run.mark_quota_failed!(credential_id: credential.id)
-    run.fail!
-    assert_equal "failed", run.state
-    assert_not_nil run.completed_at
-    assert_equal "quota_exceeded", run.failure_reason
-    assert_equal credential.id, run.failed_agent_credential_id
-
-    run.resume!
-
-    assert_equal "running", run.state
-    assert_nil run.completed_at
-    assert_nil run.failure_reason
-    assert_nil run.failed_agent_credential_id
-  end
-
   test "cannot transition from pending to completed" do
     run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
     assert_not run.may_complete?

@@ -83,10 +83,6 @@ class TemporalService
       handle = with_test_environment_handling do |cl|
         workflow_options = { id: id, task_queue: workflow.owner }
         workflow_options[:execution_timeout] = execution_timeout if execution_timeout
-        # Other callers (e.g. a fixed-id manual trigger reused after ANY prior
-        # closure, success included) rely on the gem's default ALLOW_DUPLICATE —
-        # only opt in explicitly where a stricter policy is actually wanted.
-        workflow_options[:id_reuse_policy] = options[:id_reuse_policy] if options[:id_reuse_policy]
 
         cl.start_workflow(workflow.name, input, **workflow_options)
       end

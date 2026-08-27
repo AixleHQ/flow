@@ -23,7 +23,13 @@ module PersonalTools
       result = WorkflowService.retry_step(step_run: step_run)
       return error(result[:error]) unless result[:ok]
 
-      success(run_id: run.id, retried_step_run_id: step_run.id)
+      # A retry on an already-closed run starts a brand-new run (result[:run]);
+      # a live in-place retry stays on the same run and step_run.
+      if result[:run]
+        success(run_id: result[:run].id, retried_step_run_id: nil)
+      else
+        success(run_id: run.id, retried_step_run_id: step_run.id)
+      end
     end
   end
 end

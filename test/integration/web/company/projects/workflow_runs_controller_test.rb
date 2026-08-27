@@ -73,18 +73,24 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
     assert_equal "Something went wrong.", flash[:alert]
   end
 
-  test "retry_step on a failed run resumes it with a fresh execution" do
+  test "retry_step on a failed run starts a new run and redirects to it" do
     run = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user)
     step_run = create(:step_run, :failed, workflow_run: run)
     TemporalService.stubs(:workflow_open?).returns(false)
-    TemporalWorkflowRegistry.expects(:start_workflow_execution).with(run).returns(ok: true)
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
 
-    post retry_step_company_project_workflow_run_path(@project, run), params: { step_run_id: step_run.id }
+    assert_difference("WorkflowRun.count", 1) do
+      post retry_step_company_project_workflow_run_path(@project, run), params: { step_run_id: step_run.id }
+    end
 
-    assert_response :redirect
+    new_run = WorkflowRun.order(:created_at).last
+    assert_redirected_to company_project_workflow_run_path(@project, new_run)
+    assert_not_equal run.id, new_run.id
+
     follow_redirect!
     assert_nil flash[:alert]
-    assert_equal "running", run.reload.state
+    # The old run is untouched.
+    assert_equal "failed", run.reload.state
   end
 
   test "approve_step targets the given step_run_id when a run has more than one active step" do

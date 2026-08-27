@@ -147,26 +147,4 @@ class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
 
     assert_kind_of TemporalWorkflowRegistry::WorkflowDef, workflow
   end
-
-  # == start_workflow_execution ==
-
-  test "start_workflow_execution starts under a stable id, scoped to reuse only over a failed/cancelled/timed-out prior execution" do
-    company = create(:company)
-    user = create(:user, company: company)
-    project = create(:project, company: company, owner: user)
-    workflow = create(:workflow, scope: project)
-    run = create(:workflow_run, project: project, workflow: workflow, user: user)
-
-    TemporalService.expects(:start_workflow).with(
-      TemporalWorkflowRegistry.workflow_execution_workflow,
-      { workflow_run_id: run.id },
-      id: "workflow-execution-#{run.id}",
-      execution_timeout: 86_400,
-      id_reuse_policy: Temporalio::WorkflowIDReusePolicy::ALLOW_DUPLICATE_FAILED_ONLY
-    ).returns(ok: true)
-
-    result = TemporalWorkflowRegistry.start_workflow_execution(run)
-
-    assert result[:ok]
-  end
 end

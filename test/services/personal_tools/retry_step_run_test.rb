@@ -64,5 +64,26 @@ module PersonalTools
       assert_equal "pending", new_step_run.state
       assert_equal other_step.id, new_step_run.step_id
     end
+
+    test "starts a new run and reports its id when the original run's execution has already closed" do
+      TemporalService.stubs(:workflow_open?).returns(false)
+      TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
+      @run.update!(state: "failed")
+      failed_step_run = create(:step_run, :failed, workflow_run: @run, step: @step)
+
+      result = nil
+      assert_difference("WorkflowRun.count", 1) do
+        result = execute
+      end
+
+      assert_equal 0, result[:exit_code]
+      payload = JSON.parse(result[:stdout])
+      new_run = WorkflowRun.order(:created_at).last
+      assert_equal new_run.id, payload["run_id"]
+      assert_not_equal @run.id, payload["run_id"]
+      assert_nil payload["retried_step_run_id"]
+      assert_equal "failed", @run.reload.state
+      assert_equal "failed", failed_step_run.reload.state
+    end
   end
 end

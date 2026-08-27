@@ -119,12 +119,7 @@ class TemporalWorkflowRegistry
         wf,
         { workflow_run_id: workflow_run.id },
         id: "workflow-execution-#{workflow_run.id}",
-        execution_timeout: 86_400,
-        # This id is reused when resuming a failed run with a fresh execution
-        # (WorkflowService#resume_closed_run): only permit that reuse when the
-        # prior execution under this id actually ended failed/cancelled/timed
-        # out, never over one that's still running or that succeeded.
-        id_reuse_policy: Temporalio::WorkflowIDReusePolicy::ALLOW_DUPLICATE_FAILED_ONLY
+        execution_timeout: 86_400
       )
     end
 

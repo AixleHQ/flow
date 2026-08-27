@@ -69,12 +69,15 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
     run = current_project.workflow_runs.find(params[:id])
     step_run = resolve_step_run(run) || run.latest_failed_step_run
 
-    alert = if step_run&.retryable?
+    if step_run&.retryable?
       result = WorkflowService.retry_step(step_run: step_run)
-      result[:error] unless result[:ok]
+      # A retry on an already-closed run starts a brand-new run (result[:run]);
+      # a live in-place retry stays on the same run.
+      redirect_to company_project_workflow_run_path(current_project, result[:run] || run),
+        alert: (result[:error] unless result[:ok])
+    else
+      redirect_to company_project_workflow_run_path(current_project, run)
     end
-
-    redirect_to company_project_workflow_run_path(current_project, run), alert: alert
   end
 
   def skip_step
