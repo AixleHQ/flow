@@ -47,7 +47,8 @@ const VENDOR_LABELS: Record<string, string> = {
 
 function statusMessage(entry: UsageLimitsEntry): string {
   const vendor = VENDOR_LABELS[entry.agentType] ?? 'The provider';
-  if (entry.status === 'unauthorized') return `Your ${AGENT_LABELS[entry.agentType] ?? entry.agentType} sign-in no longer works — re-authenticate above to see your limits.`;
+  if (entry.status === 'unauthorized')
+    return `Your ${AGENT_LABELS[entry.agentType] ?? entry.agentType} sign-in no longer works — re-authenticate above to see your limits.`;
   if (entry.status === 'rate_limited') return `${vendor} is throttling usage checks right now. Try again in a minute.`;
   return `Couldn't reach ${vendor} for usage limits.`;
 }
