@@ -71,8 +71,9 @@ module Agents
       # Exact JSON booleans are the contract: the adapter deliberately writes
       # `false`/`true` into settings.json; a missing key (nil) must fail here.
       assert_equal false, settings.dig("security", "folderTrust", "enabled") # rubocop:disable Minitest/RefuteFalse
-      assert_equal "auto_edit", settings.dig("tools", "approvalMode")
-      assert_equal true, settings.dig("tools", "autoAccept") # rubocop:disable Minitest/AssertTruthy
+      assert_equal "yolo", settings.dig("general", "defaultApprovalMode")
+      refute settings.dig("tools").key?("approvalMode")
+      refute settings.dig("tools").key?("autoAccept")
     end
 
     test "auth_setup_files pre-trusts the workspace so auth does not prompt" do

@@ -305,8 +305,8 @@ module Agents
         },
         # General settings
         "general" => {
-          "previewFeatures" => true,       # Enable preview models (gemini-3-*)
           "vimMode" => false,
+          "defaultApprovalMode" => "yolo", # Container is the execution sandbox
           "enableAutoUpdate" => false,     # Disable auto-update in containers
           "enableAutoUpdateNotification" => false
         },
@@ -332,8 +332,6 @@ module Agents
         },
         # Tools - auto approve all operations (container is the sandbox)
         "tools" => {
-          "autoAccept" => true,
-          "approvalMode" => "auto_edit",          # Auto-approve ALL tools
           "sandbox" => false,                # Container is already sandboxed
           "useRipgrep" => true
         },
