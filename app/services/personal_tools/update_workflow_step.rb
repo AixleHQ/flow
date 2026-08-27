@@ -14,6 +14,10 @@ module PersonalTools
       param :name, type: :string, description: "Updated name."
       param :instructions, type: :string, description: "Updated instructions (markdown)."
       param :agent_id, type: :integer, description: "Agent id to run this step."
+      runtime = param :required_agent_runtime, type: :string,
+                      description: "Runtime required for this step. Pass null to restore normal runtime resolution.",
+                      enum: Step::SUPPORTED_AGENT_RUNTIMES + [ nil ]
+      runtime["type"] = %w[string null]
       param :tool_ids, type: :array,
             description: "Tool ids available in this step. Replaces the whole list — read the current value " \
                          "with get_workflow_step first.",
@@ -41,7 +45,7 @@ module PersonalTools
     end
 
     UPDATABLE = %i[
-      name instructions agent_id tool_ids skill_ids mcp_server_ids config_item_ids
+      name instructions agent_id required_agent_runtime tool_ids skill_ids mcp_server_ids config_item_ids
       depends_on_step_ids bmad_enabled allow_non_interactive
     ].freeze
 

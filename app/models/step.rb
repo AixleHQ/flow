@@ -3,6 +3,8 @@
 class Step < ApplicationRecord
   extend Enumerize
 
+  SUPPORTED_AGENT_RUNTIMES = %w[claude_code cursor_cli codex gemini_cli].freeze
+
   belongs_to :workflow
   belongs_to :agent, optional: true
 
@@ -17,6 +19,7 @@ class Step < ApplicationRecord
   validates :name, presence: true
   validates :position, presence: true, uniqueness: { scope: :workflow_id }
   validates :preferred_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
+  validates :required_agent_runtime, inclusion: { in: SUPPORTED_AGENT_RUNTIMES }, allow_nil: true
   validate :depends_on_step_ids_valid
   validate :config_item_ids_belong_to_project
 
