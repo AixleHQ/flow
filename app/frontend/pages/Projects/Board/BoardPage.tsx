@@ -2452,7 +2452,24 @@ function TaskDetailSidebar({
               >
                 {(pendingDesc ?? task.description) ? (
                   <Box className={styles.commentMd}>
-                    <Markdown remarkPlugins={[remarkGfm]}>{pendingDesc ?? task.description ?? ''}</Markdown>
+                    <Markdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        a: ({ onClick, ...props }) => (
+                          <a
+                            {...props}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onClick?.(event);
+                            }}
+                          />
+                        ),
+                      }}
+                    >
+                      {pendingDesc ?? task.description ?? ''}
+                    </Markdown>
                   </Box>
                 ) : (
                   <span style={{ color: 'var(--mantine-color-placeholder)', fontStyle: 'italic' }}>
