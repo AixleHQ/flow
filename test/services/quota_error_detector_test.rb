@@ -78,6 +78,14 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     assert_includes result.message, "individual spend limit"
   end
 
+  test "detects anthropic workspace API usage limits (claude CLI 400 error)" do
+    text = "API Error: 400 You have reached your specified workspace API usage limits. You will regain access on 2026-09-01 at 00:00 UTC."
+    result = QuotaErrorDetector.detect(text)
+    assert result.quota_error?
+    assert_equal :anthropic, result.provider
+    assert_equal text, result.message
+  end
+
   # --- OpenAI patterns ---
 
   test "detects openai quota exceeded" do
