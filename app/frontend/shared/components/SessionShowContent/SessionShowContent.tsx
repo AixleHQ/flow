@@ -376,10 +376,10 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
         )}
 
         {workflowContext && s.initialPrompt && (
-          <section className={classes.panel}>
-            <h3 className={classes.panelTitle}>Prompt</h3>
+          <details className={`${classes.panel} ${classes.promptPanel}`}>
+            <summary className={classes.promptSummary}>Prompt</summary>
             <p className={classes.promptBody}>{s.initialPrompt}</p>
-          </section>
+          </details>
         )}
 
         {isTerminal && s.pendingArtifactsCount > 0 && (

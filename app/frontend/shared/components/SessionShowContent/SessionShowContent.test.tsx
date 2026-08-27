@@ -208,6 +208,32 @@ describe('SessionShowContent', () => {
     expect(screen.queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
   });
 
+  it('keeps the workflow prompt collapsed until requested', async () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ state: 'finished', initialPrompt: 'Generate a detailed release report' })}
+        cableStream="signed-stream"
+        context={ctx}
+        workflowContext={{
+          runId: 12,
+          runName: 'Release workflow',
+          runPath: '/runs/12',
+          stepName: 'Generate report',
+          stepPosition: 1,
+          stepsTotal: 2,
+        }}
+      />,
+    );
+
+    const disclosure = screen.getByText('Prompt').closest('details');
+    expect(disclosure).not.toHaveAttribute('open');
+
+    await userEvent.click(screen.getByText('Prompt'));
+
+    expect(disclosure).toHaveAttribute('open');
+    expect(screen.getByText('Generate a detailed release report')).toBeInTheDocument();
+  });
+
   it('renders the error message for a failed session', () => {
     renderPage(
       <SessionShowContent

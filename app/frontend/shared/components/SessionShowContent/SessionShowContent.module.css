@@ -157,12 +157,35 @@
   margin: 0 0 14px;
 }
 
+.promptPanel {
+  padding: 0;
+  flex: 0 0 auto;
+}
+
+.promptSummary {
+  padding: 14px 22px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+  user-select: none;
+}
+
+.promptSummary:hover {
+  color: var(--app-text-secondary);
+}
+
 .promptBody {
   font-size: 13px;
   line-height: 1.7;
   color: var(--app-text-secondary);
   white-space: pre-wrap;
   margin: 0;
+  padding: 0 22px 20px;
+  max-height: min(40vh, 360px);
+  overflow: auto;
 }
 
 .errorBox {
