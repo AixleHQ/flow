@@ -24,13 +24,19 @@ credentials.
 - Skills: `/home/gemini/.gemini/skills`.
 - Folder trust: `/home/gemini/.gemini/trustedFolders.json`.
 - MCP: `mcpServers` merged into the settings file; stdio and HTTP transports are supported.
-- Invocation: `gemini --yolo`, with an optional `--model` argument.
+- Invocation: `gemini --yolo`, with an optional `--model` argument; automatic
+  sessions add `-p` so the process exits after the response or provider error.
 - Hooks and extensions: provided by the upstream CLI; Aixle does not rewrite their config.
 - Telemetry: local OTLP metrics/logs are correlated with `terminal_session_token`.
 
-Gemini CLI 0.57.0 migrated the deprecated `tools.approvalMode` setting to
-`general.defaultApprovalMode`. Aixle writes the current setting and retains the
-explicit `--yolo` invocation so container sessions remain non-blocking.
+Gemini CLI 0.57.0 rejects `general.defaultApprovalMode: yolo`; the persisted
+setting accepts only `default`, `auto_edit`, or `plan`. Aixle therefore omits it
+and supplies YOLO approval only through the explicit `--yolo` invocation.
+
+The authentication container preselects `gemini-api-key`. Google-login OAuth
+credentials are intentionally unsupported by this integration. Reconnect any
+credential created by an older image so the stored value is an AI Studio API key
+rather than an OAuth access token.
 
 ## Verification
 

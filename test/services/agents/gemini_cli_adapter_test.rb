@@ -71,14 +71,17 @@ module Agents
       # Exact JSON booleans are the contract: the adapter deliberately writes
       # `false`/`true` into settings.json; a missing key (nil) must fail here.
       assert_equal false, settings.dig("security", "folderTrust", "enabled") # rubocop:disable Minitest/RefuteFalse
-      assert_equal "yolo", settings.dig("general", "defaultApprovalMode")
+      refute settings.dig("general").key?("defaultApprovalMode")
       refute settings.dig("tools").key?("approvalMode")
       refute settings.dig("tools").key?("autoAccept")
     end
 
-    test "auth_setup_files pre-trusts the workspace so auth does not prompt" do
+    test "auth_setup_files selects API-key auth and pre-trusts the workspace" do
       files = @adapter.auth_setup_files
 
+      settings = JSON.parse(files["/home/gemini/.gemini/settings.json"])
+      assert_equal "gemini-api-key", settings.dig("security", "auth", "selectedType")
+      refute settings.dig("general").key?("defaultApprovalMode")
       assert files.key?("/home/gemini/.gemini/trustedFolders.json")
       trusted = JSON.parse(files["/home/gemini/.gemini/trustedFolders.json"])
       assert_equal "TRUST_FOLDER", trusted["/workspace"]
@@ -101,6 +104,13 @@ module Agents
 
     test "required_env_fields returns empty array" do
       assert_equal [], @adapter.required_env_fields
+    end
+
+    test "session_command uses headless prompt mode for non-interactive sessions" do
+      assert_equal "gemini --yolo", @adapter.session_command(mode: "interactive")
+      assert_equal "gemini --yolo -p", @adapter.session_command(mode: "non_interactive", prompt: "do it")
+      assert_equal "gemini --model gemini-2.5-pro --yolo -p",
+                   @adapter.session_command(mode: "non_interactive", prompt: "do it", model: "gemini-2.5-pro")
     end
 
     test "env_vars_from_metadata returns empty hash" do
