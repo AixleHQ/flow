@@ -291,6 +291,12 @@ module Agents
         "lastOnboardingVersion" => CONFIG_VERSION,
         "numStartups" => 1,
         "effortCalloutV2Dismissed" => true,
+        # Suppresses the "Make auto mode your default permission mode?" nudge, which
+        # Claude Code offers whenever settings.json pins a defaultMode other than "auto"
+        # (ours is always bypassPermissions — see PERMISSION_DEFAULT_MODE). In an
+        # interactive container session the nudge steals the first keystrokes; the flag
+        # is what Claude Code itself writes once the nudge has been answered.
+        "hasSeenAutoDefaultNudge" => true,
 
         # Project config (generated based on workflow)
         "projects" => generate_projects_config(workflow_config)

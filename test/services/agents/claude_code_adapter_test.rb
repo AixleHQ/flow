@@ -165,6 +165,7 @@ module Agents
       assert_equal "sk-xxx", config["primaryApiKey"]
       assert_equal "u1", config["userID"]
       assert config["hasCompletedOnboarding"]
+      assert config["hasSeenAutoDefaultNudge"], "auto-mode default nudge must be pre-dismissed"
       assert_equal "2.1.14", config["lastOnboardingVersion"]
       assert config["projects"].present?
     end
