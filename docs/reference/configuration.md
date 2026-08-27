@@ -178,7 +178,7 @@ an env var.
 
 | Variable                   | Purpose                                                                  |
 | -------------------------- | ------------------------------------------------------------------------ |
-| `GITHUB_PUBLIC_READ_TOKEN` | Optional — raises the `api.github.com` rate limit for the public skills catalog from 60 to 5,000 requests/hour. Needs no scopes; a tenant installation token must not be used. |
+| `GITHUB_PUBLIC_READ_TOKEN` | Optional — raises the `api.github.com` rate limit from 60 to 5,000 requests/hour for the public skills catalog and for BMAD external-module tag resolution during agent-container installs. The anonymous 60/hour is counted per source IP, so every agent container shares one budget; without a token a busy deployment drains it and BMAD installs start failing with a 403. Needs no scopes; a tenant installation token must not be used. |
 
 The Skills.sh registry needs no key: its v1 API authenticates with Vercel OIDC
 only, so the catalog is browsed through the local mirror instead.

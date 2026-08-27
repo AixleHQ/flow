@@ -84,7 +84,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "bmad_modules returns default modules when not specified" do
     session = build(:terminal_session, user: @user, session_config: { "bmad_enabled" => true })
-    assert_equal %w[bmm bmb cis wds], session.bmad_modules
+    assert_equal %w[bmm wds], session.bmad_modules
   end
 
   test "bmad_modules returns custom modules when specified" do
@@ -97,17 +97,17 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   test "bmad_modules returns default when session_config is nil" do
     session = build(:terminal_session, user: @user, session_config: nil)
-    assert_equal %w[bmm bmb cis wds], session.bmad_modules
+    assert_equal %w[bmm wds], session.bmad_modules
   end
 
   test "bmad_modules returns default when bmad_modules key is absent" do
     session = build(:terminal_session, user: @user, session_config: {})
-    assert_equal %w[bmm bmb cis wds], session.bmad_modules
+    assert_equal %w[bmm wds], session.bmad_modules
   end
 
   test "BMAD_DEFAULT_MODULES constant is frozen" do
     assert TerminalSession::BMAD_DEFAULT_MODULES.frozen?
-    assert_equal %w[bmm bmb cis wds], TerminalSession::BMAD_DEFAULT_MODULES
+    assert_equal %w[bmm wds], TerminalSession::BMAD_DEFAULT_MODULES
   end
 
   # == mode and initial_prompt columns ==
