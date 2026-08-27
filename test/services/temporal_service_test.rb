@@ -123,6 +123,47 @@ class TemporalServiceTest < ActiveSupport::TestCase
     assert_equal "run-123", result[:run_id]
   end
 
+  test "start_workflow omits id_reuse_policy by default, leaving the gem's own default (ALLOW_DUPLICATE) in effect" do
+    workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
+    mock_handle = OpenStruct.new(id: "custom-id", run_id: "run-123")
+
+    mock_client = mock("client")
+    mock_client.expects(:start_workflow).with do |_name, _input, opts|
+      !opts.key?(:id_reuse_policy)
+    end.returns(mock_handle)
+
+    mock_env = OpenStruct.new(client: mock_client)
+    Temporalio::Testing::WorkflowEnvironment.unstub(:start_local)
+    Temporalio::Testing::WorkflowEnvironment.expects(:start_local).yields(mock_env).returns(mock_handle)
+
+    result = TemporalService.start_workflow(workflow, { test: true }, id: "custom-id")
+
+    assert result[:ok]
+  end
+
+  test "start_workflow passes through an explicit id_reuse_policy" do
+    workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
+    mock_handle = OpenStruct.new(id: "custom-id", run_id: "run-123")
+
+    mock_client = mock("client")
+    mock_client.expects(:start_workflow).with(
+      "TestWorkflow",
+      { test: true },
+      has_entries(id_reuse_policy: Temporalio::WorkflowIDReusePolicy::ALLOW_DUPLICATE_FAILED_ONLY)
+    ).returns(mock_handle)
+
+    mock_env = OpenStruct.new(client: mock_client)
+    Temporalio::Testing::WorkflowEnvironment.unstub(:start_local)
+    Temporalio::Testing::WorkflowEnvironment.expects(:start_local).yields(mock_env).returns(mock_handle)
+
+    result = TemporalService.start_workflow(
+      workflow, { test: true }, id: "custom-id",
+      id_reuse_policy: Temporalio::WorkflowIDReusePolicy::ALLOW_DUPLICATE_FAILED_ONLY
+    )
+
+    assert result[:ok]
+  end
+
   test "start_workflow handles Temporal errors" do
     workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
 

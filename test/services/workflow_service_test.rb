@@ -124,22 +124,98 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
   # == retry_step ==
 
-  test "retry_step creates new step_run and sends signal" do
+  test "retry_step creates new step_run and sends signal when the workflow execution is still open" do
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
     step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
 
+    TemporalService.stubs(:workflow_open?).with("workflow-execution-#{run.id}").returns(true)
     TemporalService.expects(:send_signal).with(
       "workflow-execution-#{run.id}", "step_retried",
       has_entries("old_step_run_id" => step_run.id, "new_step_run_id" => anything)
-    ).once
+    ).once.returns(ok: true)
 
+    result = nil
     assert_difference("StepRun.count", 1) do
-      WorkflowService.retry_step(step_run: step_run)
+      result = WorkflowService.retry_step(step_run: step_run)
     end
+    assert result[:ok]
 
     new_step_run = run.step_runs.where(step: @step1).order(:created_at).last
     assert_equal "pending", new_step_run.state
     assert_not_equal step_run.id, new_step_run.id
+  end
+
+  test "retry_step resumes a failed run with a fresh execution when the workflow execution has already closed" do
+    run = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user)
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
+
+    TemporalService.stubs(:workflow_open?).with("workflow-execution-#{run.id}").returns(false)
+    TemporalService.expects(:send_signal).never
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).with(run).once.returns(ok: true)
+
+    result = nil
+    assert_difference("StepRun.count", 1) do
+      result = WorkflowService.retry_step(step_run: step_run)
+    end
+    assert result[:ok]
+
+    run.reload
+    assert_equal "running", run.state
+    assert_nil run.completed_at
+
+    new_step_run = run.step_runs.where(step: @step1).order(:created_at).last
+    assert_equal "pending", new_step_run.state
+    assert_not_equal step_run.id, new_step_run.id
+  end
+
+  test "retry_step leaves run state and failure info untouched and discards the step_run when the resumed execution fails to start" do
+    run = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user)
+    run.mark_quota_failed!(credential_id: nil)
+    run.update!(failure_reason: "quota_exceeded")
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
+
+    TemporalService.stubs(:workflow_open?).with("workflow-execution-#{run.id}").returns(false)
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: false, error: "boom")
+
+    result = nil
+    assert_no_difference("StepRun.count") do
+      result = WorkflowService.retry_step(step_run: step_run)
+    end
+    refute(result[:ok])
+    assert_match(/boom/, result[:error])
+
+    run.reload
+    assert_equal "failed", run.state
+    assert_equal "quota_exceeded", run.failure_reason
+  end
+
+  test "retry_step refuses to resume a closed run that isn't failed" do
+    run = create(:workflow_run, :cancelled, workflow: @workflow, project: @project, user: @user)
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
+
+    TemporalService.stubs(:workflow_open?).with("workflow-execution-#{run.id}").returns(false)
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).never
+
+    result = nil
+    assert_no_difference("StepRun.count") do
+      result = WorkflowService.retry_step(step_run: step_run)
+    end
+    refute(result[:ok])
+  end
+
+  test "retry_step discards the new step_run when the signal fails to send" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
+
+    TemporalService.stubs(:workflow_open?).with("workflow-execution-#{run.id}").returns(true)
+    TemporalService.stubs(:send_signal).returns(ok: false, error: "boom")
+
+    result = nil
+    assert_no_difference("StepRun.count") do
+      result = WorkflowService.retry_step(step_run: step_run)
+    end
+    refute(result[:ok])
+    assert_match(/boom/, result[:error])
   end
 
   # == skip_step ==

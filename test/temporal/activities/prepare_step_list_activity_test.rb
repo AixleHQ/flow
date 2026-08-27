@@ -33,6 +33,8 @@ module Activities
         assert_equal [ 1, 2, 3 ], result.map { |e| e["position"] }
         assert_equal [ step_first.id, step_mid.id, step_last.id ], result.map { |e| e["step_id"] }
         assert_equal [ step_run.id, nil, nil ], result.map { |e| e["step_run_id"] }
+        assert_equal [ step_run.state, nil, nil ], result.map { |e| e["step_run_state"] }
+        assert_equal [ 0, 0, 0 ], result.map { |e| e["failed_attempt_count"] }
 
         # depends_on flows through per step (empty default for the others).
         assert_equal [ [], [ step_first.id ], [] ], result.map { |e| e["depends_on_step_ids"] }
@@ -69,6 +71,22 @@ module Activities
         refute by_step[interactive_step.id]["auto_run"]
         # ...and flips an interactive step on.
         assert by_step[auto_step.id]["auto_run"]
+      end
+
+      test "surfaces the latest step_run per step, not the first, and counts prior failures" do
+        # Simulates a resumed run: the step has an older failed attempt and a
+        # newer pending step_run created by the retry — the newer one must win.
+        step = create(:step, workflow: @workflow, position: 1)
+        older_failed = create(:step_run, workflow_run: @run, step: step, state: "failed")
+        older_failed.update!(created_at: 1.hour.ago)
+        newer_pending = create(:step_run, workflow_run: @run, step: step, state: "pending")
+
+        result = run_activity(PrepareStepListActivity, { "workflow_run_id" => @run.id })
+
+        entry = result.first
+        assert_equal newer_pending.id, entry["step_run_id"]
+        assert_equal "pending", entry["step_run_state"]
+        assert_equal 1, entry["failed_attempt_count"]
       end
 
       test "soft-deleted steps are excluded from the list" do

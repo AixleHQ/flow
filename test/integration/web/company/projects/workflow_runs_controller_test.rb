@@ -55,10 +55,36 @@ class Web::Company::Projects::WorkflowRunsControllerTest < ActionDispatch::Integ
 
   test "retry_step redirects" do
     run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
-    WorkflowService.stubs(:retry_step)
+    WorkflowService.stubs(:retry_step).returns(ok: true)
 
     post retry_step_company_project_workflow_run_path(@project, run)
     assert_response :redirect
+  end
+
+  test "retry_step flashes an alert when WorkflowService reports failure" do
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
+    step_run = create(:step_run, :failed, workflow_run: run)
+    WorkflowService.stubs(:retry_step).returns(ok: false, error: "Something went wrong.")
+
+    post retry_step_company_project_workflow_run_path(@project, run), params: { step_run_id: step_run.id }
+
+    assert_response :redirect
+    follow_redirect!
+    assert_equal "Something went wrong.", flash[:alert]
+  end
+
+  test "retry_step on a failed run resumes it with a fresh execution" do
+    run = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user)
+    step_run = create(:step_run, :failed, workflow_run: run)
+    TemporalService.stubs(:workflow_open?).returns(false)
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).with(run).returns(ok: true)
+
+    post retry_step_company_project_workflow_run_path(@project, run), params: { step_run_id: step_run.id }
+
+    assert_response :redirect
+    follow_redirect!
+    assert_nil flash[:alert]
+    assert_equal "running", run.reload.state
   end
 
   test "approve_step targets the given step_run_id when a run has more than one active step" do

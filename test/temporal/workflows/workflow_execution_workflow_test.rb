@@ -107,6 +107,26 @@ module Workflows
         "container_finished signal must survive into wait_for_all_parallel"
     end
 
+    # --- init_state seeding (resume support) ---
+
+    test "init_state seeds completed_step_ids and step_failure_counts from persisted step_run state" do
+      # Simulates what PrepareStepListActivity reports for a resumed run: steps 1/2
+      # already finished in a prior execution (completed/skipped), step 3's pending
+      # step_run is a fresh retry after 2 prior failures, step 4 was never attempted.
+      @workflow.stubs(:fetch_ordered_steps).returns([
+        { "step_id" => 1, "step_run_state" => "completed", "failed_attempt_count" => 0 },
+        { "step_id" => 2, "step_run_state" => "skipped", "failed_attempt_count" => 0 },
+        { "step_id" => 3, "step_run_state" => "pending", "failed_attempt_count" => 2 },
+        { "step_id" => 4, "step_run_state" => nil, "failed_attempt_count" => 0 }
+      ])
+      @workflow.stubs(:fetch_mode).returns("non_interactive")
+
+      @workflow.send(:init_state, 123)
+
+      assert_equal [ 1, 2 ], @workflow.instance_variable_get(:@completed_step_ids)
+      assert_equal({ 1 => 0, 2 => 0, 3 => 2, 4 => 0 }, @workflow.instance_variable_get(:@step_failure_counts))
+    end
+
     # --- End-to-end run via the SDK time-skipping WorkflowEnvironment ---
     #
     # These exercise the real #run orchestration (init_state -> update_status(:running)
@@ -160,10 +180,12 @@ module Workflows
     class FakeCheckSkipActivity < Temporalio::Activity::Definition
       activity_name "workflow_check_skip_activity"
       class << self
-        attr_accessor :should_skip
+        attr_accessor :should_skip, :checked_step_ids
       end
 
-      def execute(_input = nil)
+      def execute(input = nil)
+        step_id = input.is_a?(Hash) ? (input["step_id"] || input[:step_id]) : nil
+        (self.class.checked_step_ids ||= []) << step_id
         { "should_skip" => self.class.should_skip }
       end
     end
@@ -201,7 +223,13 @@ module Workflows
 
     class FakeLaunchStepSessionActivity < Temporalio::Activity::Definition
       activity_name "workflow_launch_step_session_activity"
-      def execute(_input = nil)
+      class << self
+        attr_accessor :launched_step_run_ids
+      end
+
+      def execute(input = nil)
+        step_run_id = input.is_a?(Hash) ? (input["step_run_id"] || input[:step_run_id]) : nil
+        (self.class.launched_step_run_ids ||= []) << step_run_id
         {}
       end
     end
@@ -292,6 +320,37 @@ module Workflows
       )
 
       assert_equal "completed", result["status"]
+    end
+
+    test "run resumes from persisted step_run state: never reprocesses the already-completed step" do
+      # Simulates the "Retry session" resume path: step 1 finished in a prior
+      # execution (step_run_state completed) and must never re-enter the loop
+      # (no check_skip / launch_step_session call for it); step 2's step_run_id
+      # /state reflect the fresh pending step_run created for the retried step,
+      # with one prior failed attempt recorded, and runs the normal skip path
+      # (signal-free, matching this file's other E2E happy-path tests).
+      RecordingUpdateStatusActivity.statuses = []
+      FakeLaunchStepSessionActivity.launched_step_run_ids = []
+      FakeCheckSkipActivity.checked_step_ids = []
+      FakePrepareStepListActivity.steps = [
+        { "step_id" => 1, "step_run_id" => 501, "step_run_state" => "completed", "failed_attempt_count" => 0,
+          "depends_on_step_ids" => [], "on_failure" => "fail" },
+        { "step_id" => 2, "step_run_id" => 502, "step_run_state" => "pending", "failed_attempt_count" => 1,
+          "depends_on_step_ids" => [ 1 ], "on_failure" => "fail" }
+      ]
+      FakeFetchModeActivity.mode = "non_interactive"
+      FakeCheckSkipActivity.should_skip = true
+      stub_activities_proxy!
+
+      result = run_workflow(
+        WorkflowExecutionWorkflow, { workflow_run_id: 123 },
+        activities: e2e_activities, task_queue: E2E_TASK_QUEUE
+      )
+
+      assert_equal "completed", result["status"]
+      assert_equal [ 2 ], FakeCheckSkipActivity.checked_step_ids,
+        "the already-completed step (1) must never re-enter the loop; only the retried step (2) is processed"
+      assert_equal [], FakeLaunchStepSessionActivity.launched_step_run_ids
     end
   end
 end

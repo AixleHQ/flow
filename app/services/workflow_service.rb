@@ -69,13 +69,20 @@ class WorkflowService
       send_signal(step_run.workflow_run, "step_completed", step_run.id)
     end
 
+    # Retrying a step while its run's Temporal workflow execution is still open
+    # (e.g. the "Retry" action on a waiting_input step) signals the live
+    # execution. Once the execution has closed (the run itself is failed —
+    # the common case, since the "Retry session" action only appears then),
+    # signals go nowhere, so a fresh execution is started instead, seeded from
+    # persisted step_run state so it skips already-completed/skipped steps.
     def retry_step(step_run:)
-      new_step_run = step_run.workflow_run.step_runs.create!(
-        step: step_run.step,
-        state: :pending
-      )
-      send_signal(step_run.workflow_run, "step_retried",
-                  { "old_step_run_id" => step_run.id, "new_step_run_id" => new_step_run.id })
+      run = step_run.workflow_run
+
+      if TemporalService.workflow_open?(workflow_execution_id(run))
+        retry_step_in_place(run, step_run)
+      else
+        resume_closed_run(run, step_run)
+      end
     end
 
     def skip_step(step_run:, reason: nil)
@@ -92,6 +99,43 @@ class WorkflowService
 
     private
 
+    def retry_step_in_place(run, step_run)
+      new_step_run = run.step_runs.create!(step: step_run.step, state: :pending)
+      result = send_signal(run, "step_retried",
+                  { "old_step_run_id" => step_run.id, "new_step_run_id" => new_step_run.id })
+
+      unless result[:ok]
+        new_step_run.destroy
+        return { ok: false, error: "Failed to retry: #{result[:error]}" }
+      end
+
+      { ok: true }
+    end
+
+    def resume_closed_run(run, step_run)
+      unless run.failed? && run.may_resume?
+        return { ok: false, error: "This run can't be retried right now." }
+      end
+
+      new_step_run = run.step_runs.create!(step: step_run.step, state: :pending)
+      # Start the fresh execution before flipping the run's own state: Temporal
+      # (not the run row) is the source of truth for whether this succeeded, so
+      # there's nothing to revert on failure — the run just stays failed, with
+      # its original failure_reason intact. This also closes a concurrent-retry
+      # race: if two requests both pass the guard above, only the one whose
+      # start_workflow_execution actually wins (the loser's id_reuse_policy
+      # rejects the second start) ever touches run.state.
+      result = TemporalWorkflowRegistry.start_workflow_execution(run)
+
+      unless result[:ok]
+        new_step_run.destroy
+        return { ok: false, error: "Failed to resume: #{result[:error]}" }
+      end
+
+      run.resume! if run.may_resume?
+      { ok: true }
+    end
+
     def workflow_execution_id(run)
       "workflow-execution-#{run.id}"
     end
@@ -100,6 +144,7 @@ class WorkflowService
       TemporalService.send_signal(workflow_execution_id(run), signal_name, payload)
     rescue StandardError => e
       Rails.logger.error("[WorkflowService] Failed to send signal #{signal_name} for run ##{run.id}: #{e.message}")
+      { ok: false, error: e.message }
     end
 
     def validate_mode!(run, workflow, overrides)

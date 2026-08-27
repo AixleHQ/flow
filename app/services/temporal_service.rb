@@ -83,6 +83,10 @@ class TemporalService
       handle = with_test_environment_handling do |cl|
         workflow_options = { id: id, task_queue: workflow.owner }
         workflow_options[:execution_timeout] = execution_timeout if execution_timeout
+        # Other callers (e.g. a fixed-id manual trigger reused after ANY prior
+        # closure, success included) rely on the gem's default ALLOW_DUPLICATE —
+        # only opt in explicitly where a stricter policy is actually wanted.
+        workflow_options[:id_reuse_policy] = options[:id_reuse_policy] if options[:id_reuse_policy]
 
         cl.start_workflow(workflow.name, input, **workflow_options)
       end
@@ -130,6 +134,22 @@ class TemporalService
     rescue Temporalio::Error => e
       Rails.logger.error("[Temporal] ❌ Failed to send signal: #{e.message}")
       { ok: false, error: e.message }
+    end
+
+    # True if the workflow execution is still open (running), false if it has
+    # closed (completed/failed/cancelled/terminated) or doesn't exist. Used to
+    # avoid signaling a closed execution, which fails silently otherwise.
+    def workflow_open?(workflow_id)
+      return false unless enabled?
+
+      status = with_test_environment_handling do |cl|
+        cl.workflow_handle(workflow_id).describe.status
+      end
+
+      status == Temporalio::Client::WorkflowExecutionStatus::RUNNING
+    rescue Temporalio::Error => e
+      Rails.logger.warn("[Temporal] Failed to describe workflow #{workflow_id}: #{e.message}")
+      false
     end
 
     # Cancel running workflow

@@ -7,6 +7,7 @@ module PersonalTools
     setup do
       # TemporalService is the app-owned boundary to the Temporal gem; fake it so
       # WorkflowService.retry_step signals a no-op instead of touching a server.
+      TemporalService.stubs(:workflow_open?).returns(true)
       TemporalService.stubs(:send_signal).returns({ ok: true })
 
       @user = create(:user, :with_company)

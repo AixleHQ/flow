@@ -64,11 +64,17 @@ module Workflows
       @step_decisions = {}
       @cancelled = false
       @failed = false
-      @completed_step_ids = []
       @all_steps = fetch_ordered_steps
+      # Seeded from persisted step_run state, not zeroed: a fresh execution for a
+      # brand-new run sees every step "pending" (no-op seed), but a resumed run
+      # (new execution, same workflow_run_id, after a prior execution closed)
+      # needs to skip steps already completed/skipped in a previous execution.
+      @completed_step_ids = @all_steps.select { |s| %w[completed skipped].include?(s["step_run_state"]) }
+                                       .map { |s| s["step_id"] }
       @mode = fetch_mode
-      # Counts failed completions (complete_step / prepare_step / timeout) per step_id for on_failure retry caps
-      @step_failure_counts = {}
+      # Counts failed completions (complete_step / prepare_step / timeout) per step_id for on_failure retry caps.
+      # Seeded from prior failed attempts so max_retries is still enforced across a resume.
+      @step_failure_counts = @all_steps.each_with_object({}) { |s, h| h[s["step_id"]] = s["failed_attempt_count"].to_i }
       # step_run_id -> step_id reverse map, populated as step_runs are used
       @step_run_to_step_id = {}
       # step_id -> new_step_run_id, set when a user-initiated retry creates a new step_run

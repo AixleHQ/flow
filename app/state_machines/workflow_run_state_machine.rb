@@ -23,7 +23,7 @@ module WorkflowRunStateMachine
       end
 
       event :resume do
-        transitions from: :paused, to: :running
+        transitions from: %i[paused failed], to: :running, after: :on_resumed
       end
 
       event :complete do
@@ -52,5 +52,11 @@ module WorkflowRunStateMachine
 
   def on_cancelled
     update_column(:completed_at, Time.current)
+  end
+
+  # Clears prior-attempt failure state when resuming a failed run with a fresh
+  # execution; a no-op for resuming from paused, which never sets these.
+  def on_resumed
+    update_columns(completed_at: nil, failure_reason: nil, failed_agent_credential_id: nil)
   end
 end
