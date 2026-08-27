@@ -243,6 +243,47 @@ module Agents
       []
     end
 
+    # ChatGPT-backed Codex logins expose percentage-based primary and secondary
+    # quota windows. API-key logins are pay-as-you-go and have no subscription
+    # windows to report.
+    def fetch_subscription_usage(credentials)
+      access_token = credentials.dig("tokens", "access_token")
+      return nil if access_token.blank?
+
+      body = Codex::Api.usage(access_token:, account_id: credentials["account_id"])
+      rate_limit = body["rate_limit"] || {}
+      windows = %w[primary_window secondary_window].filter_map do |key|
+        window = rate_limit[key]
+        next unless window.is_a?(Hash) && window["used_percent"].present?
+
+        {
+          key: "codex_#{key.delete_suffix('_window')}",
+          utilization: window["used_percent"].to_f,
+          resets_at: window["reset_at"] && Time.at(window["reset_at"].to_i).utc.iso8601,
+          window_duration_mins: window["limit_window_seconds"]&.to_f&./(60.0)
+        }.compact
+      end
+
+      individual = body.dig("spend_control", "individual_limit")
+      extra_usage = if individual.is_a?(Hash)
+        {
+          enabled: true,
+          utilization: individual["used_percent"]&.to_f,
+          monthly_limit: numeric_value(individual["limit"]),
+          used_credits: numeric_value(individual["used"])
+        }
+      end
+
+      { status: "ok", windows:, extra_usage: }
+    rescue Codex::Api::UnauthorizedError
+      { status: "unauthorized" }
+    rescue Codex::Api::HTTPError => e
+      e.status == 429 ? { status: "rate_limited" } : { status: "unavailable" }
+    rescue Codex::Api::ApiError => e
+      Rails.logger.warn("[CodexAdapter] subscription usage fetch failed: #{e.class}: #{e.message}")
+      { status: "unavailable" }
+    end
+
     # Refresh an expired access token using the stored refresh_token.
     # Persists new tokens back to the AgentCredential record.
     # Returns the new access_token on success, nil on failure.
@@ -272,6 +313,14 @@ module Agents
       Rails.logger.warn("[CodexAdapter] Token refresh error: #{e.class}: #{e.message}")
       nil
     end
+
+    def numeric_value(value)
+      return nil if value.nil?
+
+      number = value.to_f
+      number % 1 == 0 ? number.to_i : number
+    end
+    private :numeric_value
 
     # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
     # refresh_access_token! which persists under a row lock via persist_refreshed!.

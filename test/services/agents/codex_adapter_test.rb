@@ -227,6 +227,43 @@ module Agents
       assert_includes toml, 'trust_level = "trusted"'
     end
 
+    test "fetch_subscription_usage returns nil for an API-key login" do
+      assert_nil @adapter.fetch_subscription_usage({ "OPENAI_API_KEY" => "sk-test" })
+    end
+
+    test "fetch_subscription_usage maps upstream windows, reset periods, and credit units" do
+      Codex::Api.expects(:usage).with(access_token: "tok", account_id: "acct-1").returns({
+        "rate_limit" => {
+          "primary_window" => { "used_percent" => 42, "limit_window_seconds" => 18_000, "reset_at" => 1_725_000_000 },
+          "secondary_window" => { "used_percent" => 5, "limit_window_seconds" => 604_800, "reset_at" => 1_725_600_000 }
+        },
+        "spend_control" => {
+          "individual_limit" => { "limit" => "25000", "used" => "8000", "used_percent" => 32 }
+        }
+      })
+
+      usage = @adapter.fetch_subscription_usage({ "tokens" => { "access_token" => "tok" }, "account_id" => "acct-1" })
+
+      assert_equal "ok", usage[:status]
+      assert_equal %w[codex_primary codex_secondary], usage[:windows].pluck(:key)
+      assert_equal [ 300.0, 10_080.0 ], usage[:windows].pluck(:window_duration_mins)
+      assert_equal "2024-08-30T06:40:00Z", usage[:windows].first[:resets_at]
+      assert_equal({ enabled: true, utilization: 32.0, monthly_limit: 25_000, used_credits: 8_000 }, usage[:extra_usage])
+    end
+
+    test "fetch_subscription_usage exposes authentication, throttling, and transport states" do
+      credentials = { "tokens" => { "access_token" => "tok" } }
+
+      Codex::Api.stubs(:usage).raises(Codex::Api::UnauthorizedError)
+      assert_equal({ status: "unauthorized" }, @adapter.fetch_subscription_usage(credentials))
+
+      Codex::Api.stubs(:usage).raises(Codex::Api::HTTPError.new("slow", status: 429))
+      assert_equal({ status: "rate_limited" }, @adapter.fetch_subscription_usage(credentials))
+
+      Codex::Api.stubs(:usage).raises(Codex::Api::TimeoutError, "timeout")
+      assert_equal({ status: "unavailable" }, @adapter.fetch_subscription_usage(credentials))
+    end
+
     test "auth_setup_files writes config.toml without calling the models API" do
       # Auth has not happened yet, so there is no token to fetch the catalog with —
       # the pre-auth config must still be written (and must not raise).

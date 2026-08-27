@@ -19,9 +19,9 @@ class Web::ProfileController < Web::ApplicationController
       language_options: CompanyMembership::AGENT_LANGUAGES,
       agent_models: current_membership&.agent_models_for_props || [],
       cable_stream: inertia_cable_stream(current_user),
-      # Plan-usage windows (Claude's 5-hour / weekly limits) are fetched from the
-      # vendor over HTTP, so they are deferred: the page must never wait on
-      # Anthropic to render. `?refresh=1` is the Refresh button; the service
+      # Plan-usage windows are fetched from runtime vendors over HTTP, so they
+      # are deferred: the page must never wait on a provider to render.
+      # `?refresh=1` is the Refresh button; the service
       # throttles it so the button can't turn into a 429 generator.
       usage_limits: InertiaRails.defer(group: "limits") {
         Agents::SubscriptionUsageService.new(membership: current_membership, force: params[:refresh].present?).call

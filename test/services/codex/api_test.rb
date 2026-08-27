@@ -109,6 +109,29 @@ module Codex
     end
 
     # =========================================================================
+    # usage
+    # =========================================================================
+
+    test "usage sends the bearer token and ChatGPT account id" do
+      request = stub_request(:get, Api::USAGE_URL)
+        .with(headers: { "Authorization" => "Bearer tok", "ChatGPT-Account-Id" => "acct-1" })
+        .to_return(json_response({ "rate_limit" => {} }))
+
+      assert_equal({ "rate_limit" => {} }, Api.usage(access_token: "tok", account_id: "acct-1"))
+      assert_requested request
+    end
+
+    test "usage omits an absent account id and preserves HTTP failures" do
+      request = stub_request(:get, Api::USAGE_URL)
+        .with(headers: { "Authorization" => "Bearer tok" })
+        .to_return(status: 429, body: "slow down")
+
+      error = assert_raises(Api::HTTPError) { Api.usage(access_token: "tok") }
+      assert_equal 429, error.status
+      assert_requested request
+    end
+
+    # =========================================================================
     # refresh_tokens
     # =========================================================================
 
