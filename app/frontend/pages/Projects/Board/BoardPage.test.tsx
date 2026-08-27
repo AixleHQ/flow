@@ -417,6 +417,58 @@ describe('Projects/Board/BoardPage', () => {
     expect(drawer.getByText('Created')).toBeInTheDocument();
   });
 
+  it('opens description links safely without activating description edit mode', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          description: 'Read the [deployment guide](https://example.com/deploy).',
+        }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    const link = drawer.getByRole('link', { name: 'deployment guide' });
+
+    expect(link).toHaveAttribute('href', 'https://example.com/deploy');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+
+    await userEvent.click(link);
+
+    expect(drawer.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('activates description edit mode when a non-link area is clicked', async () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({
+          id: 1,
+          title: 'Wire up authentication',
+          boardColumnId: 100,
+          description: 'Editable description text',
+        }),
+        taskComments: [],
+        taskAssets: [],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    await userEvent.click(drawer.getByText('Editable description text'));
+
+    expect(drawer.getByRole('textbox')).toHaveValue('Editable description text');
+  });
+
   it('lists workflow runs in the Runs tab for tasks in automated columns', async () => {
     renderAuthedPage(<BoardPage />, {
       props: {
