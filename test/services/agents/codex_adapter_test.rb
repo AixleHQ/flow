@@ -254,7 +254,7 @@ module Agents
     test "fetch_subscription_usage exposes authentication, throttling, and transport states" do
       credentials = { "tokens" => { "access_token" => "tok" } }
 
-      Codex::Api.stubs(:usage).raises(Codex::Api::UnauthorizedError)
+      Codex::Api.stubs(:usage).raises(Codex::Api::UnauthorizedError.new("unauthorized", status: 401))
       assert_equal({ status: "unauthorized" }, @adapter.fetch_subscription_usage(credentials))
 
       Codex::Api.stubs(:usage).raises(Codex::Api::HTTPError.new("slow", status: 429))
