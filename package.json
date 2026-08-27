@@ -15,7 +15,7 @@
     "@types/react-syntax-highlighter": "^15",
     "@typescript-eslint/parser": "^8.67.0",
     "@vitest/coverage-v8": "4.1.11",
-    "eslint": "^9.39.2",
+    "eslint": "^10.9.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-prettier": "^5.5.6",
