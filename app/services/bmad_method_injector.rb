@@ -47,12 +47,19 @@ class BmadMethodInjector
   # Pinned to match _bmad/_config/manifest.yaml; bumping requires re-validating
   # skill target directories (cursor/codex/gemini moved to .agents/skills in 6.6.0).
   # Since 6.10.0 bmb/cis/wds are external modules fetched from GitHub during
-  # install, so the container needs outbound access to github.com.
+  # install, so the container needs outbound access to github.com — and enough
+  # api.github.com budget to resolve their tags, which is what #github_read_token
+  # buys.
   # 6.11.0 marks wds deprecated: it is hidden from the interactive picker but
   # still installs when named explicitly via --modules, which is how we drive it.
   BMAD_METHOD_VERSION = "6.11.0"
 
   INSTALL_TIMEOUT = 300
+
+  # How much of each captured stream survives into the recorded failure reason.
+  # `bmad_install_error` is itself truncated to 500 chars when stored, so this
+  # only has to keep the tail readable rather than bound the column.
+  OUTPUT_EXCERPT_LIMIT = 800
 
   class InstallError < StandardError; end
 
@@ -88,10 +95,29 @@ class BmadMethodInjector
     if exit_code.zero?
       Rails.logger.info("[BmadMethodInjector] BMAD installed in container #{container_id}")
     else
-      stderr = Array(result[1]).join
-      Rails.logger.error("[BmadMethodInjector] Install failed (exit #{exit_code}): #{stderr}")
-      raise InstallError, "npx bmad-method install failed with exit code #{exit_code}: #{stderr}"
+      details = install_failure_details(result)
+      Rails.logger.error("[BmadMethodInjector] Install failed (exit #{exit_code}): #{details}")
+      raise InstallError, "npx bmad-method install failed with exit code #{exit_code}: #{details}"
     end
+  end
+
+  # The installer explains why it gave up on STDOUT — its prompt/logger writes
+  # there — while STDERR carries npm's noise. Reporting stderr alone made every
+  # real failure read as an unrelated `npm warn deprecated glob@…` line, which is
+  # exactly how a GitHub rate-limit refusal stayed invisible in production: the
+  # recorded reason named a deprecation warning and the actual 403 was dropped.
+  # Both streams are kept, stdout first, with the token scrubbed out of each.
+  def install_failure_details(result)
+    streams = {
+      "stdout" => redact_token(Array(result[0]).join).strip,
+      "stderr" => redact_token(Array(result[1]).join).strip
+    }
+
+    excerpts = streams.filter_map do |name, text|
+      "#{name}: #{text.last(OUTPUT_EXCERPT_LIMIT)}" if text.present?
+    end
+
+    excerpts.presence&.join(" | ") || "no output captured"
   end
 
   def hide_bmad_in_vscode
@@ -114,7 +140,50 @@ class BmadMethodInjector
     parts << "--output-folder outputs"
     parts << "--yes"
 
-    parts.join(" ")
+    command = parts.join(" ")
+    token = github_read_token
+    return command if token.blank?
+
+    "GITHUB_TOKEN=#{shell_quote(token)} #{command}"
+  end
+
+  # Every external module (`bmb`, `cis`, `wds`) has its stable tag resolved
+  # through api.github.com — see the installer's
+  # tools/installer/modules/channel-resolver.js, which sends an Authorization
+  # header only when GITHUB_TOKEN is set. Unauthenticated that API allows 60
+  # requests/hour PER SOURCE IP, and every agent container in a cluster NATs
+  # through one address, so a busy project drains the hourly budget and each
+  # later install aborts with a 403. The installer's own error text says to set
+  # GITHUB_TOKEN; this reuses the scopeless public-read token the skills catalog
+  # already carries (Settings.github.read_token). Absent, the install still runs
+  # and simply keeps the anonymous budget it had before.
+  #
+  # Handed over as an argv-scoped env prefix rather than a file on disk: the
+  # install shell runs as uid 1001 while ContainerRuntime#write_file writes as
+  # root, so a token file in sticky /tmp is one that shell cannot unlink again,
+  # and a leftover secret at rest is worse than an argv the same single-tenant
+  # container already sees repo-scoped installation tokens through. It is
+  # scrubbed from everything this class logs or records.
+  def github_read_token
+    Settings.github.read_token.presence
+  end
+
+  def redact_token(text)
+    token = github_read_token
+    return text if token.blank?
+
+    text.gsub(token, "[REDACTED]")
+  end
+
+  # POSIX single-quoting: everything is literal inside '…', and an embedded
+  # quote closes, escapes, and reopens. Tokens are opaque vendor strings, so
+  # nothing here may assume they are shell-safe.
+  #
+  # The block form of gsub is required, not cosmetic: in a replacement STRING
+  # `\'` is the post-match back-reference, so the escape would expand to the
+  # rest of the token instead of a quote.
+  def shell_quote(value)
+    "'#{value.to_s.gsub("'") { "'\\''" }}'"
   end
 
   # npx re-parses arguments and drops shell quoting,
