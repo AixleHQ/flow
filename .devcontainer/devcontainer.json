@@ -17,9 +17,10 @@
 	// Mount persisted developer tool state
 	"mounts": [
 		"source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
-		"source=aixle-app-codex,target=/root/.codex,type=volume",
-		"source=aixle-app-vscode-extensions,target=/root/.vscode-server/extensions,type=volume",
-		"source=aixle-app-claude,target=/root/.claude,type=volume"
+		"source=aixle-app-home,target=/root,type=volume"
+		// "source=aixle-app-codex,target=/root/.codex,type=volume",
+		// "source=aixle-app-vscode-extensions,target=/root/.vscode-server/extensions,type=volume",
+		// "source=aixle-app-claude,target=/root/.claude,type=volume"
 	],
 
 	"containerEnv": {
