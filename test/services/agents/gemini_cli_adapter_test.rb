@@ -106,11 +106,10 @@ module Agents
       assert_equal [], @adapter.required_env_fields
     end
 
-    test "session_command uses structured headless output for non-interactive sessions" do
+    test "session_command uses the full TUI for both session modes" do
       assert_equal "gemini --yolo", @adapter.session_command(mode: "interactive")
-      assert_equal "gemini --yolo --output-format json -p",
-                   @adapter.session_command(mode: "non_interactive", prompt: "do it")
-      assert_equal "gemini --model gemini-2.5-pro --yolo --output-format json -p",
+      assert_equal "gemini --yolo", @adapter.session_command(mode: "non_interactive", prompt: "do it")
+      assert_equal "gemini --model gemini-2.5-pro --yolo",
                    @adapter.session_command(mode: "non_interactive", prompt: "do it", model: "gemini-2.5-pro")
     end
 
