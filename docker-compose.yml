@@ -35,6 +35,11 @@ x-web-environment: &web-environment
   GEM_PATH: /bundle_cache
   COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
   RAILS_LOG_TO_STDOUT: 'true'
+  # Compose does not automatically forward host/.env values into a service
+  # when an explicit environment mapping is present. Keep the hosted Codex
+  # OAuth client available to both web and worker deployments.
+  CODEX_OAUTH_CLIENT_ID: ${CODEX_OAUTH_CLIENT_ID:-}
+  CODEX_OAUTH_ISSUER: ${CODEX_OAUTH_ISSUER:-https://auth.openai.com}
   # Puma's thread budget and the value config/settings.yml sizes the Active
   # Record pool from — matches the Puma default so dev doesn't run 10 request
   # threads against a 5-connection pool. The worker overrides it.
