@@ -703,7 +703,7 @@ module Agents
       assert_equal :error, result[:status]
       assert_match(/designOauth/, result[:detail])
       block = cred.reload.config_data["designOauth"]
-      refute block["accessToken"].present?, "accessToken must be cleared after invalid_grant"
+      refute_predicate block["accessToken"], :present?, "accessToken must be cleared after invalid_grant"
       assert_equal "stale-dr", block["refreshToken"]
       assert_equal "design-client", block["clientId"]
     end
@@ -725,7 +725,7 @@ module Agents
 
       assert_equal :error, result[:status]
       block = cred.reload.config_data["claudeAiOauth"]
-      refute block["accessToken"].present?, "accessToken must be cleared after invalid_grant"
+      refute_predicate block["accessToken"], :present?, "accessToken must be cleared after invalid_grant"
       assert_equal "stale-r", block["refreshToken"]
     end
 
