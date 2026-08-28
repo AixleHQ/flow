@@ -474,7 +474,7 @@ module ContainerStrategies
         script.include?('gemini --yolo --output-format json -p "$AGENT_PROMPT"') &&
           script.include?('"$status" -eq 0') &&
           script.include?('"name":"finish_session"') &&
-          script.include?('X-Session-Key: $AIXLE_MCP_SESSION_KEY')
+          script.include?("X-Session-Key: $AIXLE_MCP_SESSION_KEY")
       end
 
       strategy.send(:launch_agent_in_tmux, container_mock)
