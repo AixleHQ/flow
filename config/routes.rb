@@ -47,6 +47,9 @@ Rails.application.routes.draw do
   get "auth/:provider/callback", to: "web/sessions#omniauth", as: :auth_callback
   get "auth/failure", to: "web/sessions#failure", as: :auth_failure
 
+  get "auth/codex/authorize", to: "web/codex_oauth#authorize", as: :codex_oauth_authorize
+  get "auth/codex/callback", to: "web/codex_oauth#callback", as: :codex_oauth_callback
+
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
       resources :assets, only: [] do

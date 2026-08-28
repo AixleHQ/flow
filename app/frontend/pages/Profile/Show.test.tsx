@@ -510,6 +510,15 @@ describe('Profile/Show', () => {
     );
   });
 
+  it('uses the hosted OAuth endpoint for Codex instead of an auth container', () => {
+    const credential = buildCredential({ id: 401, agentType: 'codex' });
+    const profile = buildProfile({ configuredAgents: ['codex'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    const link = screen.getByRole('link', { name: 'Re-authenticate' });
+    expect(link).toHaveAttribute('href', '/auth/codex/authorize');
+  });
+
   // == AWS Bedrock connection ==
   //
   // Claude Code hides Bedrock errors, so a broken connection otherwise presents as an

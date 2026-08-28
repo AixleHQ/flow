@@ -9,6 +9,12 @@ google_oauth:
   client_id: <%= ENV['GOOGLE_CLIENT_ID'] %>
   client_secret: <%= ENV['GOOGLE_CLIENT_SECRET'] %>
 
+# Public OAuth client registered for Aixle's hosted Codex callback. The stock
+# Codex CLI client only permits loopback redirects and cannot be used here.
+codex_oauth:
+  client_id: <%= ENV['CODEX_OAUTH_CLIENT_ID'] %>
+  issuer: <%= ENV['CODEX_OAUTH_ISSUER'] || 'https://auth.openai.com' %>
+
 rails:
   secret_key_base: <%= ENV['RAILS_SECRET_KEY_BASE'] %>
   port: <%= ENV['RAILS_PORT'] || 4000 %>

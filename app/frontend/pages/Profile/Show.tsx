@@ -964,13 +964,24 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                       {AGENT_STATUS_BADGE[credential.connectionStatus].label}
                     </StatusBadge>
                   )}
-                  <Button
-                    variant={isConfigured ? 'outline' : 'filled'}
-                    size="xs"
-                    onClick={() => handleAuth(agent.type)}
-                  >
-                    {isConfigured ? 'Re-authenticate' : 'Authenticate'}
-                  </Button>
+                  {agent.type === 'codex' ? (
+                    <Button
+                      component="a"
+                      href="/auth/codex/authorize"
+                      variant={isConfigured ? 'outline' : 'filled'}
+                      size="xs"
+                    >
+                      {isConfigured ? 'Re-authenticate' : 'Authenticate'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={isConfigured ? 'outline' : 'filled'}
+                      size="xs"
+                      onClick={() => handleAuth(agent.type)}
+                    >
+                      {isConfigured ? 'Re-authenticate' : 'Authenticate'}
+                    </Button>
+                  )}
                   {/* Design login layers a `designOauth` block onto an existing Claude login. It works
                       on either base (claude.ai OR the Console managed key), so offer it once any base
                       login exists. */}

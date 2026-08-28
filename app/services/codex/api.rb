@@ -111,10 +111,34 @@ module Codex
           OAUTH_TOKEN_URL,
           {
             grant_type: "refresh_token",
-            client_id: OAUTH_CLIENT_ID,
+            # Hosted Aixle credentials were issued to the deployment's public
+            # client; legacy CLI-captured credentials use Codex's stock client.
+            client_id: Settings.codex_oauth&.client_id.to_s.presence || OAUTH_CLIENT_ID,
             refresh_token: refresh_token
           },
           op: "refresh_tokens"
+        )
+
+        Tokens.new(
+          access_token: body["access_token"],
+          refresh_token: body["refresh_token"],
+          id_token: body["id_token"]
+        )
+      end
+
+      # Exchange the public Aixle callback's authorization code. PKCE makes this
+      # safe for the public client; no client secret exists or crosses the wire.
+      def exchange_authorization_code(code:, code_verifier:, redirect_uri:, client_id:)
+        body = form_post(
+          OAUTH_TOKEN_URL,
+          {
+            grant_type: "authorization_code",
+            code: code,
+            redirect_uri: redirect_uri,
+            client_id: client_id,
+            code_verifier: code_verifier
+          },
+          op: "authorization_code"
         )
 
         Tokens.new(

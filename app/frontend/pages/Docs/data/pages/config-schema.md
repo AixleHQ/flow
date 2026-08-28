@@ -113,6 +113,8 @@ an env var.
 | ---------------------- | ---------------------------------------------------- |
 | `GOOGLE_CLIENT_ID`     | Google OAuth client ID.                              |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret.                          |
+| `CODEX_OAUTH_CLIENT_ID` | Public OAuth client ID registered for hosted Codex authentication. Register `http://localhost:4000/auth/codex/callback` for development, `https://<staging-host>/auth/codex/callback` for staging, and `https://<production-host>/auth/codex/callback` for production. |
+| `CODEX_OAUTH_ISSUER` | Optional Codex OAuth issuer; defaults to `https://auth.openai.com`. |
 | `SUPER_ADMIN_EMAIL`    | First-boot bootstrap: this email becomes super admin.|
 | `ADMIN_PASSWORD`       | First-boot bootstrap password for the admin user.    |
 
