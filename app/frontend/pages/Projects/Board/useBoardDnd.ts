@@ -1,6 +1,5 @@
 import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import { router } from '@inertiajs/react';
 import { type Dispatch, type SetStateAction, useCallback, useRef, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
@@ -141,17 +140,20 @@ export function useBoardDnd<T extends DndTask, C extends DndColumn>({
         const newOrder = arrayMove(columns, oldIdx, newIdx);
         setColumns(newOrder);
 
-        // persist to server with error recovery
+        // Persist to the server. The optimistic `newOrder` above already matches what the
+        // server will store (it renumbers columns in the exact order sent), so success needs
+        // no follow-up reload — a `router.reload` here is an async Inertia partial reload with
+        // no ordering guarantee against any other in-flight reload (e.g. one from creating a
+        // column moments earlier), so it can land second and clobber this persisted order with
+        // stale data (#580). Only revert on failure.
         apiFetch(reorderApiV1ProjectColumnsPath(projectId), {
           method: 'PATCH',
           headers: jsonHeaders,
           body: JSON.stringify({ columnIds: newOrder.map((c) => c.id) }),
-        })
-          .then(() => router.reload({ only: ['columns'] }))
-          .catch(() => {
-            setColumns(columns); // revert on error
-            // Error toast would be shown by global error handler
-          });
+        }).catch(() => {
+          setColumns(columns); // revert on error
+          // Error toast would be shown by global error handler
+        });
         return;
       }
 

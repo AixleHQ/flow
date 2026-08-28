@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
+import { router } from '@inertiajs/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,20 +34,32 @@ const dropOnCard = (task: BoardTask, overTask: BoardTask): DragEndEvent =>
     over: { id: `task-${overTask.id}`, data: { current: { type: 'task', task: overTask } } },
   }) as unknown as DragEndEvent;
 
+const pickUpColumn = (column: BoardColumn): DragStartEvent =>
+  ({ active: { id: `col-${column.id}`, data: { current: { type: 'column' } } } }) as unknown as DragStartEvent;
+
+const dropColumnOn = (dragged: BoardColumn, over: BoardColumn): DragEndEvent =>
+  ({
+    active: { id: `col-${dragged.id}`, data: { current: { type: 'column' } } },
+    over: { id: `col-${over.id}`, data: { current: { type: 'column' } } },
+  }) as unknown as DragEndEvent;
+
 // Mirrors how BoardPage wires the hook: the board owns the task/column state, the hook reads it and
 // writes back through the setters. Keeping real state here is what makes the "created after mount"
 // case meaningful — the hook must see the appended task, not the list it was first rendered with.
-const useBoardHarness = (initialTasks: BoardTask[]) => {
+const useBoardHarness = (initialTasks: BoardTask[], initialColumns: BoardColumn[] = [BACKLOG, IN_PROGRESS]) => {
   const [tasks, setTasks] = useState<BoardTask[]>(initialTasks);
-  const [columns, setColumns] = useState<BoardColumn[]>([BACKLOG, IN_PROGRESS]);
+  const [columns, setColumns] = useState<BoardColumn[]>(initialColumns);
   const dnd = useBoardDnd({ projectId: PROJECT_ID, enabled: true, tasks, setTasks, columns, setColumns });
-  return { tasks, setTasks, ...dnd };
+  return { tasks, setTasks, columns, setColumns, ...dnd };
 };
 
 type FetchCall = Parameters<typeof fetch>;
 
 const moveCalls = (calls: FetchCall[], taskId: number) =>
   calls.filter(([url]) => url === `/api/v1/projects/${PROJECT_ID}/tasks/${taskId}/move`);
+
+const reorderCalls = (calls: FetchCall[]) =>
+  calls.filter(([url]) => url === `/api/v1/projects/${PROJECT_ID}/columns/reorder`);
 
 const moveBody = (call: FetchCall) => JSON.parse((call[1] as RequestInit).body as string);
 
@@ -100,5 +113,46 @@ describe('useBoardDnd', () => {
     });
 
     await waitFor(() => expect(result.current.tasks.find((t) => t.id === task.id)?.boardColumnId).toBe(100));
+  });
+
+  // Regression for #580: dragging a column used to persist via `setColumns` *and* trigger a
+  // follow-up `router.reload({ only: ['columns'] })`. That reload is an async Inertia partial
+  // reload with no ordering guarantee against any other in-flight one (e.g. the reload the
+  // "add column" flow fires right after creating a column) — whichever response lands last wins,
+  // so a reload fired here could be clobbered by a slightly earlier, now-stale one and the drag
+  // would appear to revert. The fix drops the reload and trusts the optimistic order, which
+  // already matches what the server persists.
+  it('persists a column reorder without triggering a page reload', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    // A column "just created" in this session — the exact scenario the bug report calls out.
+    const created = buildBoardColumn({ id: 300, name: 'Done', position: 2 });
+    const { result } = renderHook(() => useBoardHarness([], [BACKLOG, IN_PROGRESS, created]));
+
+    act(() => result.current.handleDragStart(pickUpColumn(created)));
+    await act(async () => {
+      await result.current.handleDragEnd(dropColumnOn(created, BACKLOG));
+    });
+
+    await waitFor(() => expect(reorderCalls(fetchSpy.mock.calls)).toHaveLength(1));
+    expect(JSON.parse((reorderCalls(fetchSpy.mock.calls)[0][1] as RequestInit).body as string)).toEqual({
+      columnIds: [300, 100, 200],
+    });
+    expect(result.current.columns.map((c) => c.id)).toEqual([300, 100, 200]);
+    expect(router.reload).not.toHaveBeenCalled();
+  });
+
+  it('restores the pre-drag column order when the reorder request fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+    const created = buildBoardColumn({ id: 300, name: 'Done', position: 2 });
+    const { result } = renderHook(() => useBoardHarness([], [BACKLOG, IN_PROGRESS, created]));
+
+    act(() => result.current.handleDragStart(pickUpColumn(created)));
+    await act(async () => {
+      await result.current.handleDragEnd(dropColumnOn(created, BACKLOG));
+    });
+
+    await waitFor(() => expect(result.current.columns.map((c) => c.id)).toEqual([100, 200, 300]));
   });
 });
