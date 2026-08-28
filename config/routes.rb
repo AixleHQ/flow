@@ -43,12 +43,13 @@ Rails.application.routes.draw do
   get "/share/:token", to: "web/public_assets#show", as: :public_asset
   get "/share/:token/raw", to: "web/public_assets#raw", as: :public_asset_raw
 
+  # Codex must precede OmniAuth's dynamic :provider callback route.
+  get "auth/codex/authorize", to: "web/codex_oauth#authorize", as: :codex_oauth_authorize
+  get "auth/codex/callback", to: "web/codex_oauth#callback", as: :codex_oauth_callback
+
   # OmniAuth callbacks (path_prefix = /auth)
   get "auth/:provider/callback", to: "web/sessions#omniauth", as: :auth_callback
   get "auth/failure", to: "web/sessions#failure", as: :auth_failure
-
-  get "auth/codex/authorize", to: "web/codex_oauth#authorize", as: :codex_oauth_authorize
-  get "auth/codex/callback", to: "web/codex_oauth#callback", as: :codex_oauth_callback
 
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
