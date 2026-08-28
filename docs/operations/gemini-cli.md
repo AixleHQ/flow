@@ -24,9 +24,10 @@ credentials.
 - Skills: `/home/gemini/.gemini/skills`.
 - Folder trust: `/home/gemini/.gemini/trustedFolders.json`.
 - MCP: `mcpServers` merged into the settings file; stdio and HTTP transports are supported.
-- Invocation: `gemini --yolo`, with an optional `--model` argument, in both
-  interactive and automatic sessions. Automatic sessions use the full TUI so the
-  agent can call the injected `finish_session` MCP tool when its work is complete.
+- Invocation: interactive sessions use `gemini --yolo`, with an optional `--model`.
+  Automatic sessions add `--output-format json -p`; after a successful one-shot
+  process exit, the launcher calls the injected `finish_session` MCP tool. This
+  preserves structured output while avoiding an idle TUI and unbounded token use.
 - Hooks and extensions: provided by the upstream CLI; Aixle does not rewrite their config.
 - Telemetry: local OTLP metrics/logs are correlated with `terminal_session_token`.
 

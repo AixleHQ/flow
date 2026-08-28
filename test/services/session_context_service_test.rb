@@ -663,10 +663,10 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "gemini --yolo", adapter.session_command(mode: "interactive")
   end
 
-  test "Gemini adapter session_command returns full TUI command for non_interactive mode" do
+  test "Gemini adapter session_command returns headless command for non_interactive mode" do
     adapter = Agents::GeminiCliAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
-    assert_equal "gemini --yolo", result
+    assert_equal "gemini --yolo --output-format json -p", result
   end
 
   test "Grok adapter session_command returns grok --yolo for both modes" do

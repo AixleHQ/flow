@@ -455,6 +455,31 @@ module ContainerStrategies
       strategy.send(:launch_agent_in_tmux, container_mock)
     end
 
+    test "launch_agent_in_tmux finishes a successful headless gemini session" do
+      @session.update!(agent_type: "gemini_cli", mode: "non_interactive", initial_prompt: "Run tests")
+      strategy = build_strategy(agent_type: "gemini_cli")
+      container_mock = mock("container")
+
+      mock_adapter = mock("adapter")
+      mock_adapter.expects(:session_command).with(mode: "non_interactive", prompt: "Run tests", model: nil)
+                  .returns("gemini --yolo --output-format json -p")
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.expects(:for).with("gemini_cli").returns(mock_service)
+
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.expects(:exec).with do |_container, command|
+        script = command[2]
+        script.include?('gemini --yolo --output-format json -p "$AGENT_PROMPT"') &&
+          script.include?('"$status" -eq 0') &&
+          script.include?('"name":"finish_session"') &&
+          script.include?('X-Session-Key: $AIXLE_MCP_SESSION_KEY')
+      end
+
+      strategy.send(:launch_agent_in_tmux, container_mock)
+    end
+
     # == collect_terminal_output (raw pipe-pane log → single SessionLog) ==
 
     test "collect_terminal_output stores the raw terminal log as a text/plain SessionLog" do

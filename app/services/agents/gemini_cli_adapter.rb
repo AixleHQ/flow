@@ -145,12 +145,12 @@ module Agents
       api_key_data.dig("token", "accessToken")
     end
 
-    # Both modes use the full Gemini TUI. Automatic sessions share the same lifecycle
-    # contract as the other adapters: the agent remains available to call the injected
-    # finish_session MCP tool after completing its work. AgentSessionStrategy appends
-    # the initial prompt from AGENT_PROMPT for non-interactive sessions.
+    # Automatic sessions use Gemini's one-shot headless mode. The surrounding session
+    # strategy finishes the Aixle session after a successful process exit; leaving the
+    # full TUI at its composer keeps the session alive and continues accruing tokens.
     def session_command(mode:, prompt: nil, model: nil)
-      model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
+      command = model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
+      mode == "non_interactive" ? "#{command} --output-format json -p" : command
     end
 
     # Context file: ~/.gemini/GEMINI.md (auto-read by Gemini CLI at startup)
