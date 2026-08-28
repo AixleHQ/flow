@@ -329,8 +329,10 @@ describe('Profile/Show', () => {
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
     expect(screen.getByRole('button', { name: 'Re-authenticate' })).toBeInTheDocument();
-    // The four unconfigured agents each render an Authenticate button.
-    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(4);
+    // Codex uses a full-page OAuth link; the other three unconfigured agents keep
+    // the terminal-session button.
+    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(3);
+    expect(screen.getByRole('link', { name: 'Authenticate' })).toHaveAttribute('href', '/auth/codex/authorize');
   });
 
   it('shows the session visibility switches in the state the profile reports', () => {
