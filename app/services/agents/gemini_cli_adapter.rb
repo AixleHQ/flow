@@ -145,11 +145,14 @@ module Agents
       api_key_data.dig("token", "accessToken")
     end
 
-    # Session command: gemini --yolo (interactive), gemini -p (non-interactive)
-    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
+    # Session command: gemini --yolo (interactive), structured headless output for
+    # non-interactive sessions. JSON makes both successful responses and provider
+    # errors observable in the captured terminal log; Gemini's text renderer can
+    # exit without leaving a durable result when it is launched inside our tmux PTY.
+    # Prompt value is appended by AgentSessionStrategy from AGENT_PROMPT.
     def session_command(mode:, prompt: nil, model: nil)
       command = model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
-      mode == "non_interactive" ? "#{command} -p" : command
+      mode == "non_interactive" ? "#{command} --output-format json -p" : command
     end
 
     # Context file: ~/.gemini/GEMINI.md (auto-read by Gemini CLI at startup)
