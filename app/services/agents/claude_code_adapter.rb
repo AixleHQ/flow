@@ -232,6 +232,7 @@ module Agents
       current = credential.config_data
       now_ms  = (Time.current.to_f * 1000).to_i
       refreshed_blocks = {}
+      invalidated_blocks = {}
       error = nil
 
       OAUTH_BLOCKS.each do |block_name|
@@ -245,22 +246,38 @@ module Agents
         client_id = block_name == "designOauth" ? block["clientId"] : base_oauth_client_id
         new_block = request_oauth_refresh(client_id: client_id, refresh_token: block["refreshToken"],
                                           previous: block, now_ms: now_ms)
-        if new_block
+        if new_block == :invalid_grant
+          # Server has permanently rejected the refresh token. Clear accessToken so
+          # config_files does not write a stale token into the next container — which
+          # would cause DesignSync (or base inference) to fail with an opaque 401.
+          # refreshToken is preserved so the block stays in the DB and the UI shows
+          # "Reconnect Design" rather than losing the Design connection entirely.
+          invalidated_blocks[block_name] = block.except("accessToken")
+          error ||= "#{block_name} invalid_grant — reconnection required"
+        elsif new_block
           refreshed_blocks[block_name] = new_block
         else
           error ||= "#{block_name} refresh failed"
         end
       end
 
-      return { status: :error,      detail: error } if refreshed_blocks.empty? && error
-      return { status: :not_needed, detail: nil }   if refreshed_blocks.empty?
+      changes = refreshed_blocks.merge(invalidated_blocks)
 
-      credential.with_lock do
-        fresh    = credential.config_data
-        incoming = fresh.merge(refreshed_blocks)                # only the blocks we refreshed change
-        merged   = merge_refreshed_credentials(fresh, incoming) # existing per-block freshest guard
-        AgentCredential.from_artifacts(credential.user_id, credential.company_id, "claude_code", merged) if merged != fresh
+      if changes.any?
+        credential.with_lock do
+          fresh    = credential.config_data
+          incoming = fresh.merge(changes)
+          merged   = merge_refreshed_credentials(fresh, incoming)
+          # Invalidated blocks must bypass the freshest-token guard: the cleared block
+          # has no expiresAt and would lose to the stored stale one.
+          invalidated_blocks.each_key { |k| merged[k] = incoming[k] }
+          AgentCredential.from_artifacts(credential.user_id, credential.company_id, "claude_code", merged) if merged != fresh
+        end
       end
+
+      return { status: :error,      detail: error } if changes.empty? && error
+      return { status: :not_needed, detail: nil }   if changes.empty?
+      return { status: :error,      detail: error } if invalidated_blocks.any? && refreshed_blocks.empty?
 
       { status: :refreshed, detail: error } # partial failure (one block ok, one failed) still counts as refreshed
     end
