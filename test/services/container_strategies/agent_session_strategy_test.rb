@@ -446,10 +446,13 @@ module ContainerStrategies
       runtime_mock = mock("runtime")
       strategy.stubs(:runtime).returns(runtime_mock)
       runtime_mock.expects(:exec).with do |container, command|
+        send_keys = command[2].match(/tmux send-keys -t agent (.+?) Enter;/)&.[](0)
+        delivered_command = Shellwords.split(send_keys).fetch(4)
+
         container == container_mock &&
           command[0] == "sh" &&
           command[1] == "-c" &&
-          command[2].include?('codex --yolo "$AGENT_PROMPT"')
+          delivered_command == 'codex --yolo "$AGENT_PROMPT"'
       end
 
       strategy.send(:launch_agent_in_tmux, container_mock)
