@@ -1074,6 +1074,22 @@ describe('Projects/Board/BoardPage', () => {
     fetchSpy.mockRestore();
   });
 
+  // Regression for #580: the collapsed column's own drag handle used to be dropped entirely —
+  // `useSortable`'s `listeners` were destructured but never spread anywhere in the collapsed
+  // render, so a collapsed column could be expanded/collapsed by click but never reordered by
+  // drag. The fix wires them onto the vertical column-name label, mirroring the expanded
+  // header's title, which is where dnd-kit's pointer sensor needs an onPointerDown handler.
+  it('wires the collapsed column name as a drag handle so the column itself can still be reordered', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    const toggles = screen.getAllByRole('button', { name: 'Collapse column' });
+    await userEvent.click(toggles[0]);
+    await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
+
+    const label = screen.getByText('Backlog');
+    expect(label).toHaveStyle({ cursor: 'grab', touchAction: 'none' });
+  });
+
   it('keeps a collapsed non-empty column’s tickets draggable so they can be moved out', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 

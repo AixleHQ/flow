@@ -132,6 +132,22 @@ class TemporalService
       { ok: false, error: e.message }
     end
 
+    # True if the workflow execution is still open (running), false if it has
+    # closed (completed/failed/cancelled/terminated) or doesn't exist. Used to
+    # avoid signaling a closed execution, which fails silently otherwise.
+    def workflow_open?(workflow_id)
+      return false unless enabled?
+
+      status = with_test_environment_handling do |cl|
+        cl.workflow_handle(workflow_id).describe.status
+      end
+
+      status == Temporalio::Client::WorkflowExecutionStatus::RUNNING
+    rescue Temporalio::Error => e
+      Rails.logger.warn("[Temporal] Failed to describe workflow #{workflow_id}: #{e.message}")
+      false
+    end
+
     # Cancel running workflow
     def cancel_workflow(workflow_id)
       return { ok: false, error: "Temporal is disabled" } unless enabled?
