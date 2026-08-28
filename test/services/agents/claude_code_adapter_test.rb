@@ -683,6 +683,34 @@ module Agents
       assert_equal "d-a", reloaded.dig("designOauth", "accessToken") # failed block left intact
     end
 
+    test "request_oauth_refresh returns :invalid_grant on 400 invalid_grant response" do
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 400,
+                   body: { error: "invalid_grant", error_description: "Refresh token expired" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      result = @adapter.send(:request_oauth_refresh,
+                             client_id: "some-client",
+                             refresh_token: "expired-rt",
+                             previous: { "scopes" => [] },
+                             now_ms: 0)
+
+      assert_equal :invalid_grant, result
+    end
+
+    test "request_oauth_refresh returns nil on non-2xx that is not invalid_grant" do
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 500, body: "internal error")
+
+      result = @adapter.send(:request_oauth_refresh,
+                             client_id: "some-client",
+                             refresh_token: "rt",
+                             previous: { "scopes" => [] },
+                             now_ms: 0)
+
+      assert_nil result
+    end
+
     # == Amazon Bedrock (bring-your-own cloud account) ==
 
     test "config_files writes no aws config and no bedrock env without an awsBedrock block" do

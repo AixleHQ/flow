@@ -876,7 +876,12 @@ module Agents
       )
       response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |h| h.request(req) }
       unless response.is_a?(Net::HTTPSuccess)
-        Rails.logger.warn("[ClaudeCodeAdapter] Token refresh failed: #{response.code} #{response.body.to_s.truncate(200)}")
+        body = response.body.to_s
+        Rails.logger.warn("[ClaudeCodeAdapter] Token refresh failed: #{response.code} #{body.truncate(200)}")
+        if response.code == "400"
+          parsed = JSON.parse(body) rescue {}
+          return :invalid_grant if parsed["error"] == "invalid_grant"
+        end
         return nil
       end
       data = JSON.parse(response.body)
