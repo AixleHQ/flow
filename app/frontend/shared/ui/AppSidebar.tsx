@@ -508,27 +508,29 @@ function SidebarWorkspaceSwitcher({
             />
           </div>
 
-          <div className={classes.swSection}>
+          <div className={classes.swProjectsSection}>
             <span className={classes.dpLabel}>PROJECTS</span>
-            {filteredProjects.map((project) => {
-              const isActive = String(project.id) === currentProjectId;
-              return (
-                <UnstyledButton
-                  key={project.id}
-                  component={Link}
-                  href={companyProjectPath(String(project.id))}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`${classes.dpItem} ${isActive ? classes.dpItemActive : ''}`}
-                  onClick={handleProjectClick}
-                >
-                  <div className={classes.dpIco}>
-                    <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
-                  </div>
-                  <span className={classes.dpName}>{project.name}</span>
-                  {isActive && <IconCheck size={12} className={classes.dpCheck} />}
-                </UnstyledButton>
-              );
-            })}
+            <div className={classes.swProjectsList}>
+              {filteredProjects.map((project) => {
+                const isActive = String(project.id) === currentProjectId;
+                return (
+                  <UnstyledButton
+                    key={project.id}
+                    component={Link}
+                    href={companyProjectPath(String(project.id))}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`${classes.dpItem} ${isActive ? classes.dpItemActive : ''}`}
+                    onClick={handleProjectClick}
+                  >
+                    <div className={classes.dpIco}>
+                      <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
+                    </div>
+                    <span className={classes.dpName}>{project.name}</span>
+                    {isActive && <IconCheck size={12} className={classes.dpCheck} />}
+                  </UnstyledButton>
+                );
+              })}
+            </div>
           </div>
 
           <div className={classes.swSection}>
