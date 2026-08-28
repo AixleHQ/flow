@@ -69,13 +69,23 @@ class WorkflowService
       send_signal(step_run.workflow_run, "step_completed", step_run.id)
     end
 
+    # Retrying a step while its run's Temporal workflow execution is still open
+    # (e.g. the "Retry" action on a waiting_input step) signals the live
+    # execution. Once the execution has closed (the run itself is failed —
+    # the common case, since the "Retry session" action only appears then),
+    # signals go nowhere, so — same as the board card's "Retry" action
+    # (TaskService.trigger_workflow) — a brand-new WorkflowRun is started
+    # instead of trying to resume the closed one, reusing the original run's
+    # parameters. The old failed run is left as-is; the new run runs every
+    # step fresh.
     def retry_step(step_run:)
-      new_step_run = step_run.workflow_run.step_runs.create!(
-        step: step_run.step,
-        state: :pending
-      )
-      send_signal(step_run.workflow_run, "step_retried",
-                  { "old_step_run_id" => step_run.id, "new_step_run_id" => new_step_run.id })
+      run = step_run.workflow_run
+
+      if TemporalService.workflow_open?(workflow_execution_id(run))
+        retry_step_in_place(run, step_run)
+      else
+        retry_closed_run(run)
+      end
     end
 
     def skip_step(step_run:, reason: nil)
@@ -92,6 +102,42 @@ class WorkflowService
 
     private
 
+    def retry_step_in_place(run, step_run)
+      new_step_run = run.step_runs.create!(step: step_run.step, state: :pending)
+      result = send_signal(run, "step_retried",
+                  { "old_step_run_id" => step_run.id, "new_step_run_id" => new_step_run.id })
+
+      unless result[:ok]
+        new_step_run.destroy
+        return { ok: false, error: "Failed to retry: #{result[:error]}" }
+      end
+
+      { ok: true }
+    end
+
+    def retry_closed_run(run)
+      return { ok: false, error: "This run can't be retried right now." } unless run.failed?
+
+      new_run = start(
+        workflow: run.workflow,
+        project: run.project,
+        user: run.user,
+        task: run.board_task,
+        mode: run.mode,
+        overrides: run.step_overrides,
+        input_asset_ids: run.input_asset_ids,
+        repository_ids: run.repository_ids,
+        agent_runtime: run.agent_runtime,
+        shared_context: run.shared_context
+      )
+
+      unless new_run.persisted?
+        return { ok: false, error: new_run.errors.full_messages.to_sentence.presence || "Could not start a new run." }
+      end
+
+      { ok: true, run: new_run }
+    end
+
     def workflow_execution_id(run)
       "workflow-execution-#{run.id}"
     end
@@ -100,6 +146,7 @@ class WorkflowService
       TemporalService.send_signal(workflow_execution_id(run), signal_name, payload)
     rescue StandardError => e
       Rails.logger.error("[WorkflowService] Failed to send signal #{signal_name} for run ##{run.id}: #{e.message}")
+      { ok: false, error: e.message }
     end
 
     def validate_mode!(run, workflow, overrides)

@@ -90,10 +90,24 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
   end
 
-  test "uses default modules (bmm) when bmad_modules is absent" do
+  # Asserted as the exact list, not a substring: every module past `bmm` is cloned
+  # from GitHub and spends a shared per-IP api.github.com budget, so which ones
+  # install by default is a deliberate choice rather than an incidental default.
+  test "installs only the default modules when bmad_modules is absent" do
     session = build_bmad_session(agent_type: "cursor_cli")
 
-    expect_exec_matching("--modules bmm")
+    expect_exec_matching("--modules bmm,wds ")
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+  end
+
+  test "does not install the bmb or cis authoring modules by default" do
+    session = build_bmad_session(agent_type: "cursor_cli")
+
+    @runtime.expects(:exec).with do |_cid, cmd|
+      modules = cmd[2].to_s[/--modules (\S+)/, 1].to_s.split(",")
+      (modules & %w[bmb cis]).empty?
+    end.returns([ [], [], 0 ])
 
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
   end
@@ -507,6 +521,93 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
 
   test "INSTALL_TIMEOUT is 300 seconds" do
     assert_equal 300, BmadMethodInjector::INSTALL_TIMEOUT
+  end
+
+  # ====================================================================
+  # GitHub authentication for external-module tag resolution
+  # ====================================================================
+
+  test "authenticates the install with the public read token when one is configured" do
+    Settings.github.stubs(:read_token).returns("ghp_public_read")
+    session = build_bmad_session(agent_type: "cursor_cli")
+
+    expect_exec_matching("GITHUB_TOKEN='ghp_public_read' npx -y bmad-method@")
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+  end
+
+  test "runs the install unauthenticated when no public read token is configured" do
+    Settings.github.stubs(:read_token).returns(nil)
+    session = build_bmad_session(agent_type: "cursor_cli")
+
+    expect_exec_not_matching("GITHUB_TOKEN")
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+  end
+
+  test "treats a blank public read token as unauthenticated" do
+    Settings.github.stubs(:read_token).returns("   ")
+    session = build_bmad_session(agent_type: "cursor_cli")
+
+    expect_exec_not_matching("GITHUB_TOKEN")
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+  end
+
+  # A token is an opaque vendor string; nothing may assume it is shell-safe.
+  test "shell-quotes a token containing a single quote" do
+    Settings.github.stubs(:read_token).returns("gh'p")
+    session = build_bmad_session(agent_type: "cursor_cli")
+
+    expect_exec_matching(%q(GITHUB_TOKEN='gh'\''p' npx))
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+  end
+
+  # ====================================================================
+  # Failure reason carries the installer's own explanation
+  # ====================================================================
+
+  test "records the installer's stdout explanation, not just npm's stderr noise" do
+    session = build_bmad_session(agent_type: "cursor_cli")
+
+    @runtime.stubs(:exec).returns([
+      [ "Could not resolve stable tag for 'cis' (GitHub API 403: API rate limit exceeded)." ],
+      [ "npm warn deprecated glob@11.1.0: Old versions of glob are not supported" ],
+      1
+    ])
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+
+    session.reload
+    error = session.context_metadata["bmad_install_error"]
+    assert_includes error, "rate limit exceeded"
+    assert_includes error, "npm warn deprecated"
+  end
+
+  test "reports no output captured when the install fails silently" do
+    session = build_bmad_session(agent_type: "cursor_cli")
+
+    @runtime.stubs(:exec).returns([ [], [], 1 ])
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+
+    session.reload
+    assert_includes session.context_metadata["bmad_install_error"], "no output captured"
+  end
+
+  test "redacts the token from a failure reason that echoes it back" do
+    Settings.github.stubs(:read_token).returns("ghp_secret_value")
+    session = build_bmad_session(agent_type: "cursor_cli")
+
+    @runtime.stubs(:exec).returns([ [ "bad credentials for ghp_secret_value" ], [], 1 ])
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+
+    session.reload
+    error = session.context_metadata["bmad_install_error"]
+    refute_includes error, "ghp_secret_value"
+    assert_includes error, "[REDACTED]"
   end
 
   private

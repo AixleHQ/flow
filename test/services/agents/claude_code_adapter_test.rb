@@ -683,6 +683,96 @@ module Agents
       assert_equal "d-a", reloaded.dig("designOauth", "accessToken") # failed block left intact
     end
 
+    test "refresh! clears designOauth accessToken on invalid_grant and returns error" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "designOauth" => {
+          "accessToken" => "stale-d", "refreshToken" => "stale-dr",
+          "expiresAt" => soon, "clientId" => "design-client",
+          "scopes" => %w[user:design:read user:design:write]
+        }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", client_id: "design-client", refresh_token: "stale-dr" })
+        .to_return(status: 400,
+                   body: { error: "invalid_grant", error_description: "Refresh token expired" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :error, result[:status]
+      assert_match(/designOauth/, result[:detail])
+      block = cred.reload.config_data["designOauth"]
+      refute_predicate block["accessToken"], :present?, "accessToken must be cleared after invalid_grant"
+      assert_equal "stale-dr", block["refreshToken"]
+      assert_equal "design-client", block["clientId"]
+    end
+
+    test "refresh! clears claudeAiOauth accessToken on invalid_grant" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => {
+          "accessToken" => "stale-a", "refreshToken" => "stale-r",
+          "expiresAt" => soon, "scopes" => %w[user:inference]
+        }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 400,
+                   body: { error: "invalid_grant", error_description: "Refresh token expired" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :error, result[:status]
+      block = cred.reload.config_data["claudeAiOauth"]
+      refute_predicate block["accessToken"], :present?, "accessToken must be cleared after invalid_grant"
+      assert_equal "stale-r", block["refreshToken"]
+    end
+
+    test "refresh! does not clear accessToken on transient 5xx error" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "designOauth" => {
+          "accessToken" => "live-d", "refreshToken" => "live-dr",
+          "expiresAt" => soon, "clientId" => "design-client"
+        }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL).to_return(status: 500, body: "boom")
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :error, result[:status]
+      assert_equal "live-d", cred.reload.config_data.dig("designOauth", "accessToken")
+    end
+
+    test "request_oauth_refresh returns :invalid_grant on 400 invalid_grant response" do
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 400,
+                   body: { error: "invalid_grant", error_description: "Refresh token expired" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      result = @adapter.send(:request_oauth_refresh,
+                             client_id: "some-client",
+                             refresh_token: "expired-rt",
+                             previous: { "scopes" => [] },
+                             now_ms: 0)
+
+      assert_equal :invalid_grant, result
+    end
+
+    test "request_oauth_refresh returns nil on non-2xx that is not invalid_grant" do
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 500, body: "internal error")
+
+      result = @adapter.send(:request_oauth_refresh,
+                             client_id: "some-client",
+                             refresh_token: "rt",
+                             previous: { "scopes" => [] },
+                             now_ms: 0)
+
+      assert_nil result
+    end
+
     # == Amazon Bedrock (bring-your-own cloud account) ==
 
     test "config_files writes no aws config and no bedrock env without an awsBedrock block" do

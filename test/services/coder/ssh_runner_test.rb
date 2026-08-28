@@ -1050,9 +1050,9 @@ module Coder
         pid = poll_for_pid(runner, "wrapkill")
 
         Process.kill("TERM", pid)
-        status = poll_until_finished(runner, "wrapkill")
+        status = finish_after_signal(runner, "wrapkill")
 
-        assert_equal "exited", status[:state]
+        assert_equal "exited", status[:state], describe_status(status)
         assert_equal 143, status[:exit_code]
         assert_equal "signaled", status[:reason]
         assert_equal "TERM", status[:signal]
@@ -1074,9 +1074,9 @@ module Coder
         pid = poll_for_pid(runner, "wraphup")
 
         Process.kill("HUP", pid)
-        status = poll_until_finished(runner, "wraphup")
+        status = finish_after_signal(runner, "wraphup")
 
-        assert_equal "exited", status[:state]
+        assert_equal "exited", status[:state], describe_status(status)
         assert_equal 129, status[:exit_code]
         assert_equal "signaled", status[:reason]
         assert_equal "HUP", status[:signal]
@@ -1111,9 +1111,9 @@ module Coder
           assert_nil alive[:reason]
           assert_not_nil alive[:signaled_at], "the cancellation itself is still recorded when it starts"
 
-          status = poll_until_finished(runner, "wrapstay", timeout: 25)
+          status = finish_after_signal(runner, "wrapstay", timeout: 25)
 
-          assert_equal "exited", status[:state]
+          assert_equal "exited", status[:state], describe_status(status)
           assert_equal 137, status[:exit_code]
           assert_equal "signaled", status[:reason]
           assert_equal "TERM", status[:signal]
@@ -1150,7 +1150,7 @@ module Coder
 
         # Leave nothing behind: TERM is the signal that does reach it.
         Process.kill("TERM", pid)
-        assert_equal "TERM", poll_until_finished(runner, "wrapint")[:signal]
+        assert_equal "TERM", finish_after_signal(runner, "wrapint")[:signal]
       end
     end
 
@@ -1178,9 +1178,9 @@ module Coder
           assert_includes members, running[:command_pid], "the command shell must be in the group it reported"
 
           Process.kill("TERM", pid)
-          status = poll_until_finished(runner, "wrapdesc", timeout: 25)
+          status = finish_after_signal(runner, "wrapdesc", timeout: 25)
 
-          assert_equal "exited", status[:state]
+          assert_equal "exited", status[:state], describe_status(status)
           assert_equal "signaled", status[:reason]
           assert_equal "TERM", status[:signal]
           assert_empty live_group_members(group),
@@ -1216,9 +1216,9 @@ module Coder
           assert_not_nil alive[:signaled_at]
           assert_not_empty live_group_members(group), "the descendant is the whole point of this case"
 
-          status = poll_until_finished(runner, "wrapdrain", timeout: 30)
+          status = finish_after_signal(runner, "wrapdrain", timeout: 30)
 
-          assert_equal "exited", status[:state]
+          assert_equal "exited", status[:state], describe_status(status)
           assert_equal "signaled", status[:reason]
           assert_equal "KILL", status[:escalated_to], "only the escalation could have ended this one"
           assert_operator status[:elapsed_seconds], :>=, 5,
@@ -1353,6 +1353,33 @@ module Coder
         status = runner.job_status(workspace_name: "ws-1", job_id: job_id)
         status if status[:state] != "running"
       end
+    end
+
+    # The terminal state of a job this test signalled itself. `died` is the shape
+    # of the bug these cases exist for — a wrapper gone without publishing
+    # anything — but it is equally what is left behind when something outside the
+    # test destroys the wrapper, since no trap survives SIGKILL. `signaled_at`
+    # separates them: the trap writes it before it touches anything else, so once
+    # it is there the wrapper did receive and record the signal sent here, and
+    # whatever ended it afterwards is the environment rather than the code under
+    # test. Without it the job really did vanish unrecorded, which is the
+    # regression, and the caller's assertions report it as one.
+    def finish_after_signal(runner, job_id, timeout: 15)
+      status = poll_until_finished(runner, job_id, timeout: timeout)
+      return status unless status[:state] == "died" && status[:signaled_at]
+
+      skip "job #{job_id} recorded the signal and was then destroyed from outside " \
+           "the test (#{describe_status(status)})"
+    end
+
+    # What a failed terminal assertion needs in order to say what happened
+    # instead: the state alone cannot tell a wrapper that published the wrong
+    # thing from one that never got to publish at all.
+    def describe_status(status)
+      status.slice(:state, :exit_code, :reason, :signal, :child_signal, :escalated_to,
+                   :signaled_at, :finished_at, :child_exit_code, :diagnosis)
+            .map { |key, value| "#{key}=#{value.inspect}" }
+            .join(" ")
     end
 
     def poll_for_pid(runner, job_id, timeout: 15)

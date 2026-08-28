@@ -1123,6 +1123,7 @@ function BoardColumn({
           padding: '12px 0',
           gap: 12,
           ...overStyle,
+          ...colStyle,
         }}
       >
         {/* Expand chevrons button */}
@@ -1141,9 +1142,12 @@ function BoardColumn({
           <IconChevronsRight size={14} />
         </Box>
 
-        {/* Column name — vertical-rl, no rotation, reads naturally */}
+        {/* Column name — vertical-rl, no rotation, reads naturally. Carries the drag
+            listeners (mirroring the expanded header's title) so a collapsed column can
+            still be reordered instead of only being expandable/collapsible. */}
         <Tooltip label={column.name} position="right">
           <div
+            {...colListeners}
             style={{
               writingMode: 'vertical-rl',
               color: 'var(--mantine-color-text)',
@@ -1151,7 +1155,8 @@ function BoardColumn({
               fontSize: 13,
               letterSpacing: '-0.01em',
               userSelect: 'none',
-              cursor: 'pointer',
+              cursor: 'grab',
+              touchAction: 'none',
               overflow: 'hidden',
             }}
           >
@@ -4773,7 +4778,13 @@ const BoardPage = () => {
       body: JSON.stringify({ boardColumn: { name: 'New column' } }),
     });
     if (res.ok) {
-      router.reload({ only: ['columns'] });
+      // Append the created column straight from the response instead of reloading the
+      // `columns` prop: a reload fired here is an async Inertia partial reload with no
+      // ordering guarantee against another one, so it can race a column-reorder reload
+      // fired moments later (e.g. the user immediately drags the new column) and land
+      // second, clobbering the persisted reorder with this stale, pre-drag order (#580).
+      const created = (await res.json()) as Column;
+      setLocalColumns((prev) => [...prev, created]);
     }
   }, [project.id]);
 
@@ -5069,28 +5080,32 @@ const BoardPage = () => {
                   onMoveLeft={
                     idx > 0
                       ? () => {
-                          const ids = localColumns.map((c) => c.id);
-                          const next = [...ids];
-                          [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                          const reordered = [...localColumns];
+                          [reordered[idx - 1], reordered[idx]] = [reordered[idx], reordered[idx - 1]];
+                          setLocalColumns(reordered);
+                          // No follow-up reload: the optimistic order above already matches what
+                          // gets persisted, and a reload here could race another in-flight one
+                          // and clobber it with stale data (#580) — see useBoardDnd's column
+                          // reorder for the full explanation.
                           apiFetch(reorderApiV1ProjectColumnsPath(project.id), {
                             method: 'PATCH',
                             headers: jsonHeaders,
-                            body: JSON.stringify({ columnIds: next }),
-                          }).then(() => router.reload({ only: ['columns'] }));
+                            body: JSON.stringify({ columnIds: reordered.map((c) => c.id) }),
+                          }).catch(() => setLocalColumns(localColumns));
                         }
                       : undefined
                   }
                   onMoveRight={
                     idx < localColumns.length - 1
                       ? () => {
-                          const ids = localColumns.map((c) => c.id);
-                          const next = [...ids];
-                          [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                          const reordered = [...localColumns];
+                          [reordered[idx], reordered[idx + 1]] = [reordered[idx + 1], reordered[idx]];
+                          setLocalColumns(reordered);
                           apiFetch(reorderApiV1ProjectColumnsPath(project.id), {
                             method: 'PATCH',
                             headers: jsonHeaders,
-                            body: JSON.stringify({ columnIds: next }),
-                          }).then(() => router.reload({ only: ['columns'] }));
+                            body: JSON.stringify({ columnIds: reordered.map((c) => c.id) }),
+                          }).catch(() => setLocalColumns(localColumns));
                         }
                       : undefined
                   }

@@ -124,22 +124,120 @@ class WorkflowServiceTest < ActiveSupport::TestCase
 
   # == retry_step ==
 
-  test "retry_step creates new step_run and sends signal" do
+  test "retry_step creates new step_run and sends signal when the workflow execution is still open" do
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
     step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
 
+    TemporalService.stubs(:workflow_open?).with("workflow-execution-#{run.id}").returns(true)
     TemporalService.expects(:send_signal).with(
       "workflow-execution-#{run.id}", "step_retried",
       has_entries("old_step_run_id" => step_run.id, "new_step_run_id" => anything)
-    ).once
+    ).once.returns(ok: true)
 
+    result = nil
     assert_difference("StepRun.count", 1) do
-      WorkflowService.retry_step(step_run: step_run)
+      result = WorkflowService.retry_step(step_run: step_run)
     end
+    assert result[:ok]
 
     new_step_run = run.step_runs.where(step: @step1).order(:created_at).last
     assert_equal "pending", new_step_run.state
     assert_not_equal step_run.id, new_step_run.id
+  end
+
+  test "retry_step starts a brand-new run reusing the original run's params when the workflow execution has already closed" do
+    run = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user,
+      mode: "interactive", step_overrides: { @step1.id.to_s => { "auto_run" => true } },
+      input_asset_ids: [ 7 ], repository_ids: [ 9 ], agent_runtime: "claude_code",
+      shared_context: { "requested_model" => "opus" })
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
+
+    TemporalService.stubs(:workflow_open?).with("workflow-execution-#{run.id}").returns(false)
+    TemporalService.expects(:send_signal).never
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
+
+    result = nil
+    assert_difference("WorkflowRun.count", 1) do
+      result = WorkflowService.retry_step(step_run: step_run)
+    end
+    assert result[:ok]
+
+    new_run = result[:run]
+    assert new_run.persisted?
+    assert_not_equal run.id, new_run.id
+    assert_equal @workflow.id, new_run.workflow_id
+    assert_equal "interactive", new_run.mode
+    assert_equal({ @step1.id.to_s => { "auto_run" => true } }, new_run.step_overrides)
+    assert_equal [ 7 ], new_run.input_asset_ids
+    assert_equal [ 9 ], new_run.repository_ids
+    assert_equal "claude_code", new_run.agent_runtime
+    assert_equal "opus", new_run.shared_context["requested_model"]
+
+    # The old failed run is left exactly as it was.
+    run.reload
+    assert_equal "failed", run.state
+    assert_equal "failed", step_run.reload.state
+  end
+
+  test "retry_step reuses the original run's board_task on the new run" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column)
+    run = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user, board_task: task)
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed")
+
+    TemporalService.stubs(:workflow_open?).returns(false)
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
+
+    result = WorkflowService.retry_step(step_run: step_run)
+
+    assert_equal task.id, result[:run].board_task_id
+  end
+
+  test "retry_step returns an error and creates no run when the new run fails validation" do
+    # @step2 doesn't allow_non_interactive and has no override — replaying the
+    # original run's non_interactive mode on a fresh start fails WorkflowService
+    # .start's validate_mode! before anything is persisted or sent to Temporal.
+    run = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user, mode: "non_interactive")
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed")
+
+    TemporalService.stubs(:workflow_open?).returns(false)
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).never
+
+    result = nil
+    assert_no_difference("WorkflowRun.count") do
+      result = WorkflowService.retry_step(step_run: step_run)
+    end
+    refute(result[:ok])
+  end
+
+  test "retry_step refuses to retry a closed run that isn't failed" do
+    run = create(:workflow_run, :cancelled, workflow: @workflow, project: @project, user: @user)
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed")
+
+    TemporalService.stubs(:workflow_open?).with("workflow-execution-#{run.id}").returns(false)
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).never
+
+    result = nil
+    assert_no_difference("WorkflowRun.count") do
+      result = WorkflowService.retry_step(step_run: step_run)
+    end
+    refute(result[:ok])
+  end
+
+  test "retry_step discards the new step_run when the signal fails to send" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
+    step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
+
+    TemporalService.stubs(:workflow_open?).with("workflow-execution-#{run.id}").returns(true)
+    TemporalService.stubs(:send_signal).returns(ok: false, error: "boom")
+
+    result = nil
+    assert_no_difference("StepRun.count") do
+      result = WorkflowService.retry_step(step_run: step_run)
+    end
+    refute(result[:ok])
+    assert_match(/boom/, result[:error])
   end
 
   # == skip_step ==

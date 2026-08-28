@@ -6,7 +6,15 @@ class TerminalSession < ApplicationRecord
   include TerminalSessionStateMachine
 
   WORKFLOW_TIMEOUT = 86_400 # 24 hours
-  BMAD_DEFAULT_MODULES = %w[bmm bmb cis wds].freeze
+
+  # `bmm` ships inside the npm package; every other module is cloned from GitHub
+  # at install time, and each one costs an api.github.com tag lookup against a
+  # per-IP hourly budget shared by the whole cluster (see BmadMethodInjector).
+  # `bmb` (builder) and `cis` (creative intelligence suite) are authoring
+  # toolkits that pipeline sessions never invoke, so they are no longer installed
+  # by default — a session that wants them still names them in
+  # `session_config.bmad_modules`.
+  BMAD_DEFAULT_MODULES = %w[bmm wds].freeze
 
   # Serialized keys (camelCase, as ApplicationResource emits them) stripped from
   # the session-list broadcast — see #broadcast_session_list_update.

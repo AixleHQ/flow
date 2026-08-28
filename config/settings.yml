@@ -133,13 +133,17 @@ github:
   app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
   private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
   webhook_secret: <%= ENV['GITHUB_WEBHOOK_SECRET'] %>
-  # OPTIONAL, and unrelated to the GitHub App above. A read-only token used only to
-  # list PUBLIC repository trees while describing the skills catalog
-  # (Skills::GithubSkillTree). Unauthenticated api.github.com allows 60 requests/hour
-  # for the whole deployment, which caps the catalog backfill at a couple of dozen
-  # publishers per run; any token raises that to 5,000/hour. Needs no scopes —
-  # public_repo read is enough, and a tenant's installation token must NOT be used
-  # here, since this reads repositories no customer installed the app on.
+  # OPTIONAL, and unrelated to the GitHub App above. A read-only token for the two
+  # paths that read PUBLIC repositories nobody installed the app on:
+  # listing repository trees while describing the skills catalog
+  # (Skills::GithubSkillTree), and resolving BMAD external-module tags during an
+  # agent-container install (BmadMethodInjector). Unauthenticated api.github.com
+  # allows 60 requests/hour PER SOURCE IP — one budget for the whole deployment,
+  # since agent containers NAT through a single address. That caps the catalog
+  # backfill at a couple of dozen publishers per run and makes BMAD installs fail
+  # once a busy project drains it; any token raises the limit to 5,000/hour. Needs
+  # no scopes — public_repo read is enough, and a tenant's installation token must
+  # NOT be used here.
   read_token: <%= ENV['GITHUB_PUBLIC_READ_TOKEN'] %>
 
 gitlab:
