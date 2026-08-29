@@ -157,6 +157,14 @@ module ContainerRuntime
         return [ [ "" ], [ "" ], @fs.key?(probe[1]) ? 0 : 1 ]
       end
 
+      # AgentSessionStrategy#preflight_codex_auth! runs a `node -e <script>` probe
+      # against CODEX_AUTH_PATH and JSON-parses stdout — answer it from the virtual
+      # FS instead of falling through to resolve_command's "" default, which would
+      # fail that JSON.parse for every codex agent_session test.
+      if codex_auth_preflight_probe?(cmd)
+        return [ [ codex_auth_preflight_probe_result.to_json ], [ "" ], 0 ]
+      end
+
       [ [ resolve_command(cmd) ], [ "" ], 0 ]
     end
 
@@ -255,10 +263,43 @@ module ContainerRuntime
 
     private
 
+    CODEX_AUTH_PROBE_PATH = "/home/codex/.codex/auth.json"
+
     # Command router — maps the handful of shell commands the strategies run to
     # deterministic output backed by the virtual FS (ports StubSupport.resolve_command).
     def command_string(cmd)
       cmd.is_a?(Array) ? cmd.join(" ") : cmd.to_s
+    end
+
+    def codex_auth_preflight_probe?(cmd)
+      cmd.is_a?(Array) && cmd[0] == "node" && cmd[1] == "-e" && cmd[2].to_s.include?(CODEX_AUTH_PROBE_PATH)
+    end
+
+    # Mirrors the diagnostic shape AgentSessionStrategy#preflight_codex_auth!'s
+    # node script reads back from the real container, computed from this fake's
+    # in-memory FS instead of an actual file.
+    def codex_auth_preflight_probe_result
+      content = @unreadable_paths.include?(CODEX_AUTH_PROBE_PATH) ? nil : @fs[CODEX_AUTH_PROBE_PATH]
+      diagnostic = {
+        exists: !content.nil?, size: content&.bytesize, owner_uid: 0, owner_gid: 0,
+        mode: content.nil? ? nil : "0600", sha256: content && Digest::SHA256.hexdigest(content),
+        json_parse_status: "not_attempted", tokens_object_present: false,
+        access_token_present: false, refresh_token_present: false,
+        effective_uid: 0, home: "/home/codex", codex_home: "/home/codex/.codex"
+      }
+      return diagnostic if content.nil?
+
+      auth = JSON.parse(content)
+      diagnostic[:json_parse_status] = "valid"
+      tokens = auth["tokens"]
+      diagnostic[:tokens_object_present] = tokens.is_a?(Hash)
+      if diagnostic[:tokens_object_present]
+        diagnostic[:access_token_present] = tokens["access_token"].is_a?(String) && tokens["access_token"].strip.present?
+        diagnostic[:refresh_token_present] = tokens["refresh_token"].is_a?(String) && tokens["refresh_token"].strip.present?
+      end
+      diagnostic
+    rescue JSON::ParserError
+      diagnostic.merge(json_parse_status: "invalid")
     end
 
     def resolve_command(cmd)

@@ -94,7 +94,7 @@ module ContainerStrategies
         credential_checked = true
         preflight_codex_auth!(container, cid, write_result)
       end
-      preflight_codex_auth!(container, cid, false) if input[:agent_type] == "codex" && !credential_checked
+      preflight_codex_auth!(container, cid, nil) if input[:agent_type] == "codex" && !credential_checked
       {}
     end
 
@@ -194,7 +194,7 @@ module ContainerStrategies
       stdout, stderr, status = runtime.exec(container, [ "node", "-e", script ])
       diagnostic = JSON.parse(Array(stdout).join)
       diagnostic.merge!(
-        "credential_write_result" => write_result == true ? "success" : "failed",
+        "credential_write_result" => credential_write_result_label(write_result),
         "runtime" => runtime.class.name,
         "container_id" => container_id
       )
@@ -204,7 +204,7 @@ module ContainerStrategies
       raise ProvisioningError.new(code, diagnostic) if code
     rescue JSON::ParserError => e
       diagnostic = {
-        "credential_write_result" => write_result == true ? "success" : "failed",
+        "credential_write_result" => credential_write_result_label(write_result),
         "runtime" => runtime.class.name,
         "container_id" => container_id,
         "probe_status" => status,
@@ -216,11 +216,26 @@ module ContainerStrategies
 
     def codex_preflight_error_code(diagnostic, probe_status)
       return "probe_failed" unless probe_status.to_i.zero?
-      return "credential_write_failed" unless diagnostic["credential_write_result"] == "success"
+      return "credential_write_failed" if diagnostic["credential_write_result"] == "failed"
       return "auth_file_missing" unless diagnostic["exists"]
       return "auth_json_malformed" unless diagnostic["json_parse_status"] == "valid"
       return "auth_tokens_mismatched" unless diagnostic["tokens_object_present"]
       "auth_tokens_missing" unless diagnostic["access_token_present"] || diagnostic["refresh_token_present"]
+    end
+
+    # write_result is true (this call injected credentials and the write
+    # succeeded), false (this call injected credentials and the write raised —
+    # SessionContextService rescues it and yields false), or nil (this call
+    # injected no credential at all, e.g. a reused/no-op session context — a
+    # normal, pre-existing case (see "before_exec skips credential when nil"),
+    # not a write failure, so it falls through to validating whatever auth.json
+    # is already on disk).
+    def credential_write_result_label(write_result)
+      case write_result
+      when true then "success"
+      when false then "failed"
+      else "not_attempted"
+      end
     end
 
     def launch_agent_in_tmux(container)
