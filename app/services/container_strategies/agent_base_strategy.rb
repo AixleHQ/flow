@@ -22,7 +22,9 @@ module ContainerStrategies
     AUTH_COMMANDS = {
       "claude_code" => "claude",
       "cursor_cli" => "agent login",
-      "codex" => "codex",
+      # Device-code, not the default browser flow: the auth container cannot receive
+      # a localhost OAuth callback, so the user completes login on their own device.
+      "codex" => "codex login --device-auth",
       "gemini_cli" => "gemini",
       # Device-code, not the default browser flow: nothing in the container can open a
       # browser, so this is the only Grok login that completes here — it prints a URL
