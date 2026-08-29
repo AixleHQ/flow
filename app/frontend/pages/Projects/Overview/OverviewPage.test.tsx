@@ -183,14 +183,14 @@ describe('Projects/Overview/OverviewPage', () => {
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('14')).toBeInTheDocument();
     expect(screen.getByText('20')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Include archived' })).not.toBeChecked();
+    expect(screen.getByRole('switch', { name: 'Include archived' })).not.toBeChecked();
     expect(screen.queryByText('27')).not.toBeInTheDocument();
   });
 
   it('includes archived tasks when the distribution toggle is enabled', async () => {
     renderAuthedPage(<OverviewPage />, { props: buildProps() });
 
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Include archived' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Include archived' }));
 
     expect(screen.getByText('15')).toBeInTheDocument();
     expect(screen.getByText('18')).toBeInTheDocument();
