@@ -373,9 +373,8 @@ module Agents
     end
 
     test "the trust flag survives the shell quoting the launch path applies to it" do
-      # The command travels through `tmux send-keys -t agent '<cmd>' Enter`
-      # (AgentBaseStrategy#send_tmux_sequence), so a flag needing quotes of its own
-      # would arrive mangled. Nothing in it may be shell-special.
+      # Keep the flag simple even though AgentBaseStrategy#send_tmux_sequence now
+      # shell-escapes complete commands before passing them to tmux.
       flag = @adapter.cli_trust_flag.strip
 
       assert_equal flag, Shellwords.split(flag).join(" ")

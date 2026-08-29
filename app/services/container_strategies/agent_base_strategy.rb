@@ -136,8 +136,8 @@ module ContainerStrategies
 
       first, *rest = commands
       script = +"for i in $(seq 1 30); do tmux capture-pane -t agent -p 2>/dev/null | grep -q '\\$' && break; sleep 0.2; done; "
-      script << "tmux send-keys -t agent '#{first}' Enter; "
-      rest.each { |cmd| script << "sleep 5; tmux send-keys -t agent '#{cmd}' Enter; " }
+      script << "tmux send-keys -t agent #{Shellwords.shellescape(first)} Enter; "
+      rest.each { |cmd| script << "sleep 5; tmux send-keys -t agent #{Shellwords.shellescape(cmd)} Enter; " }
       runtime.exec(container, [ "sh", "-c", script ])
     end
 

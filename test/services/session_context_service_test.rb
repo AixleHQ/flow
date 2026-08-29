@@ -663,7 +663,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "gemini --yolo", adapter.session_command(mode: "interactive")
   end
 
-  test "Gemini adapter session_command returns gemini --yolo for non_interactive mode" do
+  test "Gemini adapter session_command returns yolo command for non_interactive mode" do
     adapter = Agents::GeminiCliAdapter.new
     result = adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
     assert_equal "gemini --yolo", result

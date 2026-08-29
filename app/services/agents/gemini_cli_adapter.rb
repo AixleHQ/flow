@@ -85,10 +85,13 @@ module Agents
     end
 
     # Written before auth starts (AgentAuthStrategy#before_exec) so the auth
-    # terminal trusts /workspace and doesn't block on "Do you trust the files in
-    # this folder?" — which otherwise also skips project agents.
+    # terminal is locked to the supported API-key flow and trusts /workspace.
+    # OAuth tokens are not valid GEMINI_API_KEY values; allowing the auth picker
+    # here can create a credential that looks connected but fails provider calls.
     def auth_setup_files
-      trusted_folders_files
+      {
+        "#{home_dir}/.gemini/settings.json" => generate_settings(auth_type: "gemini-api-key").to_json
+      }.merge(trusted_folders_files)
     end
 
     # Gemini CLI persists folder trust to ~/.gemini/trustedFolders.json (this exact
@@ -142,8 +145,6 @@ module Agents
       api_key_data.dig("token", "accessToken")
     end
 
-    # Session command: gemini --yolo (interactive), gemini -p (non-interactive)
-    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
     def session_command(mode:, prompt: nil, model: nil)
       model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
     end
@@ -305,7 +306,6 @@ module Agents
         },
         # General settings
         "general" => {
-          "previewFeatures" => true,       # Enable preview models (gemini-3-*)
           "vimMode" => false,
           "enableAutoUpdate" => false,     # Disable auto-update in containers
           "enableAutoUpdateNotification" => false
@@ -332,8 +332,6 @@ module Agents
         },
         # Tools - auto approve all operations (container is the sandbox)
         "tools" => {
-          "autoAccept" => true,
-          "approvalMode" => "auto_edit",          # Auto-approve ALL tools
           "sandbox" => false,                # Container is already sandboxed
           "useRipgrep" => true
         },
