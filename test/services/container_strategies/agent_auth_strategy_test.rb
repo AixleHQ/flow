@@ -104,6 +104,20 @@ module ContainerStrategies
       assert_includes strategy.build_env_vars, "AUTH_REQUIRED_KEYS=__present__"
     end
 
+    # The default Codex login opens a browser with a localhost callback, which cannot
+    # reach a hosted auth container. Device auth prints a URL and code instead.
+    test "codex auth terminal runs the device-code login" do
+      assert_equal "codex login --device-auth", AgentBaseStrategy::AUTH_COMMANDS.fetch("codex")
+
+      @session.update!(agent_type: "codex")
+      strategy = build_strategy(agent_type: "codex")
+
+      assert_equal "codex login --device-auth", strategy.send(:ttyd_command)
+      assert_includes strategy.build_env_vars, "TTYD_CMD=codex login --device-auth"
+      assert_includes strategy.build_env_vars, "AUTH_WATCH_PATH=/home/codex/.codex/auth.json"
+      assert_includes strategy.build_env_vars, "AUTH_REQUIRED_KEYS=tokens"
+    end
+
     # == Environment Variables Tests ==
 
     test "builds env vars with session info" do
