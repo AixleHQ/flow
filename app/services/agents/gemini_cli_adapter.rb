@@ -145,12 +145,8 @@ module Agents
       api_key_data.dig("token", "accessToken")
     end
 
-    # Automatic sessions use Gemini's one-shot headless mode. The surrounding session
-    # strategy finishes the Aixle session after a successful process exit; leaving the
-    # full TUI at its composer keeps the session alive and continues accruing tokens.
     def session_command(mode:, prompt: nil, model: nil)
-      command = model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
-      mode == "non_interactive" ? "#{command} --output-format json -p" : command
+      model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
     end
 
     # Context file: ~/.gemini/GEMINI.md (auto-read by Gemini CLI at startup)

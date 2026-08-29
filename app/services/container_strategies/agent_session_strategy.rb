@@ -28,10 +28,6 @@ module ContainerStrategies
 
       if session.mode == "non_interactive" && session.initial_prompt.present?
         env_vars_list << "AGENT_PROMPT=#{session.initial_prompt}"
-        if session.agent_type == "gemini_cli"
-          env_vars_list << "AIXLE_MCP_URL=#{Settings.mcp.server_url}"
-          env_vars_list << "AIXLE_MCP_SESSION_KEY=#{session.mcp_key}"
-        end
       end
 
       if input[:credential]&.metadata.present?
@@ -146,15 +142,7 @@ module ContainerStrategies
       cmd = agent_service.adapter.session_command(mode: session.mode, prompt: session.initial_prompt, model: resolve_model(session))
 
       tmux_cmd = if session.mode == "non_interactive" && session.initial_prompt.present?
-        if session.agent_type == "gemini_cli"
-          finish_rpc = '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"finish_session","arguments":{}}}'
-          "#{cmd} \"$AGENT_PROMPT\"; status=$?; " \
-            "if [ \"$status\" -eq 0 ]; then curl -fsS -X POST \"$AIXLE_MCP_URL\" " \
-            "-H 'Content-Type: application/json' -H \"X-Session-Key: $AIXLE_MCP_SESSION_KEY\" " \
-            "--data '#{finish_rpc}' >/dev/null; fi; exit \"$status\""
-        else
-          "#{cmd} \"$AGENT_PROMPT\""
-        end
+        "#{cmd} \"$AGENT_PROMPT\""
       else
         cmd
       end
