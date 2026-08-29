@@ -258,39 +258,9 @@ module Agents
 
     # Parse OTLP payload and persist usage statistics for a terminal session.
     def ingest_usage(payload, terminal_session)
-      Rails.logger.info("[GeminiCliAdapter] Session #{terminal_session.id}: OTLP payload=#{payload.to_json}")
-
       new_events = extract_events_from_otlp(payload, terminal_session.route_token)
-      return :accepted if new_events.empty?
 
-      UsageStatistic.transaction do
-        stat = terminal_session.usage_statistic || terminal_session.build_usage_statistic(
-          tokens: 0, cost_cents: 0, input_tokens: 0, output_tokens: 0,
-          cache_write_tokens: 0, cache_read_tokens: 0, source: "otlp",
-          events_count: 0, events_data: []
-        )
-
-        all_events = (stat.events_data || []) + new_events
-        totals = aggregate_events(all_events)
-        models = all_events.filter_map { |event| event["model"] }.uniq
-
-        stat.assign_attributes(
-          tokens: totals[:input_tokens] + totals[:output_tokens] + totals[:cache_write_tokens] + totals[:cache_read_tokens],
-          input_tokens: totals[:input_tokens],
-          output_tokens: totals[:output_tokens],
-          cache_write_tokens: totals[:cache_write_tokens],
-          cache_read_tokens: totals[:cache_read_tokens],
-          total_cents_precise: totals[:total_cents],
-          cost_cents: totals[:total_cents].ceil,
-          models: models,
-          source: "otlp",
-          events_count: all_events.size,
-          events_data: all_events
-        )
-        stat.save!
-      end
-
-      :ok
+      UsageStatistics::Accumulator.record(terminal_session: terminal_session, events: new_events)
     end
 
     private
@@ -465,19 +435,6 @@ module Agents
       end
 
       events
-    end
-
-    def aggregate_events(events)
-      events.each_with_object(
-        { input_tokens: 0, output_tokens: 0, cache_write_tokens: 0, cache_read_tokens: 0, total_cents: 0.0 }
-      ) do |event, totals|
-        usage = event["tokenUsage"] || {}
-        totals[:input_tokens] += usage["inputTokens"].to_i
-        totals[:output_tokens] += usage["outputTokens"].to_i
-        totals[:cache_write_tokens] += usage["cacheWriteTokens"].to_i
-        totals[:cache_read_tokens] += usage["cacheReadTokens"].to_i
-        totals[:total_cents] += usage["totalCents"].to_f
-      end
     end
 
     def build_usage_event(model:, timestamp_ns:, input_tokens:, output_tokens:, cache_read_tokens:, cache_write_tokens:, total_cents:)

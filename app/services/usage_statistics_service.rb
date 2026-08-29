@@ -122,11 +122,17 @@ class UsageStatisticsService
     token
   end
 
+  # No row lock here any more. `TerminalSession.lock.find_by` issued a SELECT ...
+  # FOR UPDATE outside any transaction, so the lock was released the moment the
+  # statement returned and guarded nothing — it only cost a round trip. What it
+  # was reaching for is now handled where it belongs: UsageStatistics::Accumulator
+  # folds each batch in with a single upsert, and PostgreSQL serialises concurrent
+  # batches for one session on the unique index.
   def find_sessions(tokens)
     sessions = {}
 
     tokens.each do |token|
-      terminal_session = TerminalSession.lock.find_by(route_token: token)
+      terminal_session = TerminalSession.find_by(route_token: token)
       return nil unless terminal_session
 
       sessions[token] = terminal_session
