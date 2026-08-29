@@ -54,7 +54,7 @@ class AgentCredentialsService
   def write_to_container(container_id, credentials, workflow_config = {})
     files = config_files(credentials, workflow_config)
 
-    files.each do |path, content|
+    files.all? do |path, content|
       write_container_file(container_id, path, content)
     end
   end
@@ -121,6 +121,7 @@ class AgentCredentialsService
     ok = runtime.write_file(container_id, path, content)
     if ok
       Rails.logger.info("Wrote #{path} to container #{container_id}")
+      true
     else
       raise "runtime.write_file returned false for #{path}"
     end

@@ -142,8 +142,9 @@ class AgentCredential < ApplicationRecord
   # Write credentials to a running container
   def write_to_container(container_id, workflow_config = {})
     service = AgentCredentialsService.for(agent_type)
-    service.write_to_container(container_id, config_data, workflow_config)
+    result = service.write_to_container(container_id, config_data, workflow_config)
     touch(:last_used_at)
+    result
   end
 
   private

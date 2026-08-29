@@ -130,6 +130,82 @@ module ContainerStrategies
       strategy.before_exec(container_id: "container_ref")
     end
 
+    test "Codex preflight accepts valid auth and logs secret-safe metadata" do
+      strategy, runtime, container, auth_content = build_codex_preflight_strategy({
+        "tokens" => { "access_token" => "top-secret-access", "refresh_token" => "top-secret-refresh" }
+      }.to_json)
+      log = nil
+      Rails.logger.expects(:info).with { |message| log = message if message.include?("codex_auth_preflight"); true }.at_least_once
+
+      strategy.before_exec(container_id: "container_ref")
+
+      diagnostic = JSON.parse(log)
+      assert_equal "codex_auth_preflight", diagnostic["event"]
+      assert_equal true, diagnostic["exists"]
+      assert_equal "valid", diagnostic["json_parse_status"]
+      assert_equal true, diagnostic["access_token_present"]
+      assert_equal "success", diagnostic["credential_write_result"]
+      assert_equal "abc123", diagnostic["container_id"]
+      assert_equal runtime.class.name, diagnostic["runtime"]
+      assert_equal Digest::SHA256.hexdigest(auth_content), diagnostic["sha256"]
+      refute_includes log, "top-secret-access"
+      refute_includes log, "top-secret-refresh"
+    end
+
+    test "Codex preflight rejects a missing auth file" do
+      strategy, = build_codex_preflight_strategy(nil)
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_file_missing", error.code
+      assert_equal false, error.details["exists"]
+    end
+
+    test "Codex preflight rejects malformed or truncated JSON" do
+      strategy, = build_codex_preflight_strategy('{"tokens":{"access_token":"truncated')
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_json_malformed", error.code
+      assert_equal "invalid", error.details["json_parse_status"]
+    end
+
+    test "Codex preflight rejects mismatched JSON without a tokens object" do
+      strategy, = build_codex_preflight_strategy({ "access_token" => "wrong-shape-secret" }.to_json)
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_tokens_mismatched", error.code
+      assert_equal false, error.details["tokens_object_present"]
+    end
+
+    test "Codex preflight rejects tokens without expected keys" do
+      strategy, = build_codex_preflight_strategy({ "tokens" => { "id_token" => "not-enough" } }.to_json)
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_tokens_missing", error.code
+      assert_equal false, error.details["access_token_present"]
+      assert_equal false, error.details["refresh_token_present"]
+    end
+
+    test "failed Codex preflight prevents tmux launch" do
+      strategy, = build_codex_preflight_strategy(nil)
+      strategy.expects(:send_tmux_command).never
+
+      assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+    end
+
     # == before_cleanup Tests ==
 
     test "before_cleanup sets logs_count and outputs_count in result" do
@@ -639,6 +715,45 @@ module ContainerStrategies
         route_token: @session.route_token,
         credential: cred
       )
+    end
+
+    def build_codex_preflight_strategy(auth_content)
+      @session.update!(agent_type: "codex")
+      credential = create(:agent_credential, user: @user, agent_type: "codex")
+      filesystem = {}
+      filesystem[AgentSessionStrategy::CODEX_AUTH_PATH] = auth_content unless auth_content.nil?
+      runtime = ContainerRuntime::FakeRuntime.new(agent_type: "codex", filesystem: filesystem)
+      strategy = build_strategy(agent_type: "codex", credential: credential)
+      container = runtime.resolve_container("container_ref")
+      strategy.stubs(:resolve_container).returns(container)
+      strategy.stubs(:runtime).returns(runtime)
+      runtime.stubs(:container_identifier).returns("abc123")
+      SessionContextService.stubs(:assemble_session_context).yields(true)
+      runtime.stubs(:exec).with do |target, command|
+        target == container && command.first(2) == [ "node", "-e" ]
+      end.returns([ [ codex_probe_result(auth_content).to_json ], [], 0 ])
+      [ strategy, runtime, container, auth_content ]
+    end
+
+    def codex_probe_result(auth_content)
+      result = {
+        exists: !auth_content.nil?, size: auth_content&.bytesize, owner_uid: 1001,
+        owner_gid: 1001, mode: "0600", sha256: auth_content && Digest::SHA256.hexdigest(auth_content),
+        json_parse_status: auth_content.nil? ? "not_attempted" : "valid",
+        tokens_object_present: false, access_token_present: false, refresh_token_present: false,
+        effective_uid: 1001, home: "/home/codex", codex_home: "/home/codex/.codex"
+      }
+      return result if auth_content.nil?
+
+      auth = JSON.parse(auth_content)
+      result[:tokens_object_present] = auth["tokens"].is_a?(Hash)
+      if result[:tokens_object_present]
+        result[:access_token_present] = auth["tokens"]["access_token"].present?
+        result[:refresh_token_present] = auth["tokens"]["refresh_token"].present?
+      end
+      result
+    rescue JSON::ParserError
+      result.merge(json_parse_status: "invalid")
     end
   end
 end

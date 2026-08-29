@@ -12,6 +12,18 @@ module ContainerStrategies
   #   - phase_config: non-interactive long timeout, interactive awaits signal
   #
   class AgentSessionStrategy < AgentBaseStrategy
+    class ProvisioningError < StandardError
+      attr_reader :code, :details
+
+      def initialize(code, details)
+        @code = code
+        @details = details
+        super("Codex credential preflight failed: #{code}")
+      end
+    end
+
+    CODEX_AUTH_PATH = "/home/codex/.codex/auth.json"
+
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
@@ -77,7 +89,12 @@ module ContainerStrategies
       raise "Container not ready for before_exec" if cid.blank?
 
       session = TerminalSession.find(input[:session_id])
-      SessionContextService.assemble_session_context(container, session, credential: input[:credential])
+      credential_checked = false
+      SessionContextService.assemble_session_context(container, session, credential: input[:credential]) do |write_result|
+        credential_checked = true
+        preflight_codex_auth!(container, cid, write_result)
+      end
+      preflight_codex_auth!(container, cid, false) if input[:agent_type] == "codex" && !credential_checked
       {}
     end
 
@@ -135,6 +152,76 @@ module ContainerStrategies
     end
 
     private
+
+    def preflight_codex_auth!(container, container_id, write_result)
+      return unless input[:agent_type] == "codex"
+
+      script = <<~'JAVASCRIPT'
+        const fs = require("fs");
+        const crypto = require("crypto");
+        const path = "/home/codex/.codex/auth.json";
+        const diagnostic = {
+          exists: false, size: null, owner_uid: null, owner_gid: null, mode: null,
+          sha256: null, json_parse_status: "not_attempted", tokens_object_present: false,
+          access_token_present: false, refresh_token_present: false,
+          effective_uid: process.geteuid(), home: process.env.HOME || null,
+          codex_home: process.env.CODEX_HOME || null
+        };
+        try {
+          const stat = fs.statSync(path);
+          const content = fs.readFileSync(path);
+          diagnostic.exists = true;
+          diagnostic.size = stat.size;
+          diagnostic.owner_uid = stat.uid;
+          diagnostic.owner_gid = stat.gid;
+          diagnostic.mode = (stat.mode & 0o7777).toString(8).padStart(4, "0");
+          diagnostic.sha256 = crypto.createHash("sha256").update(content).digest("hex");
+          try {
+            const auth = JSON.parse(content.toString("utf8"));
+            diagnostic.json_parse_status = "valid";
+            diagnostic.tokens_object_present = !!auth.tokens && typeof auth.tokens === "object" && !Array.isArray(auth.tokens);
+            diagnostic.access_token_present = diagnostic.tokens_object_present && typeof auth.tokens.access_token === "string" && auth.tokens.access_token.trim().length > 0;
+            diagnostic.refresh_token_present = diagnostic.tokens_object_present && typeof auth.tokens.refresh_token === "string" && auth.tokens.refresh_token.trim().length > 0;
+          } catch (_) {
+            diagnostic.json_parse_status = "invalid";
+          }
+        } catch (error) {
+          diagnostic.read_error = error.code || error.name;
+        }
+        process.stdout.write(JSON.stringify(diagnostic));
+      JAVASCRIPT
+
+      stdout, stderr, status = runtime.exec(container, [ "node", "-e", script ])
+      diagnostic = JSON.parse(Array(stdout).join)
+      diagnostic.merge!(
+        "credential_write_result" => write_result == true ? "success" : "failed",
+        "runtime" => runtime.class.name,
+        "container_id" => container_id
+      )
+      Rails.logger.info({ event: "codex_auth_preflight", **diagnostic }.to_json)
+
+      code = codex_preflight_error_code(diagnostic, status)
+      raise ProvisioningError.new(code, diagnostic) if code
+    rescue JSON::ParserError => e
+      diagnostic = {
+        "credential_write_result" => write_result == true ? "success" : "failed",
+        "runtime" => runtime.class.name,
+        "container_id" => container_id,
+        "probe_status" => status,
+        "probe_error" => Array(stderr).join.truncate(200)
+      }
+      Rails.logger.info({ event: "codex_auth_preflight", **diagnostic }.to_json)
+      raise ProvisioningError.new("probe_failed", diagnostic), cause: e
+    end
+
+    def codex_preflight_error_code(diagnostic, probe_status)
+      return "probe_failed" unless probe_status.to_i.zero?
+      return "credential_write_failed" unless diagnostic["credential_write_result"] == "success"
+      return "auth_file_missing" unless diagnostic["exists"]
+      return "auth_json_malformed" unless diagnostic["json_parse_status"] == "valid"
+      return "auth_tokens_mismatched" unless diagnostic["tokens_object_present"]
+      return "auth_tokens_missing" unless diagnostic["access_token_present"] || diagnostic["refresh_token_present"]
+    end
 
     def launch_agent_in_tmux(container)
       session = TerminalSession.find(input[:session_id])
