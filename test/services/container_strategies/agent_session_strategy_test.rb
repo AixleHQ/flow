@@ -141,9 +141,9 @@ module ContainerStrategies
 
       diagnostic = JSON.parse(log)
       assert_equal "codex_auth_preflight", diagnostic["event"]
-      assert_equal true, diagnostic["exists"]
+      assert diagnostic["exists"]
       assert_equal "valid", diagnostic["json_parse_status"]
-      assert_equal true, diagnostic["access_token_present"]
+      assert diagnostic["access_token_present"]
       assert_equal "success", diagnostic["credential_write_result"]
       assert_equal "abc123", diagnostic["container_id"]
       assert_equal runtime.class.name, diagnostic["runtime"]
@@ -160,7 +160,7 @@ module ContainerStrategies
       end
 
       assert_equal "auth_file_missing", error.code
-      assert_equal false, error.details["exists"]
+      refute error.details["exists"]
     end
 
     test "Codex preflight rejects malformed or truncated JSON" do
@@ -182,7 +182,7 @@ module ContainerStrategies
       end
 
       assert_equal "auth_tokens_mismatched", error.code
-      assert_equal false, error.details["tokens_object_present"]
+      refute error.details["tokens_object_present"]
     end
 
     test "Codex preflight rejects tokens without expected keys" do
@@ -193,8 +193,8 @@ module ContainerStrategies
       end
 
       assert_equal "auth_tokens_missing", error.code
-      assert_equal false, error.details["access_token_present"]
-      assert_equal false, error.details["refresh_token_present"]
+      refute error.details["access_token_present"]
+      refute error.details["refresh_token_present"]
     end
 
     test "failed Codex preflight prevents tmux launch" do

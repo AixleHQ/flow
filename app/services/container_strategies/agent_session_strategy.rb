@@ -220,7 +220,7 @@ module ContainerStrategies
       return "auth_file_missing" unless diagnostic["exists"]
       return "auth_json_malformed" unless diagnostic["json_parse_status"] == "valid"
       return "auth_tokens_mismatched" unless diagnostic["tokens_object_present"]
-      return "auth_tokens_missing" unless diagnostic["access_token_present"] || diagnostic["refresh_token_present"]
+      "auth_tokens_missing" unless diagnostic["access_token_present"] || diagnostic["refresh_token_present"]
     end
 
     def launch_agent_in_tmux(container)
