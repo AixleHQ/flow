@@ -148,7 +148,7 @@ const OverviewPage = () => {
     const interval = setInterval(() => {
       router.reload({
         preserveScroll: true,
-        only: ['summary', 'workflow_run_stats', 'board_task_distribution', 'recent_activity'],
+        only: ['summary', 'workflow_run_stats', 'board_task_distribution', 'all_board_task_distribution', 'recent_activity'],
       } as never);
     }, 60_000);
     return () => clearInterval(interval);

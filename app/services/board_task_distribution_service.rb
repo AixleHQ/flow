@@ -38,8 +38,12 @@ class BoardTaskDistributionService
   attr_reader :company, :project, :include_archived
 
   def board_tasks_join
-    join = "LEFT OUTER JOIN board_tasks ON board_tasks.board_column_id = board_columns.id"
-    join += " AND board_tasks.archived_at IS NULL" unless include_archived
-    join
+    board_tasks = BoardTask.arel_table
+    board_columns = BoardColumn.arel_table
+
+    condition = board_tasks[:board_column_id].eq(board_columns[:id])
+    condition = condition.and(board_tasks[:archived_at].eq(nil)) unless include_archived
+
+    board_columns.join(board_tasks, Arel::Nodes::OuterJoin).on(condition).join_sources
   end
 end

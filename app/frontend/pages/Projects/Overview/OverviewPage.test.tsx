@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import { act, renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
 import OverviewPage from './OverviewPage';
 
@@ -87,6 +87,26 @@ const buildProps = (overrides: Partial<OverviewProps> = {}): OverviewProps => ({
 });
 
 describe('Projects/Overview/OverviewPage', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reloads both the default and all-task board distributions on the 60s poll', async () => {
+    vi.useFakeTimers();
+    renderAuthedPage(<OverviewPage />, { props: buildProps() });
+    const { router } = await import('@inertiajs/react');
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(vi.mocked(router.reload)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        only: ['summary', 'workflow_run_stats', 'board_task_distribution', 'all_board_task_distribution', 'recent_activity'],
+      }),
+    );
+  });
+
   it('renders the page header and the KPI cards from seeded props', () => {
     renderAuthedPage(<OverviewPage />, { props: buildProps() });
 
