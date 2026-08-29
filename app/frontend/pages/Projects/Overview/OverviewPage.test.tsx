@@ -25,6 +25,10 @@ interface OverviewProps extends Record<string, unknown> {
     columns: { name: string; count: number }[];
     total: number;
   };
+  allBoardTaskDistribution: {
+    columns: { name: string; count: number }[];
+    total: number;
+  };
   recentActivity: {
     eventType: string;
     description: string;
@@ -56,6 +60,14 @@ const buildProps = (overrides: Partial<OverviewProps> = {}): OverviewProps => ({
       { name: 'Shipped', count: 20 },
     ],
     total: 46,
+  },
+  allBoardTaskDistribution: {
+    columns: [
+      { name: 'Backlog', count: 15 },
+      { name: 'Doing', count: 18 },
+      { name: 'Shipped', count: 27 },
+    ],
+    total: 60,
   },
   recentActivity: [
     {
@@ -171,6 +183,19 @@ describe('Projects/Overview/OverviewPage', () => {
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('14')).toBeInTheDocument();
     expect(screen.getByText('20')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Include archived' })).not.toBeChecked();
+    expect(screen.queryByText('27')).not.toBeInTheDocument();
+  });
+
+  it('includes archived tasks when the distribution toggle is enabled', async () => {
+    renderAuthedPage(<OverviewPage />, { props: buildProps() });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Include archived' }));
+
+    expect(screen.getByText('15')).toBeInTheDocument();
+    expect(screen.getByText('18')).toBeInTheDocument();
+    expect(screen.getByText('27')).toBeInTheDocument();
+    expect(screen.queryByText('12')).not.toBeInTheDocument();
   });
 
   it("navigates to the project's board from the Open board button", async () => {

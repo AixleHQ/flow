@@ -1,7 +1,7 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Box, Button, RingProgress, Text } from '@mantine/core';
+import { Box, Button, RingProgress, Switch, Text } from '@mantine/core';
 import { IconArrowRight, IconChecklist, IconCoin, IconGitBranch, IconPlayerPlay } from '@tabler/icons-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { PageHeader } from 'shared/ui/PageHeader';
 
@@ -52,6 +52,7 @@ interface Props {
   summary: Summary;
   workflowRunStats: WorkflowRunStats;
   boardTaskDistribution: BoardTaskDistribution;
+  allBoardTaskDistribution: BoardTaskDistribution;
   recentActivity: ActivityItem[];
 }
 
@@ -139,8 +140,9 @@ function groupActivity<T extends { eventType: string; description: string; actor
 }
 
 const OverviewPage = () => {
-  const { project, summary, workflowRunStats, boardTaskDistribution, recentActivity } = usePage<{ props: Props }>()
-    .props as unknown as Props;
+  const { project, summary, workflowRunStats, boardTaskDistribution, allBoardTaskDistribution, recentActivity } =
+    usePage<{ props: Props }>().props as unknown as Props;
+  const [includeArchivedTasks, setIncludeArchivedTasks] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -174,7 +176,8 @@ const OverviewPage = () => {
 
   const avgPerSessionCents = summary.sessionsLaunched > 0 ? summary.totalSpendCents / summary.sessionsLaunched : null;
 
-  const boardColumns = boardTaskDistribution.columns ?? [];
+  const displayedBoardDistribution = includeArchivedTasks ? allBoardTaskDistribution : boardTaskDistribution;
+  const boardColumns = displayedBoardDistribution.columns ?? [];
   const maxColumnCount = Math.max(1, ...boardColumns.map((c) => c.count));
 
   return (
@@ -314,14 +317,22 @@ const OverviewPage = () => {
         <Box className={classes.panel}>
           <Box className={classes.panelHead} style={{ marginBottom: 14 }}>
             <Text className={classes.sectionTitle}>Board Task Distribution</Text>
-            <Button
-              variant="subtle"
-              size="compact-xs"
-              rightSection={<IconArrowRight size={13} />}
-              onClick={() => router.visit(`/company/projects/${project.id}/board`)}
-            >
-              Open board
-            </Button>
+            <Box display="flex" style={{ alignItems: 'center', gap: 16 }}>
+              <Switch
+                size="xs"
+                label="Include archived"
+                checked={includeArchivedTasks}
+                onChange={(event) => setIncludeArchivedTasks(event.currentTarget.checked)}
+              />
+              <Button
+                variant="subtle"
+                size="compact-xs"
+                rightSection={<IconArrowRight size={13} />}
+                onClick={() => router.visit(`/company/projects/${project.id}/board`)}
+              >
+                Open board
+              </Button>
+            </Box>
           </Box>
           <Box className={classes.hbarList}>
             {boardColumns.map((col, idx) => (
