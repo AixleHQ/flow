@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import { act, renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
 import OverviewPage from './OverviewPage';
 
@@ -22,6 +22,10 @@ interface OverviewProps extends Record<string, unknown> {
     total: number;
   };
   boardTaskDistribution: {
+    columns: { name: string; count: number }[];
+    total: number;
+  };
+  allBoardTaskDistribution: {
     columns: { name: string; count: number }[];
     total: number;
   };
@@ -57,6 +61,14 @@ const buildProps = (overrides: Partial<OverviewProps> = {}): OverviewProps => ({
     ],
     total: 46,
   },
+  allBoardTaskDistribution: {
+    columns: [
+      { name: 'Backlog', count: 15 },
+      { name: 'Doing', count: 18 },
+      { name: 'Shipped', count: 27 },
+    ],
+    total: 60,
+  },
   recentActivity: [
     {
       eventType: 'workflow_completed',
@@ -75,6 +87,32 @@ const buildProps = (overrides: Partial<OverviewProps> = {}): OverviewProps => ({
 });
 
 describe('Projects/Overview/OverviewPage', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('reloads both the default and all-task board distributions on the 60s poll', async () => {
+    vi.useFakeTimers();
+    renderAuthedPage(<OverviewPage />, { props: buildProps() });
+    const { router } = await import('@inertiajs/react');
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000);
+    });
+
+    expect(vi.mocked(router.reload)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        only: [
+          'summary',
+          'workflow_run_stats',
+          'board_task_distribution',
+          'all_board_task_distribution',
+          'recent_activity',
+        ],
+      }),
+    );
+  });
+
   it('renders the page header and the KPI cards from seeded props', () => {
     renderAuthedPage(<OverviewPage />, { props: buildProps() });
 
@@ -171,6 +209,19 @@ describe('Projects/Overview/OverviewPage', () => {
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('14')).toBeInTheDocument();
     expect(screen.getByText('20')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Include archived' })).not.toBeChecked();
+    expect(screen.queryByText('27')).not.toBeInTheDocument();
+  });
+
+  it('includes archived tasks when the distribution toggle is enabled', async () => {
+    renderAuthedPage(<OverviewPage />, { props: buildProps() });
+
+    await userEvent.click(screen.getByRole('switch', { name: 'Include archived' }));
+
+    expect(screen.getByText('15')).toBeInTheDocument();
+    expect(screen.getByText('18')).toBeInTheDocument();
+    expect(screen.getByText('27')).toBeInTheDocument();
+    expect(screen.queryByText('12')).not.toBeInTheDocument();
   });
 
   it("navigates to the project's board from the Open board button", async () => {
