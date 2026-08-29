@@ -102,7 +102,13 @@ describe('Projects/Overview/OverviewPage', () => {
 
     expect(vi.mocked(router.reload)).toHaveBeenCalledWith(
       expect.objectContaining({
-        only: ['summary', 'workflow_run_stats', 'board_task_distribution', 'all_board_task_distribution', 'recent_activity'],
+        only: [
+          'summary',
+          'workflow_run_stats',
+          'board_task_distribution',
+          'all_board_task_distribution',
+          'recent_activity',
+        ],
       }),
     );
   });
