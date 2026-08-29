@@ -510,6 +510,30 @@ describe('Profile/Show', () => {
     );
   });
 
+  it('starts a terminal auth session for Codex instead of linking to a hosted OAuth callback', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    const codexCard = screen.getByText('OpenAI Codex').closest('.mantine-Card-root') as HTMLElement;
+    expect(within(codexCard).queryByRole('link', { name: 'Authenticate' })).not.toBeInTheDocument();
+
+    await userEvent.click(within(codexCard).getByRole('button', { name: 'Authenticate' }));
+
+    expect(await screen.findByText('Authenticate OpenAI Codex')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/terminal_sessions',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            terminalSession: { agentType: 'codex', sessionType: 'auth_setup', mode: 'interactive' },
+          }),
+        }),
+      ),
+    );
+  });
+
   // == AWS Bedrock connection ==
   //
   // Claude Code hides Bedrock errors, so a broken connection otherwise presents as an
