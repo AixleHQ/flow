@@ -735,31 +735,50 @@ module Agents
       assert_equal "not_attempted", result[:diagnostic]["credential_write_result"]
     end
 
-    test "credential_preflight rejects malformed or truncated JSON" do
+    test "credential_preflight rejects a zero-byte auth file" do
+      runtime, container = preflight_runtime("")
+
+      result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: true)
+
+      refute result[:valid]
+      assert_equal "auth_file_empty", result[:error_code]
+      assert result[:diagnostic]["exists"]
+      assert_equal 0, result[:diagnostic]["size"]
+    end
+
+    # task #1327 (owner decision, board comment 8140): content validation is not a
+    # gate — a non-empty file that is malformed or carries no tokens now passes
+    # preflight. json_parse_status/tokens_object_present/access_token_present stay
+    # in the diagnostic as evidence for #1308, they just no longer decide validity.
+    test "credential_preflight accepts malformed or truncated JSON as long as the file is non-empty" do
       runtime, container = preflight_runtime('{"tokens":{"access_token":"truncated')
 
       result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: true)
 
-      refute result[:valid]
-      assert_equal "auth_json_malformed", result[:error_code]
+      assert result[:valid]
+      assert_nil result[:error_code]
+      assert_equal "invalid", result[:diagnostic]["json_parse_status"]
     end
 
-    test "credential_preflight rejects content without a tokens object" do
+    test "credential_preflight accepts content without a tokens object as long as the file is non-empty" do
       runtime, container = preflight_runtime({ "access_token" => "wrong-shape" }.to_json)
 
       result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: true)
 
-      refute result[:valid]
-      assert_equal "auth_tokens_mismatched", result[:error_code]
+      assert result[:valid]
+      assert_nil result[:error_code]
+      refute result[:diagnostic]["tokens_object_present"]
     end
 
-    test "credential_preflight rejects tokens without access or refresh keys" do
+    test "credential_preflight accepts tokens without access or refresh keys as long as the file is non-empty" do
       runtime, container = preflight_runtime({ "tokens" => { "id_token" => "not-enough" } }.to_json)
 
       result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: true)
 
-      refute result[:valid]
-      assert_equal "auth_tokens_missing", result[:error_code]
+      assert result[:valid]
+      assert_nil result[:error_code]
+      refute result[:diagnostic]["access_token_present"]
+      refute result[:diagnostic]["refresh_token_present"]
     end
 
     # task #1327 — Session 5744 used unchanged token bytes that later succeeded, so a

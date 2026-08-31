@@ -330,13 +330,16 @@ module Agents
     # Launch-time Credential Preflight (see BaseAdapter#credential_preflight)
     # =========================================================================
 
-    # Read back auth.json from the container and validate it against Codex's own
-    # auth semantics (a `tokens` object with a present access_token or
-    # refresh_token — see #auth_complete?), independent of whatever
-    # credential_write_result reports: a credential write failure this launch
-    # does not mean the file already on disk is invalid (task #1327 — Session
-    # 5744 used unchanged token bytes that later succeeded), so write result is
-    # logged as evidence only, never a gate.
+    # Read back auth.json from the container. The gate is existence + non-zero
+    # size only (task #1327, owner decision in board comment 8140) — content is
+    # still parsed and validated against Codex's own auth semantics (a `tokens`
+    # object with a present access_token or refresh_token — see #auth_complete?)
+    # purely to populate the diagnostic (json_parse_status, tokens_object_present,
+    # access_token_present, refresh_token_present), not to decide validity.
+    # credential_write_result reports are likewise diagnostic-only: a credential
+    # write failure this launch does not mean the file already on disk is invalid
+    # (task #1327 — Session 5744 used unchanged token bytes that later succeeded),
+    # so write result is logged as evidence only, never a gate.
     #
     # Exactly one read-back. No retry, no rewrite, no delay, no token refresh.
     def credential_preflight(runtime, container, container_id, credential_write_result: nil)
@@ -398,15 +401,17 @@ module Agents
       { diagnostic: diagnostic, valid: false, error_code: "probe_failed" }
     end
 
-    # Missing/malformed/mismatched/token-less content fails immediately, per the
-    # Codex auth semantics validated above. credential_write_result is logged as
-    # evidence but never gates: the file on disk is the ground truth.
+    # task #1327 (owner decision, board comment 8140): the gate is existence +
+    # non-zero size only. JSON parse status and tokens/access_token/refresh_token
+    # presence are NOT gates — a non-empty-but-malformed or token-less file passes
+    # preflight (that is a deliberate, accepted risk; see the same comment). They
+    # are still computed and logged as diagnostic evidence for #1308, just never
+    # checked here. credential_write_result is likewise evidence only, never a
+    # gate: the file on disk is the ground truth.
     def preflight_error_code(diagnostic, probe_status)
       return "probe_failed" unless probe_status.to_i.zero?
       return "auth_file_missing" unless diagnostic["exists"]
-      return "auth_json_malformed" unless diagnostic["json_parse_status"] == "valid"
-      return "auth_tokens_mismatched" unless diagnostic["tokens_object_present"]
-      "auth_tokens_missing" unless diagnostic["access_token_present"] || diagnostic["refresh_token_present"]
+      "auth_file_empty" unless diagnostic["size"].to_i > 0
     end
     private :preflight_error_code
 

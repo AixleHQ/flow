@@ -163,38 +163,39 @@ module ContainerStrategies
       refute error.details["exists"]
     end
 
-    test "Codex preflight rejects malformed or truncated JSON" do
+    test "Codex preflight rejects a zero-byte auth file" do
+      strategy, = build_codex_preflight_strategy("")
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_file_empty", error.code
+      assert error.details["exists"]
+      assert_equal 0, error.details["size"]
+    end
+
+    # task #1327 (owner decision, board comment 8140): content validation is not a
+    # gate — a non-empty file that is malformed or carries no tokens now passes
+    # preflight and the session proceeds to tmux launch. The diagnostic still
+    # records json_parse_status/tokens_object_present/access_token_present as
+    # evidence for #1308, they just no longer decide validity.
+    test "Codex preflight accepts malformed or truncated JSON as long as the file is non-empty" do
       strategy, = build_codex_preflight_strategy('{"tokens":{"access_token":"truncated')
 
-      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
-        strategy.before_exec(container_id: "container_ref")
-      end
-
-      assert_equal "auth_json_malformed", error.code
-      assert_equal "invalid", error.details["json_parse_status"]
+      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
     end
 
-    test "Codex preflight rejects mismatched JSON without a tokens object" do
+    test "Codex preflight accepts content without a tokens object as long as the file is non-empty" do
       strategy, = build_codex_preflight_strategy({ "access_token" => "wrong-shape-secret" }.to_json)
 
-      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
-        strategy.before_exec(container_id: "container_ref")
-      end
-
-      assert_equal "auth_tokens_mismatched", error.code
-      refute error.details["tokens_object_present"]
+      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
     end
 
-    test "Codex preflight rejects tokens without expected keys" do
+    test "Codex preflight accepts tokens without expected keys as long as the file is non-empty" do
       strategy, = build_codex_preflight_strategy({ "tokens" => { "id_token" => "not-enough" } }.to_json)
 
-      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
-        strategy.before_exec(container_id: "container_ref")
-      end
-
-      assert_equal "auth_tokens_missing", error.code
-      refute error.details["access_token_present"]
-      refute error.details["refresh_token_present"]
+      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
     end
 
     test "failed Codex preflight prevents tmux launch" do
