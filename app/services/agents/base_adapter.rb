@@ -486,19 +486,16 @@ module Agents
     # tmux (AgentSessionStrategy#before_exec). Default: no-op — most agents have
     # no launch-time read-back to perform. An adapter that needs one (e.g. Codex,
     # whose CLI falls through to an interactive login on invalid auth) overrides
-    # this to return a secret-safe diagnostic plus a validity verdict.
+    # this to return a validity verdict.
     #
     # @param _runtime [ContainerRuntime::BaseRuntime] the strategy's runtime —
     #   passed in (rather than resolved via ContainerRuntime.build) so callers can
     #   inject a fake directly
     # @param _container [Object] runtime-specific container handle
     # @param _container_id [String]
-    # @param credential_write_result [Boolean, nil] whether this launch attempted
-    #   a fresh credential write and, if so, how it fared — true (succeeded),
-    #   false (raised), or nil (no credential was injected this launch)
-    # @return [Hash, nil] { diagnostic: Hash, valid: Boolean, error_code: String }
-    #   or nil when this agent has nothing to check
-    def credential_preflight(_runtime, _container, _container_id, credential_write_result: nil)
+    # @return [Hash, nil] { valid: Boolean, error_code: String } or nil when this
+    #   agent has nothing to check
+    def credential_preflight(_runtime, _container, _container_id)
       nil
     end
 

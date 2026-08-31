@@ -130,26 +130,13 @@ module ContainerStrategies
       strategy.before_exec(container_id: "container_ref")
     end
 
-    test "Codex preflight accepts valid auth and logs secret-safe metadata" do
-      strategy, runtime, container, auth_content = build_codex_preflight_strategy({
-        "tokens" => { "access_token" => "top-secret-access", "refresh_token" => "top-secret-refresh" }
-      }.to_json)
-      log = nil
-      Rails.logger.expects(:info).with { |message| log = message if message.include?("codex_auth_preflight"); true }.at_least_once
+    # task #1327 (owner decision, board comment 8142): the preflight is a pure
+    # existence + non-zero-size stat — no file content is read, nothing is logged
+    # on success, so there is no diagnostic or redaction to assert on here.
+    test "Codex preflight accepts a non-empty auth file regardless of content" do
+      strategy, = build_codex_preflight_strategy({ "tokens" => { "access_token" => "top-secret-access" } }.to_json)
 
-      strategy.before_exec(container_id: "container_ref")
-
-      diagnostic = JSON.parse(log)
-      assert_equal "codex_auth_preflight", diagnostic["event"]
-      assert diagnostic["exists"]
-      assert_equal "valid", diagnostic["json_parse_status"]
-      assert diagnostic["access_token_present"]
-      assert_equal "success", diagnostic["credential_write_result"]
-      assert_equal "abc123", diagnostic["container_id"]
-      assert_equal runtime.class.name, diagnostic["runtime"]
-      assert_equal Digest::SHA256.hexdigest(auth_content), diagnostic["sha256"]
-      refute_includes log, "top-secret-access"
-      refute_includes log, "top-secret-refresh"
+      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
     end
 
     test "Codex preflight rejects a missing auth file" do
@@ -160,7 +147,6 @@ module ContainerStrategies
       end
 
       assert_equal "auth_file_missing", error.code
-      refute error.details["exists"]
     end
 
     test "Codex preflight rejects a zero-byte auth file" do
@@ -171,31 +157,6 @@ module ContainerStrategies
       end
 
       assert_equal "auth_file_empty", error.code
-      assert error.details["exists"]
-      assert_equal 0, error.details["size"]
-    end
-
-    # task #1327 (owner decision, board comment 8140): content validation is not a
-    # gate — a non-empty file that is malformed or carries no tokens now passes
-    # preflight and the session proceeds to tmux launch. The diagnostic still
-    # records json_parse_status/tokens_object_present/access_token_present as
-    # evidence for #1308, they just no longer decide validity.
-    test "Codex preflight accepts malformed or truncated JSON as long as the file is non-empty" do
-      strategy, = build_codex_preflight_strategy('{"tokens":{"access_token":"truncated')
-
-      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
-    end
-
-    test "Codex preflight accepts content without a tokens object as long as the file is non-empty" do
-      strategy, = build_codex_preflight_strategy({ "access_token" => "wrong-shape-secret" }.to_json)
-
-      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
-    end
-
-    test "Codex preflight accepts tokens without expected keys as long as the file is non-empty" do
-      strategy, = build_codex_preflight_strategy({ "tokens" => { "id_token" => "not-enough" } }.to_json)
-
-      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
     end
 
     test "failed Codex preflight prevents tmux launch" do
@@ -728,33 +689,8 @@ module ContainerStrategies
       container = runtime.resolve_container("container_ref")
       strategy.stubs(:resolve_container).returns(container)
       strategy.stubs(:runtime).returns(runtime)
-      runtime.stubs(:container_identifier).returns("abc123")
       SessionContextService.stubs(:assemble_session_context).returns(true)
-      runtime.stubs(:exec).with do |target, command|
-        target == container && command.first(2) == [ "node", "-e" ]
-      end.returns([ [ codex_probe_result(auth_content).to_json ], [], 0 ])
-      [ strategy, runtime, container, auth_content ]
-    end
-
-    def codex_probe_result(auth_content)
-      result = {
-        exists: !auth_content.nil?, size: auth_content&.bytesize, owner_uid: 1001,
-        owner_gid: 1001, mode: "0600", sha256: auth_content && Digest::SHA256.hexdigest(auth_content),
-        json_parse_status: auth_content.nil? ? "not_attempted" : "valid",
-        tokens_object_present: false, access_token_present: false, refresh_token_present: false,
-        effective_uid: 1001, home: "/home/codex", codex_home: "/home/codex/.codex"
-      }
-      return result if auth_content.nil?
-
-      auth = JSON.parse(auth_content)
-      result[:tokens_object_present] = auth["tokens"].is_a?(Hash)
-      if result[:tokens_object_present]
-        result[:access_token_present] = auth["tokens"]["access_token"].present?
-        result[:refresh_token_present] = auth["tokens"]["refresh_token"].present?
-      end
-      result
-    rescue JSON::ParserError
-      result.merge(json_parse_status: "invalid")
+      [ strategy, runtime, container ]
     end
   end
 end

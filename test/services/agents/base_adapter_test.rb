@@ -306,8 +306,8 @@ module Agents
 
     test "credential_preflight defaults to a no-op" do
       # Most agents have no launch-time read-back to perform; AgentSessionStrategy
-      # skips logging/raising entirely when this returns nil.
-      assert_nil @adapter.credential_preflight(Object.new, Object.new, "abc123", credential_write_result: true)
+      # skips raising entirely when this returns nil.
+      assert_nil @adapter.credential_preflight(Object.new, Object.new, "abc123")
     end
   end
 end

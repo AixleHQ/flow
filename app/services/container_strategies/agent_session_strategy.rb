@@ -90,16 +90,11 @@ module ContainerStrategies
 
       session = TerminalSession.find(input[:session_id])
       adapter = AgentCredentialsService.for(input[:agent_type]).adapter
-      credential_attempted = input[:credential].present?
 
-      write_result = nil
       begin
-        write_result = SessionContextService.assemble_session_context(container, session, credential: input[:credential])
-      rescue StandardError
-        write_result = false if credential_attempted
-        raise
+        SessionContextService.assemble_session_context(container, session, credential: input[:credential])
       ensure
-        run_credential_preflight!(adapter, container, cid, write_result)
+        run_credential_preflight!(adapter, container, cid)
       end
       {}
     end
@@ -160,16 +155,15 @@ module ContainerStrategies
     private
 
     # Adapter hook for launch-time credential verification (e.g. Codex's
-    # auth.json read-back before tmux launch — see BaseAdapter#credential_preflight).
+    # auth.json stat before tmux launch — see BaseAdapter#credential_preflight).
     # Most agents have nothing to check here, so #credential_preflight returns
     # nil and this is a no-op — the strategy never needs to know which agent
     # type, if any, requires the check.
-    def run_credential_preflight!(adapter, container, container_id, write_result)
-      result = adapter.credential_preflight(runtime, container, container_id, credential_write_result: write_result)
+    def run_credential_preflight!(adapter, container, container_id)
+      result = adapter.credential_preflight(runtime, container, container_id)
       return if result.nil?
 
-      Rails.logger.info(result[:diagnostic].to_json)
-      raise ProvisioningError.new(result[:error_code], result[:diagnostic]) unless result[:valid]
+      raise ProvisioningError.new(result[:error_code], {}) unless result[:valid]
     end
 
     def launch_agent_in_tmux(container)
