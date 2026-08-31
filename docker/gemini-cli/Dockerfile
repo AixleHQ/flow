@@ -17,7 +17,9 @@ RUN useradd -m -d /home/gemini -s /bin/bash -G ${AGENT_BROWSERS_GROUP} gemini
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~69 MB of /root/.npm in this layer forever.
 ARG GEMINI_CLI_VERSION=0.57.0
-RUN npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && npm cache clean --force
+RUN npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} \
+    && gemini --version | grep -qF "${GEMINI_CLI_VERSION}" \
+    && npm cache clean --force
 
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)

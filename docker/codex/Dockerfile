@@ -12,7 +12,10 @@ FROM ${BASE_IMAGE}
 # =============================================================================
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~180 MB of /root/.npm in this layer forever.
-RUN npm install -g @openai/codex && npm cache clean --force
+ARG CODEX_CLI_VERSION=0.151.0
+RUN npm install -g @openai/codex@${CODEX_CLI_VERSION} \
+    && codex --version | grep -qF "${CODEX_CLI_VERSION}" \
+    && npm cache clean --force
 
 # -G AGENT_BROWSERS_GROUP: write access to the shared browser tree (Playwright creates
 # a server dir inside it on first launch) without a 1 GB-duplicating recursive chown.

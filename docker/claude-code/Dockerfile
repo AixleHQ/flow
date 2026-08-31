@@ -20,14 +20,15 @@ RUN useradd -m -d /home/claude -s /bin/bash -G ${AGENT_BROWSERS_GROUP} claude \
 
 USER claude
 WORKDIR /home/claude
+ARG CLAUDE_CODE_VERSION=2.1.251
 # Download THEN run, and verify the binary — never `curl … | bash`. In a pipe, a failed
 # curl still leaves bash reading empty stdin and exiting 0, so a network blip produced an
 # image with no Claude CLI at all and the build reported success (seen 2026-08-05).
 RUN curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh \
-    && bash /tmp/claude-install.sh \
+    && bash /tmp/claude-install.sh "${CLAUDE_CODE_VERSION}" \
     && rm -f /tmp/claude-install.sh \
     && test -x /home/claude/.local/bin/claude \
-    && /home/claude/.local/bin/claude --version
+    && /home/claude/.local/bin/claude --version | grep -qF "${CLAUDE_CODE_VERSION}"
 
 ENV PATH="/home/claude/.local/bin:${PATH}"
 

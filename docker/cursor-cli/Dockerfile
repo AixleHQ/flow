@@ -17,8 +17,11 @@ RUN useradd -m -d /home/cursor -s /bin/bash -G ${AGENT_BROWSERS_GROUP} cursor \
 
 USER cursor
 WORKDIR /home/cursor
+ARG CURSOR_CLI_VERSION=2026.08.25-3e8eec8
 RUN curl https://cursor.com/install -fsS | bash \
-    && test -x /home/cursor/.local/bin/agent
+    && test -x /home/cursor/.local/bin/agent \
+    && readlink -f /home/cursor/.local/bin/agent | grep -qF "/versions/${CURSOR_CLI_VERSION}/" \
+    && /home/cursor/.local/bin/agent --version | grep -qF "${CURSOR_CLI_VERSION}"
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
 USER root

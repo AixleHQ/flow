@@ -24,9 +24,10 @@ RUN useradd -m -d /home/grok -s /bin/bash -G ${AGENT_BROWSERS_GROUP} grok
 #
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~69 MB of /root/.npm in this layer forever.
+ARG GROK_CLI_VERSION=1.0.13
 RUN set -eux; \
-    npm install -g @xai-official/grok; \
-    su grok -c "grok --version"; \
+    npm install -g @xai-official/grok@${GROK_CLI_VERSION}; \
+    su grok -c "grok --version" | grep -qF "${GROK_CLI_VERSION}"; \
     test -x /home/grok/.grok/bin/grok; \
     rm -f "$(npm root -g)"/@xai-official/grok-linux-*/bin/grok.br; \
     npm cache clean --force
