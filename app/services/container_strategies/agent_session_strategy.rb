@@ -77,7 +77,9 @@ module ContainerStrategies
       raise "Container not ready for before_exec" if cid.blank?
 
       session = TerminalSession.find(input[:session_id])
-      SessionContextService.assemble_session_context(container, session, credential: input[:credential])
+      credential = input[:credential]
+      refresh_credential_if_expiring(credential)
+      SessionContextService.assemble_session_context(container, session, credential: credential)
       {}
     end
 
@@ -305,6 +307,33 @@ module ContainerStrategies
     # Re-extract the auth files and update the stored credential when the token
     # material actually changed. Only updates an existing credential — never
     # creates one from a session.
+    # Refresh the credential's OAuth token if it expires within SESSION_REFRESH_THRESHOLD,
+    # so the container never starts with a token that will expire mid-session.
+    # Logs the token's expiry time regardless so failures are diagnosable in production.
+    SESSION_REFRESH_THRESHOLD = 60.minutes
+
+    def refresh_credential_if_expiring(credential)
+      return unless credential
+
+      adapter = AgentCredentialsService.for(credential.agent_type).adapter
+      expires_at = credential.expires_at
+
+      if expires_at
+        remaining_min = ((expires_at - Time.current) / 60).round
+        Rails.logger.info("[AgentSession] Token expires_at=#{expires_at.iso8601} (#{remaining_min}m remaining) for credential #{credential.id}")
+
+        if expires_at <= SESSION_REFRESH_THRESHOLD.from_now
+          result = adapter.refresh!(credential)
+          Rails.logger.info("[AgentSession] Pre-session token refresh credential=#{credential.id} status=#{result[:status]} detail=#{result[:detail].inspect}")
+          credential.reload
+        end
+      else
+        Rails.logger.info("[AgentSession] Token has no expiry (API key or Bedrock) for credential #{credential.id}")
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[AgentSession] Pre-session credential refresh failed for #{credential.id}: #{e.message}")
+    end
+
     def persist_refreshed_credentials(container, session, agent_service)
       auth_files = extract_auth_files(container, agent_service)
       return unless auth_files_complete?(auth_files, agent_service)
