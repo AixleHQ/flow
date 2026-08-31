@@ -12,6 +12,8 @@ module ContainerStrategies
   #   - phase_config: non-interactive long timeout, interactive awaits signal
   #
   class AgentSessionStrategy < AgentBaseStrategy
+    SESSION_REFRESH_THRESHOLD = 60.minutes
+
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
@@ -307,11 +309,6 @@ module ContainerStrategies
     # Re-extract the auth files and update the stored credential when the token
     # material actually changed. Only updates an existing credential — never
     # creates one from a session.
-    # Refresh the credential's OAuth token if it expires within SESSION_REFRESH_THRESHOLD,
-    # so the container never starts with a token that will expire mid-session.
-    # Logs the token's expiry time regardless so failures are diagnosable in production.
-    SESSION_REFRESH_THRESHOLD = 60.minutes
-
     def refresh_credential_if_expiring(credential)
       return unless credential
 
