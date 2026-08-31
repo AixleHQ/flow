@@ -116,6 +116,10 @@ module Coder
 
       @checked += 1
 
+      if failed?(workspace)
+        return delete_failed_workspace(name: name, id: id)
+      end
+
       # A workspace that is stopped, being deleted, or mid-build is not a
       # workspace with a dead agent — it is one that is doing what it was told.
       return clear_marker(name) unless supposedly_running?(workspace)
@@ -148,6 +152,37 @@ module Coder
     def supposedly_running?(workspace)
       workspace.dig("latest_build", "transition").to_s == "start" &&
         workspace.dig("latest_build", "job", "status").to_s == "succeeded"
+    end
+
+    def failed?(workspace)
+      workspace.dig("latest_build", "job", "status").to_s == "failed"
+    end
+
+    # A failed provisioner build cannot recover by probing the agent, and a
+    # failed delete build must not leave the workspace stuck forever. Try the
+    # normal destroy first so Terraform can release its resources; if either
+    # creating or completing that build fails, orphan the workspace record.
+    def delete_failed_workspace(name:, id:)
+      build = @workspace_service.delete(id)
+      @workspace_service.await_build(build.fetch("id"))
+      record_failed_workspace_deletion(name, orphan: false)
+    rescue Coder::WorkspaceService::OperationError, KeyError => e
+      Rails.logger.warn("[Coder::DeadWorkspaceReaper] normal delete #{name} failed: #{e.message}; retrying orphaned")
+      begin
+        orphan_build = @workspace_service.delete(id, orphan: true)
+        @workspace_service.await_build(orphan_build.fetch("id"))
+        record_failed_workspace_deletion(name, orphan: true)
+      rescue Coder::WorkspaceService::OperationError, KeyError => orphan_error
+        @failures << "#{name} (normal delete: #{e.message}; orphan delete: #{orphan_error.message})"
+        Rails.logger.warn("[Coder::DeadWorkspaceReaper] orphan delete #{name} failed: #{orphan_error.message}")
+      end
+    end
+
+    def record_failed_workspace_deletion(name, orphan:)
+      clear_marker(name)
+      @quarantine_service.clear(workspace_name: name)
+      @deleted << name
+      Rails.logger.info("[Coder::DeadWorkspaceReaper] deleted failed workspace #{name}#{' (orphaned)' if orphan}")
     end
 
     # First sighting only writes the marker. Deletion happens on a later sweep,

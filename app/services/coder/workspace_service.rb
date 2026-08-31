@@ -46,16 +46,17 @@ module Coder
     # build runs asynchronously — the workspace keeps being listed with
     # `transition: "delete"` until it finishes. Callers that need the terminal
     # state pass the build id to `await_build`.
-    def delete(workspace_id)
-      build(workspace_id, transition: "delete")
+    def delete(workspace_id, orphan: false)
+      build(workspace_id, transition: "delete", orphan: orphan)
     end
 
-    def build(workspace_id, transition:)
+    def build(workspace_id, transition:, orphan: false)
       Coder::Api.build_workspace(
         coder_url:     coder_url,
         session_token: session_token,
         workspace_id:  workspace_id,
-        transition:    transition
+        transition:    transition,
+        orphan:        orphan
       )
     rescue Coder::Api::ApiError => e
       raise OperationError, "build (#{transition}) failed: #{@token.redact(e.message)}"
