@@ -702,7 +702,84 @@ module Agents
       refute_includes toml, @adapter.toml_string("@playwright/mcp@latest")
     end
 
+    # == Launch-time Credential Preflight ==
+
+    test "credential_preflight accepts valid auth and reports success" do
+      content = { "tokens" => { "access_token" => "tok", "refresh_token" => "refresh" } }.to_json
+      runtime, container = preflight_runtime(content)
+
+      result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: true)
+
+      assert result[:valid]
+      assert_nil result[:error_code]
+      diagnostic = result[:diagnostic]
+      assert_equal "codex_auth_preflight", diagnostic["event"]
+      assert diagnostic["exists"]
+      assert_equal "valid", diagnostic["json_parse_status"]
+      assert diagnostic["access_token_present"]
+      assert_equal "success", diagnostic["credential_write_result"]
+      assert_equal "abc123", diagnostic["container_id"]
+      assert_equal Digest::SHA256.hexdigest(content), diagnostic["sha256"]
+      refute_includes diagnostic.to_json, "tok"
+    end
+
+    test "credential_preflight rejects a missing auth file" do
+      runtime, container = preflight_runtime(nil)
+
+      result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: nil)
+
+      refute result[:valid]
+      assert_equal "auth_file_missing", result[:error_code]
+      refute result[:diagnostic]["exists"]
+      assert_equal "not_attempted", result[:diagnostic]["credential_write_result"]
+    end
+
+    test "credential_preflight rejects malformed or truncated JSON" do
+      runtime, container = preflight_runtime('{"tokens":{"access_token":"truncated')
+
+      result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: true)
+
+      refute result[:valid]
+      assert_equal "auth_json_malformed", result[:error_code]
+    end
+
+    test "credential_preflight rejects content without a tokens object" do
+      runtime, container = preflight_runtime({ "access_token" => "wrong-shape" }.to_json)
+
+      result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: true)
+
+      refute result[:valid]
+      assert_equal "auth_tokens_mismatched", result[:error_code]
+    end
+
+    test "credential_preflight rejects tokens without access or refresh keys" do
+      runtime, container = preflight_runtime({ "tokens" => { "id_token" => "not-enough" } }.to_json)
+
+      result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: true)
+
+      refute result[:valid]
+      assert_equal "auth_tokens_missing", result[:error_code]
+    end
+
+    # task #1327 — Session 5744 used unchanged token bytes that later succeeded, so a
+    # failed write this launch must not invalidate bytes already valid on disk.
+    test "credential_preflight validity does not depend on credential_write_result" do
+      runtime, container = preflight_runtime({ "tokens" => { "access_token" => "tok" } }.to_json)
+
+      result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: false)
+
+      assert result[:valid]
+      assert_equal "failed", result[:diagnostic]["credential_write_result"]
+    end
+
     private
+
+    def preflight_runtime(auth_content)
+      filesystem = {}
+      filesystem[@adapter.config_path] = auth_content unless auth_content.nil?
+      runtime = ContainerRuntime::FakeRuntime.new(agent_type: "codex", filesystem: filesystem)
+      [ runtime, runtime.resolve_container("abc123") ]
+    end
 
     def codex_models_url
       "#{Codex::Api::MODELS_URL}?client_version=#{Codex::Api::CLIENT_VERSION}"

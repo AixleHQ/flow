@@ -108,6 +108,9 @@ class SessionContextService
     # @param container_id [String] Container identifier
     # @param session [TerminalSession] Session record
     # @param credential [AgentCredential, nil] Optional credential to inject
+    # @return [Boolean, nil] the credential write result — true/false when a
+    #   credential was injected, nil when none was (mirrors #write_to_container,
+    #   which itself only ever returns true or raises)
     def assemble_session_context(container_id, session, credential: nil)
       context_log = ContextLog.new(session)
 
@@ -131,18 +134,13 @@ class SessionContextService
       Rails.logger.info("[SessionContext] Pre-resolved MCP server names: #{mcp_server_names.inspect}")
 
       # Step 1: Credentials (optional)
+      credential_write_result = nil
       if credential.present?
         measure_step("credentials") do
           resolved_model = resolve_session_model(session, credential)
           workflow_config = { enabled_mcp_servers: mcp_server_names, model: resolved_model, mode: session.mode }.compact
           Rails.logger.info("[SessionContext] Writing credentials with workflow_config: #{workflow_config.inspect}")
-          begin
-            write_result = credential.write_to_container(container_id, workflow_config)
-          rescue StandardError
-            yield(false) if block_given?
-            raise
-          end
-          yield(write_result) if block_given?
+          credential_write_result = credential.write_to_container(container_id, workflow_config)
           context_log.record(:credentials, agent_type: credential.agent_type, config_keys: credential.config_data.keys, workflow_config: workflow_config)
         end
       end
@@ -183,6 +181,7 @@ class SessionContextService
       measure_step("context_log") { write_context_log(container_id, context_log) }
 
       Rails.logger.info("[SessionContext] Assembly complete for session #{session.id}")
+      credential_write_result
     end
 
     # == Story 9.2: Config File Injection ==

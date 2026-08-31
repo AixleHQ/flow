@@ -326,6 +326,99 @@ module Agents
     end
     private :numeric_value
 
+    # =========================================================================
+    # Launch-time Credential Preflight (see BaseAdapter#credential_preflight)
+    # =========================================================================
+
+    # Read back auth.json from the container and validate it against Codex's own
+    # auth semantics (a `tokens` object with a present access_token or
+    # refresh_token — see #auth_complete?), independent of whatever
+    # credential_write_result reports: a credential write failure this launch
+    # does not mean the file already on disk is invalid (task #1327 — Session
+    # 5744 used unchanged token bytes that later succeeded), so write result is
+    # logged as evidence only, never a gate.
+    #
+    # Exactly one read-back. No retry, no rewrite, no delay, no token refresh.
+    def credential_preflight(runtime, container, container_id, credential_write_result: nil)
+      script = <<~JAVASCRIPT
+        const fs = require("fs");
+        const crypto = require("crypto");
+        const path = #{config_path.to_json};
+        const diagnostic = {
+          exists: false, size: null, owner_uid: null, owner_gid: null, mode: null,
+          sha256: null, json_parse_status: "not_attempted", tokens_object_present: false,
+          access_token_present: false, refresh_token_present: false,
+          effective_uid: process.geteuid(), home: process.env.HOME || null,
+          codex_home: process.env.CODEX_HOME || null
+        };
+        try {
+          const stat = fs.statSync(path);
+          const content = fs.readFileSync(path);
+          diagnostic.exists = true;
+          diagnostic.size = stat.size;
+          diagnostic.owner_uid = stat.uid;
+          diagnostic.owner_gid = stat.gid;
+          diagnostic.mode = (stat.mode & 0o7777).toString(8).padStart(4, "0");
+          diagnostic.sha256 = crypto.createHash("sha256").update(content).digest("hex");
+          try {
+            const auth = JSON.parse(content.toString("utf8"));
+            diagnostic.json_parse_status = "valid";
+            diagnostic.tokens_object_present = !!auth.tokens && typeof auth.tokens === "object" && !Array.isArray(auth.tokens);
+            diagnostic.access_token_present = diagnostic.tokens_object_present && typeof auth.tokens.access_token === "string" && auth.tokens.access_token.trim().length > 0;
+            diagnostic.refresh_token_present = diagnostic.tokens_object_present && typeof auth.tokens.refresh_token === "string" && auth.tokens.refresh_token.trim().length > 0;
+          } catch (_) {
+            diagnostic.json_parse_status = "invalid";
+          }
+        } catch (error) {
+          diagnostic.read_error = error.code || error.name;
+        }
+        process.stdout.write(JSON.stringify(diagnostic));
+      JAVASCRIPT
+
+      stdout, stderr, status = runtime.exec(container, [ "node", "-e", script ])
+      diagnostic = JSON.parse(Array(stdout).join)
+      diagnostic.merge!(
+        "event" => "codex_auth_preflight",
+        "credential_write_result" => credential_write_result_label(credential_write_result),
+        "runtime" => runtime.class.name,
+        "container_id" => container_id
+      )
+
+      code = preflight_error_code(diagnostic, status)
+      { diagnostic: diagnostic, valid: code.nil?, error_code: code }
+    rescue JSON::ParserError
+      diagnostic = {
+        "event" => "codex_auth_preflight",
+        "credential_write_result" => credential_write_result_label(credential_write_result),
+        "runtime" => runtime.class.name,
+        "container_id" => container_id,
+        "probe_status" => status,
+        "probe_error" => Array(stderr).join.truncate(200)
+      }
+      { diagnostic: diagnostic, valid: false, error_code: "probe_failed" }
+    end
+
+    # Missing/malformed/mismatched/token-less content fails immediately, per the
+    # Codex auth semantics validated above. credential_write_result is logged as
+    # evidence but never gates: the file on disk is the ground truth.
+    def preflight_error_code(diagnostic, probe_status)
+      return "probe_failed" unless probe_status.to_i.zero?
+      return "auth_file_missing" unless diagnostic["exists"]
+      return "auth_json_malformed" unless diagnostic["json_parse_status"] == "valid"
+      return "auth_tokens_mismatched" unless diagnostic["tokens_object_present"]
+      "auth_tokens_missing" unless diagnostic["access_token_present"] || diagnostic["refresh_token_present"]
+    end
+    private :preflight_error_code
+
+    def credential_write_result_label(write_result)
+      case write_result
+      when true then "success"
+      when false then "failed"
+      else "not_attempted"
+      end
+    end
+    private :credential_write_result_label
+
     # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
     # refresh_access_token! which persists under a row lock via persist_refreshed!.
     # @param credential [AgentCredential]

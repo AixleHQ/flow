@@ -803,7 +803,29 @@ class SessionContextServiceTest < ActiveSupport::TestCase
       ctr == "ctr1" && path == "/var/log/context.log"
     end.returns(true)
 
-    SessionContextService.assemble_session_context("ctr1", session, credential: nil)
+    result = SessionContextService.assemble_session_context("ctr1", session, credential: nil)
+    assert_nil result
+  end
+
+  # AgentSessionStrategy#before_exec reads this return value directly (no block/yield)
+  # to know how a launch-time credential preflight should log the write outcome.
+  test "assemble_session_context returns the credential write result" do
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code",
+                     mode: "interactive")
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.stubs(:write_file).returns(true)
+
+    credential_mock = mock("credential")
+    credential_mock.stubs(:agent_type).returns("claude_code")
+    credential_mock.stubs(:config_data).returns({ "oauthAccount" => {} })
+    credential_mock.stubs(:default_model).returns(nil)
+    credential_mock.expects(:write_to_container).returns(true)
+
+    result = SessionContextService.assemble_session_context("ctr1", session, credential: credential_mock)
+    assert_equal true, result
   end
 
   test "assemble_session_context logs timing for each step" do

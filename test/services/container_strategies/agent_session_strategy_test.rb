@@ -721,14 +721,14 @@ module ContainerStrategies
       @session.update!(agent_type: "codex")
       credential = create(:agent_credential, user: @user, agent_type: "codex")
       filesystem = {}
-      filesystem[AgentSessionStrategy::CODEX_AUTH_PATH] = auth_content unless auth_content.nil?
+      filesystem[Agents::CodexAdapter.new.config_path] = auth_content unless auth_content.nil?
       runtime = ContainerRuntime::FakeRuntime.new(agent_type: "codex", filesystem: filesystem)
       strategy = build_strategy(agent_type: "codex", credential: credential)
       container = runtime.resolve_container("container_ref")
       strategy.stubs(:resolve_container).returns(container)
       strategy.stubs(:runtime).returns(runtime)
       runtime.stubs(:container_identifier).returns("abc123")
-      SessionContextService.stubs(:assemble_session_context).yields(true)
+      SessionContextService.stubs(:assemble_session_context).returns(true)
       runtime.stubs(:exec).with do |target, command|
         target == container && command.first(2) == [ "node", "-e" ]
       end.returns([ [ codex_probe_result(auth_content).to_json ], [], 0 ])

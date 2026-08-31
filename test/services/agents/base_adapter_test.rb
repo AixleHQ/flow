@@ -301,5 +301,13 @@ module Agents
       assert_nil @adapter.migrate_model_id(nil)
       assert_equal "", @adapter.migrate_model_id("")
     end
+
+    # == Launch-time Credential Preflight ==
+
+    test "credential_preflight defaults to a no-op" do
+      # Most agents have no launch-time read-back to perform; AgentSessionStrategy
+      # skips logging/raising entirely when this returns nil.
+      assert_nil @adapter.credential_preflight(Object.new, Object.new, "abc123", credential_write_result: true)
+    end
   end
 end

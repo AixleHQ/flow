@@ -157,10 +157,10 @@ module ContainerRuntime
         return [ [ "" ], [ "" ], @fs.key?(probe[1]) ? 0 : 1 ]
       end
 
-      # AgentSessionStrategy#preflight_codex_auth! runs a `node -e <script>` probe
-      # against CODEX_AUTH_PATH and JSON-parses stdout — answer it from the virtual
-      # FS instead of falling through to resolve_command's "" default, which would
-      # fail that JSON.parse for every codex agent_session test.
+      # Agents::CodexAdapter#credential_preflight runs a `node -e <script>` probe
+      # against CODEX_AUTH_PROBE_PATH and JSON-parses stdout — answer it from the
+      # virtual FS instead of falling through to resolve_command's "" default,
+      # which would fail that JSON.parse for every codex agent_session test.
       if codex_auth_preflight_probe?(cmd)
         return [ [ codex_auth_preflight_probe_result.to_json ], [ "" ], 0 ]
       end
@@ -275,7 +275,7 @@ module ContainerRuntime
       cmd.is_a?(Array) && cmd[0] == "node" && cmd[1] == "-e" && cmd[2].to_s.include?(CODEX_AUTH_PROBE_PATH)
     end
 
-    # Mirrors the diagnostic shape AgentSessionStrategy#preflight_codex_auth!'s
+    # Mirrors the diagnostic shape Agents::CodexAdapter#credential_preflight's
     # node script reads back from the real container, computed from this fake's
     # in-memory FS instead of an actual file.
     def codex_auth_preflight_probe_result
