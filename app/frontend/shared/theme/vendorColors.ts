@@ -18,6 +18,7 @@ export const AGENT_BRAND_COLORS: Record<string, string> = {
   cursor_cli: '#7c3aed',
   codex: '#10a37f',
   gemini_cli: '#3b82f6',
+  antigravity_cli: '#6366f1',
   // xAI's mark is monochrome — black on white, white on black — so there is no
   // chromatic brand value to carry here. A neutral slate is the identity: it reads
   // as the monochrome brand and stays visible on both light and dark surfaces,

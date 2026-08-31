@@ -94,6 +94,12 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; ic
     icon: IconBrandGoogleFilled,
   },
   {
+    type: 'antigravity_cli',
+    name: 'Antigravity CLI',
+    description: "Google's agent-first terminal runtime using Google AI Studio keys",
+    icon: IconBrandGoogleFilled,
+  },
+  {
     type: 'grok',
     name: 'Grok',
     description: "xAI's Grok CLI for agentic coding in the terminal",

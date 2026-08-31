@@ -35,6 +35,12 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     assert_instance_of Agents::GeminiCliAdapter, service.adapter
   end
 
+  test "initializes with antigravity_cli adapter" do
+    service = AgentCredentialsService.new("antigravity_cli")
+
+    assert_instance_of Agents::AntigravityCliAdapter, service.adapter
+  end
+
   test "initializes with grok adapter" do
     service = AgentCredentialsService.new("grok")
 
@@ -63,6 +69,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     assert_includes agents, "claude_code"
     assert_includes agents, "cursor_cli"
     assert_includes agents, "gemini_cli"
+    assert_includes agents, "antigravity_cli"
     assert_includes agents, "codex"
     assert_includes agents, "grok"
   end

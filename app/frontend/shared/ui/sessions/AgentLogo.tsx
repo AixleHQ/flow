@@ -12,6 +12,7 @@ const LOGOS: Record<string, string> = {
   cursor_cli: cursorLogo,
   codex: codexLogo,
   gemini_cli: geminiLogo,
+  antigravity_cli: geminiLogo,
 };
 
 export const AGENT_LABELS: Record<string, string> = {
@@ -19,6 +20,7 @@ export const AGENT_LABELS: Record<string, string> = {
   cursor_cli: 'Cursor CLI',
   codex: 'Codex',
   gemini_cli: 'Gemini CLI',
+  antigravity_cli: 'Antigravity CLI',
   grok: 'Grok',
 };
 
