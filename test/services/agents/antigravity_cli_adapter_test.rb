@@ -9,7 +9,7 @@ module Agents
     test "uses a portable API-key credential" do
       assert_equal "/home/antigravity/.gemini/antigravity-cli/aixle-api-key.json", @adapter.config_path
       assert @adapter.auth_complete?('{"api_key":"key-123"}')
-      refute @adapter.auth_complete?('{}')
+      refute @adapter.auth_complete?("{}")
       assert_equal({ "api_key" => "key-123" }, @adapter.extract_credentials('{"api_key":"key-123"}'))
     end
 
@@ -17,7 +17,7 @@ module Agents
       files = @adapter.config_files("api_key" => "key-123")
       settings = JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"])
       assert_equal "gemini", settings["modelProvider"]
-      assert_equal false, settings["enableTelemetry"]
+      refute settings["enableTelemetry"]
       assert_equal({ "api_key" => "key-123" }, JSON.parse(files[@adapter.config_path]))
     end
 

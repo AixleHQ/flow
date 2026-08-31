@@ -201,7 +201,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByText('Connect your agents')).toBeInTheDocument();
-    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(5);
+    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(6);
   });
 
   it('shows the Connected badge and an enabled Get started when an agent is configured', () => {
@@ -217,7 +217,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
-    expect(screen.getByText('1 of 5 connected')).toBeInTheDocument();
+    expect(screen.getByText('1 of 6 connected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Get started/ })).toBeEnabled();
   });
 

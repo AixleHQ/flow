@@ -323,14 +323,14 @@ describe('Profile/Show', () => {
   });
 
   it('renders Authenticate (not Re-authenticate) for an agent that has no credential', () => {
-    // Only claude_code is configured; the other four should show Authenticate.
+    // Only claude_code is configured; the other five should show Authenticate.
     const credential = buildCredential({ id: 300, agentType: 'claude_code' });
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
     expect(screen.getByRole('button', { name: 'Re-authenticate' })).toBeInTheDocument();
-    // The four unconfigured agents each render an Authenticate button.
-    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(4);
+    // The five unconfigured agents each render an Authenticate button.
+    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(5);
   });
 
   it('shows the session visibility switches in the state the profile reports', () => {

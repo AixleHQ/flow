@@ -81,7 +81,8 @@ function agentLogoChipStyle(agentType: string, size: number): CSSProperties {
 
 function agentLogoImageSize(agentType: string, chipSize: number): number {
   if (agentType === 'codex') return Math.round(chipSize * (13 / 18));
-  if (agentType === 'gemini' || agentType === 'gemini_cli' || agentType === 'antigravity_cli') return Math.round(chipSize * (12 / 18));
+  if (agentType === 'gemini' || agentType === 'gemini_cli' || agentType === 'antigravity_cli')
+    return Math.round(chipSize * (12 / 18));
   return chipSize;
 }
 
