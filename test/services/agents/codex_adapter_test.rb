@@ -705,7 +705,7 @@ module Agents
     # == Launch-time Credential Preflight ==
 
     test "credential_preflight accepts valid auth and reports success" do
-      content = { "tokens" => { "access_token" => "tok", "refresh_token" => "refresh" } }.to_json
+      content = { "tokens" => { "access_token" => "top-secret-access-value", "refresh_token" => "top-secret-refresh-value" } }.to_json
       runtime, container = preflight_runtime(content)
 
       result = @adapter.credential_preflight(runtime, container, "abc123", credential_write_result: true)
@@ -720,7 +720,8 @@ module Agents
       assert_equal "success", diagnostic["credential_write_result"]
       assert_equal "abc123", diagnostic["container_id"]
       assert_equal Digest::SHA256.hexdigest(content), diagnostic["sha256"]
-      refute_includes diagnostic.to_json, "tok"
+      refute_includes diagnostic.to_json, "top-secret-access-value"
+      refute_includes diagnostic.to_json, "top-secret-refresh-value"
     end
 
     test "credential_preflight rejects a missing auth file" do

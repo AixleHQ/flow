@@ -825,7 +825,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     credential_mock.expects(:write_to_container).returns(true)
 
     result = SessionContextService.assemble_session_context("ctr1", session, credential: credential_mock)
-    assert_equal true, result
+    assert result
   end
 
   test "assemble_session_context logs timing for each step" do
