@@ -10,6 +10,7 @@ RUN set -eux; \
     arch="${TARGETARCH:-amd64}"; [ "$arch" = "amd64" ] && arch=x64; \
     curl -fsSL "https://github.com/google-antigravity/antigravity-cli/releases/download/${ANTIGRAVITY_CLI_VERSION}/agy_cli_linux_${arch}.tar.gz" \
       | tar -xz -C /usr/local/bin; \
+    mv /usr/local/bin/antigravity /usr/local/bin/agy; \
     chmod +x /usr/local/bin/agy; \
     su antigravity -c "agy --version"
 
