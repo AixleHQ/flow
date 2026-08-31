@@ -10,11 +10,12 @@ module Coder
     class FakeWorkspaceService
       attr_reader :deleted_ids, :delete_calls
 
-      def initialize(workspaces: [], failing_delete_ids: [])
-        @workspaces         = workspaces
-        @failing_delete_ids = failing_delete_ids
-        @deleted_ids        = []
-        @delete_calls       = []
+      def initialize(workspaces: [], failing_delete_ids: [], permanently_failing_delete_ids: [])
+        @workspaces                     = workspaces
+        @failing_delete_ids             = failing_delete_ids
+        @permanently_failing_delete_ids = permanently_failing_delete_ids
+        @deleted_ids                    = []
+        @delete_calls                   = []
       end
 
       def list(prefix: nil)
@@ -26,7 +27,7 @@ module Coder
       def delete(workspace_id, orphan: false)
         @deleted_ids << workspace_id
         @delete_calls << [ workspace_id, orphan ]
-        if @failing_delete_ids.include?(workspace_id)
+        if @failing_delete_ids.include?(workspace_id) || @permanently_failing_delete_ids.include?(workspace_id)
           @failing_delete_ids.delete(workspace_id) if orphan == false
           raise Coder::WorkspaceService::OperationError, "build (delete) failed: HTTP 500"
         end
@@ -145,12 +146,13 @@ module Coder
     end
 
     test "a failed workspace delete error does not stop the remaining workspaces" do
-      service = FakeWorkspaceService.new(workspaces: [
-        running("aixle-prod-1", "u1", status: "failed"),
-        running("aixle-prod-2", "u2", status: "failed")
-      ])
-      service.stubs(:delete).with("u1").raises(Coder::WorkspaceService::OperationError, "normal failed")
-      service.stubs(:delete).with("u1", orphan: true).raises(Coder::WorkspaceService::OperationError, "orphan failed")
+      service = FakeWorkspaceService.new(
+        workspaces: [
+          running("aixle-prod-1", "u1", status: "failed"),
+          running("aixle-prod-2", "u2", status: "failed")
+        ],
+        permanently_failing_delete_ids: [ "u1" ]
+      )
 
       result = build_reaper(workspace_service: service).reap
 
