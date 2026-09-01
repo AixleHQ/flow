@@ -24,6 +24,6 @@ class Web::DocsController < Web::ApplicationController
   def page_exists?(slug)
     %w[user-guide quick-start agents runtimes tools mcp board workflows
        triggers-and-gates integrations configuration reference cli-ref api-guide
-       config-schema].include?(slug)
+       config-schema user-guide-outline changelog-product-areas].include?(slug)
   end
 end

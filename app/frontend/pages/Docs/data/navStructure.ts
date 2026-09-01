@@ -40,6 +40,13 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'config-schema', label: 'Configuration reference' },
     ],
   },
+  {
+    label: 'Product',
+    items: [
+      { slug: 'user-guide-outline', label: 'User guide outline' },
+      { slug: 'changelog-product-areas', label: 'Changelog product areas' },
+    ],
+  },
 ];
 
 export function findNavItem(slug: string): NavItem | null {

@@ -1,6 +1,7 @@
 import agents from './agents.md?raw';
 import apiGuide from './api-guide.md?raw';
 import board from './board.md?raw';
+import changelogProductAreas from './changelog-product-areas.md?raw';
 import cliRef from './cli-ref.md?raw';
 import configSchema from './config-schema.md?raw';
 import configuration from './configuration.md?raw';
@@ -11,6 +12,7 @@ import reference from './reference.md?raw';
 import runtimes from './runtimes.md?raw';
 import tools from './tools.md?raw';
 import triggersAndGates from './triggers-and-gates.md?raw';
+import userGuideOutline from './user-guide-outline.md?raw';
 import userGuide from './user-guide.md?raw';
 import workflows from './workflows.md?raw';
 
@@ -141,6 +143,18 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'Reference',
     content: configSchema,
     toc: extractToc(configSchema),
+  },
+  'user-guide-outline': {
+    title: 'User guide outline',
+    section: 'Product',
+    content: userGuideOutline,
+    toc: extractToc(userGuideOutline),
+  },
+  'changelog-product-areas': {
+    title: 'Changelog product areas',
+    section: 'Product',
+    content: changelogProductAreas,
+    toc: extractToc(changelogProductAreas),
   },
 };
 
