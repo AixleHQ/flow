@@ -646,7 +646,45 @@ module ContainerStrategies
       container_mock = mock("container")
       strategy.stubs(:resolve_container).returns(container_mock)
       strategy.stubs(:runtime).returns(mock("rt").tap { |m| m.stubs(:container_identifier).returns("abc") })
-      SessionContextService.stubs(:assemble_session_context)
+      SessionContextService.expects(:assemble_session_context)
+
+      strategy.before_exec(container_id: "container_ref")
+    end
+
+    test "before_exec refreshes credential when token is already expired" do
+      @credential.update!(expires_at: 5.minutes.ago)
+      strategy = build_strategy
+
+      mock_adapter = mock("adapter")
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.stubs(:for).with("claude_code").returns(mock_service)
+      mock_adapter.expects(:refresh!).with(@credential).returns({ status: :refreshed, detail: nil })
+      @credential.stubs(:reload)
+
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+      strategy.stubs(:runtime).returns(mock("rt").tap { |m| m.stubs(:container_identifier).returns("abc") })
+      SessionContextService.expects(:assemble_session_context)
+
+      strategy.before_exec(container_id: "container_ref")
+    end
+
+    test "before_exec refreshes credential when token expires exactly at threshold boundary" do
+      @credential.update!(expires_at: AgentSessionStrategy::SESSION_REFRESH_THRESHOLD.from_now)
+      strategy = build_strategy
+
+      mock_adapter = mock("adapter")
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.stubs(:for).with("claude_code").returns(mock_service)
+      mock_adapter.expects(:refresh!).with(@credential).returns({ status: :refreshed, detail: nil })
+      @credential.stubs(:reload)
+
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+      strategy.stubs(:runtime).returns(mock("rt").tap { |m| m.stubs(:container_identifier).returns("abc") })
+      SessionContextService.expects(:assemble_session_context)
 
       strategy.before_exec(container_id: "container_ref")
     end
@@ -655,16 +693,10 @@ module ContainerStrategies
       @credential.update!(expires_at: 2.hours.from_now)
       strategy = build_strategy
 
-      mock_adapter = mock("adapter")
-      mock_service = mock("service")
-      mock_service.stubs(:adapter).returns(mock_adapter)
-      AgentCredentialsService.stubs(:for).with("claude_code").returns(mock_service)
-      mock_adapter.expects(:refresh!).never
-
       container_mock = mock("container")
       strategy.stubs(:resolve_container).returns(container_mock)
       strategy.stubs(:runtime).returns(mock("rt").tap { |m| m.stubs(:container_identifier).returns("abc") })
-      SessionContextService.stubs(:assemble_session_context)
+      SessionContextService.expects(:assemble_session_context)
 
       strategy.before_exec(container_id: "container_ref")
     end
@@ -673,16 +705,10 @@ module ContainerStrategies
       @credential.update!(expires_at: nil)
       strategy = build_strategy
 
-      mock_adapter = mock("adapter")
-      mock_service = mock("service")
-      mock_service.stubs(:adapter).returns(mock_adapter)
-      AgentCredentialsService.stubs(:for).with("claude_code").returns(mock_service)
-      mock_adapter.expects(:refresh!).never
-
       container_mock = mock("container")
       strategy.stubs(:resolve_container).returns(container_mock)
       strategy.stubs(:runtime).returns(mock("rt").tap { |m| m.stubs(:container_identifier).returns("abc") })
-      SessionContextService.stubs(:assemble_session_context)
+      SessionContextService.expects(:assemble_session_context)
 
       strategy.before_exec(container_id: "container_ref")
     end

@@ -312,23 +312,33 @@ module ContainerStrategies
     def refresh_credential_if_expiring(credential)
       return unless credential
 
-      adapter = AgentCredentialsService.for(credential.agent_type).adapter
       expires_at = credential.expires_at
 
       if expires_at
-        remaining_min = ((expires_at - Time.current) / 60).round
-        Rails.logger.info("[AgentSession] Token expires_at=#{expires_at.iso8601} (#{remaining_min}m remaining) for credential #{credential.id}")
+        remaining_sec = expires_at - Time.current
+        if remaining_sec >= 0
+          Rails.logger.info("[AgentSession] Token expires_at=#{expires_at.iso8601} (#{(remaining_sec / 60).round}m remaining) for credential #{credential.id}")
+        else
+          Rails.logger.info("[AgentSession] Token expires_at=#{expires_at.iso8601} (expired #{(-remaining_sec / 60).round}m ago) for credential #{credential.id}")
+        end
 
         if expires_at <= SESSION_REFRESH_THRESHOLD.from_now
+          adapter = AgentCredentialsService.for(credential.agent_type).adapter
           result = adapter.refresh!(credential)
           Rails.logger.info("[AgentSession] Pre-session token refresh credential=#{credential.id} status=#{result[:status]} detail=#{result[:detail].inspect}")
-          credential.reload
+          begin
+            credential.reload
+          rescue ActiveRecord::ActiveRecordError => e
+            Rails.logger.error("[AgentSession] Refresh succeeded but credential.reload failed for #{credential.id}: #{e.class}: #{e.message}")
+          end
         end
       else
         Rails.logger.info("[AgentSession] Token has no expiry (API key or Bedrock) for credential #{credential.id}")
       end
+    rescue ArgumentError
+      raise
     rescue StandardError => e
-      Rails.logger.warn("[AgentSession] Pre-session credential refresh failed for #{credential.id}: #{e.message}")
+      Rails.logger.error("[AgentSession] Pre-session credential refresh failed for #{credential.id}: #{e.class}: #{e.message}")
     end
 
     def persist_refreshed_credentials(container, session, agent_service)
