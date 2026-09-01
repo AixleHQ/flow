@@ -96,6 +96,18 @@ export const SEARCH_INDEX: SearchResult[] = [
     section: 'Reference',
     desc: 'Every environment variable Aixle Flow reads, organized by subsystem.',
   },
+  {
+    slug: 'user-guide-outline',
+    title: 'User guide outline',
+    section: 'Product',
+    desc: 'The chapter-by-chapter skeleton of the end-user product guide, following the product sidebar.',
+  },
+  {
+    slug: 'changelog-product-areas',
+    title: 'Changelog product areas',
+    section: 'Product',
+    desc: 'The product-area taxonomy every user-visible changelog entry is tagged with.',
+  },
 ];
 
 export function searchDocs(query: string): SearchResult[] {

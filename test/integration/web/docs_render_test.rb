@@ -36,4 +36,13 @@ class Web::DocsRenderTest < ActionDispatch::IntegrationTest
       props[:slug] == "agents"
     end
   end
+
+  test "show renders the product-area snapshot pages" do
+    %w[user-guide-outline changelog-product-areas].each do |slug|
+      get docs_page_path(slug)
+      assert_response :success
+      assert_inertia_page "Docs/DocsPage"
+      assert_inertia_props { |props| props[:slug] == slug }
+    end
+  end
 end
