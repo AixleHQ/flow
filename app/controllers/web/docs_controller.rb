@@ -22,7 +22,10 @@ class Web::DocsController < Web::ApplicationController
   private
 
   def page_exists?(slug)
-    %w[user-guide quick-start agents runtimes tools mcp board workflows
+    %w[using-flow getting-started project-home tasks running-workflows starting-work
+       sessions-and-runs assets personas agent-capabilities repositories ai-builder
+       people-and-access secrets analytics company-workspace examples
+       user-guide quick-start agents runtimes tools mcp board workflows
        triggers-and-gates integrations configuration reference cli-ref api-guide
        config-schema user-guide-outline changelog-product-areas].include?(slug)
   end

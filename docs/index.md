@@ -91,4 +91,8 @@ running Flow — the product-level guide outlined above is a separate document s
 ## Related documentation elsewhere
 
 - `references/aixle-system-reference.md` — agent-facing platform reference (domain model, runtimes, container layout)
-- `app/frontend/pages/Docs/data/pages/` — the source the `/docs` portal renders; mirrored in this tree under [user-guide/](./user-guide/) and [reference/](./reference/)
+- `app/frontend/pages/Docs/data/pages/` — the markdown the `/docs` portal renders; mirrored in this tree under [user-guide/](./user-guide/) and [reference/](./reference/). Sections:
+  **Using Flow** (the product guide: what a user does on each screen) and **User guide /
+  Reference** (operator material: install, runtimes, MCP, API). Adding a page there means
+  registering it in `navStructure.ts`, `data/pages/index.ts`, `data/searchIndex.ts`, and the
+  allow-list in `Web::DocsController`
