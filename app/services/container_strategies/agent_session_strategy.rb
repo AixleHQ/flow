@@ -14,6 +14,8 @@ module ContainerStrategies
   class AgentSessionStrategy < AgentBaseStrategy
     SESSION_REFRESH_THRESHOLD = 60.minutes
 
+    class InvalidGrantError < StandardError; end
+
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
@@ -80,7 +82,7 @@ module ContainerStrategies
 
       session = TerminalSession.find(input[:session_id])
       credential = input[:credential]
-      refresh_credential_if_expiring(credential)
+      refresh_credential_if_expiring(credential, session: session)
       SessionContextService.assemble_session_context(container, session, credential: credential)
       {}
     end
@@ -309,7 +311,7 @@ module ContainerStrategies
     # Re-extract the auth files and update the stored credential when the token
     # material actually changed. Only updates an existing credential — never
     # creates one from a session.
-    def refresh_credential_if_expiring(credential)
+    def refresh_credential_if_expiring(credential, session: nil)
       return unless credential
 
       expires_at = credential.expires_at
@@ -326,6 +328,14 @@ module ContainerStrategies
           adapter = AgentCredentialsService.for(credential.agent_type).adapter
           result = adapter.refresh!(credential)
           Rails.logger.info("[AgentSession] Pre-session token refresh credential=#{credential.id} status=#{result[:status]} detail=#{result[:detail].inspect}")
+
+          if credential.agent_type == "claude_code" && result[:detail].to_s.include?("invalid_grant")
+            message = "Your Claude Code login has expired and could not be refreshed automatically. " \
+                      "Go to your profile settings and sign in again."
+            SessionService.fail_session(session: session, error_message: message) if session
+            raise InvalidGrantError, message
+          end
+
           begin
             credential.reload
           rescue ActiveRecord::ActiveRecordError => e
@@ -335,6 +345,8 @@ module ContainerStrategies
       else
         Rails.logger.info("[AgentSession] Token has no expiry (API key or Bedrock) for credential #{credential.id}")
       end
+    rescue InvalidGrantError
+      raise
     rescue ArgumentError
       raise
     rescue StandardError => e

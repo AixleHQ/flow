@@ -713,6 +713,27 @@ module ContainerStrategies
       strategy.before_exec(container_id: "container_ref")
     end
 
+    test "before_exec fails session and raises when claude_code refresh returns invalid_grant" do
+      @credential.update!(expires_at: 30.minutes.from_now)
+      strategy = build_strategy
+
+      mock_adapter = mock("adapter")
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.stubs(:for).with("claude_code").returns(mock_service)
+      mock_adapter.stubs(:refresh!).returns({ status: :error, detail: "claudeAiOauth invalid_grant — reconnection required" })
+
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+      strategy.stubs(:runtime).returns(mock("rt").tap { |m| m.stubs(:container_identifier).returns("abc") })
+      SessionService.expects(:fail_session).with(session: @session, error_message: anything)
+      SessionContextService.expects(:assemble_session_context).never
+
+      assert_raises(AgentSessionStrategy::InvalidGrantError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+    end
+
     test "before_exec continues when refresh raises" do
       @credential.update!(expires_at: 30.minutes.from_now)
       strategy = build_strategy
