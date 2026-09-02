@@ -167,7 +167,7 @@ gem "aws-sdk-bedrockruntime", "~> 1.83"
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
-gem "aws-sdk-bedrock", "~> 1.0"
+gem "aws-sdk-bedrock", "~> 1.91"
 gem "image_processing", "~> 2.0"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 
