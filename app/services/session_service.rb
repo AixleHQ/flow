@@ -16,6 +16,7 @@ class SessionService
       # this user, instead of starting a session that fails silently at provisioning.
       preflight_oauth!(user, params[:mcp_server_ids])
       preflight_cloud!(user, company || project&.company)
+      preflight_agent_credential!(user, company || project&.company, agent_type)
       preflight_url_safety!(params[:mcp_server_ids])
 
       # auth_kind ("design") is carried in metadata so AgentAuthStrategy can run the
@@ -197,6 +198,15 @@ class SessionService
     # model validates at create/update, but DNS (rebinding) or the stored value
     # may have changed since — a host that now resolves to a private/internal IP
     # must not be dialed. Cheap: url_safety uses local resolvers only.
+    def preflight_agent_credential!(user, company, agent_type)
+      return unless agent_type.present? && company.present?
+
+      credential = AgentCredential.find_by(user_id: user.id, company_id: company.id, agent_type: agent_type)
+      return if credential.nil? || credential.active?
+
+      raise AgentCredential::PreflightError, credential
+    end
+
     def preflight_url_safety!(mcp_server_ids)
       return if mcp_server_ids.blank?
 

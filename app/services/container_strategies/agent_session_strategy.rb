@@ -12,10 +12,6 @@ module ContainerStrategies
   #   - phase_config: non-interactive long timeout, interactive awaits signal
   #
   class AgentSessionStrategy < AgentBaseStrategy
-    SESSION_REFRESH_THRESHOLD = 60.minutes
-
-    class InvalidGrantError < StandardError; end
-
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
@@ -81,9 +77,7 @@ module ContainerStrategies
       raise "Container not ready for before_exec" if cid.blank?
 
       session = TerminalSession.find(input[:session_id])
-      credential = input[:credential]
-      refresh_credential_if_expiring(credential, session: session)
-      SessionContextService.assemble_session_context(container, session, credential: credential)
+      SessionContextService.assemble_session_context(container, session, credential: input[:credential])
       {}
     end
 
@@ -308,51 +302,6 @@ module ContainerStrategies
     # Agents (e.g. Claude Code) refresh their access/refresh tokens during a
     # session. Those refreshed tokens live only in the container's config files;
     # without this, the next session reloads the old (possibly expired) token.
-    # Re-extract the auth files and update the stored credential when the token
-    # material actually changed. Only updates an existing credential — never
-    # creates one from a session.
-    def refresh_credential_if_expiring(credential, session: nil)
-      return unless credential
-
-      expires_at = credential.expires_at
-
-      if expires_at
-        remaining_sec = expires_at - Time.current
-        if remaining_sec >= 0
-          Rails.logger.info("[AgentSession] Token expires_at=#{expires_at.iso8601} (#{(remaining_sec / 60).round}m remaining) for credential #{credential.id}")
-        else
-          Rails.logger.info("[AgentSession] Token expires_at=#{expires_at.iso8601} (expired #{(-remaining_sec / 60).round}m ago) for credential #{credential.id}")
-        end
-
-        if expires_at <= SESSION_REFRESH_THRESHOLD.from_now
-          adapter = AgentCredentialsService.for(credential.agent_type).adapter
-          result = adapter.refresh!(credential)
-          Rails.logger.info("[AgentSession] Pre-session token refresh credential=#{credential.id} status=#{result[:status]} detail=#{result[:detail].inspect}")
-
-          if credential.agent_type == "claude_code" && result[:detail].to_s.include?("invalid_grant")
-            message = "Your Claude Code login has expired and could not be refreshed automatically. " \
-                      "Go to your profile settings and sign in again."
-            SessionService.fail_session(session: session, error_message: message) if session
-            raise InvalidGrantError, message
-          end
-
-          begin
-            credential.reload
-          rescue ActiveRecord::ActiveRecordError => e
-            Rails.logger.error("[AgentSession] Refresh succeeded but credential.reload failed for #{credential.id}: #{e.class}: #{e.message}")
-          end
-        end
-      else
-        Rails.logger.info("[AgentSession] Token has no expiry (API key or Bedrock) for credential #{credential.id}")
-      end
-    rescue InvalidGrantError
-      raise
-    rescue ArgumentError
-      raise
-    rescue StandardError => e
-      Rails.logger.error("[AgentSession] Pre-session credential refresh failed for #{credential.id}: #{e.class}: #{e.message}")
-    end
-
     def persist_refreshed_credentials(container, session, agent_service)
       auth_files = extract_auth_files(container, agent_service)
       return unless auth_files_complete?(auth_files, agent_service)

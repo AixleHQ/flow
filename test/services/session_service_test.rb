@@ -227,6 +227,46 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert session.persisted?
   end
 
+  # == create_and_start: agent credential preflight ==
+
+  test "create_and_start blocks launch when agent credential is in error status" do
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-test" })
+    cred.mark_refresh_error!("invalid_grant", permanent: true)
+
+    error = assert_raises(AgentCredential::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "claude_code", params: {}
+      )
+    end
+
+    assert_includes error.message, "expired"
+    assert_equal 0, @user.terminal_sessions.count
+  end
+
+  test "create_and_start proceeds when agent credential is active" do
+    mock_temporal_start
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-test" })
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session",
+      agent_type: "claude_code", params: {}
+    )
+
+    assert session.persisted?
+  end
+
+  test "create_and_start proceeds when no agent credential exists" do
+    mock_temporal_start
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session",
+      agent_type: "claude_code", params: {}
+    )
+
+    assert session.persisted?
+  end
+
   test "create_and_start launches when the OAuth MCP server is connected for the user" do
     mock_temporal_start
     server = create(:mcp_server, :custom, scope: @project, transport: :sse,

@@ -3,12 +3,17 @@
 # AgentCredential - Stores encrypted authentication artifacts for agents
 class AgentCredential < ApplicationRecord
   include Encryptable
+  extend Enumerize
 
   belongs_to :user
   # Credentials are per (user, company): the same person authenticates a separate
   # agent account per company so vendor spend is billed to the company that
   # incurred it, never pooled across tenants.
   belongs_to :company
+
+  enumerize :status, in: %i[active error], default: :active, predicates: true
+
+  MAX_REFRESH_FAILURES = 3
 
   # Validations
   validates :agent_type, presence: true, inclusion: {
@@ -43,13 +48,22 @@ class AgentCredential < ApplicationRecord
 
   # Scopes
   scope :for_agent, ->(agent_type) { where(agent_type: agent_type) }
-  scope :active, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
+  scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :refreshable, -> { where(agent_type: REFRESHABLE_AGENT_TYPES) }
   # Credentials whose token expires within `within` (drives the refresh sweep).
   # NULL-expiry credentials (agents whose tokens carry no expiry) are excluded.
-  scope :refresh_due, ->(within = 15.minutes) {
-    where.not(expires_at: nil).where(expires_at: ..within.from_now)
+  scope :refresh_due, ->(within = 60.minutes) {
+    where(status: :active).where.not(expires_at: nil).where(expires_at: ..within.from_now)
   }
+
+  class PreflightError < StandardError
+    attr_reader :credential
+
+    def initialize(credential)
+      @credential = credential
+      super("Your #{credential.agent_type.titleize} login has expired. Go to profile settings and sign in again.")
+    end
+  end
 
   # Virtual attribute for admin display (shows keys without values)
   def config_keys
@@ -78,6 +92,9 @@ class AgentCredential < ApplicationRecord
   def self.from_artifacts(user_id, company_id, agent_type, artifacts_hash, new_authorization: false)
     credential = find_or_initialize_by(user_id: user_id, company_id: company_id, agent_type: agent_type)
     credential.config_data = artifacts_hash
+    credential.status = :active
+    credential.refresh_error = nil
+    credential.refresh_failure_count = 0
     dropped = %w[collected_at artifact_keys]
     dropped << "default_model" if new_authorization
     preserved = (credential.metadata || {}).except(*dropped)
@@ -144,6 +161,20 @@ class AgentCredential < ApplicationRecord
     service = AgentCredentialsService.for(agent_type)
     service.write_to_container(container_id, config_data, workflow_config)
     touch(:last_used_at)
+  end
+
+  def mark_refresh_error!(message, permanent: false)
+    self.refresh_failure_count = refresh_failure_count.to_i + 1
+    self.refresh_error = message.to_s.truncate(500)
+    self.status = :error if permanent || refresh_failure_count >= MAX_REFRESH_FAILURES
+    save!
+  end
+
+  def clear_refresh_error!
+    self.status = :active
+    self.refresh_error = nil
+    self.refresh_failure_count = 0
+    save!
   end
 
   private
