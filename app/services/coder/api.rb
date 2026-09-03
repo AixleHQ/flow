@@ -44,10 +44,12 @@ module Coder
         body["workspaces"] || []
       end
 
-      def build_workspace(coder_url:, session_token:, workspace_id:, transition:)
+      def build_workspace(coder_url:, session_token:, workspace_id:, transition:, orphan: false)
+        body = { transition: transition }
+        body[:orphan] = true if orphan
         json_post(
           "/api/v2/workspaces/#{workspace_id}/builds",
-          { transition: transition },
+          body,
           coder_url: coder_url, session_token: session_token,
           op: "build_workspace", accept: [ 200, 201 ]
         )

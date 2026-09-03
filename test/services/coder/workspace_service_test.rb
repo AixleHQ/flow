@@ -62,6 +62,16 @@ module Coder
       assert_requested request
     end
 
+    test "orphan delete posts an orphaned delete-transition build" do
+      request = stub_request(:post, "#{@base}/api/v2/workspaces/u1/builds")
+                  .with(body: { transition: "delete", orphan: true }.to_json)
+                  .to_return(status: 201, body: { id: "build-del" }.to_json)
+
+      @service.delete("u1", orphan: true)
+
+      assert_requested request
+    end
+
     test "delete raises OperationError when the build is refused" do
       stub_request(:post, "#{@base}/api/v2/workspaces/u1/builds").to_return(status: 409)
 

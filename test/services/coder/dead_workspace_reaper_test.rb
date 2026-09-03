@@ -8,12 +8,14 @@ module Coder
     # the constructor seam). Its own HTTP contract is covered in
     # workspace_service_test; here it only has to record deletions.
     class FakeWorkspaceService
-      attr_reader :deleted_ids
+      attr_reader :deleted_ids, :delete_calls
 
-      def initialize(workspaces: [], failing_delete_ids: [])
-        @workspaces         = workspaces
-        @failing_delete_ids = failing_delete_ids
-        @deleted_ids        = []
+      def initialize(workspaces: [], failing_delete_ids: [], permanently_failing_delete_ids: [])
+        @workspaces                     = workspaces
+        @failing_delete_ids             = failing_delete_ids
+        @permanently_failing_delete_ids = permanently_failing_delete_ids
+        @deleted_ids                    = []
+        @delete_calls                   = []
       end
 
       def list(prefix: nil)
@@ -22,13 +24,19 @@ module Coder
         @workspaces.select { |w| w["name"].to_s.start_with?(prefix) }
       end
 
-      def delete(workspace_id)
+      def delete(workspace_id, orphan: false)
         @deleted_ids << workspace_id
-        if @failing_delete_ids.include?(workspace_id)
+        @delete_calls << [ workspace_id, orphan ]
+        if @failing_delete_ids.include?(workspace_id) || @permanently_failing_delete_ids.include?(workspace_id)
+          @failing_delete_ids.delete(workspace_id) if orphan == false
           raise Coder::WorkspaceService::OperationError, "build (delete) failed: HTTP 500"
         end
 
         { "id" => "build-del-#{workspace_id}", "transition" => "delete" }
+      end
+
+      def await_build(build_id)
+        { "id" => build_id, "job" => { "status" => "succeeded" } }
       end
     end
 
@@ -115,6 +123,55 @@ module Coder
       end
     end
 
+    test "a workspace whose latest build failed is deleted" do
+      service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1", status: "failed") ])
+
+      result = build_reaper(workspace_service: service).reap
+
+      assert_equal 1, result[:deleted]
+      assert_equal [ [ "u1", false ] ], service.delete_calls
+    end
+
+    test "a failed workspace falls back to orphan delete when normal delete is refused" do
+      service = FakeWorkspaceService.new(
+        workspaces: [ running("aixle-prod-1", "u1", status: "failed") ],
+        failing_delete_ids: [ "u1" ]
+      )
+
+      result = build_reaper(workspace_service: service).reap
+
+      assert_equal 1, result[:deleted]
+      assert_empty result[:failures]
+      assert_equal [ [ "u1", false ], [ "u1", true ] ], service.delete_calls
+    end
+
+    test "a failed workspace delete error does not stop the remaining workspaces" do
+      service = FakeWorkspaceService.new(
+        workspaces: [
+          running("aixle-prod-1", "u1", status: "failed"),
+          running("aixle-prod-2", "u2", status: "failed")
+        ],
+        permanently_failing_delete_ids: [ "u1" ]
+      )
+
+      result = build_reaper(workspace_service: service).reap
+
+      assert_equal 1, result[:deleted]
+      assert_equal 1, result[:failures].size
+      assert_includes service.deleted_ids, "u2"
+    end
+
+    test "a workspace with a delete build in progress is untouched" do
+      service = FakeWorkspaceService.new(workspaces: [
+        running("aixle-prod-1", "u1", transition: "delete", status: "running")
+      ])
+
+      result = build_reaper(workspace_service: service).reap
+
+      assert_equal 0, result[:deleted]
+      assert_empty service.delete_calls
+    end
+
     test "nothing is deleted while the confirmation window is still open" do
       service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1") ])
       build_reaper(workspace_service: service).reap
@@ -182,7 +239,7 @@ module Coder
         running("aixle-prod-1", "u1", transition: "stop"),
         running("aixle-prod-2", "u2", transition: "delete"),
         running("aixle-prod-3", "u3", status: "running"),
-        running("aixle-prod-4", "u4", status: "failed")
+        running("aixle-prod-4", "u4", transition: "delete", status: "running")
       ])
 
       result = build_reaper(workspace_service: service).reap
