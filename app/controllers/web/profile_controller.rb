@@ -162,7 +162,7 @@ class Web::ProfileController < Web::ApplicationController
     agent_type = params.require(:agent_type)
     raise ActiveRecord::RecordNotFound unless agent_type == "antigravity_cli"
 
-    api_key = params.require(:api_key).to_s.strip
+    api_key = params[:api_key].to_s.strip
     if api_key.blank?
       return render json: { error: "API key cannot be empty" }, status: :unprocessable_entity
     end
