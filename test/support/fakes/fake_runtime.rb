@@ -157,6 +157,15 @@ module ContainerRuntime
         return [ [ "" ], [ "" ], @fs.key?(probe[1]) ? 0 : 1 ]
       end
 
+      # Agents::CodexAdapter#credential_preflight stats the auth file directly —
+      # answer from the virtual FS: exit 0 + size in bytes when present, non-zero
+      # exit (empty stdout) when absent, mirroring what `stat -c%s` reports.
+      if (probe = command_string(cmd).match(/\bstat -c%s (\S+)/))
+        path = probe[1]
+        content = @unreadable_paths.include?(path) ? nil : @fs[path]
+        return content.nil? ? [ [ "" ], [ "" ], 1 ] : [ [ content.bytesize.to_s ], [ "" ], 0 ]
+      end
+
       [ [ resolve_command(cmd) ], [ "" ], 0 ]
     end
 

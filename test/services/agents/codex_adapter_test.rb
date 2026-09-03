@@ -702,7 +702,47 @@ module Agents
       refute_includes toml, @adapter.toml_string("@playwright/mcp@latest")
     end
 
+    # == Launch-time Credential Preflight ==
+
+    # task #1327 (owner decision, board comment 8142): the preflight is a pure
+    # existence + non-zero-size stat — no file content is ever read, so there is
+    # no diagnostic to assert on and nothing to redact.
+    test "credential_preflight accepts a non-empty auth file regardless of content" do
+      content = { "tokens" => { "access_token" => "top-secret-access-value" } }.to_json
+      runtime, container = preflight_runtime(content)
+
+      result = @adapter.credential_preflight(runtime, container, "abc123")
+
+      assert result[:valid]
+      assert_nil result[:error_code]
+    end
+
+    test "credential_preflight rejects a missing auth file" do
+      runtime, container = preflight_runtime(nil)
+
+      result = @adapter.credential_preflight(runtime, container, "abc123")
+
+      refute result[:valid]
+      assert_equal "auth_file_missing", result[:error_code]
+    end
+
+    test "credential_preflight rejects a zero-byte auth file" do
+      runtime, container = preflight_runtime("")
+
+      result = @adapter.credential_preflight(runtime, container, "abc123")
+
+      refute result[:valid]
+      assert_equal "auth_file_empty", result[:error_code]
+    end
+
     private
+
+    def preflight_runtime(auth_content)
+      filesystem = {}
+      filesystem[@adapter.config_path] = auth_content unless auth_content.nil?
+      runtime = ContainerRuntime::FakeRuntime.new(agent_type: "codex", filesystem: filesystem)
+      [ runtime, runtime.resolve_container("abc123") ]
+    end
 
     def codex_models_url
       "#{Codex::Api::MODELS_URL}?client_version=#{Codex::Api::CLIENT_VERSION}"
