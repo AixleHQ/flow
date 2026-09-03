@@ -130,6 +130,44 @@ module ContainerStrategies
       strategy.before_exec(container_id: "container_ref")
     end
 
+    # task #1327 (owner decision, board comment 8142): the preflight is a pure
+    # existence + non-zero-size stat — no file content is read, nothing is logged
+    # on success, so there is no diagnostic or redaction to assert on here.
+    test "Codex preflight accepts a non-empty auth file regardless of content" do
+      strategy, = build_codex_preflight_strategy({ "tokens" => { "access_token" => "top-secret-access" } }.to_json)
+
+      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
+    end
+
+    test "Codex preflight rejects a missing auth file" do
+      strategy, = build_codex_preflight_strategy(nil)
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_file_missing", error.code
+    end
+
+    test "Codex preflight rejects a zero-byte auth file" do
+      strategy, = build_codex_preflight_strategy("")
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_file_empty", error.code
+    end
+
+    test "failed Codex preflight prevents tmux launch" do
+      strategy, = build_codex_preflight_strategy(nil)
+      strategy.expects(:send_tmux_command).never
+
+      assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+    end
+
     # == before_cleanup Tests ==
 
     test "before_cleanup sets logs_count and outputs_count in result" do
@@ -639,6 +677,20 @@ module ContainerStrategies
         route_token: @session.route_token,
         credential: cred
       )
+    end
+
+    def build_codex_preflight_strategy(auth_content)
+      @session.update!(agent_type: "codex")
+      credential = create(:agent_credential, user: @user, agent_type: "codex")
+      filesystem = {}
+      filesystem[Agents::CodexAdapter.new.config_path] = auth_content unless auth_content.nil?
+      runtime = ContainerRuntime::FakeRuntime.new(agent_type: "codex", filesystem: filesystem)
+      strategy = build_strategy(agent_type: "codex", credential: credential)
+      container = runtime.resolve_container("container_ref")
+      strategy.stubs(:resolve_container).returns(container)
+      strategy.stubs(:runtime).returns(runtime)
+      SessionContextService.stubs(:assemble_session_context).returns(true)
+      [ strategy, runtime, container ]
     end
   end
 end

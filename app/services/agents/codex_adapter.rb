@@ -326,6 +326,31 @@ module Agents
     end
     private :numeric_value
 
+    # =========================================================================
+    # Launch-time Credential Preflight (see BaseAdapter#credential_preflight)
+    # =========================================================================
+
+    # Stat auth.json on the container. The gate is existence + non-zero size
+    # only (task #1327, owner decision in board comment 8142) — file contents
+    # are never read: no JSON parse, no inspection of `tokens`/access_token/
+    # refresh_token. A non-empty-but-malformed or token-less file deliberately
+    # passes preflight (accepted risk stated in the same comment). Nothing is
+    # logged here on success; only the error path produces output, through the
+    # existing ProvisioningError / ContainerService#run_phase convention.
+    #
+    # Exactly one stat. No retry, no rewrite, no delay, no token refresh.
+    def credential_preflight(runtime, container, _container_id)
+      stdout, _stderr, status = runtime.exec(
+        container, [ "/bin/sh", "-c", "stat -c%s #{Shellwords.escape(config_path)} 2>/dev/null" ], stdout: true, stderr: true
+      )
+      return { valid: false, error_code: "auth_file_missing" } unless status.to_i.zero?
+
+      size = Array(stdout).join.strip.to_i
+      return { valid: false, error_code: "auth_file_empty" } if size.zero?
+
+      { valid: true, error_code: nil }
+    end
+
     # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
     # refresh_access_token! which persists under a row lock via persist_refreshed!.
     # @param credential [AgentCredential]

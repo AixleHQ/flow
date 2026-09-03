@@ -12,6 +12,18 @@ module ContainerStrategies
   #   - phase_config: non-interactive long timeout, interactive awaits signal
   #
   class AgentSessionStrategy < AgentBaseStrategy
+    # Raised by an adapter's #credential_preflight when the credential written
+    # to the container fails launch-time verification (see BaseAdapter).
+    class ProvisioningError < StandardError
+      attr_reader :code, :details
+
+      def initialize(code, details)
+        @code = code
+        @details = details
+        super("Credential preflight failed: #{code}")
+      end
+    end
+
     def phase_config(phase)
       case phase
       when :pull_image  then { timeout: 600 }
@@ -77,7 +89,13 @@ module ContainerStrategies
       raise "Container not ready for before_exec" if cid.blank?
 
       session = TerminalSession.find(input[:session_id])
-      SessionContextService.assemble_session_context(container, session, credential: input[:credential])
+      adapter = AgentCredentialsService.for(input[:agent_type]).adapter
+
+      begin
+        SessionContextService.assemble_session_context(container, session, credential: input[:credential])
+      ensure
+        run_credential_preflight!(adapter, container, cid)
+      end
       {}
     end
 
@@ -135,6 +153,18 @@ module ContainerStrategies
     end
 
     private
+
+    # Adapter hook for launch-time credential verification (e.g. Codex's
+    # auth.json stat before tmux launch — see BaseAdapter#credential_preflight).
+    # Most agents have nothing to check here, so #credential_preflight returns
+    # nil and this is a no-op — the strategy never needs to know which agent
+    # type, if any, requires the check.
+    def run_credential_preflight!(adapter, container, container_id)
+      result = adapter.credential_preflight(runtime, container, container_id)
+      return if result.nil?
+
+      raise ProvisioningError.new(result[:error_code], {}) unless result[:valid]
+    end
 
     def launch_agent_in_tmux(container)
       session = TerminalSession.find(input[:session_id])
