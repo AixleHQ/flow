@@ -4,7 +4,7 @@ Aixle runs Antigravity CLI as a separate runtime (`antigravity_cli`); it does no
 
 ## Authentication
 
-Aixle supports the documented Gemini API-key provider. Connect the runtime from Profile and enter a company-scoped Google AI Studio key. Aixle writes `modelProvider: gemini` to `~/.gemini/antigravity-cli/settings.json` and injects `GEMINI_API_KEY` only into that company's sessions. Account OAuth is intentionally unsupported because Antigravity stores it in an OS keyring, which cannot be safely moved between ephemeral containers. Enterprise ADC can be added separately when company-managed workload identity is available.
+Aixle supports the documented Gemini API-key provider. Connect the runtime from Profile and enter a company-scoped Google AI Studio key. The backend stores the key in the encrypted `AgentCredential` record, writes `modelProvider: gemini` and the credential file into each ephemeral container, and injects `GEMINI_API_KEY` only into that company's sessions. The image contains no credential-capture script. Account OAuth is intentionally unsupported because Antigravity stores it in an OS keyring, which cannot be safely moved between ephemeral containers. Enterprise ADC can be added separately when company-managed workload identity is available.
 
 ## Runtime contract
 
@@ -19,3 +19,5 @@ Build from the `docker/` directory:
 ```sh
 docker build -f antigravity-cli/Dockerfile -t aixle/antigravity-cli:latest .
 ```
+
+The image intentionally downloads GitHub's current `latest` release during each build. Record the emitted `agy --version` value with the published image digest for rollback traceability.

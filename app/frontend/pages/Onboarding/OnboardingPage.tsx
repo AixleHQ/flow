@@ -13,6 +13,7 @@ import {
   Stack,
   Stepper,
   Text,
+  TextInput,
   ThemeIcon,
   UnstyledButton,
 } from '@mantine/core';
@@ -128,6 +129,59 @@ const STEP_MAP: Record<string, number> = {
 
 function ttydUrlFromWs(websocketUrl: string) {
   return websocketUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace('/ws', '');
+}
+
+function AntigravityApiKeyForm({ onAuthenticated }: { onAuthenticated: () => void }) {
+  const [apiKey, setApiKey] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    const key = apiKey.trim();
+    if (!key) {
+      setError('Enter a Google AI Studio API key.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      const response = await apiFetch('/profile/update_agent_credential', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentType: 'antigravity_cli', apiKey: key }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Could not save the API key.');
+      }
+      onAuthenticated();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not save the API key.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Stack p="md" gap="md">
+      <Text size="xs" c="dimmed">
+        Enter the company-scoped Google AI Studio key. It is stored encrypted by Aixle and is never written by a helper
+        inside the agent image.
+      </Text>
+      <TextInput
+        label="Google AI Studio API key"
+        type="password"
+        value={apiKey}
+        onChange={(event) => setApiKey(event.currentTarget.value)}
+        error={error}
+        autoComplete="off"
+      />
+      <Button loading={saving} onClick={() => void save()}>
+        Save key
+      </Button>
+    </Stack>
+  );
 }
 
 function AgentAuthTerminal({
@@ -411,16 +465,25 @@ function ConnectAgentsStep({
                       overflow: 'hidden',
                     }}
                   >
-                    <AgentAuthTerminal
-                      key={agent.type}
-                      agentType={agent.type}
-                      session={session}
-                      isConfigured={false}
-                      onAuthenticated={() => {
-                        setExpandedAgent(null);
-                        router.reload();
-                      }}
-                    />
+                    {agent.type === 'antigravity_cli' ? (
+                      <AntigravityApiKeyForm
+                        onAuthenticated={() => {
+                          setExpandedAgent(null);
+                          router.reload();
+                        }}
+                      />
+                    ) : (
+                      <AgentAuthTerminal
+                        key={agent.type}
+                        agentType={agent.type}
+                        session={session}
+                        isConfigured={false}
+                        onAuthenticated={() => {
+                          setExpandedAgent(null);
+                          router.reload();
+                        }}
+                      />
+                    )}
                   </Box>
                 )}
               </Box>

@@ -21,6 +21,13 @@ module Agents
       assert_equal({ "api_key" => "key-123" }, JSON.parse(files[@adapter.config_path]))
     end
 
+    test "keeps credential file creation in the backend adapter" do
+      assert_equal({ "/home/antigravity/.gemini/antigravity-cli/settings.json" =>
+                       { "modelProvider" => "gemini", "enableTelemetry" => false, "showTips" => false }.to_json },
+                   @adapter.auth_setup_files)
+      assert_equal "key-123", JSON.parse(@adapter.config_files("api_key" => "key-123")[@adapter.config_path])["api_key"]
+    end
+
     test "uses print mode only for automatic sessions" do
       assert_equal "agy --dangerously-skip-permissions", @adapter.session_command(mode: "interactive")
       assert_equal "agy --model gemini-3.5-pro --dangerously-skip-permissions --print --output-format stream-json",

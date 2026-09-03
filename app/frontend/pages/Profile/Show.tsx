@@ -466,6 +466,9 @@ function AgentAuthModal({
   const [cloudRequested, setCloudRequested] = useState(false);
   const [cloudConnected, setCloudConnected] = useState(false);
   const [finishError, setFinishError] = useState(false);
+  const [apiKey, setApiKey] = useState('');
+  const [apiKeySaving, setApiKeySaving] = useState(false);
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const cableSubRef = useRef<Subscription | null>(null);
   const watcherPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const finishingRef = useRef(false);
@@ -557,12 +560,44 @@ function AgentAuthModal({
   useEffect(() => {
     if (!opened) {
       startedRef.current = false;
+      setApiKey('');
+      setApiKeyError(null);
       return;
     }
+    if (agentType === 'antigravity_cli') return;
     if (startedRef.current) return;
     startedRef.current = true;
     startAuth();
-  }, [opened, startAuth]);
+  }, [opened, agentType, startAuth]);
+
+  const saveApiKey = useCallback(async () => {
+    const key = apiKey.trim();
+    if (!key) {
+      setApiKeyError('Enter a Google AI Studio API key.');
+      return;
+    }
+
+    setApiKeySaving(true);
+    setApiKeyError(null);
+    try {
+      const res = await apiFetch('/profile/update_agent_credential', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentType: 'antigravity_cli', apiKey: key }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || 'Could not save the API key.');
+      }
+      notifications.show({ message: 'Antigravity CLI authentication saved!', color: 'green' });
+      router.reload({ only: ['profile'] });
+      onClose();
+    } catch (error) {
+      setApiKeyError(error instanceof Error ? error.message : 'Could not save the API key.');
+    } finally {
+      setApiKeySaving(false);
+    }
+  }, [apiKey, onClose]);
 
   // Subscribe to Inertia Cable for session updates
   useEffect(() => {
@@ -655,6 +690,33 @@ function AgentAuthModal({
   }, [sessionId, sessionState, cleanup, onClose]);
 
   const renderContent = () => {
+    if (agentType === 'antigravity_cli') {
+      return (
+        <Stack p="lg" gap="md">
+          <Text size="sm" c="dimmed">
+            Enter the company-scoped Google AI Studio key. Aixle stores it encrypted and injects it only into this
+            company&apos;s Antigravity sessions.
+          </Text>
+          <TextInput
+            label="Google AI Studio API key"
+            type="password"
+            value={apiKey}
+            onChange={(event) => setApiKey(event.currentTarget.value)}
+            error={apiKeyError}
+            autoComplete="off"
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button loading={apiKeySaving} onClick={() => void saveApiKey()}>
+              Save key
+            </Button>
+          </Group>
+        </Stack>
+      );
+    }
+
     if (sessionState === 'finished') {
       return (
         <Stack align="center" justify="center" h={500} gap="sm">

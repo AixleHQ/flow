@@ -45,6 +45,16 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     assert_includes names, "fail_session"
   end
 
+  test "non_interactive Antigravity sessions get the completion contract" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+      agent_type: "antigravity_cli", mode: "non_interactive", initial_prompt: "run")
+
+    names = session.available_tools.map(&:name)
+
+    assert_includes names, "finish_session"
+    assert_includes names, "fail_session"
+  end
+
   test "interactive sessions do not get session lifecycle tools" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
 

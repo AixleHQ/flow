@@ -155,6 +155,28 @@ class Web::ProfileController < Web::ApplicationController
     redirect_to profile_path, notice: "Default model updated"
   end
 
+  # API-key runtimes do not need a terminal login helper. Persist the key through
+  # the same encrypted backend model used by every other adapter; the adapter then
+  # writes its settings and credential files into each ephemeral agent container.
+  def update_agent_credential
+    agent_type = params.require(:agent_type)
+    raise ActiveRecord::RecordNotFound unless agent_type == "antigravity_cli"
+
+    api_key = params.require(:api_key).to_s.strip
+    if api_key.blank?
+      return render json: { error: "API key cannot be empty" }, status: :unprocessable_entity
+    end
+
+    AgentCredential.from_artifacts(
+      current_user.id,
+      current_membership.company_id,
+      agent_type,
+      { "api_key" => api_key },
+      new_authorization: true
+    )
+    render json: { configured: true }
+  end
+
   def destroy_credential
     credential = current_company_credentials.find(params[:agent_credential_id])
     credential.destroy!

@@ -534,6 +534,33 @@ describe('Profile/Show', () => {
     );
   });
 
+  it('stores an Antigravity API key through the backend without starting an auth container', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ configured: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    const card = screen.getByText('Antigravity CLI').closest('.mantine-Card-root') as HTMLElement;
+    await userEvent.click(within(card).getByRole('button', { name: 'Authenticate' }));
+    await userEvent.type(screen.getByLabelText('Google AI Studio API key'), 'google-key');
+    await userEvent.click(screen.getByRole('button', { name: 'Save key' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/profile/update_agent_credential',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ agentType: 'antigravity_cli', apiKey: 'google-key' }),
+        }),
+      ),
+    );
+    expect(fetchSpy).not.toHaveBeenCalledWith('/api/v1/terminal_sessions', expect.objectContaining({ method: 'POST' }));
+  });
+
   // == AWS Bedrock connection ==
   //
   // Claude Code hides Bedrock errors, so a broken connection otherwise presents as an

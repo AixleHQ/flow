@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildSharedUser } from 'test/factories/sharedProps';
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
@@ -271,6 +271,25 @@ describe('Onboarding/OnboardingPage', () => {
     // Connect button appears for unconfigured agents
     const connectButtons = screen.getAllByRole('button', { name: /Connect/ });
     expect(connectButtons.length).toBeGreaterThan(0);
+  });
+
+  it('connects Antigravity with a backend-stored API key instead of an auth session', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ configured: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    renderAuthedPage(<OnboardingPage />, {
+      props: { currentUser: userAt({ onboardingState: 'step2' }), authSessions: [] },
+    });
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[4]);
+    await userEvent.type(screen.getByLabelText('Google AI Studio API key'), 'google-key');
+    await userEvent.click(screen.getByRole('button', { name: 'Save key' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('/profile/update_agent_credential', expect.anything()));
+    expect(fetchSpy).not.toHaveBeenCalledWith('/api/v1/terminal_sessions', expect.anything());
   });
 
   it('advances from the profile step after clicking a role card and choosing a language', async () => {

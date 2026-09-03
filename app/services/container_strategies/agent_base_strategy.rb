@@ -27,7 +27,7 @@ module ContainerStrategies
       # a localhost OAuth callback, so the user completes login on their own device.
       "codex" => "codex login --device-auth",
       "gemini_cli" => "gemini",
-      "antigravity_cli" => "/app/antigravity-auth.sh",
+      "antigravity_cli" => "agy",
       # Device-code, not the default browser flow: nothing in the container can open a
       # browser, so this is the only Grok login that completes here — it prints a URL
       # and a code the user finishes on their own device.
