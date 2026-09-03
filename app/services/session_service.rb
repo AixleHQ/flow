@@ -103,6 +103,8 @@ class SessionService
                 run_credentials(workflow_run).order(created_at: :desc).first&.agent_type ||
                 "claude_code"
 
+      preflight_agent_credential!(workflow_run.user, workflow_run.project&.company, runtime)
+
       run_model = workflow_run.shared_context&.dig("requested_model")
 
       session = TerminalSession.create!(
