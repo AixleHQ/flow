@@ -90,12 +90,12 @@ module ContainerStrategies
 
       session = TerminalSession.find(input[:session_id])
       adapter = AgentCredentialsService.for(input[:agent_type]).adapter
+      credential = input[:credential]
 
-      begin
-        SessionContextService.assemble_session_context(container, session, credential: input[:credential])
-      ensure
-        run_credential_preflight!(adapter, container, cid)
-      end
+      raise_unresolved_credential!(session) if credential.nil? && AgentCredentialsService.supported?(input[:agent_type])
+
+      SessionContextService.assemble_session_context(container, session, credential: credential)
+      run_credential_preflight!(adapter, container, cid)
       {}
     end
 
@@ -153,6 +153,27 @@ module ContainerStrategies
     end
 
     private
+
+    def raise_unresolved_credential!(session)
+      step_run = session.step_run
+      details = {
+        session_id: session.id,
+        step_run_id: step_run&.id,
+        workflow_run_id: step_run&.workflow_run_id,
+        session_type: session.session_type,
+        mode: session.mode,
+        session_agent_type: session.agent_type,
+        input_agent_type: input[:agent_type],
+        user_id: session.user_id,
+        session_company_id: session.company_id,
+        project_id: session.project_id,
+        project_company_id: session.project&.company_id,
+        effective_company_id: SessionCompany.company_id_for(session),
+        credential_candidates: AgentCredential.where(user_id: session.user_id).pluck(:id, :company_id, :agent_type)
+      }
+
+      raise ProvisioningError.new("credential_not_resolved", details)
+    end
 
     # Adapter hook for launch-time credential verification (e.g. Codex's
     # auth.json stat before tmux launch — see BaseAdapter#credential_preflight).

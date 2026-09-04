@@ -107,7 +107,7 @@ module ContainerStrategies
       strategy.before_exec(container_id: "container_ref")
     end
 
-    test "before_exec skips credential when nil" do
+    test "before_exec rejects a nil credential before assembling context" do
       strategy = AgentSessionStrategy.new(
         user_id: @user.id,
         agent_type: "claude_code",
@@ -123,11 +123,64 @@ module ContainerStrategies
       strategy.stubs(:runtime).returns(runtime_mock)
       runtime_mock.expects(:container_identifier).with(container_mock).returns("abc123")
 
-      SessionContextService.expects(:assemble_session_context).with(
-        container_mock, @session, credential: nil
-      )
+      SessionContextService.expects(:assemble_session_context).never
 
-      strategy.before_exec(container_id: "container_ref")
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "credential_not_resolved", error.code
+      assert_equal @session.id, error.details[:session_id]
+      assert_equal @session.session_type, error.details[:session_type]
+      assert_equal @session.mode, error.details[:mode]
+      assert_equal @session.agent_type, error.details[:session_agent_type]
+      assert_equal "claude_code", error.details[:input_agent_type]
+      assert_equal @user.id, error.details[:user_id]
+      assert_equal @session.company_id, error.details[:session_company_id]
+      assert_equal @session.project_id, error.details[:project_id]
+      assert_equal @session.project.company_id, error.details[:project_company_id]
+      assert_equal @company.id, error.details[:effective_company_id]
+      assert_includes error.details[:credential_candidates], [ @credential.id, @company.id, "claude_code" ]
+    end
+
+    test "unresolved credential diagnostic contains no credential secrets" do
+      secret = "top-secret-token"
+      @credential.update!(config_data: { "tokens" => { "access_token" => secret } })
+      strategy = AgentSessionStrategy.new(
+        user_id: @user.id,
+        agent_type: "claude_code",
+        session_id: @session.id,
+        route_token: @session.route_token,
+        credential: nil
+      )
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+      strategy.stubs(:runtime).returns(stub(container_identifier: "abc123"))
+      SessionContextService.expects(:assemble_session_context).never
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      diagnostic = error.details.to_json
+      refute_includes diagnostic, secret
+      refute_includes diagnostic, "access_token"
+      refute_includes diagnostic, "config_data"
+    end
+
+    test "before_exec preserves context assembly errors without running preflight" do
+      strategy = build_strategy
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+      strategy.stubs(:runtime).returns(stub(container_identifier: "abc123"))
+      assembly_error = RuntimeError.new("credential write failed")
+      SessionContextService.expects(:assemble_session_context).raises(assembly_error)
+
+      error = assert_raises(RuntimeError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_same assembly_error, error
     end
 
     # task #1327 (owner decision, board comment 8142): the preflight is a pure
