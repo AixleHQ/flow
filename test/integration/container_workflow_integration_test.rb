@@ -51,6 +51,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
 
             if strategy == "agent_session"
               assert_session_logs_collected(session, agent_type)
+              assert_cursor_usage_recorded(session) if agent_type == "cursor_cli"
             end
           end
         end
@@ -115,6 +116,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
 
     stub_traefik_http
     stub_container_settings
+    stub_cursor_usage_api
   end
 
   teardown do
@@ -208,6 +210,22 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
       assert data.dig("auth", "https://accounts.x.ai/sign-in", "key").present?,
         "Expected the signed-in scope's token in grok credential"
     end
+  end
+
+  # Cursor's meter runs at cleanup, off the MITM log plus the dashboard reply
+  # (stubbed above) — and it is the one agent where an ordering slip in
+  # #before_cleanup leaves the columns the sessions list renders empty on a run
+  # that plainly happened. Assert the whole path, not just that it did not raise.
+  def assert_cursor_usage_recorded(session)
+    stat = session.usage_statistic
+    assert stat.present?, "Expected a UsageStatistic for the cursor_cli session"
+    assert_equal "cursor_api", stat.source
+    assert_equal 1_200, stat.input_tokens
+    assert_equal 340, stat.output_tokens
+
+    assert_equal "recorded", session.metadata.dig("usage_collection", "status")
+    assert_equal stat.total_tokens, session.total_tokens
+    assert_equal stat.cost_cents, session.cost_cents
   end
 
   def assert_session_logs_collected(session, agent_type)
