@@ -10,17 +10,19 @@ module Agents
   # works headlessly; account OAuth is stored in the host keyring and is unsuitable
   # for copying between isolated sessions.
   #
-  # Unlike every other adapter's login, `agy`'s API-key mode has no interactive
-  # credential prompt of its own to run inside the auth terminal: confirmed against
-  # the real 1.1.x binary, it only reads GEMINI_API_KEY from the environment at
-  # startup and exits immediately with an error if that is unset — it never writes a
-  # credential artifact for this mode. So the auth-terminal session (see
-  # #auth_launch_commands_for) runs a small login script instead of `agy` directly:
-  # it reads the key the user types, calls the real CLI to validate it, and — only on
-  # success — writes it to the same file every other step here already assumes
-  # (#config_path). That keeps credential capture on the one shared path
-  # (AgentAuthStrategy#before_cleanup reads #auth_file_paths) instead of a bespoke
-  # backend form, while still requiring a live human to supply and verify the secret.
+  # Unlike every other adapter's login, `agy`'s own interactive welcome prompt
+  # (confirmed against the real 1.1.x binary, run with no flags and no
+  # GEMINI_API_KEY) only offers "Google OAuth" or "Use a Google Cloud project" — it
+  # has no option to type in a raw API key, and setting GEMINI_API_KEY just skips
+  # that prompt without ever writing a credential artifact. Since neither of agy's
+  # own login modes is portable across ephemeral containers, the auth-terminal
+  # session (see #auth_launch_commands_for) runs a small login script instead of
+  # `agy` directly: it reads the key the user types, calls the real CLI to validate
+  # it, and — only on success — writes it to the same file every other step here
+  # already assumes (#config_path). That keeps credential capture on the one shared
+  # path (AgentAuthStrategy#before_cleanup reads #auth_file_paths) instead of a
+  # bespoke backend form, while still requiring a live human to supply and verify
+  # the secret.
   class AntigravityCliAdapter < BaseAdapter
     SETTINGS_PATH = ".gemini/antigravity-cli/settings.json"
     API_KEY_PATH = ".gemini/antigravity-cli/aixle-api-key.json"

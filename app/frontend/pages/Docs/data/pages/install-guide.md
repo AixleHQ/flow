@@ -19,7 +19,7 @@ host — everything runs in containers.
 ## Disk space
 
 First-run image build pulls approximately 3–5 GB of base images plus
-the five agent runtime images. Allow 10–15 GB of free disk for a
+the six agent runtime images. Allow 10–15 GB of free disk for a
 comfortable install.
 
 ## Getting the code
@@ -38,7 +38,7 @@ make setup
 
 `make setup` builds all images, installs dependencies inside the
 containers, creates the database, runs migrations, seeds defaults, and
-builds the five agent runtime images in parallel.
+builds the six agent runtime images in parallel.
 
 > **info** **First run is slow.** Most of the time is Docker pulling base images and building agent containers. Subsequent starts are seconds.
 

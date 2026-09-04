@@ -4,7 +4,13 @@ require "test_helper"
 
 module Agents
   class AntigravityCliAdapterTest < ActiveSupport::TestCase
-    setup { @adapter = AntigravityCliAdapter.new }
+    setup do
+      @adapter = AntigravityCliAdapter.new
+      @company = create(:company)
+      @user = create(:user, :admin, company: @company)
+      @project = create(:project, company: @company, owner: @user)
+      @session = create(:terminal_session, :running, user: @user, project: @project)
+    end
 
     test "uses a portable API-key credential" do
       assert_equal "/home/antigravity/.gemini/antigravity-cli/aixle-api-key.json", @adapter.config_path
@@ -28,12 +34,13 @@ module Agents
       assert_equal "key-123", JSON.parse(@adapter.config_files("api_key" => "key-123")[@adapter.config_path])["api_key"]
     end
 
-    # `agy`'s only headless-safe auth mode reads GEMINI_API_KEY from the environment
-    # at startup and has no interactive credential prompt of its own (confirmed
-    # against the real CLI — it exits immediately if that var is unset). So the auth
-    # terminal drives a login script instead of the CLI directly: the user is
-    # prompted for a key, `agy` validates it live, and only a verified key is written
-    # to #config_path — the same file every other auth check here already assumes.
+    # `agy`'s own interactive welcome prompt (confirmed against the real CLI, run
+    # with no flags) only offers Google OAuth or a Google Cloud project login —
+    # neither portable across ephemeral containers, and neither lets the user type
+    # in a raw API key. So the auth terminal drives a login script instead of the
+    # CLI directly: the user is prompted for a key, `agy` validates it live, and
+    # only a verified key is written to #config_path — the same file every other
+    # auth check here already assumes.
     test "seeds a login script that validates the key with the real CLI before writing it" do
       files = @adapter.auth_setup_files
       script = files["/home/antigravity/.aixle/antigravity-login.sh"]
@@ -62,6 +69,24 @@ module Agents
       entry = config.dig("mcpServers", MCPServer.config_key_for(server.name))
       assert_equal "https://example.test/mcp", entry["serverUrl"]
       assert_equal({ "X-Key" => "x" }, entry["headers"])
+    end
+
+    test "default_env_vars injects the API key of the session's company only" do
+      other_company = create(:company)
+      create(:company_membership, user: @user, company: other_company)
+      create(:agent_credential, user: @user, company: other_company, agent_type: "antigravity_cli",
+                                config_data: { "api_key" => "other-tenant-key" })
+
+      assert_nil @adapter.default_env_vars(@session)["GEMINI_API_KEY"]
+
+      create(:agent_credential, user: @user, company: @company, agent_type: "antigravity_cli",
+                                config_data: { "api_key" => "mine" })
+
+      assert_equal "mine", @adapter.default_env_vars(@session)["GEMINI_API_KEY"]
+    end
+
+    test "default_env_vars omits the API key entirely when no credential exists" do
+      refute @adapter.default_env_vars(@session).key?("GEMINI_API_KEY")
     end
   end
 end
