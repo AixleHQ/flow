@@ -534,9 +534,9 @@ describe('Profile/Show', () => {
     );
   });
 
-  it('stores an Antigravity API key through the backend without starting an auth container', async () => {
+  it('connects Antigravity through the same auth-session terminal as every other agent', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(JSON.stringify({ configured: true }), {
+      new Response(JSON.stringify({ data: { id: 1, state: 'starting' } }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -546,19 +546,20 @@ describe('Profile/Show', () => {
 
     const card = screen.getByText('Antigravity CLI').closest('.mantine-Card-root') as HTMLElement;
     await userEvent.click(within(card).getByRole('button', { name: 'Authenticate' }));
-    await userEvent.type(screen.getByLabelText('Google AI Studio API key'), 'google-key');
-    await userEvent.click(screen.getByRole('button', { name: 'Save key' }));
 
+    expect(await screen.findByText('Authenticate Antigravity CLI')).toBeInTheDocument();
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
-        '/profile/update_agent_credential',
+        '/api/v1/terminal_sessions',
         expect.objectContaining({
-          method: 'PUT',
-          body: JSON.stringify({ agentType: 'antigravity_cli', apiKey: 'google-key' }),
+          method: 'POST',
+          body: JSON.stringify({
+            terminalSession: { agentType: 'antigravity_cli', sessionType: 'auth_setup', mode: 'interactive' },
+          }),
         }),
       ),
     );
-    expect(fetchSpy).not.toHaveBeenCalledWith('/api/v1/terminal_sessions', expect.objectContaining({ method: 'POST' }));
+    expect(fetchSpy).not.toHaveBeenCalledWith('/profile/update_agent_credential', expect.anything());
   });
 
   // == AWS Bedrock connection ==

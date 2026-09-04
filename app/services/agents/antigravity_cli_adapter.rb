@@ -9,9 +9,22 @@ module Agents
   # the one Antigravity auth mode that is portable across ephemeral containers and
   # works headlessly; account OAuth is stored in the host keyring and is unsuitable
   # for copying between isolated sessions.
+  #
+  # Unlike every other adapter's login, `agy`'s API-key mode has no interactive
+  # credential prompt of its own to run inside the auth terminal: confirmed against
+  # the real 1.1.x binary, it only reads GEMINI_API_KEY from the environment at
+  # startup and exits immediately with an error if that is unset — it never writes a
+  # credential artifact for this mode. So the auth-terminal session (see
+  # #auth_launch_commands_for) runs a small login script instead of `agy` directly:
+  # it reads the key the user types, calls the real CLI to validate it, and — only on
+  # success — writes it to the same file every other step here already assumes
+  # (#config_path). That keeps credential capture on the one shared path
+  # (AgentAuthStrategy#before_cleanup reads #auth_file_paths) instead of a bespoke
+  # backend form, while still requiring a live human to supply and verify the secret.
   class AntigravityCliAdapter < BaseAdapter
     SETTINGS_PATH = ".gemini/antigravity-cli/settings.json"
     API_KEY_PATH = ".gemini/antigravity-cli/aixle-api-key.json"
+    LOGIN_SCRIPT_PATH = ".aixle/antigravity-login.sh"
 
     def self.default_config_paths
       [ "~/.gemini/antigravity-cli/settings.json", "~/.gemini/config/mcp_config.json", "GEMINI.md" ]
@@ -43,7 +56,18 @@ module Agents
     end
 
     def auth_setup_files
-      { "#{home_dir}/#{SETTINGS_PATH}" => settings.to_json }
+      {
+        "#{home_dir}/#{SETTINGS_PATH}" => settings.to_json,
+        "#{home_dir}/#{LOGIN_SCRIPT_PATH}" => login_script
+      }
+    end
+
+    # Drives the auth terminal: AgentAuthStrategy starts `bash` (see
+    # AgentAuthStrategy#ttyd_command) and sends this once the prompt is ready, in
+    # place of launching `agy` directly. The script itself is what the user watches
+    # and types into — this only launches it.
+    def auth_launch_commands_for(_kind)
+      [ "sh #{home_dir}/#{LOGIN_SCRIPT_PATH}" ]
     end
 
     def default_env_vars(session)
@@ -85,6 +109,42 @@ module Agents
 
     def settings
       { "modelProvider" => "gemini", "enableTelemetry" => false, "showTips" => false }
+    end
+
+    # Prompts for the key (masked, real terminal input — never seen by Aixle's
+    # backend), validates it with a real `agy` call, and writes #config_path only on
+    # success. Re-running `sh ~/#{LOGIN_SCRIPT_PATH}` retries a rejected or empty
+    # entry; nothing here persists partial state that a retry would need to undo.
+    #
+    # Single-quoted heredoc: the script is shell, not Ruby, so none of its own `\`/`"`
+    # escaping should go through Ruby's string-escape processing. The two paths are
+    # substituted afterwards via plain token replacement instead of interpolation.
+    def login_script
+      template = <<~'SCRIPT'
+        #!/bin/sh
+        set -eu
+        echo "Paste your company's Google AI Studio API key (https://aistudio.google.com/app/api-keys), then press Enter:"
+        stty -echo 2>/dev/null || true
+        IFS= read -r key
+        stty echo 2>/dev/null || true
+        echo
+        if [ -z "$key" ]; then
+          echo "No key entered. Run 'sh ~/__LOGIN_SCRIPT_PATH__' to try again."
+          exit 1
+        fi
+        if ! GEMINI_API_KEY="$key" agy --print "Reply with OK if you can read this." >/tmp/antigravity-auth-check.log 2>&1; then
+          echo "Google AI Studio rejected that key:"
+          cat /tmp/antigravity-auth-check.log
+          echo "Run 'sh ~/__LOGIN_SCRIPT_PATH__' to try again."
+          exit 1
+        fi
+        escaped_key=$(printf '%s' "$key" | sed 's/\\/\\\\/g; s/"/\\"/g')
+        mkdir -p "$(dirname "$HOME/__API_KEY_PATH__")"
+        printf '{"api_key":"%s"}' "$escaped_key" > "$HOME/__API_KEY_PATH__"
+        echo "Key verified -- Aixle will finish saving it automatically."
+      SCRIPT
+
+      template.gsub("__LOGIN_SCRIPT_PATH__", LOGIN_SCRIPT_PATH).gsub("__API_KEY_PATH__", API_KEY_PATH)
     end
   end
 end

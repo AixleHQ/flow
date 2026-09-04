@@ -4,7 +4,11 @@ Aixle runs Antigravity CLI as a separate runtime (`antigravity_cli`); it does no
 
 ## Authentication
 
-Aixle supports the documented Gemini API-key provider. Connect the runtime from Profile and enter a company-scoped Google AI Studio key. The backend stores the key in the encrypted `AgentCredential` record, writes `modelProvider: gemini` and the credential file into each ephemeral container, and injects `GEMINI_API_KEY` only into that company's sessions. The image contains no credential-capture script. Account OAuth is intentionally unsupported because Antigravity stores it in an OS keyring, which cannot be safely moved between ephemeral containers. Enterprise ADC can be added separately when company-managed workload identity is available.
+Aixle supports the documented Gemini API-key provider, connected the same way as every other CLI: from Profile or Onboarding, "Connect"/"Authenticate" opens the standard auth-terminal session (`AgentAuthTerminal`), not a bespoke form.
+
+`agy`'s API-key mode has no interactive credential prompt of its own — confirmed against the real 1.1.x binary, it only reads `GEMINI_API_KEY` from the environment at startup and exits immediately if that is unset; it never writes a credential artifact for this mode. So the auth terminal runs a small login script (`Agents::AntigravityCliAdapter#auth_launch_commands_for`) instead of `agy` directly: it prompts the user for their company-scoped Google AI Studio key, calls the real CLI to validate it, and — only on success — writes it to `~/.gemini/antigravity-cli/aixle-api-key.json`, the same file `AgentAuthStrategy#before_cleanup` already captures for every adapter. The backend then stores it in the encrypted `AgentCredential` record and injects `GEMINI_API_KEY` only into that company's sessions.
+
+Account OAuth is intentionally unsupported because Antigravity stores it in an OS keyring, which cannot be safely moved between ephemeral containers (also confirmed hands-on: the default sign-in flow blocks on a browser the container cannot open). Enterprise ADC can be added separately when company-managed workload identity is available.
 
 ## Runtime contract
 

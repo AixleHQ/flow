@@ -273,9 +273,9 @@ describe('Onboarding/OnboardingPage', () => {
     expect(connectButtons.length).toBeGreaterThan(0);
   });
 
-  it('connects Antigravity with a backend-stored API key instead of an auth session', async () => {
+  it('connects Antigravity through the same auth-session terminal as every other agent', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(JSON.stringify({ configured: true }), {
+      new Response(JSON.stringify({ data: buildTerminalSession({ agentType: 'antigravity_cli' }) }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       }),
@@ -285,11 +285,18 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[4]);
-    await userEvent.type(screen.getByLabelText('Google AI Studio API key'), 'google-key');
-    await userEvent.click(screen.getByRole('button', { name: 'Save key' }));
 
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith('/profile/update_agent_credential', expect.anything()));
-    expect(fetchSpy).not.toHaveBeenCalledWith('/api/v1/terminal_sessions', expect.anything());
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/terminal_sessions',
+        expect.objectContaining({
+          body: JSON.stringify({
+            terminalSession: { agentType: 'antigravity_cli', sessionType: 'auth_setup', mode: 'interactive' },
+          }),
+        }),
+      ),
+    );
+    expect(fetchSpy).not.toHaveBeenCalledWith('/profile/update_agent_credential', expect.anything());
   });
 
   it('advances from the profile step after clicking a role card and choosing a language', async () => {

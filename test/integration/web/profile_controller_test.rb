@@ -99,40 +99,6 @@ class Web::ProfileControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
-  test "update_agent_credential stores an encrypted company-scoped Antigravity API key" do
-    put update_agent_credential_profile_path, params: {
-      agent_type: "antigravity_cli",
-      api_key: "  test-google-key  "
-    }, as: :json
-
-    assert_response :success
-    credential = AgentCredential.find_by!(user: @user, company: @company, agent_type: "antigravity_cli")
-    assert_equal({ "api_key" => "test-google-key" }, credential.config_data)
-    assert_not_includes credential.encrypted_config_data, "test-google-key"
-  end
-
-  test "update_agent_credential replaces an existing Antigravity key" do
-    credential = create(:agent_credential, user: @user, company: @company,
-                                           agent_type: "antigravity_cli", config_data: { "api_key" => "old" })
-
-    put update_agent_credential_profile_path,
-        params: { agent_type: "antigravity_cli", api_key: "new" }, as: :json
-
-    assert_response :success
-    assert_equal "new", credential.reload.config_data["api_key"]
-    assert_equal 1, AgentCredential.where(user: @user, company: @company, agent_type: "antigravity_cli").count
-  end
-
-  test "update_agent_credential rejects blank keys and unsupported agents" do
-    put update_agent_credential_profile_path,
-        params: { agent_type: "antigravity_cli", api_key: " " }, as: :json
-    assert_response :unprocessable_entity
-
-    put update_agent_credential_profile_path,
-        params: { agent_type: "codex", api_key: "not-allowed" }, as: :json
-    assert_response :not_found
-  end
-
   # The page only renders the CURRENT company's credentials, and these two actions take
   # an id — so an id from another company must not resolve. Editing or deleting it here
   # would reach across a tenant boundary into a separately-billed agent account.
