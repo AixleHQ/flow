@@ -17,7 +17,10 @@ class ColumnWorkflowBinding < ApplicationRecord
   private
 
   def touch_board
-    board_column.board.touch
+    # Skip when the board is already gone (e.g. project/board cascade destroy).
+    # Matches BoardColumn#touch_board / BoardTask#touch_board.
+    board = board_column&.board
+    board.touch if board&.persisted?
   end
 
   def workflow_accessible_from_project

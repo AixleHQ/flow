@@ -77,6 +77,32 @@ class ProjectTest < ActiveSupport::TestCase
                  named_projects.favorites_first_for(@project_owner).order(:name).pluck(:name)
   end
 
+  # Regression for PALAD-AI-RAILS-2M: board must be destroyed before workflows so
+  # ColumnWorkflowBindings (and column_transitions) are cleared first.
+  test "destroy! succeeds when a workflow is bound to a board column" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    workflow = create(:workflow, scope: @project)
+    binding = ColumnWorkflowBinding.create!(board_column: column, workflow: workflow, trigger_mode: :manual)
+    task = create(:board_task, board: board, board_column: column)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @project_owner, board_task: task)
+    ColumnTransition.create!(
+      board_task: task, from_column: nil, to_column: column,
+      actor: @project_owner, actor_type: :human, workflow_run: run
+    )
+
+    assert_difference -> { Project.count } => -1,
+                      -> { Board.count } => -1,
+                      -> { ColumnWorkflowBinding.count } => -1,
+                      -> { Workflow.unscoped.where(id: workflow.id).count } => -1,
+                      -> { WorkflowRun.where(id: run.id).count } => -1 do
+      assert_nothing_raised { @project.destroy! }
+    end
+
+    assert_nil ColumnWorkflowBinding.find_by(id: binding.id)
+    assert_nil Workflow.unscoped.find_by(id: workflow.id)
+  end
+
   private
 
   def create_named_projects(*names)

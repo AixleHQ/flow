@@ -72,6 +72,22 @@ class Web::Company::ProjectsControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
+  # Regression for PALAD-AI-RAILS-2M: bound workflows must not 500 project destroy.
+  test "destroy succeeds when a project workflow is bound to a board column" do
+    project = create(:project, company: @company, owner: @user)
+    board = create(:board, project: project)
+    column = create(:board_column, board: board)
+    workflow = create(:workflow, scope: project)
+    ColumnWorkflowBinding.create!(board_column: column, workflow: workflow, trigger_mode: :manual)
+
+    delete company_project_path(project)
+
+    assert_response :redirect
+    assert_not Project.exists?(project.id)
+    assert_not Workflow.unscoped.exists?(workflow.id)
+    assert_not ColumnWorkflowBinding.exists?(workflow_id: workflow.id)
+  end
+
   test "destroy succeeds for a company admin who is not the project owner" do
     owner = create(:user, :employee, :onboarding_completed, company: @company)
     project = create(:project, company: @company, owner: owner)
