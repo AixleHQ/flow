@@ -36,4 +36,42 @@ class Web::DocsRenderTest < ActionDispatch::IntegrationTest
       props[:slug] == "agents"
     end
   end
+
+  test "show renders the product-area snapshot pages" do
+    %w[user-guide-outline changelog-product-areas].each do |slug|
+      get docs_page_path(slug)
+      assert_response :success
+      assert_inertia_page "Docs/DocsPage"
+      assert_inertia_props { |props| props[:slug] == slug }
+    end
+  end
+
+  # The product guide is a second, user-facing section of the same portal. Its slugs
+  # are registered in three places that can drift apart (the controller allow-list,
+  # the page registry, and the nav); the frontend guards its own two, this covers
+  # the controller's.
+  PRODUCT_GUIDE_SLUGS = %w[
+    using-flow getting-started project-home tasks running-workflows starting-work
+    sessions-and-runs assets personas agent-capabilities repositories ai-builder
+    people-and-access secrets analytics company-workspace examples
+  ].freeze
+
+  test "show renders every product guide page" do
+    PRODUCT_GUIDE_SLUGS.each do |slug|
+      get docs_page_path(slug)
+      assert_response :success, "expected /docs/#{slug} to render"
+      assert_inertia_page "Docs/DocsPage"
+      assert_inertia_props do |props|
+        props[:slug] == slug
+      end
+    end
+  end
+
+  test "show answers 404 for a slug the portal does not publish" do
+    get docs_page_path("no-such-page")
+    assert_response :not_found
+    # Still the docs page, so the reader lands on the portal's own not-found view
+    # rather than the generic error page.
+    assert_inertia_component "Docs/DocsPage"
+  end
 end

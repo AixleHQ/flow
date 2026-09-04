@@ -11,6 +11,30 @@ export interface NavSection {
 }
 
 export const NAV_STRUCTURE: NavSection[] = [
+  // The product guide comes first: most readers arrive wanting to use Flow, not to
+  // install it. The operator sections below keep their slugs so existing links hold.
+  {
+    label: 'Using Flow',
+    items: [
+      { slug: 'using-flow', label: 'What Flow is' },
+      { slug: 'getting-started', label: 'Getting started' },
+      { slug: 'project-home', label: 'Project home & settings' },
+      { slug: 'tasks', label: 'Tasks & the board' },
+      { slug: 'running-workflows', label: 'Building workflows' },
+      { slug: 'starting-work', label: 'Triggers & gates' },
+      { slug: 'sessions-and-runs', label: 'Sessions & Runs' },
+      { slug: 'assets', label: 'Assets' },
+      { slug: 'personas', label: 'Agent personas' },
+      { slug: 'agent-capabilities', label: 'Wrappers, Skills & Connectors' },
+      { slug: 'repositories', label: 'Repositories & Integrations' },
+      { slug: 'ai-builder', label: 'AI Builder' },
+      { slug: 'people-and-access', label: 'Team & access' },
+      { slug: 'secrets', label: 'Secrets & Variables' },
+      { slug: 'analytics', label: 'Analytics & cost' },
+      { slug: 'company-workspace', label: 'Company workspace' },
+      { slug: 'examples', label: 'Worked examples' },
+    ],
+  },
   {
     label: 'User guide',
     items: [
@@ -38,6 +62,13 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'cli-ref', label: 'CLI reference' },
       { slug: 'api-guide', label: 'API' },
       { slug: 'config-schema', label: 'Configuration reference' },
+    ],
+  },
+  {
+    label: 'Product',
+    items: [
+      { slug: 'user-guide-outline', label: 'User guide outline' },
+      { slug: 'changelog-product-areas', label: 'Changelog product areas' },
     ],
   },
 ];
