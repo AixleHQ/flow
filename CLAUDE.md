@@ -19,7 +19,7 @@ docker compose exec -T web make check_all
 each result and prints a summary of all failures:
 
 - **Backend:** `rails test`, `rubocop`, `brakeman`
-- **Frontend:** `eslint`, `typescript` (`tsc`), `vitest`
+- **Frontend:** `eslint`, `typescript` (`tsc`), `fsd` (Feature-Sliced Design check via steiger), `vitest`
 
 (CI splits this into `be_check_all` + `fe_check_all`; `check_all` covers both
 locally.) Don't push a branch or open/update a PR until `check_all` is green —
