@@ -138,7 +138,7 @@ module ContainerStrategies
       assert_equal @user.id, error.details[:user_id]
       assert_equal @session.company_id, error.details[:session_company_id]
       assert_equal @session.project_id, error.details[:project_id]
-      assert_equal @session.project.company_id, error.details[:project_company_id]
+      assert_nil error.details[:project_company_id]
       assert_equal @company.id, error.details[:effective_company_id]
       assert_includes error.details[:credential_candidates], [ @credential.id, @company.id, "claude_code" ]
     end
