@@ -25,6 +25,18 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     target-branch: "develop"
+    ignore:
+      # ESLint 10 is blocked by the plugin ecosystem, not by us: the newest
+      # eslint-plugin-react (7.37.5) declares a peer range up to ^9.7 and the
+      # newest eslint-plugin-import (2.32.0) up to ^9, and both still call the
+      # context.getFilename() that ESLint 10 removed. @eslint/js ships the
+      # config half of the same release train, so it has to stay on 9 as well;
+      # a v10 config object loaded by a v9 runtime is a silent mismatch.
+      # Drop both entries once the plugins ship ESLint 10 support.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
     groups:
       # Mantine pins its packages to exact peer versions, so a partial bump
       # breaks the build. Keep the whole family in one PR, majors included.
