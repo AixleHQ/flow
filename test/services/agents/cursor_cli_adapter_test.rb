@@ -365,6 +365,196 @@ module Agents
       assert_equal [ "in-window" ], stat.models
     end
 
+    test "collect_usage matches an event billed while a streamed RunSSE was still open" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      # `useHttp1ForAgent` sends RunSSE through mitmproxy, whose addon writes its
+      # response entry when the streamed body ENDS — three minutes after the turn
+      # started. Anchoring the match window on that timestamp put every billing
+      # event before the window and recorded no usage at all.
+      request_iso = "2026-05-21T19:32:30.000Z"
+      request_ms = @adapter.send(:parse_iso_to_epoch_ms, request_iso)
+      stream_end_iso = "2026-05-21T19:35:30.000Z"
+      mitm_log = [
+        { ts: request_iso, direction: "request", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "x-request-id" => "req-sse" } },
+        { ts: stream_end_iso, direction: "response", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "x-request-id" => "req-sse" } }
+      ].map(&:to_json).join("\n")
+
+      api_events = [
+        { "timestamp" => (request_ms + 5_000).to_s, "model" => "claude-4-sonnet",
+          "tokenUsage" => { "inputTokens" => 700, "outputTokens" => 120, "totalCents" => 2.25 } }
+      ]
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200,
+                   body: { "usageEventsDisplay" => api_events }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      stat = session.reload.usage_statistic
+      assert stat, "usage billed mid-stream should be attributed to the RPC that was in flight"
+      assert_equal 700, stat.input_tokens
+      assert_equal 120, stat.output_tokens
+      assert_equal 3, stat.cost_cents
+      assert_equal "recorded", session.metadata["usage_collection"]["status"]
+    end
+
+    test "collect_usage queries up to the latest response across overlapping RPCs" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      # The long RPC starts first and finishes last; the short one starts later.
+      # `windows` is ordered by request time, so the end bound must come from the
+      # maximum response, not from the last window's.
+      mitm_log = [
+        { ts: "2026-05-21T19:32:30.000Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "long" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "request", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "x-request-id" => "short" } },
+        { ts: "2026-05-21T19:32:32.000Z", direction: "response", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "x-request-id" => "short" } },
+        { ts: "2026-05-21T19:34:00.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "long" } }
+      ].map(&:to_json).join("\n")
+
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200, body: { "usageEventsDisplay" => [] }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      expected_end = @adapter.send(:parse_iso_to_epoch_ms, "2026-05-21T19:34:00.000Z") + 1_000
+      assert_equal expected_end, session.reload.metadata["usage_api_result"]["time_window"]["end_ms"]
+    end
+
+    test "collect_usage refreshes an expired token and retries the dashboard call" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "expired", "refreshToken" => "r1" })
+
+      response_iso = "2026-05-21T19:32:31.000Z"
+      response_ms = @adapter.send(:parse_iso_to_epoch_ms, response_iso)
+      mitm_log = [
+        { ts: "2026-05-21T19:32:30.461Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" }, _source: "http2-logger" },
+        { ts: response_iso, direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" }, _source: "http2-logger" }
+      ].map(&:to_json).join("\n")
+
+      api_events = [
+        { "timestamp" => (response_ms + 100).to_s, "model" => "gpt-5",
+          "tokenUsage" => { "inputTokens" => 40, "outputTokens" => 10, "totalCents" => 0.4 } }
+      ]
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 401, body: "")
+        .to_return(status: 200, body: { "usageEventsDisplay" => api_events }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .to_return(status: 200,
+                   body: { "access_token" => "fresh", "refresh_token" => "r2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      stat = session.reload.usage_statistic
+      assert stat, "a 401 on the dashboard call must be retried with a refreshed token"
+      assert_equal 40, stat.input_tokens
+      assert_equal "fresh", credential.reload.config_data["accessToken"]
+    end
+
+    # =========================================================================
+    # collect_usage diagnostics — "no usage" vs "the meter broke"
+    # =========================================================================
+
+    test "collect_usage records why nothing was collected when no MITM log came back" do
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: create(:user, company: create(:company)))
+
+      @adapter.collect_usage(session, {})
+
+      assert_nil session.reload.usage_statistic
+      assert_equal "no_mitm_log", session.metadata["usage_collection"]["status"]
+    end
+
+    test "collect_usage records no_rpc_windows when the log holds no completed run" do
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: create(:user, company: create(:company)))
+      mitm_log = { ts: "2026-05-21T19:32:30.000Z", direction: "request", path: "/other.v1/Thing" }.to_json
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      diagnostic = session.reload.metadata["usage_collection"]
+      assert_equal "no_rpc_windows", diagnostic["status"]
+      assert_equal 1, diagnostic["log_lines"]
+    end
+
+    test "collect_usage records no_access_token when the session's company has no credential" do
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: create(:user, company: create(:company)))
+      mitm_log = [
+        { ts: "2026-05-21T19:32:30.000Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } }
+      ].map(&:to_json).join("\n")
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      assert_nil session.reload.usage_statistic
+      assert_equal "no_access_token", session.metadata["usage_collection"]["status"]
+    end
+
+    test "collect_usage records api_error when the dashboard call fails" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      mitm_log = [
+        { ts: "2026-05-21T19:32:30.000Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } }
+      ].map(&:to_json).join("\n")
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 500, body: "boom")
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      assert_nil session.reload.usage_statistic
+      assert_equal "api_error", session.metadata["usage_collection"]["status"]
+    end
+
+    test "collect_usage records no_matching_events when events fall outside every RPC" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      request_iso = "2026-05-21T19:32:30.000Z"
+      request_ms = @adapter.send(:parse_iso_to_epoch_ms, request_iso)
+      mitm_log = [
+        { ts: request_iso, direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } }
+      ].map(&:to_json).join("\n")
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200,
+                   body: { "usageEventsDisplay" => [ { "timestamp" => (request_ms - 60_000).to_s,
+                                                       "tokenUsage" => { "inputTokens" => 5 } } ] }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      diagnostic = session.reload.metadata["usage_collection"]
+      assert_nil session.usage_statistic
+      assert_equal "no_matching_events", diagnostic["status"]
+      assert_equal 1, diagnostic["windows_count"]
+      assert_equal 1, diagnostic["api_count"]
+    end
+
     # =========================================================================
     # refresh! — proactive-refresh hook (wraps refresh_cursor_token!)
     # =========================================================================
