@@ -53,6 +53,22 @@ class WorkflowRun < ApplicationRecord
     step_runs.where(state: :failed).order(updated_at: :desc).first
   end
 
+  # May `viewer` STEER this run — cancel it, or approve / retry / skip one of its
+  # steps? Reaching a run is a project-level question and stays that way (the
+  # whole team watches the board's automation); acting on one is not. A run is
+  # somebody's work in flight, the same way their session is, and the person who
+  # started it is the one who knows whether a waiting step should be approved or
+  # skipped.
+  #
+  # Company admins keep an override, because a run nobody can cancel blocks the
+  # board card behind it and its owner may well be asleep.
+  def controllable_by?(viewer)
+    return false if viewer.nil?
+    return true if user_id == viewer.id
+
+    viewer.company_memberships.active.find_by(company_id: project&.company_id)&.admin? || false
+  end
+
   def mark_quota_failed!(credential_id:)
     update!(failure_reason: "quota_exceeded", failed_agent_credential_id: credential_id)
   end

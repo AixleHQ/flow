@@ -51,6 +51,16 @@ class WorkflowRunResource < ApplicationResource
     run.user&.name
   end
 
+  # May the viewer steer this run (cancel / approve / retry / skip)? Mirrors
+  # WorkflowRunsPolicy so the buttons match what the POST would actually do;
+  # the policy is the enforcement, this is only what the page renders. Pass
+  # `params: { viewer: current_user }` — without the param it stays true, for
+  # the broadcast payloads that have no single viewer.
+  typelize :boolean
+  attribute :controllable_by_viewer do |run|
+    params.key?(:viewer) ? run.controllable_by?(params[:viewer]) : true
+  end
+
   typelize :string?
   attribute :agent_type do |run|
     run.step_runs.first&.terminal_session&.agent_type
