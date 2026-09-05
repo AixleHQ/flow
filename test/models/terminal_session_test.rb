@@ -3,6 +3,26 @@
 require "test_helper"
 
 class TerminalSessionTest < ActiveSupport::TestCase
+  # --- preferred_error_message (a diagnosed reason outranks the generic one) ---
+
+  test "preferred_error_message keeps a diagnosed reason when the generic one arrives after it" do
+    assert_equal "You've hit your individual spend limit",
+                 TerminalSession.preferred_error_message("You've hit your individual spend limit", "Workflow cancelled")
+  end
+
+  test "preferred_error_message takes the generic reason when nothing more specific is known" do
+    assert_equal "Workflow cancelled", TerminalSession.preferred_error_message(nil, "Workflow cancelled")
+    assert_equal "Workflow cancelled", TerminalSession.preferred_error_message("", "Workflow cancelled")
+  end
+
+  test "preferred_error_message lets one specific reason replace another" do
+    assert_equal "Agent container vanished",
+                 TerminalSession.preferred_error_message("Some earlier failure", "Agent container vanished")
+  end
+
+  test "preferred_error_message keeps what it has when nothing new arrives" do
+    assert_equal "Agent container vanished", TerminalSession.preferred_error_message("Agent container vanished", nil)
+  end
   setup do
     @company = create(:company)
     @user = create(:user, :admin, company: @company)
