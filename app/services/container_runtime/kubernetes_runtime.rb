@@ -64,7 +64,11 @@ module ContainerRuntime
       raise "Admission must be enabled before removing legacy quotas" unless SessionAdmissionPolicy.enabled?
       raise ArgumentError, "Quota UID required" if uid.blank?
       ns = core_client.get_namespace(namespace)
-      labels = ns.metadata.labels.to_h
+      # Kubeclient hands labels back as a RecursiveOpenStruct, so #to_h keys are
+      # symbols — and a label name like "aixle.com/scope" read with a string key
+      # is silently nil, which made every check below refuse. The dry run caught
+      # it before it mattered; the lookup is normalised here so it cannot recur.
+      labels = ns.metadata.labels.to_h.transform_keys(&:to_s)
       unless labels["aixle.com/runtime-origin"] == runtime_namespace &&
           %w[project user].include?(labels["aixle.com/scope"]) &&
           namespace.match?(/\A#{Regexp.escape(runtime_namespace)}-(project|user)-\d+\z/)
