@@ -2,7 +2,9 @@
 
 class ContextSection
   PRIORITIES = %i[critical important info].freeze
-  POSITIONS  = %i[top middle bottom].freeze
+  # :footer is below even the bottom-of-context reference listings (shell tools,
+  # MCP servers) — reserved for the one rule that has to be the last thing read.
+  POSITIONS  = %i[top middle bottom footer].freeze
 
   attr_reader :tag, :priority, :content, :position_hint, :builder_name
 
