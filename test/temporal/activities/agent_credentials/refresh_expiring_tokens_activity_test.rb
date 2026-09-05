@@ -89,6 +89,27 @@ module Activities
         assert_equal 1, result[:errors]
       end
 
+      # A dead designOauth add-on must not take the base Claude login down with it:
+      # the adapter says so with permanent: false, and that has to win over the
+      # invalid_grant text in the detail.
+      test "honours the adapter's permanent flag over the invalid_grant text" do
+        credential = mock("credential")
+        adapter = mock("adapter")
+        adapter.stubs(:refresh!).returns({ status: :error, permanent: false,
+                                           detail: "designOauth invalid_grant — reconnection required" })
+        credential.stubs(:id).returns(1)
+        credential.stubs(:agent_type).returns("claude_code")
+        credential.stubs(:adapter).returns(adapter)
+        credential.expects(:mark_refresh_error!)
+                  .with("designOauth invalid_grant — reconnection required", permanent: false)
+
+        stub_due([ credential ])
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:errors]
+      end
+
       test "marks credential with transient error on non-invalid_grant failure" do
         credential = mock("credential")
         adapter = mock("adapter")

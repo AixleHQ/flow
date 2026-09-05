@@ -587,7 +587,7 @@ module Agents
       cred = create(:agent_credential, :claude_code, user: @user,
                     config_data: { "primaryApiKey" => "sk" })
 
-      assert_equal({ status: :not_needed, detail: nil }, @adapter.refresh!(cred))
+      assert_equal({ status: :not_needed, detail: nil, permanent: false }, @adapter.refresh!(cred))
     end
 
     test "refresh! returns not_needed when the token is not near expiry" do
@@ -595,7 +595,7 @@ module Agents
         "claudeAiOauth" => { "accessToken" => "a", "refreshToken" => "r", "expiresAt" => ms_from_now(60 * 60 * 1000) }
       })
 
-      assert_equal({ status: :not_needed, detail: nil }, @adapter.refresh!(cred))
+      assert_equal({ status: :not_needed, detail: nil, permanent: false }, @adapter.refresh!(cred))
     end
 
     test "refresh! refreshes a claudeAiOauth block near expiry and persists rotated tokens" do
@@ -683,7 +683,39 @@ module Agents
       assert_equal "d-a", reloaded.dig("designOauth", "accessToken") # failed block left intact
     end
 
-    test "refresh! clears designOauth accessToken on invalid_grant and returns error" do
+    # The reverse of the partial-success case: a rotated add-on block must not launder
+    # a rejected base login into :refreshed, which would clear the very error telling
+    # the user to sign in again.
+    test "refresh! reports error when the base login is rejected even if another block rotated" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "base-a", "refreshToken" => "base-r", "expiresAt" => soon },
+        "designOauth" => { "accessToken" => "d-a", "refreshToken" => "d-r", "expiresAt" => soon, "clientId" => "design-client" }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", client_id: ClaudeCodeAdapter::BASE_OAUTH_CLIENT_ID, refresh_token: "base-r" })
+        .to_return(status: 400,
+                   body: { error: "invalid_grant", error_description: "Refresh token expired" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", client_id: "design-client", refresh_token: "d-r" })
+        .to_return(status: 200,
+                   body: { access_token: "d-a2", refresh_token: "d-r2", expires_in: 3_600 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :error, result[:status]
+      assert result[:permanent], "a rejected base login condemns the credential regardless of the add-on"
+      reloaded = cred.reload.config_data
+      refute_predicate reloaded.dig("claudeAiOauth", "accessToken"), :present?
+      assert_equal "d-a2", reloaded.dig("designOauth", "accessToken")
+    end
+
+    # designOauth is an add-on layered onto the base login, so its death is reported
+    # as a non-permanent error: the sweep must leave the credential `active` or the
+    # user loses Claude Code entirely — including the auth session that would fix it.
+    test "refresh! strips designOauth token material on invalid_grant without condemning the credential" do
       soon = ms_from_now(5 * 60 * 1000)
       cred = create(:agent_credential, :claude_code, user: @user, config_data: {
         "designOauth" => {
@@ -702,10 +734,14 @@ module Agents
 
       assert_equal :error, result[:status]
       assert_match(/designOauth/, result[:detail])
+      refute result[:permanent], "a dead add-on block must not condemn the whole credential"
       block = cred.reload.config_data["designOauth"]
       refute_predicate block["accessToken"], :present?, "accessToken must be cleared after invalid_grant"
-      assert_equal "stale-dr", block["refreshToken"]
-      assert_equal "design-client", block["clientId"]
+      refute_predicate block["refreshToken"], :present?,
+                       "a grant the server rejected must not be retried by the next sweep"
+      refute_predicate block["expiresAt"], :present?,
+                       "a stale expiry would keep the credential permanently refresh-due"
+      assert_equal "design-client", block["clientId"], "the block stays so the UI still offers Reconnect Design"
     end
 
     test "refresh! clears claudeAiOauth accessToken on invalid_grant" do
@@ -724,9 +760,11 @@ module Agents
       result = @adapter.refresh!(cred)
 
       assert_equal :error, result[:status]
+      assert result[:permanent], "a rejected base login makes the credential unusable"
       block = cred.reload.config_data["claudeAiOauth"]
       refute_predicate block["accessToken"], :present?, "accessToken must be cleared after invalid_grant"
-      assert_equal "stale-r", block["refreshToken"]
+      refute_predicate block["refreshToken"], :present?,
+                       "a grant the server rejected must not be retried by the next sweep"
     end
 
     test "refresh! does not clear accessToken on transient 5xx error" do
