@@ -20,7 +20,8 @@ module Api
               .in_board_order
             tasks = tasks.limit(params[:limit]) if params[:limit].present?
             tasks = tasks.offset(params[:offset]) if params[:offset].present?
-            render json: tasks.map { |t| BoardTaskResource.new(t).to_h }
+            waiting = WorkflowRun.waiting_for_slot_ids(tasks.flat_map { |t| t.workflow_runs.map(&:id) })
+            render json: tasks.map { |t| BoardTaskResource.new(t, params: { waiting_runs: waiting }).to_h }
           end
 
           def show
