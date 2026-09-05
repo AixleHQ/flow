@@ -1290,6 +1290,67 @@ module ContainerRuntime
       ensure_runtime_image_pull_secrets(handle.namespace)
       ensure_terminal_auth_middleware(handle.namespace)
       ensure_runtime_network_policies(handle.namespace)
+      ensure_namespace_resource_quota(handle.namespace, namespace_context) unless SessionAdmissionPolicy.enabled?
+    end
+
+    def ensure_namespace_resource_quota(namespace, context)
+      context = (context || {}).with_indifferent_access
+
+      scope_type, quota_record = if context[:project_id].present?
+        [ "Project", NamespaceResourceQuota.find_by(scope_type: "Project", scope_id: context[:project_id]) ]
+      elsif context[:user_id].present?
+        [ "User", NamespaceResourceQuota.find_by(scope_type: "User", scope_id: context[:user_id]) ]
+      else
+        [ nil, nil ]
+      end
+
+      hard_limits = build_quota_hard_limits(quota_record, scope_type)
+      return if hard_limits.empty?
+
+      quota_name = "aixle-resource-quota"
+
+      resource = Kubeclient::Resource.new(
+        apiVersion: "v1",
+        kind: "ResourceQuota",
+        metadata: {
+          name: quota_name,
+          namespace: namespace
+        },
+        spec: {
+          hard: hard_limits
+        }
+      )
+
+      begin
+        existing = core_client.get_resource_quota(quota_name, namespace)
+        if existing.spec.hard != hard_limits
+          resource.metadata.resourceVersion = existing.metadata.resourceVersion
+          core_client.update_resource_quota(resource)
+        end
+      rescue Kubeclient::ResourceNotFoundError
+        core_client.create_resource_quota(resource)
+      end
+    end
+
+    def build_quota_hard_limits(quota_record, scope_type)
+      settings_key = scope_type == "Project" ? :project_defaults : :user_defaults
+      defaults = Settings.namespace_resource_quotas&.send(settings_key) || {}
+
+      fields = %i[cpu_requests memory_requests cpu_limits memory_limits max_pods]
+
+      merged = fields.each_with_object({}) do |field, hash|
+        value = quota_record&.send(field)
+        value = defaults[field] if value.nil?
+        hash[field] = value unless value.nil?
+      end
+
+      hard = {}
+      hard["requests.cpu"]    = merged[:cpu_requests].to_s    if merged.key?(:cpu_requests)
+      hard["requests.memory"] = merged[:memory_requests].to_s if merged.key?(:memory_requests)
+      hard["limits.cpu"]      = merged[:cpu_limits].to_s      if merged.key?(:cpu_limits)
+      hard["limits.memory"]   = merged[:memory_limits].to_s   if merged.key?(:memory_limits)
+      hard["count/pods"]      = merged[:max_pods].to_s        if merged.key?(:max_pods)
+      hard
     end
 
     def ensure_runtime_image_pull_secrets(namespace)

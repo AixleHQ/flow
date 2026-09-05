@@ -1,6 +1,35 @@
 # frozen_string_literal: true
 
 namespace :session_admission do
+  desc "Print legacy quotas as a reviewable session limit migration plan (Kubernetes only)"
+  task legacy_plan: :environment do
+    # The plan divides namespace quota by per-Pod resources. On Docker there are
+    # no namespace quotas, and the same arithmetic would still produce a
+    # confident number from Kubernetes settings that govern nothing — an
+    # operator would then import overrides derived from a fiction.
+    runtime = ContainerRuntime.build
+    unless runtime.is_a?(ContainerRuntime::KubernetesRuntime)
+      abort "legacy_plan converts Kubernetes namespace quotas into session counts; " \
+            "this installation runs #{runtime.class.name.demodulize}. " \
+            "Set SESSION_PROJECT_CONCURRENCY_DEFAULT / SESSION_USER_CONCURRENCY_DEFAULT directly."
+    end
+    puts JSON.pretty_generate(SessionQuotaMigration.plan)
+  end
+
+  desc "Import reviewed scoped limits from SESSION_LIMIT_PLAN JSON; never overwrites existing limits"
+  task import_limits: :environment do
+    plan = JSON.parse(File.read(ENV.fetch("SESSION_LIMIT_PLAN")))
+    SessionAdmissionService.transaction do
+      plan.fetch("overrides").each do |entry|
+        raise ArgumentError, "Invalid scope" unless %w[Project User].include?(entry.fetch("scope_type"))
+        entry.fetch("scope_type").constantize.find(entry.fetch("scope_id"))
+        limit = SessionConcurrencyLimit.find_or_initialize_by(scope_type: entry.fetch("scope_type"), scope_id: entry.fetch("scope_id"))
+        limit.update!(max_sessions: SessionAdmissionPolicy.positive_integer!(entry.fetch("max_sessions"))) if limit.new_record?
+      end
+    end
+    puts "Scoped overrides imported. Apply reviewed defaults with session_admission:sync."
+  end
+
   desc "Verify reviewed legacy quotas from QUOTA_ALLOWLIST JSON [{namespace, uid}]; deletes only with APPLY=true"
   task remove_legacy_quotas: :environment do
     entries = JSON.parse(File.read(ENV.fetch("QUOTA_ALLOWLIST")))

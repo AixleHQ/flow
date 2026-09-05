@@ -66,6 +66,7 @@ module Admin
         cache_write_tokens: 0,
         cache_read_tokens: 0
       )
+      @quota = NamespaceResourceQuota.create!(scope: @project, max_pods: 10)
     end
 
     test "users#index" do
@@ -435,6 +436,16 @@ module Admin
 
     test "usage_statistics#show" do
       get admin_usage_statistic_path(@usage)
+      assert_response :success
+    end
+
+    test "namespace_resource_quotas#index" do
+      get admin_namespace_resource_quotas_path
+      assert_response :success
+    end
+
+    test "namespace_resource_quotas#show" do
+      get admin_namespace_resource_quota_path(@quota)
       assert_response :success
     end
   end

@@ -832,6 +832,26 @@ export function adminUsageStatisticPath(id: ScalarType, options?: object): strin
   return "/" + "admin" + "/" + "usage_statistics" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /admin/namespace_resource_quotas(.:format) */
+export function adminNamespaceResourceQuotasPath(options?: object): string {
+  return "/" + "admin" + "/" + "namespace_resource_quotas" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/namespace_resource_quotas/new(.:format) */
+export function newAdminNamespaceResourceQuotaPath(options?: object): string {
+  return "/" + "admin" + "/" + "namespace_resource_quotas" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/namespace_resource_quotas/:id/edit(.:format) */
+export function editAdminNamespaceResourceQuotaPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "namespace_resource_quotas" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /admin/namespace_resource_quotas/:id(.:format) */
+export function adminNamespaceResourceQuotaPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "namespace_resource_quotas" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /admin/session_concurrency_limits(.:format) */
 export function adminSessionConcurrencyLimitsPath(options?: object): string {
   return "/" + "admin" + "/" + "session_concurrency_limits" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

@@ -316,3 +316,16 @@ container_execution:
 # workers actually read. There is deliberately no mirror of them here: a second
 # copy that nothing consults is a copy that goes stale.
 
+namespace_resource_quotas:
+  project_defaults:
+    cpu_requests:    ~
+    memory_requests: ~
+    cpu_limits:      "4000m"
+    memory_limits:   "8Gi"
+    max_pods:        100
+  user_defaults:
+    cpu_requests:    ~
+    memory_requests: ~
+    cpu_limits:      "4000m"
+    memory_limits:   "8Gi"
+    max_pods:        100
