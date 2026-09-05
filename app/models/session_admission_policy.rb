@@ -11,7 +11,33 @@ class SessionAdmissionPolicy < ApplicationRecord
   }.freeze
 
   def self.current = find_by(id: 1) || create_or_find_by!(id: 1)
-  def self.enabled? = current.enabled?
+
+  # Answers the gate every session launch asks, and survives the deploy window
+  # where the two cannot be in step.
+  #
+  # The image tag production runs is mutable, so new code starts serving when
+  # the image is PUSHED, not when the deploy job runs — and migrations run just
+  # before that job. A pod rescheduled in between (spot, autoscaling) executes
+  # new code against the old schema for as long as that gap lasts. On
+  # 2026-09-05 that cost five sessions: this gate sits on the container-create
+  # path, so a table it could not read failed the launch outright.
+  #
+  # A missing table is not an ambiguous answer. The queue cannot be on if its
+  # policy does not exist yet, so say so and let the legacy path serve. Anything
+  # else from the database still raises — this narrows to one question, it does
+  # not swallow database errors.
+  def self.enabled?
+    current.enabled?
+  rescue ActiveRecord::StatementInvalid => e
+    raise unless undefined_table?(e)
+
+    Rails.logger.warn("[SessionAdmission] policy table is not present yet; treating admission as disabled")
+    false
+  end
+
+  def self.undefined_table?(error)
+    error.cause.class.name == "PG::UndefinedTable"
+  end
 
   # The size of a scope queue is plain deployment configuration, read live, so a
   # ConfigMap edit takes effect on the next pod with nothing to remember to run.

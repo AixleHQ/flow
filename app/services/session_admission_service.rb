@@ -34,6 +34,11 @@ class SessionAdmissionService
     # Returns the admission, or nil when admission is disabled and the caller
     # should take the legacy launch path.
     def enqueue!(session)
+      # Asked before the writer lock so that a schema that is not there yet
+      # answers "no queue" instead of failing the launch. The authoritative
+      # re-check still happens under the lock below.
+      return nil unless SessionAdmissionPolicy.enabled?
+
       transaction do |policy|
         next session.session_admission if session.session_admission
         next nil unless policy.enabled?
