@@ -28,4 +28,4 @@ Build from the `docker/` directory:
 docker build -f antigravity-cli/Dockerfile -t aixle/antigravity-cli:latest .
 ```
 
-The image intentionally downloads GitHub's current `latest` release during each build. Record the emitted `agy --version` value with the published image digest for rollback traceability.
+The image downloads the pinned `agy` 1.1.27 release and verifies Google's published SHA-256 checksum during each build. Record the emitted `agy --version` value with the published image digest for rollback traceability.
