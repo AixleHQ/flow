@@ -11,7 +11,8 @@ import classes from './SessionTerminalReplay.module.css';
  * raw ANSI bytes from `logUrl` (server already caps to the tail) and renders
  * them into xterm.js, preserving the original colors/markup. Static dump (no
  * time-based playback); input-disabled. xterm is lazy-imported so it stays out
- * of the main bundle.
+ * of the main bundle, and the section starts expanded — the log is what a
+ * finished session's page is for.
  */
 
 type Status = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
@@ -66,14 +67,17 @@ function computeLayout(text: string, el: HTMLElement) {
 export function SessionTerminalReplay({ logUrl }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<import('@xterm/xterm').Terminal | null>(null);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [status, setStatus] = useState<Status>('idle');
   const [truncated, setTruncated] = useState(false);
   const colorScheme = useComputedColorScheme('dark', { getInitialValueInEffect: true });
 
-  // Collapsed by default: only fetch the log and mount xterm once the user
-  // expands the section. colorScheme is intentionally NOT a dependency — a theme
-  // toggle must not re-download or rebuild; the effect below recolors in place.
+  // Expanded by default: a finished session's log is the reason the page is
+  // being opened, so it loads without a click. Collapsing tears the terminal
+  // down (effect cleanup) and re-expanding refetches — cheap, and it keeps
+  // "is the log mounted" owned by this one effect.
+  // colorScheme is intentionally NOT a dependency — a theme toggle must not
+  // re-download or rebuild; the effect below recolors in place.
   useEffect(() => {
     if (!open) return undefined;
 
