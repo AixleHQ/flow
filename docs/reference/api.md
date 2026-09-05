@@ -149,8 +149,8 @@ while holding a single page.
 ### Assets
 
 ```
-GET  /api/v1/assets/presign
-POST /api/v1/assets/upload
+GET /api/v1/assets/presign          # -> { method: "PUT", url } for a direct upload
+PUT /api/v1/assets/upload/*key      # development/test only: stands in for S3
 
 POST   /api/v1/company/assets
 DELETE /api/v1/company/assets/:id
