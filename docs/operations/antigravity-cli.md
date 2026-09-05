@@ -2,6 +2,10 @@
 
 Aixle runs Antigravity CLI as a separate runtime (`antigravity_cli`); it does not replace Gemini CLI.
 
+The runtime image pins `agy` 1.1.27 and verifies Google's published SHA-256
+checksum during the build. This release includes the upstream fixes for
+headless runs hanging when tmux pipes their output and for print-mode shutdown.
+
 ## Authentication
 
 Aixle connects Antigravity the same way as every other CLI: from Profile or Onboarding, "Connect"/"Authenticate" opens the standard auth-terminal session (`AgentAuthTerminal`), which launches the real `agy` binary directly — no bespoke form or script.

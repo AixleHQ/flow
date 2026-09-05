@@ -5,13 +5,22 @@ FROM ${BASE_IMAGE}
 RUN useradd -m -d /home/antigravity -s /bin/bash -G ${AGENT_BROWSERS_GROUP} antigravity
 
 ARG TARGETARCH
+ARG ANTIGRAVITY_CLI_VERSION=1.1.27
 RUN set -eux; \
     arch="${TARGETARCH:-amd64}"; [ "$arch" = "amd64" ] && arch=x64; \
-    curl -fsSL "https://github.com/google-antigravity/antigravity-cli/releases/latest/download/agy_cli_linux_${arch}.tar.gz" \
-      | tar -xz -C /usr/local/bin; \
+    case "$arch" in \
+      x64) sha256="f874d4f6b8a73c2df660f580f25fb656fcb6e64adbfd746e6692e837fd9a20be" ;; \
+      arm64) sha256="97fc9fe5a6067406cd02cbe4ae6e362c9623a24d33bec486911246c17ceb6a94" ;; \
+      *) echo "Unsupported architecture: $arch" >&2; exit 1 ;; \
+    esac; \
+    archive=/tmp/agy.tar.gz; \
+    curl -fsSL "https://github.com/google-antigravity/antigravity-cli/releases/download/${ANTIGRAVITY_CLI_VERSION}/agy_cli_linux_${arch}.tar.gz" -o "$archive"; \
+    echo "$sha256  $archive" | sha256sum -c -; \
+    tar -xzf "$archive" -C /usr/local/bin; \
+    rm "$archive"; \
     mv /usr/local/bin/antigravity /usr/local/bin/agy; \
     chmod +x /usr/local/bin/agy; \
-    su antigravity -c "agy --version"
+    test "$(su antigravity -c 'agy --version')" = "$ANTIGRAVITY_CLI_VERSION"
 
 COPY base/tmux.conf /etc/tmux.conf
 COPY base/inputrc /etc/inputrc

@@ -189,9 +189,6 @@ jobs:
           - image_name: Gemini CLI
             image_suffix: gemini-cli
             dockerfile: ./docker/gemini-cli/Dockerfile
-          - image_name: Antigravity CLI
-            image_suffix: antigravity-cli
-            dockerfile: ./docker/antigravity-cli/Dockerfile
           - image_name: Grok CLI
             image_suffix: grok
             dockerfile: ./docker/grok/Dockerfile
