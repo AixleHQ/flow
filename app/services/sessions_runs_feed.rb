@@ -20,12 +20,18 @@ class SessionsRunsFeed
   # One status vocabulary over two state machines. A session is "finished" where
   # a run is "completed"; asking a user to know that is asking them to know our
   # schema.
+  # A run whose step is waiting for a session slot is itself `running` — queueing
+  # is a property of the child, not of the run — so this side cannot be a state
+  # list like the others. QUEUED_STEP asks the question the state cannot.
+  QUEUED_STEP = :queued_step
+
   STATUS_FILTERS = {
+    "queued" => { sessions: %w[queued], runs: QUEUED_STEP },
     "running" => { sessions: %w[running ready finishing], runs: %w[running] },
     "completed" => { sessions: %w[finished], runs: %w[completed] },
     "failed" => { sessions: %w[failed], runs: %w[failed] },
     "cancelled" => { sessions: %w[cancelled], runs: %w[cancelled] },
-    "pending" => { sessions: %w[not_started queued], runs: %w[pending paused] }
+    "pending" => { sessions: %w[not_started], runs: %w[pending paused] }
   }.freeze
 
   TYPES = %w[all run solo].freeze
@@ -135,7 +141,10 @@ class SessionsRunsFeed
   def filtered_runs
     scope = WorkflowRun.where(project: project)
     scope = scope.where(user_id: filters[:user_id]) if filters[:user_id].present?
-    if (states = status_states(:runs))
+    states = status_states(:runs)
+    if states == QUEUED_STEP
+      scope = scope.where(id: runs_with_queued_step)
+    elsif states
       scope = states.empty? ? scope.none : scope.where(state: states)
     end
     if filters[:agent_type].present?
@@ -146,6 +155,12 @@ class SessionsRunsFeed
       scope = scope.joins(:workflow).where("workflows.name ILIKE :q", q: "%#{sanitize_like(filters[:search])}%")
     end
     scope
+  end
+
+  def runs_with_queued_step
+    WorkflowRun.joins(step_runs: :terminal_session)
+               .where(terminal_sessions: { state: "queued" })
+               .select(:id)
   end
 
   # nil means "no status filter"; [] means "this side of the union matches
