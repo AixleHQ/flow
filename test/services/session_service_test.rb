@@ -244,6 +244,22 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_equal 0, @user.terminal_sessions.count
   end
 
+  # The catch-22 this guards: the refresh sweep marks a credential broken, and the
+  # only flow that can replace it is an auth_setup session — so gating that session
+  # on the same credential locks the user out for good.
+  test "create_and_start lets an auth_setup session run on a credential in error status" do
+    mock_temporal_start
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-test" })
+    cred.mark_refresh_error!("invalid_grant", permanent: true)
+
+    session = SessionService.create_and_start(
+      user: @user, company: @company, session_type: "auth_setup",
+      agent_type: "claude_code", params: {}
+    )
+
+    assert session.persisted?, "re-authentication must not be gated on the credential it replaces"
+  end
+
   test "create_and_start proceeds when agent credential is active" do
     mock_temporal_start
     AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-test" })
