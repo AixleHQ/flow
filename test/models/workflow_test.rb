@@ -98,6 +98,27 @@ class WorkflowTest < ActiveSupport::TestCase
     assert_not_nil wf.reload.deleted_at
   end
 
+  test "soft_delete! raises when the workflow is still bound to a board column" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    wf = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: column, workflow: wf, trigger_mode: :manual)
+
+    assert_raises(ActiveRecord::RecordNotDestroyed) { wf.soft_delete! }
+    assert_nil wf.reload.deleted_at
+  end
+
+  test "destroy aborts when the workflow is still bound to a board column" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    wf = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: column, workflow: wf, trigger_mode: :manual)
+
+    assert_not wf.destroy
+    assert Workflow.exists?(wf.id)
+    assert_includes wf.errors[:base].join, "Cannot delete — bound to column"
+  end
+
   test "config defaults to empty hash" do
     wf = create(:workflow, scope: @project)
     assert_equal({}, wf.config)

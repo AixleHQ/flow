@@ -256,6 +256,12 @@ BoardPage/
 
 - If a sub-component starts being used outside its parent, promote it to `shared/components/`.
 
+**Enforcement:** `make fsd` runs [steiger](https://github.com/feature-sliced/steiger) against
+`app/frontend` (config: `steiger.config.js`) and is part of `make fe_check` / `check_all`. The
+config disables the vanilla-FSD rules that fight this loose interpretation (segmentless pages,
+per-component rather than per-segment barrels, the `shared/components` segment name); the layer
+boundary rules (import direction, cross-slice access, reserved names) stay on.
+
 ### Container Strategy Pattern
 
 When adding a new strategy:
