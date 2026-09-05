@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_02_120946) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -23,10 +23,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
     t.datetime "expires_at"
     t.datetime "last_used_at"
     t.jsonb "metadata", default: {}
+    t.string "refresh_error"
+    t.integer "refresh_failure_count", default: 0, null: false
+    t.string "status", default: "active", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.index ["agent_type"], name: "index_agent_credentials_on_agent_type"
     t.index ["company_id"], name: "index_agent_credentials_on_company_id"
+    t.index ["status", "expires_at"], name: "index_agent_credentials_on_status_and_expires_at"
     t.index ["user_id", "company_id", "agent_type"], name: "index_agent_credentials_on_user_company_agent", unique: true
     t.index ["user_id"], name: "index_agent_credentials_on_user_id"
   end

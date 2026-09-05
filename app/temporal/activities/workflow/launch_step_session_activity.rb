@@ -8,6 +8,9 @@ module Activities
         session = SessionService.create_for_workflow_step(step_run: step_run)
 
         { "terminal_session_id" => session.id, "step_run_id" => step_run.id }
+      rescue AgentCredential::PreflightError => e
+        step_run.mark_failed!(e.message)
+        raise Temporalio::Error::ApplicationError.new(e.message, type: "PreflightError", non_retryable: true)
       end
     end
   end

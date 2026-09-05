@@ -67,6 +67,12 @@ FactoryBot.define do
       expires_at { 1.day.ago }
     end
 
+    trait :errored do
+      status { "error" }
+      refresh_error { "invalid_grant — reconnection required" }
+      refresh_failure_count { 1 }
+    end
+
     trait :recently_used do
       last_used_at { 1.hour.ago }
     end
