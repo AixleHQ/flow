@@ -95,7 +95,8 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     ENV["SESSION_PROJECT_CONCURRENCY_DEFAULT"] = "lots"
     @_scope_defaults_restore = { "SESSION_PROJECT_CONCURRENCY_DEFAULT" => nil, "SESSION_USER_CONCURRENCY_DEFAULT" => nil }
 
-    assert_equal SessionAdmissionPolicy::DEFAULT_SCOPE_LIMIT, SessionAdmissionPolicy.scope_default("Project")
+    assert_equal 4, SessionAdmissionPolicy.scope_default("Project")
+    assert_equal 2, SessionAdmissionPolicy.scope_default("User"), "an unset variable keeps its own fallback"
   end
 
   test "a scope override beats the deployment default, which beats nothing" do

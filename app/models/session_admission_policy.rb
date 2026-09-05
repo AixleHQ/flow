@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 class SessionAdmissionPolicy < ApplicationRecord
-  DEFAULT_SCOPE_LIMIT = 2
-
-  SCOPE_DEFAULT_VARIABLES = {
-    "Project" => "SESSION_PROJECT_CONCURRENCY_DEFAULT",
-    "User" => "SESSION_USER_CONCURRENCY_DEFAULT"
+  # A project is a shared workspace: several people, or one person and a couple
+  # of workflow steps running beside them, is the ordinary case. A user pool only
+  # ever holds project-less sessions, which in practice means agent logins, and
+  # nobody signs into four agents at once.
+  SCOPE_DEFAULTS = {
+    "Project" => { variable: "SESSION_PROJECT_CONCURRENCY_DEFAULT", fallback: 4 },
+    "User" => { variable: "SESSION_USER_CONCURRENCY_DEFAULT", fallback: 2 }
   }.freeze
 
   def self.current = find_by(id: 1) || create_or_find_by!(id: 1)
@@ -23,21 +25,22 @@ class SessionAdmissionPolicy < ApplicationRecord
   # replicas disagreeing about a scope's size. Bounded by the size of the edit,
   # and it settles as the rollout finishes.
   def self.scope_default(scope_type)
-    raw = ENV[SCOPE_DEFAULT_VARIABLES.fetch(scope_type)].to_s.strip
-    return DEFAULT_SCOPE_LIMIT if raw.empty?
+    config = SCOPE_DEFAULTS.fetch(scope_type)
+    raw = ENV[config[:variable]].to_s.strip
+    return config[:fallback] if raw.empty?
     return raw.to_i if raw.match?(/\A[1-9]\d*\z/)
 
     # Never raise on the grant path: a typo in a ConfigMap must not wedge every
     # queue in the installation. `session_admission:sync` validates strictly, so
     # the operator sees it at cutover instead.
     Rails.logger.error(
-      "[SessionAdmission] #{SCOPE_DEFAULT_VARIABLES.fetch(scope_type)}=#{raw.inspect} is not a positive integer; " \
-      "falling back to #{DEFAULT_SCOPE_LIMIT}"
+      "[SessionAdmission] #{config[:variable]}=#{raw.inspect} is not a positive integer; " \
+      "falling back to #{config[:fallback]}"
     )
-    DEFAULT_SCOPE_LIMIT
+    config[:fallback]
   end
 
-  def self.scope_defaults = SCOPE_DEFAULT_VARIABLES.keys.index_with { |type| scope_default(type) }
+  def self.scope_defaults = SCOPE_DEFAULTS.keys.index_with { |type| scope_default(type) }
 
   # Only the operator writes policy, and only in a maintenance window. Workers
   # never interpret their ENV for anything gated here.

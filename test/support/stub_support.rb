@@ -11,7 +11,7 @@ module StubSupport
   # ===========================================================================
 
   def with_scope_defaults(project: 1, user: 1)
-    previous = ENV.slice(*SessionAdmissionPolicy::SCOPE_DEFAULT_VARIABLES.values)
+    previous = ENV.slice(*SessionAdmissionPolicy::SCOPE_DEFAULTS.values.pluck(:variable))
     ENV["SESSION_PROJECT_CONCURRENCY_DEFAULT"] = project.to_s
     ENV["SESSION_USER_CONCURRENCY_DEFAULT"] = user.to_s
     @_scope_defaults_restore = previous
@@ -20,9 +20,9 @@ module StubSupport
   def restore_scope_defaults
     return unless defined?(@_scope_defaults_restore) && @_scope_defaults_restore
 
-    SessionAdmissionPolicy::SCOPE_DEFAULT_VARIABLES.each_value do |variable|
-      value = @_scope_defaults_restore[variable]
-      value.nil? ? ENV.delete(variable) : ENV[variable] = value
+    SessionAdmissionPolicy::SCOPE_DEFAULTS.each_value do |config|
+      value = @_scope_defaults_restore[config[:variable]]
+      value.nil? ? ENV.delete(config[:variable]) : ENV[config[:variable]] = value
     end
     @_scope_defaults_restore = nil
   end

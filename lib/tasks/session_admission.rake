@@ -58,8 +58,8 @@ namespace :session_admission do
     # Scope defaults are read live at grant time and fall back quietly on a bad
     # value so a typo cannot wedge the queue. This is the one place that can
     # afford to be strict about them, so it is.
-    SessionAdmissionPolicy::SCOPE_DEFAULT_VARIABLES.each_value do |variable|
-      raw = ENV[variable].to_s.strip
+    SessionAdmissionPolicy::SCOPE_DEFAULTS.each_value do |config|
+      raw = ENV[config[:variable]].to_s.strip
       next if raw.empty?
       SessionAdmissionPolicy.positive_integer!(raw)
     end
