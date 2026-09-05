@@ -5,7 +5,7 @@ class ContextRenderer
   CHARS_PER_TOKEN = 4
 
   PRIORITY_ORDER = { critical: 0, important: 1, info: 2 }.freeze
-  POSITION_ORDER = { top: 0, middle: 1, bottom: 2 }.freeze
+  POSITION_ORDER = { top: 0, middle: 1, bottom: 2, footer: 3 }.freeze
 
   COMPRESSIBLE_TAGS = %w[previous-steps board-context custom-tools available-resources repositories].freeze
 
@@ -14,11 +14,15 @@ class ContextRenderer
 
     sections = compress(sections) if over_budget?(sections)
 
-    sorted = sections.sort_by do |s|
-      [ POSITION_ORDER[s.position_hint], PRIORITY_ORDER[s.priority] ]
+    # sort_by is not stable, so equal (position, priority) pairs would otherwise
+    # render in an arbitrary order between runs — and the last critical section
+    # is exactly the one whose placement matters (see ContextBuilders::
+    # SessionCompletion). The index tiebreak keeps builder order.
+    sorted = sections.each_with_index.sort_by do |s, i|
+      [ POSITION_ORDER[s.position_hint], PRIORITY_ORDER[s.priority], i ]
     end
 
-    sorted.map { |s| render_section(s) }.join("\n\n")
+    sorted.map { |s, _i| render_section(s) }.join("\n\n")
   end
 
   def self.render_section(section)

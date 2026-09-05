@@ -13,7 +13,10 @@ class SessionContextConstructor
     ContextBuilders::Resources,
     ContextBuilders::ConfigItems,
     ContextBuilders::BmadMethod,
-    ContextBuilders::OutputRules
+    ContextBuilders::OutputRules,
+    # Last on purpose: ties in the renderer's sort are broken by this order, so
+    # the completion mandate is the final thing the agent reads.
+    ContextBuilders::SessionCompletion
   ].freeze
 
   def self.build(session)

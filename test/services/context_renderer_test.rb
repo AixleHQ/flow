@@ -29,6 +29,24 @@ class ContextRendererTest < ActiveSupport::TestCase
     assert_includes output, "</beta>"
   end
 
+  test "footer sections render below every bottom section, whatever its priority" do
+    bottom_info = ContextSection.new(tag: "bi", priority: :info, content: "a", position_hint: :bottom)
+    footer = ContextSection.new(tag: "ft", priority: :critical, content: "b", position_hint: :footer)
+
+    output = ContextRenderer.render([ footer, bottom_info ])
+
+    assert_operator output.index("<bi "), :<, output.index("<ft ")
+  end
+
+  test "sections tied on position and priority keep their input order" do
+    first = ContextSection.new(tag: "first", priority: :critical, content: "a", position_hint: :bottom)
+    last = ContextSection.new(tag: "last", priority: :critical, content: "b", position_hint: :bottom)
+
+    output = ContextRenderer.render([ first, last ])
+
+    assert_operator output.index("<first "), :<, output.index("<last ")
+  end
+
   test "sections are sorted by position_hint first, then priority" do
     bottom_critical = ContextSection.new(tag: "bc", priority: :critical, content: "c", position_hint: :bottom)
     top_info = ContextSection.new(tag: "ti", priority: :info, content: "c", position_hint: :top)
