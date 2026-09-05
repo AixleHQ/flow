@@ -13,23 +13,33 @@ module Agents
     end
 
     test "uses the OAuth token file agy itself writes on login" do
-      assert_equal "/home/antigravity/.gemini/antigravity-cli/oauth_creds.json", @adapter.config_path
+      assert_equal "/home/antigravity/.gemini/antigravity-cli/antigravity-oauth-token", @adapter.config_path
       assert_equal @adapter.config_path, @adapter.auth_watch_path
-      assert @adapter.auth_complete?('{"access_token":"tok-123"}')
+      assert @adapter.auth_complete?('{"token":{"access_token":"tok-123"},"auth_method":"consumer"}')
+      refute @adapter.auth_complete?('{"auth_method":"consumer"}')
       refute @adapter.auth_complete?("{}")
       assert_equal(
-        { "access_token" => "tok-123", "refresh_token" => "refresh-123" },
-        @adapter.extract_credentials('{"access_token":"tok-123","refresh_token":"refresh-123","other":"ignored"}')
+        { "access_token" => "tok-123", "refresh_token" => "refresh-123", "auth_method" => "consumer" },
+        @adapter.extract_credentials(
+          '{"token":{"access_token":"tok-123","refresh_token":"refresh-123","other":"ignored"},"auth_method":"consumer"}'
+        )
       )
     end
 
-    test "writes provider settings and credentials" do
-      credentials = { "access_token" => "tok-123", "refresh_token" => "refresh-123" }
+    test "extract_credentials returns nothing for a file with no token block yet" do
+      assert_equal({}, @adapter.extract_credentials('{"enableTelemetry":false,"trustedWorkspaces":["/workspace"]}'))
+    end
+
+    test "writes provider settings and credentials in the exact shape agy itself writes" do
+      credentials = { "access_token" => "tok-123", "refresh_token" => "refresh-123", "auth_method" => "consumer" }
       files = @adapter.config_files(credentials)
       settings = JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"])
       assert_equal "gemini", settings["modelProvider"]
       refute settings["enableTelemetry"]
-      assert_equal(credentials, JSON.parse(files[@adapter.config_path]))
+      assert_equal(
+        { "token" => { "access_token" => "tok-123", "refresh_token" => "refresh-123" }, "auth_method" => "consumer" },
+        JSON.parse(files[@adapter.config_path])
+      )
     end
 
     # Per review feedback, the auth terminal drives the real `agy` CLI directly
