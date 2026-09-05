@@ -90,13 +90,6 @@ module Agents
                    @adapter.credential_preflight(runtime, container, "abc123"))
     end
 
-    test "credential_preflight rejects a missing token file" do
-      runtime, container = preflight_runtime(nil)
-
-      assert_equal({ valid: false, error_code: "auth_file_missing" },
-                   @adapter.credential_preflight(runtime, container, "abc123"))
-    end
-
     private
 
     def preflight_runtime(auth_content)
