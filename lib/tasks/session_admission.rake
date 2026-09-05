@@ -1,8 +1,18 @@
 # frozen_string_literal: true
 
 namespace :session_admission do
-  desc "Print legacy quotas as a reviewable session limit migration plan"
+  desc "Print legacy quotas as a reviewable session limit migration plan (Kubernetes only)"
   task legacy_plan: :environment do
+    # The plan divides namespace quota by per-Pod resources. On Docker there are
+    # no namespace quotas, and the same arithmetic would still produce a
+    # confident number from Kubernetes settings that govern nothing — an
+    # operator would then import overrides derived from a fiction.
+    runtime = ContainerRuntime.build
+    unless runtime.is_a?(ContainerRuntime::KubernetesRuntime)
+      abort "legacy_plan converts Kubernetes namespace quotas into session counts; " \
+            "this installation runs #{runtime.class.name.demodulize}. " \
+            "Set SESSION_PROJECT_CONCURRENCY_DEFAULT / SESSION_USER_CONCURRENCY_DEFAULT directly."
+    end
     puts JSON.pretty_generate(SessionQuotaMigration.plan)
   end
 
