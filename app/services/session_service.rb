@@ -89,8 +89,12 @@ class SessionService
       preflight_oauth!(session.user, session.mcp_server_ids)
       preflight_cloud!(session.user, SessionCompany.company_for(session))
       # Checked again here and not only at create: the refresh sweep can mark a
-      # credential errored while the session is still waiting in the queue.
-      preflight_agent_credential!(session.user, SessionCompany.company_for(session), session.agent_type)
+      # credential errored while the session is still waiting in the queue. The
+      # session_type carries the auth_setup exemption — a login session exists to
+      # replace the broken credential, so gating it on that credential would trap
+      # the user behind the queue with no way out.
+      preflight_agent_credential!(session.user, SessionCompany.company_for(session), session.agent_type,
+        session_type: session.session_type)
       preflight_url_safety!(session.mcp_server_ids)
       refresh_oauth_tokens_for_session(session) if refresh_tokens
     end

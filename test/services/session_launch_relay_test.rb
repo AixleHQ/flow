@@ -37,6 +37,21 @@ class SessionLaunchRelayTest < ActiveSupport::TestCase
     SessionLaunchRelay.dispatch(@admission)
   end
 
+  test "a queued agent login is not blocked by the credential it exists to replace" do
+    SessionService.unstub(:revalidate_admission!)
+    broken = create(:agent_credential, user: @user, company: @user.companies.first,
+                    agent_type: "claude_code", status: "error")
+    @session.update!(session_type: "agent_session", agent_type: broken.agent_type)
+
+    # A normal session behind a broken credential is stopped at the gate...
+    assert_raises(AgentCredential::PreflightError) { SessionService.revalidate_admission!(@session.reload) }
+
+    # ...but the login that exists to replace it must get through, or the queue
+    # traps the user with no way to fix the thing blocking them.
+    @session.update!(session_type: "auth_setup")
+    assert_nothing_raised { SessionService.revalidate_admission!(@session.reload) }
+  end
+
   test "failed preflight releases a reservation when no start was attempted" do
     SessionService.stubs(:revalidate_admission!).raises(SessionAdmissionService::Stopped, "Access revoked")
     TemporalService.expects(:start_workflow).never
