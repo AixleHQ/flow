@@ -107,8 +107,8 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     admit(waiting)
     blocked = create(:terminal_session, user: @user)
     SessionAdmissionService.enqueue!(blocked)
-    SessionAdmission.find_by(terminal_session: waiting)
-                    .session_runtime_operations.create!(phase: "create_container", state: "uncertain")
+    admission = SessionAdmission.find_by(terminal_session: waiting)
+    admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
 
     stats = SessionAdmissionReconciler.snapshot
 
@@ -116,7 +116,13 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_equal 1, stats[:occupied]
     assert_equal 1, stats[:pools_with_queue]
     assert_equal 1, stats[:uncertain_operations]
+    assert_equal 0, stats[:operations_in_flight], "a provisioning create must not read as pinned capacity"
     assert_operator stats[:oldest_queue_wait_seconds], :>=, 0
+
+    admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
+
+    assert_equal 1, SessionAdmissionReconciler.snapshot[:operations_in_flight]
+    assert_equal 1, SessionAdmissionReconciler.snapshot[:uncertain_operations]
   end
 
   private

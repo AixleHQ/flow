@@ -24,12 +24,18 @@ class SessionAdmissionReconciler
     report(snapshot)
   end
 
-  # The four numbers that distinguish "the queue is working" from "the queue is
+  # The numbers that distinguish "the queue is working" from "the queue is
   # wedged": how long the head has been waiting, how much capacity is pinned by
   # an unprovable runtime operation, how long confirmed cleanup is lagging, and
   # whether anyone is blocked at all. Emitted once per pass as one structured
   # line, which is what the cluster's log pipeline can alert on without the app
   # taking on a metrics backend.
+  #
+  # in_flight and uncertain are counted apart on purpose. An in-flight operation
+  # is a create that is simply still running — every provisioning session has
+  # one, so folding it into the alerting number makes normal load look like a
+  # fault. Only `uncertain` means capacity is pinned until an operator resolves
+  # it.
   def self.snapshot
     now = Time.current
     queued = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil)
@@ -44,7 +50,8 @@ class SessionAdmissionReconciler
       occupied: SessionAdmission.occupied.count,
       pools_with_queue: SessionAdmissionPool.where(id: queued.select(:session_admission_pool_id)).count,
       oldest_queue_wait_seconds: age(queued.minimum(:created_at), now),
-      uncertain_operations: SessionRuntimeOperation.where(state: %w[in_flight uncertain]).count,
+      operations_in_flight: SessionRuntimeOperation.where(state: "in_flight").count,
+      uncertain_operations: SessionRuntimeOperation.where(state: "uncertain").count,
       cleanup_lag_seconds: age(lagging.minimum(:updated_at), now)
     }
   end
