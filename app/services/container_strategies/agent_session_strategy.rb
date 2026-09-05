@@ -189,6 +189,18 @@ module ContainerStrategies
       return if credential.nil?
 
       result = credential.refresh_if_expiring!(excluding_session_id: session.id)
+
+      # Deferring to the container that holds these tokens means this session starts
+      # on whatever is stored, which may be little. Say so: the alternative is finding
+      # out from a 401 halfway through a session and having nothing to correlate it to.
+      if result == :held
+        left = credential.expires_at ? ((credential.expires_at - Time.current) / 60).round : nil
+        Rails.logger.warn("[AgentSession] Starting session #{session.id} on credential #{credential.id} " \
+                          "with #{left || '?'}m of token life: another live session holds these tokens, " \
+                          "so refreshing now would invalidate the copy it is running on")
+        return
+      end
+
       return unless result.is_a?(Hash)
 
       case result[:status]

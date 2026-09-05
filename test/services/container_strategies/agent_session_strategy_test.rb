@@ -161,6 +161,24 @@ module ContainerStrategies
       assert_equal "active", @credential.reload.status
     end
 
+    # Deferring to the container that holds the tokens is the right call, but it means
+    # starting on whatever is stored — which the logs have to say, or the resulting
+    # mid-session 401 has nothing to correlate it to.
+    test "before_exec says so when it starts on a token another live session holds" do
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-tok", "refreshToken" => "old-ref",
+                             "expiresAt" => (20.minutes.from_now.to_f * 1000).to_i }
+      })
+      create(:terminal_session, user: @user, company_id: @credential.company_id,
+                                agent_type: "claude_code", state: "running")
+      SessionContextService.stubs(:assemble_session_context)
+      Rails.logger.expects(:warn).with(regexp_matches(/another live session holds these tokens/)).at_least_once
+
+      run_before_exec(build_strategy)
+
+      assert_equal "old-tok", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+    end
+
     test "before_exec rejects a nil credential before assembling context" do
       strategy = AgentSessionStrategy.new(
         user_id: @user.id,
