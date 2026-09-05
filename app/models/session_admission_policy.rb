@@ -1,11 +1,47 @@
 # frozen_string_literal: true
 
 class SessionAdmissionPolicy < ApplicationRecord
+  DEFAULT_SCOPE_LIMIT = 2
+
+  SCOPE_DEFAULT_VARIABLES = {
+    "Project" => "SESSION_PROJECT_CONCURRENCY_DEFAULT",
+    "User" => "SESSION_USER_CONCURRENCY_DEFAULT"
+  }.freeze
+
   def self.current = find_by(id: 1) || create_or_find_by!(id: 1)
   def self.enabled? = current.enabled?
 
-  # Only the deployment/operator writes policy. Workers never interpret their ENV.
-  def self.sync!(installation_limit: ENV["SESSION_CONCURRENCY_LIMIT"], project_default: 2, user_default: 2, enabled: true, paused: false)
+  # The size of a scope queue is plain deployment configuration, read live, so a
+  # ConfigMap edit takes effect on the next pod with nothing to remember to run.
+  #
+  # What stays in the database is what cannot be read per-process: whether
+  # admission is on at all, whether it is paused, and which pool mode applies —
+  # a mode change re-homes live sessions and has to be gated on a drain, which a
+  # value re-read at boot could never enforce.
+  #
+  # The trade-off of reading live is that a rolling update briefly leaves
+  # replicas disagreeing about a scope's size. Bounded by the size of the edit,
+  # and it settles as the rollout finishes.
+  def self.scope_default(scope_type)
+    raw = ENV[SCOPE_DEFAULT_VARIABLES.fetch(scope_type)].to_s.strip
+    return DEFAULT_SCOPE_LIMIT if raw.empty?
+    return raw.to_i if raw.match?(/\A[1-9]\d*\z/)
+
+    # Never raise on the grant path: a typo in a ConfigMap must not wedge every
+    # queue in the installation. `session_admission:sync` validates strictly, so
+    # the operator sees it at cutover instead.
+    Rails.logger.error(
+      "[SessionAdmission] #{SCOPE_DEFAULT_VARIABLES.fetch(scope_type)}=#{raw.inspect} is not a positive integer; " \
+      "falling back to #{DEFAULT_SCOPE_LIMIT}"
+    )
+    DEFAULT_SCOPE_LIMIT
+  end
+
+  def self.scope_defaults = SCOPE_DEFAULT_VARIABLES.keys.index_with { |type| scope_default(type) }
+
+  # Only the operator writes policy, and only in a maintenance window. Workers
+  # never interpret their ENV for anything gated here.
+  def self.sync!(installation_limit: ENV["SESSION_CONCURRENCY_LIMIT"], enabled: true, paused: false)
     raw = installation_limit.to_s.strip
     cap = raw.empty? ? nil : positive_integer!(raw)
     current
@@ -19,7 +55,7 @@ class SessionAdmissionPolicy < ApplicationRecord
       if switching && SessionAdmission.where(released_at: nil).exists?
         raise ArgumentError, "Drain all admissions before changing pool mode"
       end
-      policy.update!(installation_limit: cap, project_default: positive_integer!(project_default), user_default: positive_integer!(user_default), enabled: enabled, paused: paused, revision: policy.revision + 1)
+      policy.update!(installation_limit: cap, enabled: enabled, paused: paused, revision: policy.revision + 1)
       policy
     end
   end

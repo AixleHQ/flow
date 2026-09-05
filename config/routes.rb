@@ -213,6 +213,7 @@ Rails.application.routes.draw do
     # Not an Administrate resource: manual triggers for the mirrored catalogs, so a
     # fresh deployment does not sit on an empty catalog until the first scheduled run.
     resources :catalog_syncs, only: %i[index create]
+    resource :session_admission, only: %i[show update]
   end
 
   scope module: :web, defaults: { format: :html } do

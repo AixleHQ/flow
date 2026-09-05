@@ -563,11 +563,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_05_120000) do
     t.boolean "enabled", default: false, null: false
     t.integer "installation_limit"
     t.boolean "paused", default: true, null: false
-    t.integer "project_default", default: 2, null: false
     t.integer "revision", default: 1, null: false
     t.datetime "updated_at", null: false
-    t.integer "user_default", default: 2, null: false
-    t.check_constraint "id = 1 AND project_default > 0 AND user_default > 0 AND (installation_limit IS NULL OR installation_limit > 0)", name: "valid_session_policy"
+    t.check_constraint "id = 1 AND (installation_limit IS NULL OR installation_limit > 0)", name: "valid_session_policy"
   end
 
   create_table "session_admission_pools", force: :cascade do |t|

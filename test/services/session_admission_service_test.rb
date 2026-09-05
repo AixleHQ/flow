@@ -8,6 +8,8 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     SessionAdmissionPolicy.sync!(installation_limit: 1)
   end
 
+  teardown { restore_scope_defaults }
+
   def enqueue(user: @user, project: nil)
     session = create(:terminal_session, user: user, project: project)
     SessionAdmissionService.enqueue!(session)
@@ -63,7 +65,8 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "unset installation cap gives independent project and user pools" do
-    SessionAdmissionPolicy.sync!(installation_limit: nil, project_default: 1, user_default: 1)
+    with_scope_defaults(project: 1, user: 1)
+    SessionAdmissionPolicy.sync!(installation_limit: nil)
     project = create(:project, owner: @user, company: @user.companies.first)
     project_first = enqueue(project: project)
     project_second = enqueue(project: project)
@@ -72,8 +75,32 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_nil project_second.reload.admitted_at
   end
 
+  test "a changed scope default takes effect without writing policy" do
+    with_scope_defaults(project: 1)
+    SessionAdmissionPolicy.sync!(installation_limit: nil)
+    project = create(:project, owner: @user, company: @user.companies.first)
+    first = enqueue(project: project)
+    second = enqueue(project: project)
+    assert_equal [ first.id ], SessionAdmissionService.drain!
+
+    revision = SessionAdmissionPolicy.current.revision
+    with_scope_defaults(project: 2)
+
+    assert_equal [ second.id ], SessionAdmissionService.drain!
+    assert_equal revision, SessionAdmissionPolicy.current.revision,
+      "the size of a scope queue is deployment configuration, not policy state"
+  end
+
+  test "an unusable scope default falls back instead of wedging every queue" do
+    ENV["SESSION_PROJECT_CONCURRENCY_DEFAULT"] = "lots"
+    @_scope_defaults_restore = { "SESSION_PROJECT_CONCURRENCY_DEFAULT" => nil, "SESSION_USER_CONCURRENCY_DEFAULT" => nil }
+
+    assert_equal SessionAdmissionPolicy::DEFAULT_SCOPE_LIMIT, SessionAdmissionPolicy.scope_default("Project")
+  end
+
   test "a scope override beats the deployment default, which beats nothing" do
-    SessionAdmissionPolicy.sync!(installation_limit: nil, project_default: 1, user_default: 1)
+    with_scope_defaults(project: 1, user: 1)
+    SessionAdmissionPolicy.sync!(installation_limit: nil)
     project = create(:project, owner: @user, company: @user.companies.first)
     SessionConcurrencyLimit.set!(scope: project, max_sessions: 2)
 
@@ -87,7 +114,8 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "a session in a project draws on the project pool, not its launcher's" do
-    SessionAdmissionPolicy.sync!(installation_limit: nil, project_default: 1, user_default: 1)
+    with_scope_defaults(project: 1, user: 1)
+    SessionAdmissionPolicy.sync!(installation_limit: nil)
     project = create(:project, owner: @user, company: @user.companies.first)
     other = create(:user, :with_company)
     create(:company_membership, user: other, company: project.company, state: :active)
@@ -101,7 +129,8 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "raising a scope limit admits the queue without waiting for reconciliation" do
-    SessionAdmissionPolicy.sync!(installation_limit: nil, project_default: 1, user_default: 1)
+    with_scope_defaults(project: 1, user: 1)
+    SessionAdmissionPolicy.sync!(installation_limit: nil)
     project = create(:project, owner: @user, company: @user.companies.first)
     first = enqueue(project: project)
     second = enqueue(project: project)

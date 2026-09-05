@@ -14,8 +14,11 @@ class Admin::SessionConcurrencyLimitsTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
     @owner = create(:user, company: @company)
     @project = create(:project, owner: @owner, company: @company)
-    SessionAdmissionPolicy.sync!(installation_limit: nil, project_default: 1, user_default: 1)
+    with_scope_defaults(project: 1, user: 1)
+    SessionAdmissionPolicy.sync!(installation_limit: nil)
   end
+
+  teardown { restore_scope_defaults }
 
   test "index lists the scope overrides" do
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 4)

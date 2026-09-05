@@ -6,14 +6,18 @@ module Admin
   # every session draws on the single installation pool and these rows are
   # ignored, which is what the banner on the index says.
   #
-  # The defaults these override (project_default, user_default) and the pool mode
-  # itself are deployment configuration, written by `session_admission:sync`, and
-  # are deliberately read-only here: a value edited in the UI would be silently
-  # reverted by the next deploy's sync.
+  # The defaults these override come from the deployment's environment and are
+  # read live, so there is nothing to edit here; the pool mode lives in the
+  # policy row and only moves in a maintenance window.
   class SessionConcurrencyLimitsController < Admin::ApplicationController
     def policy
       @policy ||= SessionAdmissionPolicy.current
     end
-    helper_method :policy
+
+    def scope_defaults
+      @scope_defaults ||= SessionAdmissionPolicy.scope_defaults
+    end
+
+    helper_method :policy, :scope_defaults
   end
 end

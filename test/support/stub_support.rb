@@ -2,6 +2,32 @@
 
 module StubSupport
   # ===========================================================================
+  # Session concurrency defaults
+  #
+  # The size of a project/user session queue is read live from the environment,
+  # so a test that wants a small cap sets the same variable the deployment does.
+  # Each parallel worker is its own process, and tests inside one run serially,
+  # so mutating ENV here is confined to this test.
+  # ===========================================================================
+
+  def with_scope_defaults(project: 1, user: 1)
+    previous = ENV.slice(*SessionAdmissionPolicy::SCOPE_DEFAULT_VARIABLES.values)
+    ENV["SESSION_PROJECT_CONCURRENCY_DEFAULT"] = project.to_s
+    ENV["SESSION_USER_CONCURRENCY_DEFAULT"] = user.to_s
+    @_scope_defaults_restore = previous
+  end
+
+  def restore_scope_defaults
+    return unless defined?(@_scope_defaults_restore) && @_scope_defaults_restore
+
+    SessionAdmissionPolicy::SCOPE_DEFAULT_VARIABLES.each_value do |variable|
+      value = @_scope_defaults_restore[variable]
+      value.nil? ? ENV.delete(variable) : ENV[variable] = value
+    end
+    @_scope_defaults_restore = nil
+  end
+
+  # ===========================================================================
   # Container Runtime
   #
   # Injects the canonical ContainerRuntime::FakeRuntime (a real BaseRuntime with

@@ -1,29 +1,39 @@
 # Session admission rollout
 
-Queue code is installed by the database migration but remains disabled until an operator runs `bin/rails session_admission:sync`. No production migration, policy change, quota deletion or deployment is part of the source-code change.
+Who turns the queue on depends on what the database already holds.
+
+**A new installation turns it on by itself.** The migration enables admission when the database has never served a session or a run — there is nothing to drain, and a Marketplace customer has nobody to run a task. It picks up `SESSION_CONCURRENCY_LIMIT` at that moment; absent, the installation starts on per-scope queues.
+
+**An existing installation stays off.** Enabling there would put already-running sessions behind a queue they were never admitted to, so it waits for a deliberate cutover: `bin/rails session_admission:sync`, or the Enable button on the admin's Session admission page for an operator who has a login and no shell. Both apply the same drain gate and both read the cap from the same environment variable — the button carries no configuration of its own.
+
+No production migration, policy change, quota deletion or deployment is part of the source-code change.
 
 ## Deployment settings
 
 Set `SESSION_CONCURRENCY_LIMIT` to a positive integer to use a single pool for the installation. This is the separately sold parallelism dimension for a single-company Marketplace installation. The ENV setting is a deployment input, not a license-verification or Marketplace entitlement integration.
 
-If the variable is absent, per-scope queues apply instead. `SESSION_PROJECT_CONCURRENCY_DEFAULT` and `SESSION_USER_CONCURRENCY_DEFAULT` seed the defaults (both 2); per-scope overrides live in PostgreSQL and are edited in the admin under Session concurrency limits, or with `bin/rails 'session_admission:set_limit[Project,123,4]'`. Either path bumps the policy revision and drains the queue immediately. `session_admission:sync` prints the caps it just made effective, so the size of the change is visible before traffic comes back. Auth sessions and workflow-step sessions consume slots. Standalone tool executions do not.
+If the variable is absent, per-scope queues apply instead. `SESSION_PROJECT_CONCURRENCY_DEFAULT` and `SESSION_USER_CONCURRENCY_DEFAULT` size them (both 2) and are **read live**: an edit takes effect on the next boot of each pod, with nothing to run afterwards. The cost of reading live is that a rolling update briefly leaves replicas disagreeing about a scope's size — bounded by the size of the edit, and settled once the rollout finishes. A value that is not a positive integer is logged and ignored in favour of 2 rather than raised, so a ConfigMap typo cannot wedge every queue; `session_admission:sync` validates the same variables strictly, which is where an operator sees it.
+
+Per-scope overrides live in PostgreSQL and are edited in the admin under Session concurrency limits, or with `bin/rails 'session_admission:set_limit[Project,123,4]'`. Either path bumps the policy revision and drains the queue immediately. Auth sessions and workflow-step sessions consume slots. Standalone tool executions do not.
+
+What stays in the database is what cannot be read per-process: whether admission is on, whether it is paused, and which pool mode applies. A mode change re-homes live sessions, so it is gated on a drain — a value re-read at boot could not enforce that gate, which is why `SESSION_CONCURRENCY_LIMIT` needs `session_admission:sync` and the two defaults do not.
 
 **A session belongs to exactly one queue, and the project wins.** A session that has a project draws on that project's cap, whoever launched it; the user cap applies only to project-less sessions, which in practice means agent logins. So ten people working in one project share the project's cap, and one person working across three projects can hold three times a project cap. This is AD-1: a session that consumed two slots could not be ordered in one FIFO queue. If both a project ceiling and a personal ceiling are wanted, that is a two-level model and a separate change.
 
-Workers read the persisted policy. Changing ConfigMaps or restarting a process does not change the active cap: run `session_admission:sync` using the new deployment settings. Lowering a cap keeps current reservations and blocks further admission until usage falls below the cap. Changing between installation and scoped modes requires draining all admissions and runs.
+Changing `SESSION_CONCURRENCY_LIMIT` needs `session_admission:sync` (or the admin button) afterwards; the two scope defaults do not, because they are read live. The admin page reports when the configured limit and the active policy disagree. Lowering a cap keeps current reservations and blocks further admission until usage falls below it. Changing between installation and scoped modes requires draining all admissions and runs.
 
 ## Existing installation
 
 1. Stop new launch traffic, scheduled workflow triggers and other session producers during the maintenance window. Drain all legacy sessions and pending/running/paused workflow runs. Stop old worker processes before cutover; a delayed legacy activity must not run after the policy changes.
 2. Apply the application migration and deploy the new web/MCP/worker image. Keep launch traffic stopped. Worker startup registers the reconciliation schedule, which runs every minute.
 3. For scoped fallback, run `bin/rails session_admission:legacy_plan > session-limits.json`. Review the computed defaults and overrides. The calculation takes the minimum of Pod count, CPU and memory quota divided by the configured homogeneous Pod resources; it is a migration estimate, not a scheduler simulation. Import reviewed overrides with `SESSION_LIMIT_PLAN=session-limits.json bin/rails session_admission:import_limits`; existing overrides are preserved. Set deployment default ENV values to the reviewed defaults. Installation-cap mode ignores scoped overrides.
-4. Run `bin/rails session_admission:sync`. It refuses initial activation if the runtime inventory fails or contains legacy session resources, if database sessions/runs have not drained, or if scoped mode would be activated on defaults nobody reviewed. The runtime inventory must be reviewed in a shared cluster because it can include another deployment's labeled resources.
+4. Run `bin/rails session_admission:sync`, or press Enable on the admin's Session admission page. It refuses initial activation if the runtime inventory fails or contains legacy session resources, or if database sessions and runs have not drained. The runtime inventory must be reviewed in a shared cluster because it can include another deployment's labeled resources.
 5. Audit old `aixle-resource-quota` objects. Build a JSON allowlist containing only reviewed `{ "namespace": "<runtime-namespace>-project-123", "uid": "<current-quota-uid>" }` entries. Run `QUOTA_ALLOWLIST=reviewed-quotas.json bin/rails session_admission:remove_legacy_quotas` — without `APPLY=true` it is a dry run that verifies each entry and prints the quota it would delete, including its current `hard` limits. Re-run with `APPLY=true` once the report is reviewed. The task verifies namespace ownership/scope and quota UID and deletes only that exact quota with a UID precondition. It never removes namespaces, network policies, per-Pod limits or unrelated quotas. Verify actual quota deletion before reopening traffic.
 6. Run `bin/rails session_admission:status`, restore launch traffic, then submit more than the configured cap. Confirm excess sessions show Queued, cancellation works, and the next session starts after runtime cleanup. A remaining third-party quota or unschedulable Pod reports capacity waiting and retains its reservation.
 
 ## New Marketplace installation
 
-Deploy an empty database, apply migrations, supply the purchased `SESSION_CONCURRENCY_LIMIT`, start the new worker and run `session_admission:sync` before exposing launch endpoints. There are no legacy quotas to remove. The same setting is available to web, MCP and worker via the shared ConfigMap, but only the sync task writes policy.
+Supply the purchased `SESSION_CONCURRENCY_LIMIT` in the ConfigMap and deploy against an empty database. The migration finds no history, enables admission and records that cap, so there is nothing to run by hand. There are no legacy quotas to remove. Verify with `session_admission:status` or the admin page before exposing launch endpoints.
 
 ## Operations and recovery
 

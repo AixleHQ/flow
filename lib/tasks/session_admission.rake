@@ -43,12 +43,17 @@ namespace :session_admission do
     unless SessionAdmissionPolicy.current.enabled?
       resources = ContainerRuntime.build.list_session_resources(strict: true)
       raise "Legacy runtime resources remain; drain and clean them before enabling admission" if resources.any?
-
     end
-    policy = SessionAdmissionPolicy.sync!(
-      project_default: ENV.fetch("SESSION_PROJECT_CONCURRENCY_DEFAULT", "2"),
-      user_default: ENV.fetch("SESSION_USER_CONCURRENCY_DEFAULT", "2")
-    )
+
+    # Scope defaults are read live at grant time and fall back quietly on a bad
+    # value so a typo cannot wedge the queue. This is the one place that can
+    # afford to be strict about them, so it is.
+    SessionAdmissionPolicy::SCOPE_DEFAULT_VARIABLES.each_value do |variable|
+      raw = ENV[variable].to_s.strip
+      next if raw.empty?
+      SessionAdmissionPolicy.positive_integer!(raw)
+    end
+    policy = SessionAdmissionPolicy.sync!
     if policy.installation_limit
       puts "Session admission enabled: one installation-wide queue of #{policy.installation_limit} concurrent sessions (revision #{policy.revision})."
     else
@@ -56,8 +61,9 @@ namespace :session_admission do
       # own queue. Print what that actually resolves to: on an installation that
       # has been running uncapped, the defaults are a capacity cut, not a no-op.
       puts "Session admission enabled with per-scope queues (revision #{policy.revision}):"
-      puts "  every project: #{policy.project_default} concurrent sessions"
-      puts "  every project-less session (agent login): #{policy.user_default} per user"
+      defaults = SessionAdmissionPolicy.scope_defaults
+      puts "  every project: #{defaults['Project']} concurrent sessions"
+      puts "  every project-less session (agent login): #{defaults['User']} per user"
       overrides = SessionConcurrencyLimit.order(:scope_type, :scope_id)
       if overrides.any?
         overrides.each { |limit| puts "  #{limit.scope_type} ##{limit.scope_id}: #{limit.max_sessions}" }

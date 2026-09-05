@@ -163,7 +163,8 @@ class SessionAdmissionService
 
     def pool_configuration(policy, session)
       return [ "installation:default", policy.installation_limit ] if policy.installation_limit
-      type, id, default = session.project_id ? [ "Project", session.project_id, policy.project_default ] : [ "User", session.user_id, policy.user_default ]
+      type, id = session.project_id ? [ "Project", session.project_id ] : [ "User", session.user_id ]
+      default = SessionAdmissionPolicy.scope_default(type)
       [ "#{type.downcase}:#{id}", SessionConcurrencyLimit.find_by(scope_type: type, scope_id: id)&.max_sessions || default ]
     end
   end
