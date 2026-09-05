@@ -15,6 +15,8 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     agentType: 'claude_code',
     state: 'finished',
     mode: 'interactive',
+    queuedAt: null,
+    waitReason: null,
     startedAt: '2026-06-26T10:00:00Z',
     finishingAt: null,
     finishedAt: '2026-06-26T10:05:00Z',

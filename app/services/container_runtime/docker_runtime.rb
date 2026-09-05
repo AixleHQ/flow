@@ -42,6 +42,24 @@ module ContainerRuntime
       { status: :pulled, image: image, duration_seconds: duration }
     end
 
+    def session_identity(session)
+      "terminal-#{session.route_token}"
+    end
+
+    def cleanup_session(id)
+      container = Docker::Container.get(id)
+      container.delete(force: true)
+    rescue Docker::Error::NotFoundError
+      nil
+    end
+
+    def session_absent?(id)
+      Docker::Container.get(id)
+      false
+    rescue Docker::Error::NotFoundError
+      true
+    end
+
     def create_container(spec)
       config = {
         "Image" => spec[:image],
@@ -56,6 +74,14 @@ module ContainerRuntime
       config["name"] = spec[:container_name] if spec[:container_name]
 
       Docker::Container.create(config)
+    rescue Docker::Error::ConflictError
+      raise unless spec[:container_name].present? && spec.fetch(:labels, {})[SESSION_LABEL].present?
+      existing = Docker::Container.get(spec[:container_name])
+      actual = existing.json.fetch("Config")
+      unless actual.fetch("Labels", {}) == spec[:labels] && actual["Image"] == spec[:image]
+        raise "Runtime container identity conflict"
+      end
+      existing
     end
 
     def start_container(id)
@@ -221,10 +247,11 @@ module ContainerRuntime
     #
     # `all: true` on purpose: an exited container still holds its name and its
     # Traefik labels, which is precisely the leak this sweeps.
-    def list_session_resources
+    def list_session_resources(strict: false)
       Docker::Container.all(all: true, filters: { label: [ SESSION_LABEL ] }.to_json)
                        .filter_map { |container| build_session_resource(container) }
     rescue StandardError => e
+      raise if strict
       Rails.logger.warn("[DockerRuntime] Failed to list session containers: #{e.message}")
       []
     end

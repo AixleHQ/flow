@@ -38,6 +38,7 @@ module Activities
 
         count = 0
         sessions.find_each do |session|
+          next if session.session_admission
           try_cancel_workflow(session)
           cleanup_session(session)
           count += 1

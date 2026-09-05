@@ -1,0 +1,36 @@
+# Session admission rollout
+
+Queue code is installed by the database migration but remains disabled until an operator runs `bin/rails session_admission:sync`. No production migration, policy change, quota deletion or deployment is part of the source-code change.
+
+## Deployment settings
+
+Set `SESSION_CONCURRENCY_LIMIT` to a positive integer to use a single pool for the installation. This is the separately sold parallelism dimension for a single-company Marketplace installation. The ENV setting is a deployment input, not a license-verification or Marketplace entitlement integration.
+
+If the variable is absent, the project owns the pool when a session has a project; otherwise its user owns the pool. `SESSION_PROJECT_CONCURRENCY_DEFAULT` and `SESSION_USER_CONCURRENCY_DEFAULT` default to 2. Scoped overrides can be set using `bin/rails 'session_admission:set_limit[Project,123,4]'` (or `User`). Auth sessions and workflow-step sessions consume slots. Standalone tool executions do not.
+
+Workers read the persisted policy. Changing ConfigMaps or restarting a process does not change the active cap: run `session_admission:sync` using the new deployment settings. Lowering a cap keeps current reservations and blocks further admission until usage falls below the cap. Changing between installation and scoped modes requires draining all admissions and runs.
+
+## Existing installation
+
+1. Stop new launch traffic, scheduled workflow triggers and other session producers during the maintenance window. Drain all legacy sessions and pending/running/paused workflow runs. Stop old worker processes before cutover; a delayed legacy activity must not run after the policy changes.
+2. Apply the application migration and deploy the new web/MCP/worker image. Keep launch traffic stopped. Worker startup registers the reconciliation schedule, which runs every minute.
+3. For scoped fallback, run `bin/rails session_admission:legacy_plan > session-limits.json`. Review the computed defaults and overrides. The calculation takes the minimum of Pod count, CPU and memory quota divided by the configured homogeneous Pod resources; it is a migration estimate, not a scheduler simulation. Import reviewed overrides with `SESSION_LIMIT_PLAN=session-limits.json bin/rails session_admission:import_limits`; existing overrides are preserved. Set deployment default ENV values to the reviewed defaults. Installation-cap mode ignores scoped overrides.
+4. Run `bin/rails session_admission:sync`. It refuses initial activation if the runtime inventory fails or contains legacy session resources, or if database sessions/runs have not drained. The runtime inventory must be reviewed in a shared cluster because it can include another deployment's labeled resources.
+5. Audit old `aixle-resource-quota` objects. Build a JSON allowlist containing only reviewed `{ "namespace": "<runtime-namespace>-project-123", "uid": "<current-quota-uid>" }` entries. Run `QUOTA_ALLOWLIST=reviewed-quotas.json bin/rails session_admission:remove_legacy_quotas`. The task verifies namespace ownership/scope and quota UID and deletes only that exact quota with a UID precondition. It never removes namespaces, network policies, per-Pod limits or unrelated quotas. Verify actual quota deletion before reopening traffic.
+6. Run `bin/rails session_admission:status`, restore launch traffic, then submit more than the configured cap. Confirm excess sessions show Queued, cancellation works, and the next session starts after runtime cleanup. A remaining third-party quota or unschedulable Pod reports capacity waiting and retains its reservation.
+
+## New Marketplace installation
+
+Deploy an empty database, apply migrations, supply the purchased `SESSION_CONCURRENCY_LIMIT`, start the new worker and run `session_admission:sync` before exposing launch endpoints. There are no legacy quotas to remove. The same setting is available to web, MCP and worker via the shared ConfigMap, but only the sync task writes policy.
+
+## Operations and recovery
+
+`bin/rails session_admission:pause` stops new grants while preserving queued requests and occupied slots. `session_admission:sync` resumes admission. `session_admission:status` shows queue counts and retained errors. Do not disable admission or roll back to old launch code while admissions exist.
+
+Lost Temporal start responses are retried with the same `agent-session-<id>` identity and reject-duplicate reuse policy. Reservation lifetime has no TTL. The reconciler retries confirmed cleanup for closed workflows; an API timeout or deletion acceptance is never proof that resources are gone.
+
+An interrupted create/start/exec phase is deliberately retained as `in_flight` or `uncertain`: the application cannot prove that an external request will never arrive later. Operator recovery requires fencing the old worker/activity process and its outstanding runtime requests, confirming the Temporal execution is closed, and auditing the recorded runtime identity. Never clear an operation merely because it is old or the Pod is momentarily absent. After the old publisher is proven unable to act, an operator may mark that operation resolved in a Rails console (`state: "completed"`), request cancellation of the session, and let reconciliation delete and verify the runtime. Do not clear the reservation directly. Record the evidence in the operation's error field. If fencing cannot be proved, keep the slot and investigate.
+
+The first implementation serializes short admission decisions on one PostgreSQL policy row. Runtime/network work is outside those transactions. This intentionally favors a simple installation-wide concurrency invariant over maximum admission throughput.
+
+The new parent workflow polls durable child state and has no queue-inclusive execution timeout. Legacy Temporal workflow definitions remain registered for replay. Maintenance cutover is mandatory; rolling a new policy into still-running legacy histories is unsupported.

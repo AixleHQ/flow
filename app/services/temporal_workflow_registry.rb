@@ -114,12 +114,13 @@ class TemporalWorkflowRegistry
     end
 
     def start_workflow_execution(workflow_run)
-      wf = workflow_execution_workflow
+      admitted = workflow_run.shared_context["session_admission"] == true
+      wf = admitted ? workflow_execution_workflow_v2 : workflow_execution_workflow
       TemporalService.start_workflow(
         wf,
         { workflow_run_id: workflow_run.id },
         id: "workflow-execution-#{workflow_run.id}",
-        execution_timeout: 86_400
+        execution_timeout: admitted ? nil : 86_400
       )
     end
 

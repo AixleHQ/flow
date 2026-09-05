@@ -28,7 +28,10 @@ class WorkflowService
       validate_mode!(run, workflow, overrides)
       return run if run.errors.any?
 
-      return run unless run.save
+      SessionAdmissionService.transaction do |policy|
+        run.shared_context = run.shared_context.merge("session_admission" => policy.enabled?)
+        return run unless run.save
+      end
 
       workflow.steps.not_deleted.order(:position).each do |step|
         run.step_runs.find_or_create_by!(step: step)
@@ -45,6 +48,10 @@ class WorkflowService
     end
 
     def cancel(run:)
+      SessionAdmissionService.transaction do
+        run.lock!
+        run.update!(stop_requested_at: run.stop_requested_at || Time.current)
+      end
       send_signal(run, "workflow_cancelled")
       cancel_active_step_runs(run)
       run.cancel! if run.may_cancel?

@@ -311,6 +311,13 @@ container_execution:
       pids_limit: 100      # Max processes
       max_timeout: 1800    # Absolute max timeout (30 min)
 
+# Deployment inputs are copied to the database by session_admission:sync.
+# Workers read the database policy; changing ENV alone does not change capacity.
+session_admission:
+  installation_limit: <%= ENV['SESSION_CONCURRENCY_LIMIT'].inspect %>
+  project_default: <%= ENV.fetch('SESSION_PROJECT_CONCURRENCY_DEFAULT', '2').inspect %>
+  user_default: <%= ENV.fetch('SESSION_USER_CONCURRENCY_DEFAULT', '2').inspect %>
+
 namespace_resource_quotas:
   project_defaults:
     cpu_requests:    ~

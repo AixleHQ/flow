@@ -12,7 +12,7 @@ import { StatusBadge } from 'shared/ui/StatusBadge';
 
 // Sessions whose show page is worth opening (a live or completed run, not a
 // half-provisioned one). Mirrors the project-scoped sessions list.
-const CLICKABLE_STATES = new Set(['ready', 'running', 'finished', 'failed', 'cancelled', 'stopped']);
+const CLICKABLE_STATES = new Set(['queued', 'ready', 'running', 'finished', 'failed', 'cancelled', 'stopped']);
 
 interface Session {
   id: number;
@@ -58,6 +58,8 @@ const AGENT_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 const STATE_CONFIG: Record<string, { label: string }> = {
+  queued: { label: 'Queued' },
+  cancelled: { label: 'Cancelled' },
   not_started: { label: 'Pending' },
   running: { label: 'Starting' },
   ready: { label: 'Running' },
@@ -105,6 +107,8 @@ const AGENT_FILTER_OPTIONS = [
 ];
 
 const STATE_FILTER_OPTIONS = [
+  { value: 'queued', label: 'Queued' },
+  { value: 'cancelled', label: 'Cancelled' },
   { value: 'running', label: 'Starting' },
   { value: 'ready', label: 'Running' },
   { value: 'finishing', label: 'Finishing' },

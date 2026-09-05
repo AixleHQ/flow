@@ -35,21 +35,31 @@ class SessionService
                        :config_item_ids)
       )
 
-      return session unless session.save
+      SessionAdmissionService.transaction do |policy|
+        return session unless session.save
+        SessionAdmissionService.enqueue!(session) if policy.enabled?
+      end
 
-      session.start! if session.may_start?
-      start_temporal_workflow(session)
+      launch_session(session)
 
       session
     end
 
     def finish(session:)
+      if session.queued? && session.session_admission
+        if session.step_run
+          WorkflowService.cancel(run: session.step_run.workflow_run)
+          return session.reload
+        end
+        return cancel(session: session)
+      end
       unless session.may_start_finishing? || session.finishing?
         raise TerminalSession::InvalidStateError, "Cannot finish session in state: #{session.state}"
       end
 
       return unless session.may_start_finishing?
 
+      stop_admission_operations(session)
       session.start_finishing!
 
       if session.temporal_workflow_id.present?
@@ -59,7 +69,29 @@ class SessionService
       end
     end
 
+    def revalidate_admission!(session)
+      SessionAdmissionService.ensure_run_active!(session)
+      raise SessionAdmissionService::Stopped, "User account unavailable" if session.user.deleted_at || !session.user.active?
+      if session.project && !session.project.accessible_by?(session.user)
+        raise SessionAdmissionService::Stopped, "Project access revoked"
+      end
+      if session.company_id && !CompanyMembership.active.exists?(company_id: session.company_id, user_id: session.user_id)
+        raise SessionAdmissionService::Stopped, "Company membership revoked"
+      end
+      if session.session_type != "auth_setup" && session.session_credential.nil?
+        raise SessionAdmissionService::Stopped, "Agent credential unavailable"
+      end
+      preflight_oauth!(session.user, session.mcp_server_ids)
+      preflight_cloud!(session.user, SessionCompany.company_for(session))
+      preflight_url_safety!(session.mcp_server_ids)
+    end
+
     def cancel(session:)
+      if session.session_admission
+        SessionAdmissionService.cancel!(session)
+        TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission.reload.released_at
+        return session
+      end
       cancel_temporal_workflow(session) if session.temporal_workflow_id.present?
       session.fail! if session.may_fail?
     end
@@ -85,6 +117,8 @@ class SessionService
     # the cleanup phase takes its container reference from the workflow's own
     # accumulated state, not from the row.
     def fail_session(session:, error_message: nil)
+      return cancel(session: session) if session.queued? && session.session_admission
+      stop_admission_operations(session)
       session.update!(error_message: error_message) if error_message.present?
       session.fail! if session.may_fail?
       signal_container_finished(session) if session.temporal_workflow_id.present?
@@ -92,6 +126,20 @@ class SessionService
     end
 
     def create_for_workflow_step(step_run:)
+      session = nil
+      SessionAdmissionService.transaction do
+        step_run.workflow_run.lock!
+        step_run.lock!
+        return step_run.terminal_session if step_run.terminal_session
+        raise SessionAdmissionService::Stopped, "Workflow cancelled" if step_run.workflow_run.stop_requested_at || step_run.workflow_run.state == "cancelled"
+        session = build_for_workflow_step(step_run: step_run)
+        SessionAdmissionService.enqueue!(session) if SessionAdmissionPolicy.enabled?
+      end
+      launch_session(session)
+      session
+    end
+
+    def build_for_workflow_step(step_run:)
       workflow_run = step_run.workflow_run
       step = step_run.step
 
@@ -126,14 +174,28 @@ class SessionService
       config = SessionConfigResolver.resolve(session)
       session.update!(agent_type: config[:agent_runtime], mode: config[:mode])
       attach_resolved_resources(session, config)
-      refresh_oauth_tokens_for_session(session)
-      session.start! if session.may_start?
-      start_temporal_workflow(session)
-
       session
     end
 
     private
+
+    def stop_admission_operations(session)
+      return unless session.session_admission
+      SessionAdmissionService.transaction do
+        admission = session.session_admission.reload
+        admission.update!(stop_requested_at: admission.stop_requested_at || Time.current) unless admission.released_at
+      end
+    end
+
+    def launch_session(session)
+      if session.session_admission
+        SessionLaunchRelay.drain
+      else
+        refresh_oauth_tokens_for_session(session) if session.session_type == "workflow_step"
+        session.start! if session.may_start?
+        start_temporal_workflow(session)
+      end
+    end
 
     # Workflow runs are project-bound, so the run's project names the company
     # whose credential (and whose bill) this step must use.
@@ -247,6 +309,7 @@ class SessionService
     end
 
     def finalize_finished(session)
+      return if session.session_admission
       session.complete_finish!
     end
 

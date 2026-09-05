@@ -19,6 +19,8 @@ module Activities
       def cleanup_stale(state)
         count = 0
         stale_runs_scope(state).find_each do |run|
+          next if run.shared_context["session_admission"] == true
+          next if SessionAdmission.joins(terminal_session: :step_run).where(step_runs: { workflow_run_id: run.id }).unreleased.exists?
           fail_active_sessions(run)
           run.update_column(:failure_reason, "stale_run")
           run.fail! if run.may_fail?

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_05_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -554,6 +554,61 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
     t.index ["webhook_secret"], name: "index_repositories_on_webhook_secret", unique: true
   end
 
+  create_table "session_admission_policies", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.boolean "enabled", default: false, null: false
+    t.integer "installation_limit"
+    t.boolean "paused", default: true, null: false
+    t.integer "project_default", default: 2, null: false
+    t.integer "revision", default: 1, null: false
+    t.datetime "updated_at", null: false
+    t.integer "user_default", default: 2, null: false
+    t.check_constraint "id = 1 AND project_default > 0 AND user_default > 0 AND (installation_limit IS NULL OR installation_limit > 0)", name: "valid_session_policy"
+  end
+
+  create_table "session_admission_pools", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "key", null: false
+    t.integer "limit", null: false
+    t.integer "policy_revision", null: false
+    t.datetime "updated_at", null: false
+    t.index ["key"], name: "index_session_admission_pools_on_key", unique: true
+    t.check_constraint "\"limit\" > 0", name: "positive_session_pool_limit"
+  end
+
+  create_table "session_admissions", force: :cascade do |t|
+    t.datetime "admitted_at"
+    t.string "claim_token"
+    t.datetime "claimed_at"
+    t.datetime "created_at", null: false
+    t.text "last_error"
+    t.string "launch_state", default: "pending", null: false
+    t.string "permit_token"
+    t.jsonb "phase_state", default: {}, null: false
+    t.datetime "released_at"
+    t.string "runtime_id"
+    t.string "runtime_kind"
+    t.bigint "session_admission_pool_id", null: false
+    t.datetime "stop_requested_at"
+    t.bigint "terminal_session_id", null: false
+    t.datetime "updated_at", null: false
+    t.string "wait_reason", default: "concurrency_limit"
+    t.index ["permit_token"], name: "index_session_admissions_on_permit_token", unique: true
+    t.index ["session_admission_pool_id", "id"], name: "session_admission_fifo", where: "(released_at IS NULL)"
+    t.index ["session_admission_pool_id"], name: "index_session_admissions_on_session_admission_pool_id"
+    t.index ["terminal_session_id"], name: "index_session_admissions_on_terminal_session_id", unique: true
+  end
+
+  create_table "session_concurrency_limits", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.integer "max_sessions", null: false
+    t.bigint "scope_id", null: false
+    t.string "scope_type", null: false
+    t.datetime "updated_at", null: false
+    t.index ["scope_type", "scope_id"], name: "index_session_concurrency_limits_on_scope_type_and_scope_id", unique: true
+    t.check_constraint "max_sessions > 0 AND (scope_type::text = ANY (ARRAY['Project'::character varying, 'User'::character varying]::text[]))", name: "valid_session_scope_limit"
+  end
+
   create_table "session_config_items", id: false, force: :cascade do |t|
     t.bigint "config_item_id", null: false
     t.bigint "terminal_session_id", null: false
@@ -588,6 +643,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
     t.bigint "repository_id", null: false
     t.bigint "terminal_session_id", null: false
     t.index ["terminal_session_id", "repository_id"], name: "idx_on_terminal_session_id_repository_id_6a57113eb8", unique: true
+  end
+
+  create_table "session_runtime_operations", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "error"
+    t.string "phase", null: false
+    t.jsonb "result", default: {}, null: false
+    t.bigint "session_admission_id", null: false
+    t.string "state", default: "in_flight", null: false
+    t.datetime "updated_at", null: false
+    t.index ["session_admission_id", "phase"], name: "session_runtime_phase_once", unique: true
+    t.index ["session_admission_id"], name: "index_session_runtime_operations_on_session_admission_id"
   end
 
   create_table "session_skills", id: false, force: :cascade do |t|
@@ -872,6 +939,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
     t.string "models", default: [], null: false, array: true
     t.bigint "output_tokens", default: 0, null: false
     t.bigint "project_id"
+    t.datetime "queued_at"
     t.datetime "ready_at"
     t.string "requested_model"
     t.string "route_token"
@@ -1114,6 +1182,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
     t.string "state", default: "pending", null: false
     t.jsonb "step_overrides", default: {}, null: false
     t.integer "step_runs_count", default: 0, null: false
+    t.datetime "stop_requested_at"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.bigint "workflow_id", null: false
@@ -1191,6 +1260,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
   add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "received_webhooks", "webhook_endpoints", on_delete: :cascade
   add_foreign_key "repositories", "integrations"
+  add_foreign_key "session_admissions", "session_admission_pools"
+  add_foreign_key "session_admissions", "terminal_sessions"
   add_foreign_key "session_input_assets", "assets", on_delete: :cascade
   add_foreign_key "session_input_assets", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_logs", "terminal_sessions", on_delete: :cascade
@@ -1198,6 +1269,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_17_120000) do
   add_foreign_key "session_mcp_servers", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_repositories", "repositories", on_delete: :cascade
   add_foreign_key "session_repositories", "terminal_sessions", on_delete: :cascade
+  add_foreign_key "session_runtime_operations", "session_admissions"
   add_foreign_key "session_skills", "skills", on_delete: :cascade
   add_foreign_key "session_skills", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_tools", "terminal_sessions", on_delete: :cascade

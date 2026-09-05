@@ -49,7 +49,7 @@ function toCardData(stepRun: StepRun, index: number): SessionCardData {
     id: stepRun.id,
     ordinal: `Session ${index + 1}`,
     title: stepRun.stepName ?? `Step ${stepRun.stepPosition ?? index + 1}`,
-    state: stepRun.state,
+    state: stepRun.terminalSessionState === 'queued' ? 'queued' : stepRun.state,
     terminalSessionId: stepRun.terminalSessionId,
     agentType: stepRun.agentType ?? null,
     totalTokens: stepRun.totalTokens,
