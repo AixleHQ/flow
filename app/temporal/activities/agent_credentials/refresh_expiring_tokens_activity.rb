@@ -14,7 +14,13 @@ module Activities
         not_needed = 0
         errors = 0
 
-        ::AgentCredential.refreshable.refresh_due(REFRESH_WINDOW).find_each do |credential|
+        due = ::AgentCredential.refreshable.refresh_due(REFRESH_WINDOW)
+        # Skipped, not dropped: a credential a live container holds is refreshed by
+        # the CLI in that container, and its cleanup merges the rotated block back.
+        # Refreshing our own copy in parallel is what replays a rotated-out grant.
+        held = due.count - due.without_live_session.count
+
+        due.without_live_session.find_each do |credential|
           result = credential.adapter.refresh!(credential)
           case result[:status]
           when :refreshed
@@ -37,8 +43,9 @@ module Activities
           log(:warn, "credential #{credential.id} refresh raised: #{e.class}: #{e.message}")
         end
 
-        log(:info, "token refresh sweep: refreshed=#{refreshed} not_needed=#{not_needed} errors=#{errors}")
-        { refreshed: refreshed, not_needed: not_needed, errors: errors }
+        log(:info, "token refresh sweep: refreshed=#{refreshed} not_needed=#{not_needed} " \
+                   "errors=#{errors} held_by_live_session=#{held}")
+        { refreshed: refreshed, not_needed: not_needed, errors: errors, held: held }
       end
     end
   end

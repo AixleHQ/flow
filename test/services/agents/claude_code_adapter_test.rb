@@ -767,6 +767,28 @@ module Agents
                        "a grant the server rejected must not be retried by the next sweep"
     end
 
+    # A refresh failure is only actionable if the log says which block of which
+    # credential died and how its own expiry compares — that is what separates
+    # "someone rotated this grant out from under us" from "the grant aged out".
+    test "refresh! logs the failing block, credential and expiry on a rejected refresh" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "designOauth" => {
+          "accessToken" => "stale-d", "refreshToken" => "stale-dr",
+          "expiresAt" => soon, "clientId" => "design-client"
+        }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 400,
+                   body: { error: "invalid_grant", error_description: "Refresh token expired" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      Rails.logger.expects(:warn)
+           .with(regexp_matches(/block=designOauth credential=#{cred.id} expiresAt=.*expires_in_5m/))
+           .at_least_once
+
+      @adapter.refresh!(cred)
+    end
+
     test "refresh! does not clear accessToken on transient 5xx error" do
       soon = ms_from_now(5 * 60 * 1000)
       cred = create(:agent_credential, :claude_code, user: @user, config_data: {

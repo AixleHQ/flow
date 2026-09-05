@@ -55,6 +55,22 @@ class AgentCredential < ApplicationRecord
   scope :refresh_due, ->(within = 60.minutes) {
     where(status: :active).where.not(expires_at: nil).where(expires_at: ..within.from_now)
   }
+  # Credentials no live container currently holds.
+  #
+  # Launching a session writes the token blocks into the container, so the CLI in
+  # there becomes a second holder of the same single-use refresh token — and it
+  # rotates that grant whenever it renews. A sweep that refreshes the copy we still
+  # hold then replays a token the server has already rotated out, which the token
+  # endpoint answers with invalid_grant and, under OAuth reuse detection, can revoke
+  # the whole family. Leave those to the container: session cleanup merges the
+  # rotated blocks back (see AgentSessionStrategy#persist_refreshed_credentials).
+  scope :without_live_session, -> {
+    held = TerminalSession.active
+                          .where("terminal_sessions.user_id = agent_credentials.user_id")
+                          .where("terminal_sessions.company_id = agent_credentials.company_id")
+                          .where("terminal_sessions.agent_type = agent_credentials.agent_type")
+    where.not(held.arel.exists)
+  }
 
   class PreflightError < StandardError
     attr_reader :credential

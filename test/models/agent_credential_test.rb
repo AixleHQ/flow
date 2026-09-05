@@ -310,6 +310,47 @@ class AgentCredentialTest < ActiveSupport::TestCase
     refute_includes AgentCredential.refresh_due, cred
   end
 
+  # --- without_live_session scope (keeps the sweep off tokens a container holds) ---
+
+  test "without_live_session excludes a credential a live session holds" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 5.minutes.from_now))
+    create(:terminal_session, user: @user, company_id: cred.company_id,
+                              agent_type: "claude_code", state: "running")
+
+    refute_includes AgentCredential.without_live_session, cred
+  end
+
+  test "without_live_session ignores sessions that already ended" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 5.minutes.from_now))
+    create(:terminal_session, user: @user, company_id: cred.company_id,
+                              agent_type: "claude_code", state: "finished")
+
+    assert_includes AgentCredential.without_live_session, cred
+  end
+
+  # A session on a different agent holds different token material, so it says nothing
+  # about whether this credential is safe to refresh.
+  test "without_live_session only counts sessions on the same agent type" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 5.minutes.from_now))
+    create(:terminal_session, user: @user, company_id: cred.company_id,
+                              agent_type: "codex", state: "running")
+
+    assert_includes AgentCredential.without_live_session, cred
+  end
+
+  test "without_live_session only counts sessions belonging to the credential owner" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 5.minutes.from_now))
+    other = create(:user, company: @company)
+    create(:terminal_session, user: other, company_id: cred.company_id,
+                              agent_type: "claude_code", state: "running")
+
+    assert_includes AgentCredential.without_live_session, cred
+  end
+
   # --- status / refresh error lifecycle ---
 
   test "mark_refresh_error! increments failure count and records the message" do

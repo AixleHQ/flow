@@ -250,7 +250,8 @@ module Agents
 
         client_id = block_name == "designOauth" ? block["clientId"] : base_oauth_client_id
         new_block = request_oauth_refresh(client_id: client_id, refresh_token: block["refreshToken"],
-                                          previous: block, now_ms: now_ms)
+                                          previous: block, now_ms: now_ms,
+                                          block_name: block_name, credential_id: credential.id)
         if new_block == :invalid_grant
           # Server has permanently rejected the refresh token. Strip every piece of
           # token material: accessToken so config_files does not write a stale token
@@ -871,7 +872,12 @@ module Agents
     # or nil on any network / non-2xx / parse failure (logged). Preserves the block's
     # refreshToken when the server omits a rotated one, and its clientId (designOauth
     # carries its own; claudeAiOauth's is typically nil and dropped by .compact).
-    def request_oauth_refresh(client_id:, refresh_token:, previous:, now_ms:)
+    # `block_name` and `credential_id` exist for the log line alone: a refresh failure
+    # is only diagnosable if it says WHICH block of WHICH credential died and how old
+    # the grant was. "invalid_grant" on a block still minutes from its own expiry means
+    # something else rotated the grant out from under us (a container holding the same
+    # token); on a long-stale block it means the grant simply aged out.
+    def request_oauth_refresh(client_id:, refresh_token:, previous:, now_ms:, block_name: nil, credential_id: nil)
       uri = URI(OAUTH_TOKEN_URL)
       req = Net::HTTP::Post.new(uri)
       req["Content-Type"] = "application/x-www-form-urlencoded"
@@ -883,7 +889,8 @@ module Agents
       response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |h| h.request(req) }
       unless response.is_a?(Net::HTTPSuccess)
         body = response.body.to_s
-        Rails.logger.warn("[ClaudeCodeAdapter] Token refresh failed: #{response.code} #{body.truncate(200)}")
+        Rails.logger.warn("[ClaudeCodeAdapter] Token refresh failed: #{response.code} #{body.truncate(200)} " \
+                          "(#{refresh_context(block_name, credential_id, previous, now_ms)})")
         if response.code == "400"
           parsed = JSON.parse(body) rescue {}
           return :invalid_grant if parsed["error"] == "invalid_grant"
@@ -899,8 +906,23 @@ module Agents
         "clientId"     => previous["clientId"] # preserve (designOauth carries its own; claudeAiOauth may be nil → compacted)
       }.compact
     rescue StandardError => e
-      Rails.logger.warn("[ClaudeCodeAdapter] Token refresh error: #{e.class}: #{e.message}")
+      Rails.logger.warn("[ClaudeCodeAdapter] Token refresh error: #{e.class}: #{e.message} " \
+                        "(#{refresh_context(block_name, credential_id, previous, now_ms)})")
       nil
+    end
+
+    # Never carries token material — block name, credential id and expiry only.
+    def refresh_context(block_name, credential_id, previous, now_ms)
+      expires_at = previous["expiresAt"].to_i
+      parts = [ "block=#{block_name || 'unknown'}", "credential=#{credential_id || 'unknown'}" ]
+      if expires_at.positive?
+        minutes = ((expires_at - now_ms) / 60_000.0).round
+        parts << "expiresAt=#{Time.zone.at(expires_at / 1000.0).utc.iso8601}"
+        parts << (minutes.negative? ? "expired_#{minutes.abs}m_ago" : "expires_in_#{minutes}m")
+      else
+        parts << "expiresAt=none"
+      end
+      parts.join(" ")
     end
 
     def request_subscription_usage(token)
