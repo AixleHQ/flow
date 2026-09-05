@@ -185,3 +185,8 @@ schedules:
     cron: "30 * * * *"
     overlap: skip
     enabled: true
+
+  - workflow: session_admission_reconciliation_workflow
+    cron: "* * * * *"
+    overlap: skip
+    enabled: true

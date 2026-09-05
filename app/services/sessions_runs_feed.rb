@@ -24,8 +24,8 @@ class SessionsRunsFeed
     "running" => { sessions: %w[running ready finishing], runs: %w[running] },
     "completed" => { sessions: %w[finished], runs: %w[completed] },
     "failed" => { sessions: %w[failed], runs: %w[failed] },
-    "cancelled" => { sessions: [], runs: %w[cancelled] },
-    "pending" => { sessions: %w[not_started], runs: %w[pending paused] }
+    "cancelled" => { sessions: %w[cancelled], runs: %w[cancelled] },
+    "pending" => { sessions: %w[not_started queued], runs: %w[pending paused] }
   }.freeze
 
   TYPES = %w[all run solo].freeze
@@ -120,7 +120,7 @@ class SessionsRunsFeed
   # allowed to reveal (see TerminalSession#visible_to?). Without this, a
   # private session whose hidden prompt matches someone else's search term
   # would still surface in their results, leaking that the prompt matched.
-  IN_FLIGHT_STATES = %w[not_started running ready finishing].freeze
+  IN_FLIGHT_STATES = %w[not_started queued running ready finishing].freeze
 
   def viewer_visible_scope
     TerminalSession.joins(:user).where(user_id: viewer.id).or(

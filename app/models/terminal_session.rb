@@ -31,6 +31,15 @@ class TerminalSession < ApplicationRecord
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
   has_one :step_run, dependent: :nullify
+  before_destroy :retain_unreleased_admission, prepend: true
+  has_one :session_admission, dependent: :destroy
+
+  def retain_unreleased_admission
+    if session_admission && !session_admission.released_at
+      errors.add(:base, "Session runtime cleanup is still pending")
+      throw :abort
+    end
+  end
 
   has_and_belongs_to_many :tools, join_table: :session_tools
   has_and_belongs_to_many :skills, join_table: :session_skills
@@ -80,7 +89,7 @@ class TerminalSession < ApplicationRecord
   # Scopes
   scope :auth_sessions, -> { where(session_type: "auth_setup") }
   scope :agent_sessions, -> { where(session_type: "agent_session") }
-  scope :active, -> { where(state: %w[not_started running ready]) }
+  scope :active, -> { where(state: %w[not_started queued running ready]) }
   scope :finishing, -> { where(state: "finishing") }
   scope :completed, -> { where(state: %w[finished]) }
   scope :for_user, ->(user_id) { where(user_id: user_id) }
@@ -101,7 +110,7 @@ class TerminalSession < ApplicationRecord
   }
 
   def active?
-    state.in?(%w[not_started running ready])
+    state.in?(%w[not_started queued running ready])
   end
 
   def finishing?
@@ -147,6 +156,7 @@ class TerminalSession < ApplicationRecord
   # this grants the viewer an interactive shell in the container, not a
   # read-only window.
   def container_accessible_by?(viewer)
+    return false if queued? || cancelled?
     return false unless visible_to?(viewer)
     return true if user_id == viewer.id
 

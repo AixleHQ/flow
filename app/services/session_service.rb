@@ -38,19 +38,30 @@ class SessionService
 
       return session unless session.save
 
-      session.start! if session.may_start?
-      start_temporal_workflow(session)
+      # #enqueue! self-gates on the policy and returns nil when admission is off,
+      # so the writer lock is taken around the queue write only — never around
+      # the save, which touches half a dozen join tables.
+      SessionAdmissionService.enqueue!(session)
+      launch_session(session)
 
       session
     end
 
     def finish(session:)
+      if session.queued? && session.session_admission
+        if session.step_run
+          WorkflowService.cancel(run: session.step_run.workflow_run)
+          return session.reload
+        end
+        return cancel(session: session)
+      end
       unless session.may_start_finishing? || session.finishing?
         raise TerminalSession::InvalidStateError, "Cannot finish session in state: #{session.state}"
       end
 
       return unless session.may_start_finishing?
 
+      stop_admission_operations(session)
       session.start_finishing!
 
       if session.temporal_workflow_id.present?
@@ -60,7 +71,40 @@ class SessionService
       end
     end
 
+    # `refresh_tokens:` is set on the one call that precedes an actual launch.
+    # The per-phase calls only re-check authorization; refreshing on every phase
+    # would put a token round-trip in front of each container step.
+    def revalidate_admission!(session, refresh_tokens: false)
+      SessionAdmissionService.ensure_run_active!(session)
+      raise SessionAdmissionService::Stopped, "User account unavailable" if session.user.deleted_at || !session.user.active?
+      if session.project && !session.project.accessible_by?(session.user)
+        raise SessionAdmissionService::Stopped, "Project access revoked"
+      end
+      if session.company_id && !CompanyMembership.active.exists?(company_id: session.company_id, user_id: session.user_id)
+        raise SessionAdmissionService::Stopped, "Company membership revoked"
+      end
+      if session.session_type != "auth_setup" && session.session_credential.nil?
+        raise SessionAdmissionService::Stopped, "Agent credential unavailable"
+      end
+      preflight_oauth!(session.user, session.mcp_server_ids)
+      preflight_cloud!(session.user, SessionCompany.company_for(session))
+      # Checked again here and not only at create: the refresh sweep can mark a
+      # credential errored while the session is still waiting in the queue. The
+      # session_type carries the auth_setup exemption — a login session exists to
+      # replace the broken credential, so gating it on that credential would trap
+      # the user behind the queue with no way out.
+      preflight_agent_credential!(session.user, SessionCompany.company_for(session), session.agent_type,
+        session_type: session.session_type)
+      preflight_url_safety!(session.mcp_server_ids)
+      refresh_oauth_tokens_for_session(session) if refresh_tokens
+    end
+
     def cancel(session:)
+      if session.session_admission
+        SessionAdmissionService.cancel!(session)
+        TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission.reload.released_at
+        return session
+      end
       cancel_temporal_workflow(session) if session.temporal_workflow_id.present?
       session.fail! if session.may_fail?
     end
@@ -87,12 +131,32 @@ class SessionService
     # accumulated state, not from the row.
     def fail_session(session:, error_message: nil)
       session.update!(error_message: error_message) if error_message.present?
+      # Marking the row failed frees nothing: the reservation is only released
+      # once the runtime is confirmed gone (AD-6). Cancelling is what starts
+      # that, for a queued session and an admitted one alike.
+      return cancel(session: session) if unreleased_admission?(session)
+
+      stop_admission_operations(session)
       session.fail! if session.may_fail?
       signal_container_finished(session) if session.temporal_workflow_id.present?
       session
     end
 
     def create_for_workflow_step(step_run:)
+      session = nil
+      SessionAdmissionService.transaction do
+        step_run.workflow_run.lock!
+        step_run.lock!
+        return step_run.terminal_session if step_run.terminal_session
+        raise SessionAdmissionService::Stopped, "Workflow cancelled" if step_run.workflow_run.stop_requested_at || step_run.workflow_run.state == "cancelled"
+        session = build_for_workflow_step(step_run: step_run)
+        SessionAdmissionService.enqueue!(session)
+      end
+      launch_session(session)
+      session
+    end
+
+    def build_for_workflow_step(step_run:)
       workflow_run = step_run.workflow_run
       step = step_run.step
 
@@ -129,14 +193,40 @@ class SessionService
       config = SessionConfigResolver.resolve(session)
       session.update!(agent_type: config[:agent_runtime], mode: config[:mode])
       attach_resolved_resources(session, config)
-      refresh_oauth_tokens_for_session(session)
-      session.start! if session.may_start?
-      start_temporal_workflow(session)
-
       session
     end
 
     private
+
+    def stop_admission_operations(session)
+      return unless session.session_admission
+      SessionAdmissionService.transaction do
+        admission = session.session_admission.reload
+        admission.update!(stop_requested_at: admission.stop_requested_at || Time.current) unless admission.released_at
+      end
+    end
+
+    def unreleased_admission?(session)
+      admission = session.session_admission
+      admission.present? && admission.released_at.nil?
+    end
+
+    # Granting is cheap and must happen now so the caller sees a real queue
+    # position. Dispatching is not: it costs a preflight and a Temporal RPC per
+    # session, so this hands off only THIS session and leaves the rest of the
+    # newly granted batch to the relay running in the reconciler.
+    def launch_session(session)
+      unless session.session_admission
+        refresh_oauth_tokens_for_session(session) if session.session_type == "workflow_step"
+        session.start! if session.may_start?
+        start_temporal_workflow(session)
+        return
+      end
+
+      SessionAdmissionService.drain!
+      admission = session.session_admission.reload
+      SessionLaunchRelay.dispatch(admission) if admission.admitted_at && admission.launch_state == "pending"
+    end
 
     # Workflow runs are project-bound, so the run's project names the company
     # whose credential (and whose bill) this step must use.
@@ -267,6 +357,7 @@ class SessionService
     end
 
     def finalize_finished(session)
+      return if session.session_admission
       session.complete_finish!
     end
 

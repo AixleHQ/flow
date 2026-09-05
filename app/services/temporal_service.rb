@@ -84,6 +84,9 @@ class TemporalService
         workflow_options = { id: id, task_queue: workflow.owner }
         workflow_options[:execution_timeout] = execution_timeout if execution_timeout
 
+        if options[:reject_duplicate]
+          workflow_options[:id_reuse_policy] = Temporalio::WorkflowIDReusePolicy::REJECT_DUPLICATE
+        end
         cl.start_workflow(workflow.name, input, **workflow_options)
       end
 
@@ -92,8 +95,11 @@ class TemporalService
       Rails.logger.info("[Temporal] ✅ Workflow #{id} queued: #{handle.id}")
 
       { ok: true, workflow_id: handle.id, run_id: handle.run_id, handle: handle }
-    rescue Temporalio::Error => e
+    rescue Temporalio::Error::WorkflowAlreadyStartedError => e
+      return { ok: true, workflow_id: id, run_id: e.run_id } if options[:reject_duplicate]
       { ok: false, error: e.message }
+    rescue Temporalio::Error => e
+      { ok: false, error: e.message, error_class: e.class.name }
     end
 
     def execute_workflow(workflow, input, options = {})

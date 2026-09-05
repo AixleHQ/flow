@@ -34,18 +34,39 @@ module Activities
       private
 
       def cleanup_stale(state, threshold)
-        sessions = stale_sessions_scope(state, threshold)
+        sessions = stale_sessions_scope(state, threshold).includes(:session_admission)
 
         count = 0
         sessions.find_each do |session|
-          try_cancel_workflow(session)
-          cleanup_session(session)
+          next if deliberately_waiting?(session)
+
+          if unreleased_admission?(session)
+            # Tearing an admitted session down means cancelling its workflow and
+            # letting confirmed cleanup return the slot. Reaching into the
+            # runtime here would free the resources while the reservation stayed
+            # occupied forever.
+            SessionService.fail_session(session: session, error_message: "Stale session: reaped after #{threshold.inspect} without progress")
+          else
+            try_cancel_workflow(session)
+            cleanup_session(session)
+          end
           count += 1
           log(:info, "Cleaned stale #{state} session #{session.id}")
         rescue StandardError => e
           log(:warn, "Failed to clean session #{session.id}: #{e.message}")
         end
         count
+      end
+
+      # A reservation queued behind the concurrency cap, or waiting on cluster
+      # capacity, is doing exactly what it is supposed to (AD-7, AD-8).
+      def deliberately_waiting?(session)
+        session.session_admission&.wait_reason.in?(SessionAdmission::WAIT_REASONS)
+      end
+
+      def unreleased_admission?(session)
+        admission = session.session_admission
+        admission.present? && admission.released_at.nil?
       end
 
       def stale_sessions_scope(state, threshold)

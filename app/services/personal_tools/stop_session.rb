@@ -16,7 +16,7 @@ module PersonalTools
       param :reason, type: :string, description: "Recorded as the session's error message when forcing."
     end
 
-    STOPPABLE_STATES = %w[not_started running ready finishing].freeze
+    STOPPABLE_STATES = %w[not_started queued running ready finishing].freeze
 
     def execute
       session = find_session!
@@ -25,6 +25,10 @@ module PersonalTools
         return error("Session #{session.id} is already #{session.state}")
       end
 
+      if session.queued?
+        SessionService.finish(session: session)
+        return stopped(session, "cancel")
+      end
       params[:force] ? force_stop(session) : graceful_stop(session)
     rescue TerminalSession::InvalidStateError => e
       error(e.message)

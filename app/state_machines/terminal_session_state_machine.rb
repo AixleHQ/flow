@@ -8,6 +8,8 @@ module TerminalSessionStateMachine
 
     aasm column: :state do
       state :not_started, initial: true
+      state :queued
+      state :cancelled
       state :running
       state :ready
       state :finishing
@@ -15,7 +17,7 @@ module TerminalSessionStateMachine
       state :failed
 
       event :start do
-        transitions from: :not_started, to: :running, after: :on_started
+        transitions from: %i[not_started queued], to: :running, after: :on_started
       end
 
       event :mark_ready do
@@ -31,7 +33,7 @@ module TerminalSessionStateMachine
       end
 
       event :fail do
-        transitions from: %i[not_started running ready finishing], to: :failed, after: :on_failed
+        transitions from: %i[not_started queued running ready finishing], to: :failed, after: :on_failed
       end
     end
   end

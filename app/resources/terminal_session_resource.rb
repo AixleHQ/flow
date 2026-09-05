@@ -13,6 +13,16 @@ class TerminalSessionResource < ApplicationResource
              :project_id, :route_token, :configured_agent_id,
              :collected_at, :updated_at
 
+  typelize "string | null"
+  attribute :queued_at do |session|
+    session.queued_at
+  end
+
+  typelize "string | null"
+  attribute :wait_reason do |session|
+    session.session_admission&.wait_reason
+  end
+
   # Whether the REQUESTING user may open this session — see
   # TerminalSession#visible_to?. Screens that can list other people's sessions
   # pass `params: { viewer: current_user }`; without the param the payload is
@@ -64,6 +74,7 @@ class TerminalSessionResource < ApplicationResource
 
   typelize :string?
   attribute :websocket_url do |session|
+    next nil if session.queued? || session.cancelled?
     next nil unless session.route_token.present?
 
     "#{Settings.traefik.ws_base}/t/#{session.route_token}/tty/ws"
@@ -83,6 +94,7 @@ class TerminalSessionResource < ApplicationResource
 
   typelize :string?
   attribute :watcher_url do |session|
+    next nil if session.queued? || session.cancelled?
     next nil unless session.route_token.present?
     next nil unless session.session_type == "auth_setup"
 
@@ -103,6 +115,7 @@ class TerminalSessionResource < ApplicationResource
 
   typelize :string?
   attribute :ide_url do |session|
+    next nil if session.queued? || session.cancelled?
     next nil unless session.route_token.present?
     next nil if session.mode == "non_interactive"
 

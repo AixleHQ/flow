@@ -1,0 +1,91 @@
+<%#
+# Session admission
+
+The queue's on switch and the numbers an operator needs before touching it.
+
+Capacity is not edited here. SESSION_CONCURRENCY_LIMIT and the two scope
+defaults come from the deployment's environment; this page reports what they
+currently resolve to and decides only when a change of state is picked up.
+%>
+
+<header class="main-content__header">
+  <h1 class="main-content__page-title">Session admission</h1>
+</header>
+
+<section class="main-content__body">
+  <table>
+    <tbody>
+      <tr>
+        <th>State</th>
+        <td>
+          <% if !@policy.enabled? %>
+            Not enabled — sessions launch immediately and no queue applies.
+          <% elsif @policy.paused? %>
+            Enabled, paused — queued requests are kept, no new slots are granted.
+          <% else %>
+            Enabled (policy revision <%= @policy.revision %>)
+          <% end %>
+        </td>
+      </tr>
+      <tr>
+        <th>Pool mode</th>
+        <td>
+          <% if @policy.installation_limit %>
+            One installation-wide queue of <%= @policy.installation_limit %> concurrent sessions.
+          <% else %>
+            One queue per project (<%= @scope_defaults["Project"] %> each), and per user
+            for project-less sessions (<%= @scope_defaults["User"] %> each).
+          <% end %>
+        </td>
+      </tr>
+      <tr>
+        <th>SESSION_CONCURRENCY_LIMIT</th>
+        <td>
+          <%= @configured_limit || "unset — per-scope queues" %>
+          <% if @policy.enabled? && @configured_limit.to_s.presence != @policy.installation_limit.to_s.presence %>
+            <strong>— differs from the active policy; activate to apply it.</strong>
+          <% end %>
+        </td>
+      </tr>
+      <tr>
+        <th>Scope overrides</th>
+        <td>
+          <% if @overrides.any? %>
+            <%= @overrides.map { |limit| "#{limit.scope_type} ##{limit.scope_id}: #{limit.max_sessions}" }.join(", ") %>
+            (<%= link_to "edit", admin_session_concurrency_limits_path %>)
+          <% else %>
+            none — <%= link_to "add one", admin_session_concurrency_limits_path %>
+          <% end %>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Queue health</h2>
+  <table>
+    <tbody>
+      <% @health.except(:enabled, :paused).each do |key, value| %>
+        <tr>
+          <th><%= key.to_s.humanize %></th>
+          <td><%= value %></td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+
+  <h2>Actions</h2>
+  <p>
+    <%# Activation applies the drain gate: refused while any session, run or reservation is still live. %>
+    <% if !@policy.enabled? %>
+      <%= button_to "Enable admission",
+                    admin_session_admission_path(commit_action: "activate"),
+                    method: :patch,
+                    class: "button",
+                    form: { data: { turbo_confirm: "Queue every new session from now on? Refused unless all sessions and runs have drained." } } %>
+    <% elsif @policy.paused? %>
+      <%= button_to "Resume admission", admin_session_admission_path(commit_action: "resume"), method: :patch, class: "button" %>
+    <% else %>
+      <%= button_to "Pause admission", admin_session_admission_path(commit_action: "pause"), method: :patch, class: "button" %>
+    <% end %>
+  </p>
+</section>

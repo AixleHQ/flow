@@ -140,3 +140,46 @@ workflows:
         task_queue: aixle_ruby
       - name: workflow_mark_step_skipped_activity
         task_queue: aixle_ruby
+
+  - name: container_workflow_v2
+    owner: aixle_ruby
+    activities:
+      - name: container_admitted_phase_activity
+        task_queue: aixle_ruby
+
+  - name: session_admission_reconciliation_workflow
+    owner: aixle_ruby
+    activities:
+      - name: session_reconcile_admissions_activity
+        task_queue: aixle_ruby
+
+  - name: session_runtime_inventory_workflow
+    owner: aixle_ruby
+    activities:
+      - name: session_runtime_inventory_activity
+        task_queue: aixle_ruby
+
+  - name: workflow_execution_workflow_v2
+    owner: aixle_ruby
+    activities:
+      - name: workflow_prepare_step_activity
+        task_queue: aixle_ruby
+      - name: workflow_complete_step_activity
+        task_queue: aixle_ruby
+      - name: workflow_update_workflow_run_status_activity
+        task_queue: aixle_ruby
+      - name: workflow_prepare_step_list_activity
+        task_queue: aixle_ruby
+      - name: workflow_create_step_run_activity
+        task_queue: aixle_ruby
+      - name: workflow_fetch_mode_activity
+        task_queue: aixle_ruby
+      - name: workflow_check_skip_activity
+        task_queue: aixle_ruby
+      - name: workflow_launch_step_session_activity
+        task_queue: aixle_ruby
+      - name: workflow_mark_step_skipped_activity
+        task_queue: aixle_ruby
+
+      - name: workflow_step_session_status_activity
+        task_queue: aixle_ruby
