@@ -15,16 +15,24 @@
 module Activities
   module Session
     class CleanupStaleActivity < Base
+      # A session that never started is the one shape nothing used to reap: the
+      # sweeper only ever asked about running, ready and finishing, so a launch
+      # lost between the database commit and Temporal sat in `not_started`
+      # forever. Forty-seven of them had accumulated in production by
+      # 2026-09-05, the oldest since March, none with an error to explain it.
+      NOT_STARTED_STALE_THRESHOLD = 30.minutes
       RUNNING_STALE_THRESHOLD = 30.minutes
       READY_STALE_THRESHOLD = 25.hours
       FINISHING_STALE_THRESHOLD = 10.minutes
 
       def run(_input = nil)
+        cleaned_not_started = cleanup_stale(:not_started, NOT_STARTED_STALE_THRESHOLD)
         cleaned_running = cleanup_stale(:running, RUNNING_STALE_THRESHOLD)
         cleaned_ready = cleanup_stale(:ready, READY_STALE_THRESHOLD)
         cleaned_finishing = cleanup_stale(:finishing, FINISHING_STALE_THRESHOLD)
 
         {
+          cleaned_not_started: cleaned_not_started,
           cleaned_running: cleaned_running,
           cleaned_ready: cleaned_ready,
           cleaned_finishing: cleaned_finishing
@@ -73,6 +81,8 @@ module Activities
         scope = TerminalSession.where(state: state.to_s)
 
         case state
+        when :not_started
+          scope.where(created_at: ...threshold.ago)
         when :running
           scope.where(started_at: ...threshold.ago).or(
             TerminalSession

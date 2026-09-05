@@ -89,6 +89,28 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_nil admission.reload.released_at, "cleanup, not the reaper, is what frees capacity"
   end
 
+  test "a session that never started is reaped instead of orphaned forever" do
+    lost = create(:terminal_session, user: @user, state: "not_started", started_at: nil,
+                  created_at: 2.hours.ago, temporal_workflow_id: nil)
+    fresh = create(:terminal_session, user: @user, state: "not_started", started_at: nil)
+
+    Activities::Session::CleanupStaleActivity.new.run
+
+    assert_equal "failed", lost.reload.state,
+      "a launch lost between the commit and Temporal used to sit here forever"
+    assert_equal "not_started", fresh.reload.state, "a launch still in flight is not stale"
+  end
+
+  test "a queued session is never mistaken for one that failed to start" do
+    session = create(:terminal_session, user: @user)
+    SessionAdmissionService.enqueue!(session)
+    session.update_column(:created_at, 2.hours.ago)
+
+    Activities::Session::CleanupStaleActivity.new.run
+
+    assert_equal "queued", session.reload.state, "waiting for a slot is not staleness"
+  end
+
   test "a run whose step is still queued is not stale" do
     run = create(:workflow_run, :running, started_at: 6.hours.ago)
     step_run = create(:step_run, :running, workflow_run: run)
