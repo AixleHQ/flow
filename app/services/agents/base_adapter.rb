@@ -433,7 +433,10 @@ module Agents
     #   makes the credential unusable (flip it to `error`, forcing a re-login) or is a
     #   transient/partial one. Optional: an adapter that omits it falls back to the
     #   sweep's invalid_grant check.
-    def refresh!(_credential)
+    # @param margin_ms [Integer, nil] how close to expiry a token must be to be worth
+    #   refreshing. Only agents that store their own expiry (Claude, with a block per
+    #   login) can honour it; single-block agents refresh whenever they are called.
+    def refresh!(_credential, margin_ms: nil)
       { status: :not_needed, detail: nil, permanent: false }
     end
 
