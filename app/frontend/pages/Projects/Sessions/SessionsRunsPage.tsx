@@ -75,6 +75,7 @@ const AGENT_OPTIONS = [
 
 // One vocabulary over two state machines — see SessionsRunsFeed::STATUS_FILTERS.
 const STATUS_OPTIONS = [
+  { value: 'queued', label: 'Queued' },
   { value: 'running', label: 'Running' },
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },

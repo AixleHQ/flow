@@ -68,13 +68,48 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
     assert_equal [ finished.id, completed_run.id ].sort, ids.sort
   end
 
-  test "cancelled matches runs only, since sessions have no such state" do
+  test "cancelled matches a cancelled session and a cancelled run alike" do
     standalone(state: "finished")
+    session = standalone(state: "cancelled")
     cancelled = create(:workflow_run, :cancelled, workflow: @workflow, project: @project, user: @user)
 
     entries = feed(filters: { status: "cancelled" }).page(page: 1, limit: 10).entries
 
-    assert_equal [ [ "run", cancelled.id ] ], entries.map { |e| [ e.kind, e.record.id ] }
+    assert_equal [ [ "run", cancelled.id ], [ "session", session.id ] ].sort,
+      entries.map { |e| [ e.kind, e.record.id ] }.sort
+  end
+
+  # Queueing is what an operator watches during a capacity squeeze, so it needs
+  # to be answerable on the page where a project's work actually lives.
+  test "queued finds a waiting standalone session" do
+    waiting = standalone(state: "queued")
+    standalone(state: "ready")
+
+    entries = feed(filters: { status: "queued" }).page(page: 1, limit: 10).entries
+
+    assert_equal [ [ "session", waiting.id ] ], entries.map { |e| [ e.kind, e.record.id ] }
+  end
+
+  test "queued finds a run whose step is waiting, though the run itself is running" do
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
+    step_run = create(:step_run, :running, workflow_run: run)
+    step_run.update!(terminal_session: create(:terminal_session, project: @project, user: @user,
+                                              session_type: "workflow_step", state: "queued"))
+    create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
+
+    entries = feed(filters: { status: "queued" }).page(page: 1, limit: 10).entries
+
+    assert_equal [ [ "run", run.id ] ], entries.map { |e| [ e.kind, e.record.id ] },
+      "a run is 'running' while its step waits, so state alone cannot answer this"
+  end
+
+  test "pending no longer doubles as queued" do
+    standalone(state: "queued")
+    not_started = standalone(state: "not_started")
+
+    entries = feed(filters: { status: "pending" }).page(page: 1, limit: 10).entries
+
+    assert_equal [ [ "session", not_started.id ] ], entries.map { |e| [ e.kind, e.record.id ] }
   end
 
   test "search matches a session's prompt and a run's workflow name" do
