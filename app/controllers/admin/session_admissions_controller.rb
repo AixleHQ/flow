@@ -38,11 +38,11 @@ module Admin
     private
 
     def activate
-      policy = SessionAdmissionPolicy.sync!
+      policy = SessionAdmissionActivation.call
       redirect_to admin_session_admission_path, notice: activation_notice(policy)
-    rescue ArgumentError => e
-      # The drain gate. Reporting it is the whole point: the operator is being
-      # told what still has to finish before the queue can take over.
+    rescue ArgumentError, SessionAdmissionActivation::Refused => e
+      # Both gates land here. Reporting them is the whole point: the operator is
+      # being told what still has to finish before the queue can take over.
       redirect_to admin_session_admission_path, alert: e.message
     end
 

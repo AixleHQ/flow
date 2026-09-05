@@ -153,6 +153,12 @@ workflows:
       - name: session_reconcile_admissions_activity
         task_queue: aixle_ruby
 
+  - name: session_runtime_inventory_workflow
+    owner: aixle_ruby
+    activities:
+      - name: session_runtime_inventory_activity
+        task_queue: aixle_ruby
+
   - name: workflow_execution_workflow_v2
     owner: aixle_ruby
     activities:

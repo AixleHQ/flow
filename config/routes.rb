@@ -208,7 +208,6 @@ Rails.application.routes.draw do
     resources :task_comments, only: %i[index show]
     resources :task_assets, only: %i[index show]
     resources :usage_statistics, only: %i[index show]
-    resources :namespace_resource_quotas
     resources :session_concurrency_limits
     # Not an Administrate resource: manual triggers for the mirrored catalogs, so a
     # fresh deployment does not sit on an empty catalog until the first scheduled run.

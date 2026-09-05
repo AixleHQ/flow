@@ -74,7 +74,7 @@ ContainerService merges returned hashes into shared state between phases.
 
 ## Multi-tenancy
 
-Polymorphic `scope` (Company or Project): Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository, NamespaceResourceQuota.
+Polymorphic `scope` (Company or Project): Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository.
 
 Visibility scopes: `Model.visible_for_project(project)` and `Model.visible_for_company(company)` (plus `for_project`/`for_company` for a single scope). `visible_for_project` is a union of Company-scoped and Project-scoped rows (System-scoped rows excluded); `visible_for_company` returns Company-scoped rows. No name-based override between scopes.
 
