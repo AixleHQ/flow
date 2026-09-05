@@ -226,8 +226,10 @@ module ContainerRuntime
           (data[:".dockerconfigjson"] || data[".dockerconfigjson"]) == "ZXhhbXBsZQ=="
       end.returns(true)
       core_mock.expects(:create_pod).returns(true)
-      core_mock.expects(:get_resource_quota).with("aixle-resource-quota", "aixle-project-77").raises(Kubeclient::ResourceNotFoundError.new(404, "Not Found", nil))
-      core_mock.expects(:create_resource_quota).returns(true)
+      # Namespace isolation, pull secrets, network policies and per-Pod limits
+      # still bootstrap; the ResourceQuota does not — concurrency is the
+      # admission queue's job now.
+      core_mock.expects(:create_resource_quota).never
 
       traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "aixle-project-77").raises(StandardError)
       traefik_mock.expects(:create_entity).with do |kind, resource_type, resource|
@@ -462,75 +464,6 @@ module ContainerRuntime
 
       assert_equal "aixle-staging", labels["aixle.com/runtime-origin"]
       assert_equal "aixle-staging-project-1", labels["aixle.com/runtime-namespace"]
-    end
-
-    test "build_quota_hard_limits uses settings project_defaults when no db record" do
-      project_defaults = OpenStruct.new(
-        cpu_requests: nil,
-        memory_requests: nil,
-        cpu_limits: "2000m",
-        memory_limits: "4Gi",
-        max_pods: 50
-      )
-      ns_quota_settings = OpenStruct.new(project_defaults: project_defaults, user_defaults: OpenStruct.new(cpu_requests: nil, memory_requests: nil, cpu_limits: nil, memory_limits: nil, max_pods: nil))
-      Settings.stubs(:namespace_resource_quotas).returns(ns_quota_settings)
-
-      hard = @runtime.send(:build_quota_hard_limits, nil, "Project")
-
-      assert_equal "2000m", hard["limits.cpu"]
-      assert_equal "4Gi",   hard["limits.memory"]
-      assert_equal "50",    hard["count/pods"]
-      assert_not hard.key?("requests.cpu")
-      assert_not hard.key?("requests.memory")
-    end
-
-    test "build_quota_hard_limits db record values override settings defaults" do
-      project_defaults = OpenStruct.new(
-        cpu_requests: nil,
-        memory_requests: nil,
-        cpu_limits: "2000m",
-        memory_limits: "4Gi",
-        max_pods: 50
-      )
-      ns_quota_settings = OpenStruct.new(project_defaults: project_defaults, user_defaults: OpenStruct.new(cpu_requests: nil, memory_requests: nil, cpu_limits: nil, memory_limits: nil, max_pods: nil))
-      Settings.stubs(:namespace_resource_quotas).returns(ns_quota_settings)
-
-      record = NamespaceResourceQuota.new(cpu_limits: "8000m", memory_limits: nil, max_pods: nil)
-
-      hard = @runtime.send(:build_quota_hard_limits, record, "Project")
-
-      assert_equal "8000m", hard["limits.cpu"]
-      assert_equal "4Gi",   hard["limits.memory"]
-      assert_equal "50",    hard["count/pods"]
-    end
-
-    test "build_quota_hard_limits returns empty hash when all settings and record values are nil" do
-      empty_defaults = OpenStruct.new(cpu_requests: nil, memory_requests: nil, cpu_limits: nil, memory_limits: nil, max_pods: nil)
-      ns_quota_settings = OpenStruct.new(project_defaults: empty_defaults, user_defaults: empty_defaults)
-      Settings.stubs(:namespace_resource_quotas).returns(ns_quota_settings)
-
-      hard = @runtime.send(:build_quota_hard_limits, nil, "Project")
-
-      assert_empty hard
-    end
-
-    test "build_quota_hard_limits uses user_defaults for User scope" do
-      user_defaults = OpenStruct.new(
-        cpu_requests: nil,
-        memory_requests: nil,
-        cpu_limits: "1000m",
-        memory_limits: "2Gi",
-        max_pods: 20
-      )
-      project_defaults = OpenStruct.new(cpu_requests: nil, memory_requests: nil, cpu_limits: "4000m", memory_limits: "8Gi", max_pods: 100)
-      ns_quota_settings = OpenStruct.new(project_defaults: project_defaults, user_defaults: user_defaults)
-      Settings.stubs(:namespace_resource_quotas).returns(ns_quota_settings)
-
-      hard = @runtime.send(:build_quota_hard_limits, nil, "User")
-
-      assert_equal "1000m", hard["limits.cpu"]
-      assert_equal "2Gi",   hard["limits.memory"]
-      assert_equal "20",    hard["count/pods"]
     end
 
     test "container_identifier truncates a raw container id to 12 chars" do

@@ -146,7 +146,7 @@ Authorization is automatic via `dynamic_authorize!`:
   - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
 
 ### Polymorphic Scoping
-- Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository, NamespaceResourceQuota
+- Agent, Tool, Workflow, MCPServer, Skill, Asset, ConfigItem, Repository
 - `scope_type` + `scope_id` → Company or Project
 - `visible_for_project(project)` → union of Company-scoped + Project-scoped rows (System-scoped excluded; no name override)
 - `visible_for_company(company)` → Company-scoped rows
