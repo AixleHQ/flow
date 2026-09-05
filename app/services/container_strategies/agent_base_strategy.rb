@@ -289,17 +289,17 @@ module ContainerStrategies
       labels = {
         "traefik.enable" => "true",
         "traefik.http.routers.#{router_name}-tty.rule" => "PathPrefix(`/t/#{route_token}/tty`)",
-        "traefik.http.routers.#{router_name}-tty.middlewares" => "terminal-auth,#{router_name}-tty-strip",
+        "traefik.http.routers.#{router_name}-tty.middlewares" => "terminal-auth@file,#{router_name}-tty-strip",
         "traefik.http.middlewares.#{router_name}-tty-strip.stripprefix.prefixes" => "/t/#{route_token}/tty",
         "traefik.http.routers.#{router_name}-tty.service" => "#{router_name}-tty",
         "traefik.http.services.#{router_name}-tty.loadbalancer.server.port" => "7681",
         "traefik.http.routers.#{router_name}-fs.rule" => "PathPrefix(`/t/#{route_token}/fs`)",
-        "traefik.http.routers.#{router_name}-fs.middlewares" => "terminal-cors,terminal-auth,#{router_name}-fs-strip",
+        "traefik.http.routers.#{router_name}-fs.middlewares" => "terminal-cors@file,terminal-auth@file,#{router_name}-fs-strip",
         "traefik.http.middlewares.#{router_name}-fs-strip.stripprefix.prefixes" => "/t/#{route_token}/fs",
         "traefik.http.routers.#{router_name}-fs.service" => "#{router_name}-fs",
         "traefik.http.services.#{router_name}-fs.loadbalancer.server.port" => "4040",
         "traefik.http.routers.#{router_name}-ide.rule" => "PathPrefix(`/t/#{route_token}/ide`)",
-        "traefik.http.routers.#{router_name}-ide.middlewares" => "terminal-auth",
+        "traefik.http.routers.#{router_name}-ide.middlewares" => "terminal-auth@file",
         "traefik.http.routers.#{router_name}-ide.service" => "#{router_name}-ide",
         "traefik.http.services.#{router_name}-ide.loadbalancer.server.port" => "8443"
       }

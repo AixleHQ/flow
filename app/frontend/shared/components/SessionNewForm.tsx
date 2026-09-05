@@ -1,5 +1,6 @@
 import { router, usePage } from '@inertiajs/react';
 import { Badge, Box, Button, Card, Group, MultiSelect, Select, Stack, Switch, Text, Textarea } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { IconAdjustments, IconPlayerPlay, IconRobot, IconSparkles } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -219,7 +220,9 @@ export const SessionNewForm = ({
             reauth.map((r: { name: string; connect_url: string }) => ({ name: r.name, connectUrl: r.connect_url })),
           );
         } else {
-          setError(errData?.errors?.[0] ?? errData?.error ?? 'Failed to create session');
+          const msg = errData?.errors?.[0] ?? errData?.error ?? 'Failed to create session';
+          setError(msg);
+          notifications.show({ message: msg, color: 'red' });
         }
       }
     } catch {

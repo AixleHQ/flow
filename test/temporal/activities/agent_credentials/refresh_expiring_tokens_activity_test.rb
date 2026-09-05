@@ -30,10 +30,15 @@ module Activities
       end
 
       test "aggregates counts across refreshed / not_needed / error statuses" do
+        refreshed_cred = credential_double(id: 1, agent_type: "claude_code", status: :refreshed)
+        refreshed_cred.stubs(:refresh_error).returns(nil)
+        error_cred = credential_double(id: 3, agent_type: "codex", status: :error, detail: "boom")
+        error_cred.stubs(:mark_refresh_error!)
+
         stub_due([
-          credential_double(id: 1, agent_type: "claude_code", status: :refreshed),
+          refreshed_cred,
           credential_double(id: 2, agent_type: "claude_code", status: :not_needed),
-          credential_double(id: 3, agent_type: "codex", status: :error, detail: "boom")
+          error_cred
         ])
 
         result = run_activity(RefreshExpiringTokensActivity)
@@ -47,7 +52,9 @@ module Activities
         raising_adapter = mock("adapter")
         raising_adapter.stubs(:refresh!).raises(StandardError.new("kaboom"))
         bad = stub(id: 9, agent_type: "claude_code", adapter: raising_adapter)
+        bad.stubs(:mark_refresh_error!)
         good = credential_double(id: 10, agent_type: "claude_code", status: :refreshed)
+        good.stubs(:refresh_error).returns(nil)
 
         stub_due([ bad, good ])
 
@@ -64,6 +71,88 @@ module Activities
         result = run_activity(RefreshExpiringTokensActivity)
 
         assert_equal({ refreshed: 0, not_needed: 0, errors: 0 }, result)
+      end
+
+      test "marks credential with permanent error on invalid_grant" do
+        credential = mock("credential")
+        adapter = mock("adapter")
+        adapter.stubs(:refresh!).returns({ status: :error, detail: "claudeAiOauth invalid_grant — reconnection required" })
+        credential.stubs(:id).returns(1)
+        credential.stubs(:agent_type).returns("claude_code")
+        credential.stubs(:adapter).returns(adapter)
+        credential.expects(:mark_refresh_error!).with("claudeAiOauth invalid_grant — reconnection required", permanent: true)
+
+        stub_due([ credential ])
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:errors]
+      end
+
+      test "marks credential with transient error on non-invalid_grant failure" do
+        credential = mock("credential")
+        adapter = mock("adapter")
+        adapter.stubs(:refresh!).returns({ status: :error, detail: "network timeout" })
+        credential.stubs(:id).returns(1)
+        credential.stubs(:agent_type).returns("claude_code")
+        credential.stubs(:adapter).returns(adapter)
+        credential.expects(:mark_refresh_error!).with("network timeout", permanent: false)
+
+        stub_due([ credential ])
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:errors]
+      end
+
+      test "clears refresh error on successful refresh when error was present" do
+        credential = mock("credential")
+        adapter = mock("adapter")
+        adapter.stubs(:refresh!).returns({ status: :refreshed, detail: nil })
+        credential.stubs(:id).returns(1)
+        credential.stubs(:agent_type).returns("claude_code")
+        credential.stubs(:adapter).returns(adapter)
+        credential.stubs(:refresh_error).returns("previous failure")
+        credential.expects(:clear_refresh_error!)
+
+        stub_due([ credential ])
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:refreshed]
+      end
+
+      test "skips clear_refresh_error! on success when no prior error" do
+        credential = mock("credential")
+        adapter = mock("adapter")
+        adapter.stubs(:refresh!).returns({ status: :refreshed, detail: nil })
+        credential.stubs(:id).returns(1)
+        credential.stubs(:agent_type).returns("claude_code")
+        credential.stubs(:adapter).returns(adapter)
+        credential.stubs(:refresh_error).returns(nil)
+        credential.expects(:clear_refresh_error!).never
+
+        stub_due([ credential ])
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:refreshed]
+      end
+
+      test "marks credential error when refresh! raises" do
+        credential = mock("credential")
+        adapter = mock("adapter")
+        adapter.stubs(:refresh!).raises(StandardError.new("kaboom"))
+        credential.stubs(:id).returns(1)
+        credential.stubs(:agent_type).returns("claude_code")
+        credential.stubs(:adapter).returns(adapter)
+        credential.expects(:mark_refresh_error!).with("kaboom", permanent: false)
+
+        stub_due([ credential ])
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:errors]
       end
     end
   end

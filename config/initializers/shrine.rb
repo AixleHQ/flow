@@ -4,6 +4,10 @@ require "shrine"
 require "content_disposition"
 require "image_processing/vips"
 
+# Direct browser uploads are presigned by Api::V1::AssetsController#presign, which signs the
+# :cache storage itself rather than mounting Shrine's presign_endpoint/upload_endpoint Rack
+# apps — neither was ever mounted, and neither fits @uppy/aws-s3 v6's raw-PUT protocol.
+
 def dev_setup
   require "shrine/storage/file_system"
   Shrine.storages = {
@@ -11,9 +15,6 @@ def dev_setup
     store: Shrine::Storage::FileSystem.new("public", prefix: "store")
   }
   Shrine.plugin(:url_options, store: { host: "#{Settings.protocol}://#{Settings.domain}" })
-  Shrine.plugin(:presign_endpoint, presign: ->(id, options, request) {
-    { url: Rails.application.routes.url_helpers.upload_api_v1_assets_path, fields: { key: "cache/#{id}" }, method: "POST" }
-  })
 end
 
 def test_setup
@@ -23,9 +24,6 @@ def test_setup
     cache: Shrine::Storage::Memory.new,
     store: Shrine::Storage::Memory.new
   }
-  Shrine.plugin(:presign_endpoint, presign: ->(id, options, request) {
-    { url: Rails.application.routes.url_helpers.upload_api_v1_assets_path, fields: { key: "cache/#{id}" }, method: "POST" }
-  })
 end
 
 def other_setup
@@ -43,18 +41,6 @@ def other_setup
     store: Shrine::Storage::S3.new(prefix: "store", **s3_options)
   }
   Shrine.plugin(:url_options, store: { expires_in: 24*60*60 })
-  Shrine.plugin(:presign_endpoint, presign_options: ->(request) {
-    filename = request.params["filename"]
-    type     = request.params["type"]
-
-    {
-      # Inline is safe — assets live on an isolated S3 bucket origin, not an app
-      # subdomain (see assets_controller#presign / F32 accepted as low-risk).
-      content_disposition: ContentDisposition.inline(filename),
-      content_type: type,
-      content_length_range: 0..(1024 * 1024 * 1024)
-    }
-  })
 end
 
 def common
@@ -62,10 +48,6 @@ def common
   Shrine.plugin(:cached_attachment_data)
   Shrine.plugin(:restore_cached_data)
   Shrine.plugin(:pretty_location)
-  Shrine.plugin(:upload_endpoint,   url: ->(uploaded_file, request) {
-    options = { host: Settings.domain }
-    uploaded_file.url(**options)
-  })
   Shrine.plugin(:determine_mime_type, analyzer: :marcel, log_subscriber: nil)
   Shrine.plugin(:derivatives)
   Shrine.plugin(:instrumentation)

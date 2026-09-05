@@ -230,7 +230,7 @@ module ContainerStrategies
       labels = strategy.build_labels
       router_name = "terminal-#{@session.route_token}"
 
-      assert_equal "terminal-auth",
+      assert_equal "terminal-auth@file",
                    labels["traefik.http.routers.#{router_name}-ide.middlewares"]
     end
 
