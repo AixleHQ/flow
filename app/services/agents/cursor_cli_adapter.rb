@@ -189,32 +189,59 @@ module Agents
       super + %w[/var/log/mitm/http.log]
     end
 
+    # Where #collect_usage records what it managed to do, on the session's
+    # metadata. An empty Tokens/Cost cell means one of two very different things —
+    # the agent genuinely spent nothing, or the meter broke — and without this they
+    # are indistinguishable after the fact. Every exit path writes one status here:
+    #
+    #   recorded           usage was correlated and persisted
+    #   no_mitm_log        no /var/log/mitm/http.log came back from the container
+    #   no_rpc_windows     log present, but it holds no completed AgentService run
+    #   no_access_token    the session's company has no cursor_cli credential
+    #   api_error          the Dashboard API call failed (non-2xx or transport)
+    #   no_api_events      the API answered, with nothing in the session's window
+    #   no_matching_events events came back, none inside any RPC's in-flight span
+    #   error              collection raised; the message is recorded alongside
+    USAGE_DIAGNOSTIC_KEY = "usage_collection"
+
     # Collect and persist usage data at session cleanup.
     #
     # Flow:
-    #   1. Parse http2-logger entries from MITM log → RPC windows (request + response timestamps)
-    #   2. One API call: [earliest_request, latest_response + 500ms]
-    #   3. Match each API event to its RPC window [response_ts, response_ts + 500ms]
+    #   1. Parse MITM + http2-logger entries → RPC windows (request + response timestamps)
+    #   2. One API call spanning [earliest request, latest response + tail]
+    #   3. Match each API event to the RPC that was in flight when it was billed
     #   4. Persist matched events as UsageStatistic
     def collect_usage(terminal_session, artifacts = {})
       mitm_log = artifacts["logs/http.log"]
+
+      if mitm_log.blank?
+        Rails.logger.warn("[CursorCliAdapter] No MITM log collected for session #{terminal_session.id}")
+        return record_usage_diagnostic(terminal_session, "no_mitm_log")
+      end
+
       windows = build_rpc_windows(mitm_log)
 
       if windows.empty?
         Rails.logger.warn("[CursorCliAdapter] No completed AgentService runs in log for session #{terminal_session.id}")
-        return
+        return record_usage_diagnostic(terminal_session, "no_rpc_windows", "log_lines" => mitm_log.lines.size)
       end
 
-      access_token = resolve_access_token(terminal_session)
-      unless access_token
+      # The credential, not just its token: the Dashboard API call has to be able
+      # to refresh on a 401 the way every other Cursor call in this adapter does.
+      credential = resolve_credential(terminal_session)
+      if credential&.config_data&.dig("accessToken").blank?
         Rails.logger.warn("[CursorCliAdapter] No access token for session #{terminal_session.id}")
-        return
+        return record_usage_diagnostic(terminal_session, "no_access_token", "windows_count" => windows.size)
       end
 
-      # Single API call covering all windows.
+      # Single API call covering all windows. The end bound is the LATEST response
+      # across every window — `windows` is sorted by request time, and with
+      # overlapping RPCs the last one to start is not the last one to finish, so
+      # taking its response would cut the final billing event out of the query.
       api_start = windows.first[:start_ms]
-      api_end = windows.last[:response_ms] + RPC_WINDOW_AFTER_RESPONSE_MS
-      api_events = fetch_filtered_events(access_token, { start_ms: api_start, end_ms: api_end })
+      api_end = windows.map { |w| w[:response_ms] }.max + RPC_WINDOW_AFTER_RESPONSE_MS
+      time_window = { start_ms: api_start, end_ms: api_end }
+      api_events = fetch_filtered_events(credential.config_data["accessToken"], time_window, credential: credential)
 
       # Store raw API result in metadata for debugging
       meta = terminal_session.metadata || {}
@@ -226,16 +253,41 @@ module Agents
       }
       terminal_session.update_column(:metadata, meta)
 
-      if api_events.blank?
+      if api_events.nil?
+        Rails.logger.error("[CursorCliAdapter] Dashboard API call failed for session #{terminal_session.id}")
+        return record_usage_diagnostic(terminal_session, "api_error", "windows_count" => windows.size)
+      end
+
+      if api_events.empty?
         Rails.logger.warn("[CursorCliAdapter] API returned 0 events for session #{terminal_session.id}")
-        return
+        return record_usage_diagnostic(terminal_session, "no_api_events", "windows_count" => windows.size)
       end
 
       correlation = correlate_events(api_events, windows)
       persist_usage_statistic(terminal_session, correlation)
+    rescue StandardError => e
+      record_usage_diagnostic(terminal_session, "error", "message" => "#{e.class}: #{e.message}")
+      raise
     end
 
     private
+
+    # Stamp the outcome of a usage-collection attempt onto the session. Merges
+    # into whatever metadata is already there (#collect_usage also stashes the raw
+    # API result) and never raises — a failed diagnostic must not mask the real
+    # failure it is describing.
+    def record_usage_diagnostic(terminal_session, status, details = {})
+      meta = terminal_session.metadata || {}
+      meta[USAGE_DIAGNOSTIC_KEY] = details.transform_keys(&:to_s).merge(
+        "status" => status.to_s,
+        "collected_at" => Time.current.iso8601
+      )
+      terminal_session.update_column(:metadata, meta)
+      nil
+    rescue StandardError => e
+      Rails.logger.warn("[CursorCliAdapter] Failed to record usage diagnostic: #{e.message}")
+      nil
+    end
 
     def request_models(access_token)
       uri = URI(CURSOR_MODELS_URL)
@@ -299,16 +351,41 @@ module Agents
     # Cursor Dashboard API
     # =========================================================================
 
-    # The token that paid for this session's usage: the credential of the session's
+    # The credential that paid for this session's usage: the one of the session's
     # company, never "the user's" — a multi-company user has one per company and the
     # dashboard call must read the account that was actually billed.
-    def resolve_access_token(terminal_session)
-      credential = SessionCompany.agent_credentials_for(terminal_session)
-                                 .find_by(agent_type: "cursor_cli")
-      credential&.config_data&.dig("accessToken")
+    def resolve_credential(terminal_session)
+      SessionCompany.agent_credentials_for(terminal_session).find_by(agent_type: "cursor_cli")
     end
 
-    def fetch_filtered_events(access_token, time_window)
+    # Cursor access tokens are short-lived JWTs (see #token_expires_at), and this
+    # call happens at cleanup — by definition the far end of the session, when the
+    # token stored at launch is most likely to have aged out. Refresh once on
+    # 401/403 and retry, exactly as #fetch_available_models does; without it a
+    # session longer than the token's lifetime silently recorded no usage at all.
+    def fetch_filtered_events(access_token, time_window, credential: nil)
+      response = request_filtered_events(access_token, time_window)
+
+      if response && response_unauthorized?(response) && credential
+        new_token = refresh_cursor_token!(credential)
+        response = new_token ? request_filtered_events(new_token, time_window) : nil
+      end
+
+      return nil if response.nil?
+
+      unless response.is_a?(Net::HTTPSuccess)
+        Rails.logger.error("[CursorCliAdapter] API returned #{response.code}: #{response.body&.truncate(200)}")
+        return nil
+      end
+
+      data = JSON.parse(response.body)
+      data["usageEventsDisplay"] || []
+    rescue StandardError => e
+      Rails.logger.error("[CursorCliAdapter] API response parse error: #{e.class}: #{e.message}")
+      nil
+    end
+
+    def request_filtered_events(access_token, time_window)
       uri = URI("#{CURSOR_API_BASE}#{FILTERED_USAGE_ENDPOINT}")
 
       body = {
@@ -329,22 +406,15 @@ module Agents
       request["Connect-Protocol-Version"] = "1"
       request.body = body.to_json
 
-      response = http.request(request)
-
-      unless response.is_a?(Net::HTTPSuccess)
-        Rails.logger.error("[CursorCliAdapter] API returned #{response.code}: #{response.body&.truncate(200)}")
-        return nil
-      end
-
-      data = JSON.parse(response.body)
-      data["usageEventsDisplay"] || []
+      http.request(request)
     rescue StandardError => e
       Rails.logger.error("[CursorCliAdapter] API request error: #{e.class}: #{e.message}")
       nil
     end
 
-    # Billing timestamp ≈ response_headers_ts + 270ms (empirically ±100ms).
-    # Use 1s window after response for reliable matching.
+    # Tail added after an RPC's response, to absorb the lag between the response
+    # and the moment Cursor stamps the billing event (empirically ~270ms ±100ms
+    # past the response headers).
     RPC_WINDOW_AFTER_RESPONSE_MS = 1_000
 
     # =========================================================================
@@ -352,14 +422,14 @@ module Agents
     # =========================================================================
 
     # Correlate Dashboard API events with RPC time windows.
-    # Each window is [response_ts, response_ts + 500ms].
+    # Each window is the RPC's in-flight span — see #match_windows_to_api.
     def correlate_events(api_events, windows)
       matched = match_windows_to_api(api_events, windows)
 
       windows.each_with_index do |w, i|
         Rails.logger.info(
-          "[CursorCliAdapter] Window[#{i}]: resp=#{format_ts(w[:response_ms])} " \
-          "rid=#{w[:request_id]}"
+          "[CursorCliAdapter] Window[#{i}]: req=#{format_ts(w[:start_ms])} " \
+          "resp=#{format_ts(w[:response_ms])} rid=#{w[:request_id]}"
         )
       end
       Rails.logger.info(
@@ -445,13 +515,31 @@ module Agents
       headers["x-request-id"].presence || headers["X-Request-Id"].presence
     end
 
-    # Match API events to RPC windows: [response_ms, response_ms + 500ms].
-    # Billing ≈ response_ts + 270ms (empirically +190–310ms).
+    # Match API events to RPC windows. A window is the RPC's whole in-flight span
+    # plus the billing tail:
+    #
+    #     [request_ms, response_ms + RPC_WINDOW_AFTER_RESPONSE_MS]
+    #
+    # It used to start at `response_ms`, which silently assumed the response entry
+    # was logged when the response HEADERS arrived — true of http2-logger and
+    # node-http-logger, both of which fire on the `response` event. It is NOT true
+    # of mitmproxy: mitm_logger.py streams the body and writes its entry when the
+    # stream ENDS, which for an agent turn is minutes later. Since `useHttp1ForAgent`
+    # routes AgentService/RunSSE through the proxy, a session whose only response
+    # entries came from mitmproxy had every billing event fall before its window and
+    # recorded no usage at all. Anchoring on the request makes the window correct for
+    # both loggers, because the billing event cannot predate the request that caused it.
+    #
+    # The trade-off: while one RPC is in flight, an event billed to a CONCURRENT
+    # session on the same Cursor account can land inside this session's window. The
+    # API query already spans the whole session, so the two were never separable
+    # here; attributing such an event to the wrong one of two concurrent sessions
+    # beats dropping the usage of both.
     def match_windows_to_api(api_events, windows)
       matched = Set.new
 
       windows.each do |w|
-        lo = w[:response_ms]
+        lo = w[:start_ms]
         hi = w[:response_ms] + RPC_WINDOW_AFTER_RESPONSE_MS
 
         api_events.each_with_index do |event, idx|
@@ -483,10 +571,17 @@ module Agents
 
     def persist_usage_statistic(terminal_session, correlation)
       events = correlation[:matched_events]
+      details = correlation[:details]
 
       if events.empty?
-        Rails.logger.info("[CursorCliAdapter] No usage events for session #{terminal_session.id}")
-        return
+        Rails.logger.warn(
+          "[CursorCliAdapter] No usage events matched for session #{terminal_session.id} " \
+          "(windows=#{details[:windows_count]} api=#{details[:api_count]})"
+        )
+        return record_usage_diagnostic(
+          terminal_session, "no_matching_events",
+          "windows_count" => details[:windows_count], "api_count" => details[:api_count]
+        )
       end
 
       totals = aggregate_events(events)
@@ -507,7 +602,6 @@ module Agents
       )
       stat.save!
 
-      details = correlation[:details]
       Rails.logger.info(
         "[CursorCliAdapter] Session #{terminal_session.id} usage: " \
         "#{events.size} events (source=#{correlation[:source]}), " \
@@ -515,6 +609,12 @@ module Agents
         "cache_r=#{totals[:cache_read_tokens]} cache_w=#{totals[:cache_write_tokens]} " \
         "cost=$#{'%.2f' % (totals[:total_cents] / 100.0)}" \
         "#{details[:unmatched_api] ? " unmatched_api=#{details[:unmatched_api]}" : ''}"
+      )
+
+      record_usage_diagnostic(
+        terminal_session, "recorded",
+        "windows_count" => details[:windows_count], "api_count" => details[:api_count],
+        "matched_count" => details[:matched_count]
       )
     end
 

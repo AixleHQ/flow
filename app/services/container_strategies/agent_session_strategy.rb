@@ -122,8 +122,13 @@ module ContainerStrategies
       logs_count, log_contents = collect_logs(container, session, agent_service)
       logs_count += collect_terminal_output(container, session)
       outputs_count = collect_outputs(container, session)
-      collect_usage(session, agent_service, log_contents)
+      # Credentials first: an agent that rotated its token mid-session leaves the
+      # fresh one in the container and a stale one in the database, and usage
+      # collection is a provider API call authenticated with the stored token
+      # (Cursor's dashboard). Persist before collecting, or a long session's usage
+      # call authenticates with a token that expired hours ago.
       persist_refreshed_credentials(container, session, agent_service)
+      collect_usage(session, agent_service, log_contents)
       IntegrationCleanupService.release_session_locks!(session)
 
       Rails.logger.info("[AgentSession] Cleanup: #{logs_count} logs, #{outputs_count} outputs")

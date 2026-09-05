@@ -66,6 +66,50 @@ module StubSupport
   end
 
   # ===========================================================================
+  # Cursor Dashboard API (WebMock)
+  #
+  # Cursor is the one agent whose usage is not pushed to us during the run: it is
+  # pulled at cleanup, by asking the dashboard which billing events fall inside
+  # the session's AgentService windows. The fake runtime hands back a MITM log
+  # holding a completed run and an auth.json holding an access token, so every
+  # cursor_cli agent_session cleanup reaches that call for real — unstubbed, it
+  # is a WebMock::NetConnectNotAllowedError, which descends from Exception and so
+  # slips past the `rescue StandardError` around usage collection.
+  #
+  # The reply carries one event stamped just inside the queried window. The
+  # window comes from MITM fixture timestamps, so the stub reads it back off the
+  # request rather than guessing at wall-clock.
+  # ===========================================================================
+
+  CURSOR_USAGE_EVENTS_URL =
+    "#{Agents::CursorCliAdapter::CURSOR_API_BASE}#{Agents::CursorCliAdapter::FILTERED_USAGE_ENDPOINT}"
+
+  CURSOR_USAGE_EVENT = {
+    "model" => "claude-4.5-sonnet",
+    "kindLabel" => "Included in Business",
+    "tokenUsage" => {
+      "inputTokens" => 1_200,
+      "outputTokens" => 340,
+      "cacheWriteTokens" => 0,
+      "cacheReadTokens" => 900,
+      "totalCents" => 2.5
+    }
+  }.freeze
+
+  def stub_cursor_usage_api(events: nil)
+    stub_request(:post, CURSOR_USAGE_EVENTS_URL).to_return do |request|
+      window_start_ms = JSON.parse(request.body)["startDate"].to_i
+      display = events || [ CURSOR_USAGE_EVENT.merge("timestamp" => (window_start_ms + 1).to_s) ]
+
+      {
+        status: 200,
+        headers: { "Content-Type" => "application/json" },
+        body: { "usageEventsDisplay" => display }.to_json
+      }
+    end
+  end
+
+  # ===========================================================================
   # Common Settings Stubs
   # ===========================================================================
 

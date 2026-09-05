@@ -385,6 +385,32 @@ module ContainerStrategies
       assert_equal 0, result[:outputs_count]
     end
 
+    test "before_cleanup persists refreshed credentials before collecting usage" do
+      # Cursor's usage collection is a provider API call authenticated with the
+      # STORED token. An agent that rotated its token mid-session leaves the fresh
+      # one in the container, so the database has to be caught up first or a long
+      # session's dashboard call goes out with a token that expired hours ago.
+      strategy = build_strategy
+      strategy.stubs(:resolve_container).returns(mock("container"))
+
+      mock_adapter = mock("adapter")
+      mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(false)
+      mock_adapter.stubs(:respond_to?).with(:collect_usage).returns(true)
+      mock_service = mock("service")
+      mock_service.stubs(:adapter).returns(mock_adapter)
+      AgentCredentialsService.stubs(:for).returns(mock_service)
+
+      strategy.stubs(:collect_outputs).returns(0)
+      strategy.stubs(:collect_logs).returns([ 0, {} ])
+      strategy.stubs(:collect_terminal_output).returns(0)
+
+      cleanup = sequence("cleanup")
+      strategy.expects(:persist_refreshed_credentials).in_sequence(cleanup)
+      mock_adapter.expects(:collect_usage).in_sequence(cleanup)
+
+      strategy.before_cleanup(container_id: "abc123")
+    end
+
     # == Credential metadata env vars ==
 
     test "builds env vars with credential metadata for gemini" do
