@@ -1,5 +1,9 @@
 # User Guide
 
+> info Using Flow rather than installing it? Start with
+> [What Flow is](/docs/using-flow). This section describes how Flow works
+> underneath — containers, DAGs, credentials — for the people who run it.
+
 Aixle Flow turns AI coding agents into a team workflow. The pieces fit
 together like this:
 
