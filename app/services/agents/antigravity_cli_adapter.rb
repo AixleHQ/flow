@@ -91,6 +91,19 @@ module Agents
       { "AGY_CLI_HIDE_LOGO" => "1" }
     end
 
+    # Reject credentials saved by the earlier API-key implementation before
+    # launching `agy`. Those rows contain `api_key`, not an OAuth access token;
+    # allowing them through would make interactive sessions fall back to login
+    # and leave automatic sessions waiting indefinitely.
+    def credential_preflight(runtime, container, _container_id)
+      stdout, _stderr, status = runtime.exec(container, [ "cat", config_path ], stdout: true, stderr: true)
+      return { valid: false, error_code: "auth_file_missing" } unless status.to_i.zero?
+
+      return { valid: true, error_code: nil } if auth_complete?(Array(stdout).join)
+
+      { valid: false, error_code: "oauth_token_missing" }
+    end
+
     def session_command(mode:, prompt: nil, model: nil)
       parts = [ "agy" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model.present?
@@ -124,7 +137,9 @@ module Agents
     private
 
     def settings
-      { "modelProvider" => "gemini", "enableTelemetry" => false, "showTips" => false }
+      # Omitting modelProvider selects Antigravity's OAuth-backed default
+      # backend. Explicitly selecting "gemini" instead requires GEMINI_API_KEY.
+      { "enableTelemetry" => false, "showTips" => false }
     end
   end
 end

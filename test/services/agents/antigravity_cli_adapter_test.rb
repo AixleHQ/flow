@@ -30,11 +30,11 @@ module Agents
       assert_equal({}, @adapter.extract_credentials('{"enableTelemetry":false,"trustedWorkspaces":["/workspace"]}'))
     end
 
-    test "writes provider settings and credentials in the exact shape agy itself writes" do
+    test "writes OAuth settings and credentials in the exact shape agy itself writes" do
       credentials = { "access_token" => "tok-123", "refresh_token" => "refresh-123", "auth_method" => "consumer" }
       files = @adapter.config_files(credentials)
       settings = JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"])
-      assert_equal "gemini", settings["modelProvider"]
+      assert_not_includes settings, "modelProvider"
       refute settings["enableTelemetry"]
       assert_equal(
         { "token" => { "access_token" => "tok-123", "refresh_token" => "refresh-123" }, "auth_method" => "consumer" },
@@ -46,9 +46,9 @@ module Agents
     # (its own interactive login, confirmed offering Google OAuth or a Google
     # Cloud project — both a real human completes themselves) rather than a
     # backend-written script; only the pre-login settings file is seeded upfront.
-    test "seeds only provider settings before login, no bespoke script" do
+    test "seeds only OAuth-compatible settings before login, no bespoke script" do
       files = @adapter.auth_setup_files
-      assert_equal({ "modelProvider" => "gemini", "enableTelemetry" => false, "showTips" => false },
+      assert_equal({ "enableTelemetry" => false, "showTips" => false },
                    JSON.parse(files["/home/antigravity/.gemini/antigravity-cli/settings.json"]))
       assert_equal [ "/home/antigravity/.gemini/antigravity-cli/settings.json" ], files.keys
     end
@@ -73,6 +73,37 @@ module Agents
 
     test "default_env_vars only hides the CLI logo, no credential is passed via env" do
       assert_equal({ "AGY_CLI_HIDE_LOGO" => "1" }, @adapter.default_env_vars(@session))
+    end
+
+    test "credential_preflight accepts a valid OAuth token" do
+      runtime, container = preflight_runtime(
+        { "token" => { "access_token" => "tok-123" }, "auth_method" => "consumer" }.to_json
+      )
+
+      assert_equal({ valid: true, error_code: nil }, @adapter.credential_preflight(runtime, container, "abc123"))
+    end
+
+    test "credential_preflight rejects a migrated API-key credential" do
+      runtime, container = preflight_runtime({ "token" => { "api_key" => "legacy-key" } }.to_json)
+
+      assert_equal({ valid: false, error_code: "oauth_token_missing" },
+                   @adapter.credential_preflight(runtime, container, "abc123"))
+    end
+
+    test "credential_preflight rejects a missing token file" do
+      runtime, container = preflight_runtime(nil)
+
+      assert_equal({ valid: false, error_code: "auth_file_missing" },
+                   @adapter.credential_preflight(runtime, container, "abc123"))
+    end
+
+    private
+
+    def preflight_runtime(auth_content)
+      filesystem = {}
+      filesystem[@adapter.config_path] = auth_content unless auth_content.nil?
+      runtime = ContainerRuntime::FakeRuntime.new(agent_type: "antigravity_cli", filesystem: filesystem)
+      [ runtime, runtime.resolve_container("abc123") ]
     end
   end
 end
