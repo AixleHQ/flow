@@ -323,14 +323,14 @@ describe('Profile/Show', () => {
   });
 
   it('renders Authenticate (not Re-authenticate) for an agent that has no credential', () => {
-    // Only claude_code is configured; the other four should show Authenticate.
+    // Only claude_code is configured; the other five should show Authenticate.
     const credential = buildCredential({ id: 300, agentType: 'claude_code' });
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
     expect(screen.getByRole('button', { name: 'Re-authenticate' })).toBeInTheDocument();
-    // The four unconfigured agents each render an Authenticate button.
-    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(4);
+    // The five unconfigured agents each render an Authenticate button.
+    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(5);
   });
 
   it('shows the session visibility switches in the state the profile reports', () => {
@@ -532,6 +532,34 @@ describe('Profile/Show', () => {
         }),
       ),
     );
+  });
+
+  it('connects Antigravity through the same auth-session terminal as every other agent', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: { id: 1, state: 'starting' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    const card = screen.getByText('Antigravity CLI').closest('.mantine-Card-root') as HTMLElement;
+    await userEvent.click(within(card).getByRole('button', { name: 'Authenticate' }));
+
+    expect(await screen.findByText('Authenticate Antigravity CLI')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/terminal_sessions',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            terminalSession: { agentType: 'antigravity_cli', sessionType: 'auth_setup', mode: 'interactive' },
+          }),
+        }),
+      ),
+    );
+    expect(fetchSpy).not.toHaveBeenCalledWith('/profile/update_agent_credential', expect.anything());
   });
 
   // == AWS Bedrock connection ==

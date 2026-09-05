@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { buildSharedUser } from 'test/factories/sharedProps';
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
@@ -201,7 +201,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByText('Connect your agents')).toBeInTheDocument();
-    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(5);
+    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(6);
   });
 
   it('shows the Connected badge and an enabled Get started when an agent is configured', () => {
@@ -217,7 +217,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
-    expect(screen.getByText('1 of 5 connected')).toBeInTheDocument();
+    expect(screen.getByText('1 of 6 connected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Get started/ })).toBeEnabled();
   });
 
@@ -271,6 +271,32 @@ describe('Onboarding/OnboardingPage', () => {
     // Connect button appears for unconfigured agents
     const connectButtons = screen.getAllByRole('button', { name: /Connect/ });
     expect(connectButtons.length).toBeGreaterThan(0);
+  });
+
+  it('connects Antigravity through the same auth-session terminal as every other agent', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: buildTerminalSession({ agentType: 'antigravity_cli' }) }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    renderAuthedPage(<OnboardingPage />, {
+      props: { currentUser: userAt({ onboardingState: 'step2' }), authSessions: [] },
+    });
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[4]);
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/terminal_sessions',
+        expect.objectContaining({
+          body: JSON.stringify({
+            terminalSession: { agentType: 'antigravity_cli', sessionType: 'auth_setup', mode: 'interactive' },
+          }),
+        }),
+      ),
+    );
+    expect(fetchSpy).not.toHaveBeenCalledWith('/profile/update_agent_credential', expect.anything());
   });
 
   it('advances from the profile step after clicking a role card and choosing a language', async () => {

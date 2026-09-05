@@ -9,13 +9,14 @@ module ContainerStrategies
   #   - ttyd_command  — command for the ttyd terminal
   #
   class AgentBaseStrategy < BaseStrategy
-    VALID_AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli grok].freeze
+    VALID_AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok].freeze
 
     DEFAULT_AGENT_IMAGES = {
       "claude_code" => "aixle/claude-code:latest",
       "cursor_cli" => "aixle/cursor-cli:latest",
       "codex" => "aixle/codex:latest",
       "gemini_cli" => "aixle/gemini-cli:latest",
+      "antigravity_cli" => "aixle/antigravity-cli:latest",
       "grok" => "aixle/grok:latest"
     }.freeze
 
@@ -26,6 +27,7 @@ module ContainerStrategies
       # a localhost OAuth callback, so the user completes login on their own device.
       "codex" => "codex login --device-auth",
       "gemini_cli" => "gemini",
+      "antigravity_cli" => "agy",
       # Device-code, not the default browser flow: nothing in the container can open a
       # browser, so this is the only Grok login that completes here — it prints a URL
       # and a code the user finishes on their own device.
@@ -37,6 +39,7 @@ module ContainerStrategies
       "cursor_cli" => "agent",
       "codex" => "codex --yolo",
       "gemini_cli" => "gemini --yolo",
+      "antigravity_cli" => "agy --dangerously-skip-permissions",
       "grok" => "grok --yolo"
     }.freeze
 
