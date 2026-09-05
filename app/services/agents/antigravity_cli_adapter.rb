@@ -5,49 +5,60 @@ require "shellwords"
 module Agents
   # Google Antigravity CLI adapter.
   #
-  # Aixle intentionally supports the documented Gemini API-key provider only. It is
-  # the one Antigravity auth mode that is portable across ephemeral containers and
-  # works headlessly; account OAuth is stored in the host keyring and is unsuitable
-  # for copying between isolated sessions.
+  # Auth model (confirmed against the real 1.1.27 `agy` binary): run with no flags
+  # and no GEMINI_API_KEY, its interactive welcome prompt only offers "Google
+  # OAuth" or "Use a Google Cloud project" — both end up going through the same
+  # Google OAuth authorization-code flow (just different scopes), and neither
+  # offers a raw-API-key option. That flow uses a Google-hosted redirect
+  # (`https://antigravity.google/oauth-callback`), not a localhost callback, so it
+  # never needs the container to receive anything: the user opens the printed URL
+  # in their own browser and either gets redirected straight through, or pastes
+  # the resulting authorization code back into the terminal by hand. And in a
+  # container specifically — confirmed via the CLI's own log output
+  # ("composite_token_storage.go: Using file-based token storage because no D-Bus
+  # session bus detected") — `agy` automatically persists the login to a file
+  # instead of the host OS keyring, exactly like every other adapter's CLI-driven
+  # login here. So, per review feedback, this adapter drives the real `agy` login
+  # directly (default #auth_launch_commands_for, same as Gemini/Codex/Claude)
+  # instead of a bespoke script, and captures whatever `agy` writes under its own
+  # config directory — mirroring GeminiCliAdapter's `~/.gemini/oauth_creds.json`
+  # (both CLIs share the same underlying Google "codeassistclient" auth library),
+  # namespaced the same way Antigravity already namespaces its settings file.
   #
-  # Unlike every other adapter's login, `agy`'s own interactive welcome prompt
-  # (confirmed against the real 1.1.x binary, run with no flags and no
-  # GEMINI_API_KEY) only offers "Google OAuth" or "Use a Google Cloud project" — it
-  # has no option to type in a raw API key, and setting GEMINI_API_KEY just skips
-  # that prompt without ever writing a credential artifact. Since neither of agy's
-  # own login modes is portable across ephemeral containers, the auth-terminal
-  # session (see #auth_launch_commands_for) runs a small login script instead of
-  # `agy` directly: it reads the key the user types, calls the real CLI to validate
-  # it, and — only on success — writes it to the same file every other step here
-  # already assumes (#config_path). That keeps credential capture on the one shared
-  # path (AgentAuthStrategy#before_cleanup reads #auth_file_paths) instead of a
-  # bespoke backend form, while still requiring a live human to supply and verify
-  # the secret.
+  # The exact on-disk filename could not be confirmed end-to-end here without
+  # completing a real Google OAuth grant (no test account available in this
+  # environment) — only the container-vs-keyring fallback behavior and the
+  # settings/config directory layout were. If a live login in the built image
+  # writes the token somewhere else, only OAUTH_CREDS_PATH below needs to change.
   class AntigravityCliAdapter < BaseAdapter
     SETTINGS_PATH = ".gemini/antigravity-cli/settings.json"
-    API_KEY_PATH = ".gemini/antigravity-cli/aixle-api-key.json"
-    LOGIN_SCRIPT_PATH = ".aixle/antigravity-login.sh"
+    OAUTH_CREDS_PATH = ".gemini/antigravity-cli/oauth_creds.json"
 
     def self.default_config_paths
       [ "~/.gemini/antigravity-cli/settings.json", "~/.gemini/config/mcp_config.json", "GEMINI.md" ]
     end
 
     def home_dir = "/home/antigravity"
-    def config_path = "#{home_dir}/#{API_KEY_PATH}"
-    def auth_file_paths = [ config_path ]
-    def auth_required_keys = %w[api_key]
+    def config_path = "#{home_dir}/#{OAUTH_CREDS_PATH}"
+
+    # Watch the OAuth token file, not settings.json: settings.json is written
+    # up front by #auth_setup_files, before the user has logged in at all, so
+    # watching it would report success prematurely.
+    def auth_watch_path = config_path
+
+    def auth_file_paths = [ config_path, "#{home_dir}/#{SETTINGS_PATH}" ]
+    def auth_required_keys = %w[access_token]
 
     def auth_complete?(content)
-      parse_json(content)["api_key"].present?
+      parse_json(content)["access_token"].present?
     end
 
     def extract_credentials(content)
-      key = parse_json(content)["api_key"]
-      key.present? ? { "api_key" => key } : {}
+      parse_json(content).slice("access_token", "refresh_token", "token_type", "expiry", "id_token").compact
     end
 
     def generate_config(credentials, _workflow_config = {})
-      { "api_key" => credentials["api_key"] }
+      credentials
     end
 
     def config_files(credentials, _workflow_config = {})
@@ -57,24 +68,14 @@ module Agents
       }
     end
 
+    # Written before auth starts so the auth terminal already has telemetry/tips
+    # disabled when `agy` itself launches (see AgentAuthStrategy#before_exec).
     def auth_setup_files
-      {
-        "#{home_dir}/#{SETTINGS_PATH}" => settings.to_json,
-        "#{home_dir}/#{LOGIN_SCRIPT_PATH}" => login_script
-      }
+      { "#{home_dir}/#{SETTINGS_PATH}" => settings.to_json }
     end
 
-    # Drives the auth terminal: AgentAuthStrategy starts `bash` (see
-    # AgentAuthStrategy#ttyd_command) and sends this once the prompt is ready, in
-    # place of launching `agy` directly. The script itself is what the user watches
-    # and types into — this only launches it.
-    def auth_launch_commands_for(_kind)
-      [ "sh #{home_dir}/#{LOGIN_SCRIPT_PATH}" ]
-    end
-
-    def default_env_vars(session)
-      credential = SessionCompany.agent_credentials_for(session).find_by(agent_type: "antigravity_cli")
-      { "GEMINI_API_KEY" => credential&.config_data&.dig("api_key"), "AGY_CLI_HIDE_LOGO" => "1" }.compact
+    def default_env_vars(_session)
+      { "AGY_CLI_HIDE_LOGO" => "1" }
     end
 
     def session_command(mode:, prompt: nil, model: nil)
@@ -111,42 +112,6 @@ module Agents
 
     def settings
       { "modelProvider" => "gemini", "enableTelemetry" => false, "showTips" => false }
-    end
-
-    # Prompts for the key (masked, real terminal input — never seen by Aixle's
-    # backend), validates it with a real `agy` call, and writes #config_path only on
-    # success. Re-running `sh ~/#{LOGIN_SCRIPT_PATH}` retries a rejected or empty
-    # entry; nothing here persists partial state that a retry would need to undo.
-    #
-    # Single-quoted heredoc: the script is shell, not Ruby, so none of its own `\`/`"`
-    # escaping should go through Ruby's string-escape processing. The two paths are
-    # substituted afterwards via plain token replacement instead of interpolation.
-    def login_script
-      template = <<~'SCRIPT'
-        #!/bin/sh
-        set -eu
-        echo "Paste your company's Google AI Studio API key (https://aistudio.google.com/app/api-keys), then press Enter:"
-        stty -echo 2>/dev/null || true
-        IFS= read -r key
-        stty echo 2>/dev/null || true
-        echo
-        if [ -z "$key" ]; then
-          echo "No key entered. Run 'sh ~/__LOGIN_SCRIPT_PATH__' to try again."
-          exit 1
-        fi
-        if ! GEMINI_API_KEY="$key" agy --print "Reply with OK if you can read this." >/tmp/antigravity-auth-check.log 2>&1; then
-          echo "Google AI Studio rejected that key:"
-          cat /tmp/antigravity-auth-check.log
-          echo "Run 'sh ~/__LOGIN_SCRIPT_PATH__' to try again."
-          exit 1
-        fi
-        escaped_key=$(printf '%s' "$key" | sed 's/\\/\\\\/g; s/"/\\"/g')
-        mkdir -p "$(dirname "$HOME/__API_KEY_PATH__")"
-        printf '{"api_key":"%s"}' "$escaped_key" > "$HOME/__API_KEY_PATH__"
-        echo "Key verified -- Aixle will finish saving it automatically."
-      SCRIPT
-
-      template.gsub("__LOGIN_SCRIPT_PATH__", LOGIN_SCRIPT_PATH).gsub("__API_KEY_PATH__", API_KEY_PATH)
     end
   end
 end

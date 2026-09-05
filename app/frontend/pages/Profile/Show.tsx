@@ -94,7 +94,7 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; co
   {
     type: 'antigravity_cli',
     name: 'Antigravity CLI',
-    description: "Google's agent-first terminal runtime using Google AI Studio keys",
+    description: "Google's agent-first terminal runtime, signed in with your Google account",
     color: AGENT_BRAND_COLORS.antigravity_cli,
   },
   {

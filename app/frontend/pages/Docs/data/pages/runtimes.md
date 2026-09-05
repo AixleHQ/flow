@@ -30,14 +30,14 @@ admins on **Admin → Agent Credentials**). Credentials are stored
 encrypted and injected only at container start — they never live in the
 image.
 
-| Runtime           | Required credentials                                                                |
-| ----------------- | ------------------------------------------------------------------------------------|
-| `claude_code`     | Anthropic API key, or an OAuth-signed session for Claude Code Pro.                  |
-| `cursor_cli`      | Cursor API key.                                                                     |
-| `codex`           | OpenAI API key.                                                                     |
-| `gemini_cli`      | Google AI Studio API key.                                                           |
-| `antigravity_cli` | Google AI Studio API key (the only portable Antigravity login mode Aixle supports). |
-| `grok`            | xAI account, signed in with the device-code flow (or an xAI API key).               |
+| Runtime           | Required credentials                                                   |
+| ----------------- | ---------------------------------------------------------------------- |
+| `claude_code`     | Anthropic API key, or an OAuth-signed session for Claude Code Pro.     |
+| `cursor_cli`      | Cursor API key.                                                        |
+| `codex`           | OpenAI API key.                                                        |
+| `gemini_cli`      | Google AI Studio API key.                                              |
+| `antigravity_cli` | Google account, signed in through `agy`'s own interactive OAuth login. |
+| `grok`            | xAI account, signed in with the device-code flow (or an xAI API key).  |
 
 A step fails immediately with a "no credentials" error if the runtime's
 credentials aren't configured for the user who triggered the run.
