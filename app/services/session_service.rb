@@ -16,6 +16,7 @@ class SessionService
       # this user, instead of starting a session that fails silently at provisioning.
       preflight_oauth!(user, params[:mcp_server_ids])
       preflight_cloud!(user, company || project&.company)
+      preflight_agent_credential!(user, company || project&.company, agent_type)
       preflight_url_safety!(params[:mcp_server_ids])
 
       # auth_kind ("design") is carried in metadata so AgentAuthStrategy can run the
@@ -87,6 +88,9 @@ class SessionService
       end
       preflight_oauth!(session.user, session.mcp_server_ids)
       preflight_cloud!(session.user, SessionCompany.company_for(session))
+      # Checked again here and not only at create: the refresh sweep can mark a
+      # credential errored while the session is still waiting in the queue.
+      preflight_agent_credential!(session.user, SessionCompany.company_for(session), session.agent_type)
       preflight_url_safety!(session.mcp_server_ids)
       refresh_oauth_tokens_for_session(session) if refresh_tokens
     end
@@ -158,6 +162,8 @@ class SessionService
                 run_membership(workflow_run)&.default_agent_runtime.presence ||
                 run_credentials(workflow_run).order(created_at: :desc).first&.agent_type ||
                 "claude_code"
+
+      preflight_agent_credential!(workflow_run.user, workflow_run.project&.company, runtime)
 
       run_model = workflow_run.shared_context&.dig("requested_model")
 
@@ -280,6 +286,15 @@ class SessionService
     # model validates at create/update, but DNS (rebinding) or the stored value
     # may have changed since — a host that now resolves to a private/internal IP
     # must not be dialed. Cheap: url_safety uses local resolvers only.
+    def preflight_agent_credential!(user, company, agent_type)
+      return unless agent_type.present? && company.present?
+
+      credential = AgentCredential.find_by(user_id: user.id, company_id: company.id, agent_type: agent_type)
+      return if credential.nil? || credential.active?
+
+      raise AgentCredential::PreflightError, credential
+    end
+
     def preflight_url_safety!(mcp_server_ids)
       return if mcp_server_ids.blank?
 

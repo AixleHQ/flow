@@ -72,6 +72,48 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_nil project_second.reload.admitted_at
   end
 
+  test "a scope override beats the deployment default, which beats nothing" do
+    SessionAdmissionPolicy.sync!(installation_limit: nil, project_default: 1, user_default: 1)
+    project = create(:project, owner: @user, company: @user.companies.first)
+    SessionConcurrencyLimit.set!(scope: project, max_sessions: 2)
+
+    first = enqueue(project: project)
+    second = enqueue(project: project)
+    third = enqueue(project: project)
+
+    assert_equal [ first.id, second.id ], SessionAdmissionService.drain!
+    assert_nil third.reload.admitted_at, "the override raises this project's cap, not the default"
+    assert_equal 2, SessionAdmissionPool.find_by(key: "project:#{project.id}").limit
+  end
+
+  test "a session in a project draws on the project pool, not its launcher's" do
+    SessionAdmissionPolicy.sync!(installation_limit: nil, project_default: 1, user_default: 1)
+    project = create(:project, owner: @user, company: @user.companies.first)
+    other = create(:user, :with_company)
+    create(:company_membership, user: other, company: project.company, state: :active)
+
+    mine = enqueue(project: project)
+    theirs = enqueue(user: other, project: project)
+
+    assert_equal [ mine.id ], SessionAdmissionService.drain!
+    assert_nil theirs.reload.admitted_at, "two people in one project share that project's cap"
+    assert_equal "project:#{project.id}", theirs.session_admission_pool.key
+  end
+
+  test "raising a scope limit admits the queue without waiting for reconciliation" do
+    SessionAdmissionPolicy.sync!(installation_limit: nil, project_default: 1, user_default: 1)
+    project = create(:project, owner: @user, company: @user.companies.first)
+    first = enqueue(project: project)
+    second = enqueue(project: project)
+    SessionAdmissionService.drain!
+    assert_nil second.reload.admitted_at
+
+    SessionConcurrencyLimit.set!(scope: project, max_sessions: 2)
+
+    assert second.reload.admitted_at, "the write itself wakes the queue"
+    assert_equal [ first.id, second.id ], SessionAdmission.occupied.order(:id).pluck(:id)
+  end
+
   test "disabling admission with queued work is rejected" do
     enqueue
     assert_raises(ArgumentError) { SessionAdmissionPolicy.sync!(enabled: false, installation_limit: 1) }

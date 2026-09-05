@@ -49,6 +49,8 @@ module Api
       rescue SessionService::UnsafeMcpUrlError => e
         # F34: a selected MCP server's URL failed the launch-time safety re-check.
         render json: { error: e.message }, status: :unprocessable_entity
+      rescue AgentCredential::PreflightError => e
+        render json: { error: e.message }, status: :unprocessable_entity
       end
 
       def destroy

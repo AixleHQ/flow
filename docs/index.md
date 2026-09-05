@@ -63,6 +63,29 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
   - **[implementation-artifacts/review-session-queue-blind.md](./implementation-artifacts/review-session-queue-blind.md)** / **[review-session-queue-edges.md](./implementation-artifacts/review-session-queue-edges.md)** — The two independent review briefs commissioned for the admission-queue implementation (a blind correctness pass and an edge-case pass), kept so a later reviewer can see what was asked for
   - **[implementation-artifacts/40-1-workflow-builder-ux-redesign.md](./implementation-artifacts/40-1-workflow-builder-ux-redesign.md)** — Workflow builder full UX redesign (story 40.1, shipped): tab layout, step editor sections, Base Resources move. Older BMAD story format, moved here from the retired `ai/` tree
 
+## Product
+
+- **[product/user-guide-outline.md](./product/user-guide-outline.md)** — Outline of the end-user product guide: the board → workflow → agent → results loop, section-by-section skeleton following the product sidebar, two end-to-end stories, terminology notes (issue #550)
+- **[product/changelog-product-areas.md](./product/changelog-product-areas.md)** — Frozen user-facing product map used as the changelog taxonomy: named product areas, changelog rules, area → guide-chapter map, snapshot baseline (issue #551)
+
+## Operator documentation
+
+The repository mirror of the in-app portal served at `/docs`
+(`app/frontend/pages/Docs/data/pages/`). Written for people installing and
+running Flow — the product-level guide outlined above is a separate document set.
+
+- **[user-guide/index.md](./user-guide/index.md)** — Entry point: the board → workflow → agent loop and the mental model
+- **[user-guide/board.md](./user-guide/board.md)** — Projects, columns, cards, and column → workflow bindings
+- **[user-guide/workflows.md](./user-guide/workflows.md)** — DAG steps, retries, approval gates, parallel runs
+- **[user-guide/agents.md](./user-guide/agents.md)** — Personas, the container, and how session context is built
+- **[user-guide/runtimes.md](./user-guide/runtimes.md)** — The five agent CLIs, their images, credentials, and cost tracking
+- **[user-guide/tools.md](./user-guide/tools.md)** — Tool kinds, execution modes, built-in board tools, resource resolution
+- **[user-guide/mcp.md](./user-guide/mcp.md)** — MCP transports, the internal `aixle-tools` server, config-item credentials
+- **[user-guide/integrations.md](./user-guide/integrations.md)** — GitHub, GitLab, Linear, Google OAuth, and webhooks
+- **[user-guide/configuration.md](./user-guide/configuration.md)** — Env vars, OAuth, agent credentials, and other knobs
+- **[quickstart.md](./quickstart.md)** — Get a local instance running and see one card move
+- **[reference/index.md](./reference/index.md)** — Reference set: [API](./reference/api.md), [CLI](./reference/cli.md), [configuration](./reference/configuration.md)
+
 ## Strategy
 
 - **[strategy/](./strategy/)** — Business / open-source strategy documents
@@ -75,4 +98,8 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
 ## Related documentation elsewhere
 
 - `references/aixle-system-reference.md` — agent-facing platform reference (domain model, runtimes, container layout)
-- `app/frontend/pages/Docs/data/pages/` — end-user product docs rendered in the app
+- `app/frontend/pages/Docs/data/pages/` — the markdown the `/docs` portal renders; mirrored in this tree under [user-guide/](./user-guide/) and [reference/](./reference/). Sections:
+  **Using Flow** (the product guide: what a user does on each screen) and **User guide /
+  Reference** (operator material: install, runtimes, MCP, API). Adding a page there means
+  registering it in `navStructure.ts`, `data/pages/index.ts`, `data/searchIndex.ts`, and the
+  allow-list in `Web::DocsController`

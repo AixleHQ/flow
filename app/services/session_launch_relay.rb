@@ -38,7 +38,8 @@ class SessionLaunchRelay
       admission.update!(launch_state: "acknowledged")
       session.update!(temporal_workflow_id: session.workflow_id, temporal_run_id: result[:run_id])
     end
-  rescue SessionAdmissionService::Stopped, Oauth::PreflightError, CloudAuth::PreflightError, SessionService::UnsafeMcpUrlError => e
+  rescue SessionAdmissionService::Stopped, Oauth::PreflightError, CloudAuth::PreflightError,
+         AgentCredential::PreflightError, SessionService::UnsafeMcpUrlError => e
     admission.update!(last_error: e.message)
     if session && !start_attempted
       SessionAdmissionService.transaction do

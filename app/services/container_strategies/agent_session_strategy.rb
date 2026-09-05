@@ -332,9 +332,6 @@ module ContainerStrategies
     # Agents (e.g. Claude Code) refresh their access/refresh tokens during a
     # session. Those refreshed tokens live only in the container's config files;
     # without this, the next session reloads the old (possibly expired) token.
-    # Re-extract the auth files and update the stored credential when the token
-    # material actually changed. Only updates an existing credential — never
-    # creates one from a session.
     def persist_refreshed_credentials(container, session, agent_service)
       auth_files = extract_auth_files(container, agent_service)
       return unless auth_files_complete?(auth_files, agent_service)

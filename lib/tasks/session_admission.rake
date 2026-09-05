@@ -44,24 +44,27 @@ namespace :session_admission do
       resources = ContainerRuntime.build.list_session_resources(strict: true)
       raise "Legacy runtime resources remain; drain and clean them before enabling admission" if resources.any?
 
-      # Falling back to scope defaults on an installation that has been running
-      # WITHOUT a session cap is a capacity cut, not a no-op: every project
-      # silently drops to two concurrent sessions. Make the operator say so.
-      if ENV["SESSION_CONCURRENCY_LIMIT"].to_s.strip.empty? && !SessionConcurrencyLimit.exists? && ENV["ACCEPT_SCOPED_DEFAULTS"] != "true"
-        raise <<~MESSAGE
-          Refusing first activation: no SESSION_CONCURRENCY_LIMIT and no reviewed scope overrides.
-          Every project would be capped at #{ENV.fetch('SESSION_PROJECT_CONCURRENCY_DEFAULT', '2')} concurrent sessions
-          and every project-less user at #{ENV.fetch('SESSION_USER_CONCURRENCY_DEFAULT', '2')}.
-          Either set an installation cap, or run session_admission:legacy_plan and import reviewed
-          overrides with session_admission:import_limits, or re-run with ACCEPT_SCOPED_DEFAULTS=true.
-        MESSAGE
-      end
     end
     policy = SessionAdmissionPolicy.sync!(
       project_default: ENV.fetch("SESSION_PROJECT_CONCURRENCY_DEFAULT", "2"),
       user_default: ENV.fetch("SESSION_USER_CONCURRENCY_DEFAULT", "2")
     )
-    puts "Session admission enabled: installation_limit=#{policy.installation_limit || 'scoped'}, revision=#{policy.revision}"
+    if policy.installation_limit
+      puts "Session admission enabled: one installation-wide queue of #{policy.installation_limit} concurrent sessions (revision #{policy.revision})."
+    else
+      # No installation cap means every project and project-less user gets its
+      # own queue. Print what that actually resolves to: on an installation that
+      # has been running uncapped, the defaults are a capacity cut, not a no-op.
+      puts "Session admission enabled with per-scope queues (revision #{policy.revision}):"
+      puts "  every project: #{policy.project_default} concurrent sessions"
+      puts "  every project-less session (agent login): #{policy.user_default} per user"
+      overrides = SessionConcurrencyLimit.order(:scope_type, :scope_id)
+      if overrides.any?
+        overrides.each { |limit| puts "  #{limit.scope_type} ##{limit.scope_id}: #{limit.max_sessions}" }
+      else
+        puts "  no scope overrides — everything is on the defaults above"
+      end
+    end
   end
 
   desc "Pause new admissions; running sessions keep their slots"

@@ -52,7 +52,12 @@ Rails.application.routes.draw do
       resources :assets, only: [] do
         collection do
           get :presign
-          post :upload
+          # Dev/test stand-in for S3. @uppy/aws-s3 v6 uploads with a raw PUT, so the object
+          # key has to travel in the path: the plugin derives the file's uploadURL from the
+          # presigned URL minus its query string, and the frontend reads the cache id back
+          # out of that path. `format: false` keeps Rails from treating a trailing `.json`
+          # or `.md` in the key as a response format.
+          put "upload/*key", action: :upload, as: :upload, format: false
         end
       end
 
@@ -204,6 +209,7 @@ Rails.application.routes.draw do
     resources :task_assets, only: %i[index show]
     resources :usage_statistics, only: %i[index show]
     resources :namespace_resource_quotas
+    resources :session_concurrency_limits
     # Not an Administrate resource: manual triggers for the mirrored catalogs, so a
     # fresh deployment does not sit on an empty catalog until the first scheduled run.
     resources :catalog_syncs, only: %i[index create]

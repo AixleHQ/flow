@@ -211,7 +211,7 @@ module Agents
     end
 
     # An absent or unrecognisable expiry must degrade to "no expiry known" rather than
-    # to a bogus value that would make AgentCredential.active skip a working credential.
+    # to a bogus value that would make AgentCredential.not_expired skip a working credential.
     test "token_expires_at is nil when no scope carries a usable expiry" do
       assert_nil @adapter.token_expires_at(@adapter.extract_credentials(oauth_auth_json))
       assert_nil @adapter.token_expires_at({ "auth" => { "s" => { "key" => "k", "expires_at" => "whenever" } } })

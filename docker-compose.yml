@@ -177,23 +177,14 @@ services:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=app_default"
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+      - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--log.level=DEBUG"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    environment:
-      - TRAEFIK_CORS_ORIGINS=${TRAEFIK_CORS_ORIGINS:-http://localhost:4000,http://localhost}
-    labels:
-      - "traefik.enable=true"
-      # ForwardAuth middleware for terminal sessions
-      - "traefik.http.middlewares.terminal-auth.forwardauth.address=http://web:4000/api/v1/internal/ws_auth"
-      - "traefik.http.middlewares.terminal-auth.forwardauth.authResponseHeadersRegex=^X-"
-      # CORS middleware for terminal APIs
-      - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowOriginList=${TRAEFIK_CORS_ORIGINS:-http://localhost:4000,http://localhost}"
-      - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowMethods=GET,POST,PUT,DELETE,OPTIONS"
-      - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowHeaders=Content-Type,Authorization,X-Requested-With,Cookie"
-      - "traefik.http.middlewares.terminal-cors.headers.accessControlAllowCredentials=true"
+      - ./docker/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
     attach: false
 
   otlp-ingest:
