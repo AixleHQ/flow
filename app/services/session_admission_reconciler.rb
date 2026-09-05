@@ -8,13 +8,19 @@ class SessionAdmissionReconciler
       WorkflowService.repair_cancellation(run)
     end
     SessionLaunchRelay.drain(limit: limit)
-    unresolved = SessionRuntimeOperation.where(state: %w[in_flight uncertain]).select(:session_admission_id)
-    SessionAdmission.occupied.where(launch_state: %w[acknowledged claimed]).where.not(id: unresolved).order(:updated_at).limit(limit).each do |admission|
+    # Admissions with an unresolved operation used to be skipped entirely, which
+    # is how a wedged one stayed invisible for hours: nothing looked at it, and
+    # its workload kept running. They are examined like any other now — the
+    # operation still holds the reservation, but the runtime gets cleaned up and
+    # the operation gets an honest label.
+    SessionAdmission.occupied.where(launch_state: %w[acknowledged claimed]).order(:updated_at).limit(limit).each do |admission|
       next unless TemporalService.enabled?
       admission.touch
       # Unlike workflow_open?, transport errors propagate: unknown is never closed.
       description = TemporalService.client.workflow_handle(admission.terminal_session.workflow_id).describe
       next if description.status == Temporalio::Client::WorkflowExecutionStatus::RUNNING
+
+      strand_in_flight_operations(admission)
       Activities::Container::AdmittedPhaseActivity.new.run(Hashie::Mash.new(
         phase: "cleanup", admission_id: admission.id, error: admission.terminal_session.finished? ? nil : "Container workflow ended"
       ))
@@ -22,6 +28,19 @@ class SessionAdmissionReconciler
       admission.update!(last_error: "Reconciliation: #{e.class}: #{e.message}")
     end
     report(snapshot)
+  end
+
+  # An in-flight operation means "a create is running right now", which is true
+  # only while something is running it. Once the workflow is closed, no activity
+  # can ever report that result, so the honest label is `uncertain` — and that is
+  # the number an operator is alerted on. Left as in_flight it reads as ordinary
+  # provisioning load and a pinned slot stays silent.
+  def self.strand_in_flight_operations(admission)
+    stranded = admission.session_runtime_operations.where(state: "in_flight")
+    return if stranded.empty?
+
+    stranded.update_all(state: "uncertain", error: "Container workflow closed before this operation reported", updated_at: Time.current)
+    Rails.logger.warn("[SessionAdmission] admission #{admission.id}: #{stranded.size} operation(s) stranded by a closed workflow")
   end
 
   # The numbers that distinguish "the queue is working" from "the queue is

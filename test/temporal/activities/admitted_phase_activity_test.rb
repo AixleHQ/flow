@@ -57,11 +57,35 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     assert_equal "finished", @session.reload.state
   end
 
-  test "an unresolved external operation prevents cleanup and release" do
+  test "an unresolved operation holds the slot but no longer blocks the deletion" do
+    strategy = mock("strategy")
+    @session.stubs(:strategy).returns(strategy)
+    SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
+    @admission.stubs(:terminal_session).returns(@session)
+    @admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
+    strategy.stubs(:before_cleanup).returns({})
+    # Refusing to delete was a deadlock: the workload kept the slot honestly
+    # occupied, and the operation could never resolve because the deletion that
+    # would prove absence was the thing being refused.
+    @runtime.expects(:cleanup_session).with("runtime-id")
+    @runtime.stubs(:session_absent?).returns(false, true)
+
+    result = cleanup
+
+    assert result[:unresolved_operation], "the reservation must still wait for an operator"
+    assert_nil @admission.reload.released_at
+  end
+
+  test "an unresolved external operation never releases the slot, even once the runtime is gone" do
     @admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
-    @runtime.expects(:session_absent?).never
+    @runtime.expects(:session_absent?).returns(true)
     @runtime.expects(:cleanup_session).never
-    assert_raises(Temporalio::Error::ApplicationError) { cleanup }
+
+    result = cleanup
+
+    # AD-5: a late create must never find its slot handed to someone else, so
+    # an unprovable operation keeps the reservation until an operator resolves it.
+    assert result[:unresolved_operation]
     assert_nil @admission.reload.released_at
   end
 
