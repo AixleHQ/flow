@@ -7,7 +7,11 @@
 module Activities
   module AgentCredentials
     class RefreshExpiringTokensActivity < ::Activities::Base
-      REFRESH_WINDOW = 60.minutes
+      # Matches ClaudeCodeAdapter::REFRESH_MARGIN_MS: selecting rows the adapter will
+      # not act on just re-reads and decrypts them every 5 minutes. A session needing
+      # more headroom than this refreshes at launch instead
+      # (AgentCredential#refresh_if_expiring!).
+      REFRESH_WINDOW = 15.minutes
 
       def run(_input = nil)
         refreshed = 0
@@ -27,10 +31,7 @@ module Activities
             credential.clear_refresh_error! if credential.refresh_error.present?
             refreshed += 1
           when :error
-            # The adapter classifies the failure when it can tell an add-on block
-            # apart from the base login; the string match stays as the fallback for
-            # single-block agents, where any invalid_grant is terminal.
-            permanent = result.fetch(:permanent) { result[:detail].to_s.include?("invalid_grant") }
+            permanent = ::AgentCredential.permanent_failure?(result)
             credential.mark_refresh_error!(result[:detail], permanent: permanent)
             errors += 1
             log(:warn, "credential #{credential.id} (#{credential.agent_type}) refresh error: #{result[:detail]}")

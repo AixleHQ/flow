@@ -15,6 +15,12 @@ class AgentCredential < ApplicationRecord
 
   MAX_REFRESH_FAILURES = 3
 
+  # How much token life a session is guaranteed at launch. Sessions routinely run
+  # as long as the token itself lives, so a container handed a token with minutes
+  # left dies mid-run on an opaque 401. Anything below this is refreshed before the
+  # token is written into the container — see #refresh_if_expiring!.
+  SESSION_REFRESH_THRESHOLD = 60.minutes
+
   # Validations
   validates :agent_type, presence: true, inclusion: {
     in: CompanyMembership::AVAILABLE_AGENTS,
@@ -71,6 +77,14 @@ class AgentCredential < ApplicationRecord
                           .where("terminal_sessions.agent_type = agent_credentials.agent_type")
     where.not(held.arel.exists)
   }
+
+  # Whether a refresh result means the credential is now unusable. The adapter says
+  # so itself when it can tell an add-on block apart from the base login; the
+  # invalid_grant text is the fallback for single-block agents, where any rejected
+  # grant is terminal.
+  def self.permanent_failure?(result)
+    result.fetch(:permanent) { result[:detail].to_s.include?("invalid_grant") }
+  end
 
   class PreflightError < StandardError
     attr_reader :credential
@@ -178,6 +192,42 @@ class AgentCredential < ApplicationRecord
     result = service.write_to_container(container_id, config_data, workflow_config)
     touch(:last_used_at)
     result
+  end
+
+  def expiring_within?(within)
+    expires_at.present? && expires_at <= within.from_now
+  end
+
+  # Whether a running container currently holds a copy of this credential's tokens.
+  # `excluding_session_id` is the session being launched: it is the one asking, and
+  # its own container has not been handed anything yet.
+  def held_by_live_session?(excluding_session_id: nil)
+    scope = TerminalSession.active.where(user_id: user_id, company_id: company_id, agent_type: agent_type)
+    scope = scope.where.not(id: excluding_session_id) if excluding_session_id
+    scope.exists?
+  end
+
+  # Refresh a token that would otherwise die mid-session, at the last point before a
+  # container gets it. Returns the adapter's result Hash, or :not_needed / :held.
+  #
+  # Two guards, both about the single-use refresh token having more than one holder:
+  #
+  # - :held — another live container already holds these tokens. Rotating now would
+  #   invalidate the copy it is running on, turning one stale session into several.
+  #   That container refreshes for itself and cleanup merges the result back.
+  # - the re-check under the row lock — parallel launches of the same credential
+  #   would otherwise each fire a refresh, and every one after the first replays a
+  #   grant the server has already rotated out.
+  def refresh_if_expiring!(within: SESSION_REFRESH_THRESHOLD, excluding_session_id: nil)
+    return :not_needed unless expiring_within?(within)
+    return :held if held_by_live_session?(excluding_session_id: excluding_session_id)
+
+    with_lock do
+      reload
+      next :not_needed unless expiring_within?(within)
+
+      adapter.refresh!(self, margin_ms: within.in_milliseconds)
+    end
   end
 
   def mark_refresh_error!(message, permanent: false)

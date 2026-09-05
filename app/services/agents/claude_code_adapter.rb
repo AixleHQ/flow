@@ -233,7 +233,10 @@ module Agents
     # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil,
     #   permanent: Boolean } — `permanent` is true only when the BASE login is the block
     #   the server rejected; a dead add-on (designOauth) leaves the credential usable.
-    def refresh!(credential)
+    # @param margin_ms [Integer] refresh a block expiring within this many ms. The sweep
+    #   uses the default; a session launch passes its own, larger, threshold so the
+    #   container starts with a token that outlives the session.
+    def refresh!(credential, margin_ms: REFRESH_MARGIN_MS)
       current = credential.config_data
       now_ms  = (Time.current.to_f * 1000).to_i
       refreshed_blocks = {}
@@ -246,7 +249,7 @@ module Agents
 
         exp = block["expiresAt"].to_i
         # refresh if expired or within the margin
-        next unless exp.positive? && (exp - now_ms) <= REFRESH_MARGIN_MS
+        next unless exp.positive? && (exp - now_ms) <= margin_ms
 
         client_id = block_name == "designOauth" ? block["clientId"] : base_oauth_client_id
         new_block = request_oauth_refresh(client_id: client_id, refresh_token: block["refreshToken"],
