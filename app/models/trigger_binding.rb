@@ -20,6 +20,11 @@ class TriggerBinding < ApplicationRecord
 
   SCHEDULE_EVENT_TYPE = "schedule.fired"
 
+  # notify_on_failure (default true) — when a run this binding started fails,
+  # say so in the Slack thread it came from, with what it failed with. Only
+  # Slack-born runs carry the reply coordinates, so it is a no-op on every other
+  # trigger kind; see Slack::RunFailureNotifier.
+
   validates :event_type, presence: true
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }
   validate :workflow_accessible_from_project

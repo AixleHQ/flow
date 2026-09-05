@@ -23,6 +23,8 @@ module PersonalTools
                            description: "auto starts the run immediately; manual only offers it."
       param :enabled, type: :boolean, description: "Whether the trigger fires."
       param :cooldown_seconds, type: :integer, description: "Minimum gap between two firings."
+      param :notify_on_failure, type: :boolean,
+            description: "Post to the triggering Slack thread when a run from this trigger fails, with the error (default true; Slack triggers only)."
       param :subject_policy, type: :string, enum: WorkflowTriggerSupport::SUBJECT_POLICIES,
                              description: "Which board task the run is about: none, existing_task, or create_task " \
                                           "(create_task also needs subject_column_id)."
