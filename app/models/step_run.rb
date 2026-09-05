@@ -39,8 +39,13 @@ class StepRun < ApplicationRecord
     update!(state: :skipped, completed_at: Time.current, skip_reason: reason)
   end
 
-  def mark_cancelled!
-    update!(state: :cancelled, completed_at: Time.current)
+  # `reason` is what the session died of, when something diagnosed it — a spend
+  # limit, a lost node. A cancelled step with an empty error_message reads as "someone
+  # clicked cancel", which is exactly the wrong thing to tell a user whose account is
+  # out of credit.
+  def mark_cancelled!(reason = nil)
+    update!(state: :cancelled, completed_at: Time.current,
+            error_message: reason.presence || error_message)
   end
 
   def create_sub_step_runs!

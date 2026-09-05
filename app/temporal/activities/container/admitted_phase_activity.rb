@@ -150,7 +150,8 @@ module Activities
           session.reload
           final_state = session.cancelled? ? "cancelled" : (state[:error] || session.failed? ? "failed" : "finished")
           session.update!(state: final_state, finished_at: session.finished_at || Time.current,
-            container_id: nil, error_message: state[:error] || session.error_message)
+            container_id: nil,
+            error_message: TerminalSession.preferred_error_message(session.error_message, state[:error]))
         end
       end
     end

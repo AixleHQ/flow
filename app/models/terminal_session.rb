@@ -7,6 +7,27 @@ class TerminalSession < ApplicationRecord
 
   WORKFLOW_TIMEOUT = 86_400 # 24 hours
 
+  # What the cancellation path reports for every reason a session can be cancelled
+  # for — including the ones something already diagnosed precisely: a spend limit read
+  # off the terminal by ScanQuotaErrorsActivity, a node that took the pod with it,
+  # caught by ScanDeadContainersActivity.
+  #
+  # Both write the real reason here first and both were then overwritten by this
+  # string, because cleanup runs last. That is not only a cosmetic loss: the quota
+  # detector in CompleteStepActivity reads `error_message`, so a clobbered session
+  # never got `error_category: :quota_exceeded` either, and the run surfaced as a bare
+  # "cancelled" with nothing to act on. (2026-09-05: eleven runs, all of them a spend
+  # limit nobody could see.)
+  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled" ].freeze
+
+  # A specific reason always outranks a generic one, whichever arrives last.
+  def self.preferred_error_message(existing, incoming)
+    return existing if incoming.blank?
+    return existing if existing.present? && GENERIC_ERROR_MESSAGES.include?(incoming)
+
+    incoming
+  end
+
   # `bmm` ships inside the npm package; every other module is cloned from GitHub
   # at install time, and each one costs an api.github.com tag lookup against a
   # per-IP hourly budget shared by the whole cluster (see BmadMethodInjector).

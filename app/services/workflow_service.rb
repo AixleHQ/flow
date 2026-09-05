@@ -183,11 +183,28 @@ class WorkflowService
 
     def cancel_active_step_runs(run)
       run.step_runs.where(state: %w[pending running waiting_input]).find_each do |sr|
-        SessionService.cancel(session: sr.terminal_session) if sr.terminal_session
-        sr.mark_cancelled!
+        session = sr.terminal_session
+        SessionService.cancel(session: session) if session
+        # Read after the cancel: the session is where a diagnosed reason lives, and
+        # cleanup may have just written one.
+        sr.mark_cancelled!(diagnosed_reason(session))
       rescue StandardError => e
         Rails.logger.warn("[WorkflowService] Failed to cancel step_run ##{sr.id}: #{e.message}")
       end
+    end
+
+    # Only a reason worth showing: the generic cancellation text says nothing the
+    # step's own `cancelled` state does not already say.
+    def diagnosed_reason(session)
+      return nil unless session
+
+      message = session.reload.error_message
+      return nil if message.blank? || TerminalSession::GENERIC_ERROR_MESSAGES.include?(message)
+
+      message
+    rescue StandardError => e
+      Rails.logger.warn("[WorkflowService] Failed to read cancellation reason: #{e.message}")
+      nil
     end
 
     def broadcast_task_updated(run)
