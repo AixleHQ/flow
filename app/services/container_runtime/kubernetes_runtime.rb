@@ -60,7 +60,7 @@ module ContainerRuntime
 
     # Only an operator-reviewed namespace/UID allowlist may remove legacy quotas.
     # The quota itself predates ownership labels, so verify its namespace too.
-    def remove_managed_session_quota(namespace:, uid:)
+    def remove_managed_session_quota(namespace:, uid:, dry_run: false)
       raise "Admission must be enabled before removing legacy quotas" unless SessionAdmissionPolicy.enabled?
       raise ArgumentError, "Quota UID required" if uid.blank?
       ns = core_client.get_namespace(namespace)
@@ -72,12 +72,14 @@ module ContainerRuntime
       end
       quota = core_client.get_resource_quota("aixle-resource-quota", namespace)
       raise "Quota UID changed; review the allowlist again" unless quota.metadata.uid == uid
+      return quota if dry_run
+
       core_client.delete_entity("resourcequotas", "aixle-resource-quota", namespace,
         delete_options: { preconditions: { uid: uid } })
     end
 
     def cleanup_session(id)
-      handle = resolve_handle(id)
+      handle = session_locator(id)
       session_objects(handle).each do |kind, plural, client_key, object|
         metadata = object.metadata
         # UID precondition prevents deleting a replacement after the GET.
@@ -89,7 +91,21 @@ module ContainerRuntime
     end
 
     def session_absent?(id)
-      session_objects(resolve_handle(id)).empty?
+      session_objects(session_locator(id)).empty?
+    end
+
+    # Deleting and confirming absence need a namespace/name pair and nothing
+    # else. #resolve_handle would additionally infer service ports, which costs
+    # a Pod GET per call — on a path the reconciler walks every minute for every
+    # unreleased reservation.
+    def session_locator(id)
+      return id if id.respond_to?(:pod_name) && id.respond_to?(:namespace)
+
+      raw = id.to_s
+      return resolve_handle(id) unless raw.match?(%r{\A[^/\s]+/[^/\s]+\z})
+
+      namespace, pod_name = raw.split("/", 2)
+      OpenStruct.new(pod_name: sanitize_name(pod_name), namespace: namespace)
     end
 
     def session_objects(handle)

@@ -28,10 +28,13 @@ class WorkflowService
       validate_mode!(run, workflow, overrides)
       return run if run.errors.any?
 
-      SessionAdmissionService.transaction do |policy|
-        run.shared_context = run.shared_context.merge("session_admission" => policy.enabled?)
-        return run unless run.save
-      end
+      # Which launch path this run's history uses is decided once, here, and
+      # then never re-read — that is what keeps a policy change from rewriting
+      # the semantics of an already-running history. An unlocked read is enough:
+      # SessionAdmissionPolicy.sync! refuses to flip the mode while any run is
+      # pending, running or paused.
+      run.shared_context = run.shared_context.merge("session_admission" => SessionAdmissionPolicy.enabled?)
+      return run unless run.save
 
       workflow.steps.not_deleted.order(:position).each do |step|
         run.step_runs.find_or_create_by!(step: step)
@@ -56,6 +59,14 @@ class WorkflowService
       cancel_active_step_runs(run)
       run.cancel! if run.may_cancel?
       record_activity(run, :workflow_cancelled)
+      broadcast_task_updated(run)
+    end
+
+    # Cancellation fan-out that crashed halfway leaves a run carrying a stop
+    # marker over step runs that are still pending. Reconciliation replays just
+    # the fan-out — the activity entry was already written by #cancel.
+    def repair_cancellation(run)
+      cancel_active_step_runs(run)
       broadcast_task_updated(run)
     end
 

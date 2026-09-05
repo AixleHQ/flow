@@ -20,16 +20,22 @@ namespace :session_admission do
     puts "Scoped overrides imported. Apply reviewed defaults with session_admission:sync."
   end
 
-  desc "Remove reviewed legacy quotas from QUOTA_ALLOWLIST JSON [{namespace, uid}]"
+  desc "Verify reviewed legacy quotas from QUOTA_ALLOWLIST JSON [{namespace, uid}]; deletes only with APPLY=true"
   task remove_legacy_quotas: :environment do
     entries = JSON.parse(File.read(ENV.fetch("QUOTA_ALLOWLIST")))
     raise ArgumentError, "Allowlist must be an array" unless entries.is_a?(Array)
     runtime = ContainerRuntime.build
     raise "Kubernetes runtime required" unless runtime.is_a?(ContainerRuntime::KubernetesRuntime)
+    apply = ENV["APPLY"] == "true"
     entries.each do |entry|
-      runtime.remove_managed_session_quota(namespace: entry.fetch("namespace"), uid: entry.fetch("uid"))
-      puts "Requested deletion of reviewed quota in #{entry.fetch('namespace')}"
+      quota = runtime.remove_managed_session_quota(namespace: entry.fetch("namespace"), uid: entry.fetch("uid"), dry_run: !apply)
+      if apply
+        puts "Requested deletion of reviewed quota in #{entry.fetch('namespace')}"
+      else
+        puts "Verified #{entry.fetch('namespace')}/aixle-resource-quota uid=#{quota.metadata.uid} hard=#{quota.spec.hard.to_h}"
+      end
     end
+    puts "Dry run only — nothing was deleted. Re-run with APPLY=true once the report is reviewed." unless apply
   end
 
   desc "Synchronize deployment concurrency settings (requires drained legacy sessions/runs)"
@@ -37,6 +43,19 @@ namespace :session_admission do
     unless SessionAdmissionPolicy.current.enabled?
       resources = ContainerRuntime.build.list_session_resources(strict: true)
       raise "Legacy runtime resources remain; drain and clean them before enabling admission" if resources.any?
+
+      # Falling back to scope defaults on an installation that has been running
+      # WITHOUT a session cap is a capacity cut, not a no-op: every project
+      # silently drops to two concurrent sessions. Make the operator say so.
+      if ENV["SESSION_CONCURRENCY_LIMIT"].to_s.strip.empty? && !SessionConcurrencyLimit.exists? && ENV["ACCEPT_SCOPED_DEFAULTS"] != "true"
+        raise <<~MESSAGE
+          Refusing first activation: no SESSION_CONCURRENCY_LIMIT and no reviewed scope overrides.
+          Every project would be capped at #{ENV.fetch('SESSION_PROJECT_CONCURRENCY_DEFAULT', '2')} concurrent sessions
+          and every project-less user at #{ENV.fetch('SESSION_USER_CONCURRENCY_DEFAULT', '2')}.
+          Either set an installation cap, or run session_admission:legacy_plan and import reviewed
+          overrides with session_admission:import_limits, or re-run with ACCEPT_SCOPED_DEFAULTS=true.
+        MESSAGE
+      end
     end
     policy = SessionAdmissionPolicy.sync!(
       project_default: ENV.fetch("SESSION_PROJECT_CONCURRENCY_DEFAULT", "2"),
@@ -47,12 +66,24 @@ namespace :session_admission do
 
   desc "Pause new admissions; running sessions keep their slots"
   task pause: :environment do
-    SessionAdmissionService.transaction { |policy| policy.update!(paused: true) }
+    SessionAdmissionService.transaction do |policy|
+      policy.update!(paused: true, revision: policy.revision + 1)
+    end
+    puts "Admission paused. Queued requests are kept; occupied slots are untouched."
+  end
+
+  desc "Resume admissions after a pause without touching caps"
+  task resume: :environment do
+    SessionAdmissionService.transaction do |policy|
+      policy.update!(paused: false, revision: policy.revision + 1)
+    end
+    granted = SessionAdmissionService.drain!
+    puts "Admission resumed. Granted #{granted.size} queued request(s)."
   end
 
   desc "Display queue and retained reservations without runtime mutations"
   task status: :environment do
-    puts "enabled=#{SessionAdmissionPolicy.current.enabled?} paused=#{SessionAdmissionPolicy.current.paused?}"
+    puts JSON.pretty_generate(SessionAdmissionReconciler.snapshot)
     SessionAdmissionPool.order(:id).each do |pool|
       puts "#{pool.key}: limit=#{pool.limit} occupied=#{pool.session_admissions.occupied.count} queued=#{pool.session_admissions.unreleased.where(admitted_at: nil).count}"
     end
@@ -65,11 +96,7 @@ namespace :session_admission do
   task :set_limit, [ :scope_type, :scope_id, :max_sessions ] => :environment do |_task, args|
     raise ArgumentError, "Scope must be Project or User" unless %w[Project User].include?(args.scope_type)
     id = SessionAdmissionPolicy.positive_integer!(args.scope_id)
-    args.scope_type.constantize.find(id)
     maximum = SessionAdmissionPolicy.positive_integer!(args.max_sessions)
-    SessionAdmissionService.transaction do
-      limit = SessionConcurrencyLimit.find_or_initialize_by(scope_type: args.scope_type, scope_id: id)
-      limit.update!(max_sessions: maximum)
-    end
+    SessionConcurrencyLimit.set!(scope: args.scope_type.constantize.find(id), max_sessions: maximum)
   end
 end

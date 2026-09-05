@@ -35,11 +35,12 @@ class SessionService
                        :config_item_ids)
       )
 
-      SessionAdmissionService.transaction do |policy|
-        return session unless session.save
-        SessionAdmissionService.enqueue!(session) if policy.enabled?
-      end
+      return session unless session.save
 
+      # #enqueue! self-gates on the policy and returns nil when admission is off,
+      # so the writer lock is taken around the queue write only — never around
+      # the save, which touches half a dozen join tables.
+      SessionAdmissionService.enqueue!(session)
       launch_session(session)
 
       session
@@ -69,7 +70,10 @@ class SessionService
       end
     end
 
-    def revalidate_admission!(session)
+    # `refresh_tokens:` is set on the one call that precedes an actual launch.
+    # The per-phase calls only re-check authorization; refreshing on every phase
+    # would put a token round-trip in front of each container step.
+    def revalidate_admission!(session, refresh_tokens: false)
       SessionAdmissionService.ensure_run_active!(session)
       raise SessionAdmissionService::Stopped, "User account unavailable" if session.user.deleted_at || !session.user.active?
       if session.project && !session.project.accessible_by?(session.user)
@@ -84,6 +88,7 @@ class SessionService
       preflight_oauth!(session.user, session.mcp_server_ids)
       preflight_cloud!(session.user, SessionCompany.company_for(session))
       preflight_url_safety!(session.mcp_server_ids)
+      refresh_oauth_tokens_for_session(session) if refresh_tokens
     end
 
     def cancel(session:)
@@ -117,9 +122,13 @@ class SessionService
     # the cleanup phase takes its container reference from the workflow's own
     # accumulated state, not from the row.
     def fail_session(session:, error_message: nil)
-      return cancel(session: session) if session.queued? && session.session_admission
-      stop_admission_operations(session)
       session.update!(error_message: error_message) if error_message.present?
+      # Marking the row failed frees nothing: the reservation is only released
+      # once the runtime is confirmed gone (AD-6). Cancelling is what starts
+      # that, for a queued session and an admitted one alike.
+      return cancel(session: session) if unreleased_admission?(session)
+
+      stop_admission_operations(session)
       session.fail! if session.may_fail?
       signal_container_finished(session) if session.temporal_workflow_id.present?
       session
@@ -133,7 +142,7 @@ class SessionService
         return step_run.terminal_session if step_run.terminal_session
         raise SessionAdmissionService::Stopped, "Workflow cancelled" if step_run.workflow_run.stop_requested_at || step_run.workflow_run.state == "cancelled"
         session = build_for_workflow_step(step_run: step_run)
-        SessionAdmissionService.enqueue!(session) if SessionAdmissionPolicy.enabled?
+        SessionAdmissionService.enqueue!(session)
       end
       launch_session(session)
       session
@@ -187,14 +196,26 @@ class SessionService
       end
     end
 
+    def unreleased_admission?(session)
+      admission = session.session_admission
+      admission.present? && admission.released_at.nil?
+    end
+
+    # Granting is cheap and must happen now so the caller sees a real queue
+    # position. Dispatching is not: it costs a preflight and a Temporal RPC per
+    # session, so this hands off only THIS session and leaves the rest of the
+    # newly granted batch to the relay running in the reconciler.
     def launch_session(session)
-      if session.session_admission
-        SessionLaunchRelay.drain
-      else
+      unless session.session_admission
         refresh_oauth_tokens_for_session(session) if session.session_type == "workflow_step"
         session.start! if session.may_start?
         start_temporal_workflow(session)
+        return
       end
+
+      SessionAdmissionService.drain!
+      admission = session.session_admission.reload
+      SessionLaunchRelay.dispatch(admission) if admission.admitted_at && admission.launch_state == "pending"
     end
 
     # Workflow runs are project-bound, so the run's project names the company

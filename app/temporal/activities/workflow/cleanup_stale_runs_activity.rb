@@ -19,8 +19,11 @@ module Activities
       def cleanup_stale(state)
         count = 0
         stale_runs_scope(state).find_each do |run|
-          next if run.shared_context["session_admission"] == true
-          next if SessionAdmission.joins(terminal_session: :step_run).where(step_runs: { workflow_run_id: run.id }).unreleased.exists?
+          next if deliberately_waiting?(run)
+
+          # The durable stop marker is what stops a queued child from being
+          # admitted after the parent has been declared stale.
+          mark_stopped(run)
           fail_active_sessions(run)
           run.update_column(:failure_reason, "stale_run")
           run.fail! if run.may_fail?
@@ -29,6 +32,23 @@ module Activities
           log(:warn, "Failed to clean WorkflowRun #{run.id}: #{e.message}")
         end
         count
+      end
+
+      # A run is not stale because one of its steps is queued behind the
+      # concurrency cap or waiting for cluster capacity (AD-7, AD-8).
+      def deliberately_waiting?(run)
+        SessionAdmission.joins(terminal_session: :step_run)
+                        .where(step_runs: { workflow_run_id: run.id })
+                        .waiting.exists?
+      end
+
+      def mark_stopped(run)
+        return if run.stop_requested_at
+
+        SessionAdmissionService.transaction do
+          run.lock!
+          run.update!(stop_requested_at: run.stop_requested_at || Time.current)
+        end
       end
 
       def fail_active_sessions(run)

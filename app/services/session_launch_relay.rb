@@ -23,7 +23,7 @@ class SessionLaunchRelay
       admission.update!(launch_state: "claimed", claimed_at: Time.current, claim_token: claim)
     end
 
-    SessionService.revalidate_admission!(session)
+    SessionService.revalidate_admission!(session, refresh_tokens: true)
     start_attempted = true
     result = TemporalService.start_workflow(
       TemporalWorkflowRegistry.container_workflow_v2,

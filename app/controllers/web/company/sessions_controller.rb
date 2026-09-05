@@ -3,7 +3,7 @@
 class Web::Company::SessionsController < Web::Company::ApplicationController
   def index
     scope = company_sessions_scope.with_cached_resource_counts
-              .includes(:user, :project,
+              .includes(:user, :project, :session_admission,
                         :tools, :skills, :mcp_servers, :config_items,
                         :input_assets, :repositories)
               .where.not(session_type: "auth_setup")
@@ -22,7 +22,7 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
 
   def show
     session = company_sessions_scope.with_cached_resource_counts
-                .includes(:user, :project,
+                .includes(:user, :project, :session_admission,
                           :tools, :skills, :mcp_servers, :config_items,
                           :input_assets, :repositories)
                 .find(params[:id])

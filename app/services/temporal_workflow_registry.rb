@@ -2,6 +2,10 @@
 
 # Registry for Temporal workflow and activity definitions loaded from workflows.yml
 class TemporalWorkflowRegistry
+  # A run whose steps queue can legitimately outlive a day; one that has been
+  # alive for a week is a fault, not a queue.
+  ADMITTED_RUN_TIMEOUT = 7.days.to_i
+
   # Activity definition
   class ActivityDef
     attr_reader :name, :task_queue
@@ -120,7 +124,10 @@ class TemporalWorkflowRegistry
         wf,
         { workflow_run_id: workflow_run.id },
         id: "workflow-execution-#{workflow_run.id}",
-        execution_timeout: admitted ? nil : 86_400
+        # Queue time is not execution budget (AD-7), so an admitted run gets far
+        # more than a day — but it still gets a ceiling. "No timeout at all"
+        # means a wedged run is invisible to every deadline we have.
+        execution_timeout: admitted ? ADMITTED_RUN_TIMEOUT : 86_400
       )
     end
 

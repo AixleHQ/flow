@@ -25,6 +25,18 @@ class SessionLaunchRelayTest < ActiveSupport::TestCase
     assert_equal 1, SessionAdmission.occupied.count
   end
 
+  test "the launch path refreshes agent credentials before building a manifest" do
+    SessionService.unstub(:revalidate_admission!)
+    # Preflight only CHECKS a credential; a workflow-step container that starts
+    # on a token minutes from expiry fails halfway through its own run.
+    SessionService.expects(:revalidate_admission!)
+                  .with { |session, **kwargs| session.id == @session.id && kwargs[:refresh_tokens] == true }
+                  .raises(SessionAdmissionService::Stopped, "checked")
+    TemporalService.expects(:start_workflow).never
+
+    SessionLaunchRelay.dispatch(@admission)
+  end
+
   test "failed preflight releases a reservation when no start was attempted" do
     SessionService.stubs(:revalidate_admission!).raises(SessionAdmissionService::Stopped, "Access revoked")
     TemporalService.expects(:start_workflow).never

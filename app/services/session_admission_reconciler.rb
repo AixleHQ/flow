@@ -5,7 +5,7 @@ class SessionAdmissionReconciler
     # Durable run stop markers repair a crash during cancellation fan-out.
     WorkflowRun.where.not(stop_requested_at: nil).where(state: %w[running paused cancelled])
       .joins(:step_runs).where(step_runs: { state: %w[pending running waiting_input] }).distinct.limit(limit).each do |run|
-      WorkflowService.send(:cancel_active_step_runs, run)
+      WorkflowService.repair_cancellation(run)
     end
     SessionLaunchRelay.drain(limit: limit)
     unresolved = SessionRuntimeOperation.where(state: %w[in_flight uncertain]).select(:session_admission_id)
@@ -21,5 +21,39 @@ class SessionAdmissionReconciler
     rescue StandardError => e
       admission.update!(last_error: "Reconciliation: #{e.class}: #{e.message}")
     end
+    report(snapshot)
   end
+
+  # The four numbers that distinguish "the queue is working" from "the queue is
+  # wedged": how long the head has been waiting, how much capacity is pinned by
+  # an unprovable runtime operation, how long confirmed cleanup is lagging, and
+  # whether anyone is blocked at all. Emitted once per pass as one structured
+  # line, which is what the cluster's log pipeline can alert on without the app
+  # taking on a metrics backend.
+  def self.snapshot
+    now = Time.current
+    queued = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil)
+    lagging = SessionAdmission.occupied.joins(:terminal_session)
+                              .where(terminal_sessions: { state: %w[finished failed cancelled] })
+    policy = SessionAdmissionPolicy.current
+
+    {
+      enabled: policy.enabled?,
+      paused: policy.paused?,
+      queued: queued.count,
+      occupied: SessionAdmission.occupied.count,
+      pools_with_queue: SessionAdmissionPool.where(id: queued.select(:session_admission_pool_id)).count,
+      oldest_queue_wait_seconds: age(queued.minimum(:created_at), now),
+      uncertain_operations: SessionRuntimeOperation.where(state: %w[in_flight uncertain]).count,
+      cleanup_lag_seconds: age(lagging.minimum(:updated_at), now)
+    }
+  end
+
+  def self.age(timestamp, now) = timestamp ? (now - timestamp).to_i : 0
+
+  def self.report(stats)
+    Rails.logger.info("[SessionAdmission] queue health #{stats.to_json}")
+    stats
+  end
+  private_class_method :report
 end

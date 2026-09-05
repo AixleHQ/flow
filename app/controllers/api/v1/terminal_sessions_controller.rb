@@ -53,11 +53,16 @@ module Api
 
       def destroy
         session = find_session(params[:id])
-        unless session.state.in?(%w[not_started finished failed])
+        unless session.state.in?(%w[not_started finished failed cancelled])
           render json: { error: "Cannot delete active session" }, status: :bad_request
           return
         end
-        session.destroy
+        # A row whose reservation is still held refuses to be destroyed; saying
+        # "ok" to that would report a deletion that did not happen.
+        unless session.destroy
+          render json: { error: session.errors.full_messages.to_sentence }, status: :conflict
+          return
+        end
         head :ok
       end
 

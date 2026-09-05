@@ -4,9 +4,19 @@ class SessionAdmissionService
   class Stopped < StandardError; end
   class UncertainOperation < StandardError; end
 
+  # How many pools one drain pass may examine. Project/user mode creates one pool
+  # per project and per user, so an unbounded scan would row-lock the whole
+  # installation on every enqueue.
+  POOL_SCAN_LIMIT = 200
+
   class << self
-    # Policy UPDATE deliberately serializes the small admission transactions.
-    # This also gives run cancellation, scope changes and permits one lock order.
+    # The WRITER lock (AD-3). Serializes the small admission decisions — grant,
+    # cancel, release, policy and pool-limit changes — so occupancy can never be
+    # read stale between the count and the grant.
+    #
+    # Nothing slow belongs inside it: no runtime calls, no Temporal RPCs, and no
+    # record save that touches half a dozen join tables. Callers that only need
+    # to know whether admission is on use #policy instead.
     def transaction(&block)
       SessionAdmissionPolicy.current
       SessionAdmissionPolicy.transaction do
@@ -15,12 +25,25 @@ class SessionAdmissionService
       end
     end
 
+    # Unlocked read for branch decisions ("is admission on at all"). Every path
+    # that acts on the answer re-checks it under the writer lock, so a policy
+    # flip racing with this read costs at most one legacy-path launch — which
+    # the cutover drain in SessionAdmissionPolicy.sync! already forbids.
+    def policy = SessionAdmissionPolicy.current
+
+    # Returns the admission, or nil when admission is disabled and the caller
+    # should take the legacy launch path.
     def enqueue!(session)
       transaction do |policy|
         next session.session_admission if session.session_admission
+        next nil unless policy.enabled?
+
         ensure_run_active!(session)
         key, limit = pool_configuration(policy, session)
-        pool = SessionAdmissionPool.find_or_create_by!(key: key) { |p| p.limit = limit; p.policy_revision = policy.revision }
+        pool = SessionAdmissionPool.create_or_find_by!(key: key) do |p|
+          p.limit = limit
+          p.policy_revision = policy.revision
+        end
         pool.lock!
         session.update!(state: "queued", queued_at: Time.current)
         SessionAdmission.create!(terminal_session: session, session_admission_pool: pool)
@@ -31,15 +54,23 @@ class SessionAdmissionService
       granted = []
       transaction do |policy|
         next if !policy.enabled? || policy.paused?
-        SessionAdmissionPool.order(:id).each do |pool|
+
+        pools_with_waiting_head.each do |pool|
           pool.lock!
           candidates = pool.session_admissions.unreleased.where(admitted_at: nil, stop_requested_at: nil).order(:id)
           head = candidates.first
           next unless head
-          _, cap = pool_configuration(policy, head.terminal_session)
+
+          key, cap = pool_configuration(policy, head.terminal_session)
+          # A head whose scope no longer maps to this pool means the policy mode
+          # changed under us. Stamping the other mode's cap here would silently
+          # re-scope live capacity, so leave the pool alone for the operator.
+          next unless key == pool.key
+
           pool.update!(limit: cap, policy_revision: policy.revision)
           available = cap - pool.session_admissions.occupied.count
-          candidates.limit([ available, limit - granted.size ].min.clamp(0, limit)).each do |admission|
+          budget = [ available, limit - granted.size ].min.clamp(0, limit)
+          candidates.limit(budget).each do |admission|
             session = admission.terminal_session
             begin
               ensure_run_active!(session)
@@ -70,6 +101,9 @@ class SessionAdmissionService
       session.reload
     end
 
+    # Read-only permit check. Deliberately takes no lock: it is called on every
+    # container phase, and a stop marker that lands a millisecond later is
+    # caught by #begin_operation!, which does lock.
     def permit!(admission_id, token)
       admission = SessionAdmission.find(admission_id)
       raise Stopped, "Session admission is closed" if admission.released_at || admission.stop_requested_at || admission.permit_token != token || admission.admitted_at.nil?
@@ -77,9 +111,13 @@ class SessionAdmissionService
       admission
     end
 
+    # The fencing point for anything that may reach the runtime. Locks the
+    # admission — not the installation-wide policy row — because the operation
+    # ledger is per-admission and this runs on every create/start/exec phase.
     def begin_operation!(admission_id, token, phase)
-      transaction do
-        admission = permit!(admission_id, token)
+      SessionAdmission.transaction do
+        admission = SessionAdmission.lock.find(admission_id)
+        permit!(admission.id, token)
         operation = admission.session_runtime_operations.find_by(phase: phase)
         if operation
           return operation if operation.state == "completed"
@@ -107,6 +145,16 @@ class SessionAdmissionService
     end
 
     private
+
+    # Only pools that actually have someone waiting are worth locking, and only
+    # a bounded page of them per pass — the minutely reconciler picks up the
+    # rest.
+    def pools_with_waiting_head
+      SessionAdmissionPool
+        .where(id: SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil).select(:session_admission_pool_id))
+        .order(:id)
+        .limit(POOL_SCAN_LIMIT)
+    end
 
     def close_queued!(admission)
       admission.update!(released_at: Time.current, launch_state: "closed", wait_reason: nil)
