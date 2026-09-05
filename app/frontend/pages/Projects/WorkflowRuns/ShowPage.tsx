@@ -109,6 +109,12 @@ const WorkflowRunShowPage = () => {
 
   const isActive = ACTIVE_STATES.has(run.state);
   const isTerminal = run.state === 'completed' || run.state === 'failed' || run.state === 'cancelled';
+  // Steering a run — cancel it, approve / retry / skip a step — belongs to
+  // whoever started it, plus company admins (WorkflowRunsPolicy). Everyone else
+  // still watches the whole run; they get told whose it is instead of buttons
+  // that would bounce them straight back with a flash.
+  const canControl = run.controllableByViewer;
+  const notYoursNote = `Started by ${run.userName ?? 'someone else'} — only they or a company admin can control this run.`;
   const now = useElapsedTimer(isActive);
 
   const [tab, setTab] = useState<'sessions' | 'assets'>('sessions');
@@ -313,7 +319,8 @@ const WorkflowRunShowPage = () => {
           stats={stats}
           formatTokenValue={formatTokens}
           actions={
-            !isTerminal && (
+            !isTerminal &&
+            (canControl ? (
               <Button
                 variant="default"
                 leftSection={<IconPlayerStop size={14} />}
@@ -322,7 +329,11 @@ const WorkflowRunShowPage = () => {
               >
                 Cancel run
               </Button>
-            )
+            ) : (
+              <Text size="xs" c="dimmed" maw={280}>
+                {notYoursNote}
+              </Text>
+            ))
           }
           tabs={
             <TabBar
@@ -394,7 +405,8 @@ const WorkflowRunShowPage = () => {
                           ? `"${step.stepName ?? 'This session'}" is waiting for your approval.`
                           : `"${step.stepName ?? 'This session'}" is running interactively.`}
                       </span>
-                      {step.state === 'waiting_input' && (
+                      {!canControl && <span className={classes.actionBarText}>{notYoursNote}</span>}
+                      {canControl && step.state === 'waiting_input' && (
                         <>
                           <Button
                             loading={actionLoading}
@@ -415,7 +427,7 @@ const WorkflowRunShowPage = () => {
                           </Button>
                         </>
                       )}
-                      {canFinishSession(step) && step.state !== 'waiting_input' && (
+                      {canControl && canFinishSession(step) && step.state !== 'waiting_input' && (
                         <Button loading={actionLoading} onClick={() => handleFinishSession(step.terminalSessionId!)}>
                           Finish session
                         </Button>
@@ -427,13 +439,17 @@ const WorkflowRunShowPage = () => {
                 failedSteps.map((step) => (
                   <div className={classes.actionBar} key={step.id}>
                     <span className={classes.actionBarText}>&quot;{step.stepName ?? 'A session'}&quot; failed.</span>
-                    <Button
-                      variant="default"
-                      loading={actionLoading}
-                      onClick={() => post(`${runPath}/retry_step`, { step_run_id: step.id })}
-                    >
-                      Retry session
-                    </Button>
+                    {canControl ? (
+                      <Button
+                        variant="default"
+                        loading={actionLoading}
+                        onClick={() => post(`${runPath}/retry_step`, { step_run_id: step.id })}
+                      >
+                        Retry session
+                      </Button>
+                    ) : (
+                      <span className={classes.actionBarText}>{notYoursNote}</span>
+                    )}
                   </div>
                 ))}
 

@@ -10,6 +10,42 @@ class WorkflowRunTest < ActiveSupport::TestCase
     @workflow = create(:workflow, scope: @project, name: "wrtest-wf-#{SecureRandom.hex(4)}")
   end
 
+  test "controllable_by? is true for the run's owner" do
+    owner = create(:user, :employee, company: @company)
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: owner)
+
+    assert run.controllable_by?(owner)
+  end
+
+  test "controllable_by? is false for another member of the same company" do
+    owner = create(:user, :employee, company: @company)
+    other = create(:user, :employee, company: @company)
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: owner)
+
+    assert_not run.controllable_by?(other)
+  end
+
+  test "controllable_by? lets a company admin override" do
+    owner = create(:user, :employee, company: @company)
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: owner)
+
+    assert run.controllable_by?(@admin)
+  end
+
+  test "controllable_by? ignores an admin membership in a different company" do
+    owner = create(:user, :employee, company: @company)
+    outsider = create(:user, :admin, company: create(:company, name: "wrtest-other-#{SecureRandom.hex(4)}"))
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: owner)
+
+    assert_not run.controllable_by?(outsider)
+  end
+
+  test "controllable_by? is false without a viewer" do
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+
+    assert_not run.controllable_by?(nil)
+  end
+
   test "default state is pending" do
     run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
     assert_equal "pending", run.state

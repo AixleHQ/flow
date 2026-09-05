@@ -18,7 +18,7 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
 
     render inertia: "Projects/WorkflowRuns/ShowPage", props: {
       project: project_props,
-      run: WorkflowRunResource.new(run).to_h,
+      run: WorkflowRunResource.new(run, params: { viewer: current_user }).to_h,
       assets: run.workflow_run_assets.map { |wra| WorkflowRunAssetResource.new(wra).to_h },
       cable_stream: inertia_cable_stream(run)
     }
@@ -90,6 +90,36 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
   end
 
   private
+
+  # The generic "You are not authorized" flash is right for a role denial and
+  # wrong here: nothing about the person's role changed, they are simply not the
+  # one running this. Say so, and land them back on the run instead of wherever
+  # they came from.
+  def user_not_authorized
+    run = accessible_run
+    return super if run.nil? || run.controllable_by?(current_user)
+    # A read-only member is refused for their role, not for whose run this is —
+    # telling them "it isn't yours" would imply that starting it themselves
+    # would have helped.
+    return super if read_only_in?(run.project)
+
+    redirect_to company_project_workflow_run_path(run.project, run),
+      alert: "This run was started by #{run.user&.name.presence || 'someone else'} — only they or a company admin can control it."
+  end
+
+  # Deliberately re-looked-up (not #current_project): this runs from a rescue
+  # handler, where the action's own lookup may never have happened, and a
+  # missing/unreachable project must fall back to the generic flash rather than
+  # raise inside the handler.
+  def accessible_run
+    project = Project.for_user(current_user).find_by(id: params[:project_id])
+    project&.workflow_runs&.find_by(id: params[:id])
+  end
+
+  def read_only_in?(project)
+    membership = current_user.active_memberships.find { |m| m.company_id == project.company_id }
+    membership.nil? || membership.viewer?
+  end
 
   # A DAG run can have more than one step active at once, so the client names
   # which one it means. Falls back to the old single-"current step" behavior
