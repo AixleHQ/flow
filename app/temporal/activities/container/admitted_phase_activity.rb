@@ -89,13 +89,12 @@ module Activities
       end
 
       def cleanup(admission, session, state)
+        unresolved = false
         SessionAdmissionService.transaction do
           admission.reload.lock!
           return state if admission.released_at
           admission.update!(stop_requested_at: admission.stop_requested_at || Time.current)
-          if admission.session_runtime_operations.where(state: %w[in_flight uncertain]).exists?
-            raise SessionAdmissionService::UncertainOperation, "Unresolved runtime operation: operator reconciliation required"
-          end
+          unresolved = admission.session_runtime_operations.where(state: %w[in_flight uncertain]).exists?
         end
 
         runtime = ContainerRuntime.build
@@ -117,6 +116,15 @@ module Activities
         # result the workflow retries on a timer, NOT as an execution failure:
         # the session already ran, and marking it failed here would be a lie.
         return state.merge(cleanup_pending: true) unless absent
+
+        # An unresolved operation blocks the RESERVATION, not the deletion.
+        # Refusing to delete was a deadlock: the workload kept the slot honestly
+        # occupied, and the operation could never resolve because the thing that
+        # would have made absence provable was the deletion being refused. So the
+        # runtime goes above, and only the release waits for an operator — which
+        # is the invariant that actually matters (AD-5: a late create must never
+        # find its slot handed to someone else).
+        return state.merge(cleanup_pending: true, unresolved_operation: true) if unresolved
 
         SessionAdmissionService.release!(admission)
         session.send(:notify_workflow_execution_if_step_session)

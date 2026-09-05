@@ -49,6 +49,50 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_nil admission.reload.released_at
   end
 
+  test "a closed workflow strands its in-flight operation instead of leaving it silent" do
+    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: nil)
+    op = admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    # in_flight reads as ordinary provisioning load, so a slot pinned this way
+    # stayed invisible for hours. Once the workflow is closed nobody can report
+    # that result, and `uncertain` is the number an operator is alerted on.
+    assert_equal "uncertain", op.reload.state
+    assert_equal 1, SessionAdmissionReconciler.snapshot[:uncertain_operations]
+    assert_nil admission.reload.released_at, "the reservation still waits for an operator"
+  end
+
+  test "a wedged admission is examined rather than skipped over" do
+    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    # Output collection is a separate concern and reaches the real strategy;
+    # marking it done keeps this test on the deletion it is about.
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    # The workload outliving its cancelled workflow is the whole failure: the
+    # reconciler used to skip these, so nothing ever deleted it.
+    runtime.expects(:cleanup_session).with("runtime-id")
+    runtime.stubs(:session_absent?).returns(false, true)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert_nil admission.reload.released_at
+  end
+
   test "a run stop marker is fanned out to step runs that missed the cancellation" do
     run = create(:workflow_run, :running)
     step_run = create(:step_run, :running, workflow_run: run)
