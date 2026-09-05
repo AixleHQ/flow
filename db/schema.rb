@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_05_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_06_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -427,21 +427,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_05_120000) do
     t.index ["id"], name: "index_mcp_servers_with_tool_drift", where: "(tool_drift <> '{}'::jsonb)"
     t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true
     t.index ["scope_type", "scope_id"], name: "index_mcp_servers_on_scope"
-  end
-
-  create_table "namespace_resource_quotas", force: :cascade do |t|
-    t.string "cpu_limits"
-    t.string "cpu_requests"
-    t.datetime "created_at", null: false
-    t.text "description"
-    t.integer "max_pods"
-    t.string "memory_limits"
-    t.string "memory_requests"
-    t.bigint "scope_id", null: false
-    t.string "scope_type", null: false
-    t.datetime "updated_at", null: false
-    t.index ["scope_type", "scope_id"], name: "index_namespace_resource_quotas_on_scope"
-    t.index ["scope_type", "scope_id"], name: "index_namespace_resource_quotas_on_scope_type_and_scope_id", unique: true
   end
 
   create_table "oauth_clients", force: :cascade do |t|
