@@ -428,9 +428,13 @@ module Agents
     # concurrent live session's cleanup can't race the read-merge-write.
     #
     # @param credential [AgentCredential]
-    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil }
+    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil,
+    #   permanent: Boolean } — `permanent` tells the refresh sweep whether the failure
+    #   makes the credential unusable (flip it to `error`, forcing a re-login) or is a
+    #   transient/partial one. Optional: an adapter that omits it falls back to the
+    #   sweep's invalid_grant check.
     def refresh!(_credential)
-      { status: :not_needed, detail: nil }
+      { status: :not_needed, detail: nil, permanent: false }
     end
 
     # Persist a freshly-refreshed credential blob under a row lock, guarding
