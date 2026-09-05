@@ -90,12 +90,13 @@ module ContainerStrategies
 
       session = TerminalSession.find(input[:session_id])
       adapter = AgentCredentialsService.for(input[:agent_type]).adapter
+      credential = input[:credential]
 
-      begin
-        SessionContextService.assemble_session_context(container, session, credential: input[:credential])
-      ensure
-        run_credential_preflight!(adapter, container, cid)
-      end
+      raise_unresolved_credential!(session) if credential.nil? && AgentCredentialsService.supported?(input[:agent_type])
+
+      refresh_expiring_credential!(credential, session)
+      SessionContextService.assemble_session_context(container, session, credential: credential)
+      run_credential_preflight!(adapter, container, cid)
       {}
     end
 
@@ -153,6 +154,67 @@ module ContainerStrategies
     end
 
     private
+
+    def raise_unresolved_credential!(session)
+      step_run = session.step_run
+      details = {
+        session_id: session.id,
+        step_run_id: step_run&.id,
+        workflow_run_id: step_run&.workflow_run_id,
+        session_type: session.session_type,
+        mode: session.mode,
+        session_agent_type: session.agent_type,
+        input_agent_type: input[:agent_type],
+        user_id: session.user_id,
+        session_company_id: session.company_id,
+        project_id: session.project_id,
+        project_company_id: session.project&.company_id,
+        effective_company_id: SessionCompany.company_id_for(session),
+        credential_candidates: AgentCredential.where(user_id: session.user_id).pluck(:id, :company_id, :agent_type)
+      }
+
+      raise ProvisioningError.new("credential_not_resolved", details)
+    end
+
+    # Give the container a token that outlives the session it is about to run. The
+    # 5-minute sweep only refreshes a token in the last stretch of its life, so a
+    # session starting just before that window would otherwise carry a token with
+    # minutes left and die halfway through on an opaque 401.
+    #
+    # A refresh that fails without condemning the credential is not fatal here: the
+    # token in hand is still valid, and the session is better off starting with it
+    # than not starting at all. A rejected BASE login is fatal — nothing in the
+    # container can recover from it, so say so now with the message that names the fix.
+    def refresh_expiring_credential!(credential, session)
+      return if credential.nil?
+
+      result = credential.refresh_if_expiring!(excluding_session_id: session.id)
+
+      # Deferring to the container that holds these tokens means this session starts
+      # on whatever is stored, which may be little. Say so: the alternative is finding
+      # out from a 401 halfway through a session and having nothing to correlate it to.
+      if result == :held
+        left = credential.expires_at ? ((credential.expires_at - Time.current) / 60).round : nil
+        Rails.logger.warn("[AgentSession] Starting session #{session.id} on credential #{credential.id} " \
+                          "with #{left || '?'}m of token life: another live session holds these tokens, " \
+                          "so refreshing now would invalidate the copy it is running on")
+        return
+      end
+
+      return unless result.is_a?(Hash)
+
+      case result[:status]
+      when :refreshed
+        credential.clear_refresh_error! if credential.refresh_error.present?
+      when :error
+        permanent = AgentCredential.permanent_failure?(result)
+        credential.mark_refresh_error!(result[:detail], permanent: permanent)
+        raise AgentCredential::PreflightError, credential if permanent
+
+        Rails.logger.warn("[AgentSession] Pre-launch token refresh failed for credential " \
+                          "#{credential.id}: #{result[:detail]} — starting on the token in hand")
+      end
+    end
 
     # Adapter hook for launch-time credential verification (e.g. Codex's
     # auth.json stat before tmux launch — see BaseAdapter#credential_preflight).

@@ -107,7 +107,79 @@ module ContainerStrategies
       strategy.before_exec(container_id: "container_ref")
     end
 
-    test "before_exec skips credential when nil" do
+    # A session runs about as long as the token lives, so one handed a token with
+    # minutes left dies halfway through on an opaque 401. The sweep only tops up in
+    # the last stretch of a token's life — the launch has to check for itself.
+    test "before_exec tops up a token that would expire mid-session" do
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-tok", "refreshToken" => "old-ref",
+                             "expiresAt" => (20.minutes.from_now.to_f * 1000).to_i }
+      })
+      stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 200,
+                   body: { access_token: "fresh-tok", refresh_token: "fresh-ref", expires_in: 3_600 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      SessionContextService.stubs(:assemble_session_context)
+
+      run_before_exec(build_strategy)
+
+      assert_equal "fresh-tok", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+    end
+
+    # Nothing inside the container can recover from a rejected base login, so the
+    # launch stops with the message that names the fix instead of starting a session
+    # doomed to 401 on its first call.
+    test "before_exec refuses to launch when the base login is permanently rejected" do
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-tok", "refreshToken" => "dead-ref",
+                             "expiresAt" => (20.minutes.from_now.to_f * 1000).to_i }
+      })
+      stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 400,
+                   body: { error: "invalid_grant", error_description: "Refresh token expired" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      SessionContextService.expects(:assemble_session_context).never
+
+      error = assert_raises(AgentCredential::PreflightError) { run_before_exec(build_strategy) }
+
+      assert_includes error.message, "expired"
+      assert_equal "error", @credential.reload.status
+    end
+
+    # The token in hand is still valid for a while — a token endpoint having a bad
+    # minute is no reason to refuse the session.
+    test "before_exec starts the session anyway when the top-up fails transiently" do
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-tok", "refreshToken" => "old-ref",
+                             "expiresAt" => (20.minutes.from_now.to_f * 1000).to_i }
+      })
+      stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL).to_return(status: 500, body: "boom")
+      SessionContextService.expects(:assemble_session_context).once
+
+      run_before_exec(build_strategy)
+
+      assert_equal "active", @credential.reload.status
+    end
+
+    # Deferring to the container that holds the tokens is the right call, but it means
+    # starting on whatever is stored — which the logs have to say, or the resulting
+    # mid-session 401 has nothing to correlate it to.
+    test "before_exec says so when it starts on a token another live session holds" do
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-tok", "refreshToken" => "old-ref",
+                             "expiresAt" => (20.minutes.from_now.to_f * 1000).to_i }
+      })
+      create(:terminal_session, user: @user, company_id: @credential.company_id,
+                                agent_type: "claude_code", state: "running")
+      SessionContextService.stubs(:assemble_session_context)
+      Rails.logger.expects(:warn).with(regexp_matches(/another live session holds these tokens/)).at_least_once
+
+      run_before_exec(build_strategy)
+
+      assert_equal "old-tok", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+    end
+
+    test "before_exec rejects a nil credential before assembling context" do
       strategy = AgentSessionStrategy.new(
         user_id: @user.id,
         agent_type: "claude_code",
@@ -123,11 +195,64 @@ module ContainerStrategies
       strategy.stubs(:runtime).returns(runtime_mock)
       runtime_mock.expects(:container_identifier).with(container_mock).returns("abc123")
 
-      SessionContextService.expects(:assemble_session_context).with(
-        container_mock, @session, credential: nil
-      )
+      SessionContextService.expects(:assemble_session_context).never
 
-      strategy.before_exec(container_id: "container_ref")
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "credential_not_resolved", error.code
+      assert_equal @session.id, error.details[:session_id]
+      assert_equal @session.session_type, error.details[:session_type]
+      assert_equal @session.mode, error.details[:mode]
+      assert_equal @session.agent_type, error.details[:session_agent_type]
+      assert_equal "claude_code", error.details[:input_agent_type]
+      assert_equal @user.id, error.details[:user_id]
+      assert_equal @session.company_id, error.details[:session_company_id]
+      assert_equal @session.project_id, error.details[:project_id]
+      assert_nil error.details[:project_company_id]
+      assert_equal @company.id, error.details[:effective_company_id]
+      assert_includes error.details[:credential_candidates], [ @credential.id, @company.id, "claude_code" ]
+    end
+
+    test "unresolved credential diagnostic contains no credential secrets" do
+      secret = "top-secret-token"
+      @credential.update!(config_data: { "tokens" => { "access_token" => secret } })
+      strategy = AgentSessionStrategy.new(
+        user_id: @user.id,
+        agent_type: "claude_code",
+        session_id: @session.id,
+        route_token: @session.route_token,
+        credential: nil
+      )
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+      strategy.stubs(:runtime).returns(stub(container_identifier: "abc123"))
+      SessionContextService.expects(:assemble_session_context).never
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      diagnostic = error.details.to_json
+      refute_includes diagnostic, secret
+      refute_includes diagnostic, "access_token"
+      refute_includes diagnostic, "config_data"
+    end
+
+    test "before_exec preserves context assembly errors without running preflight" do
+      strategy = build_strategy
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+      strategy.stubs(:runtime).returns(stub(container_identifier: "abc123"))
+      assembly_error = RuntimeError.new("credential write failed")
+      SessionContextService.expects(:assemble_session_context).raises(assembly_error)
+
+      error = assert_raises(RuntimeError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_same assembly_error, error
     end
 
     # task #1327 (owner decision, board comment 8142): the preflight is a pure
@@ -677,6 +802,19 @@ module ContainerStrategies
         route_token: @session.route_token,
         credential: cred
       )
+    end
+
+    # Drive before_exec with the container plumbing stubbed out — these tests are
+    # about what the launch does with the credential, not about the runtime.
+    def run_before_exec(strategy)
+      container_mock = mock("container")
+      strategy.stubs(:resolve_container).returns(container_mock)
+      runtime_mock = mock("runtime")
+      strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.stubs(:container_identifier).with(container_mock).returns("abc123")
+      strategy.stubs(:run_credential_preflight!)
+
+      strategy.before_exec(container_id: "container_ref")
     end
 
     def build_codex_preflight_strategy(auth_content)

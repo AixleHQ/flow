@@ -16,7 +16,7 @@ class SessionService
       # this user, instead of starting a session that fails silently at provisioning.
       preflight_oauth!(user, params[:mcp_server_ids])
       preflight_cloud!(user, company || project&.company)
-      preflight_agent_credential!(user, company || project&.company, agent_type)
+      preflight_agent_credential!(user, company || project&.company, agent_type, session_type: session_type)
       preflight_url_safety!(params[:mcp_server_ids])
 
       # auth_kind ("design") is carried in metadata so AgentAuthStrategy can run the
@@ -282,11 +282,15 @@ class SessionService
       raise CloudAuth::PreflightError, broken if broken.any?
     end
 
-    # Re-validate selected custom MCP server URLs right before launch (F34). The
-    # model validates at create/update, but DNS (rebinding) or the stored value
-    # may have changed since — a host that now resolves to a private/internal IP
-    # must not be dialed. Cheap: url_safety uses local resolvers only.
-    def preflight_agent_credential!(user, company, agent_type)
+    # Block a launch whose agent credential the refresh sweep has marked broken, so
+    # the user gets "sign in again" instead of a container that fails on an expired
+    # token.
+    #
+    # An auth_setup session is exempt: it exists to REPLACE the broken credential,
+    # so gating it on that credential locks the user out of the only flow that can
+    # clear the error.
+    def preflight_agent_credential!(user, company, agent_type, session_type: nil)
+      return if session_type == "auth_setup"
       return unless agent_type.present? && company.present?
 
       credential = AgentCredential.find_by(user_id: user.id, company_id: company.id, agent_type: agent_type)
@@ -295,6 +299,10 @@ class SessionService
       raise AgentCredential::PreflightError, credential
     end
 
+    # Re-validate selected custom MCP server URLs right before launch (F34). The
+    # model validates at create/update, but DNS (rebinding) or the stored value
+    # may have changed since — a host that now resolves to a private/internal IP
+    # must not be dialed. Cheap: url_safety uses local resolvers only.
     def preflight_url_safety!(mcp_server_ids)
       return if mcp_server_ids.blank?
 
