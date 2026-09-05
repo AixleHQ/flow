@@ -3,6 +3,8 @@
 require "test_helper"
 
 class WorkflowRunTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     @company = create(:company, name: "wrtest-co-#{SecureRandom.hex(4)}")
     @admin = create(:user, :admin, company: @company)
@@ -44,6 +46,22 @@ class WorkflowRunTest < ActiveSupport::TestCase
     run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
 
     assert_not run.controllable_by?(nil)
+  end
+
+  test "failing a run queues the Slack failure notice, whoever failed it" do
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    run.start!
+
+    assert_enqueued_with(job: Slack::NotifyRunFailureJob, args: [ run.id ]) { run.fail! }
+    assert_equal "failed", run.state
+    assert_not_nil run.completed_at
+  end
+
+  test "completing a run queues nothing" do
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    run.start!
+
+    assert_no_enqueued_jobs(only: Slack::NotifyRunFailureJob) { run.complete! }
   end
 
   test "default state is pending" do

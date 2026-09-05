@@ -5,6 +5,7 @@ export interface Trigger {
   name?: string | null;
   trigger_mode?: string;
   cooldown_seconds?: number;
+  notify_on_failure?: boolean;
   enabled?: boolean;
   column_name?: string;
   board_column_id?: number;

@@ -1021,6 +1021,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_06_120000) do
     t.string "event_type", null: false
     t.jsonb "filter_predicate", default: {}, null: false
     t.string "name"
+    t.boolean "notify_on_failure", default: true, null: false
     t.bigint "project_id", null: false
     t.jsonb "schedule_config", default: {}, null: false
     t.bigint "subject_column_id"

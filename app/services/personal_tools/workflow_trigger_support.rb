@@ -15,7 +15,7 @@ module PersonalTools
     VERIFICATION_STRATEGIES = %w[none slack_v0 hmac_sha256 shared_token].freeze
 
     # Mutable fields, mirroring the controller's permit lists.
-    BINDING_FIELDS = %i[name trigger_mode enabled cooldown_seconds
+    BINDING_FIELDS = %i[name trigger_mode enabled cooldown_seconds notify_on_failure
                         subject_policy subject_column_id subject_title_template].freeze
     COLUMN_FIELDS = %i[trigger_mode cooldown_seconds].freeze
     SCHEDULE_KEYS = %w[cron timezone].freeze
@@ -88,6 +88,7 @@ module PersonalTools
         subject_title_template: trigger.subject_title_template,
         schedule_config: trigger.schedule_config,
         cooldown_seconds: trigger.cooldown_seconds,
+        notify_on_failure: trigger.notify_on_failure,
         enabled: trigger.enabled
       }
     end
