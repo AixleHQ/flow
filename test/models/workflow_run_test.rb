@@ -107,4 +107,31 @@ class WorkflowRunTest < ActiveSupport::TestCase
     assert_equal "quota_exceeded", run.failure_reason
     assert_nil run.failed_agent_credential_id
   end
+
+  # A board card reads the run state, so a run whose step is waiting for a
+  # session slot would claim work is happening while nothing is.
+  test "waiting_for_slot_ids finds a run whose only step is waiting" do
+    run = create(:workflow_run, :running)
+    step_run = create(:step_run, :running, workflow_run: run)
+    step_run.update!(terminal_session: create(:terminal_session, user: run.user, project: run.project,
+                                              session_type: "workflow_step", state: "queued"))
+
+    assert_includes WorkflowRun.waiting_for_slot_ids([ run.id ]), run.id
+  end
+
+  test "waiting_for_slot_ids leaves a run that is still executing alone" do
+    run = create(:workflow_run, :running)
+    working = create(:step_run, :running, workflow_run: run)
+    working.update!(terminal_session: create(:terminal_session, user: run.user, project: run.project,
+                                             session_type: "workflow_step", state: "ready"))
+    waiting = create(:step_run, workflow_run: run)
+    waiting.update!(terminal_session: create(:terminal_session, user: run.user, project: run.project,
+                                             session_type: "workflow_step", state: "queued"))
+
+    assert_empty WorkflowRun.waiting_for_slot_ids([ run.id ])
+  end
+
+  test "waiting_for_slot_ids answers for a whole page in one query" do
+    assert_empty WorkflowRun.waiting_for_slot_ids([])
+  end
 end

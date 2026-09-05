@@ -18,6 +18,14 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
 
   private
 
+  # Which runs are waiting on a slot is one query for the whole page; asking it
+  # per card would put a join behind every ticket on the board.
+  def serialize_board_tasks(tasks)
+    tasks = tasks.to_a
+    waiting = WorkflowRun.waiting_for_slot_ids(tasks.flat_map { |t| t.workflow_runs.map(&:id) })
+    tasks.map { |task| BoardTaskResource.new(task, params: { waiting_runs: waiting }).to_h }
+  end
+
   def render_board_page(board)
     task = params[:task].present? ? find_task(board) : nil
 
@@ -41,7 +49,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
                (SELECT COUNT(*) FROM task_assets WHERE board_task_id = board_tasks.id) AS assets_count
              SQL
              .includes(:assignee, :workflow_runs, :gates)
-             .in_board_order.map { |t| BoardTaskResource.new(t).to_h }
+             .in_board_order.then { |tasks| serialize_board_tasks(tasks) }
       },
       tasks_page_size: BoardTask::PAGE_SIZE,
       # Filter options and the parent-epic picker used to be derived from the task

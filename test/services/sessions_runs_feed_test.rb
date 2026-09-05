@@ -103,6 +103,31 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
       "a run is 'running' while its step waits, so state alone cannot answer this"
   end
 
+  test "a run row reads Queued while its step waits for a slot" do
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
+    step_run = create(:step_run, :running, workflow_run: run)
+    step_run.update!(terminal_session: create(:terminal_session, project: @project, user: @user,
+                                              session_type: "workflow_step", state: "queued"))
+
+    payload = RunListEntryResource.new(run.reload).to_h
+
+    assert_equal "queued", payload["state"], "the row must not claim work is happening while it waits"
+  end
+
+  test "a run still working is not reported as queued because another step waits" do
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user)
+    working = create(:step_run, :running, workflow_run: run)
+    working.update!(terminal_session: create(:terminal_session, project: @project, user: @user,
+                                             session_type: "workflow_step", state: "ready"))
+    waiting = create(:step_run, workflow_run: run)
+    waiting.update!(terminal_session: create(:terminal_session, project: @project, user: @user,
+                                             session_type: "workflow_step", state: "queued"))
+
+    payload = RunListEntryResource.new(run.reload).to_h
+
+    assert_equal "running", payload["state"], "one step waiting does not park a run that is executing"
+  end
+
   test "pending no longer doubles as queued" do
     standalone(state: "queued")
     not_started = standalone(state: "not_started")

@@ -1,6 +1,26 @@
 # frozen_string_literal: true
 
 class WorkflowRun < ApplicationRecord
+  # A run whose step is waiting for a session slot is itself `running`: queueing
+  # is a property of the child. A board card that reads the run state therefore
+  # claims work is happening while nothing is — so the runs that are actually
+  # waiting are resolved once per page and reported as `queued`.
+  #
+  # "Waiting" means a queued step session and nothing else in flight: a run with
+  # one step running and another queued is still working, and must not read as
+  # parked.
+  def self.waiting_for_slot_ids(run_ids)
+    return Set.new if run_ids.blank?
+
+    sessions = TerminalSession.joins(:step_run)
+                              .where(step_runs: { workflow_run_id: run_ids })
+                              .pluck(Arel.sql("step_runs.workflow_run_id"), :state)
+    sessions.group_by(&:first).filter_map do |run_id, rows|
+      states = rows.map(&:last)
+      run_id if states.include?("queued") && (states & %w[running ready finishing]).empty?
+    end.to_set
+  end
+
   include WorkflowRunStateMachine
   extend Enumerize
 

@@ -65,7 +65,9 @@ module InternalTools
       total = scope.count
       limit = requested_limit
       offset = requested_offset
-      rows = page(scope, limit, offset).map { |task| row(task) }
+      page_tasks = page(scope, limit, offset).to_a
+      @waiting_runs = WorkflowRun.waiting_for_slot_ids(page_tasks.flat_map { |t| t.workflow_runs.map(&:id) })
+      rows = page_tasks.map { |task| row(task) }
 
       success({ tasks: rows, total: total, limit: limit, offset: offset,
                 has_more: offset + rows.size < total }.to_json)
@@ -98,7 +100,11 @@ module InternalTools
     # tokens. Dropped after serialization rather than left out of the SELECT
     # because the resource reads the attribute.
     def row(task)
-      BoardTaskResource.new(task, params: { snake_keys: true }).to_h.except("description")
+      BoardTaskResource.new(task, params: { snake_keys: true, waiting_runs: waiting_runs }).to_h.except("description")
+    end
+
+    def waiting_runs
+      @waiting_runs || Set.new
     end
 
     def requested_limit

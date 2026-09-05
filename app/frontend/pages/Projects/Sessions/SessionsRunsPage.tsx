@@ -93,7 +93,11 @@ function entryKey(entry: ListEntry): string {
 
 function stateLabel(entry: ListEntry): string {
   if (entry.kind === 'run') {
-    return { completed: 'Completed', running: 'Running', failed: 'Failed', cancelled: 'Cancelled' }[entry.state] ?? '';
+    return (
+      { completed: 'Completed', running: 'Running', failed: 'Failed', cancelled: 'Cancelled', queued: 'Queued' }[
+        entry.state
+      ] ?? ''
+    );
   }
   return (
     {
