@@ -42,6 +42,31 @@ module Api
             assert_response :created
           end
 
+          # The builder no longer sends one: soft-deleted steps stay in the
+          # unique (workflow, position) index but never reach the list it counts
+          # from, so any number it derived collided with a deleted step.
+          test "create appends the step when the client sends no position" do
+            post :create, params: {
+              project_id: @project.id, workflow_id: @workflow.id,
+              step: { name: "appended", instructions: "Run" }
+            }
+
+            assert_response :created
+            assert_equal 2, response.parsed_body["position"]
+          end
+
+          # A caller that does send one and gets it wrong deserves an answer, not
+          # the 500 this used to be — create was the only action not rescuing.
+          test "create reports a taken position instead of failing the request" do
+            post :create, params: {
+              project_id: @project.id, workflow_id: @workflow.id,
+              step: { name: "clash", instructions: "Run", position: @step.position }
+            }
+
+            assert_response :unprocessable_entity
+            assert_match(/position/i, response.parsed_body["errors"].to_sentence)
+          end
+
           test "update returns step json" do
             patch :update, params: {
               project_id: @project.id,

@@ -132,6 +132,12 @@ describe('Projects/Workflows/BuilderPage', () => {
       '/api/v1/projects/7/workflows/3/steps',
       expect.objectContaining({ method: 'POST' }),
     );
+
+    // No position: soft-deleted steps keep theirs and never reach this list, so
+    // anything derived from it collides with a step the user already deleted.
+    const postCall = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps');
+    const body: unknown = JSON.parse(String((postCall?.[1] as RequestInit | undefined)?.body ?? '{}'));
+    expect(body).toEqual({ step: { name: 'My session' } });
   });
 
   it('renders a read-only company workflow without editing affordances', () => {

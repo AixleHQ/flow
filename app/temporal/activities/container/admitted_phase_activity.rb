@@ -94,7 +94,7 @@ module Activities
           admission.reload.lock!
           return state if admission.released_at
           admission.update!(stop_requested_at: admission.stop_requested_at || Time.current)
-          unresolved = admission.session_runtime_operations.where(state: %w[in_flight uncertain]).exists?
+          unresolved = admission.session_runtime_operations.pinning.exists?
         end
 
         runtime = ContainerRuntime.build
@@ -124,6 +124,10 @@ module Activities
         # runtime goes above, and only the release waits for an operator — which
         # is the invariant that actually matters (AD-5: a late create must never
         # find its slot handed to someone else).
+        #
+        # Only a create or a start can produce that late workload. An `exec` we
+        # cannot account for is recorded and reported, but by here the container
+        # it would have run in is provably gone, so it costs nobody a slot.
         return state.merge(cleanup_pending: true, unresolved_operation: true) if unresolved
 
         SessionAdmissionService.release!(admission)

@@ -40,13 +40,18 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     assert_equal "retryable", @admission.session_runtime_operations.find_by(phase: "exec").state
   end
 
-  test "a failure that may have reached the runtime holds the slot for an operator" do
+  test "a failure that may have reached the runtime is recorded as uncertain" do
     stub_exec_raising(Errno::ECONNRESET.new("connection reset by peer"))
 
     assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
 
     assert_equal "uncertain", @admission.session_runtime_operations.find_by(phase: "exec").state
-    assert_raises(SessionAdmissionService::UncertainOperation) { SessionAdmissionService.release!(@admission) }
+    # Recorded, but not a lien on the pool: an exec can only act inside a
+    # container, and release is reached only once that container is provably
+    # gone. What AD-5 retains a slot for is an unprovable CREATE — the sibling
+    # test below.
+    SessionAdmissionService.release!(@admission)
+    assert @admission.reload.released_at
   end
 
   test "an absent runtime finalizes session and releases its slot" do
@@ -62,7 +67,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     @session.stubs(:strategy).returns(strategy)
     SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
     @admission.stubs(:terminal_session).returns(@session)
-    @admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
+    @admission.session_runtime_operations.create!(phase: "create_container", state: "in_flight")
     strategy.stubs(:before_cleanup).returns({})
     # Refusing to delete was a deadlock: the workload kept the slot honestly
     # occupied, and the operation could never resolve because the deletion that
@@ -74,6 +79,25 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
 
     assert result[:unresolved_operation], "the reservation must still wait for an operator"
     assert_nil @admission.reload.released_at
+  end
+
+  # Same deletion, same unprovable operation — but an exec cannot bring a
+  # workload back, so once the container is confirmed gone the slot goes back to
+  # the pool instead of waiting for a human who has nothing left to check.
+  test "an unresolved exec is deleted and released once the container is gone" do
+    strategy = mock("strategy")
+    @session.stubs(:strategy).returns(strategy)
+    SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
+    @admission.stubs(:terminal_session).returns(@session)
+    @admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
+    strategy.stubs(:before_cleanup).returns({})
+    @runtime.expects(:cleanup_session).with("runtime-id")
+    @runtime.stubs(:session_absent?).returns(false, true)
+
+    result = cleanup
+
+    assert_nil result[:unresolved_operation]
+    assert @admission.reload.released_at
   end
 
   test "an unresolved external operation never releases the slot, even once the runtime is gone" do

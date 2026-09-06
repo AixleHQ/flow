@@ -67,7 +67,7 @@ flowchart LR
 
 - **Binds:** runtime create/start/exec, cancellation, cleanup and reconciliation.
 - **Prevents:** a late Pod appearing after its slot was reassigned.
-- **Rule:** persist a runtime-operation envelope before side effects. Cover Pod/Docker creation and startup as well as session routing resources and readiness repairs. Verify stable identity and ownership when adopting resources; use UID preconditions on deletion. Stop markers prevent new attempts but cannot revoke an already sent RPC. Unresolved operations block release until completion or quiescence is established. A DB token is not Kubernetes fencing. GET 404, timeout and a closed Temporal execution do not prove that a late create is impossible. Unresolvable uncertainty requires operator evidence and retains the slot.
+- **Rule:** persist a runtime-operation envelope before side effects. Cover Pod/Docker creation and startup as well as session routing resources and readiness repairs. Verify stable identity and ownership when adopting resources; use UID preconditions on deletion. Stop markers prevent new attempts but cannot revoke an already sent RPC. Unresolved operations that could still materialize a workload — creation and startup — block release until completion or quiescence is established. An unresolved operation that can only act inside a container whose absence is already confirmed (exec) is recorded and reported, but retains no slot: it has nothing left to bring into existence, so holding capacity for it only leaks the slot. A DB token is not Kubernetes fencing. GET 404, timeout and a closed Temporal execution do not prove that a late create is impossible. Unresolvable uncertainty requires operator evidence and retains the slot.
 
 ### AD-6: Confirmed release
 

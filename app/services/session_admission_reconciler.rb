@@ -53,8 +53,15 @@ class SessionAdmissionReconciler
   # in_flight and uncertain are counted apart on purpose. An in-flight operation
   # is a create that is simply still running — every provisioning session has
   # one, so folding it into the alerting number makes normal load look like a
-  # fault. Only `uncertain` means capacity is pinned until an operator resolves
-  # it.
+  # fault.
+  #
+  # `pinned_reservations` is the one to alert on, and it is narrower than
+  # `uncertain_operations`: only an unresolved create or start can still put a
+  # workload on the cluster, so only those hold a slot
+  # (SessionRuntimeOperation::MATERIALIZING_PHASES). An unaccountable `exec` is
+  # still worth seeing — it means a session died mid-launch — but it costs no
+  # capacity, and counting it as pinned sent operators after slots that were
+  # never taken.
   def self.snapshot
     now = Time.current
     queued = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil)
@@ -71,6 +78,7 @@ class SessionAdmissionReconciler
       oldest_queue_wait_seconds: age(queued.minimum(:created_at), now),
       operations_in_flight: SessionRuntimeOperation.where(state: "in_flight").count,
       uncertain_operations: SessionRuntimeOperation.where(state: "uncertain").count,
+      pinned_reservations: SessionRuntimeOperation.pinning.count,
       cleanup_lag_seconds: age(lagging.minimum(:updated_at), now)
     }
   end

@@ -56,11 +56,21 @@ module Tools
       MCP::Server.new(
         name: PersonalMCP::NAME,
         instructions: PersonalMCPGuides::INSTRUCTIONS,
-        tools: definitions.map { |defn| define_tool(defn) },
+        tools: definitions.filter_map { |defn| publishable(defn) },
         prompts: PROMPTS.map { |spec| define_prompt(spec, definitions) },
         resources: [ reference_resource ],
         server_context: { user: user }
       )
+    end
+
+    # A definition the gem refuses would otherwise raise out of tools/list and
+    # 500 every request this user's client makes, rather than costing them the
+    # one tool. See Tools::MCPRequestHandler#publishable.
+    def publishable(defn)
+      define_tool(defn)
+    rescue StandardError => e
+      Rails.logger.error("[PersonalMCP] #{defn.name} could not be published: #{e.class}: #{e.message}")
+      nil
     end
 
     def define_tool(defn)

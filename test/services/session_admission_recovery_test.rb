@@ -54,7 +54,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     admission = admit(session)
     session.update!(state: "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: nil)
-    op = admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
+    op = admission.session_runtime_operations.create!(phase: "create_container", state: "in_flight")
 
     runtime = ContainerRuntime::DockerRuntime.new
     ContainerRuntime.stubs(:build).returns(runtime)
@@ -78,7 +78,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     # marking it done keeps this test on the deletion it is about.
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
                       phase_state: { "cleanup_collected" => true })
-    admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
+    admission.session_runtime_operations.create!(phase: "create_container", state: "in_flight")
 
     runtime = ContainerRuntime::DockerRuntime.new
     ContainerRuntime.stubs(:build).returns(runtime)
@@ -91,6 +91,35 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     SessionAdmissionReconciler.run
 
     assert_nil admission.reload.released_at
+  end
+
+  # AD-5 holds a slot so a late Pod never finds its seat handed to someone else,
+  # and only a create or a start can produce that Pod. An `exec` runs inside a
+  # container this very pass has just proved absent, so retaining the reservation
+  # for one pinned capacity nothing could reclaim without an operator — which is
+  # how sessions that timed out mid-exec ate the installation's slots one by one.
+  test "an unaccountable exec stops pinning the slot once the container is gone" do
+    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    op = admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    runtime.expects(:cleanup_session).with("runtime-id")
+    runtime.stubs(:session_absent?).returns(false, true)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert admission.reload.released_at, "a container that is gone cannot host a late exec"
+    # Still recorded honestly: the operation is a diagnostic, not a lien.
+    assert_equal "uncertain", op.reload.state
+    stats = SessionAdmissionReconciler.snapshot
+    assert_equal 1, stats[:uncertain_operations]
+    assert_equal 0, stats[:pinned_reservations]
   end
 
   test "a run stop marker is fanned out to step runs that missed the cancellation" do
@@ -182,13 +211,18 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_equal 1, stats[:occupied]
     assert_equal 1, stats[:pools_with_queue]
     assert_equal 1, stats[:uncertain_operations]
+    assert_equal 1, stats[:pinned_reservations], "an unaccountable create is what an operator is paged for"
     assert_equal 0, stats[:operations_in_flight], "a provisioning create must not read as pinned capacity"
     assert_operator stats[:oldest_queue_wait_seconds], :>=, 0
 
     admission.session_runtime_operations.create!(phase: "exec", state: "in_flight")
 
-    assert_equal 1, SessionAdmissionReconciler.snapshot[:operations_in_flight]
-    assert_equal 1, SessionAdmissionReconciler.snapshot[:uncertain_operations]
+    stats = SessionAdmissionReconciler.snapshot
+    assert_equal 1, stats[:operations_in_flight]
+    assert_equal 1, stats[:uncertain_operations]
+    # An exec nobody can account for is worth reading — a session died
+    # mid-launch — but it costs no capacity, so it must not inflate the alarm.
+    assert_equal 1, stats[:pinned_reservations]
   end
 
   private
