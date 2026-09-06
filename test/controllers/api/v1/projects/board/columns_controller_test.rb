@@ -61,6 +61,35 @@ module Api
             }
 
             assert_response :success
+            assert_equal [ @col2.id, @col1.id ], @board.board_columns.reload.order(:position).map(&:id)
+          end
+
+          # The board settings dialog omits any column that appeared while it was
+          # open. Renumbering only the named ones then collided with the ones it
+          # did not name, on the (board_id, position) unique index.
+          test "reorder with a partial list still lands on one position per column" do
+            col3 = create(:board_column, board: @board, name: "C")
+
+            patch :reorder, params: { project_id: @project.id, column_ids: [ col3.id, @col1.id ] }
+
+            assert_response :success
+            ordered = @board.board_columns.reload.order(:position)
+            assert_equal [ col3.id, @col1.id, @col2.id ], ordered.map(&:id)
+            assert_equal [ 1, 2, 3 ], ordered.map(&:position)
+          end
+
+          # A column someone else deleted mid-drag, or a repeated id, is a stale
+          # payload — not a reason to leave the board's numbering half-written.
+          test "reorder ignores unknown and repeated ids" do
+            patch :reorder, params: {
+              project_id: @project.id,
+              column_ids: [ @col2.id, @col2.id, 999_999, @col1.id ]
+            }
+
+            assert_response :success
+            ordered = @board.board_columns.reload.order(:position)
+            assert_equal [ @col2.id, @col1.id ], ordered.map(&:id)
+            assert_equal [ 1, 2 ], ordered.map(&:position)
           end
         end
       end

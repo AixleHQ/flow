@@ -19,6 +19,8 @@ module Api
             step = current_workflow.steps.new(step_params)
             step.save!
             render json: StepResource.new(step).to_h, status: :created
+          rescue ActiveRecord::RecordInvalid => e
+            render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
           end
 
           def update

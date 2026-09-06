@@ -41,15 +41,45 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test "uncertain runtime operations cannot replay or release their slot" do
+  # Replaying a phase nobody can account for would risk doing its side effect
+  # twice — for exec, launching the agent twice — so the phase refuses whatever
+  # it costs the session. This is separate from what the operation costs the
+  # POOL, which the two tests below draw the line for.
+  test "an uncertain runtime operation is never replayed" do
     admission = enqueue
     SessionAdmissionService.drain!
     token = admission.reload.permit_token
-    operation = SessionAdmissionService.begin_operation!(admission.id, token, "exec")
-    operation.update!(state: "uncertain")
-    assert_raises(SessionAdmissionService::UncertainOperation) { SessionAdmissionService.begin_operation!(admission.id, token, "exec") }
+    SessionAdmissionService.begin_operation!(admission.id, token, "exec").update!(state: "uncertain")
+
+    assert_raises(SessionAdmissionService::UncertainOperation) do
+      SessionAdmissionService.begin_operation!(admission.id, token, "exec")
+    end
+  end
+
+  # AD-5 keeps a slot so a late Pod never finds its seat handed to someone else,
+  # and only a create or a start can produce that Pod.
+  test "an uncertain create keeps the reservation until an operator resolves it" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    SessionAdmissionService.begin_operation!(admission.id, token, "create_container").update!(state: "uncertain")
+
     assert_raises(SessionAdmissionService::UncertainOperation) { SessionAdmissionService.release!(admission) }
     assert_nil admission.reload.released_at
+  end
+
+  # An exec acts inside a container, and callers release only after confirming
+  # that container is gone — so a late one has nothing left to run and costs the
+  # pool nothing. Holding the slot for it wedged the installation instead.
+  test "an uncertain exec does not stand in the way of release" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    SessionAdmissionService.begin_operation!(admission.id, token, "exec").update!(state: "uncertain")
+
+    SessionAdmissionService.release!(admission)
+
+    assert admission.reload.released_at
   end
 
   test "lowering capacity does not evict existing reservations" do

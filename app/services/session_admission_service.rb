@@ -139,7 +139,11 @@ class SessionAdmissionService
       transaction do
         admission.reload.lock!
         next if admission.released_at
-        raise UncertainOperation, "Runtime operation unresolved" if admission.session_runtime_operations.where(state: %w[in_flight uncertain]).exists?
+        # Only an operation that can still put a workload on the cluster keeps
+        # the slot (SessionRuntimeOperation::MATERIALIZING_PHASES). Callers
+        # release after confirming absence, which is what makes an unresolved
+        # `exec` harmless: it has nothing left to run inside.
+        raise UncertainOperation, "Runtime operation unresolved" if admission.session_runtime_operations.pinning.exists?
         admission.update!(released_at: Time.current, launch_state: "closed", wait_reason: nil)
       end
     end

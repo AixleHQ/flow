@@ -267,6 +267,24 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     refute_includes names, "my_linter"
   end
 
+  # A row written before `$ref` was forbidden still carries a digest that
+  # matches, so it passes the tamper check and reaches the schema validator
+  # inside the gem. That raise used to escape tools/list and 500 every request
+  # the session made — including calls to the tools that were fine.
+  test "a tool whose schema the gem refuses is dropped instead of taking tools/list down" do
+    attach_platform_tool("board_list_tasks")
+    legacy = create(:tool, scope: @project, name: "legacy_linter", docker_image: "l:1")
+    @session.tools << legacy
+    legacy.update_columns(input_schema: { "type" => "object", "properties" => { "q" => { "$ref" => "shared" } } })
+    legacy.update_columns(definition_digest: legacy.reload.compute_definition_digest)
+
+    names = listed_tools(rpc("tools/list")).map { |t| t["name"] }
+
+    assert_response :success
+    assert_includes names, "board_list_tasks", "one unusable tool must not cost the session the others"
+    refute_includes names, "legacy_linter"
+  end
+
   # ── integration-gated Coder tools ──
 
   test "Coder tools surface through aixle-tools once the Coder integration is active" do

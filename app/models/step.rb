@@ -27,6 +27,8 @@ class Step < ApplicationRecord
 
   scope :not_deleted, -> { where(deleted_at: nil) }
 
+  before_validation :assign_next_position, on: :create
+
   def soft_delete!
     update_column(:deleted_at, Time.current)
   end
@@ -62,6 +64,16 @@ class Step < ApplicationRecord
   end
 
   private
+
+  # Appending is the server's job. A soft-deleted step keeps its position and
+  # the unique (workflow_id, position) index still covers it, so the next free
+  # slot has to be read from every row — a client that counts only the steps it
+  # can see lands on a deleted one's number and the insert fails.
+  def assign_next_position
+    return if position.present?
+
+    self.position = workflow&.steps&.maximum(:position).to_i + 1
+  end
 
   # A step may only name config items of its workflow's own project — the ids
   # decide what `get_config_item` will decrypt for the step's session, so they

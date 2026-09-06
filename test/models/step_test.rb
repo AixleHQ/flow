@@ -19,9 +19,34 @@ class StepTest < ActiveSupport::TestCase
     assert_not step.valid?
   end
 
-  test "invalid without position" do
-    step = build(:step, workflow: @workflow, position: nil)
-    assert_not step.valid?
+  test "a new step without a position is appended rather than rejected" do
+    create(:step, workflow: @workflow, position: 4)
+
+    step = create(:step, workflow: @workflow, position: nil)
+
+    assert_equal 5, step.position
+  end
+
+  # Soft-deleted steps keep their position and the unique (workflow, position)
+  # index still covers them, so the next free number cannot be read off the
+  # visible list — which is how the builder kept colliding with a step the user
+  # had already deleted.
+  test "the appended position clears soft-deleted steps too" do
+    create(:step, workflow: @workflow, position: 1)
+    deleted = create(:step, workflow: @workflow, position: 2)
+    deleted.soft_delete!
+
+    step = create(:step, workflow: @workflow, position: nil)
+
+    assert_equal 3, step.position, "position 2 is still taken by the deleted step's row"
+    # The client cannot see the row it has to skip — which is the whole point.
+    assert_equal [ 1, 3 ], @workflow.steps.not_deleted.pluck(:position)
+  end
+
+  test "position cannot be cleared once the step exists" do
+    step = create(:step, workflow: @workflow, position: 1)
+
+    assert_not step.update(position: nil)
   end
 
   test "unique position per workflow" do
