@@ -139,9 +139,9 @@ const SessionPage = () => {
     boardColumns,
   } = usePage<{ props: Props }>().props as unknown as Props;
 
-  const isActive = ['not_started', 'running', 'ready'].includes(s.state);
+  const isActive = ['not_started', 'queued', 'running', 'ready'].includes(s.state);
   const isFinishing = s.state === 'finishing';
-  const isTerminal = s.state === 'finished' || s.state === 'failed';
+  const isTerminal = ['finished', 'failed', 'cancelled'].includes(s.state);
   const [finishRequested, setFinishRequested] = useState(false);
   const [tab, setTab] = useState<string | null>('activity');
   const [termLoaded, setTermLoaded] = useState(false);
@@ -188,7 +188,7 @@ const SessionPage = () => {
               <>
                 <Loader size="sm" />
                 <Text size="sm" c="dimmed">
-                  Starting container...
+                  {s.state === 'queued' ? 'Waiting for an available session slot' : 'Starting container...'}
                 </Text>
                 <Badge size="sm" variant="outline" color="blue">
                   {s.state}
@@ -377,7 +377,7 @@ const SessionPage = () => {
     <>
       <Head title={`Aixle Builder — ${project.name}`} />
       <div className={classes.root}>
-        {(finishRequested || isFinishing) && (
+        {((finishRequested && s.state !== 'queued') || isFinishing) && (
           <div className={classes.finishingOverlay}>
             <Stack align="center" gap="sm">
               <Loader color="yellow" size="lg" />
@@ -432,7 +432,7 @@ const SessionPage = () => {
                 loading={finishRequested}
                 leftSection={<IconPlayerStop size={14} />}
               >
-                Finish Session
+                {s.state === 'queued' ? 'Cancel session' : 'Finish Session'}
               </Button>
             )}
           </div>

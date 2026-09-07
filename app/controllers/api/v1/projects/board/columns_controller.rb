@@ -38,21 +38,37 @@ module Api
 
           # @summary Reorder board columns
           def reorder
+            ordered = ordered_for_reorder(current_board.board_columns.order(:position).to_a)
+
             ActiveRecord::Base.transaction do
-              offset = current_board.board_columns.count + 1
-              params[:column_ids].each_with_index do |id, index|
-                current_board.board_columns.find(id).update_column(:position, offset + index + 1)
-              end
-              params[:column_ids].each_with_index do |id, index|
-                current_board.board_columns.find(id).update_column(:position, index + 1)
-              end
+              # Position is unique per board, so the new numbering cannot be
+              # written over the old one in place. Everything parks above the
+              # highest number currently in use — free by definition — and then
+              # comes back down as a contiguous 1..n.
+              offset = current_board.board_columns.maximum(:position).to_i
+              ordered.each_with_index { |column, index| column.update_column(:position, offset + index + 1) }
+              ordered.each_with_index { |column, index| column.update_column(:position, index + 1) }
               current_board.update_column(:preset_origin, nil) if current_board.preset_origin.present?
             end
+
             reordered = current_board.board_columns.reload.with_tasks_count.order(:position)
             render json: reordered.map { |c| BoardColumnResource.new(c).to_h }
           end
 
           private
+
+          # The named columns in the order given, then whatever the payload left
+          # out, keeping its relative order. Renumbering only the named ones
+          # collided with the columns it did not name, and the board settings
+          # dialog sends a partial list whenever a column appears while it is
+          # open or a create in the same save fails. Unknown and repeated ids
+          # are dropped rather than failing the whole reorder over a column
+          # someone else has already deleted.
+          def ordered_for_reorder(columns)
+            by_id = columns.index_by(&:id)
+            named = Array(params[:column_ids]).map(&:to_i).uniq.filter_map { |id| by_id[id] }
+            named + (columns - named)
+          end
 
           def column_params
             params.require(:board_column).permit(:name, :purpose)

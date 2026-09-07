@@ -2,7 +2,7 @@
 
 require "administrate/base_dashboard"
 
-class NamespaceResourceQuotaDashboard < Administrate::BaseDashboard
+class SessionConcurrencyLimitDashboard < Administrate::BaseDashboard
   ATTRIBUTE_TYPES = {
     id: Field::Number.with_options(searchable: true),
     scope_type: Field::Select.with_options(
@@ -10,12 +10,7 @@ class NamespaceResourceQuotaDashboard < Administrate::BaseDashboard
       collection: %w[Project User]
     ),
     scope_id: Field::Number,
-    cpu_requests: Field::String,
-    memory_requests: Field::String,
-    cpu_limits: Field::String,
-    memory_limits: Field::String,
-    max_pods: Field::Number,
-    description: Field::Text,
+    max_sessions: Field::Number,
     created_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
     updated_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p")
   }.freeze
@@ -24,22 +19,15 @@ class NamespaceResourceQuotaDashboard < Administrate::BaseDashboard
     id
     scope_type
     scope_id
-    cpu_limits
-    memory_limits
-    max_pods
-    created_at
+    max_sessions
+    updated_at
   ].freeze
 
   SHOW_PAGE_ATTRIBUTES = %i[
     id
     scope_type
     scope_id
-    cpu_requests
-    memory_requests
-    cpu_limits
-    memory_limits
-    max_pods
-    description
+    max_sessions
     created_at
     updated_at
   ].freeze
@@ -47,12 +35,7 @@ class NamespaceResourceQuotaDashboard < Administrate::BaseDashboard
   FORM_ATTRIBUTES = %i[
     scope_type
     scope_id
-    cpu_requests
-    memory_requests
-    cpu_limits
-    memory_limits
-    max_pods
-    description
+    max_sessions
   ].freeze
 
   COLLECTION_FILTERS = {
@@ -60,7 +43,7 @@ class NamespaceResourceQuotaDashboard < Administrate::BaseDashboard
     user: ->(resources) { resources.where(scope_type: "User") }
   }.freeze
 
-  def display_resource(quota)
-    "#{quota.scope_type} ##{quota.scope_id}"
+  def display_resource(limit)
+    "#{limit.scope_type} ##{limit.scope_id}: #{limit.max_sessions} concurrent sessions"
   end
 end

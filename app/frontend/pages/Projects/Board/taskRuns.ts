@@ -22,8 +22,11 @@ export interface TaskWorkflowRun {
   }>;
 }
 
-// Run states that mean "this run has not settled yet".
-export const WORKFLOW_ACTIVE_STATES = new Set(['pending', 'running', 'paused']);
+// Run states that mean "this run has not settled yet". `queued` belongs here:
+// the run is waiting for a session slot and will proceed on its own, so the
+// ticket is in flight — unlike a pending gate, which needs a human and
+// deliberately clears the active flag below.
+export const WORKFLOW_ACTIVE_STATES = new Set(['pending', 'running', 'paused', 'queued']);
 
 // Step states that mean "there is something live to look at right now".
 const STEP_ACTIVE_STATES = new Set(['running', 'waiting_input']);

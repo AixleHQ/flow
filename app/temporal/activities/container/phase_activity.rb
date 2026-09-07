@@ -19,7 +19,7 @@ module Activities
         log(:info, "[ContainerPhase] #{phase} for #{strategy.class.name.demodulize}")
         service.run_phase(phase)
       rescue ContainerService::PhaseError, ArgumentError => e
-        raise TemporalExceptions.non_retryable(e, benign: @cleanup_phase)
+        raise TemporalExceptions.non_retryable(e, benign: @cleanup_phase, details: phase_error_details(e))
       rescue Docker::Error::NotFoundError => e
         raise TemporalExceptions.non_retryable(e, benign: @cleanup_phase)
       rescue Docker::Error::DockerError => e
@@ -27,6 +27,19 @@ module Activities
       end
 
       private
+
+      # A strategy's ProvisioningError-style domain errors carry a secret-safe
+      # `.details` diagnostic (see AgentSessionStrategy::ProvisioningError). PhaseError
+      # preserves that instance on `#original_error`, but ContainerService's own log
+      # line and this activity's ApplicationError previously only forwarded
+      # `error.message` — the diagnostic never reached the workflow or Temporal
+      # history. ArgumentError (the other rescued class here) has no `#details`.
+      def phase_error_details(error)
+        original = error.respond_to?(:original_error) ? error.original_error : nil
+        return nil unless original.respond_to?(:details)
+
+        original.details
+      end
 
       def resolve_strategy(input)
         if input.tool_id.present?

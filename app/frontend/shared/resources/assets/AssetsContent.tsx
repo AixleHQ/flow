@@ -20,7 +20,7 @@ import { notifications } from '@mantine/notifications';
 import { IconDownload, IconEye, IconFolder, IconHistory, IconSearch, IconTrash, IconUpload } from '@tabler/icons-react';
 import AwsS3 from '@uppy/aws-s3';
 import Uppy from '@uppy/core';
-import type { Body, Meta } from '@uppy/core';
+import type { Body, Meta, UppyFile } from '@uppy/core';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
@@ -154,26 +154,30 @@ export function AssetsContent({
   // --- Uppy upload ---
   const uppyRef = useRef<InstanceType<typeof Uppy<Meta, Body>> | null>(null);
   if (!uppyRef.current) {
-    uppyRef.current = new Uppy<Meta, Body>({
+    const uppy = new Uppy<Meta, Body>({
       restrictions: { maxFileSize: MAX_FILE_SIZE },
       autoProceed: false,
-    }).use(AwsS3, {
+    });
+
+    uppy.use(AwsS3, {
       shouldUseMultipart: false,
-      getUploadParameters: async (file) => {
-        const qs = new URLSearchParams({
-          filename: file.name ?? 'file',
-          type: file.type ?? 'application/octet-stream',
-        });
+      // The S3 object key is chosen by the server, not here — /presign mints it and signs a
+      // PUT for it, so a client cannot aim an upload at someone else's pending cache entry.
+      // signRequest is handed nothing but `{ method, key }`, so the key generated here exists
+      // only to carry the Uppy file id across to it.
+      generateObjectKey: (file) => file.id,
+      signRequest: async ({ key }) => {
+        // getFile is typed as always returning a file, but a file removed mid-upload resolves
+        // to undefined. The name only picks the cache key's extension, so a fallback is fine.
+        const file: UppyFile<Meta, Body> | undefined = uppy.getFile(key);
+        const qs = new URLSearchParams({ filename: file?.name ?? 'file' });
         const res = await apiFetch(`${PRESIGN_URL}?${qs}`);
         const data = await res.json();
-        return {
-          method: data.method as 'POST' | 'PUT',
-          url: data.url,
-          fields: data.fields ?? {},
-          headers: data.headers ?? {},
-        };
+        return { url: data.url as string };
       },
     });
+
+    uppyRef.current = uppy;
 
     uppyRef.current.on('progress', (progress: number) => setUploadProgress(progress));
     uppyRef.current.on('complete', (result) => {
@@ -181,7 +185,7 @@ export function AssetsContent({
         const name = f.name ?? 'file';
         return {
           name,
-          cachedFile: extractCachedFileData((f as unknown as { uploadURL?: string }).uploadURL ?? '', name),
+          cachedFile: extractCachedFileData(f.uploadURL ?? '', name),
         };
       });
       setUploadedFiles((prev) => [...prev, ...files]);

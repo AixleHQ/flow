@@ -44,6 +44,27 @@ module Api
             assert_equal "slack", json["kind"]
           end
 
+          test "a slack trigger reports failures back to Slack unless it is switched off" do
+            post :create, params: {
+              project_id: @project.id, workflow_id: @workflow.id,
+              trigger: { kind: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
+            }
+
+            assert_response :created
+            assert json["notify_on_failure"], "a new slack trigger notifies on failure by default"
+            binding = TriggerBinding.find(json["id"])
+            assert binding.notify_on_failure
+
+            patch :update, params: {
+              project_id: @project.id, workflow_id: @workflow.id, id: binding.id,
+              trigger: { notify_on_failure: false }
+            }
+
+            assert_response :success
+            assert_not json["notify_on_failure"]
+            assert_not binding.reload.notify_on_failure
+          end
+
           test "create webhook trigger provisions an endpoint and returns its url + secret" do
             assert_difference -> { TriggerBinding.count } => 1, -> { WebhookEndpoint.count } => 1 do
               post :create, params: {

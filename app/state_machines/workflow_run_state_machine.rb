@@ -31,7 +31,7 @@ module WorkflowRunStateMachine
       end
 
       event :fail do
-        transitions from: %i[running paused], to: :failed, after: :on_completed
+        transitions from: %i[running paused], to: :failed, after: %i[on_completed announce_failure]
       end
 
       event :cancel do
@@ -52,5 +52,15 @@ module WorkflowRunStateMachine
 
   def on_cancelled
     update_column(:completed_at, Time.current)
+  end
+
+  # On the transition rather than in WorkflowService.fail, because that is not
+  # the only way a run ends up failed — the stale-run sweeper calls `fail!`
+  # straight on the record, and a run reaped as stale is precisely the kind of
+  # failure nobody is watching for.
+  def announce_failure
+    Slack::NotifyRunFailureJob.perform_later(id)
+  rescue StandardError => e
+    Rails.logger.error("[WorkflowRun] Failed to enqueue the Slack failure notice for run ##{id}: #{e.message}")
   end
 end

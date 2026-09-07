@@ -117,6 +117,52 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
+  describe("someone else's run", () => {
+    const notMine = (overrides: Partial<WorkflowRun> = {}) =>
+      makeRun({ controllableByViewer: false, userName: 'Dana Operator', ...overrides });
+
+    it('replaces Cancel with a line naming who started it', () => {
+      renderAuthedPage(<ShowPage />, { props: seed({ run: notMine() }) });
+
+      expect(screen.queryByRole('button', { name: /cancel run/i })).not.toBeInTheDocument();
+      expect(screen.getAllByText(/Started by Dana Operator/).length).toBeGreaterThan(0);
+    });
+
+    it('drops the approve / skip / retry buttons on a waiting step', () => {
+      const waiting = buildStepRun({
+        id: 301,
+        stepId: 3,
+        stepName: 'Review Draft',
+        stepPosition: 1,
+        state: 'waiting_input',
+      });
+
+      renderAuthedPage(<ShowPage />, { props: seed({ run: notMine({ stepRuns: [waiting] }) }) });
+
+      expect(screen.getByText(/"Review Draft" is waiting for your approval\./)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /approve & continue/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^skip$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^retry$/i })).not.toBeInTheDocument();
+    });
+
+    it('drops Retry session on a failed step', () => {
+      const failed = buildStepRun({
+        id: 302,
+        stepId: 4,
+        stepName: 'Render Output',
+        stepPosition: 1,
+        state: 'failed',
+      });
+
+      renderAuthedPage(<ShowPage />, {
+        props: seed({ run: notMine({ state: 'failed', stepRuns: [failed] }) }),
+      });
+
+      expect(screen.queryByRole('button', { name: /retry session/i })).not.toBeInTheDocument();
+      expect(screen.getAllByText(/Started by Dana Operator/).length).toBeGreaterThan(0);
+    });
+  });
+
   it('does not offer Cancel on a terminal run', () => {
     renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ state: 'completed' }) }) });
 

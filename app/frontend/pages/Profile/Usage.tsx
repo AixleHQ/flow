@@ -130,6 +130,8 @@ const AGENT_LABELS: Record<string, { label: string; color: string }> = {
 
 const STATE_CONFIG: Record<string, { label: string }> = {
   not_started: { label: 'Pending' },
+  queued: { label: 'Queued' },
+  cancelled: { label: 'Cancelled' },
   running: { label: 'Starting' },
   ready: { label: 'Running' },
   finishing: { label: 'Finishing' },

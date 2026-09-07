@@ -48,6 +48,8 @@ interface Props {
 
 const SESSION_STATE_LABELS: Record<string, string> = {
   not_started: 'Pending',
+  queued: 'Queued',
+  cancelled: 'Cancelled',
   running: 'Starting',
   ready: 'Running',
   finishing: 'Finishing',
@@ -65,7 +67,8 @@ function sessionTitle(s: TerminalSession, workflowContext?: SessionWorkflowConte
 
 export function SessionShowContent({ session: s, cableStream, context: ctx, workflowContext = null }: Props) {
   const { canExecute } = useProjectPermissions();
-  const isTerminal = s.state === 'finished' || s.state === 'failed';
+  const isTerminal = ['finished', 'failed', 'cancelled'].includes(s.state);
+  const isQueued = s.state === 'queued';
   const isFinishing = s.state === 'finishing';
   const isReady = s.state === 'ready';
   const isActive = isReady || s.state === 'running';
@@ -209,7 +212,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
               so offering it to a viewer would only produce a failed request. */}
           {canExecute && isOwner && !isTerminal && !isFinishing && (
             <Button leftSection={<IconSquareCheck size={15} />} onClick={handleFinish} loading={finishRequested}>
-              Finish session
+              {isQueued ? (workflowContext ? 'Cancel workflow' : 'Cancel session') : 'Finish session'}
             </Button>
           )}
           {canExecute && isTerminal && ctx.newSessionPath && (
@@ -259,9 +262,23 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
           <Stack align="center" gap="md">
             <Loader size="md" />
             <Text size="lg" fw={500}>
-              Starting session…
+              {isQueued
+                ? 'Waiting for an available session slot'
+                : ['namespace_quota', 'cluster_capacity'].includes(s.waitReason ?? '')
+                  ? 'Waiting for cluster capacity'
+                  : 'Starting session…'}
             </Text>
             <StatusTag state={s.state}>{SESSION_STATE_LABELS[s.state]}</StatusTag>
+            {isQueued && (
+              <Text size="sm" c="dimmed">
+                Your session will start automatically when capacity is available.
+              </Text>
+            )}
+            {isQueued && s.queuedAt && (
+              <Text size="xs" c="dimmed">
+                Queued at {new Date(s.queuedAt).toLocaleString()}
+              </Text>
+            )}
           </Stack>
         </Center>
       );
@@ -331,9 +348,11 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       className={classes.frame}
       label={frameLabel}
       footer={
-        s.state === 'failed'
-          ? 'Session failed · workspace is read-only'
-          : `Session finished · ${duration} · ${formatCost(s.costCents)} · read-only`
+        s.state === 'cancelled'
+          ? 'Session cancelled'
+          : s.state === 'failed'
+            ? 'Session failed · workspace is read-only'
+            : `Session finished · ${duration} · ${formatCost(s.costCents)} · read-only`
       }
     >
       {s.terminalLogUrl ? (
@@ -354,7 +373,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
 
   return (
     <div className={classes.root}>
-      {(finishRequested || isFinishing) && (
+      {((finishRequested && !isQueued) || isFinishing) && (
         <div className={classes.finishingOverlay}>
           <Stack align="center" gap="sm">
             <Loader size="lg" />

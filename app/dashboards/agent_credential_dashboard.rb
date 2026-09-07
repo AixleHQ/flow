@@ -10,6 +10,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
       include_blank: false,
       collection: %w[claude_code cursor_cli codex gemini_cli grok]
     ),
+    status: Field::String,
     metadata: Field::String.with_options(truncate: 100),
     expires_at: Field::DateTime,
     last_used_at: Field::DateTime,
@@ -23,6 +24,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     id
     user
     agent_type
+    status
     last_used_at
     created_at
   ].freeze
@@ -31,6 +33,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     id
     user
     agent_type
+    status
     config_keys
     metadata
     expires_at
@@ -52,7 +55,8 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     codex: ->(resources) { resources.for_agent("codex") },
     gemini_cli: ->(resources) { resources.for_agent("gemini_cli") },
     grok: ->(resources) { resources.for_agent("grok") },
-    active: ->(resources) { resources.active },
+    active: ->(resources) { resources.where(status: :active) },
+    error: ->(resources) { resources.where(status: :error) },
     expired: ->(resources) { resources.where("expires_at < ?", Time.current) }
   }.freeze
 

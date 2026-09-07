@@ -355,7 +355,9 @@ module Agents
     # refresh_access_token! which persists under a row lock via persist_refreshed!.
     # @param credential [AgentCredential]
     # @return [Hash] { status: :refreshed | :error, detail: String | nil }
-    def refresh!(credential)
+    # margin_ms is ignored: this agent stores no per-block expiry to compare it
+    # against, so a call is already the decision to refresh.
+    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
       new_token = refresh_access_token!(credential)
       new_token ? { status: :refreshed, detail: nil }
                 : { status: :error, detail: "codex token refresh failed" }

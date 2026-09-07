@@ -54,7 +54,6 @@ class User < ApplicationRecord
   # CompanyMembership#credentials_scope, SessionCompany.agent_credentials_for(session),
   # or CloudAuth::CredentialLookup.
   has_many :agent_credentials, dependent: :destroy
-  has_one :namespace_resource_quota, as: :scope, dependent: :destroy
 
   # Validations
   validates :email, presence: true,

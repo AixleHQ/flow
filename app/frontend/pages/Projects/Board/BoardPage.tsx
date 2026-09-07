@@ -332,6 +332,11 @@ const GATE_UNRESOLVED_STATUSES = new Set(['pending', 'stale']);
 
 // Helper to get workflow status indicator color
 const workflowStatusColor = (state: string): string => {
+  // Waiting for a session slot is in flight but not working, and it reads as
+  // `info` everywhere else in the app — the sessions list already shows QUEUED
+  // in blue, so the board says the same thing. Checked before the active branch,
+  // which would otherwise paint it amber like a run that is actually executing.
+  if (state === 'queued') return 'var(--app-info-fg)';
   if (WORKFLOW_ACTIVE_STATES.has(state)) return 'var(--app-warning-fg)';
   if (state === 'failed') return 'var(--app-danger-fg)';
   if (state === 'completed' || state === 'succeeded') return 'var(--app-success-fg)';

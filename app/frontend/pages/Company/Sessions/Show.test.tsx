@@ -13,6 +13,8 @@ function buildSession(overrides: Partial<TerminalSession> = {}): TerminalSession
     agentType: 'claude_code',
     state: 'running',
     mode: 'interactive',
+    queuedAt: null,
+    waitReason: null,
     startedAt: '2026-06-26T10:00:00Z',
     finishingAt: null,
     finishedAt: null,

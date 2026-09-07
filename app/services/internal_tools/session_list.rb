@@ -19,7 +19,7 @@ module InternalTools
     end
 
     STATE_FILTERS = {
-      "active" => %w[not_started running ready finishing],
+      "active" => %w[not_started queued running ready finishing],
       "finished" => %w[finished],
       "failed" => %w[failed]
     }.freeze
@@ -71,6 +71,8 @@ module InternalTools
       {
         id: record.id,
         state: record.state,
+        queued_at: record.queued_at,
+        wait_reason: record.session_admission&.wait_reason,
         session_type: record.session_type,
         agent_type: record.agent_type,
         mode: record.mode,

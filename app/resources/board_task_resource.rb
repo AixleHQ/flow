@@ -67,8 +67,9 @@ class BoardTaskResource < ApplicationResource
 
   typelize "Array<{ id: number; state: string; createdAt: string }>"
   attribute :recent_workflow_runs do |task|
+    waiting = params[:waiting_runs] || WorkflowRun.waiting_for_slot_ids(task.workflow_runs.map(&:id))
     task.workflow_runs.sort_by(&:created_at).last(5).reverse.map do |run|
-      { id: run.id, state: run.state, created_at: run.created_at.iso8601 }
+      { id: run.id, state: waiting.include?(run.id) ? "queued" : run.state, created_at: run.created_at.iso8601 }
     end
   end
 

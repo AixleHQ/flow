@@ -75,6 +75,7 @@ const AGENT_OPTIONS = [
 
 // One vocabulary over two state machines — see SessionsRunsFeed::STATUS_FILTERS.
 const STATUS_OPTIONS = [
+  { value: 'queued', label: 'Queued' },
   { value: 'running', label: 'Running' },
   { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
@@ -84,7 +85,7 @@ const STATUS_OPTIONS = [
 
 // A run's session is never opened straight from the list while it is still
 // being provisioned — there is nothing to show yet.
-const OPENABLE_SESSION_STATES = new Set(['ready', 'finished', 'failed', 'finishing']);
+const OPENABLE_SESSION_STATES = new Set(['queued', 'cancelled', 'ready', 'finished', 'failed', 'finishing']);
 
 function entryKey(entry: ListEntry): string {
   return `${entry.kind}-${entry.id}`;
@@ -92,12 +93,22 @@ function entryKey(entry: ListEntry): string {
 
 function stateLabel(entry: ListEntry): string {
   if (entry.kind === 'run') {
-    return { completed: 'Completed', running: 'Running', failed: 'Failed', cancelled: 'Cancelled' }[entry.state] ?? '';
+    return (
+      { completed: 'Completed', running: 'Running', failed: 'Failed', cancelled: 'Cancelled', queued: 'Queued' }[
+        entry.state
+      ] ?? ''
+    );
   }
   return (
-    { ready: 'Running', running: 'Starting', finished: 'Finished', failed: 'Failed', not_started: 'Pending' }[
-      entry.state
-    ] ?? ''
+    {
+      queued: 'Queued',
+      cancelled: 'Cancelled',
+      ready: 'Running',
+      running: 'Starting',
+      finished: 'Finished',
+      failed: 'Failed',
+      not_started: 'Pending',
+    }[entry.state] ?? ''
   );
 }
 

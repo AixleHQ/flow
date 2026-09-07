@@ -3,10 +3,12 @@ require "dotenv"
 
 Dotenv.load
 
+require_relative "../../lib/middleware/raw_upload_body"
 require_relative "../../lib/middleware/utf8_content_type"
 
 Rails.application.configure do
   config.middleware.insert_before ActionDispatch::Static, Middleware::Utf8ContentType
+  config.middleware.use Middleware::RawUploadBody
 
   # Settings specified here will take precedence over those in config/application.rb.
 

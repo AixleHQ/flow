@@ -225,11 +225,15 @@ const BuilderPage = () => {
   // --- Session (Step) CRUD ---
   const createSession = useCallback(
     async (name: string) => {
+      // Only the default name is numbered from what is on screen. The position
+      // itself is the server's to pick: soft-deleted steps stay in the unique
+      // (workflow, position) index but never reach this list, so a number
+      // derived from it collides with one of them.
       const nextPos = steps.length > 0 ? Math.max(...steps.map((s) => s.position)) + 1 : 1;
       const res = await apiFetch(stepsCollectionApi(projectId, workflow.id), {
         method: 'POST',
         headers: jsonHeaders,
-        body: JSON.stringify({ step: { name: name || `Session ${nextPos}`, position: nextPos } }),
+        body: JSON.stringify({ step: { name: name || `Session ${nextPos}` } }),
       });
       await withSave(Promise.resolve(res));
       if (res.ok) {

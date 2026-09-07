@@ -137,7 +137,7 @@ Merge logic: `visible_for_project` unions code/platform + company-scoped + proje
   sessions                          # Auth (login/logout/oauth)
   current_user                      # Profile
   terminal_sessions                 # Create/manage sessions
-  assets/presign, assets/upload     # Direct upload
+  assets/presign, assets/upload/*key # Direct upload (upload is dev/test only)
   internal/ws_auth                  # WebSocket auth
   internal/usage_statistics         # OTLP usage ingestion
 

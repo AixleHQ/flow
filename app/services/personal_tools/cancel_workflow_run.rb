@@ -14,8 +14,7 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :cancel?, policy: Web::Company::Projects::WorkflowRunsPolicy, project: project)
-      run = WorkflowRun.where(project: project).find_by(id: params[:run_id])
-      return error("Run not found in this project") unless run
+      run = find_controllable_run!(project)
 
       WorkflowService.cancel(run: run)
       success(run_id: run.id, state: run.reload.state)

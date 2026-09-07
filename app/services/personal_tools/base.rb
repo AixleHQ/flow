@@ -93,6 +93,21 @@ module PersonalTools
       user.company_memberships.active.find_by(company_id: company_id)
     end
 
+    # A run of THIS project that this user may steer. Two separate refusals:
+    # a run of another project does not exist as far as the caller is concerned,
+    # and a run they can see but not steer is a denial with a reason — the same
+    # rule the run screen applies (WorkflowRun#controllable_by?).
+    def find_controllable_run!(project, id = params[:run_id])
+      run = WorkflowRun.where(project: project).find_by(id: id)
+      raise NotFoundError, "Run #{id} not found in this project" unless run
+      unless run.controllable_by?(user)
+        raise UnauthorizedError,
+          "Run #{run.id} was started by #{run.user&.name.presence || 'someone else'} — only they or a company admin can control it"
+      end
+
+      run
+    end
+
     # A workflow scoped to the project — never a global Workflow.find, so a
     # user can't reach another project's workflow by id.
     def find_workflow!(project, id = params[:workflow_id])

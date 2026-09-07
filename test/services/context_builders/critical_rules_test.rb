@@ -50,6 +50,19 @@ class ContextBuilders::CriticalRulesTest < ActiveSupport::TestCase
     assert_not_includes sections.first.content, "NEVER ask questions"
   end
 
+  test "non_interactive rules point at the session-completion section instead of restating it" do
+    session = create(:terminal_session, :agent_session,
+      user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work")
+
+    content = ContextBuilders::CriticalRules.new(session).build.first.content
+
+    assert_includes content, "`finish_session`"
+    assert_includes content, "`<session-completion>`"
+    # The detail (what counts as partial work, what it costs to skip the call)
+    # belongs to ContextBuilders::SessionCompletion, rendered last.
+    assert_not_includes content, "Partial work"
+  end
+
   test "non_interactive rules include key backward-compatible phrases" do
     session = create(:terminal_session, :agent_session,
       user: @user, project: @project, mode: "non_interactive", initial_prompt: "do work")

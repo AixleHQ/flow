@@ -91,6 +91,39 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_equal "cancelled", run.state
   end
 
+  # The cancellation itself is not the news — the reason is. A session killed by a
+  # spend limit or a lost node has one, and the step is where a user sees it.
+  test "cancel carries the session's diagnosed reason onto the step run" do
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution)
+    TemporalService.stubs(:send_signal)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run.start! if run.may_start?
+    step_run = run.step_runs.first
+    session = create(:terminal_session, user: @user, project: @project,
+                                        error_message: "You've hit your individual spend limit")
+    step_run.update!(terminal_session: session, state: "running")
+    SessionService.stubs(:cancel)
+
+    WorkflowService.cancel(run: run)
+
+    assert_equal "You've hit your individual spend limit", step_run.reload.error_message
+  end
+
+  test "cancel leaves the step run unexplained when the generic reason is all there is" do
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution)
+    TemporalService.stubs(:send_signal)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run.start! if run.may_start?
+    step_run = run.step_runs.first
+    session = create(:terminal_session, user: @user, project: @project, error_message: "Workflow cancelled")
+    step_run.update!(terminal_session: session, state: "running")
+    SessionService.stubs(:cancel)
+
+    WorkflowService.cancel(run: run)
+
+    assert_predicate step_run.reload.error_message.to_s, :empty?
+  end
+
   test "cancel records a workflow_cancelled activity on the task's board" do
     TemporalWorkflowRegistry.stubs(:start_workflow_execution)
     TemporalService.stubs(:send_signal)

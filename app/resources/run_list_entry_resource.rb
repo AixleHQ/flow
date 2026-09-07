@@ -9,7 +9,20 @@
 class RunListEntryResource < ApplicationResource
   typelize_from WorkflowRun
 
-  attributes :id, :state, :mode, :started_at, :completed_at, :created_at
+  attributes :id, :mode, :started_at, :completed_at, :created_at
+
+  # A run waiting for a session slot is itself `running`, so the row would claim
+  # work is happening while nothing is. The step sessions are already loaded for
+  # every other attribute here, so the honest answer costs no extra query.
+  typelize :string
+  attribute :state do |run|
+    sessions = ordered_step_runs(run).filter_map { |sr| sr.terminal_session&.state }
+    if sessions.include?("queued") && (sessions & %w[running ready finishing]).empty?
+      "queued"
+    else
+      run.state
+    end
+  end
 
   typelize :string
   attribute :kind do |_run|

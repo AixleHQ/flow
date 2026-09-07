@@ -1,0 +1,23 @@
+http:
+  middlewares:
+    terminal-auth:
+      forwardAuth:
+        address: "http://web:4000/api/v1/internal/ws_auth"
+        authResponseHeadersRegex: "^X-"
+    terminal-cors:
+      headers:
+        accessControlAllowOriginList:
+          - "http://localhost:4000"
+          - "http://localhost"
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Requested-With
+          - Cookie
+        accessControlAllowCredentials: true

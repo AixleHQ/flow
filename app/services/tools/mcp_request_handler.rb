@@ -66,7 +66,21 @@ module Tools
 
     def tool_classes
       available = entitled_tools.select { |t| t.available?(ctx) && digest_intact?(t) }.sort_by(&:name)
-      available.map { |row| define_tool(row) }
+      available.filter_map { |row| publishable(row) }
+    end
+
+    # One unusable definition must not take the endpoint down with it. Schema
+    # validation runs while the tool class is being built, so a schema the gem
+    # cannot parse raises out of tools/list — and that 500'd every request the
+    # session made, including calls to the tools that were fine. Drop the row
+    # and make noise, the same way a failed digest check does.
+    def publishable(row)
+      define_tool(row)
+    rescue StandardError => e
+      Rails.logger.error(
+        "[MCP] Tool ##{row.id} (#{row.name}) could not be published: #{e.class}: #{e.message}"
+      )
+      nil
     end
 
     # Memoized per request: a tools/call resolves the entitlement twice (the

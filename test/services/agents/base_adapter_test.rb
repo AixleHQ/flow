@@ -290,7 +290,7 @@ module Agents
 
     test "refresh! defaults to a not_needed no-op" do
       # Agents whose credentials carry no refreshable OAuth token never refresh.
-      assert_equal({ status: :not_needed, detail: nil }, @adapter.refresh!(Object.new))
+      assert_equal({ status: :not_needed, detail: nil, permanent: false }, @adapter.refresh!(Object.new))
     end
 
     # == Retired Model Mapping ==

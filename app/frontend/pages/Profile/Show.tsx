@@ -435,7 +435,8 @@ function CompaniesSection({
   );
 }
 
-type AuthSessionState = 'idle' | 'starting' | 'not_started' | 'running' | 'ready' | 'finished' | 'failed';
+type AuthSessionState =
+  'idle' | 'starting' | 'not_started' | 'queued' | 'cancelled' | 'running' | 'ready' | 'finished' | 'failed';
 
 function AgentAuthModal({
   agentType,
@@ -561,7 +562,7 @@ function AgentAuthModal({
   // Subscribe to Inertia Cable for session updates
   useEffect(() => {
     if (!cableStream || !sessionId) return;
-    const isTerminal = sessionState === 'finished' || sessionState === 'failed';
+    const isTerminal = ['finished', 'failed', 'cancelled'].includes(sessionState);
     if (isTerminal) return;
 
     let cancelled = false;
@@ -640,7 +641,7 @@ function AgentAuthModal({
 
   const handleClose = useCallback(() => {
     cleanup();
-    if (sessionId && sessionState !== 'finished' && sessionState !== 'failed') {
+    if (sessionId && !['finished', 'failed', 'cancelled'].includes(sessionState)) {
       apiFetch(finishApiV1TerminalSessionPath(sessionId), { method: 'POST' }).catch(() => {});
     }
     setSessionId(null);
@@ -649,6 +650,23 @@ function AgentAuthModal({
   }, [sessionId, sessionState, cleanup, onClose]);
 
   const renderContent = () => {
+    if (sessionState === 'queued' || sessionState === 'cancelled') {
+      return (
+        <Stack align="center" justify="center" h={500} gap="sm">
+          <Text>
+            {sessionState === 'queued' ? 'Waiting for an available session slot' : 'Authentication session cancelled'}
+          </Text>
+          {sessionState === 'queued' && (
+            <Text size="sm" c="dimmed">
+              Authentication will start automatically when capacity is available.
+            </Text>
+          )}
+          <Button variant="outline" onClick={handleClose}>
+            {sessionState === 'queued' ? 'Cancel session' : 'Close'}
+          </Button>
+        </Stack>
+      );
+    }
     if (sessionState === 'finished') {
       return (
         <Stack align="center" justify="center" h={500} gap="sm">

@@ -15,16 +15,24 @@
 module Activities
   module Session
     class CleanupStaleActivity < Base
+      # A session that never started is the one shape nothing used to reap: the
+      # sweeper only ever asked about running, ready and finishing, so a launch
+      # lost between the database commit and Temporal sat in `not_started`
+      # forever. Forty-seven of them had accumulated in production by
+      # 2026-09-05, the oldest since March, none with an error to explain it.
+      NOT_STARTED_STALE_THRESHOLD = 30.minutes
       RUNNING_STALE_THRESHOLD = 30.minutes
       READY_STALE_THRESHOLD = 25.hours
       FINISHING_STALE_THRESHOLD = 10.minutes
 
       def run(_input = nil)
+        cleaned_not_started = cleanup_stale(:not_started, NOT_STARTED_STALE_THRESHOLD)
         cleaned_running = cleanup_stale(:running, RUNNING_STALE_THRESHOLD)
         cleaned_ready = cleanup_stale(:ready, READY_STALE_THRESHOLD)
         cleaned_finishing = cleanup_stale(:finishing, FINISHING_STALE_THRESHOLD)
 
         {
+          cleaned_not_started: cleaned_not_started,
           cleaned_running: cleaned_running,
           cleaned_ready: cleaned_ready,
           cleaned_finishing: cleaned_finishing
@@ -34,12 +42,22 @@ module Activities
       private
 
       def cleanup_stale(state, threshold)
-        sessions = stale_sessions_scope(state, threshold)
+        sessions = stale_sessions_scope(state, threshold).includes(:session_admission)
 
         count = 0
         sessions.find_each do |session|
-          try_cancel_workflow(session)
-          cleanup_session(session)
+          next if deliberately_waiting?(session)
+
+          if unreleased_admission?(session)
+            # Tearing an admitted session down means cancelling its workflow and
+            # letting confirmed cleanup return the slot. Reaching into the
+            # runtime here would free the resources while the reservation stayed
+            # occupied forever.
+            SessionService.fail_session(session: session, error_message: "Stale session: reaped after #{threshold.inspect} without progress")
+          else
+            try_cancel_workflow(session)
+            cleanup_session(session)
+          end
           count += 1
           log(:info, "Cleaned stale #{state} session #{session.id}")
         rescue StandardError => e
@@ -48,10 +66,23 @@ module Activities
         count
       end
 
+      # A reservation queued behind the concurrency cap, or waiting on cluster
+      # capacity, is doing exactly what it is supposed to (AD-7, AD-8).
+      def deliberately_waiting?(session)
+        session.session_admission&.wait_reason.in?(SessionAdmission::WAIT_REASONS)
+      end
+
+      def unreleased_admission?(session)
+        admission = session.session_admission
+        admission.present? && admission.released_at.nil?
+      end
+
       def stale_sessions_scope(state, threshold)
         scope = TerminalSession.where(state: state.to_s)
 
         case state
+        when :not_started
+          scope.where(created_at: ...threshold.ago)
         when :running
           scope.where(started_at: ...threshold.ago).or(
             TerminalSession

@@ -114,7 +114,7 @@ module ContainerStrategies
       session.reload
 
       if error
-        session.update(error_message: error)
+        session.update(error_message: TerminalSession.preferred_error_message(session.error_message, error))
         session.fail! if session.may_fail?
       else
         # `complete_finish!` is idempotent: when the user initiated finalization,

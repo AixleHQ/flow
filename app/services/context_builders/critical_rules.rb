@@ -44,17 +44,11 @@ module ContextBuilders
 
         ### Session Completion (MANDATORY)
 
-        You MUST call one of these tools when finished:
-        - **finish_session** — when the task is **fully completed** successfully. Optional `note` parameter.
-        - **fail_session** — when the task **cannot be completed**. Required `reason`, optional `note`.
-
-        Call `finish_session` ONLY when ALL deliverables are produced.
-        Call `fail_session` if ANY of these are true:
-        - A required resource is missing (repository, file, API, tool)
-        - You cannot produce the expected deliverables
-        - A critical error prevents completing the task
-
-        **You MUST call one of these tools to end the session — it will not end on its own.**
+        The session ends ONLY when you call `finish_session` (objective fully met) or
+        `fail_session` (objective cannot be met). It will NOT end on its own, and
+        ending your turn without one of those calls leaves it hanging until a sweeper
+        kills it. The full rule — including when partial work must be `fail_session` —
+        is in the `<session-completion>` section at the very end of this context.
       RULES
     end
 

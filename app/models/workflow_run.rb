@@ -1,6 +1,26 @@
 # frozen_string_literal: true
 
 class WorkflowRun < ApplicationRecord
+  # A run whose step is waiting for a session slot is itself `running`: queueing
+  # is a property of the child. A board card that reads the run state therefore
+  # claims work is happening while nothing is — so the runs that are actually
+  # waiting are resolved once per page and reported as `queued`.
+  #
+  # "Waiting" means a queued step session and nothing else in flight: a run with
+  # one step running and another queued is still working, and must not read as
+  # parked.
+  def self.waiting_for_slot_ids(run_ids)
+    return Set.new if run_ids.blank?
+
+    sessions = TerminalSession.joins(:step_run)
+                              .where(step_runs: { workflow_run_id: run_ids })
+                              .pluck(Arel.sql("step_runs.workflow_run_id"), :state)
+    sessions.group_by(&:first).filter_map do |run_id, rows|
+      states = rows.map(&:last)
+      run_id if states.include?("queued") && (states & %w[running ready finishing]).empty?
+    end.to_set
+  end
+
   include WorkflowRunStateMachine
   extend Enumerize
 
@@ -51,6 +71,22 @@ class WorkflowRun < ApplicationRecord
   # Latest failed step the user may retry via API (current_step_run excludes failed — that caused 404 on retry).
   def latest_failed_step_run
     step_runs.where(state: :failed).order(updated_at: :desc).first
+  end
+
+  # May `viewer` STEER this run — cancel it, or approve / retry / skip one of its
+  # steps? Reaching a run is a project-level question and stays that way (the
+  # whole team watches the board's automation); acting on one is not. A run is
+  # somebody's work in flight, the same way their session is, and the person who
+  # started it is the one who knows whether a waiting step should be approved or
+  # skipped.
+  #
+  # Company admins keep an override, because a run nobody can cancel blocks the
+  # board card behind it and its owner may well be asleep.
+  def controllable_by?(viewer)
+    return false if viewer.nil?
+    return true if user_id == viewer.id
+
+    viewer.company_memberships.active.find_by(company_id: project&.company_id)&.admin? || false
   end
 
   def mark_quota_failed!(credential_id:)

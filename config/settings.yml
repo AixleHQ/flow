@@ -311,16 +311,8 @@ container_execution:
       pids_limit: 100      # Max processes
       max_timeout: 1800    # Absolute max timeout (30 min)
 
-namespace_resource_quotas:
-  project_defaults:
-    cpu_requests:    ~
-    memory_requests: ~
-    cpu_limits:      "4000m"
-    memory_limits:   "8Gi"
-    max_pods:        100
-  user_defaults:
-    cpu_requests:    ~
-    memory_requests: ~
-    cpu_limits:      "4000m"
-    memory_limits:   "8Gi"
-    max_pods:        100
+# Session admission takes its deployment inputs straight from ENV in
+# `session_admission:sync`, which copies them into the database policy that
+# workers actually read. There is deliberately no mirror of them here: a second
+# copy that nothing consults is a copy that goes stale.
+

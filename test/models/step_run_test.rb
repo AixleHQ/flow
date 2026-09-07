@@ -3,6 +3,25 @@
 require "test_helper"
 
 class StepRunTest < ActiveSupport::TestCase
+  # A cancelled step with no message reads as "someone clicked cancel" — wrong to show
+  # a user whose account simply ran out of credit.
+  test "mark_cancelled! records the reason it was given" do
+    step_run = create(:step_run)
+
+    step_run.mark_cancelled!("You've hit your individual spend limit")
+
+    assert_equal "cancelled", step_run.reload.state
+    assert_equal "You've hit your individual spend limit", step_run.error_message
+  end
+
+  test "mark_cancelled! without a reason leaves any earlier message alone" do
+    step_run = create(:step_run, error_message: "Earlier detail")
+
+    step_run.mark_cancelled!
+
+    assert_equal "cancelled", step_run.reload.state
+    assert_equal "Earlier detail", step_run.error_message
+  end
   setup do
     @company = create(:company)
     @user = create(:user, :admin, company: @company)

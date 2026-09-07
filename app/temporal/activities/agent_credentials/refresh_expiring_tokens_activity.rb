@@ -7,6 +7,10 @@
 module Activities
   module AgentCredentials
     class RefreshExpiringTokensActivity < ::Activities::Base
+      # Matches ClaudeCodeAdapter::REFRESH_MARGIN_MS: selecting rows the adapter will
+      # not act on just re-reads and decrypts them every 5 minutes. A session needing
+      # more headroom than this refreshes at launch instead
+      # (AgentCredential#refresh_if_expiring!).
       REFRESH_WINDOW = 15.minutes
 
       def run(_input = nil)
@@ -14,12 +18,21 @@ module Activities
         not_needed = 0
         errors = 0
 
-        ::AgentCredential.refreshable.refresh_due(REFRESH_WINDOW).find_each do |credential|
+        due = ::AgentCredential.refreshable.refresh_due(REFRESH_WINDOW)
+        # Skipped, not dropped: a credential a live container holds is refreshed by
+        # the CLI in that container, and its cleanup merges the rotated block back.
+        # Refreshing our own copy in parallel is what replays a rotated-out grant.
+        held = due.count - due.without_live_session.count
+
+        due.without_live_session.find_each do |credential|
           result = credential.adapter.refresh!(credential)
           case result[:status]
           when :refreshed
+            credential.clear_refresh_error! if credential.refresh_error.present?
             refreshed += 1
           when :error
+            permanent = ::AgentCredential.permanent_failure?(result)
+            credential.mark_refresh_error!(result[:detail], permanent: permanent)
             errors += 1
             log(:warn, "credential #{credential.id} (#{credential.agent_type}) refresh error: #{result[:detail]}")
           else
@@ -27,11 +40,13 @@ module Activities
           end
         rescue StandardError => e
           errors += 1
+          credential.mark_refresh_error!(e.message, permanent: false)
           log(:warn, "credential #{credential.id} refresh raised: #{e.class}: #{e.message}")
         end
 
-        log(:info, "token refresh sweep: refreshed=#{refreshed} not_needed=#{not_needed} errors=#{errors}")
-        { refreshed: refreshed, not_needed: not_needed, errors: errors }
+        log(:info, "token refresh sweep: refreshed=#{refreshed} not_needed=#{not_needed} " \
+                   "errors=#{errors} held_by_live_session=#{held}")
+        { refreshed: refreshed, not_needed: not_needed, errors: errors, held: held }
       end
     end
   end

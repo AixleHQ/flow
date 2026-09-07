@@ -152,7 +152,11 @@ module Workflows
         return recover_from_step_failure(step_data, step_run_id)
       end
 
-      launch_step_session(step_run_id)
+      begin
+        launch_step_session(step_run_id)
+      rescue Temporalio::Error::ActivityError
+        return recover_from_step_failure(step_data, step_run_id)
+      end
 
       if auto_advance?(step_data)
         wait_for_signal(step_run_id)
@@ -189,7 +193,13 @@ module Workflows
         # Initialize the decision slot before launching so any container_finished
         # signal that arrives during launch is not overwritten by a subsequent nil-init.
         @step_decisions[sr_id] = nil
-        launch_step_session(sr_id)
+        begin
+          launch_step_session(sr_id)
+        rescue Temporalio::Error::ActivityError
+          results[step_id] = :failed
+          step_run_ids.delete(step_id)
+          next
+        end
       end
 
       steps_by_id = {}

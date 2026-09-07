@@ -428,9 +428,16 @@ module Agents
     # concurrent live session's cleanup can't race the read-merge-write.
     #
     # @param credential [AgentCredential]
-    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil }
-    def refresh!(_credential)
-      { status: :not_needed, detail: nil }
+    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil,
+    #   permanent: Boolean } — `permanent` tells the refresh sweep whether the failure
+    #   makes the credential unusable (flip it to `error`, forcing a re-login) or is a
+    #   transient/partial one. Optional: an adapter that omits it falls back to the
+    #   sweep's invalid_grant check.
+    # @param margin_ms [Integer, nil] how close to expiry a token must be to be worth
+    #   refreshing. Only agents that store their own expiry (Claude, with a block per
+    #   login) can honour it; single-block agents refresh whenever they are called.
+    def refresh!(_credential, margin_ms: nil)
+      { status: :not_needed, detail: nil, permanent: false }
     end
 
     # Persist a freshly-refreshed credential blob under a row lock, guarding

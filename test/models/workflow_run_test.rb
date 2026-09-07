@@ -3,11 +3,65 @@
 require "test_helper"
 
 class WorkflowRunTest < ActiveSupport::TestCase
+  include ActiveJob::TestHelper
+
   setup do
     @company = create(:company, name: "wrtest-co-#{SecureRandom.hex(4)}")
     @admin = create(:user, :admin, company: @company)
     @project = create(:project, company: @company, owner: @admin, name: "wrtest-proj-#{SecureRandom.hex(4)}")
     @workflow = create(:workflow, scope: @project, name: "wrtest-wf-#{SecureRandom.hex(4)}")
+  end
+
+  test "controllable_by? is true for the run's owner" do
+    owner = create(:user, :employee, company: @company)
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: owner)
+
+    assert run.controllable_by?(owner)
+  end
+
+  test "controllable_by? is false for another member of the same company" do
+    owner = create(:user, :employee, company: @company)
+    other = create(:user, :employee, company: @company)
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: owner)
+
+    assert_not run.controllable_by?(other)
+  end
+
+  test "controllable_by? lets a company admin override" do
+    owner = create(:user, :employee, company: @company)
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: owner)
+
+    assert run.controllable_by?(@admin)
+  end
+
+  test "controllable_by? ignores an admin membership in a different company" do
+    owner = create(:user, :employee, company: @company)
+    outsider = create(:user, :admin, company: create(:company, name: "wrtest-other-#{SecureRandom.hex(4)}"))
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: owner)
+
+    assert_not run.controllable_by?(outsider)
+  end
+
+  test "controllable_by? is false without a viewer" do
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+
+    assert_not run.controllable_by?(nil)
+  end
+
+  test "failing a run queues the Slack failure notice, whoever failed it" do
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    run.start!
+
+    assert_enqueued_with(job: Slack::NotifyRunFailureJob, args: [ run.id ]) { run.fail! }
+    assert_equal "failed", run.state
+    assert_not_nil run.completed_at
+  end
+
+  test "completing a run queues nothing" do
+    run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
+    run.start!
+
+    assert_no_enqueued_jobs(only: Slack::NotifyRunFailureJob) { run.complete! }
   end
 
   test "default state is pending" do
@@ -106,5 +160,32 @@ class WorkflowRunTest < ActiveSupport::TestCase
 
     assert_equal "quota_exceeded", run.failure_reason
     assert_nil run.failed_agent_credential_id
+  end
+
+  # A board card reads the run state, so a run whose step is waiting for a
+  # session slot would claim work is happening while nothing is.
+  test "waiting_for_slot_ids finds a run whose only step is waiting" do
+    run = create(:workflow_run, :running)
+    step_run = create(:step_run, :running, workflow_run: run)
+    step_run.update!(terminal_session: create(:terminal_session, user: run.user, project: run.project,
+                                              session_type: "workflow_step", state: "queued"))
+
+    assert_includes WorkflowRun.waiting_for_slot_ids([ run.id ]), run.id
+  end
+
+  test "waiting_for_slot_ids leaves a run that is still executing alone" do
+    run = create(:workflow_run, :running)
+    working = create(:step_run, :running, workflow_run: run)
+    working.update!(terminal_session: create(:terminal_session, user: run.user, project: run.project,
+                                             session_type: "workflow_step", state: "ready"))
+    waiting = create(:step_run, workflow_run: run)
+    waiting.update!(terminal_session: create(:terminal_session, user: run.user, project: run.project,
+                                             session_type: "workflow_step", state: "queued"))
+
+    assert_empty WorkflowRun.waiting_for_slot_ids([ run.id ])
+  end
+
+  test "waiting_for_slot_ids answers for a whole page in one query" do
+    assert_empty WorkflowRun.waiting_for_slot_ids([])
   end
 end

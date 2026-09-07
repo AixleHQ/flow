@@ -14,6 +14,8 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     agentType: 'claude_code',
     state: 'ready',
     mode: 'interactive',
+    queuedAt: null,
+    waitReason: null,
     startedAt: '2026-06-26T10:00:00Z',
     finishingAt: null,
     finishedAt: null,
@@ -67,6 +69,27 @@ const ctx: SessionShowContext = {
 };
 
 describe('SessionShowContent', () => {
+  it('shows queue waiting and cancellation without mounting a terminal', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ state: 'queued', startedAt: null })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+    expect(screen.getByText('Waiting for an available session slot')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel session' })).toBeInTheDocument();
+    expect(screen.queryByTitle('Terminal')).not.toBeInTheDocument();
+  });
+
+  it('treats cancelled sessions as terminal without finish controls', () => {
+    renderPage(
+      <SessionShowContent session={makeSession({ state: 'cancelled' })} cableStream="signed-stream" context={ctx} />,
+    );
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Finish session' })).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Terminal')).not.toBeInTheDocument();
+  });
   it('renders the shared detail header: breadcrumb, title, status, id and runtime', () => {
     renderPage(
       <SessionShowContent

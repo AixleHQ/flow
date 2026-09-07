@@ -132,7 +132,7 @@ module Api
 
           def trigger_binding_params
             params.require(:trigger).permit(
-              :name, :trigger_mode, :enabled, :cooldown_seconds,
+              :name, :trigger_mode, :enabled, :cooldown_seconds, :notify_on_failure,
               :subject_policy, :subject_column_id, :subject_title_template,
               filter_predicate: {}, schedule_config: %i[cron timezone]
             )
@@ -181,6 +181,7 @@ module Api
               subject_title_template: binding.subject_title_template,
               schedule_config: binding.schedule_config,
               cooldown_seconds: binding.cooldown_seconds,
+              notify_on_failure: binding.notify_on_failure,
               enabled: binding.enabled
             }
           end

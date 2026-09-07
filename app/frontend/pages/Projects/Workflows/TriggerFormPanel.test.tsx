@@ -211,8 +211,24 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(bodyOf(fetchSpy, 'POST').trigger).toEqual({
       kind: 'slack',
       filter_predicate: { channel: 'C42', text: { op: 'contains', value: 'deploy' } },
+      notify_on_failure: true,
       subject_policy: 'none',
     });
+  });
+
+  it('reports slack failures back by default and stops when the switch is turned off', async () => {
+    const fetchSpy = installFetch();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack' })} />);
+
+    const notify = screen.getByRole('switch', { name: /report failures back to slack/i });
+    expect(notify).toBeChecked();
+
+    await userEvent.click(notify);
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(bodyOf(fetchSpy, 'POST').trigger.notify_on_failure).toBe(false);
   });
 
   it('posts an empty slack filter when channel and pattern are left blank', async () => {

@@ -127,9 +127,9 @@ export function presignApiV1AssetsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "assets" + "/" + "presign" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /api/v1/assets/upload(.:format) */
-export function uploadApiV1AssetsPath(options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "assets" + "/" + "upload" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+/** /api/v1/assets/upload/*key */
+export function uploadApiV1AssetsPath(key: ScalarType[], options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "assets" + "/" + "upload" + "/" + key.map((part) => $encode(part)).join("/") + $buildOptions(options, ["key"]);
 }
 
 /** /api/v1/internal/ws_auth(.:format) */
@@ -312,6 +312,11 @@ export function apiV1ProjectActivitiesPath(project_id: ScalarType, options?: obj
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "activities" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /api/v1/projects/:project_id/tasks/bulk_actions(.:format) */
+export function bulkActionsApiV1ProjectTasksPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + "bulk_actions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
 /** /api/v1/projects/:project_id/tasks/:id/move(.:format) */
 export function moveApiV1ProjectTaskPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + id + "/" + "move" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
@@ -375,11 +380,6 @@ export function apiV1ProjectTaskStatisticsPath(project_id: ScalarType, task_id: 
 /** /api/v1/projects/:project_id/tasks(.:format) */
 export function apiV1ProjectTasksPath(project_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
-}
-
-/** /api/v1/projects/:project_id/tasks/bulk_actions(.:format) */
-export function bulkActionsApiV1ProjectTasksPath(project_id: ScalarType, options?: object): string {
-  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + "bulk_actions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /api/v1/projects/:project_id/tasks/new(.:format) */
@@ -832,29 +832,34 @@ export function adminUsageStatisticPath(id: ScalarType, options?: object): strin
   return "/" + "admin" + "/" + "usage_statistics" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
-/** /admin/namespace_resource_quotas(.:format) */
-export function adminNamespaceResourceQuotasPath(options?: object): string {
-  return "/" + "admin" + "/" + "namespace_resource_quotas" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+/** /admin/session_concurrency_limits(.:format) */
+export function adminSessionConcurrencyLimitsPath(options?: object): string {
+  return "/" + "admin" + "/" + "session_concurrency_limits" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /admin/namespace_resource_quotas/new(.:format) */
-export function newAdminNamespaceResourceQuotaPath(options?: object): string {
-  return "/" + "admin" + "/" + "namespace_resource_quotas" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+/** /admin/session_concurrency_limits/new(.:format) */
+export function newAdminSessionConcurrencyLimitPath(options?: object): string {
+  return "/" + "admin" + "/" + "session_concurrency_limits" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /admin/namespace_resource_quotas/:id/edit(.:format) */
-export function editAdminNamespaceResourceQuotaPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "namespace_resource_quotas" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+/** /admin/session_concurrency_limits/:id/edit(.:format) */
+export function editAdminSessionConcurrencyLimitPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "session_concurrency_limits" + "/" + id + "/" + "edit" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
-/** /admin/namespace_resource_quotas/:id(.:format) */
-export function adminNamespaceResourceQuotaPath(id: ScalarType, options?: object): string {
-  return "/" + "admin" + "/" + "namespace_resource_quotas" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+/** /admin/session_concurrency_limits/:id(.:format) */
+export function adminSessionConcurrencyLimitPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "session_concurrency_limits" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/catalog_syncs(.:format) */
 export function adminCatalogSyncsPath(options?: object): string {
   return "/" + "admin" + "/" + "catalog_syncs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /admin/session_admission(.:format) */
+export function adminSessionAdmissionPath(options?: object): string {
+  return "/" + "admin" + "/" + "session_admission" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** / */

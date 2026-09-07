@@ -93,6 +93,7 @@ export function TriggerFormPanel({
   const [enabled, setEnabled] = useState(editing?.enabled ?? true);
 
   const [channel, setChannel] = useState(editSlack?.channel ?? '');
+  const [notifyOnFailure, setNotifyOnFailure] = useState(editing?.notify_on_failure ?? true);
   const [textContains, setTextContains] = useState(editSlack?.value ?? '');
   const [textOp, setTextOp] = useState(editSlack?.op ?? 'contains');
 
@@ -137,6 +138,7 @@ export function TriggerFormPanel({
       if (kind === 'slack') {
         if (channel.trim()) filter.channel = channel.trim();
         if (textContains.trim()) filter.text = { op: textOp, value: textContains.trim() };
+        trigger.notify_on_failure = notifyOnFailure;
       } else if (kind === 'webhook') {
         if (!isEdit) {
           trigger.verification_strategy = verification;
@@ -196,6 +198,7 @@ export function TriggerFormPanel({
     cooldown,
     enabled,
     channel,
+    notifyOnFailure,
     textContains,
     textOp,
     verification,
@@ -621,6 +624,14 @@ export function TriggerFormPanel({
                     }}
                   />
                 </div>
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <Switch
+                  label="Report failures back to Slack"
+                  description="When a run from this trigger fails, reply in the same thread with the error."
+                  checked={notifyOnFailure}
+                  onChange={(e) => setNotifyOnFailure(e.currentTarget.checked)}
+                />
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label

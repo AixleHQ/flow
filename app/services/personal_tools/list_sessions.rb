@@ -17,7 +17,7 @@ module PersonalTools
     end
 
     STATE_FILTERS = {
-      "active" => %w[not_started running ready finishing],
+      "active" => %w[not_started queued running ready finishing],
       "finished" => %w[finished],
       "failed" => %w[failed]
     }.freeze
@@ -72,6 +72,8 @@ module PersonalTools
       {
         id: session.id,
         state: session.state,
+        queued_at: session.queued_at,
+        wait_reason: session.session_admission&.wait_reason,
         session_type: session.session_type,
         agent_type: session.agent_type,
         mode: session.mode,

@@ -14,8 +14,7 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :approve_step?, policy: Web::Company::Projects::WorkflowRunsPolicy, project: project)
-      run = WorkflowRun.where(project: project).find_by(id: params[:run_id])
-      return error("Run not found in this project") unless run
+      run = find_controllable_run!(project)
 
       step_run = run.current_step_run
       return error("No current step to approve") unless step_run

@@ -54,12 +54,87 @@ module ContainerRuntime
       { status: :skipped, image: image, duration_seconds: 0 }
     end
 
+    def session_identity(session)
+      "#{namespace_for(project_id: session.project_id, user_id: session.user_id)}/terminal-#{session.route_token}"
+    end
+
+    # Only an operator-reviewed namespace/UID allowlist may remove legacy quotas.
+    # The quota itself predates ownership labels, so verify its namespace too.
+    def remove_managed_session_quota(namespace:, uid:, dry_run: false)
+      raise "Admission must be enabled before removing legacy quotas" unless SessionAdmissionPolicy.enabled?
+      raise ArgumentError, "Quota UID required" if uid.blank?
+      ns = core_client.get_namespace(namespace)
+      # Kubeclient hands labels back as a RecursiveOpenStruct, so #to_h keys are
+      # symbols — and a label name like "aixle.com/scope" read with a string key
+      # is silently nil, which made every check below refuse. The dry run caught
+      # it before it mattered; the lookup is normalised here so it cannot recur.
+      labels = ns.metadata.labels.to_h.transform_keys(&:to_s)
+      unless labels["aixle.com/runtime-origin"] == runtime_namespace &&
+          %w[project user].include?(labels["aixle.com/scope"]) &&
+          namespace.match?(/\A#{Regexp.escape(runtime_namespace)}-(project|user)-\d+\z/)
+        raise "Namespace is not a managed session scope"
+      end
+      quota = core_client.get_resource_quota("aixle-resource-quota", namespace)
+      raise "Quota UID changed; review the allowlist again" unless quota.metadata.uid == uid
+      return quota if dry_run
+
+      core_client.delete_entity("resourcequotas", "aixle-resource-quota", namespace,
+        delete_options: { preconditions: { uid: uid } })
+    end
+
+    def cleanup_session(id)
+      handle = session_locator(id)
+      session_objects(handle).each do |kind, plural, client_key, object|
+        metadata = object.metadata
+        # UID precondition prevents deleting a replacement after the GET.
+        kube_client(client_key).delete_entity(plural, metadata.name, handle.namespace,
+          delete_options: { preconditions: { uid: metadata.uid } })
+      rescue Kubeclient::ResourceNotFoundError
+        next
+      end
+    end
+
+    def session_absent?(id)
+      session_objects(session_locator(id)).empty?
+    end
+
+    # Deleting and confirming absence need a namespace/name pair and nothing
+    # else. #resolve_handle would additionally infer service ports, which costs
+    # a Pod GET per call — on a path the reconciler walks every minute for every
+    # unreleased reservation.
+    def session_locator(id)
+      return id if id.respond_to?(:pod_name) && id.respond_to?(:namespace)
+
+      raw = id.to_s
+      return resolve_handle(id) unless raw.match?(%r{\A[^/\s]+/[^/\s]+\z})
+
+      namespace, pod_name = raw.split("/", 2)
+      OpenStruct.new(pod_name: sanitize_name(pod_name), namespace: namespace)
+    end
+
+    def session_objects(handle)
+      SESSION_RESOURCE_KINDS.flat_map do |kind, plural, client_key|
+        raw = kube_client(client_key).get_entities(kind, plural, namespace: handle.namespace,
+          label_selector: "app=#{RUNTIME_APP_LABEL},#{CONTAINER_LABEL}=#{handle.pod_name}", as: :raw)
+        JSON.parse(raw.to_s).fetch("items").map do |item|
+          [ kind, plural, client_key, Kubeclient::Resource.new(item) ]
+        end
+      end
+    end
+
     def create_container(spec)
       handle = build_handle(spec)
       ensure_runtime_namespace_resources(handle, spec[:namespace_context])
       pod = build_pod(spec, handle)
 
-      core_client.create_pod(pod)
+      begin
+        create_or_verify(core_client, "Pod", "pods", pod)
+      rescue Kubeclient::HttpError => e
+        if e.error_code.to_i == 403 && e.message.match?(/exceeded quota/i)
+          raise CapacityError.new(e.message, reason: "namespace_quota")
+        end
+        raise
+      end
       Rails.logger.info("[KubernetesRuntime] Pod created: #{handle.pod_name}")
 
       handle
@@ -233,9 +308,9 @@ module ContainerRuntime
     # A listing failure is logged and answered with an empty list for that kind:
     # the sweeper's job is to delete garbage, and "I could not see" must never
     # be read as "there is none of it left alive".
-    def list_session_resources
+    def list_session_resources(strict: false)
       SESSION_RESOURCE_KINDS.flat_map do |kind, plural, client_key|
-        list_session_objects(kind, plural, client_key)
+        list_session_objects(kind, plural, client_key, strict: strict)
       end
     end
 
@@ -258,7 +333,7 @@ module ContainerRuntime
 
     private
 
-    def list_session_objects(kind, plural, client_key)
+    def list_session_objects(kind, plural, client_key, strict: false)
       body = kube_client(client_key).get_entities(
         kind, plural,
         label_selector: SESSION_RESOURCE_SELECTOR,
@@ -268,6 +343,7 @@ module ContainerRuntime
       items = JSON.parse(body.to_s)["items"]
       Array(items).filter_map { |item| build_session_resource(kind, item) }
     rescue StandardError => e
+      raise if strict
       Rails.logger.warn("[KubernetesRuntime] Failed to list #{kind} objects: #{e.message}")
       []
     end
@@ -459,6 +535,22 @@ module ContainerRuntime
       )
     end
 
+    def create_or_verify(client, kind, plural, resource)
+      case kind
+      when "Service" then client.create_service(resource)
+      when "Pod" then client.create_pod(resource)
+      else client.create_entity(kind, plural, resource)
+      end
+    rescue Kubeclient::HttpError => e
+      raise unless e.error_code.to_i == 409
+      existing = client.get_entity(plural, resource.metadata.name, resource.metadata.namespace)
+      raise "Runtime resource identity conflict" unless existing.metadata.labels.to_h == resource.metadata.labels.to_h
+      if kind == "Pod" && existing.spec.containers.map(&:image) != resource.spec.containers.map(&:image)
+        raise "Runtime image identity conflict"
+      end
+      existing
+    end
+
     def create_service(handle)
       ports = handle.service_ports.map do |port|
         {
@@ -486,7 +578,7 @@ module ContainerRuntime
         }
       )
 
-      core_client.create_service(service)
+      create_or_verify(core_client, "Service", "services", service)
       Rails.logger.info("[KubernetesRuntime] Service created: #{handle.service_name}")
     end
 
@@ -496,8 +588,8 @@ module ContainerRuntime
       tty_strip = build_strip_middleware(handle, "tty", "/t/#{handle.route_token}/tty")
       fs_strip = build_strip_middleware(handle, "fs", "/t/#{handle.route_token}/fs")
 
-      traefik_client.create_entity("Middleware", "middlewares", tty_strip)
-      traefik_client.create_entity("Middleware", "middlewares", fs_strip)
+      create_or_verify(traefik_client, "Middleware", "middlewares", tty_strip)
+      create_or_verify(traefik_client, "Middleware", "middlewares", fs_strip)
     end
 
     def create_ingressroute(handle)
@@ -520,7 +612,7 @@ module ContainerRuntime
         }
       )
 
-      traefik_client.create_entity("IngressRoute", "ingressroutes", ingress)
+      create_or_verify(traefik_client, "IngressRoute", "ingressroutes", ingress)
       Rails.logger.info("[KubernetesRuntime] IngressRoute created: #{handle.ingress_name}")
     end
 
@@ -551,7 +643,13 @@ module ContainerRuntime
         return true if pod_ready?(pod)
 
         elapsed = Time.current - start_time
-        raise "Pod failed to start within #{timeout}s" if elapsed > timeout
+        if elapsed > timeout
+          conditions = Array(pod.status&.conditions)
+          if conditions.any? { |c| c.type == "PodScheduled" && c.reason == "Unschedulable" }
+            raise CapacityError, "Waiting for cluster capacity"
+          end
+          raise "Pod failed to start within #{timeout}s"
+        end
 
         sleep ready_interval
       end
@@ -1196,67 +1294,6 @@ module ContainerRuntime
       ensure_runtime_image_pull_secrets(handle.namespace)
       ensure_terminal_auth_middleware(handle.namespace)
       ensure_runtime_network_policies(handle.namespace)
-      ensure_namespace_resource_quota(handle.namespace, namespace_context)
-    end
-
-    def ensure_namespace_resource_quota(namespace, context)
-      context = (context || {}).with_indifferent_access
-
-      scope_type, quota_record = if context[:project_id].present?
-        [ "Project", NamespaceResourceQuota.find_by(scope_type: "Project", scope_id: context[:project_id]) ]
-      elsif context[:user_id].present?
-        [ "User", NamespaceResourceQuota.find_by(scope_type: "User", scope_id: context[:user_id]) ]
-      else
-        [ nil, nil ]
-      end
-
-      hard_limits = build_quota_hard_limits(quota_record, scope_type)
-      return if hard_limits.empty?
-
-      quota_name = "aixle-resource-quota"
-
-      resource = Kubeclient::Resource.new(
-        apiVersion: "v1",
-        kind: "ResourceQuota",
-        metadata: {
-          name: quota_name,
-          namespace: namespace
-        },
-        spec: {
-          hard: hard_limits
-        }
-      )
-
-      begin
-        existing = core_client.get_resource_quota(quota_name, namespace)
-        if existing.spec.hard != hard_limits
-          resource.metadata.resourceVersion = existing.metadata.resourceVersion
-          core_client.update_resource_quota(resource)
-        end
-      rescue Kubeclient::ResourceNotFoundError
-        core_client.create_resource_quota(resource)
-      end
-    end
-
-    def build_quota_hard_limits(quota_record, scope_type)
-      settings_key = scope_type == "Project" ? :project_defaults : :user_defaults
-      defaults = Settings.namespace_resource_quotas&.send(settings_key) || {}
-
-      fields = %i[cpu_requests memory_requests cpu_limits memory_limits max_pods]
-
-      merged = fields.each_with_object({}) do |field, hash|
-        value = quota_record&.send(field)
-        value = defaults[field] if value.nil?
-        hash[field] = value unless value.nil?
-      end
-
-      hard = {}
-      hard["requests.cpu"]    = merged[:cpu_requests].to_s    if merged.key?(:cpu_requests)
-      hard["requests.memory"] = merged[:memory_requests].to_s if merged.key?(:memory_requests)
-      hard["limits.cpu"]      = merged[:cpu_limits].to_s      if merged.key?(:cpu_limits)
-      hard["limits.memory"]   = merged[:memory_limits].to_s   if merged.key?(:memory_limits)
-      hard["count/pods"]      = merged[:max_pods].to_s        if merged.key?(:max_pods)
-      hard
     end
 
     def ensure_runtime_image_pull_secrets(namespace)

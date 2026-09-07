@@ -143,7 +143,7 @@ function AgentAuthTerminal({
 
   if (session) creatingRef.current = false;
   const sessionState = session?.state ?? (creatingRef.current ? 'starting' : 'idle');
-  const isTerminal = sessionState === 'finished' || sessionState === 'failed';
+  const isTerminal = ['finished', 'failed', 'cancelled'].includes(sessionState);
   const ttydUrl = session?.state === 'ready' && session.websocketUrl ? ttydUrlFromWs(session.websocketUrl) : null;
 
   useInertiaCableStream(session?.cableStream, {
@@ -234,11 +234,22 @@ function AgentAuthTerminal({
     );
   }
 
-  if (sessionState === 'failed') {
+  if (sessionState === 'queued') {
+    return (
+      <Stack align="center" justify="center" h="100%" gap="sm">
+        <Loader size="sm" />
+        <Text size="sm">Waiting for an available session slot</Text>
+      </Stack>
+    );
+  }
+
+  if (sessionState === 'failed' || sessionState === 'cancelled') {
     return (
       <Stack align="center" justify="center" h="100%" gap="sm">
         <Text size="sm" c="red">
-          Authentication session failed to start.
+          {sessionState === 'cancelled'
+            ? 'Authentication session cancelled.'
+            : 'Authentication session failed to start.'}
         </Text>
         <Button size="xs" variant="outline" onClick={createSession}>
           Retry

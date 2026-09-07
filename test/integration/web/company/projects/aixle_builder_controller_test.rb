@@ -74,7 +74,11 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     # `config_item_ids`, so the session scope preloads `:config_items`. One query
     # for the whole page however many sessions it lists — which is exactly what
     # this guard exists to hold.
-    assert_operator query_count, :<=, 20, "Expected bounded content query count, got #{query_count}"
+    #
+    # 20 -> 21 with the session admission queue: the resource serializes
+    # `wait_reason` off `session_admission`, so the scope preloads it. Same
+    # shape — one query for the page, not one per session.
+    assert_operator query_count, :<=, 21, "Expected bounded content query count, got #{query_count}"
   end
 
   # ── start ─────────────────────────────────────────

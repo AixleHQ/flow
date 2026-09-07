@@ -189,6 +189,9 @@ module Agents
     # (a) adding designOauth isn't skipped just because claudeAiOauth didn't change, and
     # (b) a session without design access never wipes a stored designOauth.
     OAUTH_BLOCKS = %w[claudeAiOauth designOauth].freeze
+    # The base login. Every other block is an add-on layered onto it, so only this
+    # one going bad makes the whole credential unusable.
+    BASE_OAUTH_BLOCK = "claudeAiOauth"
 
     # Proactive server-side token refresh (Temporal sweep).
     REFRESH_MARGIN_MS = 15 * 60 * 1000 # refresh a block if it expires within 15 min (or already expired)
@@ -227,8 +230,13 @@ module Agents
     # via merge_refreshed_credentials + from_artifacts so a concurrent live session's
     # cleanup can't clobber the rotated token.
     # @param credential [AgentCredential]
-    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil }
-    def refresh!(credential)
+    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil,
+    #   permanent: Boolean } — `permanent` is true only when the BASE login is the block
+    #   the server rejected; a dead add-on (designOauth) leaves the credential usable.
+    # @param margin_ms [Integer] refresh a block expiring within this many ms. The sweep
+    #   uses the default; a session launch passes its own, larger, threshold so the
+    #   container starts with a token that outlives the session.
+    def refresh!(credential, margin_ms: REFRESH_MARGIN_MS)
       current = credential.config_data
       now_ms  = (Time.current.to_f * 1000).to_i
       refreshed_blocks = {}
@@ -241,18 +249,22 @@ module Agents
 
         exp = block["expiresAt"].to_i
         # refresh if expired or within the margin
-        next unless exp.positive? && (exp - now_ms) <= REFRESH_MARGIN_MS
+        next unless exp.positive? && (exp - now_ms) <= margin_ms
 
         client_id = block_name == "designOauth" ? block["clientId"] : base_oauth_client_id
         new_block = request_oauth_refresh(client_id: client_id, refresh_token: block["refreshToken"],
-                                          previous: block, now_ms: now_ms)
+                                          previous: block, now_ms: now_ms,
+                                          block_name: block_name, credential_id: credential.id)
         if new_block == :invalid_grant
-          # Server has permanently rejected the refresh token. Clear accessToken so
-          # config_files does not write a stale token into the next container — which
-          # would cause DesignSync (or base inference) to fail with an opaque 401.
-          # refreshToken is preserved so the block stays in the DB and the UI shows
-          # "Reconnect Design" rather than losing the Design connection entirely.
-          invalidated_blocks[block_name] = block.except("accessToken")
+          # Server has permanently rejected the refresh token. Strip every piece of
+          # token material: accessToken so config_files does not write a stale token
+          # into the next container (DesignSync or base inference would fail with an
+          # opaque 401), and refreshToken + expiresAt so the sweep stops retrying a
+          # grant the server will never honour again. Retrying it forever is what
+          # pinned expires_at in the past and re-failed the credential every 5 minutes.
+          # The block itself stays so the UI still offers "Reconnect Design" rather
+          # than losing the Design connection entirely.
+          invalidated_blocks[block_name] = block.except("accessToken", "refreshToken", "expiresAt")
           error ||= "#{block_name} invalid_grant — reconnection required"
         elsif new_block
           refreshed_blocks[block_name] = new_block
@@ -275,11 +287,19 @@ module Agents
         end
       end
 
-      return { status: :error,      detail: error } if changes.empty? && error
-      return { status: :not_needed, detail: nil }   if changes.empty?
-      return { status: :error,      detail: error } if invalidated_blocks.any? && refreshed_blocks.empty?
+      # Only a rejected BASE login makes the credential unusable, and only that may
+      # flip it to `error`: a session runs on claudeAiOauth alone, so a dead
+      # designOauth must not take the user's whole Claude login down with it.
+      permanent = invalidated_blocks.key?(BASE_OAUTH_BLOCK)
 
-      { status: :refreshed, detail: error } # partial failure (one block ok, one failed) still counts as refreshed
+      return { status: :not_needed, detail: nil, permanent: false } if changes.empty? && error.nil?
+      # A rejected base login is a failure even when an add-on block rotated fine in
+      # the same pass — reporting :refreshed there would clear the error the user
+      # has to act on.
+      return { status: :error, detail: error, permanent: permanent } if error && (permanent || refreshed_blocks.empty?)
+
+      # partial failure (add-on block failed, base rotated) still counts as refreshed
+      { status: :refreshed, detail: error, permanent: false }
     end
 
     # Extract only the credentials we need to persist
@@ -855,7 +875,12 @@ module Agents
     # or nil on any network / non-2xx / parse failure (logged). Preserves the block's
     # refreshToken when the server omits a rotated one, and its clientId (designOauth
     # carries its own; claudeAiOauth's is typically nil and dropped by .compact).
-    def request_oauth_refresh(client_id:, refresh_token:, previous:, now_ms:)
+    # `block_name` and `credential_id` exist for the log line alone: a refresh failure
+    # is only diagnosable if it says WHICH block of WHICH credential died and how old
+    # the grant was. "invalid_grant" on a block still minutes from its own expiry means
+    # something else rotated the grant out from under us (a container holding the same
+    # token); on a long-stale block it means the grant simply aged out.
+    def request_oauth_refresh(client_id:, refresh_token:, previous:, now_ms:, block_name: nil, credential_id: nil)
       uri = URI(OAUTH_TOKEN_URL)
       req = Net::HTTP::Post.new(uri)
       req["Content-Type"] = "application/x-www-form-urlencoded"
@@ -867,7 +892,8 @@ module Agents
       response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |h| h.request(req) }
       unless response.is_a?(Net::HTTPSuccess)
         body = response.body.to_s
-        Rails.logger.warn("[ClaudeCodeAdapter] Token refresh failed: #{response.code} #{body.truncate(200)}")
+        Rails.logger.warn("[ClaudeCodeAdapter] Token refresh failed: #{response.code} #{body.truncate(200)} " \
+                          "(#{refresh_context(block_name, credential_id, previous, now_ms)})")
         if response.code == "400"
           parsed = JSON.parse(body) rescue {}
           return :invalid_grant if parsed["error"] == "invalid_grant"
@@ -883,8 +909,23 @@ module Agents
         "clientId"     => previous["clientId"] # preserve (designOauth carries its own; claudeAiOauth may be nil → compacted)
       }.compact
     rescue StandardError => e
-      Rails.logger.warn("[ClaudeCodeAdapter] Token refresh error: #{e.class}: #{e.message}")
+      Rails.logger.warn("[ClaudeCodeAdapter] Token refresh error: #{e.class}: #{e.message} " \
+                        "(#{refresh_context(block_name, credential_id, previous, now_ms)})")
       nil
+    end
+
+    # Never carries token material — block name, credential id and expiry only.
+    def refresh_context(block_name, credential_id, previous, now_ms)
+      expires_at = previous["expiresAt"].to_i
+      parts = [ "block=#{block_name || 'unknown'}", "credential=#{credential_id || 'unknown'}" ]
+      if expires_at.positive?
+        minutes = ((expires_at - now_ms) / 60_000.0).round
+        parts << "expiresAt=#{Time.zone.at(expires_at / 1000.0).utc.iso8601}"
+        parts << (minutes.negative? ? "expired_#{minutes.abs}m_ago" : "expires_in_#{minutes}m")
+      else
+        parts << "expiresAt=none"
+      end
+      parts.join(" ")
     end
 
     def request_subscription_usage(token)

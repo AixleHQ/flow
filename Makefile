@@ -92,9 +92,10 @@ endef
 # tsc/eslint — let alone the Ruby suite in the old all-in-one check_all — CPU-starved the heaviest
 # jsdom+userEvent form tests past their timeout: green in isolation, flaky only under the full load.
 define run_fe_checks
-	@echo "Running eslint, typescript in parallel..."
+	@echo "Running eslint, typescript, fsd in parallel..."
 	@( yarn lint                                                    > $(CHECK_RESULTS)/eslint.log     2>&1; echo $$? > $(CHECK_RESULTS)/eslint.status )     & \
 	 ( yarn tsc                                                     > $(CHECK_RESULTS)/typescript.log 2>&1; echo $$? > $(CHECK_RESULTS)/typescript.status ) & \
+	 ( yarn fsd                                                     > $(CHECK_RESULTS)/fsd.log        2>&1; echo $$? > $(CHECK_RESULTS)/fsd.status )        & \
 	 wait
 	@echo "Running fe-test (Vitest$(if $(filter 1,$(RUN_COVERAGE)), + coverage,)) on its own..."
 	@( $(FE_TEST_CMD)                                               > $(CHECK_RESULTS)/fe-test.log    2>&1; echo $$? > $(CHECK_RESULTS)/fe-test.status )
@@ -172,7 +173,7 @@ check_all:
 be_check: rails-test rubocop-fix brakeman
 
 # Run frontend checks
-fe_check: eslint-fix typescript
+fe_check: eslint-fix typescript fsd
 
 # Run all linters
 lint: eslint-fix rubocop-fix brakeman typescript
@@ -207,6 +208,14 @@ eslint:
 # Run ESLint with auto-correction
 eslint-fix:
 	yarn lint:fix
+
+# Run the Feature-Sliced Design check (config: steiger.config.js)
+fsd:
+	yarn fsd
+
+# Run the Feature-Sliced Design check with auto-correction
+fsd-fix:
+	yarn fsd:fix
 
 db_dump:
 	pg_dump --no-owner --no-privileges -c "postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}" | gzip > ${TODAY}.sql.gz
@@ -323,6 +332,8 @@ help:
 	@echo "  make rubocop-fix            - Run Rubocop with auto-correction"
 	@echo "  make eslint                 - Run ESLint"
 	@echo "  make eslint-fix             - Run ESLint with auto-correction"
+	@echo "  make fsd                    - Run the Feature-Sliced Design check (steiger)"
+	@echo "  make fsd-fix                - Run the Feature-Sliced Design check with auto-correction"
 	@echo "  make typescript             - Run TypeScript compiler check"
 	@echo "  make brakeman               - Run Brakeman security analysis"
 	@echo "  make license-report         - Generate Ruby and npm license reports"

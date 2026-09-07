@@ -4,14 +4,15 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
   def show
     sessions = current_project.terminal_sessions
                        .with_cached_resource_counts
-                       .includes(:user, :project, :tools, :skills, :mcp_servers, :config_items,
+                       .includes(:user, :project, :session_admission,
+                                 :tools, :skills, :mcp_servers, :config_items,
                                  :input_assets, :repositories)
                        .where(user: current_user)
                        .where("metadata @> ?", { aixle_builder: true }.to_json)
                        .order(created_at: :desc)
                        .limit(20)
 
-    active_session = sessions.find { |s| %w[not_started running ready].include?(s.state) }
+    active_session = sessions.find { |s| %w[not_started queued running ready].include?(s.state) }
 
     render inertia: "Projects/AixleBuilder/LandingPage", props: {
       sessions: -> { sessions.map { |s| TerminalSessionResource.new(s).to_h } },

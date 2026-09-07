@@ -17,6 +17,8 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   agentType: 'claude_code',
   state: 'starting',
   mode: 'interactive',
+  queuedAt: null,
+  waitReason: null,
   startedAt: null,
   finishingAt: null,
   finishedAt: null,
