@@ -125,7 +125,10 @@ module Agents
 
       assert_equal 1, windows.size
       assert_equal "req-1", windows.first[:request_id]
-      assert windows.first[:response_ms].present?
+      # Pinned, not just `present?`: skipping node-http-logger response entries must
+      # leave the legacy HTTP/2 path taking its timestamp from http2-logger as before.
+      assert_equal @adapter.send(:parse_iso_to_epoch_ms, "2026-05-21T19:32:31.000Z"),
+                   windows.first[:response_ms]
     end
 
     test "build_rpc_windows pairs mitm RunSSE when response omits x-request-id" do
@@ -142,7 +145,12 @@ module Agents
 
       assert_equal 1, windows.size
       assert_equal "req-sse-1", windows.first[:request_id]
-      assert_equal @adapter.send(:parse_iso_to_epoch_ms, "2026-05-21T19:43:57.033Z"), windows.first[:response_ms]
+      # This fixture is a captured log, and the two response entries in it are 5.4 s
+      # apart on a short turn: node-http-logger's response HEADERS at :57.033, then
+      # mitmproxy's stream END at :44:02.435. The turn finished at the second one, so
+      # that is the timestamp the window has to end on.
+      assert_equal @adapter.send(:parse_iso_to_epoch_ms, "2026-05-21T19:44:02.435065Z"),
+                   windows.first[:response_ms]
     end
 
     test "build_rpc_windows ignores http2 requests without a matching response" do
@@ -370,22 +378,33 @@ module Agents
       session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
       create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
 
-      # `useHttp1ForAgent` sends RunSSE through mitmproxy, whose addon writes its
-      # response entry when the streamed body ENDS — three minutes after the turn
-      # started. Anchoring the match window on that timestamp put every billing
-      # event before the window and recorded no usage at all.
+      # The real shape of a proxied RunSSE: FOUR entries, because start-mitm.sh loads
+      # http2-logger.js into the agent unconditionally, so the in-process logger and the
+      # proxy each log the same call. Only mitmproxy's response entry marks the end of
+      # the turn — node-http-logger's fires on response HEADERS, three minutes earlier.
+      # Note what the two response entries carry: node-http-logger writes no headers at
+      # all, and mitmproxy serialises `dict(resp.headers)`, where x-request-id (a REQUEST
+      # header) is absent. Letting the node entry claim the pending rid threw the
+      # stream-end timestamp away and closed the window while the turn was still running.
       request_iso = "2026-05-21T19:32:30.000Z"
       request_ms = @adapter.send(:parse_iso_to_epoch_ms, request_iso)
+      response_headers_iso = "2026-05-21T19:32:33.000Z"
       stream_end_iso = "2026-05-21T19:35:30.000Z"
       mitm_log = [
         { ts: request_iso, direction: "request", path: "/agent.v1.AgentService/RunSSE",
+          _source: "node-http-logger" },
+        { ts: request_iso, direction: "request", path: "/agent.v1.AgentService/RunSSE",
           headers: { "x-request-id" => "req-sse" } },
+        { ts: response_headers_iso, direction: "response", path: "/agent.v1.AgentService/RunSSE",
+          status_code: 200, _source: "node-http-logger" },
         { ts: stream_end_iso, direction: "response", path: "/agent.v1.AgentService/RunSSE",
-          headers: { "x-request-id" => "req-sse" } }
+          status_code: 200, headers: { "content-type" => "application/connect+json" } }
       ].map(&:to_json).join("\n")
 
+      # Billed two minutes into the stream: past the response headers (and their 1 s
+      # tail), well before the stream ends.
       api_events = [
-        { "timestamp" => (request_ms + 5_000).to_s, "model" => "claude-4-sonnet",
+        { "timestamp" => (request_ms + 120_000).to_s, "model" => "claude-4-sonnet",
           "tokenUsage" => { "inputTokens" => 700, "outputTokens" => 120, "totalCents" => 2.25 } }
       ]
       stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
@@ -401,6 +420,53 @@ module Agents
       assert_equal 120, stat.output_tokens
       assert_equal 3, stat.cost_cents
       assert_equal "recorded", session.metadata["usage_collection"]["status"]
+
+      # The queried span has to run to the stream end, not to the response headers.
+      expected_end = @adapter.send(:parse_iso_to_epoch_ms, stream_end_iso) + 1_000
+      assert_equal expected_end, session.metadata["usage_api_result"]["time_window"]["end_ms"]
+    end
+
+    test "build_rpc_windows takes response_ms from the stream end, not the response headers" do
+      request_iso = "2026-05-21T19:32:30.000Z"
+      response_headers_iso = "2026-05-21T19:32:33.000Z"
+      stream_end_iso = "2026-05-21T19:35:30.000Z"
+      log = [
+        { ts: request_iso, direction: "request", path: "/agent.v1.AgentService/RunSSE",
+          _source: "node-http-logger" },
+        { ts: request_iso, direction: "request", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "x-request-id" => "req-sse" } },
+        { ts: response_headers_iso, direction: "response", path: "/agent.v1.AgentService/RunSSE",
+          _source: "node-http-logger" },
+        { ts: stream_end_iso, direction: "response", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "content-type" => "application/connect+json" } }
+      ].map(&:to_json).join("\n")
+
+      windows = @adapter.send(:build_rpc_windows, log)
+
+      assert_equal 1, windows.size
+      assert_equal @adapter.send(:parse_iso_to_epoch_ms, request_iso), windows.first[:start_ms]
+      assert_equal @adapter.send(:parse_iso_to_epoch_ms, stream_end_iso), windows.first[:response_ms]
+    end
+
+    test "build_rpc_windows pairs consecutive streamed RPCs in FIFO order" do
+      log = [
+        { ts: "2026-05-21T19:32:30.000Z", direction: "request", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "x-request-id" => "first" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/RunSSE",
+          _source: "node-http-logger" },
+        { ts: "2026-05-21T19:33:00.000Z", direction: "response", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "content-type" => "application/connect+json" } },
+        { ts: "2026-05-21T19:33:05.000Z", direction: "request", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "x-request-id" => "second" } },
+        { ts: "2026-05-21T19:34:00.000Z", direction: "response", path: "/agent.v1.AgentService/RunSSE",
+          headers: { "content-type" => "application/connect+json" } }
+      ].map(&:to_json).join("\n")
+
+      windows = @adapter.send(:build_rpc_windows, log)
+
+      assert_equal %w[first second], windows.map { |w| w[:request_id] }
+      assert_equal @adapter.send(:parse_iso_to_epoch_ms, "2026-05-21T19:33:00.000Z"), windows.first[:response_ms]
+      assert_equal @adapter.send(:parse_iso_to_epoch_ms, "2026-05-21T19:34:00.000Z"), windows.last[:response_ms]
     end
 
     test "collect_usage queries up to the latest response across overlapping RPCs" do
@@ -520,6 +586,31 @@ module Agents
       ].map(&:to_json).join("\n")
       stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
         .to_return(status: 500, body: "boom")
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      assert_nil session.reload.usage_statistic
+      assert_equal "api_error", session.metadata["usage_collection"]["status"]
+    end
+
+    test "collect_usage records api_error for a Connect error returned with HTTP 200" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      mitm_log = [
+        { ts: "2026-05-21T19:32:30.000Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } }
+      ].map(&:to_json).join("\n")
+      # The Connect protocol answers errors with a 200 and an error body. Such a body
+      # has no usageEventsDisplay, so treating it as an empty list would stamp
+      # `no_api_events` — "nothing was billed" — on a call that never ran.
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200,
+                   body: { "code" => "unauthenticated", "message" => "invalid token" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
 
       @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
 

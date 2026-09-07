@@ -381,6 +381,18 @@ module Agents
       end
 
       data = JSON.parse(response.body)
+
+      # A Connect-protocol error arrives as an HTTP 200 with an error body — which is
+      # why #fetch_available_models guards the same way. Without this, such a body
+      # parses fine, `usageEventsDisplay` is missing, `|| []` yields an empty array and
+      # #collect_usage stamps `no_api_events` — "the API answered, with nothing billed".
+      # That is exactly the reading the diagnostic exists to make unambiguous, so a real
+      # API failure has to come back as nil (→ `api_error`) instead.
+      if data["code"].present?
+        Rails.logger.error("[CursorCliAdapter] API returned Connect error #{data['code']}: #{data['message']}")
+        return nil
+      end
+
       data["usageEventsDisplay"] || []
     rescue StandardError => e
       Rails.logger.error("[CursorCliAdapter] API response parse error: #{e.class}: #{e.message}")
@@ -449,9 +461,26 @@ module Agents
 
     # Build correlation windows from MITM + http2-logger entries.
     #
-    # HTTP/2 Run (legacy): http2-logger pairs request/response by x-request-id.
-    # HTTP/1 RunSSE (useHttp1ForAgent): mitmproxy logs requests with x-request-id but
-    # streaming responses often omit it — pair those by FIFO order per path.
+    # Every agent RPC is seen TWICE, because start-mitm.sh exports
+    # `NODE_OPTIONS --require /opt/mitm/http2-logger.js` unconditionally: once by the
+    # in-process JS logger and once by the proxy. A single RunSSE therefore leaves four
+    # lines in the log, and only the mitmproxy pair is usable:
+    #
+    #   request   node-http-logger   no headers block at all      → skipped
+    #   request   mitmproxy          x-request-id (request header) → registers the rid
+    #   response  node-http-logger   response HEADERS time         → skipped
+    #   response  mitmproxy          stream END time               → sets response_ms
+    #
+    # `node-http-logger` is dropped on BOTH sides. Its entries carry no headers
+    # (http2-logger.js:126,136), so they can never register a rid — meaning the request
+    # side has always skipped them, and without a rid the response side could only ever
+    # overwrite a timestamp, never contribute a window of its own. Worse, it fires on the
+    # `response` event, i.e. when response HEADERS arrive; for a streamed turn that is
+    # tens of seconds before the turn ends. Letting it claim the pending rid discarded
+    # mitmproxy's stream-end timestamp on every RPC and ended the window early.
+    #
+    # HTTP/2 Run (legacy) is unaffected: http2-logger tags its entries `http2-logger`
+    # and puts x-request-id on both sides, so they keep pairing by rid.
     def build_rpc_windows(log_content)
       requests = {}        # request_id → { start_ms:, request_id:, path: }
       responses = {}       # request_id → response_ms
@@ -475,10 +504,7 @@ module Agents
           requests[rid] = { start_ms: ts, request_id: rid, path: path }
           (pending_by_path[path] ||= []) << rid
         when "response"
-          if source == "node-http-logger"
-            assign_response_timestamp!(responses, pending_by_path, path, ts)
-            next
-          end
+          next if source == "node-http-logger"
 
           if rid.present?
             responses[rid] = ts unless responses.key?(rid)
@@ -499,6 +525,9 @@ module Agents
       end.sort_by { |w| w[:start_ms] }
     end
 
+    # FIFO fallback for mitmproxy response entries, which carry no x-request-id:
+    # mitm_logger.py serialises `dict(resp.headers)` and x-request-id is a REQUEST
+    # header. Pair them with the oldest still-pending request on the same path.
     def assign_response_timestamp!(responses, pending_by_path, path, ts)
       pending_rid = pending_by_path.dig(path)&.first
       return if pending_rid.blank?
@@ -522,15 +551,21 @@ module Agents
     #
     #     [request_ms, response_ms + RPC_WINDOW_AFTER_RESPONSE_MS]
     #
-    # It used to start at `response_ms`, which silently assumed the response entry
-    # was logged when the response HEADERS arrived — true of http2-logger and
-    # node-http-logger, both of which fire on the `response` event. It is NOT true
-    # of mitmproxy: mitm_logger.py streams the body and writes its entry when the
-    # stream ENDS, which for an agent turn is minutes later. Since `useHttp1ForAgent`
-    # routes AgentService/RunSSE through the proxy, a session whose only response
-    # entries came from mitmproxy had every billing event fall before its window and
-    # recorded no usage at all. Anchoring on the request makes the window correct for
-    # both loggers, because the billing event cannot predate the request that caused it.
+    # It used to start at `response_ms`, i.e. a 1-second window hung off the end of the
+    # RPC. Both bounds were wrong, and each was wrong for its own reason:
+    #
+    #   * `lo` assumed the billing event is stamped after the response. Cursor stamps it
+    #     while the turn is still streaming, so the event fell before the window.
+    #     Anchoring on the request is always safe — a billing event cannot predate the
+    #     request that caused it.
+    #   * `hi` was the response HEADERS time rather than the stream end, because
+    #     #build_rpc_windows let node-http-logger's response entry claim the pending rid
+    #     and threw mitmproxy's stream-end timestamp away. On a live 258-second session
+    #     that left a window 1141 ms wide, and the query came back empty. Now that the
+    #     node entry is skipped, `response_ms` really is the end of the turn.
+    #
+    # Both bounds had to move. The request anchor alone still leaves a window that closes
+    # ~1 s after the response headers, tens of seconds before a streamed turn is billed.
     #
     # The trade-off: while one RPC is in flight, an event billed to a CONCURRENT
     # session on the same Cursor account can land inside this session's window. The
