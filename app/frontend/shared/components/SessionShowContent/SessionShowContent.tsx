@@ -9,9 +9,11 @@ import {
   Center,
   Group,
   Loader,
+  Select,
   Stack,
   Text,
   Tooltip,
+  UnstyledButton,
   useComputedColorScheme,
 } from '@mantine/core';
 import { type HotkeyItem, useClipboard, useHotkeys } from '@mantine/hooks';
@@ -31,6 +33,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels';
 
+import { LlmCallsTable } from '@/shared/ui/llm-calls';
+import type LlmCall from 'types/generated/LlmCall';
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import { apiMutate } from 'shared/lib/apiFetch';
@@ -78,6 +82,7 @@ export interface SessionShowContext {
 
 interface Props {
   session: TerminalSession;
+  llmCalls?: LlmCall[];
   cableStream: string;
   context: SessionShowContext;
   workflowContext?: SessionWorkflowContext | null;
@@ -102,7 +107,13 @@ function sessionTitle(s: TerminalSession, workflowContext?: SessionWorkflowConte
   return 'Interactive session';
 }
 
-export function SessionShowContent({ session: s, cableStream, context: ctx, workflowContext = null }: Props) {
+export function SessionShowContent({
+  session: s,
+  llmCalls = [],
+  cableStream,
+  context: ctx,
+  workflowContext = null,
+}: Props) {
   const { canExecute } = useProjectPermissions();
   const isTerminal = ['finished', 'failed', 'cancelled'].includes(s.state);
   const isQueued = s.state === 'queued';
@@ -118,6 +129,17 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   const frameRef = useRef<HTMLDivElement>(null);
   const clipboard = useClipboard({ timeout: 2000 });
   const runsOnMeta = useRunsOnMeta(s.runner, s.runnerId, s.projectId);
+  const [llmModelFilter, setLlmModelFilter] = useState<string | null>(null);
+  const [llmCallsOpen, setLlmCallsOpen] = useState(false);
+
+  const llmModelOptions = useMemo(
+    () => [...new Set(llmCalls.map((c) => c.model))].sort().map((m) => ({ value: m, label: m })),
+    [llmCalls],
+  );
+  const filteredLlmCalls = useMemo(
+    () => (llmModelFilter ? llmCalls.filter((c) => c.model === llmModelFilter) : llmCalls),
+    [llmCalls, llmModelFilter],
+  );
 
   const now = useElapsedTimer(isActive);
 
@@ -520,6 +542,43 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       )}
 
       {header}
+
+      {isTerminal && llmCalls.length > 0 && (
+        <Box className={classes.llmCallsPanel}>
+          <UnstyledButton onClick={() => setLlmCallsOpen((o) => !o)} w="100%" aria-expanded={llmCallsOpen}>
+            <Group gap={6}>
+              <IconChevronRight
+                size={14}
+                style={{ transition: 'transform 150ms', transform: llmCallsOpen ? 'rotate(90deg)' : 'none' }}
+              />
+              <Text size="xs" fw={600} c="dimmed" tt="uppercase">
+                LLM calls
+              </Text>
+              <Badge size="xs" variant="light">
+                {llmCalls.length}
+              </Badge>
+            </Group>
+          </UnstyledButton>
+          {llmCallsOpen && (
+            <>
+              {llmModelOptions.length > 1 && (
+                <Group px={22} pb={8} pt={8}>
+                  <Select
+                    size="xs"
+                    placeholder="Model"
+                    data={llmModelOptions}
+                    value={llmModelFilter}
+                    onChange={setLlmModelFilter}
+                    clearable
+                    w={220}
+                  />
+                </Group>
+              )}
+              <LlmCallsTable calls={filteredLlmCalls} showSessionColumn={false} />
+            </>
+          )}
+        </Box>
+      )}
 
       <div className={isTerminal ? classes.body : `${classes.body} ${classes.bodyLive}`}>
         {s.authNotice?.state === 'expired' && (

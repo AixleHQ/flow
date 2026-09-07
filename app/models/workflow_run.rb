@@ -50,6 +50,7 @@ class WorkflowRun < ApplicationRecord
   belongs_to :team, class_name: "ProjectTeam", optional: true, inverse_of: :workflow_runs
 
   has_many :step_runs, dependent: :destroy
+  has_many :llm_calls, dependent: :destroy
   has_many :workflow_run_assets, dependent: :destroy
   has_many :column_transitions, dependent: :nullify
 

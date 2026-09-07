@@ -89,6 +89,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'queued', startedAt: null, launchPhase: 'queued_for_slot' })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -190,7 +191,12 @@ describe('SessionShowContent', () => {
 
   it('treats cancelled sessions as terminal without finish controls', () => {
     renderPage(
-      <SessionShowContent session={makeSession({ state: 'cancelled' })} cableStream="signed-stream" context={ctx} />,
+      <SessionShowContent
+        session={makeSession({ state: 'cancelled' })}
+        llmCalls={[]}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
     );
     expect(screen.getByText('Cancelled')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Finish session' })).not.toBeInTheDocument();
@@ -200,6 +206,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ id: 42, state: 'ready', initialPrompt: 'Audit the GA4 property', userName: 'Ada' })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -248,7 +255,7 @@ describe('SessionShowContent', () => {
 
   it('labels a standalone session as such and a workflow-step session by its position', () => {
     const { unmount } = renderPage(
-      <SessionShowContent session={makeSession()} cableStream="signed-stream" context={ctx} />,
+      <SessionShowContent session={makeSession()} llmCalls={[]} cableStream="signed-stream" context={ctx} />,
     );
     expect(screen.getByText('Standalone session')).toBeInTheDocument();
     unmount();
@@ -256,6 +263,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession()}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
         workflowContext={{
@@ -284,6 +292,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ id: 99, state: 'running' })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -306,7 +315,7 @@ describe('SessionShowContent', () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
 
-    renderPage(<SessionShowContent session={makeSession()} cableStream="signed-stream" context={ctx} />);
+    renderPage(<SessionShowContent session={makeSession()} llmCalls={[]} cableStream="signed-stream" context={ctx} />);
 
     await userEvent.click(screen.getByRole('button', { name: /copy session link/i }));
 
@@ -326,6 +335,7 @@ describe('SessionShowContent', () => {
           outputTokens: 4000,
           models: ['claude-sonnet'],
         })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -343,6 +353,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'finished', finishedAt: '2026-06-26T10:05:00Z', pendingArtifactsCount: 3 })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -357,6 +368,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'finished', finishedAt: '2026-06-26T10:05:00Z', costCents: 478 })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -372,6 +384,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'finished', initialPrompt: 'Generate a detailed release report' })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
         workflowContext={{
@@ -402,6 +415,7 @@ describe('SessionShowContent', () => {
           finishedAt: '2026-06-26T10:05:00Z',
           errorMessage: 'Container exploded',
         })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -416,6 +430,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'not_started', websocketUrl: undefined })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -428,7 +443,12 @@ describe('SessionShowContent', () => {
 
   it('renders the finishing overlay while the session is finishing', () => {
     renderPage(
-      <SessionShowContent session={makeSession({ state: 'finishing' })} cableStream="signed-stream" context={ctx} />,
+      <SessionShowContent
+        session={makeSession({ state: 'finishing' })}
+        llmCalls={[]}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
     );
 
     expect(screen.getByText(/finishing session/i)).toBeInTheDocument();
@@ -439,6 +459,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'ready', websocketUrl: 'wss://host.test/sess/ws' })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -458,6 +479,7 @@ describe('SessionShowContent', () => {
           websocketUrl: 'wss://host.test/sess/ws',
           ideUrl: 'https://host.test/ide',
         })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -476,6 +498,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'ready', ownedByViewer: true, websocketUrl: 'wss://host.test/sess/ws' })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
