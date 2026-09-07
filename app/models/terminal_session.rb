@@ -63,6 +63,7 @@ class TerminalSession < ApplicationRecord
   belongs_to :company, optional: true
   belongs_to :configured_agent, class_name: "Agent", optional: true
   has_one :usage_statistic, dependent: :destroy
+  has_many :llm_calls, dependent: :destroy
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
   has_one :step_run, dependent: :nullify
@@ -354,6 +355,7 @@ class TerminalSession < ApplicationRecord
 
   def on_finished
     assign_usage_totals
+    materialize_llm_calls
     self.finished_at = Time.current
     self.container_id = nil
     ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
@@ -361,6 +363,7 @@ class TerminalSession < ApplicationRecord
 
   def on_failed
     assign_usage_totals
+    materialize_llm_calls
     self.finished_at = Time.current
     self.container_id = nil
     ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
@@ -370,6 +373,7 @@ class TerminalSession < ApplicationRecord
   # its id; the usage it ran up so far is recorded like any other ending.
   def on_cancelled
     assign_usage_totals
+    materialize_llm_calls
     self.finished_at = Time.current
     ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
   end
@@ -421,6 +425,42 @@ class TerminalSession < ApplicationRecord
     )
   rescue StandardError => e
     Rails.logger.error("[TerminalSession] Failed to read usage for #{id}: #{e.message}")
+  end
+
+  def materialize_llm_calls
+    stat = reload_usage_statistic
+    events = stat&.events_data.presence
+    return if events.nil?
+    return if LlmCall.where(terminal_session_id: id).exists?
+
+    run_id  = step_run&.workflow_run_id
+    step_id = step_run&.id
+
+    rows = events.filter_map do |event|
+      usage = event["tokenUsage"] || {}
+      ts_ms = event["timestamp"]
+      occurred = ts_ms.present? ? Time.at(ts_ms.to_i / 1000.0).utc : created_at
+
+      {
+        terminal_session_id: id,
+        workflow_run_id:     run_id,
+        step_run_id:         step_id,
+        model:               event["model"].presence || "unknown",
+        input_tokens:        usage["inputTokens"].to_i,
+        output_tokens:       usage["outputTokens"].to_i,
+        cache_read_tokens:   usage["cacheReadTokens"].to_i,
+        cache_write_tokens:  usage["cacheWriteTokens"].to_i,
+        total_cents_precise: usage["totalCents"].to_f,
+        source:              event["source"].to_s,
+        occurred_at:         occurred,
+        created_at:          Time.current,
+        updated_at:          Time.current
+      }
+    end
+
+    LlmCall.insert_all(rows) if rows.any?
+  rescue StandardError => e
+    Rails.logger.error("[TerminalSession] Failed to materialize llm_calls for #{id}: #{e.message}")
   end
 
   def strategy_params

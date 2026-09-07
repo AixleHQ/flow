@@ -1,5 +1,6 @@
 import { Head, usePage } from '@inertiajs/react';
 
+import type LlmCall from 'types/generated/LlmCall';
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import {
@@ -13,11 +14,13 @@ interface Props {
   project: { id: number; name: string };
   session: TerminalSession;
   workflowContext: SessionWorkflowContext | null;
+  llmCalls: LlmCall[];
   cableStream: string;
 }
 
 const ProjectSessionShowPage = () => {
-  const { project, session, workflowContext, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, session, workflowContext, llmCalls, cableStream } = usePage<{ props: Props }>()
+    .props as unknown as Props;
   const basePath = `/company/projects/${project.id}/sessions`;
 
   return (
@@ -25,6 +28,7 @@ const ProjectSessionShowPage = () => {
       <Head title={`Session #${session.id} — ${project.name}`} />
       <SessionShowContent
         session={session}
+        llmCalls={llmCalls}
         cableStream={cableStream}
         workflowContext={workflowContext}
         context={{
