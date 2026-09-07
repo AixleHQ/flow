@@ -31,6 +31,7 @@ function seed(props: Record<string, unknown> = {}) {
     project,
     run: makeRun(),
     assets: [],
+    llmCalls: [],
     cableStream: 'signed-stream',
     ...props,
   };
@@ -181,6 +182,14 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     await userEvent.click(screen.getByRole('tab', { name: /^Assets/ }));
 
     expect(screen.getByText(/No assets yet/)).toBeInTheDocument();
+  });
+
+  it('switches to the LLM calls tab and shows the empty message', async () => {
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ state: 'completed' }) }) });
+
+    await userEvent.click(screen.getByRole('tab', { name: /^LLM calls/ }));
+
+    expect(screen.getByText(/No LLM calls recorded yet/)).toBeInTheDocument();
   });
 
   it('shows the quota banner and re-runs the workflow on a failed quota run', async () => {

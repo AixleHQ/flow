@@ -188,6 +188,18 @@
   overflow: auto;
 }
 
+.llmCallsPanel {
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  background: var(--app-bg-card);
+  margin: 20px 28px 0;
+  padding: 14px;
+}
+
+.llmCallsPanel table {
+  margin-top: 0;
+}
+
 .errorBox {
   border: 1px solid var(--app-danger-border);
   background: var(--app-danger-bg);

@@ -510,3 +510,99 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert_equal 0, session.config_items.count
   end
 end
+
+class TerminalSessionMaterializeLlmCallsTest < ActiveSupport::TestCase
+  setup do
+    @company = create(:company)
+    @owner   = create(:user, company: @company)
+    @project = create(:project, company: @company, owner: @owner)
+    @session = create(:terminal_session, :agent_session, user: @owner, project: @project)
+
+    ts_ms = (Time.utc(2026, 1, 15, 12, 0, 0).to_f * 1000).round.to_s
+    @events = [
+      {
+        "model" => "claude-sonnet-4-5",
+        "timestamp" => ts_ms,
+        "tokenUsage" => {
+          "inputTokens" => 1200, "outputTokens" => 450,
+          "cacheReadTokens" => 100, "cacheWriteTokens" => 50,
+          "totalCents" => 0.045
+        },
+        "source" => "otlp"
+      },
+      {
+        "model" => "claude-sonnet-4-5",
+        "timestamp" => nil,
+        "tokenUsage" => {
+          "inputTokens" => 800, "outputTokens" => 200,
+          "cacheReadTokens" => 0, "cacheWriteTokens" => 0,
+          "totalCents" => 0.02
+        },
+        "source" => "mitm"
+      }
+    ]
+    @session.create_usage_statistic!(
+      tokens: 0, cost_cents: 0,
+      input_tokens: 0, output_tokens: 0,
+      cache_write_tokens: 0, cache_read_tokens: 0,
+      source: "otlp", events_count: 2, events_data: @events
+    )
+  end
+
+  test "materialize_llm_calls creates one LlmCall per event" do
+    assert_difference "LlmCall.count", 2 do
+      @session.send(:materialize_llm_calls)
+    end
+  end
+
+  test "materialize_llm_calls maps fields correctly" do
+    @session.send(:materialize_llm_calls)
+    call = LlmCall.order(:occurred_at).first
+
+    assert_equal "claude-sonnet-4-5", call.model
+    assert_equal 1200, call.input_tokens
+    assert_equal 450,  call.output_tokens
+    assert_equal 100,  call.cache_read_tokens
+    assert_equal 50,   call.cache_write_tokens
+    assert_in_delta 0.045, call.total_cents_precise.to_f, 0.0001
+    assert_equal "otlp", call.source
+    assert_equal Time.utc(2026, 1, 15, 12, 0, 0), call.occurred_at
+  end
+
+  test "materialize_llm_calls handles nil timestamp by using created_at" do
+    @session.send(:materialize_llm_calls)
+    call = LlmCall.order(occurred_at: :desc).first
+    assert_in_delta @session.created_at.to_f, call.occurred_at.to_f, 1.0
+  end
+
+  test "materialize_llm_calls is idempotent" do
+    @session.send(:materialize_llm_calls)
+    assert_no_difference "LlmCall.count" do
+      @session.send(:materialize_llm_calls)
+    end
+  end
+
+  test "materialize_llm_calls uses 'unknown' when model is nil" do
+    @session.usage_statistic.update!(events_data: [
+      { "model" => nil, "timestamp" => nil,
+        "tokenUsage" => { "inputTokens" => 10, "outputTokens" => 5 },
+        "source" => "otlp" }
+    ])
+    @session.send(:materialize_llm_calls)
+    assert_equal "unknown", LlmCall.last.model
+  end
+
+  test "materialize_llm_calls does nothing when events_data is empty" do
+    @session.usage_statistic.update!(events_data: [])
+    assert_no_difference "LlmCall.count" do
+      @session.send(:materialize_llm_calls)
+    end
+  end
+
+  test "materialize_llm_calls does nothing when usage_statistic is absent" do
+    @session.usage_statistic.destroy!
+    assert_no_difference "LlmCall.count" do
+      @session.send(:materialize_llm_calls)
+    end
+  end
+end
