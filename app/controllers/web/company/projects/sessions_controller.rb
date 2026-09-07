@@ -37,10 +37,13 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
                       .find(params[:id])
     authorize_session_visibility!(session)
 
+    llm_calls = session.llm_calls.order(occurred_at: :desc).map { |c| LlmCallResource.new(c).to_h }
+
     render inertia: "Projects/Sessions/ShowPage", props: {
       project: project_props,
       session: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h,
       workflow_context: workflow_context_for(session),
+      llm_calls: llm_calls,
       cable_stream: inertia_cable_stream(session)
     }
   end
