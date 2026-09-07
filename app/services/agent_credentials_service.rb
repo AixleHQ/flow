@@ -8,6 +8,7 @@ class AgentCredentialsService
     "cursor_cli" => Agents::CursorCliAdapter,
     "codex" => Agents::CodexAdapter,
     "gemini_cli" => Agents::GeminiCliAdapter,
+    "antigravity_cli" => Agents::AntigravityCliAdapter,
     "grok" => Agents::GrokAdapter
   }.freeze
 

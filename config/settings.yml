@@ -240,6 +240,7 @@ agents:
     cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'aixle/cursor-cli:latest' %>
     codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'aixle/codex:latest' %>
     gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'aixle/gemini-cli:latest' %>
+    antigravity_cli: <%= ENV['AGENT_IMAGE_ANTIGRAVITY_CLI'] || 'aixle/antigravity-cli:latest' %>
     grok: <%= ENV['AGENT_IMAGE_GROK'] || 'aixle/grok:latest' %>
   mcp:
     startup_timeout_ms: <%= ENV['AGENT_MCP_STARTUP_TIMEOUT_MS'] || 90000 %>

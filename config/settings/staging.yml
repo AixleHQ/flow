@@ -4,4 +4,5 @@ agents:
     cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'ghcr.io/aixle/aixle-app-cursor-cli' %>
     codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'ghcr.io/aixle/aixle-app-codex' %>
     gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'ghcr.io/aixle/aixle-app-gemini-cli' %>
+    antigravity_cli: <%= ENV['AGENT_IMAGE_ANTIGRAVITY_CLI'] || 'ghcr.io/aixle/aixle-app-antigravity-cli' %>
     grok: <%= ENV['AGENT_IMAGE_GROK'] || 'ghcr.io/aixle/aixle-app-grok' %>

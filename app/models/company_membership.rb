@@ -12,7 +12,7 @@ class CompanyMembership < ApplicationRecord
   # incurred it.
   AGENT_LANGUAGES = %w[en ru es zh fr de ja pt it pl uk].freeze
   POSITIONS = %w[qa pm_po_ba dev designer cto other].freeze
-  AVAILABLE_AGENTS = %w[claude_code cursor_cli codex gemini_cli grok].freeze
+  AVAILABLE_AGENTS = %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok].freeze
 
   # Associations
   belongs_to :user
