@@ -461,7 +461,11 @@ module Agents
       body = entry["body"].to_s
       return "" if body.blank?
 
-      entry["body_encoding"] == "base64" ? Base64.decode64(body).force_encoding("UTF-8") : body
+      if entry["body_encoding"] == "base64"
+        Base64.decode64(body).force_encoding("UTF-8").scrub("")
+      else
+        body
+      end
     rescue ArgumentError
       ""
     end
