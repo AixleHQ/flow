@@ -345,8 +345,15 @@ class TerminalSession < ApplicationRecord
 
     rows = events.filter_map do |event|
       usage = event["tokenUsage"] || {}
-      ts_ms = event["timestamp"]
-      occurred = ts_ms.present? ? Time.at(ts_ms.to_i / 1000.0).utc : created_at
+      ts_raw = event["timestamp"]
+      occurred =
+        if ts_raw.blank?
+          created_at
+        elsif ts_raw.is_a?(String) && ts_raw.match?(/[T:\-]/)
+          Time.zone.parse(ts_raw)
+        else
+          Time.at(ts_raw.to_i / 1000.0).utc
+        end
 
       {
         terminal_session_id: id,
