@@ -27,6 +27,55 @@ class Web::Company::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_page "Company/Sessions/Index"
   end
 
+  test "index exposes the Sessions & Runs props: type, total and user options" do
+    project = create(:project, company: @company, owner: @user)
+    create(:terminal_session, :agent_session, user: @user, project: project)
+
+    get company_sessions_path
+    assert_response :success
+
+    assert_equal "all", inertia.props[:filters][:type]
+    assert_equal 1, inertia.props[:total]
+    assert_equal [ @user.id ], inertia.props[:userOptions].map { |u| u[:id] }
+  end
+
+  test "index type=run keeps only workflow-step sessions; type=solo keeps only standalone" do
+    project = create(:project, company: @company, owner: @user)
+    solo = create(:terminal_session, :agent_session, user: @user, project: project)
+    step = create(:terminal_session, user: @user, project: project, session_type: "workflow_step")
+
+    get company_sessions_path(type: "run")
+    assert_equal [ step.id ], inertia.props[:sessions].map { |s| s[:id] }
+
+    get company_sessions_path(type: "solo")
+    assert_equal [ solo.id ], inertia.props[:sessions].map { |s| s[:id] }
+  end
+
+  test "index status filter maps the shared vocabulary onto internal states" do
+    project = create(:project, company: @company, owner: @user)
+    running = create(:terminal_session, :agent_session, :running, user: @user, project: project)
+    create(:terminal_session, :agent_session, :collected, user: @user, project: project)
+
+    get company_sessions_path(status: "running")
+    assert_equal [ running.id ], inertia.props[:sessions].map { |s| s[:id] }
+  end
+
+  test "index search on the prompt does not leak a private session's hidden prompt" do
+    project = create(:project, company: @company, owner: @user)
+    other = create(:user, :employee, :onboarding_completed, company: @company,
+                                                            share_active_sessions: false,
+                                                            share_completed_sessions: false)
+    hidden = create(:terminal_session, :agent_session, :running, user: other, project: project,
+                                                                 initial_prompt: "migrate the payroll ledger")
+    mine = create(:terminal_session, :agent_session, user: @user, project: project,
+                                                     initial_prompt: "migrate the payroll ledger")
+
+    get company_sessions_path(search: "payroll ledger")
+    ids = inertia.props[:sessions].map { |s| s[:id] }
+    assert_includes ids, mine.id
+    assert_not_includes ids, hidden.id
+  end
+
   test "show renders session detail page" do
     session = create(:terminal_session, user: @user, project: create(:project, company: @company, owner: @user))
     get company_session_path(session)

@@ -71,7 +71,10 @@ describe('Company/Sessions/Show', () => {
     // The company list keeps its own breadcrumb label (the sidebar has a
     // same-named link, so scope the query to the breadcrumb).
     const breadcrumb = screen.getByRole('navigation', { name: 'Breadcrumb' });
-    expect(within(breadcrumb).getByRole('link', { name: 'Sessions' })).toHaveAttribute('href', '/company/sessions');
+    expect(within(breadcrumb).getByRole('link', { name: 'Sessions & Runs' })).toHaveAttribute(
+      'href',
+      '/company/sessions',
+    );
   });
 
   it('reports cost, models and pending outputs for a finished session', () => {

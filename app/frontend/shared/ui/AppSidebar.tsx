@@ -163,7 +163,12 @@ const companyNavGroups: NavGroup[] = [
     label: 'Monitoring',
     items: [
       { label: 'Analytics', icon: <IconChartBar size={18} />, path: '/company/analytics', adminOnly: true }, // TODO: use companyAnalyticsPath() when route helper is available
-      { label: 'Sessions', icon: <IconTerminal2 size={18} />, path: companySessionsPath(), adminOnly: true },
+      {
+        label: 'Sessions & Runs',
+        icon: <IconTerminal2 size={18} />,
+        path: companySessionsPath(),
+        adminOnly: true,
+      },
     ],
   },
   {
