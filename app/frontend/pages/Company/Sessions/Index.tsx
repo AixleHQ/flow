@@ -1,18 +1,22 @@
-import { InfiniteScroll, router } from '@inertiajs/react';
-import { Badge, Box, Center, Group, Loader, Select, Table, Text, Tooltip } from '@mantine/core';
-import { IconExternalLink, IconLock } from '@tabler/icons-react';
+import { Head, InfiniteScroll, Link, router } from '@inertiajs/react';
+import { Center, Loader, Select, TextInput, Tooltip } from '@mantine/core';
+import { useDebouncedCallback } from '@mantine/hooks';
+import { IconExternalLink, IconLock, IconSearch } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
+import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
 import { companySessionPath } from 'shared/routes';
-import { StatusBadge } from 'shared/ui/StatusBadge';
+import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
+
+import classes from './Index.module.css';
 
 // Sessions whose show page is worth opening (a live or completed run, not a
-// half-provisioned one). Mirrors the project-scoped sessions list.
-const CLICKABLE_STATES = new Set(['queued', 'ready', 'running', 'finished', 'failed', 'cancelled', 'stopped']);
+// half-provisioned one). Mirrors the project Sessions & Runs list.
+const OPENABLE_STATES = new Set(['queued', 'ready', 'finished', 'failed', 'cancelled', 'finishing']);
 
 interface Session {
   id: number;
@@ -24,12 +28,7 @@ interface Session {
   finishedAt: string | null;
   createdAt: string;
   totalTokens: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
   costCents: number;
-  models: string[] | null;
   userName: string | null;
   userEmail: string | null;
   projectName: string | null;
@@ -41,64 +40,30 @@ interface Session {
   viewable: boolean;
 }
 
-type Filters = Record<string, string | undefined>;
+type ListType = 'all' | 'run' | 'solo';
+
+interface Filters {
+  type: ListType;
+  search?: string;
+  agentType?: string;
+  status?: string;
+  userId?: string;
+}
 
 type Props = {
   sessions: Session[];
   filters: Filters;
-  perPage: number;
+  total: number;
+  userOptions: { id: number; name: string }[];
 };
 
-const AGENT_LABELS: Record<string, { label: string; color: string }> = {
-  claude_code: { label: 'Claude Code', color: 'orange' },
-  cursor_cli: { label: 'Cursor CLI', color: 'violet' },
-  codex: { label: 'Codex', color: 'teal' },
-  gemini_cli: { label: 'Gemini CLI', color: 'blue' },
-  grok: { label: 'Grok', color: 'gray' },
-};
+const TYPE_TABS: { value: ListType; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'run', label: 'Workflow runs' },
+  { value: 'solo', label: 'Standalone' },
+];
 
-const STATE_CONFIG: Record<string, { label: string }> = {
-  queued: { label: 'Queued' },
-  cancelled: { label: 'Cancelled' },
-  not_started: { label: 'Pending' },
-  running: { label: 'Starting' },
-  ready: { label: 'Running' },
-  finishing: { label: 'Finishing' },
-  finished: { label: 'Finished' },
-  failed: { label: 'Failed' },
-};
-
-const SESSION_TYPE_LABELS: Record<string, string> = {
-  agent_session: 'Standalone',
-  workflow_step: 'Workflow step',
-  auth_setup: 'Auth setup',
-  tool_setup: 'Tool setup',
-};
-
-function formatTokens(n: number): string {
-  if (!n || n === 0) return '—';
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return String(n);
-}
-
-function formatCost(cents: number): string {
-  if (!cents || cents === 0) return '—';
-  return `$${(cents / 100).toFixed(2)}`;
-}
-
-function formatDuration(startedAt: string | null, finishedAt: string | null, state: string): string {
-  if (!startedAt) return '—';
-  const start = new Date(startedAt);
-  const end = finishedAt ? new Date(finishedAt) : state === 'running' || state === 'ready' ? new Date() : null;
-  if (!end) return '—';
-  const seconds = Math.round((end.getTime() - start.getTime()) / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
-}
-
-const AGENT_FILTER_OPTIONS = [
+const AGENT_OPTIONS = [
   { value: 'claude_code', label: 'Claude Code' },
   { value: 'cursor_cli', label: 'Cursor CLI' },
   { value: 'codex', label: 'Codex' },
@@ -107,24 +72,57 @@ const AGENT_FILTER_OPTIONS = [
   { value: 'grok', label: 'Grok' },
 ];
 
-const STATE_FILTER_OPTIONS = [
-  { value: 'queued', label: 'Queued' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: 'running', label: 'Starting' },
-  { value: 'ready', label: 'Running' },
-  { value: 'finishing', label: 'Finishing' },
-  { value: 'finished', label: 'Finished' },
+// The shared status vocabulary — the four values the project feed exposes as
+// filters. Internal states (Starting / Finishing / Queued) map onto these
+// server-side; they are not offered as filter values.
+const STATUS_OPTIONS = [
+  { value: 'running', label: 'Running' },
+  { value: 'completed', label: 'Completed' },
   { value: 'failed', label: 'Failed' },
+  { value: 'pending', label: 'Pending' },
 ];
 
-const PER_PAGE_OPTIONS = ['20', '50', '100'];
+const SESSION_TYPE_LABEL: Record<string, string> = {
+  agent_session: 'Standalone session',
+  workflow_step: 'Workflow step',
+};
 
 const SESSIONS_URL = '/company/sessions';
 
-const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
-  // Local map mirrors the InfiniteScroll-accumulated sessions prop.
-  // Cable updates patch individual entries in-place without touching the rest,
-  // so live state changes are visible across all loaded pages simultaneously.
+const MAX_NAME_LENGTH = 80;
+
+/**
+ * A session has no title column. The first line of the prompt is what the
+ * person asked for and how they recognise the row; a promptless (or redacted)
+ * session falls back to the generic label the design shows for that case.
+ */
+function sessionName(s: Session): string {
+  const firstLine = (s.initialPrompt ?? '').trim().split('\n')[0]?.trim() ?? '';
+  if (!firstLine) return 'Interactive session';
+  return firstLine.length > MAX_NAME_LENGTH ? `${firstLine.slice(0, MAX_NAME_LENGTH - 1)}…` : firstLine;
+}
+
+function stateLabel(state: string): string {
+  return (
+    {
+      queued: 'Queued',
+      cancelled: 'Cancelled',
+      ready: 'Running',
+      running: 'Starting',
+      finishing: 'Finishing',
+      finished: 'Finished',
+      failed: 'Failed',
+      not_started: 'Pending',
+    }[state] ?? state
+  );
+}
+
+const SessionsIndex = ({ sessions, filters, total, userOptions }: Props) => {
+  const [searchValue, setSearchValue] = useState(filters.search ?? '');
+
+  // Local map mirrors the InfiniteScroll-accumulated sessions prop. Cable
+  // updates patch individual entries in-place without touching the rest, so
+  // live state changes are visible across all loaded pages simultaneously.
   const [sessionMap, setSessionMap] = useState<Map<number, Session>>(() => {
     const map = new Map<number, Session>();
     for (const s of sessions) map.set(s.id, s);
@@ -133,7 +131,7 @@ const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
 
   const prevFiltersRef = useRef<string>('');
 
-  // Accumulate pages loaded by InfiniteScroll; reset map when filters change.
+  // Accumulate pages loaded by InfiniteScroll; reset the map when filters change.
   useEffect(() => {
     const filtersKey = JSON.stringify(filters);
     const filtersChanged = filtersKey !== prevFiltersRef.current;
@@ -157,7 +155,7 @@ const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
       setSessionMap((prev) => {
         if (!prev.has(updated.id as number)) return prev;
         const map = new Map(prev);
-        map.set(updated.id as number, updated as unknown as Session);
+        map.set(updated.id as number, { ...prev.get(updated.id as number)!, ...(updated as unknown as Session) });
         return map;
       });
     }, []),
@@ -166,234 +164,211 @@ const SessionsIndex = ({ sessions, filters, perPage }: Props) => {
   const displaySessions = useMemo(() => [...sessionMap.values()], [sessionMap]);
 
   const navigate = useCallback(
-    (q: Filters, newPerPage?: number) => {
-      const pp = newPerPage ?? perPage;
-      const queryParams = pp !== 20 ? { q, per_page: pp } : { q };
-      router.get(SESSIONS_URL, queryParams as Record<string, string | number | Filters>, {
-        preserveState: true,
-        preserveScroll: true,
-      });
-    },
-    [perPage],
-  );
-
-  const onFilterChange = useCallback(
-    (key: string, value: string | null) => {
-      const q = { ...filters };
-      if (value) {
-        q[key] = value;
-      } else {
-        delete q[key];
+    (next: Partial<Filters>) => {
+      const combined = { ...filters, ...next };
+      const merged: Record<string, string> = {};
+      for (const [key, value] of Object.entries(combined)) {
+        if (value && !(key === 'type' && value === 'all')) {
+          merged[key.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)] = String(value);
+        }
       }
-      navigate(q);
+      router.get(SESSIONS_URL, merged, { preserveState: true, preserveScroll: true });
     },
-    [filters, navigate],
+    [filters],
   );
 
-  const onPerPageChange = useCallback(
-    (value: string | null) => {
-      navigate(filters, value ? Number(value) : 20);
-    },
-    [filters, navigate],
-  );
+  const debouncedSearch = useDebouncedCallback((value: string) => navigate({ search: value || undefined }), 350);
+
+  const userSelectData = useMemo(() => userOptions.map((u) => ({ value: String(u.id), label: u.name })), [userOptions]);
+
+  const hasFilters = !!(filters.search || filters.agentType || filters.status || filters.userId);
 
   return (
     <AuthLayout>
-      <Box>
-        <Box mb="md">
-          <Text size="xl" fw={600}>
-            Sessions
-          </Text>
-          <Text size="sm" c="dimmed">
-            Agent session history across the company
-          </Text>
-        </Box>
+      <Head title="Sessions & Runs" />
 
-        <Group justify="space-between" mb="md">
-          <Group gap="sm">
-            <Select
-              placeholder="Agent"
-              data={AGENT_FILTER_OPTIONS}
-              value={filters.agent_type_eq ?? null}
-              onChange={(v) => onFilterChange('agent_type_eq', v)}
-              clearable
-              size="sm"
-              w={160}
-            />
-            <Select
-              placeholder="Status"
-              data={STATE_FILTER_OPTIONS}
-              value={filters.state_eq ?? null}
-              onChange={(v) => onFilterChange('state_eq', v)}
-              clearable
-              size="sm"
-              w={140}
-            />
-            <Select
-              data={PER_PAGE_OPTIONS}
-              value={String(perPage)}
-              onChange={onPerPageChange}
-              size="sm"
-              w={80}
-              allowDeselect={false}
-            />
-          </Group>
-        </Group>
+      <header className={classes.head}>
+        <h1 className={classes.title}>Sessions &amp; Runs</h1>
+        <p className={classes.subtitle}>Every agent session and workflow run across the company, in one place.</p>
+      </header>
 
-        {sessions.length === 0 ? (
-          <Box py="xl" ta="center" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
-            <Text c="dimmed">{Object.keys(filters).length > 0 ? 'No sessions match filters' : 'No sessions yet'}</Text>
-          </Box>
-        ) : (
-          <InfiniteScroll
-            data="sessions"
-            loading={() => (
-              <Center py="md">
-                <Loader size="sm" />
-              </Center>
-            )}
-          >
-            <Table.ScrollContainer minWidth={1000}>
-              <Table striped highlightOnHover verticalSpacing={6} fz="sm">
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>ID</Table.Th>
-                    <Table.Th>Agent</Table.Th>
-                    <Table.Th>Type</Table.Th>
-                    <Table.Th>Status</Table.Th>
-                    <Table.Th>User</Table.Th>
-                    <Table.Th>Project</Table.Th>
-                    <Table.Th ta="right">Tokens</Table.Th>
-                    <Table.Th ta="right">Cost</Table.Th>
-                    <Table.Th>Models</Table.Th>
-                    <Table.Th>Duration</Table.Th>
-                    <Table.Th>Started</Table.Th>
-                    <Table.Th w={40} />
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {displaySessions.map((s) => (
-                    <SessionRow key={s.id} session={s} />
-                  ))}
-                </Table.Tbody>
-              </Table>
-            </Table.ScrollContainer>
-          </InfiniteScroll>
-        )}
-      </Box>
+      <div className={classes.typebar}>
+        <div className={classes.seg} role="tablist" aria-label="Filter by type">
+          {TYPE_TABS.map((tab) => (
+            <button
+              key={tab.value}
+              type="button"
+              role="tab"
+              aria-selected={filters.type === tab.value}
+              className={filters.type === tab.value ? `${classes.segButton} ${classes.segButtonOn}` : classes.segButton}
+              onClick={() => navigate({ type: tab.value })}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className={classes.typebarRight}>
+          <span className={classes.count}>
+            {total} {total === 1 ? 'entry' : 'entries'}
+          </span>
+        </div>
+      </div>
+
+      <div className={classes.filters}>
+        <TextInput
+          placeholder="Search by name…"
+          aria-label="Search by name"
+          leftSection={<IconSearch size={14} />}
+          value={searchValue}
+          w={220}
+          onChange={(e) => {
+            setSearchValue(e.currentTarget.value);
+            debouncedSearch(e.currentTarget.value);
+          }}
+        />
+        <Select
+          placeholder="Agent"
+          aria-label="Filter by agent"
+          data={AGENT_OPTIONS}
+          value={filters.agentType ?? null}
+          onChange={(v) => navigate({ agentType: v ?? undefined })}
+          clearable
+          w={150}
+        />
+        <Select
+          placeholder="Status"
+          aria-label="Filter by status"
+          data={STATUS_OPTIONS}
+          value={filters.status ?? null}
+          onChange={(v) => navigate({ status: v ?? undefined })}
+          clearable
+          w={140}
+        />
+        <Select
+          placeholder="User"
+          aria-label="Filter by user"
+          data={userSelectData}
+          value={filters.userId ?? null}
+          onChange={(v) => navigate({ userId: v ?? undefined })}
+          clearable
+          searchable
+          w={170}
+        />
+      </div>
+
+      {sessions.length === 0 ? (
+        <div className={classes.empty}>{hasFilters ? 'No sessions match these filters.' : 'No sessions yet'}</div>
+      ) : (
+        <InfiniteScroll
+          data="sessions"
+          loading={() => (
+            <Center py="md">
+              <Loader size="sm" />
+            </Center>
+          )}
+        >
+          <div className={classes.tableWrap}>
+            <div className={classes.table} role="table" aria-label="Sessions & Runs">
+              <div className={classes.thead}>
+                <span>Status</span>
+                <span>Name</span>
+                <span>Agent</span>
+                <span>User</span>
+                <span>Project</span>
+                <span className={classes.right}>Tokens</span>
+                <span className={classes.right}>Cost</span>
+                <span className={classes.right}>Duration</span>
+                <span style={{ paddingLeft: 24 }}>Started</span>
+                <span />
+              </div>
+              {displaySessions.map((s) => (
+                <SessionRow key={s.id} session={s} />
+              ))}
+            </div>
+          </div>
+        </InfiniteScroll>
+      )}
     </AuthLayout>
   );
 };
 
 function SessionRow({ session: s }: { session: Session }) {
-  const agent = AGENT_LABELS[s.agentType ?? ''] ?? { label: s.agentType ?? '—', color: 'gray' };
-  const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state };
-  const typeLabel = SESSION_TYPE_LABELS[s.sessionType] ?? s.sessionType;
-  const isClickable = CLICKABLE_STATES.has(s.state) && s.viewable;
+  const openable = s.viewable && OPENABLE_STATES.has(s.state);
   const isPrivate = !s.viewable;
-  const sessionUrl = companySessionPath(s.id);
-
-  const tokenBreakdown = [
-    s.inputTokens > 0 && `in: ${formatTokens(s.inputTokens)}`,
-    s.outputTokens > 0 && `out: ${formatTokens(s.outputTokens)}`,
-    s.cacheReadTokens > 0 && `cache_r: ${formatTokens(s.cacheReadTokens)}`,
-    s.cacheWriteTokens > 0 && `cache_w: ${formatTokens(s.cacheWriteTokens)}`,
-  ]
-    .filter(Boolean)
-    .join(', ');
+  const href = companySessionPath(s.id);
+  const typeLabel = SESSION_TYPE_LABEL[s.sessionType] ?? s.sessionType;
+  const showsPending = s.state === 'finished' && !s.artifactsReviewed && s.pendingArtifactsCount > 0;
 
   return (
-    <Table.Tr
-      style={isClickable ? { cursor: 'pointer' } : undefined}
-      onClick={isClickable ? () => router.visit(sessionUrl) : undefined}
+    <div
+      className={openable ? classes.row : `${classes.row} ${classes.rowStatic}`}
+      onClick={openable ? () => router.visit(href) : undefined}
+      tabIndex={openable ? 0 : undefined}
+      onKeyDown={
+        openable
+          ? (e) => {
+              if (e.key === 'Enter') router.visit(href);
+            }
+          : undefined
+      }
     >
-      <Table.Td>
-        <Text size="xs" ff="monospace" c="dimmed">
+      <span className={classes.status}>
+        <StatusTag state={s.state}>{stateLabel(s.state)}</StatusTag>
+        {showsPending && <span className={classes.pending}>{s.pendingArtifactsCount} pending</span>}
+      </span>
+
+      <div className={classes.name}>
+        <div className={classes.nameTitle}>{sessionName(s)}</div>
+        <div className={classes.nameSub}>
           #{s.id}
-        </Text>
-      </Table.Td>
-      <Table.Td>
-        <Badge color={agent.color} size="sm" variant="filled">
-          {agent.label}
-        </Badge>
-      </Table.Td>
-      <Table.Td>
-        <Text size="xs" c="dimmed">
+          <span className={classes.nameSubSep}>·</span>
           {typeLabel}
-        </Text>
-      </Table.Td>
-      <Table.Td>
-        <Group gap={4}>
-          <StatusBadge state={s.state} tone={s.state === 'ready' ? 'running' : undefined} size="sm">
-            {stateConfig.label}
-          </StatusBadge>
-          {s.state === 'finished' && !s.artifactsReviewed && s.pendingArtifactsCount > 0 && (
-            <Badge color="yellow" size="xs">
-              {s.pendingArtifactsCount} pending
-            </Badge>
-          )}
-        </Group>
-      </Table.Td>
-      <Table.Td>
-        <Tooltip label={s.userEmail ?? ''} disabled={!s.userEmail}>
-          <Text size="sm" truncate maw={120}>
-            {s.userName ?? '—'}
-          </Text>
+        </div>
+      </div>
+
+      <div className={classes.agent}>
+        <AgentLogo agentType={s.agentType} size={18} />
+        <span className={classes.agentLabel}>{agentLabel(s.agentType)}</span>
+        <ModeTag mode={s.mode} />
+      </div>
+
+      <Tooltip label={s.userEmail ?? ''} disabled={!s.userEmail}>
+        <span className={classes.user}>{s.userName ?? '—'}</span>
+      </Tooltip>
+      <span className={classes.project}>{s.projectName ?? '—'}</span>
+
+      <span className={`${classes.num} ${classes.right}`}>{formatTokens(s.totalTokens)}</span>
+      <span className={`${classes.num} ${classes.right}`} style={{ color: costColor(s.costCents) }}>
+        {formatCost(s.costCents)}
+      </span>
+      <span className={`${classes.num} ${classes.right}`}>{formatDuration(s.startedAt, s.finishedAt, s.state)}</span>
+      <span className={classes.ago}>
+        <Tooltip label={s.startedAt ? new Date(s.startedAt).toLocaleString() : new Date(s.createdAt).toLocaleString()}>
+          <span>{formatDistanceToNow(new Date(s.startedAt ?? s.createdAt), { addSuffix: true })}</span>
         </Tooltip>
-      </Table.Td>
-      <Table.Td>
-        <Text size="sm" truncate maw={120} c="dimmed">
-          {s.projectName ?? '—'}
-        </Text>
-      </Table.Td>
-      <Table.Td ta="right">
-        <Tooltip label={tokenBreakdown || 'No token data'}>
-          <Text size="xs" ff="monospace">
-            {formatTokens(s.totalTokens)}
-          </Text>
+      </span>
+
+      {openable ? (
+        <Tooltip label="Open session">
+          <Link
+            href={href}
+            className={classes.link}
+            aria-label={`Open session #${s.id}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <IconExternalLink size={15} />
+          </Link>
         </Tooltip>
-      </Table.Td>
-      <Table.Td ta="right">
-        <Text size="xs" ff="monospace" fw={s.costCents > 0 ? 600 : 400}>
-          {formatCost(s.costCents)}
-        </Text>
-      </Table.Td>
-      <Table.Td>
-        <Group gap={4} wrap="wrap">
-          {(s.models ?? []).map((m) => (
-            <Badge key={m} size="xs" variant="outline">
-              {m}
-            </Badge>
-          ))}
-        </Group>
-      </Table.Td>
-      <Table.Td>
-        <Text size="xs" ff="monospace" c="dimmed">
-          {formatDuration(s.startedAt, s.finishedAt, s.state)}
-        </Text>
-      </Table.Td>
-      <Table.Td>
-        <Tooltip label={s.startedAt ? new Date(s.startedAt).toLocaleString() : s.createdAt}>
-          <Text size="xs" c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-            {formatDistanceToNow(new Date(s.startedAt ?? s.createdAt), { addSuffix: true })}
-          </Text>
+      ) : isPrivate ? (
+        <Tooltip label={`${s.userName ?? 'The owner'} keeps this session private`}>
+          <span className={classes.link}>
+            <IconLock size={15} aria-label={`Session #${s.id} is private`} />
+          </span>
         </Tooltip>
-      </Table.Td>
-      <Table.Td>
-        {isClickable && (
-          <Tooltip label="Open session">
-            <a href={sessionUrl} onClick={(e) => e.stopPropagation()}>
-              <IconExternalLink size={16} />
-            </a>
-          </Tooltip>
-        )}
-        {isPrivate && (
-          <Tooltip label={`${s.userName ?? 'The owner'} keeps this session private`}>
-            <IconLock size={16} aria-label={`Session #${s.id} is private`} color="var(--app-text-tertiary)" />
-          </Tooltip>
-        )}
-      </Table.Td>
-    </Table.Tr>
+      ) : (
+        <span />
+      )}
+    </div>
   );
 }
 

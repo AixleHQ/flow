@@ -1,0 +1,311 @@
+/*
+ * Company Sessions & Runs list.
+ *
+ * The project Sessions & Runs list projected onto the company surface: same
+ * grid ruler, status tags and agent treatment, plus a Project column. Rows stay
+ * session-level here — there is no run/step nesting, so no caret column.
+ *
+ * Responsive rules drop whole columns by priority (tokens first, then user)
+ * rather than letting everything shrink to unreadable.
+ */
+
+.head {
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--app-text-tertiary);
+  margin: 3px 0 0;
+}
+
+/* ── Typebar: type toggle on the left, count on the right ── */
+.typebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.typebarRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.seg {
+  display: inline-flex;
+  background: var(--app-bg-paper);
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.segButton {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+  white-space: nowrap;
+}
+
+.segButton:hover {
+  color: var(--app-text-primary);
+}
+
+.segButtonOn {
+  background: var(--app-bg-card);
+  color: var(--app-text-primary);
+  box-shadow: inset 0 0 0 1px var(--app-border-default);
+}
+
+.count {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  font-family: var(--app-font-mono);
+  white-space: nowrap;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── Table ── */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--app-bg-card);
+  min-width: 960px;
+}
+
+.thead,
+.row {
+  display: grid;
+  grid-template-columns: 118px minmax(200px, 1.3fr) 210px 128px 150px 88px 74px 88px 118px 34px;
+  align-items: center;
+}
+
+.thead {
+  padding: 0 12px;
+  height: 40px;
+  border-bottom: 1px solid var(--app-border-default);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-text-tertiary);
+}
+
+.right {
+  text-align: right;
+}
+
+.row {
+  padding: 0 12px;
+  height: 54px;
+  border-bottom: 1px solid var(--app-border-default);
+  cursor: pointer;
+  background: transparent;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row:hover {
+  background: var(--app-action-hover);
+}
+
+.rowStatic {
+  cursor: default;
+}
+
+.rowStatic:hover {
+  background: transparent;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pending {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--app-warning-fg);
+  white-space: nowrap;
+}
+
+.name {
+  min-width: 0;
+  padding-right: 16px;
+}
+
+.nameTitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--app-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nameSub {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-family: var(--app-font-mono);
+}
+
+.nameSubSep {
+  color: var(--app-text-tertiary);
+  font-family: var(--app-font-body);
+}
+
+.agent {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 12px;
+}
+
+.agentLabel {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user,
+.project {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 12px;
+}
+
+.project {
+  color: var(--app-text-tertiary);
+}
+
+.num {
+  font-family: var(--app-font-mono);
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
+}
+
+.ago {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  white-space: nowrap;
+  padding-left: 24px;
+}
+
+.link {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: var(--app-text-tertiary);
+  background: transparent;
+  border: 0;
+}
+
+.link:hover {
+  color: var(--app-primary-strong);
+  background: var(--app-action-selected);
+}
+
+.empty {
+  padding: 48px;
+  text-align: center;
+  color: var(--app-text-tertiary);
+  font-size: 13px;
+  border: 1px solid var(--app-border-default);
+  border-radius: 8px;
+}
+
+/* Responsive column priority: tokens go first, then user. */
+@media (max-width: 1500px) {
+  .thead,
+  .row {
+    grid-template-columns: 118px minmax(200px, 1.3fr) 210px 128px 150px 74px 88px 118px 34px;
+  }
+
+  .thead > *:nth-child(6),
+  .row > *:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 1280px) {
+  .thead,
+  .row {
+    grid-template-columns: 118px minmax(180px, 1.3fr) 190px 150px 74px 84px 128px 34px;
+  }
+
+  .thead > *:nth-child(4),
+  .row > *:nth-child(4),
+  .thead > *:nth-child(6),
+  .row > *:nth-child(6) {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .typebar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .typebarRight {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
