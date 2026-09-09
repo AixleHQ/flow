@@ -162,8 +162,23 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id,
       error: "Session admission is closed"))
 
-    assert_equal "finished", @session.reload.state
+    assert_equal "cancelled", @session.reload.state,
+      "closing the dialog on a container that never came up is a cancellation"
     assert_nil @session.error_message
+  end
+
+  test "a session that was usable before the user finished it is finished" do
+    strategy = mock("strategy")
+    @session.stubs(:strategy).returns(strategy)
+    SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
+    @admission.stubs(:terminal_session).returns(@session)
+    strategy.stubs(:before_cleanup).returns({})
+    @runtime.stubs(:session_absent?).returns(true)
+    @session.update!(state: "running", finishing_at: Time.current, ready_at: 1.minute.ago)
+
+    @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id))
+
+    assert_equal "finished", @session.reload.state
   end
 
   test "a real error still fails a session the user asked to finish" do

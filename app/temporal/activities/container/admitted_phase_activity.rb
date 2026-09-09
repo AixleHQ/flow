@@ -161,8 +161,7 @@ module Activities
         ActiveRecord::Base.transaction do
           session.reload
           error = outcome_error(session, state[:error])
-          final_state = session.cancelled? ? "cancelled" : (error || session.failed? ? "failed" : "finished")
-          session.update!(state: final_state, finished_at: session.finished_at || Time.current,
+          session.update!(state: outcome_state(session, error), finished_at: session.finished_at || Time.current,
             container_id: nil,
             error_message: TerminalSession.preferred_error_message(session.error_message, error))
         end
@@ -178,6 +177,20 @@ module Activities
         return nil if session.finishing_at && TerminalSession::GENERIC_ERROR_MESSAGES.include?(error)
 
         error
+      end
+
+      # A session the person stopped before it was ever usable was cancelled,
+      # not finished — closing the dialog on a container that is still coming up
+      # is a cancellation, and the only button on that screen says so. `ready_at`
+      # is the fact that separates the two: across three days of production,
+      # `finishing_at` without `ready_at` described exactly the two
+      # authentication sessions this is about and not one workflow step.
+      def outcome_state(session, error)
+        return "cancelled" if session.cancelled?
+        return "failed" if error || session.failed?
+        return "cancelled" if session.finishing_at && session.ready_at.nil?
+
+        "finished"
       end
     end
   end
