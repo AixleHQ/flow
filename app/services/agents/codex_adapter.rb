@@ -351,13 +351,28 @@ module Agents
       { valid: true, error_code: nil }
     end
 
-    # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
-    # refresh_access_token! which persists under a row lock via persist_refreshed!.
+    # Proactive server-side token refresh (Temporal sweep). Matches the sweep's own
+    # selection window (RefreshExpiringTokensActivity::REFRESH_WINDOW).
+    REFRESH_MARGIN_MS = 15 * 60 * 1000
+
+    # Proactive-refresh hook (Temporal sweep) and pre-launch refresh. Thin wrapper
+    # over the reactive refresh_access_token! which persists under a row lock via
+    # persist_refreshed!.
+    #
+    # Like CursorCliAdapter (and Claude before both), the decision is taken here from
+    # the stored token rather than from the denormalised `agent_credentials.expires_at`
+    # column: a row whose expiry was never derived reads as "never expires" and would
+    # never be refreshed. An `exp` that cannot be read means refresh, never skip — the
+    # token dies with its grant regardless of what we could parse out of it.
+    #
     # @param credential [AgentCredential]
-    # @return [Hash] { status: :refreshed | :error, detail: String | nil }
-    # margin_ms is ignored: this agent stores no per-block expiry to compare it
-    # against, so a call is already the decision to refresh.
-    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
+    # @param margin_ms [Integer] refresh when the stored token expires within this many
+    #   ms (or has already expired).
+    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil }
+    def refresh!(credential, margin_ms: REFRESH_MARGIN_MS)
+      exp = token_expires_at(credential.config_data).to_i
+      return { status: :not_needed, detail: nil } if exp.positive? && (exp - now_ms) > margin_ms
+
       new_token = refresh_access_token!(credential)
       new_token ? { status: :refreshed, detail: nil }
                 : { status: :error, detail: "codex token refresh failed" }

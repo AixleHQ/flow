@@ -592,6 +592,44 @@ module Agents
       assert_equal :error, @adapter.refresh!(credential)[:status]
     end
 
+    # Decided from the token, not from the denormalised expires_at column.
+    test "refresh! returns not_needed when the stored token outlives the margin" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => jwt_with_exp(2.hours.from_now.to_i), "refresh_token" => "r1" }
+      })
+
+      assert_equal({ status: :not_needed, detail: nil }, @adapter.refresh!(credential))
+      assert_not_requested :post, Codex::Api::OAUTH_TOKEN_URL
+    end
+
+    test "refresh! rotates a token that expires inside the margin" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => jwt_with_exp(5.minutes.from_now.to_i), "refresh_token" => "r1" }
+      })
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
+        .to_return(status: 200, body: { access_token: "new", refresh_token: "r2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal :refreshed, @adapter.refresh!(credential)[:status]
+      assert_equal "new", credential.reload.config_data.dig("tokens", "access_token")
+    end
+
+    # An unreadable exp is not "never expires" — the token still dies with its grant.
+    test "refresh! rotates a token whose exp cannot be read" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => "opaque", "refresh_token" => "r1" }
+      })
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
+        .to_return(status: 200, body: { access_token: "new", refresh_token: "r2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal :refreshed, @adapter.refresh!(credential)[:status]
+      assert_equal "new", credential.reload.config_data.dig("tokens", "access_token")
+    end
+
     test "refresh_access_token! keeps the stored refresh_token when the server omits a rotated one" do
       user = create(:user, company: create(:company))
       credential = create(:agent_credential, :codex, user: user, config_data: {
