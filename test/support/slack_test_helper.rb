@@ -13,7 +13,10 @@
 # teardown (registered from #included when the module is mixed into
 # ActiveSupport::TestCase), so it is auto-reset just like a Mocha stub.
 module SlackTestHelper
-  SLACK_CLIENT_METHODS = %i[exchange_code auth_test post_message upload_files download_file].freeze
+  SLACK_CLIENT_METHODS = %i[
+    exchange_code auth_test post_message update_message delete_message
+    conversation_replies upload_files download_file
+  ].freeze
 
   def self.included(base)
     base.teardown { unstub_slack_client! }

@@ -91,6 +91,101 @@ module Slack
       assert_match(/channel_not_found/, error.message)
     end
 
+    test "post_message sends blocks and reply_broadcast when given" do
+      blocks = [ { "type" => "markdown", "text" => "**hi**" } ]
+      expected = @fake.post_message(token: BOT_TOKEN, channel: "C1", text: "hi", blocks: blocks)
+      stub = stub_request(:post, "#{API}/chat.postMessage")
+        .with(body: hash_including(
+          "blocks" => blocks, "reply_broadcast" => true, "thread_ts" => "5.5"
+        ))
+        .to_return(json(expected))
+
+      Slack::Client.post_message(token: BOT_TOKEN, channel: "C1", text: "hi", thread_ts: "5.5",
+        blocks: blocks, reply_broadcast: true)
+
+      assert_requested stub
+    end
+
+    # --- chat.update -----------------------------------------------------------
+
+    test "update_message posts JSON and parses into the fake's shape" do
+      blocks = [ { "type" => "section", "text" => { "type" => "mrkdwn", "text" => "done" } } ]
+      expected = @fake.update_message(token: BOT_TOKEN, channel: "C1", ts: "5.5", text: "done", blocks: blocks)
+      stub = stub_request(:post, "#{API}/chat.update")
+        .with(
+          headers: { "Authorization" => "Bearer #{BOT_TOKEN}", "Content-Type" => "application/json; charset=utf-8" },
+          body: hash_including("channel" => "C1", "ts" => "5.5", "text" => "done", "blocks" => blocks)
+        )
+        .to_return(json(expected))
+
+      actual = Slack::Client.update_message(token: BOT_TOKEN, channel: "C1", ts: "5.5",
+        text: "done", blocks: blocks)
+
+      assert_equal expected, actual
+      assert_equal "5.5", actual["ts"]
+      assert_requested stub
+    end
+
+    test "update_message raises Slack::Client::Error on an ok:false body" do
+      stub_request(:post, "#{API}/chat.update").to_return(json(ok: false, error: "message_not_found"))
+
+      error = assert_raises(Slack::Client::Error) do
+        Slack::Client.update_message(token: BOT_TOKEN, channel: "C1", ts: "5.5", text: "x")
+      end
+      assert_match(/message_not_found/, error.message)
+    end
+
+    # --- chat.delete -----------------------------------------------------------
+
+    test "delete_message posts the form and parses into the fake's shape" do
+      expected = @fake.delete_message(token: BOT_TOKEN, channel: "C1", ts: "5.5")
+      stub = stub_request(:post, "#{API}/chat.delete")
+        .with(headers: { "Authorization" => "Bearer #{BOT_TOKEN}" },
+              body: hash_including("channel" => "C1", "ts" => "5.5"))
+        .to_return(json(expected))
+
+      actual = Slack::Client.delete_message(token: BOT_TOKEN, channel: "C1", ts: "5.5")
+
+      assert_equal expected, actual
+      assert_requested stub
+    end
+
+    test "delete_message raises Slack::Client::Error on an ok:false body" do
+      stub_request(:post, "#{API}/chat.delete").to_return(json(ok: false, error: "cant_delete_message"))
+
+      error = assert_raises(Slack::Client::Error) do
+        Slack::Client.delete_message(token: BOT_TOKEN, channel: "C1", ts: "5.5")
+      end
+      assert_match(/cant_delete_message/, error.message)
+    end
+
+    # --- conversations.replies -------------------------------------------------
+
+    test "conversation_replies sends ts (not thread_ts) and parses into the fake's shape" do
+      expected = @fake.conversation_replies(token: BOT_TOKEN, channel: "C1", ts: "1700000000.000100")
+      stub = stub_request(:post, "#{API}/conversations.replies")
+        .with(headers: { "Authorization" => "Bearer #{BOT_TOKEN}" },
+              body: hash_including("channel" => "C1", "ts" => "1700000000.000100", "limit" => "50"))
+        .to_return(json(expected))
+
+      actual = Slack::Client.conversation_replies(token: BOT_TOKEN, channel: "C1",
+        ts: "1700000000.000100", limit: 50)
+
+      assert_equal expected, actual
+      assert_equal 2, actual["messages"].size
+      assert_equal "1700000000.000100", actual.dig("messages", 0, "ts")
+      assert_requested stub
+    end
+
+    test "conversation_replies raises Slack::Client::Error on an ok:false body" do
+      stub_request(:post, "#{API}/conversations.replies").to_return(json(ok: false, error: "thread_not_found"))
+
+      error = assert_raises(Slack::Client::Error) do
+        Slack::Client.conversation_replies(token: BOT_TOKEN, channel: "C1", ts: "1.1")
+      end
+      assert_match(/thread_not_found/, error.message)
+    end
+
     # --- files: getUploadURLExternal -> PUT bytes -> completeUploadExternal ----
 
     test "upload_files runs the external-upload flow and returns completeUpload's shape" do

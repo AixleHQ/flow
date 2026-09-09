@@ -2,13 +2,15 @@
 
 # In-memory fake for the Slack boundary. A real object implementing
 # Slack::Client's public class-method interface (exchange_code, auth_test,
-# post_message, upload_files, download_file) as INSTANCE methods (R3,
-# docs/testing.md §4). Callers stub Slack::Client onto one of these via
+# post_message, update_message, delete_message, conversation_replies,
+# upload_files, download_file) as INSTANCE methods (R3, docs/testing.md §4).
+# Callers stub Slack::Client onto one of these via
 # SlackTestHelper#stub_slack_client!.
 #
 # Every method records its call so tests can assert what was sent
-# (`oauth_exchanges`, `auth_tests`, `posted_messages`, `uploaded_files`,
-# `downloads`) and returns a realistic canned response whose SHAPE matches what
+# (`oauth_exchanges`, `auth_tests`, `posted_messages`, `updated_messages`,
+# `deleted_messages`, `replies_reads`, `uploaded_files`, `downloads`) and returns
+# a realistic canned response whose SHAPE matches what
 # the real Slack::Client parses out of the Slack Web API — string-keyed hashes
 # for the JSON endpoints, a raw String for download_file. That shape equality is
 # pinned by test/services/slack/client_contract_test.rb (R4): change a canned
@@ -23,18 +25,38 @@ class FakeSlackClient
   DEFAULT_FILE_BODY = "fake slack file bytes"
   WORKSPACE_HOST    = "fake-workspace.slack.com"
 
-  attr_reader :oauth_exchanges, :auth_tests, :posted_messages, :uploaded_files, :downloads
+  # A two-message thread: a human's @mention and the bot's reply to it. Shaped
+  # like conversations.replies returns them, down to `thread_ts` on both and the
+  # parent's reply bookkeeping.
+  DEFAULT_THREAD_PARENT = {
+    "type" => "message", "user" => "U00USER000", "text" => "<@U0BOTFAKE0> ship the report",
+    "ts" => "1700000000.000100", "thread_ts" => "1700000000.000100",
+    "reply_count" => 1, "replies" => [ { "user" => "U0BOTFAKE0", "ts" => "1700000000.000200" } ]
+  }.freeze
+  DEFAULT_THREAD_REPLY = {
+    "type" => "message", "subtype" => "bot_message", "text" => "On it.",
+    "ts" => "1700000000.000200", "thread_ts" => "1700000000.000100", "bot_id" => DEFAULT_BOT_ID
+  }.freeze
+
+  attr_reader :oauth_exchanges, :auth_tests, :posted_messages, :uploaded_files, :downloads,
+              :updated_messages, :deleted_messages, :replies_reads
   # Let a test tailor the shared canned values (e.g. a specific team_id) without
   # reaching into the response builders.
   attr_accessor :team_id, :team_name, :bot_token, :bot_user_id, :scope, :file_body
+  # The thread conversations.replies hands back, so a test can stage a thread
+  # without knowing the wire shape. Each entry is a Slack message hash.
+  attr_accessor :thread_messages
 
   def initialize
-    @oauth_exchanges = []
-    @auth_tests      = []
-    @posted_messages = []
-    @uploaded_files  = []
-    @downloads       = []
-    @seq             = 0
+    @oauth_exchanges  = []
+    @auth_tests       = []
+    @posted_messages  = []
+    @uploaded_files   = []
+    @downloads        = []
+    @updated_messages = []
+    @deleted_messages = []
+    @replies_reads    = []
+    @seq              = 0
 
     @team_id     = DEFAULT_TEAM_ID
     @team_name   = DEFAULT_TEAM_NAME
@@ -42,6 +64,8 @@ class FakeSlackClient
     @bot_user_id = DEFAULT_BOT_USER
     @scope       = DEFAULT_SCOPE
     @file_body   = DEFAULT_FILE_BODY
+
+    @thread_messages = [ DEFAULT_THREAD_PARENT, DEFAULT_THREAD_REPLY ]
   end
 
   # --- Slack::Client public interface (JSON endpoints return string-keyed hashes) ---
@@ -79,13 +103,16 @@ class FakeSlackClient
     }
   end
 
-  # chat.postMessage — { ok, channel, ts, message }. Slack::Notifier only checks
-  # that this does not raise (truthy return), so the exact shape matters only for
-  # the contract pin.
-  def post_message(token:, channel:, text: nil, thread_ts: nil, blocks: nil)
+  # chat.postMessage — { ok, channel, ts, message }. Slack::Notifier reads `ts`
+  # out of this to address the message later and to thread file uploads under it.
+  def post_message(token:, channel:, text: nil, thread_ts: nil, blocks: nil, reply_broadcast: nil)
     ts = next_ts
+    # `ts` is the one value here that is a RESPONSE rather than a request field;
+    # recorded alongside so a test can assert what the caller did with the
+    # timestamp it got back (thread a follow-up under it, report it to the agent).
     @posted_messages << {
-      token: token, channel: channel, text: text, thread_ts: thread_ts, blocks: blocks
+      token: token, channel: channel, text: text, thread_ts: thread_ts, blocks: blocks,
+      reply_broadcast: reply_broadcast, ts: ts
     }
     {
       "ok"      => true,
@@ -128,6 +155,46 @@ class FakeSlackClient
     }
   end
 
+  # chat.update — { ok, channel, ts, text, message }. Slack echoes back the edited
+  # message, so `ts` is the one that was addressed, not a new one.
+  def update_message(token:, channel:, ts:, text: nil, blocks: nil)
+    @updated_messages << {
+      token: token, channel: channel, ts: ts, text: text, blocks: blocks
+    }
+    {
+      "ok"      => true,
+      "channel" => channel,
+      "ts"      => ts,
+      "text"    => text.to_s,
+      "message" => {
+        "type" => "message", "subtype" => "bot_message", "text" => text.to_s,
+        "ts" => ts, "bot_id" => DEFAULT_BOT_ID
+      }.merge(blocks ? { "blocks" => blocks } : {})
+    }
+  end
+
+  # chat.delete — { ok, channel, ts }.
+  def delete_message(token:, channel:, ts:)
+    @deleted_messages << { token: token, channel: channel, ts: ts }
+    { "ok" => true, "channel" => channel, "ts" => ts }
+  end
+
+  # conversations.replies — { ok, messages, has_more, response_metadata }. Returns
+  # `thread_messages` (the parent plus its replies, oldest first), truncated to
+  # `limit` with has_more set when there is more behind it.
+  def conversation_replies(token:, channel:, ts:, limit: nil, cursor: nil)
+    @replies_reads << { token: token, channel: channel, ts: ts, limit: limit, cursor: cursor }
+
+    messages = thread_messages.map(&:dup)
+    page = limit ? messages.first(limit) : messages
+    has_more = page.size < messages.size
+    {
+      "ok"       => true,
+      "messages" => page,
+      "has_more" => has_more
+    }.merge(has_more ? { "response_metadata" => { "next_cursor" => "fake-cursor-1" } } : {})
+  end
+
   # File download — the raw body String (not JSON). Slack::FileIngestor writes it
   # straight into an AssetVersion.
   def download_file(url:, token:, max_bytes: nil)
@@ -143,6 +210,23 @@ class FakeSlackClient
 
   def last_uploaded_files
     uploaded_files.last
+  end
+
+  # The ts the last chat.postMessage handed back.
+  def last_posted_message_ts
+    last_posted_message&.fetch(:ts, nil)
+  end
+
+  def last_updated_message
+    updated_messages.last
+  end
+
+  def last_deleted_message
+    deleted_messages.last
+  end
+
+  def last_replies_read
+    replies_reads.last
   end
 
   def last_download

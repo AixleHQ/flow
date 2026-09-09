@@ -62,10 +62,87 @@ module Slack
       assert_empty fake_slack.posted_messages
     end
 
-    test "post swallows Slack API errors and returns false" do
+    test "post swallows Slack API errors and returns nothing" do
       fake_slack.stubs(:post_message).raises(Slack::Client::Error.new("channel_not_found"))
 
       assert_not Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi")
+    end
+
+    test "post returns the posted message's coordinates" do
+      result = Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi", thread_ts: "5.5")
+
+      assert result.ok?
+      assert_equal "C1", result.channel
+      assert_equal "5.5", result.thread_ts
+      assert_equal fake_slack.last_posted_message_ts, result.ts
+      assert_empty result.errors
+    end
+
+    test "post sends blocks and reply_broadcast through to the client" do
+      blocks = [ { "type" => "divider" } ]
+
+      assert Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi",
+        blocks: blocks, thread_ts: "5.5", reply_broadcast: true)
+
+      msg = fake_slack.last_posted_message
+      assert_equal blocks, msg[:blocks]
+      assert msg[:reply_broadcast]
+    end
+
+    test "post with blocks AND files sends the message, then the files into its thread" do
+      result = Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi",
+        blocks: [ { "type" => "divider" } ], files: [ { filename: "a.rb", content: "x" } ])
+
+      assert result.ok?
+      assert_equal 1, fake_slack.posted_messages.size
+      assert_equal 1, fake_slack.uploaded_files.size
+      assert_equal result.ts, fake_slack.last_uploaded_files[:thread_ts]
+      assert_nil fake_slack.last_uploaded_files[:initial_comment]
+    end
+
+    test "post with blocks and files keeps an explicit thread for both" do
+      Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi", thread_ts: "5.5",
+        blocks: [ { "type" => "divider" } ], files: [ { filename: "a.rb", content: "x" } ])
+
+      assert_equal "5.5", fake_slack.last_posted_message[:thread_ts]
+      assert_equal "5.5", fake_slack.last_uploaded_files[:thread_ts]
+    end
+
+    test "post reports a half-delivered send instead of swallowing it" do
+      fake_slack.stubs(:upload_files).raises(Slack::Client::Error.new("upload_failed"))
+
+      result = Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi",
+        blocks: [ { "type" => "divider" } ], files: [ { filename: "a.rb", content: "x" } ])
+
+      assert_not result.ok?
+      assert result.ts.present?
+      assert_match(/files: upload_failed/, result.error_message)
+    end
+
+    test "post falls back to carrying the text on the upload when the message fails" do
+      fake_slack.stubs(:post_message).raises(Slack::Client::Error.new("invalid_blocks"))
+
+      result = Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi",
+        blocks: [ { "type" => "divider" } ], files: [ { filename: "a.rb", content: "x" } ])
+
+      assert_not result.ok?
+      assert_nil result.ts
+      assert_equal "hi", fake_slack.last_uploaded_files[:initial_comment]
+    end
+
+    test "post returns nothing when every request fails" do
+      fake_slack.stubs(:post_message).raises(Slack::Client::Error.new("invalid_blocks"))
+      fake_slack.stubs(:upload_files).raises(Slack::Client::Error.new("upload_failed"))
+
+      assert_not Slack::Notifier.post(integration: @integration, channel: "C1", text: "hi",
+        blocks: [ { "type" => "divider" } ], files: [ { filename: "a.rb", content: "x" } ])
+    end
+
+    test "post sends blocks with no text at all" do
+      assert Slack::Notifier.post(integration: @integration, channel: "C1",
+        blocks: [ { "type" => "divider" } ])
+
+      assert_equal 1, fake_slack.posted_messages.size
     end
   end
 end
