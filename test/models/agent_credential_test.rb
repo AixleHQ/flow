@@ -412,6 +412,43 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal :refreshed, result[:status]
   end
 
+  # --- credential_unusable_reason: the launch gate asks the token, not the columns ---
+
+  # A Cursor accessToken is a JWT: its `exp` claim is the only real statement about
+  # when the credential dies. Minimal unsigned form — nothing verifies the signature.
+  def cursor_jwt(expires_at)
+    header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
+    payload = Base64.urlsafe_encode64({ exp: expires_at.to_i }.to_json, padding: false)
+    "#{header}.#{payload}.sig"
+  end
+
+  # The production row this exists for: the sweep never selected it (NULL expiry), so it
+  # is `active` with no refresh error while its token expired weeks ago.
+  test "credential_unusable_reason reports a dead cursor token the sweep never marked" do
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
+                                     config_data: { "accessToken" => cursor_jwt(1.day.ago), "refreshToken" => "r1" })
+    cred.update_column(:expires_at, nil)
+
+    assert cred.reload.active?
+    assert_equal "token_expired", cred.credential_unusable_reason
+  end
+
+  test "credential_unusable_reason is nil for a cursor token with life left in it" do
+    config = { "accessToken" => cursor_jwt(30.days.from_now), "refreshToken" => "r1" }
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli", config_data: config)
+
+    assert_nil cred.credential_unusable_reason
+  end
+
+  # An API key or a Bedrock connection legitimately carries no readable `exp`; refusing
+  # those would lock a working login out of every launch.
+  test "credential_unusable_reason is nil for an agent whose auth carries no readable expiry" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: { "primaryApiKey" => "sk-ant" })
+
+    assert_nil cred.credential_unusable_reason
+  end
+
   # --- status / refresh error lifecycle ---
 
   test "mark_refresh_error! increments failure count and records the message" do

@@ -286,9 +286,26 @@ class SessionService
       raise CloudAuth::PreflightError, broken if broken.any?
     end
 
-    # Block a launch whose agent credential the refresh sweep has marked broken, so
-    # the user gets "sign in again" instead of a container that fails on an expired
-    # token.
+    # Block a launch whose agent credential is broken, so the user gets "sign in again"
+    # instead of a container that fails on an expired token.
+    #
+    # Two questions, because one is not enough:
+    #
+    # - `status` — what the refresh sweep has already noticed. Necessary but not
+    #   sufficient: the sweep only looks at rows with a non-NULL `expires_at`, so a
+    #   credential whose expiry was never derived is never selected, never marked, and
+    #   stays `active` however dead its token is. That is how a Cursor CLI session ran
+    #   to COMPLETED on a token that had expired weeks earlier — the CLI in the
+    #   container papered over it with its own device login, while every server-side
+    #   call made with the stored token 401'd and the run finished with no usage.
+    # - the token itself — asked of the adapter holding it, the way CloudAuth::Preflight
+    #   inspects a cloud connection's own material rather than a derived flag. Only
+    #   agents for which a missing expiry really means a broken credential answer this
+    #   (BaseAdapter returns nil), so an API-key or Bedrock login is unaffected.
+    #
+    # No network, matching Oauth::Preflight and CloudAuth::Preflight — the refresh that
+    # can still save a token expiring soon happens later, at provisioning
+    # (AgentSessionStrategy#refresh_expiring_credential!).
     #
     # An auth_setup session is exempt: it exists to REPLACE the broken credential,
     # so gating it on that credential locks the user out of the only flow that can
@@ -298,8 +315,13 @@ class SessionService
       return unless agent_type.present? && company.present?
 
       credential = AgentCredential.find_by(user_id: user.id, company_id: company.id, agent_type: agent_type)
-      return if credential.nil? || credential.active?
+      return if credential.nil?
+      raise AgentCredential::PreflightError, credential unless credential.active?
 
+      reason = credential.credential_unusable_reason
+      return if reason.nil?
+
+      Rails.logger.warn("[SessionService] Refusing launch for #{agent_type} credential #{credential.id}: #{reason}")
       raise AgentCredential::PreflightError, credential
     end
 

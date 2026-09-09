@@ -198,6 +198,23 @@ class AgentCredential < ApplicationRecord
     expires_at.present? && expires_at <= within.from_now
   end
 
+  # Why the STORED token material cannot be handed to a session, or nil when nothing is
+  # wrong. Asked at session-start preflight, on top of `status`, because `status` and
+  # `expires_at` are both derived: they say what the refresh sweep has already noticed,
+  # and a credential the sweep never selected (NULL expiry) is `active` however dead its
+  # token is. The adapter holds the token, so the adapter answers — see
+  # BaseAdapter#credential_unusable_reason. No network.
+  #
+  # A failure to even read the material is logged and treated as "no verdict": an
+  # internal error is not evidence about the token, and refusing every launch on one
+  # would be worse than the launch it is guarding.
+  def credential_unusable_reason
+    adapter.credential_unusable_reason(config_data)
+  rescue StandardError => e
+    Rails.logger.warn("[AgentCredential] credential_unusable_reason failed for #{id}: #{e.message}")
+    nil
+  end
+
   # Whether a running container currently holds a copy of this credential's tokens.
   # `excluding_session_id` is the session being launched: it is the one asking, and
   # its own container has not been handed anything yet.

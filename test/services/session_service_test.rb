@@ -260,6 +260,105 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert session.persisted?, "re-authentication must not be gated on the credential it replaces"
   end
 
+  # == create_and_start: agent credential preflight reads the token, not just `status` ==
+  #
+  # `status` and `expires_at` are derived: they report what the refresh sweep has already
+  # noticed, and the sweep only selects rows with a non-NULL expiry. A Cursor credential
+  # whose expiry was never derived is therefore `active` with a NULL column however dead
+  # its token is — which is how a session ran to COMPLETED while every server-side call
+  # made with the stored token 401'd, leaving the run with no tokens and no cost.
+
+  test "create_and_start blocks launch when the stored agent token has already expired" do
+    AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
+      "accessToken" => jwt_with_exp(1.day.ago.to_i), "refreshToken" => "r1"
+    })
+
+    error = assert_raises(AgentCredential::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "cursor_cli", params: {}
+      )
+    end
+
+    assert_includes error.message, "expired"
+    assert_equal 0, @user.terminal_sessions.count, "must not create a session it can't launch"
+  end
+
+  # The exact production row: status active, expires_at never derived, token long dead.
+  test "create_and_start blocks launch on an expired token even while status is active and expires_at is NULL" do
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
+      "accessToken" => jwt_with_exp(1.day.ago.to_i), "refreshToken" => "r1"
+    })
+    cred.update_column(:expires_at, nil)
+
+    assert cred.reload.active?, "precondition: the sweep never marked this row"
+
+    assert_raises(AgentCredential::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "cursor_cli", params: {}
+      )
+    end
+  end
+
+  # Garbage counts as expired (CloudAuth::Preflight.past?): a Cursor token whose exp
+  # cannot be read still dies with its grant, so prompt a reconnect.
+  test "create_and_start blocks launch when the stored agent token's expiry cannot be read" do
+    AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
+      "accessToken" => "opaque", "refreshToken" => "r1"
+    })
+
+    assert_raises(AgentCredential::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "cursor_cli", params: {}
+      )
+    end
+  end
+
+  test "create_and_start launches on a healthy stored agent token" do
+    mock_temporal_start
+    AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
+      "accessToken" => jwt_with_exp(30.days.from_now.to_i), "refreshToken" => "r1"
+    })
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session",
+      agent_type: "cursor_cli", params: {}
+    )
+
+    assert session.persisted?
+  end
+
+  test "create_and_start lets an auth_setup session run on an expired stored agent token" do
+    mock_temporal_start
+    AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
+      "accessToken" => jwt_with_exp(1.day.ago.to_i), "refreshToken" => "r1"
+    })
+
+    session = SessionService.create_and_start(
+      user: @user, company: @company, session_type: "auth_setup",
+      agent_type: "cursor_cli", params: {}
+    )
+
+    assert session.persisted?, "re-authentication must not be gated on the token it replaces"
+  end
+
+  # Regression: only agents for which a missing expiry really means a broken credential
+  # answer the token question. Claude's own auth carries no readable `exp` when it is an
+  # API key or a Bedrock connection, and must not be refused for it.
+  test "create_and_start launches a claude_code credential whose auth carries no readable expiry" do
+    mock_temporal_start
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-test" })
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session",
+      agent_type: "claude_code", params: {}
+    )
+
+    assert session.persisted?
+  end
+
   test "create_and_start proceeds when agent credential is active" do
     mock_temporal_start
     AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", { "primaryApiKey" => "sk-test" })
@@ -571,5 +670,15 @@ class SessionServiceTest < ActiveSupport::TestCase
     Oauth::TokenService.expects(:fresh).never
 
     SessionService.send(:preflight_oauth!, @user, [ server.id ])
+  end
+
+  private
+
+  # Minimal unsigned JWT carrying an `exp` claim (seconds) — the shape of a Cursor
+  # accessToken as far as the preflight is concerned.
+  def jwt_with_exp(exp_seconds)
+    header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
+    payload = Base64.urlsafe_encode64({ exp: exp_seconds }.to_json, padding: false)
+    "#{header}.#{payload}.sig"
   end
 end
