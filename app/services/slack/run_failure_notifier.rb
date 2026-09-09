@@ -45,17 +45,20 @@ module Slack
 
         dispatch = TriggerDispatch.where(workflow_run_id: run.id).order(:id).last
         return false unless notify?(dispatch)
-        return false unless claim(dispatch)
 
         integration = integration_for(run.project, slack["integration_id"])
         return false if integration.nil?
 
-        Slack::Notifier.post(
-          integration: integration,
-          channel: channel,
-          thread_ts: slack["thread_ts"],
-          text: message_for(run)
-        )
+        return false unless claim(dispatch)
+
+        post_or_release(dispatch) do
+          Slack::Notifier.post(
+            integration: integration,
+            channel: channel,
+            thread_ts: slack["thread_ts"],
+            text: message_for(run)
+          )
+        end
       rescue StandardError => e
         Rails.logger.error("[Slack::RunFailureNotifier] run ##{run&.id}: #{e.message}")
         false
@@ -73,17 +76,20 @@ module Slack
 
         channel = event.data["channel"]
         return false if channel.blank?
-        return false unless claim(dispatch)
 
         integration = integration_for(dispatch.trigger_binding.project, event.data["integration_id"])
         return false if integration.nil?
 
-        Slack::Notifier.post(
-          integration: integration,
-          channel: channel,
-          thread_ts: event.data["thread_ts"] || event.data["ts"],
-          text: launch_skip_message(dispatch)
-        )
+        return false unless claim(dispatch)
+
+        post_or_release(dispatch) do
+          Slack::Notifier.post(
+            integration: integration,
+            channel: channel,
+            thread_ts: event.data["thread_ts"] || event.data["ts"],
+            text: launch_skip_message(dispatch)
+          )
+        end
       rescue StandardError => e
         Rails.logger.error("[Slack::RunFailureNotifier] dispatch ##{dispatch&.id}: #{e.message}")
         false
@@ -102,10 +108,29 @@ module Slack
       # Atomic claim: the UPDATE only touches the row while the column is still
       # NULL, so exactly one caller ever gets through — job retries, a duplicate
       # enqueue, and the reaper + WorkflowService.fail both landing on the same
-      # run all collapse to a single reply.
+      # run all collapse to a single reply. Claimed just before the post and
+      # released again (see #post_or_release) if the post never lands, so a Slack
+      # outage or a config gap leaves the notice retryable rather than eaten.
       def claim(dispatch)
         TriggerDispatch.where(id: dispatch.id, slack_failure_notified_at: nil)
                        .update_all(slack_failure_notified_at: Time.current) == 1
+      end
+
+      # Hold the claim only for a post that actually lands. Slack::Notifier.post
+      # swallows a Slack outage and returns false rather than raising, so a falsy
+      # result has to release the claim too — otherwise a transient failure eats
+      # the notice for good.
+      def post_or_release(dispatch)
+        posted = yield
+        release(dispatch) unless posted
+        posted
+      rescue StandardError
+        release(dispatch)
+        raise
+      end
+
+      def release(dispatch)
+        TriggerDispatch.where(id: dispatch.id).update_all(slack_failure_notified_at: nil)
       end
 
       # Reply through the SAME workspace that triggered the launch — its install is

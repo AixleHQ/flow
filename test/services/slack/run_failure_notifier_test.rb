@@ -115,6 +115,19 @@ module Slack
       assert_equal 1, fake_slack.posted_messages.size
     end
 
+    test "a Slack outage releases the claim so a later call can still post" do
+      run = failed_run
+      dispatch = TriggerDispatch.where(workflow_run_id: run.id).order(:id).last
+
+      Slack::Notifier.stubs(:post).returns(false).then.returns(true)
+
+      assert_not Slack::RunFailureNotifier.call(run)
+      assert_nil dispatch.reload.slack_failure_notified_at
+
+      assert Slack::RunFailureNotifier.call(run)
+      assert_not_nil dispatch.reload.slack_failure_notified_at
+    end
+
     # == launch-skip entry point ==
 
     def skipped_dispatch(reason: "step 'Approve' needs a human", notify: true)
