@@ -459,6 +459,12 @@ module Agents
     # - Only override where a nil expiry is genuinely evidence of a broken credential.
     #   Returning a reason for an agent whose auth legitimately carries no readable
     #   expiry (an API key, a cloud connection) would refuse a working login.
+    # - Condemn only what is beyond saving. A credential that still holds a usable
+    #   refresh token is rotated at provisioning a few steps later
+    #   (AgentSessionStrategy#refresh_expiring_credential!), so returning a reason for
+    #   it sends the user to a re-authentication they did not need — and, for a
+    #   workflow step, kills the run: launch_step_session_activity wraps PreflightError
+    #   in a non-retryable Temporal ApplicationError.
     #
     # @param _credentials [Hash] decrypted credential data
     # @return [String, nil] a short machine reason ("token_expired", …) for logs

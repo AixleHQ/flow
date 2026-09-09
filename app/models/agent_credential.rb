@@ -52,14 +52,38 @@ class AgentCredential < ApplicationRecord
   # Agent types whose credentials carry a refreshable OAuth token.
   REFRESHABLE_AGENT_TYPES = %w[claude_code codex cursor_cli].freeze
 
+  # Agent types whose adapter derives the expiry from the stored token itself in
+  # #refresh! (see CursorCliAdapter#refresh!) and returns :not_needed when there is
+  # nothing to do. For those, and only those, a NULL expires_at must not keep a row
+  # away from the adapter: the column is written only when config_data is written,
+  # config_data is only routinely written by a refresh, and NULL reads as "never
+  # expires" — so a row whose expiry was never derived sat in a closed loop, never
+  # selected, never refreshed, still NULL. Handing the decision to the adapter costs
+  # one extra decrypt per sweep tick and closes the loop.
+  #
+  # An adapter that ignores margin_ms and refreshes on every call must NOT be listed
+  # here: it would burn a rotating grant every 5 minutes on rows that are perfectly
+  # healthy (a codex OPENAI_API_KEY-only credential has no JWT to read at all).
+  TOKEN_DERIVED_REFRESH_AGENT_TYPES = %w[cursor_cli].freeze
+
   # Scopes
   scope :for_agent, ->(agent_type) { where(agent_type: agent_type) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :refreshable, -> { where(agent_type: REFRESHABLE_AGENT_TYPES) }
-  # Credentials whose token expires within `within` (drives the refresh sweep).
-  # NULL-expiry credentials (agents whose tokens carry no expiry) are excluded.
+  # Credentials worth handing to their adapter's #refresh! (drives the refresh sweep).
+  #
+  # Two ways in: a populated expiry inside `within`, or no expiry at all for an agent
+  # whose adapter decides from the token (TOKEN_DERIVED_REFRESH_AGENT_TYPES). The
+  # second exists because the first cannot see the rows this sweep is most needed for
+  # — a NULL expiry is not "never expires", it is "nobody ever derived it".
+  #
+  # For every other agent a NULL expiry still means "the tokens carry no expiry", and
+  # those rows stay excluded.
   scope :refresh_due, ->(within = 60.minutes) {
-    where(status: :active).where.not(expires_at: nil).where(expires_at: ..within.from_now)
+    where(status: :active).where(
+      "expires_at <= :cutoff OR (expires_at IS NULL AND agent_type IN (:token_derived))",
+      cutoff: within.from_now, token_derived: TOKEN_DERIVED_REFRESH_AGENT_TYPES
+    )
   }
   # Credentials no live container currently holds.
   #
@@ -198,6 +222,18 @@ class AgentCredential < ApplicationRecord
     expires_at.present? && expires_at <= within.from_now
   end
 
+  # Whether it is worth asking the adapter to refresh — the instance-level twin of
+  # the .refresh_due scope, and for the same reason. The column answers the question
+  # only while it is populated; a NULL says nothing at all, so for an agent whose
+  # adapter derives the expiry from the token itself the adapter is asked instead of
+  # the row being skipped. It answers :not_needed when the token has life left, so
+  # the extra call costs a decrypt, not a token rotation.
+  def refresh_worth_attempting?(within)
+    return true if expires_at.nil? && TOKEN_DERIVED_REFRESH_AGENT_TYPES.include?(agent_type)
+
+    expiring_within?(within)
+  end
+
   # Why the STORED token material cannot be handed to a session, or nil when nothing is
   # wrong. Asked at session-start preflight, on top of `status`, because `status` and
   # `expires_at` are both derived: they say what the refresh sweep has already noticed,
@@ -236,12 +272,12 @@ class AgentCredential < ApplicationRecord
   #   would otherwise each fire a refresh, and every one after the first replays a
   #   grant the server has already rotated out.
   def refresh_if_expiring!(within: SESSION_REFRESH_THRESHOLD, excluding_session_id: nil)
-    return :not_needed unless expiring_within?(within)
+    return :not_needed unless refresh_worth_attempting?(within)
     return :held if held_by_live_session?(excluding_session_id: excluding_session_id)
 
     with_lock do
       reload
-      next :not_needed unless expiring_within?(within)
+      next :not_needed unless refresh_worth_attempting?(within)
 
       adapter.refresh!(self, margin_ms: within.in_milliseconds)
     end

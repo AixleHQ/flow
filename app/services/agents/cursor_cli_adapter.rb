@@ -178,8 +178,14 @@ module Agents
     # config_data is written, and config_data is only routinely written by a refresh,
     # so a row whose expiry was never derived sat in a closed loop: NULL reads as
     # "never expires" in `refresh_due` / `#expiring_within?`, so it was never selected,
-    # never refreshed, never written, and stayed NULL. Deciding from the token makes the
-    # column an optimisation for row selection instead of the only gate.
+    # never refreshed, never written, and stayed NULL.
+    #
+    # Deciding here is only half of it: both callers used to gate on the column before
+    # consulting an adapter, so this method was unreachable for exactly those rows. They
+    # now let a NULL-expiry row through for the agent types listed in
+    # AgentCredential::TOKEN_DERIVED_REFRESH_AGENT_TYPES (`.refresh_due` and
+    # #refresh_worth_attempting?), which is what makes the column an optimisation for
+    # row selection rather than the only gate.
     #
     # An `exp` this adapter cannot read is deliberately NOT treated as "never expires":
     # a Cursor accessToken dies with its grant either way, so an unreadable expiry means
@@ -209,10 +215,24 @@ module Agents
     # 401, leaving the run with no tokens and no cost. The CLI in the container hides it
     # by re-authenticating against its own 401 via device login.
     #
-    # Unreadable is refused along with expired, matching CloudAuth::Preflight.past?
-    # ("garbage counts as expired"): the token still dies at its grant's 60 days, and a
-    # reconnect prompt beats handing a session a credential nothing can refresh.
+    # Only what is beyond saving is refused, as in the two preflights this mirrors
+    # (`Oauth::Preflight.usable?` — `!cred.expired? || cred.refreshable?`;
+    # `CloudAuth::Preflight.unusable_reason` — "reauthorization_required" only when the
+    # refresh token is blank AND the expiry is past). A live refreshToken means
+    # AgentSessionStrategy#refresh_expiring_credential! rotates this token at
+    # provisioning, a few steps after this gate, and #refresh! now decides that from the
+    # token rather than from the column — so refusing here would send the user to a
+    # manual re-authentication they did not need. For a workflow step it would be worse:
+    # launch_step_session_activity.rb wraps PreflightError in a NON-RETRYABLE Temporal
+    # ApplicationError, killing a run that self-heals today.
+    #
+    # Without a refreshToken nothing can rescue the token, so an unreadable expiry is
+    # refused alongside an expired one, matching CloudAuth::Preflight.past? ("garbage
+    # counts as expired"): the token still dies at its grant's 60 days, and a reconnect
+    # prompt beats handing a session a credential nothing can refresh.
     def credential_unusable_reason(credentials)
+      return nil if credentials["refreshToken"].present?
+
       exp = token_expires_at(credentials).to_i
       return "expiry_unreadable" unless exp.positive?
       return "token_expired" if exp <= now_ms

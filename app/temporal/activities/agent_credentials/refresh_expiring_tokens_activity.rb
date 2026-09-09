@@ -7,10 +7,16 @@
 module Activities
   module AgentCredentials
     class RefreshExpiringTokensActivity < ::Activities::Base
-      # Matches ClaudeCodeAdapter::REFRESH_MARGIN_MS: selecting rows the adapter will
-      # not act on just re-reads and decrypts them every 5 minutes. A session needing
-      # more headroom than this refreshes at launch instead
+      # Matches ClaudeCodeAdapter::REFRESH_MARGIN_MS and CursorCliAdapter's: selecting
+      # rows the adapter will not act on just re-reads and decrypts them every 5
+      # minutes. A session needing more headroom than this refreshes at launch instead
       # (AgentCredential#refresh_if_expiring!).
+      #
+      # `.refresh_due` also selects NULL-expiry rows for the agents whose adapter reads
+      # the expiry out of the token (AgentCredential::TOKEN_DERIVED_REFRESH_AGENT_TYPES).
+      # Those rows are the whole reason this sweep missed the credential the incident was
+      # found on, and the adapter answers :not_needed for the healthy ones, so they land
+      # in `not_needed` rather than costing a token rotation.
       REFRESH_WINDOW = 15.minutes
 
       def run(_input = nil)

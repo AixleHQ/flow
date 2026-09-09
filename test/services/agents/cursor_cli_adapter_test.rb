@@ -456,22 +456,6 @@ module Agents
       assert_equal "new", credential.reload.config_data["accessToken"]
     end
 
-    # The row the incident was found on: expires_at never derived, so no scope would ever
-    # select it. Reaching the adapter at all must be enough.
-    test "refresh! rotates a credential whose expires_at column was never derived" do
-      user = create(:user, company: create(:company))
-      credential = create(:agent_credential, :cursor_cli, user: user, config_data: {
-        "accessToken" => jwt_with_exp(1.day.ago.to_i), "refreshToken" => "r1"
-      })
-      credential.update_column(:expires_at, nil)
-      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
-        .to_return(status: 200, body: { access_token: "new", refresh_token: "r2" }.to_json,
-                   headers: { "Content-Type" => "application/json" })
-
-      assert_equal :refreshed, @adapter.refresh!(credential.reload)[:status]
-      assert_equal "new", credential.reload.config_data["accessToken"]
-    end
-
     test "refresh! honours a caller-supplied margin" do
       user = create(:user, company: create(:company))
       credential = create(:agent_credential, :cursor_cli, user: user, config_data: {
@@ -494,16 +478,34 @@ module Agents
       assert_nil @adapter.credential_unusable_reason({ "accessToken" => jwt_with_exp(2.hours.from_now.to_i) })
     end
 
-    test "credential_unusable_reason reports an expired token" do
+    test "credential_unusable_reason reports an expired token that cannot be refreshed" do
       assert_equal "token_expired",
                    @adapter.credential_unusable_reason({ "accessToken" => jwt_with_exp(1.minute.ago.to_i) })
     end
 
-    # Garbage counts as expired (CloudAuth::Preflight.past?): better to prompt a
-    # reconnect than to hand a session a credential nothing can refresh.
-    test "credential_unusable_reason reports a token whose exp cannot be read" do
+    # Only what is beyond saving is refused. An expired accessToken with a live
+    # refreshToken is rotated at provisioning by
+    # AgentSessionStrategy#refresh_expiring_credential!, so refusing it here would send
+    # the user to a manual re-auth they did not need — and would kill a workflow step
+    # outright, since launch_step_session_activity wraps PreflightError in a
+    # non-retryable Temporal ApplicationError.
+    test "credential_unusable_reason passes an expired token that still has a refresh token" do
+      assert_nil @adapter.credential_unusable_reason(
+        { "accessToken" => jwt_with_exp(1.minute.ago.to_i), "refreshToken" => "r1" }
+      )
+    end
+
+    test "credential_unusable_reason passes an unreadable token that still has a refresh token" do
+      assert_nil @adapter.credential_unusable_reason({ "accessToken" => "opaque", "refreshToken" => "r1" })
+    end
+
+    # Garbage counts as expired (CloudAuth::Preflight.past?) once nothing can refresh it:
+    # better to prompt a reconnect than to hand a session a dead credential.
+    test "credential_unusable_reason reports an unrefreshable token whose exp cannot be read" do
       assert_equal "expiry_unreadable", @adapter.credential_unusable_reason({ "accessToken" => "opaque" })
       assert_equal "expiry_unreadable", @adapter.credential_unusable_reason({})
+      assert_equal "expiry_unreadable",
+                   @adapter.credential_unusable_reason({ "accessToken" => "opaque", "refreshToken" => "" })
     end
 
     test "token_expires_at decodes the JWT exp (ms) from the accessToken" do

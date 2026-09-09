@@ -301,7 +301,13 @@ class SessionService
     # - the token itself — asked of the adapter holding it, the way CloudAuth::Preflight
     #   inspects a cloud connection's own material rather than a derived flag. Only
     #   agents for which a missing expiry really means a broken credential answer this
-    #   (BaseAdapter returns nil), so an API-key or Bedrock login is unaffected.
+    #   (BaseAdapter returns nil), so an API-key or Bedrock login is unaffected. And
+    #   only what is beyond saving is refused: an expired token that still carries a
+    #   usable refresh token passes, the way Oauth::Preflight.usable? passes an expired
+    #   credential that is refreshable. Refusing it would send the user to a re-auth
+    #   they did not need — and, since this also runs for workflow steps and
+    #   launch_step_session_activity wraps PreflightError in a NON-RETRYABLE Temporal
+    #   ApplicationError, would kill a run that self-heals today.
     #
     # No network, matching Oauth::Preflight and CloudAuth::Preflight — the refresh that
     # can still save a token expiring soon happens later, at provisioning

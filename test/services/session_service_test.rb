@@ -268,9 +268,9 @@ class SessionServiceTest < ActiveSupport::TestCase
   # its token is — which is how a session ran to COMPLETED while every server-side call
   # made with the stored token 401'd, leaving the run with no tokens and no cost.
 
-  test "create_and_start blocks launch when the stored agent token has already expired" do
+  test "create_and_start blocks launch when the stored agent token is expired and unrefreshable" do
     AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
-      "accessToken" => jwt_with_exp(1.day.ago.to_i), "refreshToken" => "r1"
+      "accessToken" => jwt_with_exp(1.day.ago.to_i)
     })
 
     error = assert_raises(AgentCredential::PreflightError) do
@@ -285,9 +285,9 @@ class SessionServiceTest < ActiveSupport::TestCase
   end
 
   # The exact production row: status active, expires_at never derived, token long dead.
-  test "create_and_start blocks launch on an expired token even while status is active and expires_at is NULL" do
+  test "create_and_start blocks launch on a dead token even while status is active and expires_at is NULL" do
     cred = AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
-      "accessToken" => jwt_with_exp(1.day.ago.to_i), "refreshToken" => "r1"
+      "accessToken" => jwt_with_exp(1.day.ago.to_i)
     })
     cred.update_column(:expires_at, nil)
 
@@ -301,12 +301,10 @@ class SessionServiceTest < ActiveSupport::TestCase
     end
   end
 
-  # Garbage counts as expired (CloudAuth::Preflight.past?): a Cursor token whose exp
-  # cannot be read still dies with its grant, so prompt a reconnect.
-  test "create_and_start blocks launch when the stored agent token's expiry cannot be read" do
-    AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
-      "accessToken" => "opaque", "refreshToken" => "r1"
-    })
+  # Garbage counts as expired (CloudAuth::Preflight.past?) once nothing can refresh it:
+  # such a token still dies with its grant, so prompt a reconnect.
+  test "create_and_start blocks launch when the expiry cannot be read and there is no refresh token" do
+    AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", { "accessToken" => "opaque" })
 
     assert_raises(AgentCredential::PreflightError) do
       SessionService.create_and_start(
@@ -314,6 +312,27 @@ class SessionServiceTest < ActiveSupport::TestCase
         agent_type: "cursor_cli", params: {}
       )
     end
+  end
+
+  # Only what is beyond saving is refused, as in Oauth::Preflight.usable? and
+  # CloudAuth::Preflight.unusable_reason. An expired accessToken with a live
+  # refreshToken is rotated a few steps later by
+  # AgentSessionStrategy#refresh_expiring_credential!, so refusing it would send the
+  # user to a re-auth they did not need — and would kill a workflow step outright,
+  # since launch_step_session_activity wraps PreflightError in a non-retryable
+  # Temporal ApplicationError.
+  test "create_and_start launches on an expired agent token that can still be refreshed" do
+    mock_temporal_start
+    AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
+      "accessToken" => jwt_with_exp(1.day.ago.to_i), "refreshToken" => "r1"
+    })
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session",
+      agent_type: "cursor_cli", params: {}
+    )
+
+    assert session.persisted?, "a refreshable credential must not be refused at the gate"
   end
 
   test "create_and_start launches on a healthy stored agent token" do
@@ -330,10 +349,10 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert session.persisted?
   end
 
-  test "create_and_start lets an auth_setup session run on an expired stored agent token" do
+  test "create_and_start lets an auth_setup session run on a dead stored agent token" do
     mock_temporal_start
     AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
-      "accessToken" => jwt_with_exp(1.day.ago.to_i), "refreshToken" => "r1"
+      "accessToken" => jwt_with_exp(1.day.ago.to_i)
     })
 
     session = SessionService.create_and_start(
