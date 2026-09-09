@@ -301,4 +301,49 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
     assert_equal "C9", msg[:channel]
     assert_equal "9.9", msg[:thread_ts]
   end
+
+  # --- outside a workflow run ------------------------------------------------
+  #
+  # The tool auto-injects into workflow steps only, but a user can attach it to a
+  # plain agent session from the picker. The install is resolved from the PROJECT,
+  # so that works — what the session lacks is the trigger, hence no default channel.
+
+  test "posts from a plain agent session when the channel is named" do
+    result = InternalTools::SlackPostMessage.new(
+      params: { text: "hi", channel: "C7" }, session: plain_session
+    ).execute
+    assert_equal 0, result[:exit_code]
+
+    msg = fake_slack.last_posted_message
+    assert_equal "xoxb-1", msg[:token]
+    assert_equal "C7", msg[:channel]
+    assert_nil msg[:thread_ts]
+  end
+
+  test "asks a plain agent session to name a channel, since it has no trigger to borrow one from" do
+    result = InternalTools::SlackPostMessage.new(params: { text: "hi" }, session: plain_session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "pass `channel` explicitly"
+    assert_empty fake_slack.posted_messages
+  end
+
+  test "errors when the session has no project to resolve an install from" do
+    projectless = create(:terminal_session, :running, :agent_session, user: @user, project: nil,
+      mode: "non_interactive", initial_prompt: "x")
+
+    result = InternalTools::SlackPostMessage.new(
+      params: { text: "hi", channel: "C7" }, session: projectless
+    ).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "needs a project"
+    assert_empty fake_slack.posted_messages
+  end
+
+  # An agent session in the same project, with no step_run and so no workflow run.
+  def plain_session
+    @plain_session ||= create(:terminal_session, :running, :agent_session,
+      user: @user, project: @project, mode: "non_interactive", initial_prompt: "x")
+  end
 end

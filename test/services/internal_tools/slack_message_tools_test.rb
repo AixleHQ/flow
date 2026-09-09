@@ -205,4 +205,45 @@ class InternalTools::SlackMessageToolsTest < ActiveSupport::TestCase
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "thread_not_found"
   end
+
+  # --- outside a workflow run ------------------------------------------------
+  #
+  # Attached by hand to a plain agent session, these work off the session's
+  # project; only the trigger-derived channel/thread defaults are missing.
+
+  test "update and delete work in a plain agent session with an explicit channel" do
+    assert_equal 0, InternalTools::SlackUpdateMessage.new(
+      params: { ts: "111.9", text: "done", channel: "C7" }, session: plain_session
+    ).execute[:exit_code]
+    assert_equal "C7", fake_slack.last_updated_message[:channel]
+
+    assert_equal 0, InternalTools::SlackDeleteMessage.new(
+      params: { ts: "111.9", channel: "C7" }, session: plain_session
+    ).execute[:exit_code]
+    assert_equal "C7", fake_slack.last_deleted_message[:channel]
+  end
+
+  test "read_thread in a plain agent session needs both coordinates named" do
+    no_channel = InternalTools::SlackReadThread.new(params: { thread_ts: "1.1" }, session: plain_session).execute
+    assert_equal 1, no_channel[:exit_code]
+    assert_includes no_channel[:stderr], "pass `channel` explicitly"
+
+    no_thread = InternalTools::SlackReadThread.new(params: { channel: "C7" }, session: plain_session).execute
+    assert_equal 1, no_thread[:exit_code]
+    assert_includes no_thread[:stderr], "No thread given"
+
+    assert_empty fake_slack.replies_reads
+
+    ok = InternalTools::SlackReadThread.new(
+      params: { channel: "C7", thread_ts: "1.1" }, session: plain_session
+    ).execute
+    assert_equal 0, ok[:exit_code]
+    assert_equal "C7", fake_slack.last_replies_read[:channel]
+  end
+
+  # An agent session in the same project, with no step_run and so no workflow run.
+  def plain_session
+    @plain_session ||= create(:terminal_session, :running, :agent_session,
+      user: @user, project: @project, mode: "non_interactive", initial_prompt: "x")
+  end
 end

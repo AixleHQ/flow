@@ -19,7 +19,7 @@ module InternalTools
 
     tool do
       display_name "Slack Read Thread"
-      description "Read a Slack thread: the parent message and its replies, oldest first. Call it with no arguments to read the thread this run was triggered from — the usual case, and how you recover the conversation behind the request. Returns JSON: {messages: [{ts, user, bot_id, text, files}], has_more, next_cursor}. Public and private channels only (not DMs). Read a thread once rather than polling it."
+      description "Read a Slack thread: the parent message and its replies, oldest first. In a run triggered from Slack, call it with no arguments to read the thread behind the request — the usual case; anywhere else, name `channel` and `thread_ts`. Returns JSON: {messages: [{ts, user, bot_id, text, files}], has_more, next_cursor}. Public and private channels only (not DMs). Read a thread once rather than polling it."
       tags :messaging, :slack
       inject_when :workflow_step_session
       requires_integration :slack
@@ -35,7 +35,7 @@ module InternalTools
           },
           channel: {
             type: "string",
-            description: "Channel ID the thread lives in. Defaults to the triggering channel."
+            description: "Channel ID the thread lives in. Defaults to the triggering channel, when there is one."
           },
           limit: {
             type: "integer",
@@ -50,8 +50,6 @@ module InternalTools
     end
 
     def execute
-      require_workflow_context!
-
       integration, channel, target_error = resolve_slack_target(params[:channel])
       return target_error if target_error
 

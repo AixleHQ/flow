@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module InternalTools
-  # Platform tool: let a workflow agent send a Slack message. Text, Block Kit
+  # Platform tool: let an agent send a Slack message. Text, Block Kit
   # blocks and files are each optional, but at least one is required. Any number
   # of files can be attached, and each one comes from exactly one source:
   #   - content:   inline text the agent typed out (needs filename)
@@ -12,13 +12,14 @@ module InternalTools
   # way to attach files to a Block Kit message), so Slack::Notifier posts the
   # message and hangs the files in its thread. Gated on the project having an
   # active Slack integration. Defaults the channel/thread to the message that
-  # triggered the run.
+  # triggered the run; a session with no Slack trigger behind it must name a
+  # channel itself.
   class SlackPostMessage < Base
     include Concerns::SlackContext
 
     tool do
       display_name "Slack Post Message"
-      description "Send a Slack message from this workflow. `text`, `blocks` and `files` are all optional but at least one is required. `text` is plain/mrkdwn; `blocks` is Block Kit for rich layout; files can be attached in any number, each entry setting EXACTLY ONE source: `content` (inline text, needs `filename`), `file_path` (a path in the running container — any type incl. binary), or `asset_id` (a project asset's bytes). text + files arrive as one message; blocks + files send the message first and hang the files in its thread. Omit channel/thread to reply in the channel/thread that triggered the run. Returns the message `ts`, which slack_update_message and slack_delete_message address it by. Requires a Slack integration on the project."
+      description "Send a Slack message. `text`, `blocks` and `files` are all optional but at least one is required. `text` is plain/mrkdwn; `blocks` is Block Kit for rich layout; files can be attached in any number, each entry setting EXACTLY ONE source: `content` (inline text, needs `filename`), `file_path` (a path in the running container — any type incl. binary), or `asset_id` (a project asset's bytes). text + files arrive as one message; blocks + files send the message first and hang the files in its thread. Omit channel/thread to reply in the channel/thread that triggered the run; when nothing Slack-side started this session there is no default, so pass `channel` yourself. Returns the message `ts`, which slack_update_message and slack_delete_message address it by. Requires a Slack integration on the project."
       tags :messaging, :slack
       inject_when :workflow_step_session
       requires_integration :slack
@@ -87,8 +88,6 @@ module InternalTools
     end
 
     def execute
-      require_workflow_context!
-
       files, file_error = build_files
       return file_error if file_error
 

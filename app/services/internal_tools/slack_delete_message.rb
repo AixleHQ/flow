@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module InternalTools
-  # Platform tool: delete a Slack message this workflow posted, addressed by the
+  # Platform tool: delete a Slack message the bot posted, addressed by the
   # `ts` slack_post_message returned. For retracting a message that turned out to
   # be wrong or is superseded — prefer slack_update_message when the message
   # should stay and only its content changed, since a delete leaves people who
@@ -11,7 +11,7 @@ module InternalTools
 
     tool do
       display_name "Slack Delete Message"
-      description "Delete a Slack message this workflow posted, by its `ts` (returned by slack_post_message). Only the bot's own messages can be deleted, and the deletion is permanent. Prefer slack_update_message when the message should stay and only its content is wrong. Omit `channel` to use the channel that triggered the run."
+      description "Delete a Slack message the bot posted, by its `ts` (returned by slack_post_message). Only the bot's own messages can be deleted, and the deletion is permanent. Prefer slack_update_message when the message should stay and only its content is wrong. Omit `channel` only when this session was started from Slack; otherwise name it."
       tags :messaging, :slack
       inject_when :workflow_step_session
       requires_integration :slack
@@ -27,15 +27,13 @@ module InternalTools
           },
           channel: {
             type: "string",
-            description: "Channel ID the message lives in. Defaults to the triggering channel."
+            description: "Channel ID the message lives in. Defaults to the triggering channel, when there is one."
           }
         }
       })
     end
 
     def execute
-      require_workflow_context!
-
       integration, channel, target_error = resolve_slack_target(params[:channel])
       return target_error if target_error
 
