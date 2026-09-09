@@ -205,6 +205,7 @@ class TriggerEngine
             status: started ? "started" : "skipped",
             detail: started ? {} : { "reason" => skip_reason(result) }
           )
+          notify_launch_failure(dispatch, event) unless started
         end
       end
       result
@@ -274,6 +275,19 @@ class TriggerEngine
     def skip_reason(result)
       msgs = result.try(:errors)&.full_messages
       msgs.presence&.join("; ") || "workflow did not start"
+    end
+
+    # Best-effort: tell the originating Slack thread the launch was skipped. Only
+    # Slack-born events carry reply coordinates; enqueue failure never breaks the
+    # dispatch that triggered it.
+    def notify_launch_failure(dispatch, event)
+      return unless event.event_type.to_s.start_with?("slack.")
+
+      Slack::NotifyLaunchFailureJob.perform_later(dispatch.id)
+    rescue StandardError => e
+      Rails.logger.error(
+        "[TriggerEngine] Failed to enqueue the Slack launch-failure notice for dispatch ##{dispatch.id}: #{e.message}"
+      )
     end
 
     # Resolve the board task a binding's run should be about, per subject_policy.

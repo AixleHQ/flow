@@ -208,6 +208,41 @@ class TriggerEngineTest < ActiveSupport::TestCase
     assert_equal "Triage: fix login", task.title
   end
 
+  # == Slack launch-failure notice ==
+
+  test "a skipped launch from Slack enqueues the launch-failure notice" do
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", subject_policy: :none)
+    event = create(:trigger_event, event_type: "slack.message", project: @project,
+      data: { "channel" => "C1", "ts" => "111.222" })
+
+    unstarted = build(:workflow_run)
+    unstarted.errors.add(:base, "step 'Approve' needs a human")
+    WorkflowService.expects(:start).once.returns(unstarted)
+    Slack::NotifyLaunchFailureJob.expects(:perform_later).once
+
+    TriggerEngine.fire_for_binding(binding: binding, event: event)
+
+    dispatch = TriggerDispatch.order(:id).last
+    assert_equal "skipped", dispatch.status
+    assert_equal "step 'Approve' needs a human", dispatch.detail["reason"]
+  end
+
+  test "a skipped launch that did not come from Slack enqueues nothing" do
+    event = create(:trigger_event, event_type: TriggerEngine::COLUMN_EVENT_TYPE, project: @project)
+    TriggerDispatch.create!(
+      trigger_event: event, source: "column_workflow_binding",
+      dedup_key: "event:#{event.id}:column_workflow_binding", status: "matched"
+    )
+    WorkflowService.expects(:start).once.returns(build(:workflow_run))
+    Slack::NotifyLaunchFailureJob.expects(:perform_later).never
+
+    TriggerEngine.fire_workflow(
+      workflow: @workflow, project: @project, task: nil, actor: @user,
+      event: event, source: "column_workflow_binding"
+    )
+  end
+
   test "subject_policy existing_task uses the event's task" do
     board = create(:board, project: @project)
     column = create(:board_column, board: board)

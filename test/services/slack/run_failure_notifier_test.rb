@@ -88,5 +88,76 @@ module Slack
 
       assert_not Slack::RunFailureNotifier.call(failed_run)
     end
+
+    test "says the run timed out when it was reaped as stale" do
+      run = failed_run
+      run.update_columns(failure_reason: "stale_run")
+
+      assert Slack::RunFailureNotifier.call(run)
+      assert_match(/timed out and was cleaned up as stale/, fake_slack.last_posted_message[:text])
+    end
+
+    test "scrubs credentials out of the failure reason" do
+      run = failed_run
+      run.step_runs.last.update!(error_message: "auth failed with token=xoxb-999-secret-abc")
+
+      assert Slack::RunFailureNotifier.call(run)
+      text = fake_slack.last_posted_message[:text]
+      assert_no_match(/xoxb-999-secret-abc/, text)
+      assert_match(/\[redacted\]/, text)
+    end
+
+    test "a second call does not post the failure twice in the thread" do
+      run = failed_run
+
+      assert Slack::RunFailureNotifier.call(run)
+      assert_not Slack::RunFailureNotifier.call(run)
+      assert_equal 1, fake_slack.posted_messages.size
+    end
+
+    # == launch-skip entry point ==
+
+    def skipped_dispatch(reason: "step 'Approve' needs a human", notify: true)
+      @binding.update!(notify_on_failure: notify)
+      event = TriggerEvent.create!(
+        event_type: "slack.message", source: "slack:acme", occurred_at: Time.current,
+        data: { "channel" => "C1", "ts" => "111.222", "integration_id" => @integration.id }
+      )
+      TriggerDispatch.create!(
+        trigger_event: event, trigger_binding: @binding, dedup_key: "d-skip-#{event.id}",
+        status: "skipped", source: "trigger_binding", detail: { "reason" => reason }
+      )
+    end
+
+    test "notify_launch_skip replies in the thread with the workflow and the skip reason" do
+      assert Slack::RunFailureNotifier.notify_launch_skip(skipped_dispatch)
+
+      msg = fake_slack.last_posted_message
+      assert_equal "C1", msg[:channel]
+      assert_equal "111.222", msg[:thread_ts]
+      assert_match(/Weekly Digest/, msg[:text])
+      assert_match(/needs a human/, msg[:text])
+    end
+
+    test "notify_launch_skip is idempotent" do
+      dispatch = skipped_dispatch
+
+      assert Slack::RunFailureNotifier.notify_launch_skip(dispatch)
+      assert_not Slack::RunFailureNotifier.notify_launch_skip(dispatch)
+      assert_equal 1, fake_slack.posted_messages.size
+    end
+
+    test "notify_launch_skip stays quiet when the trigger has notifications off" do
+      assert_not Slack::RunFailureNotifier.notify_launch_skip(skipped_dispatch(notify: false))
+      assert_empty fake_slack.posted_messages
+    end
+
+    test "notify_launch_skip stays quiet for a dispatch that actually started" do
+      dispatch = skipped_dispatch
+      dispatch.update!(status: "started")
+
+      assert_not Slack::RunFailureNotifier.notify_launch_skip(dispatch)
+      assert_empty fake_slack.posted_messages
+    end
   end
 end
