@@ -51,10 +51,10 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
     assert_equal "999", msg[:thread_ts]
   end
 
-  test "errors when neither text nor files are given" do
+  test "errors when neither text, blocks nor files are given" do
     result = run_tool(text: "")
     assert_equal 1, result[:exit_code]
-    assert_includes result[:stderr], "text` and/or `files"
+    assert_includes result[:stderr], "Provide `text`, `blocks` and/or `files`"
 
     assert_empty fake_slack.posted_messages
     assert_empty fake_slack.uploaded_files
@@ -188,6 +188,101 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
     assert_includes result[:stderr], "No channel"
 
     assert_empty fake_slack.posted_messages
+  end
+
+  # --- Block Kit -------------------------------------------------------------
+
+  MARKDOWN_BLOCK = { "type" => "markdown", "text" => "## Report\n\n- one\n- two" }.freeze
+
+  test "sends Block Kit blocks with the text as the fallback line" do
+    assert_equal 0, run_tool(text: "Report ready", blocks: [ MARKDOWN_BLOCK ])[:exit_code]
+
+    msg = fake_slack.last_posted_message
+    assert_equal "Report ready", msg[:text]
+    assert_equal [ MARKDOWN_BLOCK ], msg[:blocks].map(&:to_h)
+    assert_empty fake_slack.uploaded_files
+  end
+
+  test "reports the posted ts so the message can be edited later" do
+    result = run_tool(text: "hi")
+
+    assert_equal 0, result[:exit_code]
+    assert_includes result[:stdout], "ts #{fake_slack.last_posted_message_ts}"
+  end
+
+  test "sends blocks and files as a message plus an upload into the same thread" do
+    result = run_tool(text: "Report ready", blocks: [ MARKDOWN_BLOCK ],
+      files: [ { "filename" => "report.csv", "content" => "a,b" } ])
+    assert_equal 0, result[:exit_code]
+
+    assert_equal 1, fake_slack.posted_messages.size
+    assert_equal 1, fake_slack.uploaded_files.size
+    assert_equal "111.2", fake_slack.last_uploaded_files[:thread_ts]
+    # The text rode on the block message; repeating it above the files would double it.
+    assert_nil fake_slack.last_uploaded_files[:initial_comment]
+  end
+
+  test "hangs the files under the block message when the run has no thread" do
+    @workflow_run.update!(shared_context: { "slack" => { "channel" => "C1", "integration_id" => @integration.id } })
+
+    assert_equal 0, run_tool(blocks: [ MARKDOWN_BLOCK ],
+      files: [ { "filename" => "a.txt", "content" => "x" } ])[:exit_code]
+
+    assert_equal fake_slack.last_posted_message_ts, fake_slack.last_uploaded_files[:thread_ts]
+  end
+
+  test "reports a partial send when the message lands but the upload fails" do
+    fake_slack.stubs(:upload_files).raises(Slack::Client::Error.new("upload_failed"))
+
+    result = run_tool(text: "Report ready", blocks: [ MARKDOWN_BLOCK ],
+      files: [ { "filename" => "a.txt", "content" => "x" } ])
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "Partially sent to C1"
+    assert_includes result[:stderr], "upload_failed"
+    assert_equal 1, fake_slack.posted_messages.size
+  end
+
+  test "broadcasts a threaded reply to the channel when asked" do
+    assert_equal 0, run_tool(text: "done", reply_broadcast: true)[:exit_code]
+
+    assert fake_slack.last_posted_message[:reply_broadcast]
+  end
+
+  test "leaves reply_broadcast unset when it was not asked for" do
+    assert_equal 0, run_tool(text: "done")[:exit_code]
+
+    assert_nil fake_slack.last_posted_message[:reply_broadcast]
+  end
+
+  test "rejects interactive blocks this deployment cannot answer" do
+    result = run_tool(text: "pick one", blocks: [ { "type" => "actions", "elements" => [] } ])
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "interactivity endpoint"
+    assert_empty fake_slack.posted_messages
+  end
+
+  test "rejects more blocks than Slack accepts in one message" do
+    result = run_tool(text: "x", blocks: Array.new(51) { { "type" => "divider" } })
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "capped at 50"
+    assert_empty fake_slack.posted_messages
+  end
+
+  test "rejects blocks that are not typed block objects" do
+    assert_includes run_tool(text: "x", blocks: "not-an-array")[:stderr], "must be an array"
+    assert_includes run_tool(text: "x", blocks: [ { "text" => "no type" } ])[:stderr], "blocks[0]"
+
+    assert_empty fake_slack.posted_messages
+  end
+
+  test "can send blocks with no text at all" do
+    assert_equal 0, run_tool(blocks: [ MARKDOWN_BLOCK ])[:exit_code]
+
+    assert_equal 1, fake_slack.posted_messages.size
+    assert_nil fake_slack.last_posted_message[:text]
   end
 
   test "replies through the workspace that triggered the run (by integration_id)" do

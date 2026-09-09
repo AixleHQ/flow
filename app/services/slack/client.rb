@@ -28,11 +28,39 @@ module Slack
       end
 
       # Post a message as the bot. `blocks` (Block Kit) and `thread_ts` (reply in
-      # a thread) are optional. Requires the chat:write scope.
-      def post_message(token:, channel:, text:, thread_ts: nil, blocks: nil)
+      # a thread) are optional; `reply_broadcast` additionally surfaces a threaded
+      # reply in the channel. Requires the chat:write scope. Returns the posted
+      # message's coordinates — `ts` is what chat.update/chat.delete address later.
+      def post_message(token:, channel:, text:, thread_ts: nil, blocks: nil, reply_broadcast: nil)
         post_json("chat.postMessage", token: token, payload: {
-          channel: channel, text: text, thread_ts: thread_ts, blocks: blocks
+          channel: channel, text: text, thread_ts: thread_ts, blocks: blocks,
+          reply_broadcast: reply_broadcast
         }.compact)
+      end
+
+      # Edit a message the bot posted, addressed by its `ts`. Slack replaces the
+      # whole message: fields left nil are dropped from it, so a text-only update
+      # of a Block Kit message clears its blocks. Requires the chat:write scope.
+      def update_message(token:, channel:, ts:, text: nil, blocks: nil)
+        post_json("chat.update", token: token, payload: {
+          channel: channel, ts: ts, text: text, blocks: blocks
+        }.compact)
+      end
+
+      # Delete a message the bot posted. Requires the chat:write scope.
+      def delete_message(token:, channel:, ts:)
+        post("chat.delete", token: token, params: { channel: channel, ts: ts })
+      end
+
+      # Read a thread: the parent message plus its replies, oldest first. `ts` is
+      # the thread parent's timestamp (Slack's own argument name — not thread_ts).
+      # Requires a history scope for the conversation kind (channels:history for
+      # public channels, groups:history for private ones; DM threads would need
+      # im:history / mpim:history, which this app does not request).
+      def conversation_replies(token:, channel:, ts:, limit: nil, cursor: nil)
+        post("conversations.replies", token: token, params: {
+          channel: channel, ts: ts, limit: limit, cursor: cursor
+        })
       end
 
       # Upload one or more files and share them in a SINGLE Slack message. Each

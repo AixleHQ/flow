@@ -343,6 +343,10 @@ class TriggerEngine
 
       slack = {
         "channel" => event.data["channel"],
+        # Both, and they differ: `ts` is the message that mentioned us, `thread_ts`
+        # the thread it belongs to. Replies default to the thread; `ts` is what an
+        # agent needs to point at that one message inside it.
+        "ts" => event.data["ts"],
         "thread_ts" => event.data["thread_ts"] || event.data["ts"],
         "team" => event.data["team"],
         "integration_id" => event.data["integration_id"],

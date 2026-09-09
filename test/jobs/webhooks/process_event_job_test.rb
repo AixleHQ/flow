@@ -108,7 +108,7 @@ module Webhooks
         has_entries(
           workflow: @workflow,
           shared_context: has_entries(
-            "slack" => has_entries("channel" => "C1", "thread_ts" => "111.222",
+            "slack" => has_entries("channel" => "C1", "ts" => "111.222", "thread_ts" => "111.222",
                                    "team" => "T1", "integration_id" => integration.id,
                                    "text" => "run report", "user" => "U1")
           )
@@ -122,6 +122,27 @@ module Webhooks
       assert_equal "F1", event.data.dig("files", 0, "id")
       assert_nil event.data.dig("files", 0, "extra") # only whitelisted file fields kept
       assert_equal integration.id, event.data["integration_id"]
+    end
+
+    test "a mention inside a thread carries both the message ts and its thread" do
+      payload = {
+        "type" => "event_callback", "event_id" => "EvThread", "team_id" => "T1",
+        "event" => {
+          "type" => "app_mention", "channel" => "C1", "user" => "U1", "text" => "and this?",
+          "ts" => "222.333", "thread_ts" => "111.222"
+        }
+      }
+      rw = received(payload, key: "EvThread")
+
+      WorkflowService.expects(:start).with(
+        has_entries(
+          shared_context: has_entries(
+            "slack" => has_entries("ts" => "222.333", "thread_ts" => "111.222")
+          )
+        )
+      ).once.returns(build(:workflow_run))
+
+      Webhooks::ProcessEventJob.perform_now(rw.id)
     end
 
     test "ingests Slack attachments into the matching binding's project at fire time" do
