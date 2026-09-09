@@ -505,6 +505,7 @@ class AgentCredentialTest < ActiveSupport::TestCase
   # Deriving the value from the token it is already storing must not count as a
   # credential write: that would bust the cached model list on every sweep.
   test "backfill_expires_at! keeps the stored credential material and its model cache" do
+    Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
     legacy = legacy_cursor_credential
     stored = legacy.config_data
     Rails.cache.write(legacy.models_cache_key, [ { model_id: "cached" } ])
