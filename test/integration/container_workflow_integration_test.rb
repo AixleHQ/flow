@@ -217,11 +217,12 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
   # #before_cleanup leaves the columns the sessions list renders empty on a run
   # that plainly happened. Assert the whole path, not just that it did not raise.
   def assert_cursor_usage_recorded(session)
+    billed = StubSupport::CURSOR_USAGE_EVENT["tokenUsage"]
     stat = session.usage_statistic
     assert stat.present?, "Expected a UsageStatistic for the cursor_cli session"
     assert_equal "cursor_api", stat.source
-    assert_equal 1_200, stat.input_tokens
-    assert_equal 340, stat.output_tokens
+    assert_equal billed["inputTokens"], stat.input_tokens
+    assert_equal billed["outputTokens"], stat.output_tokens
 
     assert_equal "recorded", session.metadata.dig("usage_collection", "status")
     assert_equal stat.total_tokens, session.total_tokens

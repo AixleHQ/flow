@@ -61,6 +61,24 @@ class AgentCredential < ApplicationRecord
   scope :refresh_due, ->(within = 60.minutes) {
     where(status: :active).where.not(expires_at: nil).where(expires_at: ..within.from_now)
   }
+  # Refreshable credentials whose expiry was never derived from their token material.
+  #
+  # NULL is read everywhere as "no expiry" (.not_expired, #expiring_within?,
+  # AgentCredentialResource#connection_status), but a refreshable token DOES expire —
+  # for these rows the date is unknown, not absent. It stays unknown because
+  # #sync_expires_at only fires on a config_data write and the only routine writer is a
+  # refresh, which .refresh_due never selects while expires_at is NULL: the row is never
+  # refreshed, so it never gets an expiry, so it is never refreshed. Rows that predate
+  # #token_expires_at landing for their agent type start out in that loop and cannot
+  # leave it on their own.
+  #
+  # The failure is silent, which is why it took two months to surface. The token dies at
+  # its own `exp` and the SESSION still works — the CLI in the container hits 401, runs
+  # its own device login and carries on — while every server-side call made with the
+  # STORED token starts answering 401. Cursor's usage dashboard is one of those calls,
+  # so the run completes with a duration and no tokens and no cost.
+  # See #backfill_expires_at!, which is what breaks the loop.
+  scope :expiry_unknown, -> { where(agent_type: REFRESHABLE_AGENT_TYPES, expires_at: nil) }
   # Credentials no live container currently holds.
   #
   # Launching a session writes the token blocks into the container, so the CLI in
@@ -198,6 +216,30 @@ class AgentCredential < ApplicationRecord
     expires_at.present? && expires_at <= within.from_now
   end
 
+  # Derive and persist expires_at for a refreshable credential that has none, which is
+  # what lets the refresh machinery see the row at all (see .expiry_unknown for the loop
+  # this breaks). No-op when the expiry is already known, when the agent's tokens carry
+  # none, or when the type is not refreshable — nothing refreshes those, so an expiry
+  # would only make .not_expired start hiding a credential that still works.
+  #
+  # Writes the column directly: the value is derived FROM the stored token, so going
+  # through #sync_expires_at would mean re-encrypting identical credential material and
+  # busting the model cache (after_save :invalidate_models_cache) for no change.
+  # Returns the resolved expiry, or nil when there is none to resolve.
+  def backfill_expires_at!
+    return expires_at if expires_at.present?
+    return nil unless REFRESHABLE_AGENT_TYPES.include?(agent_type)
+
+    ms = adapter.token_expires_at(config_data)
+    return nil if ms.blank?
+
+    update_column(:expires_at, Time.zone.at(ms / 1000.0))
+    expires_at
+  rescue StandardError => e
+    Rails.logger.warn("[AgentCredential] backfill_expires_at! failed for #{id}: #{e.message}")
+    nil
+  end
+
   # Whether a running container currently holds a copy of this credential's tokens.
   # `excluding_session_id` is the session being launched: it is the one asking, and
   # its own container has not been handed anything yet.
@@ -219,6 +261,10 @@ class AgentCredential < ApplicationRecord
   #   would otherwise each fire a refresh, and every one after the first replays a
   #   grant the server has already rotated out.
   def refresh_if_expiring!(within: SESSION_REFRESH_THRESHOLD, excluding_session_id: nil)
+    # Last chance to resolve an unknown expiry, and the only one for a credential the
+    # sweep has never selected: without this a token whose expiry was never derived
+    # reads as "never expires", skips the refresh, and is handed to the container dead.
+    backfill_expires_at!
     return :not_needed unless expiring_within?(within)
     return :held if held_by_live_session?(excluding_session_id: excluding_session_id)
 
@@ -281,8 +327,14 @@ class AgentCredential < ApplicationRecord
   end
 
   # Derive expires_at from the adapter's soonest token expiry (epoch ms → Time).
-  # nil when the agent's tokens carry no expiry (e.g. codex/cursor today), which
-  # keeps the credential always-active in `.active` (its expiry is unknown, not past).
+  # nil when the agent's tokens carry no expiry (an API-key credential, or an agent
+  # whose adapter does not implement #token_expires_at), which keeps the credential
+  # always-active in `.active` (its expiry is unknown, not past).
+  #
+  # Every refreshable type DOES report one — Claude from the OAuth block's expiresAt,
+  # Codex and Cursor from the access token's JWT `exp`. A refreshable row still sitting
+  # at NULL is therefore a row this callback never ran for, not one without an expiry;
+  # see .expiry_unknown and #backfill_expires_at!.
   def sync_expires_at
     ms = adapter.token_expires_at(config_data)
     self.expires_at = ms ? Time.zone.at(ms / 1000.0) : nil

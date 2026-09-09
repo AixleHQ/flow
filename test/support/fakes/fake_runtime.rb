@@ -456,17 +456,34 @@ module ContainerRuntime
       "claude_code" => "",
       "gemini_cli" => "",
       "grok" => "",
+      # The layout a proxied Cursor turn actually leaves behind, because
+      # CursorCliAdapter#generate_cli_config sets `useHttp1ForAgent => true` and
+      # start-mitm.sh loads http2-logger.js into the agent regardless: RunSSE over
+      # HTTP/1 through mitmproxy, logged twice, four entries. Note which entry carries
+      # what — the in-process logger writes no headers block at all
+      # (http2-logger.js:126,136), and mitmproxy's response entry serialises
+      # `dict(resp.headers)`, where x-request-id (a REQUEST header) is absent
+      # (mitm_logger.py:135). So the request side registers the rid, the response side
+      # has to be paired by FIFO, and the turn ends when the stream ends, not when its
+      # headers arrived 400 ms in. Keep this in the production shape: it is the only
+      # end-to-end check that the sessions list gets its Tokens and Cost columns filled.
       "cursor_cli" => [
-        { _source: "http2-logger", direction: "request", scheme: "https", method: "POST",
+        { direction: "request", scheme: "https", method: "POST",
           host: "api2.cursor.sh", port: 443,
-          path: "/agent.v1.AgentService/Run",
-          url: "https://api2.cursor.sh/agent.v1.AgentService/Run",
+          path: "/agent.v1.AgentService/RunSSE",
+          url: "https://api2.cursor.sh/agent.v1.AgentService/RunSSE",
+          ts: Time.now.utc.iso8601(6),
+          _source: "node-http-logger" },
+        { direction: "request", scheme: "https", method: "POST",
+          host: "api2.cursor.sh", port: 443,
+          path: "/agent.v1.AgentService/RunSSE",
+          url: "https://api2.cursor.sh/agent.v1.AgentService/RunSSE",
           ts: Time.now.utc.iso8601(6),
           headers: {
             "accept-encoding" => "gzip,br",
             "authorization" => "Bearer eyJhbGciOiJIUzI1NiJ9.test-token",
             "connect-protocol-version" => "1",
-            "content-type" => "application/proto",
+            "content-type" => "application/connect+json",
             "user-agent" => "connect-es/1.6.1",
             "x-cursor-client-type" => "cli",
             "x-cursor-client-version" => "cli-2026.02.13-41ac335",
@@ -474,18 +491,22 @@ module ContainerRuntime
             "x-request-id" => "f3b82c20-18aa-4f88-ba0d-c7036521f1e2"
           },
           content_length: 42, body_encoding: "text", body_truncated: false },
-        { _source: "http2-logger", direction: "response", status_code: 200,
+        { direction: "response", status_code: 200,
           host: "api2.cursor.sh",
-          path: "/agent.v1.AgentService/Run",
-          url: "https://api2.cursor.sh/agent.v1.AgentService/Run",
+          path: "/agent.v1.AgentService/RunSSE",
+          ts: (Time.now.utc + 0.4).iso8601(6),
+          _source: "node-http-logger" },
+        { direction: "response", status_code: 200,
+          host: "api2.cursor.sh",
+          path: "/agent.v1.AgentService/RunSSE",
+          url: "https://api2.cursor.sh/agent.v1.AgentService/RunSSE",
           ts: (Time.now.utc + 12.5).iso8601(6),
           headers: {
             "Date" => Time.now.utc.httpdate,
-            "Content-Type" => "application/proto",
+            "Content-Type" => "application/connect+json",
             "Connection" => "close",
             "vary" => "Origin",
-            "access-control-allow-credentials" => "true",
-            "x-request-id" => "f3b82c20-18aa-4f88-ba0d-c7036521f1e2"
+            "access-control-allow-credentials" => "true"
           },
           content_length: 0, body_encoding: "text", body_truncated: false }
       ].map(&:to_json).join("\n") + "\n",

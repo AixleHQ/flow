@@ -646,6 +646,129 @@ module Agents
       assert_equal 1, diagnostic["api_count"]
     end
 
+    # The other half of the distinction the Connect-error guard above exists to make:
+    # a real answer with nothing billed has to stay readable as "spent nothing", not
+    # get lumped in with a call that never ran.
+    test "collect_usage records no_api_events when the API answers with nothing billed" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      mitm_log = [
+        { ts: "2026-05-21T19:32:30.000Z", direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } }
+      ].map(&:to_json).join("\n")
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200,
+                   body: { "usageEventsDisplay" => [] }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      diagnostic = session.reload.metadata["usage_collection"]
+      assert_nil session.usage_statistic
+      assert_equal "no_api_events", diagnostic["status"]
+      assert_equal 1, diagnostic["windows_count"]
+    end
+
+    # `error` is the only status that both records a diagnostic and lets the exception
+    # through, so the caller's own rescue still logs the failure. A payload the usage
+    # columns refuse (they validate tokens >= 0) drives it the way a malformed API
+    # answer would.
+    test "collect_usage records error and re-raises when the usage row will not persist" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      request_iso = "2026-05-21T19:32:30.000Z"
+      request_ms = @adapter.send(:parse_iso_to_epoch_ms, request_iso)
+      mitm_log = [
+        { ts: request_iso, direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } }
+      ].map(&:to_json).join("\n")
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200,
+                   body: { "usageEventsDisplay" => [
+                     { "timestamp" => (request_ms + 100).to_s,
+                       "tokenUsage" => { "inputTokens" => -50 } }
+                   ] }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_raises(ActiveRecord::RecordInvalid) do
+        @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+      end
+
+      diagnostic = session.reload.metadata["usage_collection"]
+      assert_nil session.usage_statistic
+      assert_equal "error", diagnostic["status"]
+      assert_match(/RecordInvalid/, diagnostic["message"])
+    end
+
+    # The endpoint pages and filters by date only, i.e. across the whole account. A
+    # full page means the total may be short — an undercount stamped `recorded` reads
+    # as a healthy meter, so the diagnostic has to carry the doubt.
+    test "collect_usage flags a full page of dashboard events as possibly truncated" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      request_iso = "2026-05-21T19:32:30.000Z"
+      request_ms = @adapter.send(:parse_iso_to_epoch_ms, request_iso)
+      mitm_log = [
+        { ts: request_iso, direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } }
+      ].map(&:to_json).join("\n")
+      full_page = Array.new(CursorCliAdapter::API_PAGE_SIZE) do |i|
+        { "timestamp" => (request_ms + (i * 5)).to_s,
+          "tokenUsage" => { "inputTokens" => 1, "totalCents" => 0.01 } }
+      end
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200,
+                   body: { "usageEventsDisplay" => full_page }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      diagnostic = session.reload.metadata["usage_collection"]
+      assert_equal "recorded", diagnostic["status"]
+      assert_equal true, diagnostic["page_truncated"] # rubocop:disable Minitest/AssertTruthy
+      assert_equal CursorCliAdapter::API_PAGE_SIZE, session.usage_statistic.events_count
+    end
+
+    test "collect_usage does not flag truncation when the page came back short" do
+      user = create(:user, company: create(:company))
+      session = create(:terminal_session, :collected, agent_type: "cursor_cli", user: user)
+      create(:agent_credential, :cursor_cli, user: user, config_data: { "accessToken" => "session-token" })
+
+      request_iso = "2026-05-21T19:32:30.000Z"
+      request_ms = @adapter.send(:parse_iso_to_epoch_ms, request_iso)
+      mitm_log = [
+        { ts: request_iso, direction: "request", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } },
+        { ts: "2026-05-21T19:32:31.000Z", direction: "response", path: "/agent.v1.AgentService/Run",
+          headers: { "x-request-id" => "req-1" } }
+      ].map(&:to_json).join("\n")
+      stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+        .to_return(status: 200,
+                   body: { "usageEventsDisplay" => [
+                     { "timestamp" => (request_ms + 100).to_s,
+                       "tokenUsage" => { "inputTokens" => 10, "totalCents" => 0.5 } }
+                   ] }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      @adapter.collect_usage(session, { "logs/http.log" => mitm_log })
+
+      diagnostic = session.reload.metadata["usage_collection"]
+      assert_equal "recorded", diagnostic["status"]
+      assert_nil diagnostic["page_truncated"]
+    end
+
     # =========================================================================
     # refresh! — proactive-refresh hook (wraps refresh_cursor_token!)
     # =========================================================================

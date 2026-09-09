@@ -510,30 +510,46 @@ module ContainerStrategies
       assert_equal 0, result[:outputs_count]
     end
 
-    test "before_cleanup persists refreshed credentials before collecting usage" do
-      # Cursor's usage collection is a provider API call authenticated with the
-      # STORED token. An agent that rotated its token mid-session leaves the fresh
-      # one in the container, so the database has to be caught up first or a long
-      # session's dashboard call goes out with a token that expired hours ago.
-      strategy = build_strategy
+    # Cursor's usage collection is a provider API call authenticated with the STORED
+    # token. An agent that rotated its token mid-session leaves the fresh one in the
+    # container, so the database has to be caught up first or a long session's dashboard
+    # call goes out with a token that expired hours ago — and the run lands in the
+    # sessions list with a duration and no tokens and no cost.
+    #
+    # Asserted as what usage collection actually read, not as a call sequence: an order
+    # expectation goes red on a harmless reshuffle and stays green if the reason for the
+    # order disappears (docs/testing.md §6).
+    test "usage collection reads the token the container rotated to, not the one it launched with" do
+      @session.update!(agent_type: "cursor_cli")
+      credential = create(:agent_credential, :cursor_cli, user: @user,
+                          config_data: { "accessToken" => "launch-token" })
+      strategy = build_strategy(agent_type: "cursor_cli", credential: credential)
       strategy.stubs(:resolve_container).returns(mock("container"))
 
-      mock_adapter = mock("adapter")
-      mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(false)
-      mock_adapter.stubs(:respond_to?).with(:collect_usage).returns(true)
+      # Stands in for the container half of the merge (a real one needs a live auth.json
+      # to read): what this test is about is the state of the row when it is read, not
+      # how the rotated token got there.
+      strategy.define_singleton_method(:persist_refreshed_credentials) do |*|
+        credential.update!(config_data: { "accessToken" => "rotated-token" })
+      end
+
+      token_seen_by_usage = nil
+      adapter = Object.new
+      adapter.define_singleton_method(:collect_usage) do |_session, _artifacts|
+        token_seen_by_usage = credential.reload.config_data["accessToken"]
+      end
       mock_service = mock("service")
-      mock_service.stubs(:adapter).returns(mock_adapter)
+      mock_service.stubs(:adapter).returns(adapter)
       AgentCredentialsService.stubs(:for).returns(mock_service)
 
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_logs).returns([ 0, {} ])
       strategy.stubs(:collect_terminal_output).returns(0)
 
-      cleanup = sequence("cleanup")
-      strategy.expects(:persist_refreshed_credentials).in_sequence(cleanup)
-      mock_adapter.expects(:collect_usage).in_sequence(cleanup)
-
       strategy.before_cleanup(container_id: "abc123")
+
+      assert_equal "rotated-token", token_seen_by_usage,
+        "usage collection ran against the token the session launched with"
     end
 
     # == Credential metadata env vars ==

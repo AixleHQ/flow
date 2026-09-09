@@ -34,6 +34,14 @@ module Activities
         ::AgentCredential.stubs(:refreshable).returns(refreshable)
       end
 
+      # Minimal unsigned JWT carrying an `exp` claim (seconds) — the shape Cursor and
+      # Codex access tokens have, and the only thing their #token_expires_at reads.
+      def jwt_with_exp(exp_seconds)
+        header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
+        payload = Base64.urlsafe_encode64({ exp: exp_seconds }.to_json, padding: false)
+        "#{header}.#{payload}.sig"
+      end
+
       test "aggregates counts across refreshed / not_needed / error statuses" do
         refreshed_cred = credential_double(id: 1, agent_type: "claude_code", status: :refreshed)
         refreshed_cred.stubs(:refresh_error).returns(nil)
@@ -75,7 +83,40 @@ module Activities
 
         result = run_activity(RefreshExpiringTokensActivity)
 
-        assert_equal({ refreshed: 0, not_needed: 0, errors: 0, held: 0 }, result)
+        assert_equal({ refreshed: 0, not_needed: 0, errors: 0, held: 0, backfilled: 0 }, result)
+      end
+
+      # A refreshable credential with no expires_at is invisible to .refresh_due, so the
+      # sweep has to resolve the expiry first or that row is skipped forever and its
+      # token dies of old age. Real rows here (the scope is the point), and the outcome
+      # asserted is the persisted column, not that some method was called.
+      test "resolves unknown expiries before selecting what is due" do
+        user = create(:user, company: create(:company))
+        token_exp = 3.hours.from_now
+        stale = create(:agent_credential, :cursor_cli, user: user,
+                       config_data: { "accessToken" => jwt_with_exp(token_exp.to_i) })
+        stale.update_column(:expires_at, nil)
+
+        stub_due([])
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:backfilled]
+        assert_in_delta token_exp.to_i, stale.reload.expires_at.to_i, 2
+        assert_includes ::AgentCredential.refresh_due(4.hours), stale
+      end
+
+      test "leaves a credential whose token carries no expiry alone" do
+        user = create(:user, company: create(:company))
+        opaque = create(:agent_credential, :cursor_cli, user: user,
+                        config_data: { "accessToken" => "opaque-not-a-jwt" })
+
+        stub_due([])
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 0, result[:backfilled]
+        assert_nil opaque.reload.expires_at
       end
 
       # Refreshing a token a container also holds replays a grant that container may

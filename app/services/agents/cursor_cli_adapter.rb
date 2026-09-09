@@ -266,6 +266,12 @@ module Agents
       end
 
       correlation = correlate_events(api_events, windows)
+      # The endpoint pages, and it filters by date only — i.e. across the whole Cursor
+      # account, not this session. A full page means the account may have billed more
+      # inside the window than came back, so anything we record could be an undercount
+      # wearing a `recorded` status. An undercount that looks like a success is harder
+      # to catch than an empty cell, so it gets said out loud rather than guessed at.
+      correlation[:details][:page_truncated] = true if api_events.size >= API_PAGE_SIZE
       persist_usage_statistic(terminal_session, correlation)
     rescue StandardError => e
       record_usage_diagnostic(terminal_session, "error", "message" => "#{e.class}: #{e.message}")
@@ -621,16 +627,22 @@ module Agents
     def persist_usage_statistic(terminal_session, correlation)
       events = correlation[:matched_events]
       details = correlation[:details]
+      counts = { "windows_count" => details[:windows_count], "api_count" => details[:api_count] }
+      counts["page_truncated"] = true if details[:page_truncated]
+
+      if details[:page_truncated]
+        Rails.logger.warn(
+          "[CursorCliAdapter] Dashboard API returned a full page (#{API_PAGE_SIZE}) for session " \
+          "#{terminal_session.id}: usage billed inside the window may be missing from this total"
+        )
+      end
 
       if events.empty?
         Rails.logger.warn(
           "[CursorCliAdapter] No usage events matched for session #{terminal_session.id} " \
           "(windows=#{details[:windows_count]} api=#{details[:api_count]})"
         )
-        return record_usage_diagnostic(
-          terminal_session, "no_matching_events",
-          "windows_count" => details[:windows_count], "api_count" => details[:api_count]
-        )
+        return record_usage_diagnostic(terminal_session, "no_matching_events", counts)
       end
 
       totals = aggregate_events(events)
@@ -661,9 +673,7 @@ module Agents
       )
 
       record_usage_diagnostic(
-        terminal_session, "recorded",
-        "windows_count" => details[:windows_count], "api_count" => details[:api_count],
-        "matched_count" => details[:matched_count]
+        terminal_session, "recorded", counts.merge("matched_count" => details[:matched_count])
       )
     end
 

@@ -18,6 +18,20 @@ module Activities
         not_needed = 0
         errors = 0
 
+        # Resolve unknown expiries before selecting what is due. A refreshable
+        # credential whose expires_at was never derived is invisible to .refresh_due,
+        # so the sweep would pass over it every five minutes until its token died of
+        # old age — with no symptom until a server-side call made with the stored token
+        # started answering 401 (AgentCredential.expiry_unknown documents the loop).
+        # This is the backfill: it runs against the rows that need it and stops finding
+        # them once they are healed. What stays NULL afterwards is a credential whose
+        # token really carries no expiry (an API key stored under a refreshable type) —
+        # a decrypt of a handful of rows per tick, not a scan.
+        backfilled = 0
+        ::AgentCredential.expiry_unknown.find_each do |credential|
+          backfilled += 1 if credential.backfill_expires_at!
+        end
+
         due = ::AgentCredential.refreshable.refresh_due(REFRESH_WINDOW)
         # Skipped, not dropped: a credential a live container holds is refreshed by
         # the CLI in that container, and its cleanup merges the rotated block back.
@@ -45,8 +59,8 @@ module Activities
         end
 
         log(:info, "token refresh sweep: refreshed=#{refreshed} not_needed=#{not_needed} " \
-                   "errors=#{errors} held_by_live_session=#{held}")
-        { refreshed: refreshed, not_needed: not_needed, errors: errors, held: held }
+                   "errors=#{errors} held_by_live_session=#{held} expiry_backfilled=#{backfilled}")
+        { refreshed: refreshed, not_needed: not_needed, errors: errors, held: held, backfilled: backfilled }
       end
     end
   end

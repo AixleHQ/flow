@@ -123,13 +123,7 @@ module ContainerStrategies
       logs_count, log_contents = collect_logs(container, session, agent_service)
       logs_count += collect_terminal_output(container, session)
       outputs_count = collect_outputs(container, session)
-      # Credentials first: an agent that rotated its token mid-session leaves the
-      # fresh one in the container and a stale one in the database, and usage
-      # collection is a provider API call authenticated with the stored token
-      # (Cursor's dashboard). Persist before collecting, or a long session's usage
-      # call authenticates with a token that expired hours ago.
-      persist_refreshed_credentials(container, session, agent_service)
-      collect_usage(session, agent_service, log_contents)
+      persist_credentials_then_collect_usage(container, session, agent_service, log_contents)
       IntegrationCleanupService.release_session_locks!(session)
 
       Rails.logger.info("[AgentSession] Cleanup: #{logs_count} logs, #{outputs_count} outputs")
@@ -387,6 +381,21 @@ module ContainerStrategies
       end
 
       [ "Company", company_id ]
+    end
+
+    # The credential/usage pair, in the one order that works. Every cleanup path goes
+    # through here — this one and WorkflowStepStrategy's — so the reason for the order
+    # is stated once instead of being re-derived, or quietly reversed, per subclass.
+    #
+    # Credentials first: an agent that rotated its token mid-session leaves the fresh one
+    # in the container and a stale one in the database, while usage collection is a
+    # provider API call authenticated with the STORED token (Cursor's dashboard). The
+    # other way round, a session longer than its token's life bills its usage call to a
+    # token that expired hours ago, and the run lands in the sessions list with a
+    # duration and no tokens and no cost.
+    def persist_credentials_then_collect_usage(container, session, agent_service, log_contents)
+      persist_refreshed_credentials(container, session, agent_service)
+      collect_usage(session, agent_service, log_contents)
     end
 
     def collect_usage(session, agent_service, log_contents = {})

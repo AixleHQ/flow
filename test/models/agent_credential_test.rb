@@ -412,6 +412,131 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal :refreshed, result[:status]
   end
 
+  # --- expiry_unknown / backfill_expires_at! ---
+  #
+  # Cursor and Codex carry the expiry inside the access token's JWT. Credentials
+  # created before their adapter learned to read it kept expires_at NULL, and NULL
+  # reads as "never expires": .refresh_due skips the row, so it is never refreshed, so
+  # nothing ever writes config_data, so #sync_expires_at never runs — a loop the row
+  # cannot leave. The token then dies at its own exp while sessions still appear to
+  # work, and every server-side call made with the stored token (Cursor's usage
+  # dashboard among them) answers 401. That is what left Tokens and Cost empty on
+  # completed Cursor runs.
+
+  # Minimal unsigned JWT carrying an `exp` claim (seconds), the shape Cursor issues.
+  def jwt_with_exp(exp_seconds)
+    header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
+    payload = Base64.urlsafe_encode64({ exp: exp_seconds }.to_json, padding: false)
+    "#{header}.#{payload}.sig"
+  end
+
+  def cursor_config(expires_at:, access_token: nil)
+    { "accessToken" => access_token || jwt_with_exp(expires_at.to_i), "refreshToken" => "cur-ref" }
+  end
+
+  # A row in the loop: refreshable type, token material that does carry an expiry,
+  # column still NULL.
+  def legacy_cursor_credential(user: @user, expires_at: 30.days.from_now)
+    create(:agent_credential, :cursor_cli, user: user, config_data: cursor_config(expires_at: expires_at))
+      .tap { |cred| cred.update_column(:expires_at, nil) }
+  end
+
+  test "expiry_unknown selects refreshable credentials whose expiry was never derived" do
+    legacy = legacy_cursor_credential
+    known = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                      config_data: claude_config(expires_at: 2.hours.from_now))
+    # Gemini authenticates with an API key: nothing refreshes it, and a NULL expiry
+    # there is the truth, not a gap.
+    api_key = create(:agent_credential, user: @user, agent_type: "gemini_cli")
+
+    unknown = AgentCredential.expiry_unknown
+    assert_includes unknown, legacy
+    refute_includes unknown, known
+    refute_includes unknown, api_key
+  end
+
+  test "backfill_expires_at! derives the expiry from the stored token and persists it" do
+    token_exp = 30.days.from_now
+    legacy = legacy_cursor_credential(expires_at: token_exp)
+
+    assert_in_delta token_exp.to_i, legacy.backfill_expires_at!.to_i, 2
+    assert_in_delta token_exp.to_i, legacy.reload.expires_at.to_i, 2
+  end
+
+  # The backfill exists to put the row back under the refresh machinery — that, not
+  # the column value, is what stops the token from dying unnoticed.
+  test "a backfilled credential becomes visible to refresh_due" do
+    legacy = legacy_cursor_credential(expires_at: 10.minutes.from_now)
+    refute_includes AgentCredential.refresh_due, legacy
+
+    legacy.backfill_expires_at!
+
+    assert_includes AgentCredential.refresh_due, legacy
+  end
+
+  test "backfill_expires_at! leaves an expiry that is already known untouched" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 2.hours.from_now))
+    sentinel = 99.days.from_now
+    cred.update_column(:expires_at, sentinel)
+
+    cred.backfill_expires_at!
+
+    assert_in_delta sentinel.to_i, cred.reload.expires_at.to_i, 2
+  end
+
+  test "backfill_expires_at! returns nil for a token that carries no expiry" do
+    opaque = create(:agent_credential, :cursor_cli, user: @user,
+                    config_data: cursor_config(expires_at: nil, access_token: "opaque"))
+
+    assert_nil opaque.backfill_expires_at!
+    assert_nil opaque.reload.expires_at
+  end
+
+  # An API-key credential is never refreshed, so giving it an expiry would only make
+  # .not_expired start hiding a credential that still works.
+  test "backfill_expires_at! ignores agent types that are not refreshable" do
+    api_key = create(:agent_credential, user: @user, agent_type: "gemini_cli")
+
+    assert_nil api_key.backfill_expires_at!
+    assert_nil api_key.reload.expires_at
+  end
+
+  # Deriving the value from the token it is already storing must not count as a
+  # credential write: that would bust the cached model list on every sweep.
+  test "backfill_expires_at! keeps the stored credential material and its model cache" do
+    legacy = legacy_cursor_credential
+    stored = legacy.config_data
+    Rails.cache.write(legacy.models_cache_key, [ { model_id: "cached" } ])
+
+    legacy.backfill_expires_at!
+
+    assert_equal stored, legacy.reload.config_data
+    assert_equal [ { model_id: "cached" } ], Rails.cache.read(legacy.models_cache_key)
+  end
+
+  # The launch-time top-up is the last point before the token is written into a
+  # container, and for a credential the sweep has never selected it is the only point.
+  test "refresh_if_expiring! resolves an unknown expiry and tops the token up" do
+    legacy = legacy_cursor_credential(expires_at: 20.minutes.from_now)
+    stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL)
+      .to_return(status: 200,
+                 body: { access_token: jwt_with_exp(30.days.from_now.to_i), refresh_token: "cur-ref-2" }.to_json,
+                 headers: { "Content-Type" => "application/json" })
+
+    result = legacy.refresh_if_expiring!
+
+    assert_equal :refreshed, result[:status]
+    assert_equal "cur-ref-2", legacy.reload.config_data["refreshToken"]
+  end
+
+  test "refresh_if_expiring! leaves a backfilled token with plenty of life alone" do
+    legacy = legacy_cursor_credential(expires_at: 30.days.from_now)
+
+    assert_equal :not_needed, legacy.refresh_if_expiring!
+    assert_not_nil legacy.reload.expires_at
+  end
+
   # --- status / refresh error lifecycle ---
 
   test "mark_refresh_error! increments failure count and records the message" do

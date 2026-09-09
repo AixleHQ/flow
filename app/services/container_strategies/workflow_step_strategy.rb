@@ -43,11 +43,7 @@ module ContainerStrategies
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
       logs_count += collect_terminal_output(container, session)
-      # Order matters — see AgentSessionStrategy#before_cleanup: usage collection
-      # may authenticate against the provider with the stored token, so the
-      # container's rotated credential has to land in the database first.
-      persist_refreshed_credentials(container, session, agent_service)
-      collect_usage(session, agent_service, log_contents)
+      persist_credentials_then_collect_usage(container, session, agent_service, log_contents)
 
       outputs_count = collect_workflow_outputs(container_id)
 
