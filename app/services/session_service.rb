@@ -268,7 +268,7 @@ class SessionService
         Oauth::TokenService.refresh_if_expiring_soon(cred)
         cred.reload
         if cred.error?
-          raise Oauth::PreflightError, [ { mcp_server_id: server.id, reason: :credential_error,
+          raise Oauth::PreflightError, [ { mcp_server_id: server.id, name: server.name, reason: :credential_error,
                                            connect_url: "/oauth/mcp/#{server.id}/connect" } ]
         end
       end
@@ -379,14 +379,14 @@ class SessionService
         next if cred.nil?
 
         if cred.error?
-          raise Oauth::PreflightError, [ { mcp_server_id: server.id, reason: :credential_error,
+          raise Oauth::PreflightError, [ { mcp_server_id: server.id, name: server.name, reason: :credential_error,
                                            connect_url: "/oauth/mcp/#{server.id}/connect" } ]
         end
 
         Oauth::TokenService.refresh_if_expiring_soon(cred)
         cred.reload
         if cred.error?
-          raise Oauth::PreflightError, [ { mcp_server_id: server.id, reason: :credential_error,
+          raise Oauth::PreflightError, [ { mcp_server_id: server.id, name: server.name, reason: :credential_error,
                                            connect_url: "/oauth/mcp/#{server.id}/connect" } ]
         end
       end

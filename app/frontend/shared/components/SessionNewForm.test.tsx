@@ -121,7 +121,7 @@ describe('SessionNewForm', () => {
       status: 422,
       json: () =>
         Promise.resolve({
-          error: 'Connect required for 1 OAuth MCP server(s) before launching',
+          error: 'Connect required before launching: Sentry',
           reauth_required: [{ mcp_server_id: 5, name: 'Sentry', connect_url: '/oauth/mcp/5/connect' }],
         }),
     } as Response);
