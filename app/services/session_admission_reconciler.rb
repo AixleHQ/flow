@@ -16,9 +16,7 @@ class SessionAdmissionReconciler
     SessionAdmission.occupied.where(launch_state: %w[acknowledged claimed]).order(:updated_at).limit(limit).each do |admission|
       next unless TemporalService.enabled?
       admission.touch
-      # Unlike workflow_open?, transport errors propagate: unknown is never closed.
-      description = TemporalService.client.workflow_handle(admission.terminal_session.workflow_id).describe
-      next if description.status == Temporalio::Client::WorkflowExecutionStatus::RUNNING
+      next if execution_open?(admission.terminal_session.workflow_id)
 
       strand_in_flight_operations(admission)
       Activities::Container::AdmittedPhaseActivity.new.run(Hashie::Mash.new(
@@ -28,6 +26,26 @@ class SessionAdmissionReconciler
       admission.update!(last_error: "Reconciliation: #{e.class}: #{e.message}")
     end
     report(snapshot)
+  end
+
+  # Whether Temporal still has a running execution behind this reservation.
+  #
+  # Unlike workflow_open?, transport errors propagate: unknown is never closed,
+  # because cleaning up behind a workflow that is merely unreachable would race
+  # its own cleanup. NOT_FOUND is the one negative answer that is not a
+  # transport failure — the server looked and has no such execution, whether
+  # because the launch never reached Temporal or because retention expired.
+  # Nothing can ever report a result for an execution that does not exist, so
+  # treating it as "unknown" pinned the slot forever: the reservation recorded
+  # the same error every minute and never reached cleanup.
+  def self.execution_open?(workflow_id)
+    description = TemporalService.client.workflow_handle(workflow_id).describe
+    description.status == Temporalio::Client::WorkflowExecutionStatus::RUNNING
+  rescue Temporalio::Error::RPCError => e
+    raise unless e.code == Temporalio::Error::RPCError::Code::NOT_FOUND
+
+    Rails.logger.warn("[SessionAdmission] Temporal has no execution #{workflow_id}; reconciling as closed")
+    false
   end
 
   # An in-flight operation means "a create is running right now", which is true
