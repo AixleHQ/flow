@@ -5,9 +5,15 @@ module InternalTools
     # SlackContext — shared plumbing for the Slack tools: which workspace install
     # this call talks to, and the channel/thread the run was started from.
     #
+    # The tools auto-inject into workflow steps only, but nothing here needs a
+    # workflow: the install is resolved from the session's PROJECT, so a plain
+    # agent session that a user attached the tool to works the same way. What it
+    # loses is the trigger context — with no run behind it there is no channel or
+    # thread to default to, and `channel` becomes required.
+    #
     # Every Slack tool is gated on `requires_integration :slack`, so the install
-    # exists in the common case; the guards here cover the run that was launched
-    # by hand, or after the workspace was disconnected mid-run.
+    # exists in the common case; the guards here cover the session launched by
+    # hand, or a workspace disconnected mid-run.
     module SlackContext
       # What an agent needs to know to write `blocks` without a round-trip through
       # a Slack `invalid_blocks` error: the block types that work on the message
@@ -45,7 +51,8 @@ module InternalTools
 
       # Reply coordinates threaded into the run by TriggerEngine#slack_run_context:
       # channel, ts, thread_ts, team, integration_id, plus the triggering message's
-      # text and author. Empty for a run that did not start from Slack.
+      # text and author. Empty for a run that did not start from Slack, and for a
+      # session with no workflow run behind it at all.
       def slack_context
         workflow_run&.shared_context.to_h["slack"] || {}
       end
@@ -73,12 +80,15 @@ module InternalTools
       # that triggered the run. Returns [integration, channel, error]: on the first
       # missing half, error is a tool error naming what is absent.
       def resolve_slack_target(explicit_channel)
+        return [ nil, nil, error("This tool needs a project — the session has none") ] if project.nil?
+
         integration = slack_integration
         return [ nil, nil, error("Slack is not connected for this project") ] if integration.nil?
 
         channel = explicit_channel.presence || slack_context["channel"]
         if channel.blank?
-          return [ integration, nil, error("No channel given, and this run was not triggered from Slack") ]
+          return [ integration, nil, error("No channel given. Only a run started from Slack has one to " \
+                                           "fall back on — pass `channel` explicitly.") ]
         end
 
         [ integration, channel, nil ]

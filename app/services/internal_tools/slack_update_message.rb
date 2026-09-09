@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module InternalTools
-  # Platform tool: edit a Slack message this workflow already posted, addressed by
+  # Platform tool: edit a Slack message the bot already posted, addressed by
   # the `ts` slack_post_message returned. What it buys the agent is the
   # "working… → result" pattern: one message in the channel that fills in as the
   # step progresses, instead of a trail of partial updates.
@@ -14,7 +14,7 @@ module InternalTools
 
     tool do
       display_name "Slack Update Message"
-      description "Edit a Slack message this workflow posted, by its `ts` (returned by slack_post_message). Use it for a status message that fills in as the step progresses. The message is REPLACED, not merged: send everything it should end up with — a text-only update of a message that had blocks clears those blocks. Only the bot's own messages can be edited, and already-uploaded files cannot. Omit `channel` to use the channel that triggered the run."
+      description "Edit a Slack message the bot posted, by its `ts` (returned by slack_post_message). Use it for a status message that fills in as the step progresses. The message is REPLACED, not merged: send everything it should end up with — a text-only update of a message that had blocks clears those blocks. Only the bot's own messages can be edited, and already-uploaded files cannot. Omit `channel` only when this session was started from Slack; otherwise name it."
       tags :messaging, :slack
       inject_when :workflow_step_session
       requires_integration :slack
@@ -40,15 +40,13 @@ module InternalTools
           },
           channel: {
             type: "string",
-            description: "Channel ID the message lives in. Defaults to the triggering channel."
+            description: "Channel ID the message lives in. Defaults to the triggering channel, when there is one."
           }
         }
       })
     end
 
     def execute
-      require_workflow_context!
-
       blocks, blocks_error = build_blocks
       return blocks_error if blocks_error
       return error("Provide `text` and/or `blocks` to replace the message with") if params[:text].blank? && blocks.empty?
