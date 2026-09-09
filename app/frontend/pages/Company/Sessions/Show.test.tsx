@@ -15,6 +15,8 @@ function buildSession(overrides: Partial<TerminalSession> = {}): TerminalSession
     mode: 'interactive',
     queuedAt: null,
     waitReason: null,
+    launchPhase: null,
+    launchError: null,
     startedAt: '2026-06-26T10:00:00Z',
     finishingAt: null,
     finishedAt: null,

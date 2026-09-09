@@ -16,6 +16,8 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     mode: 'interactive',
     queuedAt: null,
     waitReason: null,
+    launchPhase: null,
+    launchError: null,
     startedAt: '2026-06-26T10:00:00Z',
     finishingAt: null,
     finishedAt: null,
@@ -72,14 +74,56 @@ describe('SessionShowContent', () => {
   it('shows queue waiting and cancellation without mounting a terminal', () => {
     renderPage(
       <SessionShowContent
-        session={makeSession({ state: 'queued', startedAt: null })}
+        session={makeSession({ state: 'queued', startedAt: null, launchPhase: 'queued_for_slot' })}
         cableStream="signed-stream"
         context={ctx}
       />,
     );
-    expect(screen.getByText('Waiting for an available session slot')).toBeInTheDocument();
+    expect(screen.getByText('Waiting for a free session slot')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel session' })).toBeInTheDocument();
     expect(screen.queryByTitle('Terminal')).not.toBeInTheDocument();
+  });
+
+  // A session sits in `queued` right through dispatch, so this state on its own
+  // never meant the pool was full — saying so blamed the user's own limit for
+  // every launch, and for every launch that failed outright.
+  it('does not blame the queue while a granted slot is starting up', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ state: 'queued', startedAt: null, launchPhase: 'starting' })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+    expect(screen.getByText('Starting session…')).toBeInTheDocument();
+    expect(screen.queryByText('Waiting for a free session slot')).not.toBeInTheDocument();
+  });
+
+  it('shows what the launch itself failed on instead of a queue wait', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({
+          state: 'queued',
+          startedAt: null,
+          launchPhase: 'starting',
+          launchError: 'GitHub token expired; reconnect the integration',
+        })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+    expect(screen.getByText('GitHub token expired; reconnect the integration')).toBeInTheDocument();
+  });
+
+  it('names cluster capacity as the reason when that is what it is', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({ state: 'queued', startedAt: null, launchPhase: 'cluster_capacity' })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+    expect(screen.getByText('Waiting for cluster capacity')).toBeInTheDocument();
   });
 
   it('treats cancelled sessions as terminal without finish controls', () => {

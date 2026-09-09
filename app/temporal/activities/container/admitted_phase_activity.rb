@@ -160,11 +160,24 @@ module Activities
       def finalize_session(session, state)
         ActiveRecord::Base.transaction do
           session.reload
-          final_state = session.cancelled? ? "cancelled" : (state[:error] || session.failed? ? "failed" : "finished")
+          error = outcome_error(session, state[:error])
+          final_state = session.cancelled? ? "cancelled" : (error || session.failed? ? "failed" : "finished")
           session.update!(state: final_state, finished_at: session.finished_at || Time.current,
             container_id: nil,
-            error_message: TerminalSession.preferred_error_message(session.error_message, state[:error]))
+            error_message: TerminalSession.preferred_error_message(session.error_message, error))
         end
+      end
+
+      # A stop the person asked for is not a failure, and the queue's own
+      # vocabulary is not a diagnosis. `finish` can land while the launch is
+      # still running — the next activity then hits a closed permit — so a
+      # requested finish keeps whatever real error it already had, and nothing
+      # more.
+      def outcome_error(session, error)
+        return error if error.blank?
+        return nil if session.finishing_at && TerminalSession::GENERIC_ERROR_MESSAGES.include?(error)
+
+        error
       end
     end
   end
