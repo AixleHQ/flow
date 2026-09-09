@@ -60,6 +60,7 @@ const AVAILABLE_AGENTS = [
   { type: 'cursor_cli', label: 'Cursor CLI', color: AGENT_BRAND_COLORS.cursor_cli },
   { type: 'codex', label: 'Codex', color: AGENT_BRAND_COLORS.codex },
   { type: 'gemini_cli', label: 'Gemini CLI', color: AGENT_BRAND_COLORS.gemini_cli },
+  { type: 'antigravity_cli', label: 'Antigravity CLI', color: AGENT_BRAND_COLORS.antigravity_cli },
   { type: 'grok', label: 'Grok', color: AGENT_BRAND_COLORS.grok },
 ];
 
@@ -68,6 +69,7 @@ const AGENT_MANTINE_COLORS: Record<string, string> = {
   cursor_cli: 'violet',
   codex: 'teal',
   gemini_cli: 'blue',
+  antigravity_cli: 'indigo',
   grok: 'gray',
 };
 

@@ -16,7 +16,9 @@ function makeProps(overrides: Partial<SessionNewFormProps> = {}): SessionNewForm
 }
 
 // Seed SharedProps with a currentUser whose configured agents we control.
-function authProps(configuredAgents: ('claude_code' | 'cursor_cli' | 'codex' | 'gemini_cli' | 'grok')[] = []) {
+function authProps(
+  configuredAgents: ('claude_code' | 'cursor_cli' | 'codex' | 'gemini_cli' | 'antigravity_cli' | 'grok')[] = [],
+) {
   return { currentUser: buildSharedUser({ configuredAgents }) };
 }
 
@@ -24,15 +26,16 @@ describe('SessionNewForm', () => {
   it('renders the agent runtime options and disables Start until a configured agent is chosen', () => {
     renderAuthedPage(<SessionNewForm {...makeProps()} />, { props: authProps([]) });
 
-    // All five runtimes are shown.
+    // All six runtimes are shown.
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
     expect(screen.getByText('Cursor CLI')).toBeInTheDocument();
     expect(screen.getByText('Codex')).toBeInTheDocument();
     expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
+    expect(screen.getByText('Antigravity CLI')).toBeInTheDocument();
     expect(screen.getByText('Grok')).toBeInTheDocument();
 
     // With no configured agents, every runtime tile is marked as needing setup.
-    expect(screen.getAllByText('Setup')).toHaveLength(5);
+    expect(screen.getAllByText('Setup')).toHaveLength(6);
 
     // Start is disabled because no agent can be selected.
     expect(screen.getByRole('button', { name: /start session/i })).toBeDisabled();

@@ -92,6 +92,12 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; co
     color: AGENT_BRAND_COLORS.gemini_cli,
   },
   {
+    type: 'antigravity_cli',
+    name: 'Antigravity CLI',
+    description: "Google's agent-first terminal runtime, signed in with your Google account",
+    color: AGENT_BRAND_COLORS.antigravity_cli,
+  },
+  {
     type: 'grok',
     name: 'Grok',
     description: "xAI's Grok CLI for agentic coding in the terminal",

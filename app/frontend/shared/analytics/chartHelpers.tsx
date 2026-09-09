@@ -41,6 +41,7 @@ const AGENT_COLOR: Record<string, string> = {
   codex: 'var(--app-chart-warm-1)',
   gemini: 'var(--app-chart-warm-3)',
   gemini_cli: 'var(--app-chart-warm-3)',
+  antigravity_cli: 'var(--app-chart-warm-3)',
   // No xAI artwork ships in this repo, so a Grok row renders the neutral chip
   // AgentLogo falls back to; naming it here keeps the runtime known, not unmapped.
   grok: CHART_NEUTRAL,
@@ -55,6 +56,7 @@ const AGENT_LOGO_SRC: Record<string, string> = {
   codex: codexLogo,
   gemini: geminiLogo,
   gemini_cli: geminiLogo,
+  antigravity_cli: geminiLogo,
 };
 
 function agentLogoChipStyle(agentType: string, size: number): CSSProperties {
@@ -71,7 +73,7 @@ function agentLogoChipStyle(agentType: string, size: number): CSSProperties {
   if (agentType === 'codex') {
     return { ...base, backgroundColor: LOGO_TILE_BG.light };
   }
-  if (agentType === 'gemini' || agentType === 'gemini_cli') {
+  if (agentType === 'gemini' || agentType === 'gemini_cli' || agentType === 'antigravity_cli') {
     return { ...base, backgroundColor: LOGO_TILE_BG.dark, border: '1px solid var(--app-border-default)' };
   }
   return base;
@@ -79,7 +81,8 @@ function agentLogoChipStyle(agentType: string, size: number): CSSProperties {
 
 function agentLogoImageSize(agentType: string, chipSize: number): number {
   if (agentType === 'codex') return Math.round(chipSize * (13 / 18));
-  if (agentType === 'gemini' || agentType === 'gemini_cli') return Math.round(chipSize * (12 / 18));
+  if (agentType === 'gemini' || agentType === 'gemini_cli' || agentType === 'antigravity_cli')
+    return Math.round(chipSize * (12 / 18));
   return chipSize;
 }
 

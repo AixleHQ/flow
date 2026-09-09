@@ -8,7 +8,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     user: Field::BelongsTo.with_options(searchable: true, searchable_fields: %w[email name]),
     agent_type: Field::Select.with_options(
       include_blank: false,
-      collection: %w[claude_code cursor_cli codex gemini_cli grok]
+      collection: %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok]
     ),
     status: Field::String,
     metadata: Field::String.with_options(truncate: 100),
@@ -54,6 +54,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     cursor_cli: ->(resources) { resources.for_agent("cursor_cli") },
     codex: ->(resources) { resources.for_agent("codex") },
     gemini_cli: ->(resources) { resources.for_agent("gemini_cli") },
+    antigravity_cli: ->(resources) { resources.for_agent("antigravity_cli") },
     grok: ->(resources) { resources.for_agent("grok") },
     active: ->(resources) { resources.where(status: :active) },
     error: ->(resources) { resources.where(status: :error) },
