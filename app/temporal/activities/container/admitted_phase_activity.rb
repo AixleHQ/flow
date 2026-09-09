@@ -160,11 +160,37 @@ module Activities
       def finalize_session(session, state)
         ActiveRecord::Base.transaction do
           session.reload
-          final_state = session.cancelled? ? "cancelled" : (state[:error] || session.failed? ? "failed" : "finished")
-          session.update!(state: final_state, finished_at: session.finished_at || Time.current,
+          error = outcome_error(session, state[:error])
+          session.update!(state: outcome_state(session, error), finished_at: session.finished_at || Time.current,
             container_id: nil,
-            error_message: TerminalSession.preferred_error_message(session.error_message, state[:error]))
+            error_message: TerminalSession.preferred_error_message(session.error_message, error))
         end
+      end
+
+      # A stop the person asked for is not a failure, and the queue's own
+      # vocabulary is not a diagnosis. `finish` can land while the launch is
+      # still running — the next activity then hits a closed permit — so a
+      # requested finish keeps whatever real error it already had, and nothing
+      # more.
+      def outcome_error(session, error)
+        return error if error.blank?
+        return nil if session.finishing_at && TerminalSession::GENERIC_ERROR_MESSAGES.include?(error)
+
+        error
+      end
+
+      # A session the person stopped before it was ever usable was cancelled,
+      # not finished — closing the dialog on a container that is still coming up
+      # is a cancellation, and the only button on that screen says so. `ready_at`
+      # is the fact that separates the two: across three days of production,
+      # `finishing_at` without `ready_at` described exactly the two
+      # authentication sessions this is about and not one workflow step.
+      def outcome_state(session, error)
+        return "cancelled" if session.cancelled?
+        return "failed" if error || session.failed?
+        return "cancelled" if session.finishing_at && session.ready_at.nil?
+
+        "finished"
       end
     end
   end

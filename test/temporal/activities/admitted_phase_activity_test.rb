@@ -145,6 +145,58 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     assert_nil @admission.reload.released_at, "capacity is only returned once the runtime is confirmed gone"
   end
 
+  # Production, 2026-09-09: someone pressed Finish four seconds into an
+  # Antigravity authentication session, before the launch reached `exec`. The
+  # next activity found a closed permit, and "Session admission is closed" — the
+  # queue talking to itself — became both the session's error message and the
+  # reason it was marked failed. Nothing had failed.
+  test "a finish requested mid-launch is not reported as a failure" do
+    strategy = mock("strategy")
+    @session.stubs(:strategy).returns(strategy)
+    SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
+    @admission.stubs(:terminal_session).returns(@session)
+    strategy.stubs(:before_cleanup).returns({})
+    @runtime.stubs(:session_absent?).returns(true)
+    @session.update!(state: "running", finishing_at: Time.current)
+
+    @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id,
+      error: "Session admission is closed"))
+
+    assert_equal "cancelled", @session.reload.state,
+      "closing the dialog on a container that never came up is a cancellation"
+    assert_nil @session.error_message
+  end
+
+  test "a session that was usable before the user finished it is finished" do
+    strategy = mock("strategy")
+    @session.stubs(:strategy).returns(strategy)
+    SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
+    @admission.stubs(:terminal_session).returns(@session)
+    strategy.stubs(:before_cleanup).returns({})
+    @runtime.stubs(:session_absent?).returns(true)
+    @session.update!(state: "running", finishing_at: Time.current, ready_at: 1.minute.ago)
+
+    @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id))
+
+    assert_equal "finished", @session.reload.state
+  end
+
+  test "a real error still fails a session the user asked to finish" do
+    strategy = mock("strategy")
+    @session.stubs(:strategy).returns(strategy)
+    SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
+    @admission.stubs(:terminal_session).returns(@session)
+    strategy.stubs(:before_cleanup).returns({})
+    @runtime.stubs(:session_absent?).returns(true)
+    @session.update!(state: "running", finishing_at: Time.current)
+
+    @activity.run(Hashie::Mash.new(phase: "cleanup", admission_id: @admission.id,
+      error: "Agent image could not be pulled"))
+
+    assert_equal "failed", @session.reload.state
+    assert_equal "Agent image could not be pulled", @session.error_message
+  end
+
   test "output collection does not repeat when cleanup is retried" do
     strategy = mock("strategy")
     @session.stubs(:strategy).returns(strategy)

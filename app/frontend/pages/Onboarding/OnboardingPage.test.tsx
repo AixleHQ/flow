@@ -19,6 +19,8 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   mode: 'interactive',
   queuedAt: null,
   waitReason: null,
+  launchPhase: null,
+  launchError: null,
   startedAt: null,
   finishingAt: null,
   finishedAt: null,

@@ -18,7 +18,13 @@ class TerminalSession < ApplicationRecord
   # never got `error_category: :quota_exceeded` either, and the run surfaced as a bare
   # "cancelled" with nothing to act on. (2026-09-05: eleven runs, all of them a spend
   # limit nobody could see.)
-  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled" ].freeze
+  # "Session admission is closed" is the queue refusing a permit, which is what
+  # a `finish` landing mid-launch looks like from inside an activity. It says
+  # nothing about why the work ended, and it used to be both the session's error
+  # message and the reason it was marked failed — so a person who pressed Finish
+  # four seconds into an authentication session was told their session had
+  # failed, in the queue's vocabulary.
+  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed" ].freeze
 
   # A specific reason always outranks a generic one, whichever arrives last.
   def self.preferred_error_message(existing, incoming)
