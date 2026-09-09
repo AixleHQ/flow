@@ -474,10 +474,15 @@ module Agents
     # `node-http-logger` is dropped on BOTH sides. Its entries carry no headers
     # (http2-logger.js:126,136), so they can never register a rid — meaning the request
     # side has always skipped them, and without a rid the response side could only ever
-    # overwrite a timestamp, never contribute a window of its own. Worse, it fires on the
+    # overwrite a timestamp, never contribute a window of its own. It also fires on the
     # `response` event, i.e. when response HEADERS arrive; for a streamed turn that is
-    # tens of seconds before the turn ends. Letting it claim the pending rid discarded
-    # mitmproxy's stream-end timestamp on every RPC and ended the window early.
+    # tens of seconds before the turn ends, so letting it claim the pending rid discarded
+    # mitmproxy's stream-end timestamp on every RPC and closed the window at the headers.
+    #
+    # That shortening is NOT what broke correlation — see #match_windows_to_api: the
+    # billing event lands ~300 ms after the REQUEST, so it was already inside the old
+    # window whenever the headers were prompt. Skipping the node entry is a consistency
+    # fix (one logger, one pair of bounds); its measurable effect is a wider window.
     #
     # HTTP/2 Run (legacy) is unaffected: http2-logger tags its entries `http2-logger`
     # and puts x-request-id on both sides, so they keep pairing by rid.
@@ -552,26 +557,33 @@ module Agents
     #     [request_ms, response_ms + RPC_WINDOW_AFTER_RESPONSE_MS]
     #
     # It used to start at `response_ms`, i.e. a 1-second window hung off the end of the
-    # RPC. Both bounds were wrong, and each was wrong for its own reason:
+    # RPC. `lo` is the bound that broke correlation. It assumed the billing event is
+    # stamped after the response; Cursor stamps it at the START of the turn, so whenever
+    # the response headers lagged the request the event fell before the window. Measured
+    # on a live session (two RunSSE turns, deployed code, no part of this change applied):
     #
-    #   * `lo` assumed the billing event is stamped after the response. Cursor stamps it
-    #     while the turn is still streaming, so the event fell before the window.
-    #     Anchoring on the request is always safe — a billing event cannot predate the
-    #     request that caused it.
-    #   * `hi` was the response HEADERS time rather than the stream end, because
-    #     #build_rpc_windows let node-http-logger's response entry claim the pending rid
-    #     and threw mitmproxy's stream-end timestamp away. On a live 258-second session
-    #     that left a window 1141 ms wide, and the query came back empty. Now that the
-    #     node entry is skipped, `response_ms` really is the end of the turn.
+    #     event = request + 301 ms = response headers + 224 ms = stream end - 13.0 s
     #
-    # Both bounds had to move. The request anchor alone still leaves a window that closes
-    # ~1 s after the response headers, tens of seconds before a streamed turn is billed.
+    # With headers 77 ms and 284 ms behind their requests the old window still caught it;
+    # in the capture that first exposed the bug the headers lagged by 3.2 s, the old
+    # window was [+3.2 s, +4.2 s] and the event at +301 ms missed it. Anchoring on the
+    # request is always safe — a billing event cannot predate the request that caused it.
     #
-    # The trade-off: while one RPC is in flight, an event billed to a CONCURRENT
-    # session on the same Cursor account can land inside this session's window. The
-    # API query already spans the whole session, so the two were never separable
-    # here; attributing such an event to the wrong one of two concurrent sessions
-    # beats dropping the usage of both.
+    # `hi` is the stream end rather than the response headers, because #build_rpc_windows
+    # no longer lets node-http-logger's response entry claim the pending rid. For matching
+    # that is not load-bearing: +1 s past the headers already contains a +301 ms event.
+    # What it does is widen each window from ~1 s to the turn's duration — 13.3 s and
+    # 21.5 s in the session measured above.
+    #
+    # The trade-off, and the widening makes it materially likelier: while one RPC is in
+    # flight, an event billed to a CONCURRENT session on the same Cursor account can land
+    # inside this session's window, and each session writes its own UsageStatistic, so the
+    # same spend is counted twice in a rollup. The API query already spans the whole
+    # session, so the two were never separable here; double-counting two concurrent
+    # sessions beats dropping the usage of both. Narrowing `hi` back to the headers is a
+    # live option, but the timing above is a single measured event — get the spread of
+    # `event.timestamp - request_ms` over more sessions before moving that bound. Exact
+    # matching needs a request id on `usageEventsDisplay`, which Cursor does not expose.
     def match_windows_to_api(api_events, windows)
       matched = Set.new
 
