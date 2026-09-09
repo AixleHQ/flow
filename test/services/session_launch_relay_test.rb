@@ -52,6 +52,27 @@ class SessionLaunchRelayTest < ActiveSupport::TestCase
     assert_nothing_raised { SessionService.revalidate_admission!(@session.reload) }
   end
 
+  # Production, 2026-09-09: nine "Verify the story on real staging" steps were
+  # refused over three and a half hours because one project-shared Sentry grant
+  # had expired. Every one of them ended as a bare `cancelled` with an empty
+  # error, and the only trace of the reason lived on the admission, which no
+  # screen reads.
+  test "a connection the launch was refused over is named on the session" do
+    project = create(:project, company: @user.companies.first, owner: @user)
+    server = create(:mcp_server, :custom, scope: project, transport: :sse,
+                    auth_type: :oauth, credential_scope: :per_user, name: "Sentry")
+    SessionService.stubs(:revalidate_admission!)
+                  .raises(Oauth::PreflightError.new([ { mcp_server_id: server.id, name: server.name,
+                                                        connect_url: "/oauth/mcp/#{server.id}/connect" } ]))
+    TemporalService.expects(:start_workflow).never
+
+    SessionLaunchRelay.dispatch(@admission)
+
+    assert_equal "cancelled", @session.reload.state
+    assert_equal "Connect required before launching: Sentry", @session.error_message
+    assert_equal "Connect required before launching: Sentry", @admission.reload.last_error
+  end
+
   test "failed preflight releases a reservation when no start was attempted" do
     SessionService.stubs(:revalidate_admission!).raises(SessionAdmissionService::Stopped, "Access revoked")
     TemporalService.expects(:start_workflow).never

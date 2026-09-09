@@ -10,7 +10,17 @@ module Oauth
 
     def initialize(connections)
       @connections = connections
-      super("Connect required for #{connections.size} OAuth MCP server(s) before launching")
+      super("Connect required before launching: #{self.class.names(connections)}")
+    end
+
+    # The browser gets the whole `connections` list and renders it, but a
+    # workflow-step launch has no browser: the relay stores only this message on
+    # the admission, and that was the operator's entire account of a blocked
+    # run. "1 OAuth MCP server(s)" left them to guess which one — production,
+    # 2026-09-09: nine Verify steps refused over three and a half hours because
+    # one project-shared grant had expired, and nothing said whose.
+    def self.names(connections)
+      connections.map { |c| c[:name].presence || "MCP server ##{c[:mcp_server_id]}" }.join(", ")
     end
   end
 end

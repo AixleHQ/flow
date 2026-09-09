@@ -98,6 +98,9 @@ class SessionServiceTest < ActiveSupport::TestCase
 
     assert_equal 0, @user.terminal_sessions.count, "must not create a session with a broken credential"
     assert_equal "/oauth/mcp/#{server.id}/connect", error.connections.first[:connect_url]
+    # A credential that broke on refresh names its server like any other refusal;
+    # this raise site used to omit the name and leave the message anonymous.
+    assert_equal "Connect required before launching: #{server.name}", error.message
   end
 
   test "create_and_start blocks launch when a credential is already in error status before start" do
