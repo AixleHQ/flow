@@ -66,6 +66,7 @@ import {
   IconBookmark,
   IconBug,
   IconCheck,
+  IconCheckbox,
   IconChevronDown,
   IconChevronsRight,
   IconCircleCheck,
@@ -4491,6 +4492,10 @@ const BoardPage = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  // Explicit bulk-selection mode. Off by default: the board stays click-to-open / drag until the
+  // user arms it from the "Bulk" toolbar button, so hovering a dense column never reveals or
+  // reflows a checkbox (issue #581).
+  const [bulkMode, setBulkMode] = useState(false);
 
   const toggleSelect = useCallback((id: number, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -4502,6 +4507,20 @@ const BoardPage = () => {
   }, []);
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // Leaving bulk mode always drops the selection — a checkbox left checked under a board that no
+  // longer shows checkboxes would be invisible state.
+  const exitBulkMode = useCallback(() => {
+    setBulkMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleBulkMode = useCallback(() => {
+    setBulkMode((on) => {
+      if (on) setSelectedIds(new Set());
+      return !on;
+    });
+  }, []);
 
   const {
     execute: executeBulkAction,
@@ -4807,12 +4826,16 @@ const BoardPage = () => {
         e.preventDefault();
         searchInputRef.current?.focus();
       } else if (e.key === 'Escape') {
+        if (bulkMode) {
+          exitBulkMode();
+          return;
+        }
         closeTask();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeTask, canExecute]);
+  }, [closeTask, canExecute, bulkMode, exitBulkMode]);
 
   if (!board) {
     return (
@@ -5007,6 +5030,30 @@ const BoardPage = () => {
 
           <Box style={{ flex: 1 }} />
 
+          {/* Bulk — arms explicit selection mode. Hidden for view-only members, who get no
+              selection affordance at all (issue #581). */}
+          {canExecute && (
+            <Button
+              variant="default"
+              size="xs"
+              leftSection={bulkMode ? <IconCheck size={12} /> : <IconCheckbox size={12} />}
+              onClick={toggleBulkMode}
+              styles={
+                bulkMode
+                  ? {
+                      root: {
+                        backgroundColor: 'var(--mantine-color-brand-light)',
+                        color: 'var(--mantine-color-brand-6)',
+                        borderColor: 'var(--mantine-color-brand-light-hover)',
+                      },
+                    }
+                  : undefined
+              }
+            >
+              {bulkMode ? 'Done' : 'Bulk'}
+            </Button>
+          )}
+
           {/* Collapse all */}
           <Button
             variant="default"
@@ -5039,6 +5086,7 @@ const BoardPage = () => {
 
         {/* Selection toolbar — second row, visible only when tasks are selected */}
         <SelectionBar
+          active={bulkMode}
           selectedCount={selectedIds.size}
           selectedIds={selectedIds}
           columns={localColumns}
@@ -5120,9 +5168,9 @@ const BoardPage = () => {
                   isDropTarget={hoverColumnId === col.id}
                   canExecute={canExecute}
                   selectedIds={selectedIds}
-                  onToggleSelect={canExecute ? toggleSelect : undefined}
-                  onToggleColumn={canExecute ? toggleColumn : undefined}
-                  selectionMode={canExecute && selectedIds.size > 0}
+                  onToggleSelect={canExecute && bulkMode ? toggleSelect : undefined}
+                  onToggleColumn={canExecute && bulkMode ? toggleColumn : undefined}
+                  selectionMode={canExecute && bulkMode}
                 />
               ))}
             </SortableContext>
