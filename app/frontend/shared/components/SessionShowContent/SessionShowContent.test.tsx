@@ -102,6 +102,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'queued', startedAt: null, launchPhase: 'starting' })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -119,6 +120,7 @@ describe('SessionShowContent', () => {
           launchPhase: 'starting',
           launchError: 'GitHub token expired; reconnect the integration',
         })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
@@ -178,6 +180,7 @@ describe('SessionShowContent', () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'queued', startedAt: null, launchPhase: 'cluster_capacity' })}
+        llmCalls={[]}
         cableStream="signed-stream"
         context={ctx}
       />,
