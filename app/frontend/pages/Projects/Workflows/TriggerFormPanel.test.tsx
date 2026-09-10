@@ -312,6 +312,93 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
   });
 
   // -------------------------------------------------------------------------
+  // Webhook create — success view with the ready-to-run cURL example (issue #624)
+  // -------------------------------------------------------------------------
+  it('stays open on a success view showing the URL, secret, and no-auth cURL after a webhook is created', async () => {
+    installFetch(() =>
+      json({ webhook_url: 'https://example.test/hooks/abc', webhook_secret: '', verification_strategy: 'none' }),
+    );
+    const onSaved = vi.fn();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook', onSaved })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    expect(await screen.findByText('Webhook trigger created')).toBeInTheDocument();
+    expect(screen.getByText('https://example.test/hooks/abc')).toBeInTheDocument();
+    expect(screen.getByText('Request URL')).toBeInTheDocument();
+    expect(screen.queryByText('Secret')).not.toBeInTheDocument();
+    expect(screen.getByText(/Example request \(no auth\)/)).toBeInTheDocument();
+    expect(screen.getByText(/curl -X POST 'https:\/\/example\.test\/hooks\/abc'/)).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('shows the shared-token cURL and the secret when the webhook uses shared_token verification', async () => {
+    installFetch(() =>
+      json({
+        webhook_url: 'https://example.test/hooks/xyz',
+        webhook_secret: 'sek_123',
+        verification_strategy: 'shared_token',
+      }),
+    );
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook' })} />);
+    await pickOption('None', 'Shared token');
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    expect(await screen.findByText('Webhook trigger created')).toBeInTheDocument();
+    expect(screen.getByText('sek_123')).toBeInTheDocument();
+    expect(screen.getByText(/Example request \(shared token\)/)).toBeInTheDocument();
+    expect(screen.getByText(/X-Webhook-Token: sek_123/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy curl' })).toBeInTheDocument();
+  });
+
+  it('shows the HMAC SHA-256 cURL for an hmac_sha256 webhook', async () => {
+    installFetch(() =>
+      json({
+        webhook_url: 'https://example.test/hooks/hm',
+        webhook_secret: 'topsecret',
+        verification_strategy: 'hmac_sha256',
+      }),
+    );
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook' })} />);
+    await pickOption('None', 'HMAC SHA-256');
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    expect(await screen.findByText(/Example request \(HMAC SHA-256\)/)).toBeInTheDocument();
+    expect(screen.getByText(/X-Hub-Signature-256: sha256=\$SIG/)).toBeInTheDocument();
+    expect(screen.getByText(/openssl dgst -sha256 -hmac 'topsecret'/)).toBeInTheDocument();
+  });
+
+  it('refreshes the list (onSaved, not onClose) when the webhook success view is dismissed via the ✕', async () => {
+    installFetch(() => json({ webhook_url: 'https://example.test/hooks/abc', webhook_secret: '' }));
+    const onSaved = vi.fn();
+    const onClose = vi.fn();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook', onSaved, onClose })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    expect(await screen.findByText('Webhook trigger created')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not show the success view for a non-webhook trigger — it closes via onSaved', async () => {
+    installFetch(() => json({ webhook_url: 'https://example.test/should-be-ignored' }));
+    const onSaved = vi.fn();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onSaved })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(screen.queryByText('Webhook trigger created')).not.toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------------
   // Edit mode — kind locked, seeded from the trigger
   // -------------------------------------------------------------------------
   it('locks the kind and patches a column trigger with the kind query param', async () => {
