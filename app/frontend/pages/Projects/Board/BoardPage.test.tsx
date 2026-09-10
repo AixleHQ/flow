@@ -172,7 +172,7 @@ describe('Projects/Board/BoardPage', () => {
       ),
     );
     await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('q%5Bm%5D=or'), expect.anything()),
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('q%5Bg%5D%5B0%5D%5Bm%5D=or'), expect.anything()),
     );
     expect(await screen.findByText('Render dashboard charts')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
@@ -191,7 +191,7 @@ describe('Projects/Board/BoardPage', () => {
 
     await waitFor(() =>
       expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('q%5Bg%5D%5B1%5D%5Bid_eq%5D=42'),
+        expect.stringContaining('q%5Bg%5D%5B0%5D%5Bid_eq%5D=42'),
         expect.anything(),
       ),
     );

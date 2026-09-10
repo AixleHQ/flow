@@ -75,7 +75,7 @@ module Api
 
           get :index, params: {
             project_id: @project.id,
-            q: { g: { "0" => { title_cont: by_id.id.to_s }, "1" => { id_eq: by_id.id } }, m: "or" }
+            q: { g: { "0" => { m: "or", title_cont: by_id.id.to_s, id_eq: by_id.id } } }
           }
 
           assert_response :success
@@ -84,13 +84,31 @@ module Api
           assert_includes ids, by_title.id
         end
 
+        # The OR combinator lives inside the search group, so it must not widen the sibling
+        # assignee/type/priority filters — a search that matches by title but is owned by a
+        # different assignee stays excluded when an assignee filter is applied.
+        test "index search groups OR internally so sibling filters still AND" do
+          mine = create(:board_task, board: @board, board_column: @col1, title: "Fix login crash", assignee: @user)
+          other_user = create(:user, :onboarding_completed, company: @company)
+          @project.add_collaborator(other_user)
+          create(:board_task, board: @board, board_column: @col1, title: "Fix login timeout", assignee: other_user)
+
+          get :index, params: {
+            project_id: @project.id,
+            q: { g: { "0" => { m: "or", title_cont: "login" } }, assignee_id_eq: @user.id }
+          }
+
+          assert_response :success
+          assert_equal [ mine.id ], JSON.parse(response.body).map { |t| t["id"] }
+        end
+
         test "index search by title alone (no id_eq) still narrows to the title match" do
           match = create(:board_task, board: @board, board_column: @col1, title: "Refactor billing")
           create(:board_task, board: @board, board_column: @col1, title: "Something else")
 
           get :index, params: {
             project_id: @project.id,
-            q: { g: { "0" => { title_cont: "billing" } }, m: "or" }
+            q: { g: { "0" => { m: "or", title_cont: "billing" } } }
           }
 
           assert_response :success
