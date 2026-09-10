@@ -783,6 +783,9 @@ function TaskCardUI({
         <Text size="sm" fw={500} lh={1.3} style={{ flex: 1, wordBreak: 'break-word', fontSize: 13 }}>
           {task.title}
         </Text>
+        <Text size="sm" c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap', fontSize: 13 }}>
+          #{task.id}
+        </Text>
       </Group>
 
       {/* Workflow status chip — filled colored badge (AC-11). The chip names only the latest run,
@@ -2357,13 +2360,20 @@ function TaskDetailSidebar({
                 autoFocus
               />
             ) : (
-              <div
-                className={styles.ptTitle}
-                onClick={() => canExecute && setEditingTitle(true)}
-                style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-              >
-                {pendingTitle ?? task.title}
-              </div>
+              // The `#id` is a sibling of the editable title div, never a child of it: putting it
+              // inside would make it part of the text saveTitle reads and persists.
+              <Box style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <div
+                  className={styles.ptTitle}
+                  onClick={() => canExecute && setEditingTitle(true)}
+                  style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                >
+                  {pendingTitle ?? task.title}
+                </div>
+                <Text c="dimmed" style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+                  #{task.id}
+                </Text>
+              </Box>
             )}
 
             {/* Status chips: type, priority, workflow */}

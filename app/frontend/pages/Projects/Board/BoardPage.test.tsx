@@ -163,15 +163,54 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.type(screen.getByPlaceholderText('Search tasks'), 'dashboard');
 
-    // The search reaches the tasks endpoint as a ransack predicate rather than filtering the
-    // pages the board happens to hold.
+    // The search reaches the tasks endpoint as a ransack OR grouping (title matched here) rather
+    // than filtering the pages the board happens to hold.
     await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('q%5Btitle_cont%5D=dashboard'), expect.anything()),
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('q%5Bg%5D%5B0%5D%5Btitle_cont%5D=dashboard'),
+        expect.anything(),
+      ),
+    );
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('q%5Bm%5D=or'), expect.anything()),
     );
     expect(await screen.findByText('Render dashboard charts')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Wire up authentication')).not.toBeInTheDocument());
 
     fetchSpy.mockRestore();
+  });
+
+  it('adds an id_eq predicate when the search term is a numeric task ID', async () => {
+    const match = makeTask({ id: 42, title: 'Render dashboard charts', boardColumnId: 200, position: 0 });
+    const fetchSpy = stubColumnTasks([match]);
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    // A leading `#` (matching the displayed `#id` format) is stripped before the numeric check.
+    await userEvent.type(screen.getByPlaceholderText('Search tasks'), '#42');
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('q%5Bg%5D%5B1%5D%5Bid_eq%5D=42'),
+        expect.anything(),
+      ),
+    );
+    // The raw term still drives the title predicate.
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('q%5Bg%5D%5B0%5D%5Btitle_cont%5D=%2342'),
+        expect.anything(),
+      ),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('renders the task ID after the title on each card', () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    expect(screen.getByText('#1')).toBeInTheDocument();
+    expect(screen.getByText('#2')).toBeInTheDocument();
   });
 
   it('toggling the Archived filter fetches and reveals archived tasks without crashing', async () => {
@@ -408,8 +447,9 @@ describe('Projects/Board/BoardPage', () => {
 
     // The title also renders on the board card, so scope to the drawer dialog.
     const drawer = within(screen.getByRole('dialog'));
-    // The drawer header shows the title plus type and priority badges.
+    // The drawer header shows the title, its ID, plus type and priority badges.
     expect(drawer.getByText('Wire up authentication')).toBeInTheDocument();
+    expect(drawer.getByText('#1')).toBeInTheDocument();
     expect(drawer.getByText('bug')).toBeInTheDocument();
     expect(drawer.getByText('high')).toBeInTheDocument();
     // Details tab is selected by default and shows the section labels.

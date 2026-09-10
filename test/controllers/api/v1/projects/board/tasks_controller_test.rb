@@ -67,6 +67,36 @@ module Api
           assert_equal "1", response.headers["X-Total-Count"]
         end
 
+        test "index search groups title and id under OR so a task ID returns the matching task" do
+          by_id = create(:board_task, board: @board, board_column: @col1, title: "Ship the release notes")
+          # A task whose title contains the same digits as the searched ID must still surface — the
+          # grouping is an OR, not an AND.
+          by_title = create(:board_task, board: @board, board_column: @col1, title: "Bug #{by_id.id} regression")
+
+          get :index, params: {
+            project_id: @project.id,
+            q: { g: { "0" => { title_cont: by_id.id.to_s }, "1" => { id_eq: by_id.id } }, m: "or" }
+          }
+
+          assert_response :success
+          ids = JSON.parse(response.body).map { |t| t["id"] }
+          assert_includes ids, by_id.id
+          assert_includes ids, by_title.id
+        end
+
+        test "index search by title alone (no id_eq) still narrows to the title match" do
+          match = create(:board_task, board: @board, board_column: @col1, title: "Refactor billing")
+          create(:board_task, board: @board, board_column: @col1, title: "Something else")
+
+          get :index, params: {
+            project_id: @project.id,
+            q: { g: { "0" => { title_cont: "billing" } }, m: "or" }
+          }
+
+          assert_response :success
+          assert_equal [ match.id ], JSON.parse(response.body).map { |t| t["id"] }
+        end
+
         test "index tags_match=all requires every tag, while the default still matches any" do
           both = create(:board_task, board: @board, board_column: @col1, tags: %w[api ui])
           one = create(:board_task, board: @board, board_column: @col1, tags: %w[api])
