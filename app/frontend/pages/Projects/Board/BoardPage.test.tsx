@@ -2342,24 +2342,58 @@ describe('Projects/Board/BoardPage', () => {
 
   // --- bulk selection ---
 
-  it('shows selection checkboxes for non-view-only users', () => {
+  // Selection is off until the "Bulk" toolbar button arms it (issue #581): before then a dense
+  // column shows no checkboxes, so hovering a card can never reveal or reflow one.
+  const armBulkMode = () => userEvent.click(screen.getByRole('button', { name: 'Bulk' }));
+
+  it('hides selection checkboxes until bulk mode is armed', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    expect(screen.queryByRole('checkbox', { name: /Select/ })).not.toBeInTheDocument();
+
+    await armBulkMode();
 
     expect(screen.getByRole('checkbox', { name: 'Select Wire up authentication' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select Render dashboard charts' })).toBeInTheDocument();
   });
 
-  it('does not show selection checkboxes for view-only users', () => {
+  it('shows the SelectionBar as soon as bulk mode is armed, before anything is selected', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+
+    await armBulkMode();
+
+    expect(await screen.findByText('0 selected')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+  });
+
+  it('leaves bulk mode and drops the checkboxes when Done is clicked', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await armBulkMode();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
+    expect(await screen.findByText('1 selected')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: /Select/ })).not.toBeInTheDocument());
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
+  });
+
+  it('does not show the Bulk button for view-only users', () => {
     renderAuthedPage(<BoardPage />, {
       props: { ...populatedProps, projectPermissions: { canExecute: false, canManage: false } },
     });
 
+    expect(screen.queryByRole('button', { name: 'Bulk' })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /Select/ })).not.toBeInTheDocument();
   });
 
-  it('shows SelectionBar after selecting a task card', async () => {
+  it('shows the selected count after checking a task card', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
+    await armBulkMode();
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
 
     expect(await screen.findByText('1 selected')).toBeInTheDocument();
@@ -2368,20 +2402,57 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByRole('button', { name: /Move to/i })).toBeInTheDocument();
   });
 
-  it('clears selection when the × button in SelectionBar is clicked', async () => {
+  it('Cancel clears the selection but stays in bulk mode', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
+    await armBulkMode();
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
     expect(await screen.findByText('1 selected')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
 
     await waitFor(() => expect(screen.queryByText('1 selected')).not.toBeInTheDocument());
+    // Bar and checkboxes remain — the user opted out of the selection, not out of the mode.
+    expect(screen.getByText('0 selected')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Select Wire up authentication' })).toBeInTheDocument();
+  });
+
+  it('POSTs to bulk_actions when Archive is confirmed', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      if (String(input).includes('bulk_actions')) {
+        return new Response(JSON.stringify({ succeeded: [1], skipped: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('{}', { status: 200 });
+    });
+
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await armBulkMode();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
+    await screen.findByText('1 selected');
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
+
+    const modal = await screen.findByRole('dialog', { name: /archive tasks/i });
+    await userEvent.click(within(modal).getByRole('button', { name: 'Archive' }));
+
+    await waitFor(() =>
+      expect(fetchSpy).toHaveBeenCalledWith(
+        expect.stringContaining('bulk_actions'),
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    expect(await screen.findByText(/Archived 1 task/)).toBeInTheDocument();
+
+    fetchSpy.mockRestore();
   });
 
   it('opens a confirm modal when Delete is clicked in the SelectionBar', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
+    await armBulkMode();
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
     await screen.findByText('1 selected');
 
@@ -2404,6 +2475,7 @@ describe('Projects/Board/BoardPage', () => {
 
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
+    await armBulkMode();
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
     await screen.findByText('1 selected');
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
@@ -2435,6 +2507,7 @@ describe('Projects/Board/BoardPage', () => {
 
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
+    await armBulkMode();
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
     await userEvent.click(screen.getByRole('checkbox', { name: 'Select Render dashboard charts' }));
     await screen.findByText('2 selected');

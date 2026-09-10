@@ -30,6 +30,8 @@ interface Member {
 }
 
 export interface SelectionBarProps {
+  /** Whether bulk-selection mode is armed. The bar shows while armed even with nothing selected yet. */
+  active: boolean;
   selectedCount: number;
   selectedIds: Set<number>;
   columns: BulkColumn[];
@@ -112,6 +114,7 @@ const dangerBtnStyle = {
 };
 
 export function SelectionBar({
+  active,
   selectedCount,
   columns,
   members,
@@ -122,7 +125,9 @@ export function SelectionBar({
   onBulkTag,
   onClear,
 }: SelectionBarProps) {
-  if (!canExecute || selectedCount === 0) return null;
+  if (!canExecute || (!active && selectedCount === 0)) return null;
+
+  const hasSelection = selectedCount > 0;
 
   const confirmDestructive = (action: 'delete' | 'archive') => {
     const isDelete = action === 'delete';
@@ -239,6 +244,7 @@ export function SelectionBar({
             leftSection={<IconArrowRight size={12} />}
             rightSection={<IconChevronDown size={11} />}
             styles={btnStyle}
+            disabled={!hasSelection}
           >
             Move to
           </Button>
@@ -278,6 +284,7 @@ export function SelectionBar({
             leftSection={<IconFlag size={12} />}
             rightSection={<IconChevronDown size={11} />}
             styles={btnStyle}
+            disabled={!hasSelection}
           >
             Priority
           </Button>
@@ -306,6 +313,7 @@ export function SelectionBar({
               leftSection={<IconUser size={12} />}
               rightSection={<IconChevronDown size={11} />}
               styles={btnStyle}
+              disabled={!hasSelection}
             >
               Assign
             </Button>
@@ -352,7 +360,14 @@ export function SelectionBar({
       )}
 
       {/* Add tag */}
-      <Button size="xs" variant="default" leftSection={<IconTag size={12} />} styles={btnStyle} onClick={openTagPrompt}>
+      <Button
+        size="xs"
+        variant="default"
+        leftSection={<IconTag size={12} />}
+        styles={btnStyle}
+        onClick={openTagPrompt}
+        disabled={!hasSelection}
+      >
         Add tag
       </Button>
 
@@ -363,6 +378,7 @@ export function SelectionBar({
         leftSection={<IconArchive size={12} />}
         styles={btnStyle}
         onClick={() => confirmDestructive('archive')}
+        disabled={!hasSelection}
       >
         Archive
       </Button>
@@ -374,6 +390,7 @@ export function SelectionBar({
         leftSection={<IconTrash size={12} />}
         styles={dangerBtnStyle}
         onClick={() => confirmDestructive('delete')}
+        disabled={!hasSelection}
       >
         Delete
       </Button>
