@@ -207,10 +207,13 @@ class Web::Company::UsersControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "a revoked member has no page" do
-    membership = CompanyMembership.find_by!(user: @colleague, company: @company)
-    membership.aasm(:state).fire!(:revoke)
+    # Deliberately not @colleague: they are this company's only admin and own
+    # the project, so revoking them trips the last-admin and owns-projects
+    # guards — a different subject from what this test is about.
+    leaver = create(:user, :employee, :onboarding_completed, company: @company)
+    CompanyMembership.find_by!(user: leaver, company: @company).aasm(:state).fire!(:revoke)
 
-    get user_path(@colleague)
+    get user_path(leaver)
 
     assert_response :not_found
   end
