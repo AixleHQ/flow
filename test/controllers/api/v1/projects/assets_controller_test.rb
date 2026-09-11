@@ -44,6 +44,71 @@ module Api
           assert version["contentType"].present?
         end
 
+        # An invalid folder used to reach `save!` unrescued and answer 500, so the client got no
+        # way to tell a typo apart from an outage.
+        test "create answers 422 and names the offending field for an invalid folder" do
+          post :create, params: {
+            project_id: @project.id,
+            asset: {
+              name: "proj-doc.md",
+              folder: "docs/sub",
+              file: document_file_cache_data
+            }
+          }
+
+          assert_response :unprocessable_entity
+          assert_match(/folder/i, response.parsed_body["error"])
+          assert { !@project.assets.exists?(name: "proj-doc.md") }
+        end
+
+        test "create trims a padded folder and keeps the spaces inside it" do
+          post :create, params: {
+            project_id: @project.id,
+            asset: { name: "proj-doc.md", folder: "  Q3 reports  ", file: document_file_cache_data }
+          }
+
+          assert_response :created
+          assert_equal "Q3 reports", response.parsed_body["folder"]
+        end
+
+        # The lookup used to key on name alone, so this second upload moved the first asset into
+        # the new folder (and appended a version) instead of creating a sibling.
+        test "create makes a separate asset when the same filename lands in another folder" do
+          post :create, params: {
+            project_id: @project.id,
+            asset: { name: "readme.md", folder: "docs", file: document_file_cache_data }
+          }
+          assert_response :created
+
+          assert_difference -> { @project.assets.count }, 1 do
+            post :create, params: {
+              project_id: @project.id,
+              asset: { name: "readme.md", folder: "reports", file: document_file_cache_data }
+            }
+          end
+
+          assert_response :created
+          assert_equal %w[docs reports], @project.assets.where(name: "readme.md").map(&:folder).sort
+        end
+
+        test "create appends a version to the existing asset when name and folder both match" do
+          post :create, params: {
+            project_id: @project.id,
+            asset: { name: "readme.md", folder: "docs", file: document_file_cache_data }
+          }
+          assert_response :created
+
+          assert_no_difference -> { @project.assets.count } do
+            post :create, params: {
+              project_id: @project.id,
+              asset: { name: "readme.md", folder: "docs", file: document_file_cache_data }
+            }
+          end
+
+          assert_response :created
+          assert_equal 2, @project.assets.find_by(name: "readme.md", folder: "docs").versions.count
+        end
+
         test "destroy soft-deletes asset" do
           asset = create(:asset, :with_project_scope, scope: @project, created_by: @user)
 

@@ -42,6 +42,22 @@ const MAX_FILE_SIZE = 1024 * 1024 * 1024;
 // Api::V1::AssetsController#cache_key.
 const CACHE_PREFIX = 'cache/';
 
+// Mirrors Asset::FOLDER_FORMAT / RESERVED_FOLDERS / FOLDER_MAX_LENGTH. Catching it here keeps the
+// file — already uploaded to cache storage by the time the folder is typed — from being thrown
+// away on a server-side 422. A folder is one flat name: spaces are fine, path separators are not.
+// eslint-disable-next-line no-control-regex -- control characters are exactly what this rejects
+const FOLDER_FORBIDDEN = /[/\\\x00-\x1f\x7f]/;
+const RESERVED_FOLDERS = ['.', '..'];
+const FOLDER_MAX_LENGTH = 100;
+const FOLDER_HINT = 'One folder name — spaces are fine, "/" is not';
+
+function folderError(folder: string): string | null {
+  if (FOLDER_FORBIDDEN.test(folder)) return 'Folder cannot contain slashes or control characters';
+  if (RESERVED_FOLDERS.includes(folder)) return 'That folder name is not usable';
+  if (folder.length > FOLDER_MAX_LENGTH) return `Folder must be ${FOLDER_MAX_LENGTH} characters or fewer`;
+  return null;
+}
+
 interface CachedFileDescriptor {
   id: string;
   storage: string;
@@ -81,6 +97,18 @@ function cachedFileDescriptor(key: unknown, uploadURL: string | undefined, filen
   return { id, storage: 'cache', metadata: { filename } };
 }
 
+// The API answers a rejected asset with `{ error: "<full messages>" }`; surfacing it beats the
+// static "Failed to save" toast, which told the user nothing about which field was refused.
+async function readErrorMessage(res: Response): Promise<string | null> {
+  try {
+    const body: unknown = await res.json();
+    const error = (body as { error?: unknown })?.error;
+    return typeof error === 'string' && error.length > 0 ? error : null;
+  } catch {
+    return null;
+  }
+}
+
 interface AssetsContentProps {
   assets: Asset[];
   assetVersions?: AssetVersion[];
@@ -118,6 +146,7 @@ export function AssetsContent({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; cachedFile: CachedFileDescriptor }>>([]);
   const [uploadFolder, setUploadFolder] = useState('');
+  const [uploadFolderError, setUploadFolderError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -240,8 +269,17 @@ export function AssetsContent({
 
   const handleSaveUpload = useCallback(async () => {
     if (!createEndpoint || uploadedFiles.length === 0) return;
+
+    const folder = uploadFolder.trim();
+    const invalid = folder && folderError(folder);
+    if (invalid) {
+      setUploadFolderError(invalid);
+      return;
+    }
+    setUploadFolderError(null);
     setIsSaving(true);
     let successCount = 0;
+    let failureMessage: string | null = null;
 
     for (const f of uploadedFiles) {
       try {
@@ -249,37 +287,47 @@ export function AssetsContent({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            asset: { name: f.name, folder: uploadFolder || null, file: f.cachedFile },
+            asset: { name: f.name, folder: folder || null, file: f.cachedFile },
           }),
         });
-        if (res.ok) successCount++;
+        if (res.ok) {
+          successCount++;
+        } else {
+          failureMessage ??= await readErrorMessage(res);
+        }
       } catch {
         /* continue with remaining files */
       }
     }
 
     setIsSaving(false);
+
+    if (successCount === 0) {
+      // Every file was refused: keep the modal and the already-cached uploads in place so the
+      // user can fix the folder and retry instead of re-picking the files.
+      notifications.show({ message: failureMessage ?? 'Failed to save uploaded files', color: 'red' });
+      return;
+    }
+
     setUploadOpen(false);
     setUploadedFiles([]);
     setUploadFolder('');
     setUploadProgress(0);
     uppyRef.current?.cancelAll();
 
-    if (successCount > 0) {
-      notifications.show({
-        message: `${successCount} file${successCount > 1 ? 's' : ''} uploaded`,
-        color: 'green',
-      });
-      router.reload();
-    } else {
-      notifications.show({ message: 'Failed to save uploaded files', color: 'red' });
-    }
+    notifications.show({
+      message: `${successCount} file${successCount > 1 ? 's' : ''} uploaded`,
+      color: 'green',
+    });
+    if (failureMessage) notifications.show({ message: failureMessage, color: 'red' });
+    router.reload();
   }, [createEndpoint, uploadedFiles, uploadFolder]);
 
   const handleCloseUpload = useCallback(() => {
     setUploadOpen(false);
     setUploadedFiles([]);
     setUploadFolder('');
+    setUploadFolderError(null);
     setUploadProgress(0);
     uppyRef.current?.cancelAll();
   }, []);
@@ -568,9 +616,13 @@ export function AssetsContent({
               <TextInput
                 label="Folder (optional)"
                 placeholder="Leave empty for root"
-                description="Lowercase letters, numbers, hyphens, underscores"
+                description={FOLDER_HINT}
+                error={uploadFolderError}
                 value={uploadFolder}
-                onChange={(e) => setUploadFolder(e.currentTarget.value)}
+                onChange={(e) => {
+                  setUploadFolder(e.currentTarget.value);
+                  setUploadFolderError(null);
+                }}
               />
               <Group justify="flex-end">
                 <Button

@@ -48,7 +48,7 @@ module InternalTools
       if params[:asset_id].present?
         scope.find_by(id: params[:asset_id])
       else
-        scope.find_by(name: params[:name], folder: params[:folder].presence)
+        scope.find_by(name: params[:name], folder: Asset.normalize_folder(params[:folder]))
       end
     end
   end

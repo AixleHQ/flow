@@ -18,6 +18,7 @@ class AssetExportService
   private
 
   def find_or_create_asset(folder, is_public)
+    folder = Asset.normalize_folder(folder)
     existing = Asset.find_by(
       scope_type: "Project",
       scope_id: @project.id,

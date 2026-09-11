@@ -60,27 +60,56 @@ class AssetTest < ActiveSupport::TestCase
   # ====== Folder ======
 
   test "folder allows valid names" do
-    %w[architecture reports my-docs templates_v2].each do |name|
+    [ "architecture", "reports", "my-docs", "templates_v2", "Q3 reports", "Отчёты", "notes (draft)" ].each do |name|
       asset = build(:asset, folder: name, scope: @company, created_by: @owner)
-      assert { asset.valid? }
+      assert asset.valid?, asset.errors.full_messages.to_sentence
     end
   end
 
-  test "folder rejects slashes" do
-    asset = build(:asset, folder: "level1/level2", scope: @company, created_by: @owner)
-    assert { !asset.valid? }
-    assert { asset.errors[:folder].present? }
+  # A folder is one flat label, not a path: a separator would let it address a directory of its
+  # own choosing under /workspace/assets.
+  test "folder rejects path separators, traversal and control characters" do
+    [ "level1/level2", "level1\\level2", ".", "..", "tabbed\tname", "a" * 101 ].each do |name|
+      asset = build(:asset, folder: name, scope: @company, created_by: @owner)
+      assert { !asset.valid? }
+      assert { asset.errors[:folder].present? }
+    end
   end
 
-  test "folder rejects spaces" do
+  # Asset names have always been free-form, and the folder is half of the same path — every
+  # consumer shell-escapes it, so there is nothing for a space to break.
+  test "folder allows spaces" do
     asset = build(:asset, folder: "my folder", scope: @company, created_by: @owner)
-    assert { !asset.valid? }
-    assert { asset.errors[:folder].present? }
+    assert asset.valid?, asset.errors.full_messages.to_sentence
   end
 
   test "folder allows blank" do
     asset = build(:asset, folder: nil, scope: @company, created_by: @owner)
     assert { asset.valid? }
+  end
+
+  test "folder is trimmed on write and a blank folder is stored as root" do
+    asset = create(:asset, folder: "  docs  ", scope: @company, created_by: @owner)
+    assert_equal "docs", asset.folder
+
+    rooted = create(:asset, folder: "   ", scope: @company, created_by: @owner)
+    assert_nil rooted.folder
+  end
+
+  test ".normalize_folder canonicalizes a lookup key the same way a write is canonicalized" do
+    assert_equal "docs", Asset.normalize_folder(" docs ")
+    assert_equal "my folder", Asset.normalize_folder("  my folder  ")
+    assert_nil Asset.normalize_folder("")
+    assert_nil Asset.normalize_folder(nil)
+  end
+
+  test ".invalid_folder? mirrors the validation for callers that reject before building a record" do
+    assert { !Asset.invalid_folder?("my folder") }
+    assert { !Asset.invalid_folder?(nil) }
+    assert { !Asset.invalid_folder?("  ") }
+    assert { Asset.invalid_folder?("docs/sub") }
+    assert { Asset.invalid_folder?("..") }
+    assert { Asset.invalid_folder?("a" * 101) }
   end
 
   test "same name in different folders is allowed" do
