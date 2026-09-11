@@ -18,10 +18,8 @@ class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::Inte
     sign_in_as(@user)
   end
 
-  test "the page offers only this company's approved organizations and their approved projects" do
+  test "the page offers only this company's approved organizations, and calls Azure for none of them" do
     other_company_installation = create(:azure_devops_installation, :active, :approved)
-    stub_azure_token(tenant_id: @installation.tenant_id)
-    stub_projects_list
 
     get company_project_integrations_path(@project)
 
@@ -32,8 +30,24 @@ class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::Inte
       ids = azure["installations"].map { |i| i["id"] }
       assert_includes ids, @installation.id
       refute_includes ids, other_company_installation.id
+      # No project list yet — listing one is a live Azure call, and it does not
+      # belong on the critical path of a page most visitors are not connecting
+      # anything from.
+      assert_nil azure["installations"].first["projects"]
+    end
+    assert_not_requested :post, "#{AZURE_TOKEN_HOST}/#{@installation.tenant_id}/oauth2/v2.0/token"
+  end
+
+  test "asking about one installation lists only the projects its approval covers" do
+    stub_azure_token(tenant_id: @installation.tenant_id)
+    stub_projects_list
+
+    get company_project_integrations_path(@project, azure_devops_installation_id: @installation.id)
+
+    assert_inertia_props do |props|
+      installation = props["azureDevops"]["installations"].find { |i| i["id"] == @installation.id }
       # Azure returned two projects; only the approved one is offered.
-      assert_equal [ @azure_project_id ], azure["installations"].first["projects"].map { |p| p["id"] }
+      assert_equal [ @azure_project_id ], installation["projects"].map { |p| p["id"] }
     end
   end
 
