@@ -13,6 +13,10 @@ const schema = z
     mode: z.enum(['integration', 'public']),
     integrationId: z.string(),
     fullName: z.string(),
+    // Azure repositories are addressed by GUID: `fullName` is a display value
+    // there, and a same-named repository in another project would otherwise
+    // resolve just as well.
+    externalId: z.string(),
     sourceBranch: z.string(),
     publicUrl: z.string(),
     purpose: z.string().optional(),
@@ -38,6 +42,12 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
+const PROVIDER_LABELS: Record<string, string> = {
+  github: 'GitHub',
+  gitlab: 'GitLab',
+  azure_devops: 'Azure DevOps',
+};
+
 interface Props {
   opened: boolean;
   onClose: () => void;
@@ -54,6 +64,7 @@ interface Integration {
 interface AvailableRepo {
   fullName: string;
   defaultBranch: string;
+  externalId?: string;
 }
 
 interface PageProps {
@@ -75,6 +86,7 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
       mode: 'integration',
       integrationId: '',
       fullName: '',
+      externalId: '',
       sourceBranch: '',
       publicUrl: '',
       purpose: '',
@@ -87,10 +99,16 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
     () =>
       integrations.map((i) => ({
         value: String(i.id),
-        label: `${i.name} (${i.provider === 'github' ? 'GitHub' : 'GitLab'})`,
+        label: `${i.name} (${PROVIDER_LABELS[i.provider] ?? i.provider})`,
       })),
     [integrations],
   );
+
+  const selectedIntegration = useMemo(
+    () => integrations.find((i) => String(i.id) === form.values.integrationId) ?? null,
+    [integrations, form.values.integrationId],
+  );
+  const isAzure = selectedIntegration?.provider === 'azure_devops';
 
   const repoOptions = useMemo(
     () =>
@@ -110,10 +128,12 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
     });
   };
 
-  const loadBranches = (integrationId: string, repoName: string) => {
+  // `external_id` travels alongside `repo` because Azure's branch lookup is by
+  // repository GUID — a name would reach a same-named repository elsewhere.
+  const loadBranches = (integrationId: string, repoName: string, externalId?: string) => {
     setLoadingBranches(true);
     router.reload({
-      data: { integration_id: integrationId, repo: repoName },
+      data: { integration_id: integrationId, repo: repoName, external_id: externalId ?? '' },
       only: ['available_branches'],
       preserveUrl: true,
       onFinish: () => setLoadingBranches(false),
@@ -123,6 +143,7 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
   const handleIntegrationChange = (value: string | null) => {
     form.setFieldValue('integrationId', value ?? '');
     form.setFieldValue('fullName', '');
+    form.setFieldValue('externalId', '');
     form.setFieldValue('sourceBranch', '');
     if (value) {
       loadRepos(value);
@@ -134,10 +155,11 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
     form.setFieldValue('sourceBranch', '');
     if (value && form.values.integrationId) {
       const repo = (availableRepos ?? []).find((r) => r.fullName === value);
+      form.setFieldValue('externalId', repo?.externalId ?? '');
       if (repo?.defaultBranch) {
         form.setFieldValue('sourceBranch', repo.defaultBranch);
       }
-      loadBranches(form.values.integrationId, value);
+      loadBranches(form.values.integrationId, value, repo?.externalId);
     }
   };
 
@@ -175,6 +197,10 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
         : {
             integrationId: Number(values.integrationId),
             fullName: values.fullName,
+            // Sent for every provider and used by Azure only: the server looks
+            // the repository up by this id and takes names, clone url and
+            // privacy from the provider's answer rather than from this form.
+            externalId: values.externalId,
             sourceBranch: values.sourceBranch,
             purpose: values.purpose,
           };
@@ -266,6 +292,12 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
                 placeholder={loadingRepos ? 'Loading repositories...' : 'Select repository...'}
                 disabled={!form.values.integrationId || loadingRepos}
               />
+              {isAzure && (
+                <Text size="xs" c="dimmed">
+                  Agents clone, fetch and push with a short-lived credential issued per operation — nothing is stored in
+                  the checkout. Pull requests and Boards work items are reached with the Azure DevOps tools.
+                </Text>
+              )}
               <Select
                 label="Source branch"
                 data={availableBranches ?? []}
