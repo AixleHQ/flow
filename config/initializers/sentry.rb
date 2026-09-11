@@ -20,7 +20,17 @@ Sentry.init do |config|
   # ran the command; it says nothing about the app, and it carries no useful stacktrace.
   config.excluded_exceptions += %w[SystemExit]
   config.send_default_pii = true
-  config.enable_logs = !running_console
+  # sentry-ruby 7 removed `enable_logs` — logs are unconditionally on, and the gate that
+  # used to sit in front of them is gone. Nothing is lost here: the only thing that turns
+  # this app's log lines into Sentry log events is the `:logger` patch below, which is
+  # still opt-in, so a console session with no patches still emits no logs.
+  #
+  # The one flag that did change meaning is Rails structured logging. Under 6.7 it was
+  # *derived* from enable_logs (`rails.structured_logging.enabled = enable_logs if nil`),
+  # so it followed the same console rule; under 7.0 it defaults to true regardless. Set it
+  # explicitly to the value 6.7 would have derived, so a `rails console` still ships
+  # nothing and the web/worker processes keep the subscribers they already had.
+  config.rails.structured_logging.enabled = !running_console
   config.enabled_patches = running_console ? [] : [ :logger ]
   config.traces_sample_rate = 1.0
   config.traces_sampler = lambda do |context|
