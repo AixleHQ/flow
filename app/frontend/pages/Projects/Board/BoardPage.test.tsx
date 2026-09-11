@@ -1195,7 +1195,7 @@ describe('Projects/Board/BoardPage', () => {
     await userEvent.hover(chip);
 
     // A folded column still reports what happened to each ticket, without unfolding it.
-    expect(await screen.findByText('Wire up authentication · Status: failed')).toBeInTheDocument();
+    expect(await screen.findByText('#1 · Wire up authentication · Status: failed')).toBeInTheDocument();
   });
 
   it('reports elapsed time instead of a bare state for a running ticket in a collapsed column', async () => {
@@ -1210,7 +1210,7 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.hover(chip);
 
-    expect(await screen.findByText(/^Wire up authentication · Running — /)).toBeInTheDocument();
+    expect(await screen.findByText(/^#1 · Wire up authentication · Running — /)).toBeInTheDocument();
   });
 
   it('reports a pending gate as "Waiting" in a collapsed column chip tooltip', async () => {
@@ -1226,7 +1226,7 @@ describe('Projects/Board/BoardPage', () => {
 
     await userEvent.hover(chip);
 
-    expect(await screen.findByText(/Wire up authentication · Status: paused · Waiting — /)).toBeInTheDocument();
+    expect(await screen.findByText(/^#1 · Wire up authentication · Status: paused · Waiting — /)).toBeInTheDocument();
   });
 
   it('colors a collapsed column chip by the ticket’s latest run state', async () => {
@@ -1404,7 +1404,7 @@ describe('Projects/Board/BoardPage', () => {
       makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
     );
     await userEvent.hover(card);
-    const reference = tooltipBackground(await screen.findByText(/^Wire up authentication/));
+    const reference = tooltipBackground(await screen.findByText(/^#1 · Wire up authentication/));
     expect(reference).not.toBe('');
 
     cleanup();
