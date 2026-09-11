@@ -149,6 +149,56 @@ github:
 gitlab:
   endpoint: <%= ENV['GITLAB_ENDPOINT'] || 'https://gitlab.com/api/v4' %>
 
+# Azure DevOps (docs/design/azure-devops-integration.md). One operator-owned
+# multi-tenant Entra app registration per deployment: its client id is public,
+# its credential is server-held and never reaches a customer browser, an
+# integration row, a session container, a tool argument or a Temporal payload.
+#
+# Customers do NOT register their own app. Their Entra administrator provisions
+# a tenant-local service principal for THIS client id, and an Azure DevOps
+# administrator adds that principal to the organization — see §5.2 of the design.
+azure_devops:
+  # Hard off switch. Hides the connect controls and refuses every Azure tool,
+  # discovery call and credential issuance while false, without removing data.
+  enabled: <%= ENV['AZURE_DEVOPS_ENABLED'] == 'true' %>
+  # Permits the fallback identity mode. PAT mode acts as the token's owner and
+  # carries that person's full upstream permissions, so it is opt-in per
+  # deployment rather than an automatic fallback for a failed app setup.
+  pat_mode_enabled: <%= ENV['AZURE_DEVOPS_PAT_MODE_ENABLED'] == 'true' %>
+  # The Azure DevOps OAuth resource. This looks like a legacy ADAL resource and
+  # is not: it is exactly what Microsoft's service-principal documentation shows
+  # for the client-credentials flow. `499b84ac-1321-427f-aa17-267ca6975798/.default`
+  # is the equivalent spelling. Do not "fix" it into a third form.
+  resource: <%= ENV['AZURE_DEVOPS_RESOURCE'] || 'https://app.vssps.visualstudio.com/.default' %>
+  # Token endpoint host. Sovereign clouds use a different one; the tenant GUID is
+  # always appended by AppTokenService and is never caller-supplied.
+  login_host: <%= ENV['AZURE_DEVOPS_LOGIN_HOST'] || 'https://login.microsoftonline.com' %>
+  api_host: <%= ENV['AZURE_DEVOPS_API_HOST'] || 'https://dev.azure.com' %>
+  # Where the in-container git credential helper asks for a short-lived token.
+  # Reached over the docker network like cloud.credentials_url — never a public
+  # host, since the request carries a per-session vending key.
+  git_credentials_url: <%= ENV['AZURE_DEVOPS_GIT_CREDENTIALS_URL'] || 'http://web:4002/azure/git/credentials' %>
+  # Seconds before the recorded expiry at which a cached token is treated as
+  # spent. Entra tokens for this resource live about an hour, so renewal is a
+  # hot path on any long session, not a rare event.
+  token_refresh_skew: <%= (ENV['AZURE_DEVOPS_TOKEN_REFRESH_SKEW'] || 300).to_i %>
+  open_timeout: <%= (ENV['AZURE_DEVOPS_OPEN_TIMEOUT'] || 5).to_i %>
+  read_timeout: <%= (ENV['AZURE_DEVOPS_READ_TIMEOUT'] || 30).to_i %>
+  # Named app configurations. An installation stores the KEY, never a secret and
+  # never a path — a project administrator cannot point a binding at arbitrary
+  # credential material by submitting a string.
+  apps:
+    default:
+      client_id: "<%= ENV['AZURE_DEVOPS_CLIENT_ID'] %>"
+      # Exactly one of these. The certificate is the production credential; the
+      # secret is a setup/pilot alternative. Both stay on the server.
+      client_secret: "<%= ENV['AZURE_DEVOPS_CLIENT_SECRET'] %>"
+      private_key: "<%= ENV['AZURE_DEVOPS_PRIVATE_KEY'] %>"
+      certificate_thumbprint: "<%= ENV['AZURE_DEVOPS_CERT_THUMBPRINT'] %>"
+      # Bumped by the operator on every rotation. Cached tokens minted under an
+      # older generation stop being served the moment this changes.
+      credential_generation: "<%= ENV['AZURE_DEVOPS_CREDENTIAL_GENERATION'] || 'v1' %>"
+
 # CI gates (board task preconditions resolved by a CI webhook). These bound how
 # long a gate may wait on a webhook that may never arrive — see GateReconciler.
 gates:

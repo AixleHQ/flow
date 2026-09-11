@@ -112,6 +112,50 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
     t.index ["user_id", "user_type"], name: "user_index"
   end
 
+  create_table "azure_devops_installations", force: :cascade do |t|
+    t.jsonb "allowed_project_ids", default: [], null: false
+    t.string "app_config_key", default: "default", null: false
+    t.datetime "approved_at"
+    t.bigint "approved_by_id"
+    t.string "client_id", null: false
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.text "encrypted_access_token"
+    t.string "error_code"
+    t.datetime "last_verified_at"
+    t.string "organization_id"
+    t.string "organization_slug", null: false
+    t.string "service_principal_object_id"
+    t.string "status", default: "inactive", null: false
+    t.string "tenant_id", null: false
+    t.string "token_credential_generation"
+    t.datetime "token_expires_at"
+    t.string "token_resource"
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "tenant_id", "organization_slug"], name: "idx_ado_installations_identity", unique: true
+    t.index ["company_id"], name: "index_azure_devops_installations_on_company_id"
+    t.index ["token_expires_at"], name: "idx_ado_installations_token_expiry"
+  end
+
+  create_table "azure_devops_operations", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "error_code"
+    t.bigint "integration_id", null: false
+    t.string "operation", null: false
+    t.string "operation_key", null: false
+    t.string "request_digest", null: false
+    t.jsonb "result", default: {}, null: false
+    t.string "state", default: "pending", null: false
+    t.string "target_id"
+    t.string "target_kind"
+    t.bigint "terminal_session_id"
+    t.datetime "updated_at", null: false
+    t.bigint "user_id"
+    t.index ["created_at"], name: "idx_ado_operations_created_at"
+    t.index ["integration_id", "operation_key"], name: "idx_ado_operations_key", unique: true
+    t.index ["integration_id"], name: "index_azure_devops_operations_on_integration_id"
+  end
+
   create_table "board_activities", force: :cascade do |t|
     t.bigint "actor_id", null: false
     t.string "actor_type", null: false
@@ -385,6 +429,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
   end
 
   create_table "integrations", force: :cascade do |t|
+    t.bigint "azure_devops_installation_id"
     t.bigint "company_id", null: false
     t.bigint "connected_by_id", null: false
     t.datetime "created_at", null: false
@@ -395,6 +440,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
     t.jsonb "settings", default: {}
     t.string "status", default: "inactive", null: false
     t.datetime "updated_at", null: false
+    t.index ["azure_devops_installation_id"], name: "index_integrations_on_azure_devops_installation_id"
     t.index ["company_id", "provider"], name: "index_integrations_on_company_id_and_provider"
     t.index ["company_id"], name: "index_integrations_on_company_id"
     t.index ["project_id", "provider"], name: "index_integrations_on_project_id_and_provider", where: "(project_id IS NOT NULL)"
@@ -529,6 +575,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
     t.string "clone_url", null: false
     t.datetime "created_at", null: false
     t.text "description"
+    t.string "external_id"
+    t.string "external_organization_id"
+    t.string "external_project_id"
     t.string "full_name", null: false
     t.bigint "integration_id"
     t.boolean "is_private", default: false
@@ -540,6 +589,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
     t.datetime "updated_at", null: false
     t.string "webhook_secret"
     t.index ["integration_id"], name: "index_repositories_on_integration_id"
+    t.index ["scope_type", "scope_id", "external_organization_id", "external_project_id", "external_id"], name: "idx_repositories_external_identity", unique: true, where: "(external_id IS NOT NULL)"
     t.index ["scope_type", "scope_id", "full_name"], name: "idx_repositories_scope_full_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_repositories_on_scope_type_and_scope_id"
     t.index ["webhook_secret"], name: "index_repositories_on_webhook_secret", unique: true
@@ -1211,6 +1261,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
   add_foreign_key "asset_versions", "users", column: "uploaded_by_id"
   add_foreign_key "assets", "terminal_sessions", on_delete: :nullify
   add_foreign_key "assets", "users", column: "created_by_id"
+  add_foreign_key "azure_devops_installations", "companies"
+  add_foreign_key "azure_devops_installations", "users", column: "approved_by_id"
+  add_foreign_key "azure_devops_operations", "integrations"
   add_foreign_key "board_activities", "board_tasks"
   add_foreign_key "board_activities", "boards"
   add_foreign_key "board_activities", "users", column: "actor_id"
@@ -1237,6 +1290,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id"
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
+  add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects"
   add_foreign_key "integrations", "users", column: "connected_by_id"

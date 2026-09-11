@@ -11,7 +11,7 @@ module PersonalTools
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
       param :provider, type: :string, description: "Integration provider to hint at.",
-                       enum: %w[github gitlab linear coder slack]
+                       enum: %w[github gitlab linear coder slack azure_devops]
     end
 
     def execute

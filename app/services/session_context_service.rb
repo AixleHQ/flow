@@ -481,17 +481,33 @@ class SessionContextService
       adapter = adapter_for(session)
       uid = adapter.container_uid
 
+      # Resolve every checkout path ONCE, for the set, and persist it. Two
+      # repositories named `api` — including two on different hosts — used to
+      # resolve to the same directory and silently overwrite each other, and a
+      # path recomputed later from a renamed remote no longer pointed at the
+      # checkout. Everything downstream reads this map instead of recomputing.
+      path_map = RepositoryWorkspacePath.resolve(repos)
+      RepositoryWorkspacePath.persist!(session, path_map)
+
       repos.group_by(&:integration_id).each do |integration_id, group_repos|
         # Public repositories carry no integration: they are cloned anonymously,
         # so there is no token to mint and nothing to share across the group.
         if integration_id.nil?
-          group_repos.each { |repo| clone_repository(container_id, repo, nil, nil, uid, session) }
+          group_repos.each { |repo| clone_repository(container_id, repo, nil, nil, uid, session, path_map) }
           next
         end
 
         integration = group_repos.first.integration
         unless integration&.active?
           group_repos.each { |r| record_failed_repo(session, r, "Integration not active") }
+          next
+        end
+
+        # Azure vends a short-lived credential per repository through the same
+        # endpoint the in-container helper uses, so there is no group token to
+        # mint and no per-repo fallback to fall back to.
+        if integration.azure_devops?
+          clone_azure_repositories(container_id, group_repos, uid, session, path_map)
           next
         end
 
@@ -503,10 +519,36 @@ class SessionContextService
         end
 
         if token
-          group_repos.each { |repo| clone_repository(container_id, repo, integration, token, uid, session) }
+          group_repos.each { |repo| clone_repository(container_id, repo, integration, token, uid, session, path_map) }
         else
-          clone_with_per_repo_tokens(container_id, group_repos, integration, uid, session)
+          clone_with_per_repo_tokens(container_id, group_repos, integration, uid, session, path_map)
         end
+      end
+    end
+
+    # Each Azure clone resolves its own credential through
+    # AzureDevops::GitCredentialService — the same authorization chain the
+    # in-container helper goes through — and configures the helper in the fresh
+    # checkout so the agent's own fetch and push keep working after the hour-long
+    # Entra token behind this clone has expired.
+    def clone_azure_repositories(container_id, group_repos, uid, session, path_map)
+      setup = AzureDevops::SessionGitSetup.new(runtime: runtime, container_id: container_id, session: session)
+
+      group_repos.each do |repo|
+        target_path = path_map[repo.id]
+        result = setup.clone(repo, target_path, uid)
+        if result[2].to_i.zero?
+          repo.update_column(:last_fetched_at, Time.current)
+          Rails.logger.info("[SessionContext] Cloned Azure repository: #{repo.full_name} → #{target_path}")
+        else
+          record_failed_repo(session, repo, "git clone exited with #{result[2]}: #{Array(result[1]).join.truncate(300)}")
+        end
+      rescue AzureDevops::Error => e
+        # One repository the connection cannot reach must not abort the others.
+        record_failed_repo(session, repo, "Azure credential unavailable (#{e.code})")
+      rescue StandardError => e
+        Rails.logger.error("[SessionContext] Azure clone failed for #{repo.full_name}: #{e.message}")
+        record_failed_repo(session, repo, e.message)
       end
     end
 
@@ -514,7 +556,7 @@ class SessionContextService
     # access to it, say) fails the WHOLE group's token — GitHub rejects the
     # `repositories:` list wholesale with a 422. Falling back to a token per
     # repository keeps the failure with the repository that caused it.
-    def clone_with_per_repo_tokens(container_id, group_repos, integration, uid, session)
+    def clone_with_per_repo_tokens(container_id, group_repos, integration, uid, session, path_map)
       group_repos.each do |repo|
         token = begin
           generate_clone_token(integration, [ repo ])
@@ -524,7 +566,7 @@ class SessionContextService
           next
         end
 
-        clone_repository(container_id, repo, integration, token, uid, session)
+        clone_repository(container_id, repo, integration, token, uid, session, path_map)
       end
     end
 
@@ -540,8 +582,8 @@ class SessionContextService
       end
     end
 
-    def clone_repository(container_id, repo, integration, token, uid, session)
-      target_path = "/workspace/repo/#{repo.repo_name}"
+    def clone_repository(container_id, repo, integration, token, uid, session, path_map = nil)
+      target_path = path_map&.dig(repo.id) || RepositoryWorkspacePath.for_repository(session, repo)
       2.times do |index|
         result = exec_clone_command(container_id, repo, integration, token, uid, target_path)
         exit_code = result[2]
