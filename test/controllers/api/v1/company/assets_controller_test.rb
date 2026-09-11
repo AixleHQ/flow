@@ -28,7 +28,7 @@ module Api
 
         test "create answers 422 and names the offending field for an invalid folder" do
           post :create, params: {
-            asset: { name: "doc.md", folder: "docs/sub", file: document_file_cache_data }
+            asset: { name: "doc.md", folder: "my folder", file: document_file_cache_data }
           }
 
           assert_response :unprocessable_entity

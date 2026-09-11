@@ -420,6 +420,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
     t.index ["status"], name: "index_connectors_on_status"
   end
 
+  create_table "folders", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", null: false
+    t.string "path", null: false
+    t.bigint "scope_id", null: false
+    t.string "scope_type", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_folders_on_created_by_id"
+    t.index ["scope_type", "scope_id", "path"], name: "index_folders_on_scope_and_path", unique: true
+    t.index ["scope_type", "scope_id"], name: "index_folders_on_scope_type_and_scope_id"
+  end
+
   create_table "gates", force: :cascade do |t|
     t.bigint "board_task_id", null: false
     t.datetime "created_at", null: false
@@ -1323,6 +1335,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
   add_foreign_key "company_memberships", "companies"
   add_foreign_key "company_memberships", "users"
   add_foreign_key "company_memberships", "users", column: "invited_by_id", on_delete: :nullify
+  add_foreign_key "folders", "users", column: "created_by_id"
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
   add_foreign_key "integration_data", "integrations", on_delete: :cascade

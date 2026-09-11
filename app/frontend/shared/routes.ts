@@ -187,6 +187,11 @@ export function downloadApiV1CompanyAssetPath(id: ScalarType, options?: object):
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "assets" + "/" + id + "/" + "download" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /api/v1/company/assets/bulk_actions(.:format) */
+export function bulkActionsApiV1CompanyAssetsPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "assets" + "/" + "bulk_actions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /api/v1/company/assets(.:format) */
 export function apiV1CompanyAssetsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "assets" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -197,9 +202,24 @@ export function apiV1CompanyAssetPath(id: ScalarType, options?: object): string 
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "assets" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /api/v1/company/folders(.:format) */
+export function apiV1CompanyFoldersPath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "folders" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /api/v1/company/folders/relocate(.:format) */
+export function apiV1CompanyFoldersRelocatePath(options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "folders" + "/" + "relocate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /api/v1/projects/:project_id/assets/:id/download(.:format) */
 export function downloadApiV1ProjectAssetPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "assets" + "/" + id + "/" + "download" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /api/v1/projects/:project_id/assets/bulk_actions(.:format) */
+export function bulkActionsApiV1ProjectAssetsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "assets" + "/" + "bulk_actions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /api/v1/projects/:project_id/assets(.:format) */
@@ -210,6 +230,16 @@ export function apiV1ProjectAssetsPath(project_id: ScalarType, options?: object)
 /** /api/v1/projects/:project_id/assets/:id(.:format) */
 export function apiV1ProjectAssetPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "assets" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /api/v1/projects/:project_id/folders(.:format) */
+export function apiV1ProjectFoldersPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "folders" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/projects/:project_id/folders/relocate(.:format) */
+export function apiV1ProjectFoldersRelocatePath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "folders" + "/" + "relocate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /api/v1/projects/:project_id/workflows/:workflow_id/steps/reorder(.:format) */
