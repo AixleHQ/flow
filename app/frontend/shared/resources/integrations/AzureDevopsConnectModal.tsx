@@ -2,7 +2,7 @@ import { router } from '@inertiajs/react';
 import { Alert, Button, Checkbox, Group, Modal, PasswordInput, Select, Stack, Text, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle } from '@tabler/icons-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export interface AzureDevopsProject {
   id: string;
@@ -16,7 +16,10 @@ export interface AzureDevopsInstallation {
   tenantId: string;
   status: string;
   lastVerifiedAt?: string | null;
-  projects: AzureDevopsProject[];
+  // Absent until this installation is the one asked about: the server lists an
+  // organization's projects only on request, so the integrations page does not
+  // make a live Azure call for every visitor.
+  projects?: AzureDevopsProject[];
 }
 
 export interface AzureDevopsProps {
@@ -59,12 +62,28 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
   const [pat, setPat] = useState('');
   const [capabilities, setCapabilities] = useState<string[]>(DEFAULT_CAPABILITIES);
   const [loading, setLoading] = useState(false);
+  const [loadingProjects, setLoadingProjects] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectedInstallation = useMemo(
     () => installations.find((i) => i.id.toString() === installationId) ?? null,
     [installations, installationId],
   );
+  const projects = selectedInstallation?.projects;
+
+  // Ask the server for this organization's approved projects the first time it
+  // is selected, the same partial-reload shape the repository picker uses.
+  useEffect(() => {
+    if (!opened || !installationId || projects !== undefined) return;
+
+    setLoadingProjects(true);
+    router.reload({
+      data: { azure_devops_installation_id: installationId },
+      only: ['azure_devops'],
+      preserveUrl: true,
+      onFinish: () => setLoadingProjects(false),
+    });
+  }, [opened, installationId, projects]);
 
   const reset = useCallback(() => {
     setAuthMode('service_principal');
@@ -161,11 +180,17 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
             <Select
               label="Azure project"
               description="Only projects inside this organization's approved scope are listed. The selection cannot be changed later — connect again to work against a different project."
-              placeholder={selectedInstallation ? 'Select a project' : 'Select an organization first'}
-              data={(selectedInstallation?.projects ?? []).map((p) => ({ value: p.id, label: p.name }))}
+              placeholder={
+                loadingProjects
+                  ? 'Loading projects...'
+                  : selectedInstallation
+                    ? 'Select a project'
+                    : 'Select an organization first'
+              }
+              data={(projects ?? []).map((p) => ({ value: p.id, label: p.name }))}
               value={projectId}
               onChange={setProjectId}
-              disabled={!selectedInstallation}
+              disabled={!selectedInstallation || loadingProjects}
               allowDeselect={false}
               searchable
             />

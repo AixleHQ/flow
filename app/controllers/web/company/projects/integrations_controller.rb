@@ -149,13 +149,21 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   private
 
   # What the page needs to offer Azure DevOps at all: whether the deployment
-  # enables it, which approved organization installations this company holds,
-  # and which Azure projects each one may expose. An arbitrary organization URL
-  # is never enough — the binding has to exist first.
+  # enables it, and which approved organization installations this company
+  # holds. An arbitrary organization URL is never enough — the binding has to
+  # exist first.
+  #
+  # The project list for one installation is fetched only when the connect modal
+  # asks for it (`?azure_devops_installation_id=`), the same partial-reload shape
+  # the repository picker uses. Listing projects for every installation on every
+  # page load would put a live Azure call — and a token acquisition — on the
+  # critical path of a page most visitors are not connecting anything from.
   def azure_devops_props
     return { enabled: false } unless AzureDevops::AppConfig.enabled?
 
     installations = AzureDevopsInstallation.for_company(current_company).active.order(:organization_slug)
+    selected_id = params[:azure_devops_installation_id].presence
+
     {
       enabled: true,
       pat_mode_enabled: AzureDevops::AppConfig.pat_mode_enabled?,
@@ -166,11 +174,11 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
           tenant_id: installation.tenant_id,
           status: installation.status.to_s,
           last_verified_at: installation.last_verified_at,
-          # Approved scope only. Azure's own answer is intersected with this in
-          # the service; showing everything Azure returns would advertise
-          # projects nobody signed off on.
-          projects: azure_projects_for(installation)
-        }
+          # Approved scope only. Azure's own answer is intersected with the
+          # approved list in the service; showing everything Azure returns would
+          # advertise projects nobody signed off on.
+          projects: selected_id.to_s == installation.id.to_s ? azure_projects_for(installation) : nil
+        }.compact
       end
     }
   end
