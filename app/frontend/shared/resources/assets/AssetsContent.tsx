@@ -38,6 +38,9 @@ export type { Asset, AssetVersion } from './types';
 
 const PRESIGN_URL = '/api/v1/assets/presign';
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+// Shrine's :cache storage prefix, which is what /presign signs under. Server-side twin:
+// Api::V1::AssetsController#cache_key.
+const CACHE_PREFIX = 'cache/';
 
 interface CachedFileDescriptor {
   id: string;
@@ -45,17 +48,21 @@ interface CachedFileDescriptor {
   metadata?: { filename: string };
 }
 
+// The cache id arrives verbatim rather than being parsed back out of a URL: /presign answers with
+// the object key it signed for, signRequest passes that key on to @uppy/aws-s3 (6.1+ honours a
+// `key` next to `url`), and Uppy carries it through the upload into the 'complete' payload. The
+// URL it replaces had to be re-decoded to read — percent-escapes plus `+` for space — and only
+// held the id at all because the key happened to sit in the path.
+//
 // The filename is the only metadata we send: Shrine's determine_mime_type analyzer needs it to
 // derive a content type for formats without magic bytes (.md, .txt, .json, .csv). Size and MIME
 // type are deliberately omitted — restore_cached_data re-derives both from the stored bytes, and
 // file_size must stay client-untrusted (OutputValidator#validate_size depends on it).
-function extractCachedFileData(uploadURL: string, filename: string): CachedFileDescriptor {
-  const url = new URL(uploadURL, window.location.origin);
-  const pathname = decodeURIComponent(url.pathname.replace(/\+/g, '%20'));
-  const cachePrefix = '/cache/';
-  const idx = pathname.indexOf(cachePrefix);
-  if (idx === -1) throw new Error('Cannot extract cache data from upload URL');
-  return { id: pathname.substring(idx + cachePrefix.length), storage: 'cache', metadata: { filename } };
+function cachedFileDescriptor(key: unknown, filename: string): CachedFileDescriptor {
+  if (typeof key !== 'string' || !key.startsWith(CACHE_PREFIX)) {
+    throw new Error('Upload finished without a cache key');
+  }
+  return { id: key.slice(CACHE_PREFIX.length), storage: 'cache', metadata: { filename } };
 }
 
 interface AssetsContentProps {
@@ -164,7 +171,7 @@ export function AssetsContent({
       // The S3 object key is chosen by the server, not here — /presign mints it and signs a
       // PUT for it, so a client cannot aim an upload at someone else's pending cache entry.
       // signRequest is handed nothing but `{ method, key }`, so the key generated here exists
-      // only to carry the Uppy file id across to it.
+      // only to carry the Uppy file id across to it; the server's key replaces it below.
       generateObjectKey: (file) => file.id,
       signRequest: async ({ key }) => {
         // getFile is typed as always returning a file, but a file removed mid-upload resolves
@@ -173,7 +180,9 @@ export function AssetsContent({
         const qs = new URLSearchParams({ filename: file?.name ?? 'file' });
         const res = await apiFetch(`${PRESIGN_URL}?${qs}`);
         const data = await res.json();
-        return { url: data.url as string };
+        // Returning `key` tells the plugin which object the URL was actually signed for, so it
+        // reports the server's key — not the file id above — once the upload succeeds.
+        return { url: data.url as string, key: data.key as string };
       },
     });
 
@@ -185,7 +194,7 @@ export function AssetsContent({
         const name = f.name ?? 'file';
         return {
           name,
-          cachedFile: extractCachedFileData(f.uploadURL ?? '', name),
+          cachedFile: cachedFileDescriptor(f.response?.body?.key, name),
         };
       });
       setUploadedFiles((prev) => [...prev, ...files]);

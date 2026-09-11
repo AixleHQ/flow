@@ -8,8 +8,9 @@ require "tmpdir"
 # In production #presign hands back a presigned S3 PUT and the browser never talks to Rails
 # again. Locally the same presign points at #upload, which stands in for S3 — so the two
 # actions are one round trip and are exercised as one: presign, PUT the bytes at the URL it
-# returned, then read the file back out of the cache storage under the id the frontend will
-# parse out of that URL.
+# returned, then read the file back out of the cache storage under the key presign named. That
+# key is what the frontend sends back as the cached file's id (Uppy reports it verbatim once the
+# upload succeeds), so it has to address the object the PUT actually wrote.
 #
 # (This replaces the grandfathered ActionController::TestCase for these actions. The upload
 # path only behaves correctly with the full middleware stack in place — Middleware::RawUploadBody
@@ -29,6 +30,17 @@ class Api::V1::AssetsUploadTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal "PUT", response.parsed_body["method"]
     assert_match %r{/cache/\h{60}\.pdf\z}, response.parsed_body["url"]
+  end
+
+  test "presign names the key it signed for, prefix included, matching the url" do
+    get presign_api_v1_assets_path, params: { filename: "design-spec.pdf", type: "application/pdf" }
+
+    key = response.parsed_body["key"]
+    # @uppy/aws-s3 takes this as the object key for the rest of the upload and reports it to
+    # `upload-success`, so it is the whole key and not the bare id — and it has to name the same
+    # object the presigned URL writes to.
+    assert_match %r{\Acache/\h{60}\.pdf\z}, key
+    assert response.parsed_body["url"].end_with?("/#{key}"), "url must address the key it reports"
   end
 
   test "presign mints a different key per call" do
@@ -51,18 +63,18 @@ class Api::V1::AssetsUploadTest < ActionDispatch::IntegrationTest
     assert_match %r{/cache/\h{60}\z}, response.parsed_body["url"]
   end
 
-  test "uploading to the presigned url caches the bytes under the id in its path" do
+  test "uploading to the presigned url caches the bytes under the key presign reported" do
     get presign_api_v1_assets_path, params: { filename: "diagram.png", type: "image/png" }
     url = response.parsed_body["url"]
+    key = response.parsed_body["key"]
     bytes = "\x89PNG\r\n\x1a\n not really a png".b
 
     put url, params: bytes, headers: { "CONTENT_TYPE" => "image/png" }
 
     assert_response :no_content
-    # The frontend derives the cached file's id by splitting the upload URL on "/cache/";
-    # this asserts the id it will send back actually addresses the stored object.
-    id = url.split("/cache/").last
-    assert_equal bytes, Shrine.storages[:cache].open(id).read
+    # The frontend strips the "cache/" prefix off this key and sends the rest as the cached
+    # file's id; this asserts that id actually addresses the object the PUT stored.
+    assert_equal bytes, Shrine.storages[:cache].open(key.delete_prefix("cache/")).read
   end
 
   test "stores a json asset whose body is not valid json" do

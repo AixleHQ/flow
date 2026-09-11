@@ -39,9 +39,14 @@ function makeAsset(over: Partial<Asset> = {}): Asset {
 }
 
 // Uppy is stubbed inert (see test/setup.ts), so a finished upload is the 'complete' event the
-// component subscribed to, carrying the cache URL the presigned S3 PUT would have produced.
-function completeUpload(files: Array<{ name?: string; uploadURL: string }>) {
-  act(() => emitUppy('complete', { successful: files }));
+// component subscribed to. Each file carries the response @uppy/aws-s3 builds from the key
+// /presign signed for — `{ body: { location, key } }` — which is where the cache id comes from.
+function completeUpload(files: Array<{ name?: string; key: string }>) {
+  act(() =>
+    emitUppy('complete', {
+      successful: files.map(({ name, key }) => ({ name, response: { body: { key } } })),
+    }),
+  );
 }
 
 function lastPostedAsset(): { name: string; folder: string | null; file: Record<string, unknown> } {
@@ -561,7 +566,7 @@ describe('AssetsContent', () => {
     renderPage(<AssetsContent {...baseProps} assets={[]} />);
     await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
 
-    completeUpload([{ name: 'release-notes.md', uploadURL: 'https://s3.example/cache/9f8e7d-release-notes.md' }]);
+    completeUpload([{ name: 'release-notes.md', key: 'cache/9f8e7d-release-notes.md' }]);
     await userEvent.click(await screen.findByRole('button', { name: /save 1 file/i }));
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -584,10 +589,7 @@ describe('AssetsContent', () => {
     renderPage(<AssetsContent {...baseProps} assets={[]} />);
     await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
 
-    completeUpload([
-      { name: 'rows.csv', uploadURL: 'https://s3.example/cache/aaa111-rows.csv' },
-      { uploadURL: 'https://s3.example/cache/bbb222-unnamed' },
-    ]);
+    completeUpload([{ name: 'rows.csv', key: 'cache/aaa111-rows.csv' }, { key: 'cache/bbb222-unnamed' }]);
     await userEvent.click(await screen.findByRole('button', { name: /save 2 files/i }));
 
     const bodies = vi
