@@ -218,4 +218,63 @@ describe('SessionNewForm', () => {
 
     fetchSpy.mockRestore();
   });
+
+  it('offers a tool group as one entry instead of its members', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <SessionNewForm
+        {...makeProps({
+          projectId: 3,
+          tools: [
+            { id: 10, name: 'Board List Tasks' },
+            { id: 11, name: 'Board Move Task' },
+            { id: 20, name: 'Echo Greeter' },
+          ],
+          toolGroups: [{ tag: 'board', label: 'Board management', toolIds: [10, 11] }],
+        })}
+      />,
+      { props: authProps(['claude_code']) },
+    );
+
+    await user.click(screen.getByRole('combobox', { name: /tools/i }));
+
+    expect(await screen.findByText('Board management')).toBeInTheDocument();
+    expect(screen.queryByText('Board List Tasks')).not.toBeInTheDocument();
+    expect(screen.queryByText('Board Move Task')).not.toBeInTheDocument();
+    // An ungrouped tool is still attachable on its own.
+    expect(screen.getByText('Echo Greeter')).toBeInTheDocument();
+  });
+
+  it('sends every member id when a tool group is selected', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: { id: 'sess-9' } }),
+    } as Response);
+
+    renderAuthedPage(
+      <SessionNewForm
+        {...makeProps({
+          projectId: 3,
+          tools: [
+            { id: 10, name: 'Board List Tasks' },
+            { id: 11, name: 'Board Move Task' },
+          ],
+          toolGroups: [{ tag: 'board', label: 'Board management', toolIds: [10, 11] }],
+        })}
+      />,
+      { props: authProps(['claude_code']) },
+    );
+
+    await user.click(screen.getByText('Claude Code'));
+    await user.click(screen.getByRole('combobox', { name: /tools/i }));
+    await user.click(await screen.findByText('Board management'));
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0];
+    expect(JSON.parse(init!.body as string).terminalSession.toolIds).toEqual([10, 11]);
+
+    fetchSpy.mockRestore();
+  });
 });
