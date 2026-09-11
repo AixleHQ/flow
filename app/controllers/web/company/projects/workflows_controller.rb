@@ -21,7 +21,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       # `current_project.assets` walks the has_many and sees project-owned rows only,
       # so the workflow builder was the one picker that could not reach them.
       assets: InertiaRails.defer(group: "resources") {
-        Asset.accessible_from_project(current_project).map { |r| PickerResource.new(r).to_h }
+        Asset.accessible_from_project(current_project).map { |r| AssetPickerResource.new(r).to_h }
       },
       repositories: InertiaRails.defer(group: "resources") {
         Repository.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
@@ -73,7 +73,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       # `current_project.assets` walks the has_many and sees project-owned rows only,
       # so the workflow builder was the one picker that could not reach them.
       assets: InertiaRails.defer(group: "resources") {
-        Asset.accessible_from_project(current_project).map { |r| PickerResource.new(r).to_h }
+        Asset.accessible_from_project(current_project).map { |r| AssetPickerResource.new(r).to_h }
       },
       repositories: InertiaRails.defer(group: "resources") {
         Repository.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }

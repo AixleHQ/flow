@@ -2,6 +2,7 @@ import { MultiSelect, Switch } from '@mantine/core';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
+import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { toolIdsFromPickerValue, toolPickerData, toolPickerValue, type ToolGroup } from 'shared/lib/toolPicker';
 
 interface NamedItem {
@@ -25,7 +26,7 @@ interface BaseResourcesTabProps {
   toolGroups: ToolGroup[];
   skills: NamedItem[];
   mcpServers: NamedItem[];
-  assets: NamedItem[];
+  assets: AssetPickerItem[];
   repositories: NamedItem[];
   configItems: ConfigItemPicker[];
   readOnly: boolean;
@@ -148,10 +149,10 @@ export function BaseResourcesTab({
               },
               {
                 label: 'Assets',
-                placeholder: 'Select assets…',
-                data: toSelectData(assets),
-                value: toStringArr(workflow.baseAssetIds),
-                onChange: (v: string[]) => onWorkflowChange('baseAssetIds', toNumberArr(v)),
+                placeholder: '',
+                data: [],
+                value: [],
+                onChange: () => {},
                 isEmpty: workflow.baseAssetIds.length === 0,
                 supersededByInherit: true,
                 emptyHint: 'None added',
@@ -195,23 +196,34 @@ export function BaseResourcesTab({
               >
                 {label}
               </div>
-              <MultiSelect
-                data={data}
-                value={[...value]}
-                onChange={onChange}
-                disabled={readOnly || (supersededByInherit && workflow.inheritAllProjectResources)}
-                searchable
-                placeholder={placeholder}
-                styles={{
-                  input: {
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 5,
-                    fontSize: 13,
-                    minHeight: 36,
-                  },
-                }}
-              />
+              {label === 'Assets' ? (
+                <AssetPicker
+                  assets={assets}
+                  value={workflow.baseAssetIds}
+                  onChange={(ids) => onWorkflowChange('baseAssetIds', ids)}
+                  disabled={readOnly || (supersededByInherit && workflow.inheritAllProjectResources)}
+                  placeholder="Select assets…"
+                  aria-label="Assets"
+                />
+              ) : (
+                <MultiSelect
+                  data={data}
+                  value={[...value]}
+                  onChange={onChange}
+                  disabled={readOnly || (supersededByInherit && workflow.inheritAllProjectResources)}
+                  searchable
+                  placeholder={placeholder}
+                  styles={{
+                    input: {
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 5,
+                      fontSize: 13,
+                      minHeight: 36,
+                    },
+                  }}
+                />
+              )}
               {isEmpty && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>{emptyHint}</div>}
             </div>
           ))}

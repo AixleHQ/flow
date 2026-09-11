@@ -4,6 +4,7 @@ import { notifications } from '@mantine/notifications';
 import { IconAdjustments, IconPlayerPlay, IconRobot, IconSitemap } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { FormSection, ModeCards, RuntimeTiles, StatusTag } from 'shared/ui/sessions';
 
 import classes from './RunWorkflowDrawer.module.css';
@@ -44,7 +45,7 @@ interface RunWorkflowDrawerProps {
   defaultAgentRuntime?: string | null;
   agentModels?: AgentModelsEntry[];
   repositories: NamedItem[];
-  assets: NamedItem[];
+  assets: AssetPickerItem[];
 }
 
 type ExecutionMode = 'interactive' | 'automatic' | 'custom';
@@ -89,7 +90,7 @@ export function RunWorkflowDrawer({
       : (configuredAgents[0] ?? null),
   );
   const [selectedRepoIds, setSelectedRepoIds] = useState<string[]>([]);
-  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>([]);
   const [customAutoRun, setCustomAutoRun] = useState<Record<number, boolean>>({});
   const [requestedModel, setRequestedModel] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -138,7 +139,7 @@ export function RunWorkflowDrawer({
           agentRuntime: agentRuntime,
           requestedModel: requestedModel || undefined,
           repositoryIds: selectedRepoIds.map(Number),
-          inputAssetIds: selectedAssetIds.map(Number),
+          inputAssetIds: selectedAssetIds,
           ...(mode === 'custom' && {
             stepOverrides: Object.fromEntries(steps.map((s) => [s.id, { autoRun: !!customAutoRun[s.id] }])),
           }),
@@ -260,15 +261,21 @@ export function RunWorkflowDrawer({
                   data={repositories.map((r) => ({ value: String(r.id), label: r.name }))}
                   searchable
                 />
-                <MultiSelect
-                  label="Input assets"
-                  description="Project assets available as inputs to workflow steps"
-                  placeholder="Select assets to include…"
-                  value={selectedAssetIds}
-                  onChange={setSelectedAssetIds}
-                  data={assets.map((a) => ({ value: String(a.id), label: a.name }))}
-                  searchable
-                />
+                <Box>
+                  <Text size="sm" fw={500} mb={2}>
+                    Input assets
+                  </Text>
+                  <Text size="xs" c="dimmed" mb={4}>
+                    Project assets available as inputs to workflow steps
+                  </Text>
+                  <AssetPicker
+                    assets={assets}
+                    value={selectedAssetIds}
+                    onChange={setSelectedAssetIds}
+                    placeholder="Select assets to include…"
+                    aria-label="Input assets"
+                  />
+                </Box>
               </Stack>
             </Box>
           </Stack>

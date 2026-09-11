@@ -1,14 +1,9 @@
 # frozen_string_literal: true
 
 class Asset < ApplicationRecord
-  # A folder is one flat, human-readable label — spaces and non-Latin scripts included; asset
-  # names have always been free-form, and the folder is half of the same path. What it may not
-  # be is a *path*: a separator would let it address a directory of its own choosing under
-  # /workspace/assets, and a control character would make the directory unnameable at the far
-  # end. Everything that consumes the path shell-escapes it.
-  FOLDER_FORMAT = /\A[^\/\\\x00-\x1F\x7F]+\z/
-  # "." and ".." pass the format but name a directory that already exists.
-  RESERVED_FOLDERS = %w[. ..].freeze
+  # `folder` holds the same path shape as `Folder#path`: one or more segments of letters,
+  # digits, hyphens or underscores, separated by `/`. See `Folder` for why paths (not a
+  # `parent_id`) are the source of truth for nesting.
   FOLDER_MAX_LENGTH = 100
 
   belongs_to :scope, polymorphic: true
@@ -26,11 +21,11 @@ class Asset < ApplicationRecord
   validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
   validates :scope_id, presence: true
   validates :status, presence: true, inclusion: { in: %w[active pending_review dismissed] }
-  validates :folder,
-            format: { with: FOLDER_FORMAT, message: "must not contain slashes or control characters" },
-            exclusion: { in: RESERVED_FOLDERS, message: "is not a usable folder name" },
-            length: { maximum: FOLDER_MAX_LENGTH },
-            allow_blank: true
+  validates :folder, format: { with: Folder::PATH_FORMAT,
+                                message: "must be one or more path segments of letters, digits, hyphens " \
+                                         "or underscores, separated by /" },
+                     length: { maximum: FOLDER_MAX_LENGTH },
+                     allow_blank: true
 
   scope :active, -> { where(deleted_at: nil, status: "active") }
   scope :publicly_shared, -> { where(public: true).where.not(public_token: nil) }
@@ -78,7 +73,7 @@ class Asset < ApplicationRecord
     folder = normalize_folder(value)
     return false if folder.nil?
 
-    !folder.match?(FOLDER_FORMAT) || RESERVED_FOLDERS.include?(folder) || folder.length > FOLDER_MAX_LENGTH
+    !folder.match?(Folder::PATH_FORMAT) || folder.length > FOLDER_MAX_LENGTH
   end
 
   def picker_name

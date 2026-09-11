@@ -121,6 +121,17 @@ class ContextBuilders::ResourcesTest < ActiveSupport::TestCase
     assert_includes content, "- **spec.md** (id: #{asset.id}) → `/workspace/assets/docs/spec.md`"
   end
 
+  test "build lists input assets nested in a multi-segment folder with the full path" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+      mode: "interactive")
+    asset = create(:asset, scope: @project, created_by: @user, name: "api-spec.md", folder: "dashboard/specs")
+    session.input_assets << asset
+
+    content = ContextBuilders::Resources.new(session.reload).build.first.content
+
+    assert_includes content, "- **api-spec.md** (id: #{asset.id}) → `/workspace/assets/dashboard/specs/api-spec.md`"
+  end
+
   test "build includes the public share link for shared input assets" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
       mode: "interactive")

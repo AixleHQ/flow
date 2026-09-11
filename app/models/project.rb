@@ -22,6 +22,7 @@ class Project < ApplicationRecord
   has_many :mcp_servers, as: :scope, dependent: :destroy, class_name: "MCPServer"
   has_many :skills, as: :scope, dependent: :destroy
   has_many :assets, as: :scope, dependent: :destroy
+  has_many :folders, as: :scope, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   # Board must be destroyed before workflows: Workflow#check_column_bindings aborts
   # while ColumnWorkflowBindings exist, and column_transitions.workflow_run_id is RESTRICT.
