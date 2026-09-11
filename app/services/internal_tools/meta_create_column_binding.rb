@@ -47,6 +47,10 @@ module InternalTools
       binding = ColumnWorkflowBinding.create!(
         board_column: column,
         workflow: workflow,
+        # The builder agent acts for whoever launched it, so that user owns the
+        # trigger it creates. `try` because a standalone (non-workflow) session
+        # need not expose a user.
+        created_by: workflow_run&.user || session.try(:user),
         trigger_mode: params[:trigger_mode] || "manual",
         cooldown_seconds: params[:cooldown_seconds] || 5
       )

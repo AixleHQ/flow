@@ -86,6 +86,7 @@ module Api
             binding = ColumnWorkflowBinding.create!(
               board_column: column,
               workflow: current_workflow,
+              created_by: current_user,
               trigger_mode: params.dig(:trigger, :trigger_mode).presence || "auto",
               cooldown_seconds: params.dig(:trigger, :cooldown_seconds).presence || 5
             )
@@ -145,8 +146,8 @@ module Api
           # ---- serialization ----
 
           def serialized_triggers
-            column_bindings.map { |b| serialize_column(b) } +
-              current_workflow.trigger_bindings.order(:created_at).map { |b| serialize_binding(b) }
+            column_bindings.includes(:board_column, :created_by).map { |b| serialize_column(b) } +
+              current_workflow.trigger_bindings.includes(:created_by).order(:created_at).map { |b| serialize_binding(b) }
           end
 
           def column_bindings
@@ -164,6 +165,7 @@ module Api
               column_name: binding.board_column.name,
               trigger_mode: binding.trigger_mode,
               cooldown_seconds: binding.cooldown_seconds,
+              created_by: serialize_creator(binding.created_by),
               enabled: true
             }
           end
@@ -182,8 +184,18 @@ module Api
               schedule_config: binding.schedule_config,
               cooldown_seconds: binding.cooldown_seconds,
               notify_on_failure: binding.notify_on_failure,
+              created_by: serialize_creator(binding.created_by),
               enabled: binding.enabled
             }
+          end
+
+          # Who a trigger runs as. nil for rows created before the creator was
+          # recorded (and for a deleted account, whose reference is nullified) —
+          # the UI shows those as "Unknown" and an unattended fire is skipped.
+          def serialize_creator(user)
+            return nil unless user
+
+            { id: user.id, name: user.name }
           end
 
           def binding_kind(event_type)

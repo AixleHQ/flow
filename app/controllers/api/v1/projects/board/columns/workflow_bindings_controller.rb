@@ -14,7 +14,11 @@ module Api
             end
 
             def create
+              # created_by is the trigger's "runs as" identity — recorded here as
+              # well so a binding added from the board carries one, exactly like
+              # one added from the workflow's Triggers tab.
               binding = current_column.build_column_workflow_binding(binding_params)
+              binding.created_by = current_user
               binding.save!
               render json: ColumnWorkflowBindingResource.new(binding).to_h, status: :created
             end

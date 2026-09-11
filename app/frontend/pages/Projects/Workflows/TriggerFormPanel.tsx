@@ -1,11 +1,13 @@
+import { usePage } from '@inertiajs/react';
 import { Button, CopyButton, NumberInput, PasswordInput, Select, Switch, TextInput } from '@mantine/core';
-import { IconCheck, IconCopy, IconLock, IconX } from '@tabler/icons-react';
+import { IconCheck, IconCopy, IconLock, IconUser, IconX } from '@tabler/icons-react';
 import cronstrue from 'cronstrue';
 import { useCallback, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { TIMEZONE_OPTIONS } from 'shared/lib/timezones';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
+import type { SharedProps } from 'shared/ui';
 
 import type { Trigger } from './types';
 
@@ -32,6 +34,11 @@ interface TriggerFormPanelProps {
 }
 
 type Kind = 'column' | 'slack' | 'webhook' | 'schedule';
+
+// Off-board triggers fire unattended: the run belongs to whoever added the
+// trigger and uses their credentials. A column trigger's run belongs to the
+// person the card puts on it, so its creator is provenance, not identity.
+const OFF_BOARD_KINDS: Kind[] = ['slack', 'webhook', 'schedule'];
 
 function describeCron(expr: string): { ok: boolean; text: string } {
   const value = expr.trim();
@@ -101,6 +108,7 @@ export function TriggerFormPanel({
   onClose,
   onSaved,
 }: TriggerFormPanelProps) {
+  const { currentUser } = usePage<SharedProps>().props;
   const isEdit = Boolean(editing);
   const editPred = editing?.filter_predicate ?? {};
   const editSlack = editing?.kind === 'slack' ? slackFilterFromPredicate(editPred) : null;
@@ -261,6 +269,21 @@ export function TriggerFormPanel({
   // dismissing the panel any which way (scrim, ✕, Done) must still refresh the list.
   const dismiss = created ? onSaved : onClose;
 
+  const runsAsCreator = OFF_BOARD_KINDS.includes(kind);
+  // On create the trigger is recorded as the signed-in user; on edit it keeps
+  // the creator it was given (the creator is not reassignable in v1).
+  const creatorName = isEdit ? (editing?.created_by?.name ?? null) : (currentUser?.name ?? null);
+  // A missing creator only blocks the off-board kinds; on a column trigger it is
+  // just an unknown, so it is not flagged red.
+  const creatorTone = creatorName ? null : runsAsCreator ? 'var(--err)' : 'var(--text-3)';
+  const creatorHint = creatorName
+    ? runsAsCreator
+      ? 'Unattended runs from this trigger belong to this user and use their credentials.'
+      : 'Recorded when the trigger was added. The run itself belongs to whoever the card is on.'
+    : runsAsCreator
+      ? 'Without a creator this trigger cannot start a run. Re-create it to record one.'
+      : 'This trigger was added before creators were recorded.';
+
   const kindOptions = [
     { value: 'column', label: 'Task enters column' },
     { value: 'schedule', label: 'On schedule' },
@@ -375,6 +398,23 @@ export function TriggerFormPanel({
                     }}
                   />
                 )}
+              </div>
+
+              {/* Creator — recorded on create, never editable */}
+              <div style={{ marginBottom: 16 }}>
+                <label
+                  style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', display: 'block', marginBottom: 5 }}
+                >
+                  {runsAsCreator ? 'Runs as' : 'Created by'}
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <IconUser size={13} style={{ color: creatorTone ?? 'var(--text-3)' }} />
+                  <span style={{ fontSize: 13, color: creatorTone ?? 'var(--text-1)' }}>
+                    {creatorName ?? 'Unknown'}
+                  </span>
+                  <IconLock size={12} style={{ color: 'var(--text-3)' }} />
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4 }}>{creatorHint}</div>
               </div>
 
               {/* Column fields */}

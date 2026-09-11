@@ -38,6 +38,17 @@ module Api
               assert_response :created
             end
 
+            test "create records the signed-in user as the trigger's creator" do
+              post :create, params: {
+                project_id: @project.id,
+                column_id: @column.id,
+                column_workflow_binding: { workflow_id: @workflow.id, trigger_mode: "auto", cooldown_seconds: 5 }
+              }
+
+              assert_response :created
+              assert_equal @user, @column.reload.column_workflow_binding.created_by
+            end
+
             test "update returns binding json" do
               binding = ColumnWorkflowBinding.create!(
                 board_column: @column,

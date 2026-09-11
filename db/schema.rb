@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_06_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_11_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -240,10 +240,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_06_120000) do
     t.bigint "board_column_id", null: false
     t.integer "cooldown_seconds", default: 5, null: false
     t.datetime "created_at", null: false
+    t.bigint "created_by_id"
     t.string "trigger_mode", default: "manual", null: false
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
     t.index ["board_column_id"], name: "index_column_workflow_bindings_on_board_column_id", unique: true
+    t.index ["created_by_id"], name: "index_column_workflow_bindings_on_created_by_id"
     t.index ["workflow_id"], name: "index_column_workflow_bindings_on_workflow_id"
   end
 
@@ -1226,6 +1228,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_06_120000) do
   add_foreign_key "column_transitions", "users", column: "actor_id"
   add_foreign_key "column_transitions", "workflow_runs"
   add_foreign_key "column_workflow_bindings", "board_columns"
+  add_foreign_key "column_workflow_bindings", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "column_workflow_bindings", "workflows"
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
   add_foreign_key "company_memberships", "companies"

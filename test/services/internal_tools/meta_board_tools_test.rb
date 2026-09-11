@@ -129,6 +129,8 @@ class InternalTools::MetaBoardToolsTest < ActiveSupport::TestCase
     assert_equal "auto", data["trigger_mode"]
     assert_equal 10, data["cooldown_seconds"]
     assert_equal "Auto Review", data["workflow_name"]
+    # The trigger is owned by whoever launched the builder run, not by the agent.
+    assert_equal @user, ColumnWorkflowBinding.find(data["id"]).created_by
   end
 
   test "meta_create_column_binding fails if column already has binding" do
