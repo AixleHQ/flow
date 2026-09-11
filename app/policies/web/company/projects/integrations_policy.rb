@@ -8,6 +8,10 @@ module Web
         def create? = manage_integrations?
         def update? = manage_integrations?
         def destroy? = manage_integrations?
+        # Re-verifies a connection against the provider. It reads only, but it
+        # spends the deployment's credential and reports provider diagnostics,
+        # so it sits with the other management actions rather than with #index.
+        def test_connection? = manage_integrations?
         def slack_oauth_start? = manage_integrations?
         def github_app_install? = manage_integrations?
 

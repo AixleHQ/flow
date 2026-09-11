@@ -37,6 +37,58 @@ the project level) and paste a token with `api` scope.
 - Webhook endpoint: `https://<your-host>/webhooks/gitlab`, verified with
   a per-repository secret.
 
+### Azure DevOps
+
+Azure DevOps is **project-scoped**: one connection names one Azure
+organization and one Azure project inside it. Agents clone, push, open
+and review pull requests, and read and update Azure Boards work items.
+
+Unlike GitHub and GitLab, a project owner cannot connect it alone —
+access is approved per organization first, because knowing a tenant id
+or an organization URL is not proof that your company owns that
+organization. Setup runs in three places:
+
+1. **Your Entra administrator** provisions a service principal for
+   Aixle's application in your tenant, using the client id your Aixle
+   operator publishes. No new app registration is needed, and Aixle's
+   private key is never shared.
+2. **An Azure DevOps administrator** adds that service principal to the
+   organization under **Organization settings → Users**, with at least a
+   **Basic** access level (Stakeholder cannot read repositories) and the
+   project permissions the agents need. Grant repository Read and
+   Contribute, pull-request Contribute, and Boards access to the area
+   paths in scope — never project-collection administration or policy
+   bypass.
+3. **Your Aixle operator** records the approval and the list of Azure
+   projects it covers (`rake azure_devops:approve` / `:verify` /
+   `:scope`).
+
+Then, in **Project → Integrations → Connect → Azure DevOps**, pick the
+approved organization and one of its approved projects, and choose what
+agents may do. The selected Azure project is fixed for the life of the
+connection: changing it would silently re-point existing repository and
+work-item references, so connect again instead.
+
+Operations run as the **application's identity**, not as the person who
+connected it — pull requests and comments are authored by it, and an
+employee leaving does not revoke it. Repositories authenticate through a
+credential helper that fetches a short-lived token per git operation, so
+nothing is stored in the checkout; ordinary `git fetch` and `git push`
+work with no extra step.
+
+Notes and limits:
+
+- **Azure DevOps Services on `dev.azure.com` with Git repositories
+  only.** Azure DevOps Server (on-premises), TFVC, Artifacts, Test Plans
+  and Wiki management are out of scope.
+- An organization backed by a personal Microsoft account, with no
+  connected Entra tenant, cannot use a service principal at all. Those
+  organizations need the optional personal-access-token mode, which
+  acts as the token's owner and carries that person's permissions.
+- Completing or merging a pull request, reviewers and votes, Azure
+  Pipelines and Service Hooks are a later parity extension.
+- `AZURE_DEVOPS_ENABLED` gates the whole feature per deployment.
+
 ### Linear
 
 Linear is supported as an issue-tracker integration (connected under

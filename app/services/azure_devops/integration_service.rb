@@ -160,7 +160,10 @@ module AzureDevops
     # readable through this exact connection. A token that Entra issued proves
     # the app authenticated, not that this project exists or is permitted.
     def verify_selected_project!(integration)
-      client, resolved = CredentialProvider.client_for(integration)
+      # allow_inactive: this IS the check that decides whether the connection
+      # becomes active. Requiring active here would make a new connection
+      # unverifiable and a repair impossible once one had errored.
+      client, resolved = CredentialProvider.client_for(integration, allow_inactive: true)
       project_id = integration.azure_project_id
       raise ConfigurationError, "No Azure project selected" if project_id.blank?
 

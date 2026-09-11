@@ -133,7 +133,13 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
   const loadBranches = (integrationId: string, repoName: string, externalId?: string) => {
     setLoadingBranches(true);
     router.reload({
-      data: { integration_id: integrationId, repo: repoName, external_id: externalId ?? '' },
+      // `external_id` is added only when the provider supplies one, so the
+      // GitHub and GitLab requests keep exactly the shape they had.
+      data: {
+        integration_id: integrationId,
+        repo: repoName,
+        ...(externalId ? { external_id: externalId } : {}),
+      },
       only: ['available_branches'],
       preserveUrl: true,
       onFinish: () => setLoadingBranches(false),
@@ -197,12 +203,14 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
         : {
             integrationId: Number(values.integrationId),
             fullName: values.fullName,
-            // Sent for every provider and used by Azure only: the server looks
-            // the repository up by this id and takes names, clone url and
-            // privacy from the provider's answer rather than from this form.
-            externalId: values.externalId,
             sourceBranch: values.sourceBranch,
             purpose: values.purpose,
+            // Only Azure carries one, and only when a repository has been
+            // picked. The server looks the repository up by this id and takes
+            // names, clone url and privacy from the provider's answer rather
+            // than from this form; the other providers must keep their existing
+            // payload untouched.
+            ...(values.externalId ? { externalId: values.externalId } : {}),
           };
 
     router.post(
