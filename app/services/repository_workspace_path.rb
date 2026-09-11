@@ -47,9 +47,14 @@ class RepositoryWorkspacePath
       resolved.merge(stored.slice(*resolved.keys))
     end
 
+    # Stored entries WIN. A recomputation is a guess about where files would go;
+    # a stored entry is the record of where they went. Merging the other way
+    # round renames a checkout that already exists — the agent's context table
+    # then points somewhere the files are not.
     def persist!(session, path_map)
       metadata = session.metadata || {}
-      metadata[METADATA_KEY] = (metadata[METADATA_KEY] || {}).merge(path_map.transform_keys(&:to_s))
+      stored = (metadata[METADATA_KEY] || {})
+      metadata[METADATA_KEY] = path_map.transform_keys(&:to_s).merge(stored)
       session.update_column(:metadata, metadata)
       metadata[METADATA_KEY]
     end

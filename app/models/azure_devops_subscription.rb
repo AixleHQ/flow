@@ -35,10 +35,16 @@ class AzureDevopsSubscription < ApplicationRecord
   has_many :azure_devops_deliveries, dependent: :delete_all
 
   validates :endpoint_id, presence: true, uniqueness: true
-  validates :event_type, presence: true, inclusion: { in: EVENT_TYPES }
+  validates :event_type, presence: true, inclusion: { in: EVENT_TYPES },
+                        uniqueness: { scope: :integration_id }
   validate :integration_is_azure
 
   scope :live, -> { where(status: %w[pending active probation]) }
+
+  # Mirrors the scope, for a loaded row.
+  def live?
+    %w[pending active probation].include?(status.to_s)
+  end
 
   before_validation :assign_endpoint_id, on: :create
 

@@ -6,8 +6,14 @@ require "test_helper"
 # through all of them: a project administrator cannot widen their own reach by
 # submitting ids — the approved installation is what grants access, and it is
 # established out of band.
+# These drive the connect/verify/repair flow end to end through the real
+# IntegrationService, CredentialProvider and Client — none of which FakeAzureDevops
+# replaces — so the WebMock stubs here ARE this flow's contract (R4), not stray
+# stubs in a feature test.
 class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::IntegrationTest
   setup do
+    # No webhook base URL, so activation does not try to provision Service Hooks:
+    # that path has its own test in subscription_service_test.
     with_azure_devops_enabled
     @company = create(:company)
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
@@ -201,6 +207,70 @@ class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::Inte
 
     assert_equal "Integration settings saved", flash[:notice]
     refute_match(/Only Coder integrations/, flash[:alert].to_s)
+  end
+
+  # Regression: `present?` meant unticking every box submitted an empty list that
+  # was read as "said nothing", so the one edit a user makes to revoke everything
+  # was the one that silently did not work.
+  test "unticking every capability revokes them all" do
+    integration = create_connected_integration
+
+    patch company_project_integration_path(@project, integration), params: { enabled_capabilities: [] }
+
+    assert_empty integration.reload.azure_enabled_capabilities
+  end
+
+  test "an unknown capability is not persisted on create" do
+    stub_azure_token(tenant_id: @installation.tenant_id)
+    stub_project_get
+
+    post company_project_integrations_path(@project), params: {
+      provider: "azure_devops", azure_devops_installation_id: @installation.id,
+      azure_project_id: @azure_project_id,
+      enabled_capabilities: [ "repositories.read", "project_collection_administer" ]
+    }
+
+    integration = Integration.where(provider: "azure_devops").last
+    assert_equal %w[repositories.read], integration.azure_enabled_capabilities
+  end
+
+  # Regression: mark_error used save!, and the commonest way to reach it is a
+  # connection whose Azure project has left the approved scope — which is exactly
+  # what the model rejects, so recording the failure raised a 500 instead.
+  test "a connection outside the approved scope reports the failure instead of raising" do
+    integration = create_connected_integration
+    @installation.update!(allowed_project_ids: [ SecureRandom.uuid ])
+
+    post test_connection_company_project_integration_path(@project, integration)
+
+    assert_response :redirect
+    assert_match(/Connection failed/, flash[:alert])
+    assert integration.reload.error?
+    assert_equal "not_authorized", integration.settings["error"]
+  end
+
+  # `settings` reaches the browser whole, which IntegrationResource's own comment
+  # states as an invariant: provider text does not belong in it, and a repaired
+  # connection must not keep shipping the old failure.
+  test "only the stable error code is stored, and a successful re-verify clears it" do
+    integration = create_connected_integration
+    stub_azure_token(tenant_id: @installation.tenant_id)
+    stub_request(:get, %r{/_apis/projects/}).to_return(
+      status: 403, headers: { "Content-Type" => "application/json" },
+      body: { message: "TF400813: The user 'x' is not authorized to access this resource." }.to_json
+    )
+    post test_connection_company_project_integration_path(@project, integration)
+
+    settings = integration.reload.settings
+    assert_equal "permission_denied", settings["error"]
+    refute settings.key?("error_message")
+    refute_match(/TF400813/, settings.to_json)
+
+    stub_project_get
+    post test_connection_company_project_integration_path(@project, integration)
+
+    assert integration.reload.active?
+    refute integration.settings.key?("error")
   end
 
   test "test_connection re-verifies without mutating anything in Azure" do

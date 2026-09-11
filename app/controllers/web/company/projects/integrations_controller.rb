@@ -192,6 +192,19 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     []
   end
 
+  # Array of strings, whatever shape the parameter arrives in. An
+  # ActionController::Parameters hash responds to neither to_ary nor to_a, so
+  # `Array()` would wrap it whole and stringify it into junk.
+  def capability_params
+    raw = params[:enabled_capabilities]
+    case raw
+    when ActionController::Parameters then raw.values.map(&:to_s)
+    when Array then raw.map(&:to_s)
+    when nil then []
+    else [ raw.to_s ]
+    end
+  end
+
   def create_azure_devops
     service = AzureDevops::IntegrationService.new(
       company: current_company, connected_by: current_user, project: current_project
@@ -203,13 +216,13 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
           organization_slug: params[:organization_slug].to_s,
           azure_project_id: params[:azure_project_id].to_s,
           personal_access_token: params[:personal_access_token].to_s,
-          enabled_capabilities: params[:enabled_capabilities]
+          enabled_capabilities: params.key?(:enabled_capabilities) ? capability_params : nil
         )
       else
         service.create_with_installation(
           installation_id: params[:azure_devops_installation_id],
           azure_project_id: params[:azure_project_id].to_s,
-          enabled_capabilities: params[:enabled_capabilities]
+          enabled_capabilities: params.key?(:enabled_capabilities) ? capability_params : nil
         )
       end
 
@@ -232,10 +245,15 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       service.replace_pat(integration, personal_access_token: params[:personal_access_token].to_s)
     end
 
-    if params[:enabled_capabilities].present?
-      allowed = Array(params[:enabled_capabilities]).map(&:to_s) &
-                AzureDevops::IntegrationService::ALL_CAPABILITIES
-      integration.settings = integration.settings.to_h.merge("enabled_capabilities" => allowed)
+    # `key?`, not `present?`: unticking every box submits an empty list, and
+    # treating that as "said nothing" silently kept the old set — the one edit a
+    # user makes to revoke everything was the one that did not work.
+    if params.key?(:enabled_capabilities)
+      integration.settings = integration.settings.to_h.merge(
+        "enabled_capabilities" => AzureDevops::IntegrationService.sanitize_capabilities(
+          capability_params
+        )
+      )
       integration.save!
     end
 

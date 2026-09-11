@@ -58,7 +58,7 @@ class IntegrationResource < ApplicationResource
     next nil unless integration.azure_devops?
 
     slug = integration.azure_organization_slug
-    slug.present? ? "https://dev.azure.com/#{slug}" : nil
+    slug.present? ? "#{AzureDevops::AppConfig.api_host}/#{slug}" : nil
   end
 
   typelize %w[company project]

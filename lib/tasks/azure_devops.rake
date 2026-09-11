@@ -93,6 +93,41 @@ namespace :azure_devops do
     puts "Access tokens already handed to running sessions stay valid until Azure expires them."
   end
 
+  desc "Create or repair Service Hook subscriptions for a project connection: INTEGRATION_ID=1 [BASE_URL=https://...]"
+  task hooks: :environment do
+    integration = Integration.find(ENV.fetch("INTEGRATION_ID"))
+    abort "Integration ##{integration.id} is not an Azure DevOps connection" unless integration.azure_devops?
+
+    base_url = ENV["BASE_URL"].presence || AzureDevops::AppConfig.webhook_base_url
+    if base_url.blank?
+      abort "No public base URL. Set AZURE_DEVOPS_WEBHOOK_BASE_URL, or pass BASE_URL= for a one-off. " \
+            "Azure posts INBOUND, so an unreachable host produces subscriptions it can never deliver to."
+    end
+
+    service = AzureDevops::SubscriptionService.new(integration)
+    service.ensure_all!(base_url: base_url)
+    service.refresh_status!
+
+    integration.azure_devops_subscriptions.reload.each do |subscription|
+      puts format("  %-26s %-10s %s", subscription.event_type, subscription.status,
+                  subscription.error_code.presence || subscription.azure_subscription_id)
+    end
+  end
+
+  desc "Re-read Azure's own subscription state for a connection: INTEGRATION_ID=1"
+  task hook_status: :environment do
+    integration = Integration.find(ENV.fetch("INTEGRATION_ID"))
+    AzureDevops::SubscriptionService.new(integration).refresh_status!
+
+    integration.azure_devops_subscriptions.reload.each do |subscription|
+      # `probation` is Azure throttling a failing subscription: it exists and
+      # delivers nothing, which from here looks exactly like silence.
+      note = subscription.probation? ? "  (delivering nothing while on probation)" : ""
+      puts format("  %-26s %-10s last_event=%s%s", subscription.event_type, subscription.status,
+                  subscription.last_event_at&.iso8601 || "never", note)
+    end
+  end
+
   desc "List the installations this deployment knows about"
   task list: :environment do
     AzureDevopsInstallation.includes(:company).order(:company_id, :organization_slug).each do |installation|
