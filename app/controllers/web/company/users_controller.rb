@@ -51,7 +51,9 @@ class Web::Company::UsersController < Web::Company::ApplicationController
       # list. `?refresh=1` is the Refresh button, throttled by the service.
       usage_limits: InertiaRails.defer(group: "limits") {
         Agents::SubscriptionUsageService.new(membership: membership, force: params[:refresh].present?).call
-      }
+      },
+      period: period,
+      **analytics_props(membership.user)
     }
   end
 
@@ -67,6 +69,51 @@ class Web::Company::UsersController < Web::Company::ApplicationController
                                           .where.not(state: "revoked")
                                           .joins(:user).where(users: { deleted_at: nil })
                                           .find_by!(user_id: params[:id])
+  end
+
+  # Aixle spend for this person in this company — the same four panels, the same
+  # services and the same deferral group as Profile -> Usage. Nothing new is
+  # exposed: /profile/usage?user_id= already answers this for any member of the
+  # company (see ProfileController#resolve_target_user); this only puts the
+  # answer on the page people actually open to ask it.
+  def analytics_props(target)
+    company = current_company
+
+    {
+      summary: InertiaRails.defer(group: "usage") {
+        r = UserAnalyticsService.new(user: target, company:, period:, project_id: nil).call
+        {
+          totalSessions: r.total_sessions,
+          totalCostCents: r.total_cost_cents,
+          totalTokens: r.total_tokens,
+          avgCostCentsPerSession: r.avg_cost_cents_per_session,
+          workflowsRun: r.workflows_run,
+          projectBreakdowns: r.project_breakdowns.map { |p|
+            { projectId: p.project_id, projectName: p.project_name, sessions: p.sessions, costCents: p.cost_cents, tokens: p.tokens }
+          }
+        }
+      },
+      agent_activity: InertiaRails.defer(group: "usage") {
+        r = UserAgentActivityService.new(user: target, company:, period:, project_id: nil).call
+        { sessionsByAgent: r.sessions_by_agent.map { |a| { agentType: a.agent_type, sessions: a.sessions, costCents: a.cost_cents, tokens: a.tokens } } }
+      },
+      cost_token: InertiaRails.defer(group: "usage") {
+        r = UserSessionCostTokenUsageService.new(user: target, company:, period:, project_id: nil).call
+        { timeSeries: r.time_series.map { |p| { date: p.date, costCents: p.cost_cents, totalTokens: p.total_tokens } } }
+      },
+      activity_heatmap: InertiaRails.defer(group: "usage") {
+        scope = target.terminal_sessions.joins(:project).where(projects: { company_id: company.id })
+        { days: ActivityHeatmapService.new(scope:).call.map { |d| { date: d.date, count: d.count } } }
+      }
+    }
+  end
+
+  # The window the charts cover. An unknown value would reach the services as a
+  # period they cannot answer, so only the four the picker offers are accepted.
+  PERIODS = %w[7d 30d 90d 1y].freeze
+
+  def period
+    @period ||= PERIODS.include?(params[:period]) ? params[:period] : "30d"
   end
 
   # The current company's projects this viewer may open a session in — the same

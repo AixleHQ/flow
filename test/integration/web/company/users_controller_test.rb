@@ -149,6 +149,48 @@ class Web::Company::UsersControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_props usageLimits: []
   end
 
+  # Aixle spend, alongside the vendor allowance. Same services and deferral
+  # group as Profile -> Usage, so a slow query never delays the first paint.
+  test "defers the spend analytics props and defaults the window to 30 days" do
+    get user_path(@colleague)
+
+    assert_inertia_props period: "30d"
+    assert_inertia_deferred_props :summary, :agent_activity, :cost_token, :activity_heatmap, group: "usage"
+  end
+
+  test "the deferred analytics resolve to the subject's spend in this company" do
+    seed_session(user: @colleague).tap do |session|
+      UsageStatistic.create!(terminal_session: session, cost_cents: 300, input_tokens: 3000, output_tokens: 0,
+                             cache_write_tokens: 0, cache_read_tokens: 0, tokens: 3000)
+    end
+    seed_session(user: @user).tap do |session|
+      UsageStatistic.create!(terminal_session: session, cost_cents: 999, input_tokens: 9999, output_tokens: 0,
+                             cache_write_tokens: 0, cache_read_tokens: 0, tokens: 9999)
+    end
+
+    get user_path(@colleague)
+    inertia_load_deferred_props("usage")
+
+    assert_inertia_props do |props|
+      props[:summary][:totalSessions] == 1 &&
+        props[:summary][:totalCostCents] == 300 &&
+        props[:summary][:totalTokens] == 3000 &&
+        props[:activityHeatmap][:days].length == 1
+    end
+  end
+
+  test "an unknown period falls back to the default instead of reaching the services" do
+    get user_path(@colleague, period: "all-time")
+
+    assert_inertia_props period: "30d"
+  end
+
+  test "a supported period is passed through" do
+    get user_path(@colleague, period: "7d")
+
+    assert_inertia_props period: "7d"
+  end
+
   test "a member of another company is a 404, not a 403" do
     other_company = create(:company)
     stranger = create(:user, :employee, :onboarding_completed, company: other_company)

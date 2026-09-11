@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
+import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
-import { renderAuthedPage, screen, within } from 'test/renderPage';
+import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import UserShow, { type UserShowProps } from './Show';
 
@@ -51,6 +52,7 @@ function seed(overrides: Partial<UserShowProps> = {}): UserShowProps {
     viewerIsAdmin: true,
     accessibleProjectIds: [9],
     usageLimits: [],
+    period: '30d',
     ...overrides,
   };
 }
@@ -165,6 +167,40 @@ describe('Company/Users/Show', () => {
     expect(screen.queryByRole('button', { name: /connect/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/mcp/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('offers the spend charts for a window the viewer can change', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(<UserShow {...seed()} />);
+
+    expect(screen.getByRole('heading', { name: 'Usage' })).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Usage period'));
+    await user.click(await screen.findByRole('option', { name: 'Last 7 days' }));
+
+    expect(router.get).toHaveBeenCalledWith('/user/7', { period: '7d' }, expect.anything());
+  });
+
+  it('renders the spend numbers once the deferred usage props arrive', () => {
+    renderAuthedPage(<UserShow {...seed()} />, {
+      props: {
+        summary: {
+          totalSessions: 1234,
+          totalCostCents: 56789,
+          totalTokens: 2_500_000,
+          avgCostCentsPerSession: 46,
+          workflowsRun: 42,
+          projectBreakdowns: [
+            { projectId: 11, projectName: 'Quasar Initiative', sessions: 800, costCents: 40000, tokens: 1_800_000 },
+          ],
+        },
+      },
+    });
+
+    expect(screen.getByText('Total Sessions')).toBeInTheDocument();
+    expect(screen.getByText('1,234')).toBeInTheDocument();
+    expect(screen.getByText('Per-Project Breakdown')).toBeInTheDocument();
+    expect(screen.getByText('Quasar Initiative')).toBeInTheDocument();
   });
 
   it('says so plainly when the person has run nothing here', () => {

@@ -1,5 +1,5 @@
-import { Deferred, Head } from '@inertiajs/react';
-import { Avatar, Badge, Box, Card, Group, Skeleton, Stack, Text, Title } from '@mantine/core';
+import { Deferred, Head, router } from '@inertiajs/react';
+import { Avatar, Badge, Box, Card, Group, Select, Skeleton, Stack, Text, Title } from '@mantine/core';
 import { useCallback, useMemo } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
@@ -8,8 +8,9 @@ import { formatDateMedium } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
 import { RoleTag } from 'shared/resources/members/MembersContent';
 import { SessionFeedTable, type SessionFeedRow } from 'shared/resources/sessions/SessionFeedTable';
+import { PERIOD_OPTIONS, UsageAnalytics, type Period } from 'shared/resources/usage/UsageAnalytics';
 import { UsageLimitsCard, type UsageLimitsEntry } from 'shared/resources/usage/UsageLimitsCard';
-import { companyProjectSessionPath, companySessionPath } from 'shared/routes';
+import { companyProjectSessionPath, companySessionPath, userPath } from 'shared/routes';
 import type { UserRole } from 'shared/ui';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
@@ -37,6 +38,8 @@ export interface UserShowProps {
   /** Projects this viewer may open a session in (owner / collaborator). */
   accessibleProjectIds: number[];
   usageLimits?: UsageLimitsEntry[];
+  /** Window the spend charts cover. The panels read their own deferred props. */
+  period: Period;
 }
 
 /**
@@ -57,6 +60,7 @@ function UserShow({
   viewerIsAdmin,
   accessibleProjectIds,
   usageLimits,
+  period,
 }: UserShowProps) {
   const displayName = member.name || member.email;
   const accessible = useMemo(() => new Set(accessibleProjectIds), [accessibleProjectIds]);
@@ -132,6 +136,27 @@ function UserShow({
           <UsageLimitsCard entries={usageLimits ?? []} ownerName={viewerIsSelf ? null : displayName} />
         </Deferred>
       </Box>
+
+      {/* Aixle spend, not vendor allowance — the card above is the plan, this is
+          what the work cost us. Same panels, services and deferral group as the
+          owner's own Profile -> Usage. */}
+      <Group justify="space-between" align="baseline" gap="xs" mb="md">
+        <Title order={5} style={{ margin: 0 }}>
+          Usage
+        </Title>
+        <Select
+          value={period}
+          onChange={(value) =>
+            router.get(userPath(member.id), { period: value ?? '30d' }, { preserveState: true, preserveScroll: true })
+          }
+          data={PERIOD_OPTIONS}
+          size="sm"
+          w={140}
+          aria-label="Usage period"
+        />
+      </Group>
+
+      <UsageAnalytics period={period} />
 
       <Stack gap={12}>
         <Group justify="space-between" align="baseline" gap="xs">
