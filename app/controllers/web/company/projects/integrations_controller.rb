@@ -234,7 +234,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
     if params[:enabled_capabilities].present?
       allowed = Array(params[:enabled_capabilities]).map(&:to_s) &
-                AzureDevops::IntegrationService::DEFAULT_CAPABILITIES
+                AzureDevops::IntegrationService::ALL_CAPABILITIES
       integration.settings = integration.settings.to_h.merge("enabled_capabilities" => allowed)
       integration.save!
     end

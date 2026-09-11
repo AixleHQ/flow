@@ -46,9 +46,18 @@ const CAPABILITIES: { value: string; label: string; hint: string }[] = [
   { value: 'pull_request_threads.write', label: 'Reply in review threads', hint: 'Comment and resolve discussions' },
   { value: 'work_items.read', label: 'Read work items', hint: 'Azure Boards tasks and comments' },
   { value: 'work_items.write', label: 'Edit work items', hint: 'Create, update and comment' },
+  { value: 'builds.read', label: 'Read pipeline builds', hint: 'Build results and branch policy status' },
+  {
+    value: 'pull_requests.complete',
+    label: 'Complete pull requests',
+    hint: 'Merging. Off by default, and branch policies still apply',
+  },
 ];
 
-const DEFAULT_CAPABILITIES = CAPABILITIES.map((c) => c.value);
+// Mirrors AzureDevops::IntegrationService::DEFAULT_CAPABILITIES. Completing pull
+// requests is the one action nobody should acquire by accepting a form's
+// defaults, so it starts unticked.
+const DEFAULT_CAPABILITIES = CAPABILITIES.map((c) => c.value).filter((v) => v !== 'pull_requests.complete');
 
 export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops }: Props) => {
   const installations = useMemo(() => azureDevops.installations ?? [], [azureDevops.installations]);

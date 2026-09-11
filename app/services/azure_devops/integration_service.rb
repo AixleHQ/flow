@@ -11,11 +11,18 @@ module AzureDevops
   # and what needs proving is that the SELECTED PROJECT is reachable and
   # approved.
   class IntegrationService
-    DEFAULT_CAPABILITIES = %w[
+    # Everything a connection may be permitted to do.
+    ALL_CAPABILITIES = %w[
       repositories.read repositories.write
       pull_requests.write pull_request_threads.write
       work_items.read work_items.write
+      pull_requests.complete builds.read
     ].freeze
+
+    # What a new connection gets. Completing pull requests is deliberately NOT
+    # among them: merging is the one agent action nobody should acquire by
+    # accepting a form's defaults, so it is switched on explicitly or not at all.
+    DEFAULT_CAPABILITIES = (ALL_CAPABILITIES - %w[pull_requests.complete]).freeze
 
     class ConfigurationError < StandardError; end
 
@@ -116,6 +123,12 @@ module AzureDevops
     # NOT disable the shared installation, delete the tenant's service
     # principal, or rotate the central app credential other connections use.
     def disconnect(integration)
+      # Cleanup runs FIRST, while this connection's credentials still resolve —
+      # after the row is gone there is nothing left to authenticate with, and the
+      # subscription would keep posting to an endpoint that no longer exists.
+      # Failure is logged, not raised: a disconnect must not be blocked by it,
+      # and what is left behind fails closed.
+      SubscriptionService.new(integration).remove_all! if integration.azure_devops_subscriptions.any?
       integration.destroy!
     end
 

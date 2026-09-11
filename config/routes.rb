@@ -35,6 +35,12 @@ Rails.application.routes.draw do
   # GitLab webhook endpoint (public, no session auth — verified via per-repository secret)
   post "/webhooks/gitlab", to: "webhooks/gitlab#receive"
 
+  # Azure DevOps Service Hooks. The endpoint id ROUTES a delivery to one
+  # subscription and is not a secret: Azure authenticates with HTTP basic auth
+  # and sends no signature, so the subscription's own password is the credential.
+  post "/webhooks/azure_devops/:endpoint_id", to: "webhooks/azure_devops#receive",
+                                              as: :azure_devops_webhook
+
   # Generic inbound webhook gateway (arbitrary sources, public — verified
   # per-endpoint via WebhookEndpoint#verification_strategy on the raw body).
   post "/webhooks/in/:slug", to: "webhooks/ingress#receive", as: :webhook_ingress

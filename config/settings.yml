@@ -175,6 +175,11 @@ azure_devops:
   # always appended by AppTokenService and is never caller-supplied.
   login_host: <%= ENV['AZURE_DEVOPS_LOGIN_HOST'] || 'https://login.microsoftonline.com' %>
   api_host: <%= ENV['AZURE_DEVOPS_API_HOST'] || 'https://dev.azure.com' %>
+  # Where Azure posts Service Hook deliveries. The ONLY part of this integration
+  # that needs a publicly reachable host — everything else is outbound. Defaults
+  # to the deployment's own domain; set it when that domain is not reachable from
+  # Azure (a tunnel in development, say).
+  webhook_base_url: <%= ENV['AZURE_DEVOPS_WEBHOOK_BASE_URL'] %>
   # Where the in-container git credential helper asks for a short-lived token.
   # Reached over the docker network like cloud.credentials_url — never a public
   # host, since the request carries a per-session vending key.
@@ -183,6 +188,9 @@ azure_devops:
   # spent. Entra tokens for this resource live about an hour, so renewal is a
   # hot path on any long session, not a rare event.
   token_refresh_skew: <%= (ENV['AZURE_DEVOPS_TOKEN_REFRESH_SKEW'] || 300).to_i %>
+  # Seconds between re-reads while confirming a pull-request completion: Azure
+  # accepts the request and merges asynchronously, so a response is not a merge.
+  completion_poll_interval: <%= (ENV['AZURE_DEVOPS_COMPLETION_POLL_INTERVAL'] || 1.0).to_f %>
   open_timeout: <%= (ENV['AZURE_DEVOPS_OPEN_TIMEOUT'] || 5).to_i %>
   read_timeout: <%= (ENV['AZURE_DEVOPS_READ_TIMEOUT'] || 30).to_i %>
   # Named app configurations. An installation stores the KEY, never a secret and

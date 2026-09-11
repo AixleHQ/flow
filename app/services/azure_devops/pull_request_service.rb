@@ -157,6 +157,106 @@ module AzureDevops
       summarize_thread(thread)
     end
 
+    # ----- Parity extension: reviewers, votes, completion -----
+
+    def reviewers(repository, pull_request_id)
+      client, resolved = client_for(:"repositories.read")
+      payload = client.get(*repo_path(repository), "pullrequests", pull_request_id.to_s, "reviewers",
+                           family: :git, project: resolved.project_id)
+
+      Array(payload["value"]).map { |reviewer| summarize_reviewer(reviewer) }
+    end
+
+    # Azure identifies a reviewer by its identity id, not by a name or an email,
+    # and an unknown id is a 400 rather than a no-op. Resolution happens in the
+    # tool layer so this stays a thin translation.
+    def add_reviewer(repository, pull_request_id, reviewer_id:, required: false)
+      client, resolved = client_for(:"pull_requests.write")
+      reviewer = client.patch(*repo_path(repository), "pullrequests", pull_request_id.to_s,
+                              "reviewers", reviewer_id.to_s,
+                              body: { vote: 0, isRequired: required },
+                              family: :git, project: resolved.project_id)
+      summarize_reviewer(reviewer)
+    end
+
+    # Azure's vote vocabulary is numeric and asymmetric: 10 approve,
+    # 5 approve-with-suggestions, 0 no vote, -5 waiting for author,
+    # -10 rejected. Named here so a caller never has to post a bare integer.
+    VOTES = { "approve" => 10, "approve_with_suggestions" => 5, "reset" => 0,
+              "waiting_for_author" => -5, "reject" => -10 }.freeze
+
+    def vote(repository, pull_request_id, reviewer_id:, vote:)
+      value = VOTES[vote.to_s]
+      raise ValidationFailed, "vote must be one of #{VOTES.keys.join(', ')}" if value.nil?
+
+      client, resolved = client_for(:"pull_requests.write")
+      reviewer = client.patch(*repo_path(repository), "pullrequests", pull_request_id.to_s,
+                              "reviewers", reviewer_id.to_s,
+                              body: { vote: value },
+                              family: :git, project: resolved.project_id)
+      summarize_reviewer(reviewer)
+    end
+
+    # Completion, with two guards the design insists on.
+    #
+    # The expected source commit is sent as `lastMergeSourceCommit`, so a push
+    # that lands between reading the pull request and completing it makes Azure
+    # refuse rather than merge code the caller never saw. And the response is not
+    # the answer: Azure accepts the request and completes asynchronously, so a
+    # 200 here means "accepted", and the caller re-reads until the status is
+    # actually `completed` or reports it as pending.
+    #
+    # bypassPolicy is never set. A pull request blocked by branch policy stays
+    # blocked.
+    MERGE_STRATEGIES = %w[noFastForward squash rebase rebaseMerge].freeze
+
+    def complete(repository, pull_request_id, expected_commit:, merge_strategy: "squash",
+                 delete_source_branch: false, commit_message: nil)
+      unless MERGE_STRATEGIES.include?(merge_strategy.to_s)
+        raise ValidationFailed, "merge_strategy must be one of #{MERGE_STRATEGIES.join(', ')}"
+      end
+      raise ValidationFailed, "expected_commit is required to complete a pull request" if expected_commit.blank?
+
+      client, resolved = client_for(:"pull_requests.complete")
+      body = {
+        status: "completed",
+        lastMergeSourceCommit: { commitId: expected_commit.to_s },
+        completionOptions: {
+          mergeStrategy: merge_strategy.to_s,
+          deleteSourceBranch: delete_source_branch == true,
+          bypassPolicy: false,
+          mergeCommitMessage: commit_message.presence
+        }.compact
+      }
+
+      accepted = client.patch(*repo_path(repository), "pullrequests", pull_request_id.to_s,
+                              body: body, family: :git, project: resolved.project_id)
+      confirm_completion(repository, pull_request_id, accepted)
+    end
+
+    # Re-read until Azure confirms, rather than reporting the acceptance as a
+    # merge. A pull request that is still `active` after the last read is
+    # reported as pending with its merge status — "we asked, it has not landed
+    # yet" — which is the honest answer and the one that does not invite a
+    # second completion attempt.
+    def confirm_completion(repository, pull_request_id, accepted, attempts: 3, interval: nil)
+      interval = interval || AppConfig.completion_poll_interval
+      attempts.times do |index|
+        current = get(repository, pull_request_id)
+        return current.merge(completed: true) if current[:status] == "completed"
+        return current.merge(completed: false, abandoned: true) if current[:status] == "abandoned"
+
+        sleep(interval) unless index == attempts - 1
+      end
+
+      summarize(accepted, full: true).merge(
+        completed: false,
+        pending: true,
+        note: "Azure accepted the completion but the pull request has not finished merging. " \
+              "Re-read it rather than completing again — branch policies or a merge conflict may still block it."
+      )
+    end
+
     # PR ↔ work item is an artifact relation on the WORK ITEM, added through the
     # work item patch API — it is not a field on the pull request. Linking never
     # transitions the work item's state.
@@ -243,6 +343,18 @@ module AzureDevops
         left_line: context&.dig("leftFileStart", "line"),
         published_at: thread["publishedDate"],
         comments: Array(thread["comments"]).reject { |c| c["isDeleted"] }.map { |c| summarize_comment(c) }
+      }.compact
+    end
+
+    def summarize_reviewer(reviewer)
+      {
+        id: reviewer["id"],
+        name: reviewer["displayName"],
+        unique_name: reviewer["uniqueName"],
+        vote: reviewer["vote"],
+        vote_label: VOTES.key(reviewer["vote"]),
+        required: reviewer["isRequired"],
+        has_declined: reviewer["hasDeclined"]
       }.compact
     end
 

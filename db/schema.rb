@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_12_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_12_110000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -112,6 +112,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_12_090000) do
     t.index ["user_id", "user_type"], name: "user_index"
   end
 
+  create_table "azure_devops_deliveries", force: :cascade do |t|
+    t.bigint "azure_devops_subscription_id", null: false
+    t.datetime "created_at", null: false
+    t.string "event_id", null: false
+    t.string "event_type"
+    t.datetime "received_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["azure_devops_subscription_id", "event_id"], name: "idx_ado_deliveries_event", unique: true
+    t.index ["azure_devops_subscription_id"], name: "idx_ado_deliveries_subscription"
+    t.index ["received_at"], name: "idx_ado_deliveries_received_at"
+  end
+
   create_table "azure_devops_installations", force: :cascade do |t|
     t.jsonb "allowed_project_ids", default: [], null: false
     t.string "app_config_key", default: "default", null: false
@@ -154,6 +166,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_12_090000) do
     t.index ["created_at"], name: "idx_ado_operations_created_at"
     t.index ["integration_id", "operation_key"], name: "idx_ado_operations_key", unique: true
     t.index ["integration_id"], name: "index_azure_devops_operations_on_integration_id"
+  end
+
+  create_table "azure_devops_subscriptions", force: :cascade do |t|
+    t.string "azure_subscription_id"
+    t.datetime "created_at", null: false
+    t.text "encrypted_password", null: false
+    t.string "endpoint_id", null: false
+    t.string "error_code"
+    t.string "event_type", null: false
+    t.bigint "integration_id", null: false
+    t.datetime "last_checked_at"
+    t.datetime "last_event_at"
+    t.string "status", default: "pending", null: false
+    t.datetime "updated_at", null: false
+    t.index ["endpoint_id"], name: "index_azure_devops_subscriptions_on_endpoint_id", unique: true
+    t.index ["integration_id", "event_type"], name: "idx_ado_subscriptions_integration_event", unique: true
+    t.index ["integration_id"], name: "index_azure_devops_subscriptions_on_integration_id"
   end
 
   create_table "board_activities", force: :cascade do |t|
@@ -1261,9 +1290,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_12_090000) do
   add_foreign_key "asset_versions", "users", column: "uploaded_by_id"
   add_foreign_key "assets", "terminal_sessions", on_delete: :nullify
   add_foreign_key "assets", "users", column: "created_by_id"
+  add_foreign_key "azure_devops_deliveries", "azure_devops_subscriptions"
   add_foreign_key "azure_devops_installations", "companies"
   add_foreign_key "azure_devops_installations", "users", column: "approved_by_id"
   add_foreign_key "azure_devops_operations", "integrations"
+  add_foreign_key "azure_devops_subscriptions", "integrations"
   add_foreign_key "board_activities", "board_tasks"
   add_foreign_key "board_activities", "boards"
   add_foreign_key "board_activities", "users", column: "actor_id"
