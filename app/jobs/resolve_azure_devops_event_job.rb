@@ -32,7 +32,6 @@ class ResolveAzureDevopsEventJob < ApplicationJob
 
   def resolve_build(integration, resource)
     build_id = resource["id"]
-    repository_id = resource.dig("repository", "id")
     return if build_id.blank?
 
     build = AzureDevops::BuildService.new(integration).get(build_id)
@@ -40,12 +39,26 @@ class ResolveAzureDevopsEventJob < ApplicationJob
     # completed has no verdict to report, whatever the event claimed.
     return unless build[:status].to_s == "completed"
 
+    # The repository comes from AZURE's answer, not from the payload, and it has
+    # to be one this connection actually owns. Routing on the delivered id would
+    # let a delivery on one project's subscription resolve gates in another
+    # project that happens to hold that repository — the gate scope looks
+    # repositories up across every project.
+    repository = owned_repository(integration, build[:repository_id])
+    return if repository.nil?
+
     GateService.resolve_azure_devops_build(
-      external_repository_id: repository_id.presence || build[:repository_id],
+      external_repository_id: repository.external_id,
       build_id: build_id,
       result: build[:result],
       commit: build[:commit]
     )
+  end
+
+  def owned_repository(integration, external_id)
+    return nil if external_id.blank?
+
+    Repository.find_by(external_id: external_id, integration_id: integration.id)
   end
 
   def resolve_pull_request(integration, resource)
@@ -53,7 +66,7 @@ class ResolveAzureDevopsEventJob < ApplicationJob
     repository_id = resource.dig("repository", "id")
     return if pull_request_id.blank? || repository_id.blank?
 
-    repository = Repository.find_by(external_id: repository_id, integration_id: integration.id)
+    repository = owned_repository(integration, repository_id)
     return if repository.nil?
 
     policies = AzureDevops::BuildService.new(integration).policy_evaluations(repository, pull_request_id)

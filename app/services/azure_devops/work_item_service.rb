@@ -56,7 +56,7 @@ module AzureDevops
     # clause to it, because the fragment can close the clause itself.
     def query(filters: {}, limit: DEFAULT_LIMIT, cursor: nil)
       client, resolved = client_for(:"work_items.read")
-      wiql = build_wiql(filters, resolved.project_id)
+      wiql = build_wiql(filters)
 
       # WIQL has no generic $skip. Paging is done over the ORDERED id list it
       # returns, which is deterministic because the query always orders by id.
@@ -139,8 +139,13 @@ module AzureDevops
                           body: patch, family: :wit, project: resolved.project_id,
                           content_type: "application/json-patch+json")
       detail(item)
-    rescue Conflict, ValidationFailed => e
-      raise e unless expected_revision.present?
+    rescue Conflict => e
+      # Only an actual conflict is re-raised as one, and only when a revision was
+      # pinned. A ValidationFailed — a forbidden state transition, a missing
+      # required field, a bad area path — propagates with its own message: told
+      # "changed since revision 7" the agent re-reads, sees revision 7, and
+      # retries the same invalid request forever.
+      raise e if expected_revision.blank?
 
       current = begin
         get(work_item_id)[:rev]
@@ -220,15 +225,51 @@ module AzureDevops
       ).compact
     end
 
-    # A work item id is unique per organization, not per project, so an id from
-    # a neighbouring project would otherwise read fine through this connection.
+    # A work item id is unique per organization, not per project, so an id from a
+    # neighbouring project would otherwise read fine through this connection.
+    #
+    # `System.TeamProject` is the project NAME, not its GUID — comparing it to
+    # `resolved.project_id` can never match, so the only check that ever did
+    # anything was against the cached display name. That cache goes stale on a
+    # rename and is absent on a connection whose name was never recorded, and
+    # both used to fail every read permanently. So the name is resolved from
+    # Azure when it is missing, and a name we cannot establish is a diagnostic
+    # rather than a refusal.
     def verify_project_scope!(item, resolved)
-      project_id = item.dig("fields", "System.TeamProject")
-      return if project_id.blank?
-      return if project_id == resolved.project_id
-      return if project_id.to_s == integration.azure_project_name.to_s
+      item_project = item.dig("fields", "System.TeamProject").to_s
+      return if item_project.blank?
+      # Some responses carry the GUID instead; accept either.
+      return if item_project == resolved.project_id
 
-      raise NotAuthorized, "That work item is not in this connection's Azure project"
+      expected = expected_project_name(resolved)
+      return if expected.blank?
+      return if item_project.casecmp?(expected)
+
+      raise NotAuthorized,
+            "Work item is in Azure project '#{item_project}', not this connection's '#{expected}'"
+    end
+
+    # The connection's Azure project NAME, from settings when it is recorded and
+    # from Azure otherwise. Memoized per service instance, and a lookup failure
+    # returns nil rather than raising: an unverifiable name must not turn every
+    # work-item read into an authorization error.
+    def expected_project_name(resolved)
+      return @expected_project_name if defined?(@expected_project_name)
+
+      @expected_project_name = integration.azure_project_name.presence || fetch_project_name(resolved)
+    end
+
+    def fetch_project_name(resolved)
+      client = Client.new(credential: resolved, organization: resolved.organization)
+      name = client.get("_apis", "projects", resolved.project_id, family: :core)["name"].presence
+      # Cache it so the next read does not pay for the lookup, and so a renamed
+      # project heals itself on first use.
+      integration.update_column(:settings, integration.settings.to_h.merge("azure_project_name" => name)) if name
+      name
+    rescue Error => e
+      Rails.logger.warn("[AzureDevops::WorkItemService] could not resolve project name for " \
+                        "integration #{integration.id}: #{e.code}")
+      nil
     end
 
     # Field reference names only, from an allowlist. An arbitrary `/fields/...`
@@ -260,7 +301,7 @@ module AzureDevops
 
     # WIQL is assembled from bound clauses; every value passes through the
     # escaper and the project predicate is added unconditionally.
-    def build_wiql(filters, project_id)
+    def build_wiql(filters)
       clauses = [ "[System.TeamProject] = @project" ]
 
       if (ids = Array(filters[:ids]).map(&:to_i).reject(&:zero?)).any?
@@ -274,16 +315,21 @@ module AzureDevops
       clauses << "[System.State] NOT IN ('Closed', 'Removed', 'Done')" if filters[:open_only]
 
       # @project resolves to the project the request is scoped to, which is the
-      # one in the URL path — so the predicate cannot be redirected by a filter.
-      _ = project_id
+      # one in the URL path — so the predicate cannot be redirected by a filter,
+      # and the caller never passes a project id in here at all.
       "SELECT [System.Id] FROM WorkItems WHERE #{clauses.join(' AND ')} ORDER BY [System.Id] DESC"
     end
 
     # WIQL string literals are single-quoted; doubling the quote is the escape.
     # Control characters are dropped rather than escaped — nothing legitimate
     # puts them in a work item filter.
+    #
+    # Truncation happens BEFORE escaping. The other order can cut an escaped
+    # `''` pair in half and ship an unterminated string literal: a 199-character
+    # value ending in a quote becomes 200 characters ending in `''`, and
+    # truncating to 200 keeps only the first of them.
     def escape(value)
-      value.to_s.gsub(/[\x00-\x1f]/, "").gsub("'", "''").truncate(200, omission: "")
+      value.to_s.gsub(/[\x00-\x1f]/, "").truncate(200, omission: "").gsub("'", "''")
     end
   end
 end

@@ -142,7 +142,7 @@ class Repository < ApplicationRecord
     return nil if parts.values.any?(&:blank?)
 
     encoded = parts.values_at(:organization, :project, :repository).map { |p| ERB::Util.url_encode(p) }
-    "https://dev.azure.com/#{encoded[0]}/#{encoded[1]}/_git/#{encoded[2]}"
+    "#{AzureDevops::AppConfig.api_host}/#{encoded[0]}/#{encoded[1]}/_git/#{encoded[2]}"
   end
 
   def mark_public_source_as_public

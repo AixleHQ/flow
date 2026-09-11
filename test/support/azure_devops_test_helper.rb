@@ -59,6 +59,35 @@ module AzureDevopsTestHelper
       )
   end
 
+  # Inject the canonical fakes for the app-owned Azure adapters (R3). Use this in
+  # caller tests — tool handlers, controllers, jobs — instead of scattering
+  # `stub_request` through them: WebMock stubs belong in the adapter contract
+  # tests, which are what keep these fakes honest (R4, docs/testing.md §4).
+  #
+  # CredentialProvider and Client stay REAL, because the authorization chain is
+  # usually the thing under test; only the HTTP-shaped services above it are
+  # replaced. An Entra token stub is still needed, so this installs one.
+  AzureFakes = Struct.new(:repositories, :pull_requests, :work_items, :builds, keyword_init: true)
+
+  def stub_azure_devops!(integration: nil, **overrides)
+    if integration&.azure_devops_installation
+      stub_azure_token(tenant_id: integration.azure_devops_installation.tenant_id)
+    end
+
+    fakes = AzureFakes.new(
+      repositories: FakeAzureDevops::RepositoryService.new(integration, **overrides.fetch(:repositories, {})),
+      pull_requests: FakeAzureDevops::PullRequestService.new(integration, **overrides.fetch(:pull_requests, {})),
+      work_items: FakeAzureDevops::WorkItemService.new(integration, **overrides.fetch(:work_items, {})),
+      builds: FakeAzureDevops::BuildService.new(integration, **overrides.fetch(:builds, {}))
+    )
+
+    AzureDevops::RepositoryService.stubs(:new).returns(fakes.repositories)
+    AzureDevops::PullRequestService.stubs(:new).returns(fakes.pull_requests)
+    AzureDevops::WorkItemService.stubs(:new).returns(fakes.work_items)
+    AzureDevops::BuildService.stubs(:new).returns(fakes.builds)
+    fakes
+  end
+
   def azure_url(organization, *segments, **query)
     path = segments.map { |s| ERB::Util.url_encode(s.to_s) }.join("/")
     url = "#{AZURE_API_HOST}/#{ERB::Util.url_encode(organization)}/#{path}"

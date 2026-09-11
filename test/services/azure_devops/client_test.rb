@@ -105,6 +105,68 @@ module AzureDevops
       assert_requested stub, times: 1
     end
 
+    # Regression: System.TeamProject is the project NAME, so the old check
+    # compared it to a GUID and could only ever fall through to a cached display
+    # name — absent or stale, every work-item read failed permanently.
+    test "a work item is scoped by project NAME, resolved from Azure when it is not cached" do
+      @integration.settings = @integration.settings.except("azure_project_name")
+      @integration.save!
+      stub_request(:get, %r{/_apis/projects/#{@integration.azure_project_id}}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { id: @integration.azure_project_id, name: "Customer Platform" }.to_json
+      )
+      stub_request(:get, %r{/_apis/wit/workitems/11}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { id: 11, rev: 2, fields: { "System.TeamProject" => "Customer Platform",
+                                          "System.Title" => "t" } }.to_json
+      )
+
+      item = WorkItemService.new(@integration).get(11)
+
+      assert_equal 11, item[:id]
+      # Resolved once and cached, so the next read does not pay for the lookup.
+      assert_equal "Customer Platform", @integration.reload.azure_project_name
+    end
+
+    test "a work item from a neighbouring Azure project is refused" do
+      stub_request(:get, %r{/_apis/wit/workitems/11}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { id: 11, rev: 2, fields: { "System.TeamProject" => "Someone Else" } }.to_json
+      )
+
+      error = assert_raises(NotAuthorized) { WorkItemService.new(@integration).get(11) }
+      assert_match(/Someone Else/, error.message)
+    end
+
+    # Regression: update rescued ValidationFailed too and always re-raised it as a
+    # revision conflict, so an agent told "changed since revision 7" re-read, saw
+    # revision 7, and retried the same invalid request forever.
+    test "a process-rule rejection is reported as a validation failure, not a conflict" do
+      stub_request(:patch, %r{/_apis/wit/workitems/11}).to_return(
+        status: 400, headers: { "Content-Type" => "application/json" },
+        body: { message: "The field 'State' contains an invalid value" }.to_json
+      )
+
+      error = assert_raises(ValidationFailed) do
+        WorkItemService.new(@integration).update(11, fields: { state: "Nope" }, expected_revision: 7)
+      end
+      assert_match(/invalid value/, error.message)
+    end
+
+    # Regression: escaping before truncating could cut an escaped '' pair in half
+    # and ship an unterminated WIQL string literal.
+    test "a long filter value ending in a quote stays balanced" do
+      wiql = nil
+      stub_request(:post, %r{/_apis/wit/wiql}).to_return do |req|
+        wiql = JSON.parse(req.body)["query"]
+        { status: 200, headers: { "Content-Type" => "application/json" }, body: { workItems: [] }.to_json }
+      end
+
+      WorkItemService.new(@integration).query(filters: { title_contains: "#{'a' * 199}'" })
+
+      assert_equal 0, wiql.count("'") % 2, "WIQL has an unbalanced quote: #{wiql}"
+    end
+
     test "paginate follows Azure's continuation header and stops at the limit" do
       base = "#{AZURE_API_HOST}/#{@resolved.organization}/_apis/paged"
       stub_request(:get, base).with(query: { "api-version" => "7.1" })

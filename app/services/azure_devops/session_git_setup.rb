@@ -41,7 +41,11 @@ module AzureDevops
       {
         "AIXLE_AZURE_GIT_URL" => Settings.azure_devops&.git_credentials_url.presence ||
           "http://web:4002/azure/git/credentials",
-        "AIXLE_AZURE_GIT_KEY" => GitSessionKey.generate(session)
+        "AIXLE_AZURE_GIT_KEY" => GitSessionKey.generate(session),
+        # The host the helper will answer for. Configurable because api_host is
+        # (sovereign clouds), and a helper hardcoded to dev.azure.com would
+        # silently refuse every request on such a deployment.
+        "AIXLE_AZURE_GIT_HOST" => URI.parse(AppConfig.api_host).host
       }
     end
 
@@ -106,16 +110,24 @@ module AzureDevops
         git -C #{path} config credential.useHttpPath true
         git -C #{path} config credential.#{url}.helper #{helper}
         git -C #{path} config credential.#{url}.aixleRepositoryId #{id}
+        git -C #{path} config credential.#{url}.aixleAuthtype #{authtype_supported? ? 1 : 0}
         git -C #{path} config --unset-all http.extraheader || true
       SH
     end
 
     # Detected, not assumed, and detected per image: the base image installs the
     # distribution's Git without pinning a version, and a custom image can carry
-    # anything. A version string alone is the weaker signal, so the helper
-    # protocol capability is what gets reported into session context.
+    # anything.
+    #
+    # The answer is written into each checkout's git config as
+    # `credential.<url>.aixleAuthtype`, which is where the helper reads it — the
+    # helper cannot probe git itself without recursing, and process env would not
+    # survive the agent opening a new shell. `defined?` rather than `||=` so a
+    # negative answer is memoized instead of re-probing on every repository.
     def authtype_supported?
-      @authtype_supported ||= begin
+      return @authtype_supported if defined?(@authtype_supported)
+
+      @authtype_supported = begin
         out, = runtime.exec(container_id, [ "sh", "-c", "git --version" ])
         version = Array(out).join[/\d+\.\d+(\.\d+)?/]
         version.present? && Gem::Version.new(version) >= AUTHTYPE_MIN_GIT

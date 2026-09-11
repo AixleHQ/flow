@@ -87,6 +87,10 @@ module AzureDevops
       {
         id: build["id"],
         build_number: build["buildNumber"],
+        # Azure's own answer about which repository the build ran against. The
+        # webhook payload carries one too, and this is the one that is trusted:
+        # gate routing must not follow an id the caller supplied.
+        repository_id: build.dig("repository", "id"),
         # `status` is the lifecycle (notStarted/inProgress/completed) and
         # `result` is the verdict. A completed build with no result is not a
         # pass — that is the pair a single "status" field would flatten away.

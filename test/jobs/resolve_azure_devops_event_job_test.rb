@@ -6,6 +6,12 @@ require "test_helper"
 # not state. `git.pullrequest.merged` fires for a merge that FAILED on a conflict
 # exactly as it does for one that landed, so believing the payload would mark CI
 # green for a merge that never happened.
+#
+# These keep WebMock rather than FakeAzureDevops on purpose. What is under test
+# is that the job goes BACK to Azure and prefers that answer over the delivered
+# one — asserted against a real HTTP round trip whose body disagrees with the
+# payload. Faking the adapter here would assert that the fake re-reads, not that
+# the job does.
 class ResolveAzureDevopsEventJobTest < ActiveSupport::TestCase
   setup do
     with_azure_devops_enabled
@@ -21,11 +27,14 @@ class ResolveAzureDevopsEventJobTest < ActiveSupport::TestCase
     )
   end
 
-  def stub_build(id:, status: "completed", result: "succeeded", commit: "abc123")
+  # `repository` is included deliberately: gate routing follows AZURE's answer
+  # about which repository the build ran against, not the id in the payload.
+  def stub_build(id:, status: "completed", result: "succeeded", commit: "abc123", repository_id: nil)
     stub_request(:get, %r{/_apis/build/builds/#{id}}).to_return(
       status: 200, headers: { "Content-Type" => "application/json" },
       body: { id: id, status: status, result: result, sourceVersion: commit,
-              buildNumber: "20260912.1" }.to_json
+              buildNumber: "20260912.1",
+              repository: { id: repository_id || @repository.external_id } }.to_json
     )
   end
 
@@ -92,6 +101,17 @@ class ResolveAzureDevopsEventJobTest < ActiveSupport::TestCase
 
   # A transient Azure failure must leave the gate pending for the reconciliation
   # sweep rather than retrying the job against a provider that is already unhappy.
+  # The payload names a repository too, and it is NOT what routing follows: a
+  # delivery on one project's subscription must not resolve gates in another
+  # project that happens to hold that repository.
+  test "a build whose repository this connection does not own resolves nothing" do
+    stub_build(id: 55, repository_id: SecureRandom.uuid)
+    GateService.expects(:resolve_azure_devops_build).never
+
+    perform(event_type: "build.complete",
+            resource: { "id" => 55, "repository" => { "id" => @repository.external_id } })
+  end
+
   test "an Azure failure is swallowed so the reconciliation sweep can take over" do
     stub_request(:get, %r{/_apis/build/builds/55}).to_return(status: 503, body: "")
 

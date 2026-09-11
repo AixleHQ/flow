@@ -65,6 +65,19 @@ module AzureDevops
       # merges asynchronously, so this is a real waiting loop — configurable
       # rather than a constant so a test can set it to zero instead of stubbing
       # sleep (docs/testing.md R7).
+      # Service Hooks are the one inbound part of this integration, so they are
+      # only attempted when a publicly reachable base URL is actually
+      # configured. Without this a development deployment would create
+      # subscriptions pointing at localhost that Azure accepts and can never
+      # deliver to, and then go on probation trying.
+      def webhooks_enabled?
+        webhook_base_url.present?
+      end
+
+      def webhook_base_url
+        Settings.azure_devops&.webhook_base_url.presence
+      end
+
       def completion_poll_interval
         (Settings.azure_devops&.completion_poll_interval || 1.0).to_f
       end

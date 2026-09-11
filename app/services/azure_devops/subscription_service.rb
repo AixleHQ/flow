@@ -23,8 +23,11 @@ module AzureDevops
     # one rotates its password and orphans the subscription Azure still holds.
     def ensure_all!(event_types: AzureDevopsSubscription::EVENT_TYPES, base_url: nil)
       event_types.filter_map do |event_type|
-        existing = integration.azure_devops_subscriptions.live.find_by(event_type: event_type)
-        next existing if existing&.azure_subscription_id.present?
+        # ANY existing row, not only a live one: the unique index is on
+        # (integration, event_type), so a row left behind by an earlier failed
+        # attempt must be reused rather than duplicated.
+        existing = integration.azure_devops_subscriptions.find_by(event_type: event_type)
+        next existing if existing&.azure_subscription_id.present? && existing.live?
 
         create!(event_type: event_type, base_url: base_url, subscription: existing)
       rescue Error => e
@@ -35,7 +38,7 @@ module AzureDevops
     end
 
     def create!(event_type:, base_url: nil, subscription: nil)
-      subscription ||= integration.azure_devops_subscriptions.new(event_type: event_type)
+      subscription ||= integration.azure_devops_subscriptions.find_or_initialize_by(event_type: event_type)
       subscription.save! if subscription.new_record?
 
       client, resolved = CredentialProvider.client_for(integration)
@@ -133,10 +136,8 @@ module AzureDevops
     # needs a publicly reachable host: Azure posts INBOUND, so `localhost:4000`
     # produces a subscription Azure can create and never deliver to.
     def callback_url(subscription, base_url)
-      root = base_url.presence ||
-             Settings.azure_devops&.webhook_base_url.presence ||
-             "#{Settings.protocol}://#{Settings.domain}"
-      raise CredentialActionRequired, "No public base URL is configured for Azure webhooks" if root.blank?
+      root = base_url.presence || AppConfig.webhook_base_url
+      raise CredentialActionRequired, "AZURE_DEVOPS_WEBHOOK_BASE_URL is not set" if root.blank?
 
       "#{root.to_s.chomp('/')}/webhooks/azure_devops/#{subscription.endpoint_id}"
     end

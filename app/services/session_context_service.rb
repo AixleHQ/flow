@@ -486,7 +486,10 @@ class SessionContextService
       # resolve to the same directory and silently overwrite each other, and a
       # path recomputed later from a renamed remote no longer pointed at the
       # checkout. Everything downstream reads this map instead of recomputing.
-      path_map = RepositoryWorkspacePath.resolve(repos)
+      # `for_session`, not `resolve`: a session being re-provisioned keeps the
+      # paths its existing checkouts are actually at, and only newly attached
+      # repositories get a freshly resolved one.
+      path_map = RepositoryWorkspacePath.for_session(session, repos)
       RepositoryWorkspacePath.persist!(session, path_map)
 
       repos.group_by(&:integration_id).each do |integration_id, group_repos|

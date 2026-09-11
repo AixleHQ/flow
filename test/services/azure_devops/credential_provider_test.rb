@@ -110,6 +110,24 @@ module AzureDevops
       assert_nil credential[:expires_in]
     end
 
+    # Regression: capability lists arrive from the browser and land in `settings`,
+    # which IntegrationResource serializes whole. An unrecognized entry would be
+    # persisted and echoed back to every viewer.
+    test "capabilities are intersected with the known set on create" do
+      service = IntegrationService.new(company: @integration.company,
+                                       connected_by: @integration.connected_by,
+                                       project: @integration.project)
+
+      assert_equal %w[repositories.read],
+                   service.class.sanitize_capabilities([ "repositories.read", "../../admin", "nonsense" ])
+      # nil means "the caller did not say" and takes the defaults; an explicit
+      # empty list means "nothing", which is a connection that can do nothing
+      # until it is edited.
+      assert_equal IntegrationService::DEFAULT_CAPABILITIES, service.class.sanitize_capabilities(nil)
+      assert_empty service.class.sanitize_capabilities([])
+      refute_includes IntegrationService::DEFAULT_CAPABILITIES, "pull_requests.complete"
+    end
+
     test "refuses a non-Azure integration outright" do
       github = create(:integration, :github, :active)
 

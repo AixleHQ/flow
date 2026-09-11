@@ -65,6 +65,29 @@ class RepositoryWorkspacePathTest < ActiveSupport::TestCase
     assert_equal "/workspace/repo/api", RepositoryWorkspacePath.for_repository(session, repository)
   end
 
+  # Regression: persist! merged the freshly-resolved map OVER the stored one, so
+  # re-provisioning renamed a checkout that already existed and the agent's
+  # context table pointed somewhere the files were not.
+  test "re-provisioning keeps the path an existing checkout is actually at" do
+    first = create(:repository, full_name: "acme/api", scope: @project)
+    session = create(:terminal_session, :running, user: @user, project: @project)
+    RepositoryWorkspacePath.persist!(session, RepositoryWorkspacePath.resolve([ first ]))
+    assert_equal "/workspace/repo/api", RepositoryWorkspacePath.stored_map(session)[first.id]
+
+    # A second repository with the same basename is attached. Resolving the set
+    # afresh would now qualify BOTH paths — but the first one's files are already
+    # at the bare path.
+    second = create(:repository, full_name: "other/api", scope: @project,
+                                 integration: create(:integration, :gitlab, :active, company: @company,
+                                                                   connected_by: @user))
+    map = RepositoryWorkspacePath.for_session(session, [ first, second ])
+    RepositoryWorkspacePath.persist!(session, map)
+
+    assert_equal "/workspace/repo/api", RepositoryWorkspacePath.stored_map(session)[first.id]
+    # The newcomer gets a distinct path rather than colliding with it.
+    refute_equal "/workspace/repo/api", RepositoryWorkspacePath.stored_map(session)[second.id]
+  end
+
   test "a session with no stored map still resolves a path" do
     repository = create(:repository, full_name: "acme/api", scope: @project)
     session = create(:terminal_session, :running, user: @user, project: @project)

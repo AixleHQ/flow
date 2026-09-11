@@ -43,7 +43,7 @@ class AzureDevopsInstallation < ApplicationRecord
   validates :tenant_id, format: { with: GUID, message: "must be a tenant GUID" }
 
   def organization_url
-    "https://dev.azure.com/#{organization_slug}"
+    "#{AzureDevops::AppConfig.api_host}/#{organization_slug}"
   end
 
   # Approved scope is an allowlist with no "unrestricted" state: an empty list

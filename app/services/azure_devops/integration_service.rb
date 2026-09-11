@@ -24,6 +24,20 @@ module AzureDevops
     # accepting a form's defaults, so it is switched on explicitly or not at all.
     DEFAULT_CAPABILITIES = (ALL_CAPABILITIES - %w[pull_requests.complete]).freeze
 
+    # Capability lists arrive from the browser and land in `settings`, which
+    # IntegrationResource serializes whole — so an unrecognized entry would be
+    # persisted and echoed back to every viewer. Intersecting here rather than in
+    # the controller means every caller gets it, not just the one door.
+    #
+    # `nil` means "the caller did not say" and takes the defaults; an explicit
+    # empty list means "nothing", which is a connection that can be attached and
+    # can do nothing until it is edited.
+    def self.sanitize_capabilities(requested)
+      return DEFAULT_CAPABILITIES if requested.nil?
+
+      Array(requested).map(&:to_s) & ALL_CAPABILITIES
+    end
+
     class ConfigurationError < StandardError; end
 
     def initialize(company:, connected_by:, project:)
@@ -55,7 +69,7 @@ module AzureDevops
           "client_id" => installation.client_id,
           "service_principal_object_id" => installation.service_principal_object_id,
           "azure_project_id" => azure_project_id.to_s,
-          "enabled_capabilities" => Array(enabled_capabilities).presence || DEFAULT_CAPABILITIES
+          "enabled_capabilities" => self.class.sanitize_capabilities(enabled_capabilities)
         }
       )
 
@@ -75,7 +89,7 @@ module AzureDevops
           "auth_mode" => "pat",
           "organization_slug" => organization_slug.to_s.strip,
           "azure_project_id" => azure_project_id.to_s,
-          "enabled_capabilities" => Array(enabled_capabilities).presence || DEFAULT_CAPABILITIES
+          "enabled_capabilities" => self.class.sanitize_capabilities(enabled_capabilities)
         }
       )
       integration.credentials_data = { "personal_access_token" => personal_access_token.to_s }
@@ -88,16 +102,12 @@ module AzureDevops
     # fails. `test` never mutates Azure.
     def test(integration)
       project_info = verify_selected_project!(integration)
-      integration.settings = integration.settings.to_h.merge(
-        "azure_project_name" => project_info[:name],
-        "identity_display_name" => project_info[:identity_display_name],
-        "last_verified_at" => Time.current.iso8601
-      ).compact
-      integration.status = :active
-      integration.save!
+      apply_verified(integration, project_info)
       { status: :active, project: project_info }
     rescue Error => e
-      mark_error(integration, e)
+      record_error(integration, e.code)
+      # The message goes to the caller, which puts it in a flash — not into
+      # `settings`, which reaches every viewer of the integrations page.
       { status: :error, error: e.code, message: e.message }
     end
 
@@ -113,7 +123,9 @@ module AzureDevops
 
       integration.credentials_data = { "personal_access_token" => personal_access_token.to_s }
       integration.status = :active
-      integration.settings = integration.settings.to_h.merge("last_verified_at" => Time.current.iso8601)
+      integration.settings = integration.settings.to_h
+                                        .merge("last_verified_at" => Time.current.iso8601)
+                                        .except("error", "error_message")
       integration.save!
       integration
     end
@@ -150,23 +162,43 @@ module AzureDevops
     def activate(integration)
       info = verify_selected_project!(integration)
       integration.name = "#{integration.settings['organization_slug']}/#{info[:name]}"
-      integration.settings = integration.settings.to_h.merge(
-        "azure_project_name" => info[:name],
-        "identity_display_name" => info[:identity_display_name],
-        "last_verified_at" => Time.current.iso8601
-      ).compact
-      integration.status = :active
-      integration.save!
+      apply_verified(integration, info)
+      provision_subscriptions(integration)
       integration
     rescue Error => e
       # Persist the failure so the card can explain it, but keep the connection
       # inactive: a row that looks connected and cannot reach Azure is worse
       # than a visible error.
       integration.name = integration.name.presence || "Azure DevOps (unverified)"
-      integration.status = :error
-      integration.settings = integration.settings.to_h.merge("error" => e.code, "error_message" => e.message)
-      integration.save
+      record_error(integration, e.code)
       raise ConfigurationError, e.message
+    end
+
+    # A successful verification CLEARS the recorded error. Without this a
+    # connection that failed once and was then repaired keeps shipping the old
+    # error code to the browser while reporting itself active.
+    def apply_verified(integration, info)
+      integration.settings = integration.settings.to_h.merge(
+        "azure_project_name" => info[:name],
+        "identity_display_name" => info[:identity_display_name],
+        "last_verified_at" => Time.current.iso8601
+      ).compact.except("error", "error_message")
+      integration.status = :active
+      integration.save!
+    end
+
+    # Service Hooks, best effort and after the connection is already active.
+    # Creating them needs organization-level permission this connection may not
+    # have, and everything on demand works without them — so a failure is logged
+    # and the subscription row carries its own error, rather than failing a
+    # connection that is otherwise fine. `rake azure_devops:hooks` retries.
+    def provision_subscriptions(integration)
+      return unless AppConfig.webhooks_enabled?
+
+      SubscriptionService.new(integration).ensure_all!
+    rescue StandardError => e
+      Rails.logger.warn("[AzureDevops::IntegrationService] subscription setup skipped for " \
+                        "integration #{integration.id}: #{e.class}: #{e.message}")
     end
 
     # The one check that matters at connect time: the selected project must be
@@ -201,10 +233,23 @@ module AzureDevops
       nil
     end
 
-    def mark_error(integration, error)
+    # Only the adapter's own stable CODE is recorded. IntegrationResource
+    # serializes `settings` to the browser whole and says so in its own comment:
+    # raw provider errors do not belong there, and Azure's envelope text can
+    # name identities, policies and project structure.
+    #
+    # Saved WITHOUT validation on purpose. The commonest way to land here is a
+    # connection whose Azure project has left the installation's approved scope
+    # — which is exactly what `azure_devops_connection_is_scoped` rejects — so
+    # `save!` would raise out of the error handler and turn a reportable failure
+    # into a 500.
+    def record_error(integration, code = nil)
       integration.status = :error
-      integration.settings = integration.settings.to_h.merge("error" => error.code, "error_message" => error.message)
-      integration.save!
+      integration.settings = integration.settings.to_h.merge("error" => code).compact
+      return if integration.save(validate: false)
+
+      Rails.logger.error("[AzureDevops::IntegrationService] could not record the failure on " \
+                         "integration #{integration.id}")
     end
   end
 end

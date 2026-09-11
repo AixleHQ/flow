@@ -24,7 +24,29 @@ module InternalTools
           },
           gate_type: {
             type: "string",
-            description: "Gate type. Supported: github_checks_completed, github_workflow_completed"
+            description: "Gate type. Supported: github_checks_completed, github_workflow_completed, " \
+                         "gitlab_pipeline_completed, azure_devops_build_completed, " \
+                         "azure_devops_pr_policies_satisfied",
+            enum: %w[github_checks_completed github_workflow_completed gitlab_pipeline_completed
+                     azure_devops_build_completed azure_devops_pr_policies_satisfied]
+          },
+          build_id: {
+            type: "integer",
+            description: "(azure_devops_build_completed) Azure Pipelines build id"
+          },
+          pull_request_id: {
+            type: "integer",
+            description: "(azure_devops_pr_policies_satisfied) Azure pull request id"
+          },
+          repository_id: {
+            type: "integer",
+            description: "(azure_devops_*) Aixle repository id. Azure repositories are addressed by id, " \
+                         "not by name — a name would reach a same-named repository in another project."
+          },
+          expected_commit: {
+            type: "string",
+            description: "(azure_devops_*) The commit this gate is waiting on. A verdict about a different " \
+                         "commit leaves the gate pending, because the branch has moved on."
           },
           pr_number: {
             type: "integer",
@@ -38,7 +60,10 @@ module InternalTools
       })
     end
 
-    SUPPORTED_GATE_TYPES = %w[github_checks_completed github_workflow_completed gitlab_pipeline_completed].freeze
+    SUPPORTED_GATE_TYPES = %w[
+      github_checks_completed github_workflow_completed gitlab_pipeline_completed
+      azure_devops_build_completed azure_devops_pr_policies_satisfied
+    ].freeze
 
     def execute
       require_workflow_context!
@@ -70,6 +95,25 @@ module InternalTools
 
     private
 
+    # Azure gates record the repository GUID, never a display name: `full_name`
+    # is a display value two organizations can share and a rename changes, so a
+    # name would route one organization's build to another's board.
+    def azure_metadata(task, reference_key:, reference:)
+      return error("#{reference_key} must be a positive integer") unless reference > 0
+      return error("repository_id is required for an Azure DevOps gate") if params[:repository_id].blank?
+
+      project = task.board.project
+      repository = Repository.visible_for_project(project).find_by(id: params[:repository_id])
+      return error("Repository #{params[:repository_id]} is not linked to this task's project") if repository.nil?
+      return error("Repository #{repository.id} is not an Azure DevOps repository") unless repository.azure_devops?
+
+      {
+        external_repository_id: repository.external_id,
+        reference_key => reference,
+        expected_commit: params[:expected_commit].presence
+      }.compact
+    end
+
     def build_metadata(gate_type, task)
       case gate_type
       when "github_checks_completed"
@@ -99,6 +143,12 @@ module InternalTools
         end
 
         { repo_full_name: repo_full_name, run_id: run_id }
+
+      when "azure_devops_build_completed"
+        azure_metadata(task, reference_key: :build_id, reference: params[:build_id].to_i)
+
+      when "azure_devops_pr_policies_satisfied"
+        azure_metadata(task, reference_key: :pull_request_id, reference: params[:pull_request_id].to_i)
 
       when "gitlab_pipeline_completed"
         repo_full_name = params[:repo_full_name]

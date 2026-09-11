@@ -22,11 +22,14 @@ class Webhooks::AzureDevopsController < ActionController::API
   # probation. So anything that is not "we might succeed later" is acknowledged.
   MAX_PAYLOAD_BYTES = 512 * 1024
 
+  # Order matters: the limit is enforced before anything reads `params`.
+  # ActionController builds `params` from the parsed request body, so a check
+  # inside the action runs only after a 50 MB body has already been buffered and
+  # parsed — the guard would be there and do nothing.
+  before_action :enforce_payload_limit
   before_action :authenticate_subscription
 
   def receive
-    return head :content_too_large if request.content_length.to_i > MAX_PAYLOAD_BYTES
-
     payload = request.request_parameters
     event_id = payload["id"].presence || payload["notificationId"].presence
 
@@ -54,8 +57,20 @@ class Webhooks::AzureDevopsController < ActionController::API
 
   private
 
+  # `content_length` is absent on a chunked request, which cannot be checked up
+  # front at all; the app server's own body limit is what bounds that case, and
+  # this returns a refusal rather than pretending a missing header means zero.
+  def enforce_payload_limit
+    length = request.content_length
+    return if length.nil?
+
+    head :content_too_large if length.to_i > MAX_PAYLOAD_BYTES
+  end
+
   def authenticate_subscription
-    @subscription = AzureDevopsSubscription.find_by(endpoint_id: params[:endpoint_id])
+    # `request.path_parameters`, not `params`: reading `params` here would parse
+    # the body and defeat the limit enforced above.
+    @subscription = AzureDevopsSubscription.find_by(endpoint_id: request.path_parameters[:endpoint_id])
     return head :unauthorized if @subscription.nil?
 
     username, password = ActionController::HttpAuthentication::Basic.user_name_and_password(request)
