@@ -158,9 +158,10 @@ gitlab:
 # a tenant-local service principal for THIS client id, and an Azure DevOps
 # administrator adds that principal to the organization — see §5.2 of the design.
 azure_devops:
-  # Hard off switch. Hides the connect controls and refuses every Azure tool,
-  # discovery call and credential issuance while false, without removing data.
-  enabled: <%= ENV['AZURE_DEVOPS_ENABLED'] == 'true' %>
+  # There is no `enabled` flag: the feature is offered exactly when `apps.default`
+  # below carries a client id and a credential (or PAT mode is on). A separate
+  # boolean could only ever disagree with the configuration it sits next to.
+  #
   # Permits the fallback identity mode. PAT mode acts as the token's owner and
   # carries that person's full upstream permissions, so it is opt-in per
   # deployment rather than an automatic fallback for a failed app setup.

@@ -2,11 +2,13 @@
 
 # Shared setup for the Azure DevOps adapter tests.
 #
-# Everything Azure-facing is off by a deployment switch, so a test that does not
-# enable it exercises the disabled path — which is itself worth asserting, but is
-# not what most of these tests are about. `with_azure_devops_enabled` supplies a
-# complete operator configuration; the app credential is a client secret rather
-# than a certificate because the certificate path has its own focused test.
+# The feature is offered exactly when an operator has configured something that
+# can reach Azure, so "enabled" in these tests means "a usable app
+# configuration exists" rather than a flag being set. `with_azure_devops_enabled`
+# supplies a complete one; the app credential is a client secret rather than a
+# certificate because the certificate path has its own focused test.
+# `with_azure_devops_unconfigured` is the other side — a deployment where nobody
+# has set the feature up.
 module AzureDevopsTestHelper
   AZURE_TOKEN_HOST = "https://login.microsoftonline.com"
   AZURE_API_HOST = "https://dev.azure.com"
@@ -14,7 +16,6 @@ module AzureDevopsTestHelper
   def with_azure_devops_enabled(pat_mode: false, credential_generation: "v1")
     Settings.stubs(:azure_devops).returns(
       Hashie::Mash.new(
-        enabled: true,
         pat_mode_enabled: pat_mode,
         resource: "https://app.vssps.visualstudio.com/.default",
         login_host: AZURE_TOKEN_HOST,
@@ -31,6 +32,14 @@ module AzureDevopsTestHelper
           }
         }
       )
+    )
+  end
+
+  # No client id and no credential: nothing an operator did makes Azure
+  # reachable, so the feature is not offered at all.
+  def with_azure_devops_unconfigured
+    Settings.stubs(:azure_devops).returns(
+      Hashie::Mash.new(pat_mode_enabled: false, apps: { "default" => { "client_id" => nil } })
     )
   end
 

@@ -501,7 +501,7 @@ Implementation touchpoints beyond the new service classes:
 
 Operator onboarding is `lib/tasks/azure_devops.rake` (`approve`, `verify`, `scope`, `disable`, `list`) rather than a UI: §5.2's verification step is a human judgement about who controls an Azure organization, and nothing a form collects is evidence of it.
 
-Migrations are additive and leave GitHub/GitLab identity columns null. Hide Azure connect controls/tools behind `Settings.azure_devops.enabled` until core validation passes. Disabling the feature stops new Azure setup and execution without removing existing data; account for live sessions and outstanding credentials. A rollback must not route Azure records through GitHub fallback behavior.
+Migrations are additive and leave GitHub/GitLab identity columns null. Azure connect controls and tools are hidden until the deployment is actually configured — the design's proposed `Settings.azure_devops.enabled` flag was dropped for a derived predicate, because a boolean beside the credentials can only ever disagree with them ("enabled but unconfigured" fails at the first call; "configured but disabled" is a switch to forget). Disabling the feature stops new Azure setup and execution without removing existing data; account for live sessions and outstanding credentials. A rollback must not route Azure records through GitHub fallback behavior.
 
 ## 13. Acceptance and validation
 

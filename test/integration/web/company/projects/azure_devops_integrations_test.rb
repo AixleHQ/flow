@@ -51,8 +51,8 @@ class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::Inte
     end
   end
 
-  test "the connect entry is hidden entirely while the deployment switch is off" do
-    Settings.stubs(:azure_devops).returns(Hashie::Mash.new(enabled: false))
+  test "the connect entry is hidden entirely on a deployment nobody configured" do
+    with_azure_devops_unconfigured
 
     get company_project_integrations_path(@project)
 
@@ -103,6 +103,55 @@ class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::Inte
 
     assert_match(/No approved Azure organization installation/, flash[:alert])
     assert_equal 0, Integration.where(provider: "azure_devops").count
+  end
+
+  # The fastest path to a working connection, and the one a pilot uses: no Entra
+  # work at all, at the cost of acting as the token's owner.
+  test "PAT mode connects against a verified project and stores the token encrypted" do
+    with_azure_devops_enabled(pat_mode: true)
+    stub_request(:get, %r{/_apis/projects/#{@azure_project_id}}).to_return(
+      status: 200, headers: { "Content-Type" => "application/json" },
+      body: { id: @azure_project_id, name: "Customer Platform" }.to_json
+    )
+
+    post company_project_integrations_path(@project), params: {
+      provider: "azure_devops", auth_mode: "pat",
+      organization_slug: "contoso", azure_project_id: @azure_project_id,
+      personal_access_token: "azdo-pilot-token"
+    }
+
+    integration = Integration.where(provider: "azure_devops").last
+    assert integration.active?
+    assert_equal "pat", integration.azure_auth_mode
+    assert_nil integration.azure_devops_installation_id
+    assert_equal "azdo-pilot-token", integration.azure_personal_access_token
+    # The credentials column is encrypted and `settings` is serialized whole to
+    # the browser, so neither may carry the token in the clear.
+    refute_includes integration.credentials.to_s, "azdo-pilot-token"
+    refute_includes integration.settings.to_json, "azdo-pilot-token"
+  end
+
+  # Azure authenticates a PAT as Basic with an empty username; an Entra token is
+  # Bearer. The two are not interchangeable, so assert the wire shape.
+  test "PAT mode authenticates with basic auth rather than a bearer token" do
+    with_azure_devops_enabled(pat_mode: true)
+    expected = "Basic #{Base64.strict_encode64(':azdo-pilot-token')}"
+    stub_request(:get, %r{/_apis/projects/#{@azure_project_id}})
+      .with(headers: { "Authorization" => expected })
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                 body: { id: @azure_project_id, name: "Customer Platform" }.to_json)
+
+    post company_project_integrations_path(@project), params: {
+      provider: "azure_devops", auth_mode: "pat",
+      organization_slug: "contoso", azure_project_id: @azure_project_id,
+      personal_access_token: "azdo-pilot-token"
+    }
+
+    # The stub only matches the Basic header, so an active connection is itself
+    # the assertion that nothing sent a bearer token.
+    assert Integration.where(provider: "azure_devops").last.active?
+    # No Entra exchange happens in this mode at all.
+    assert_not_requested :post, %r{login\.microsoftonline\.com}
   end
 
   test "PAT mode is refused while the deployment has it switched off" do
