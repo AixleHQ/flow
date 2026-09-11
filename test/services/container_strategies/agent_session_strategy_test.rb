@@ -312,6 +312,7 @@ module ContainerStrategies
       strategy.stubs(:collect_logs).returns([ 0, {} ])
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
 
       result = strategy.before_cleanup(container_id: "abc123")
@@ -421,6 +422,7 @@ module ContainerStrategies
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
 
       assert_difference "SessionLog.count", 1 do
@@ -452,6 +454,7 @@ module ContainerStrategies
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
 
       result = strategy.before_cleanup(container_id: "abc123")
@@ -477,6 +480,7 @@ module ContainerStrategies
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
 
       assert_no_difference "SessionLog.count" do
@@ -503,6 +507,7 @@ module ContainerStrategies
       strategy.stubs(:collect_logs).returns([ 0, {} ])
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
 
       result = strategy.before_cleanup(container_id: "abc123")
 

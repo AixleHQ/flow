@@ -16,7 +16,11 @@ class BmadMethodInjector
     # (its `[compat.claude]` cells scan `.claude/skills`, `.claude/rules` and
     # `CLAUDE.md` and are on by default), so the claude-code install is what a Grok
     # session can actually consume — not a stand-in for a missing platform.
-    "grok" => "claude-code"
+    "grok" => "claude-code",
+    # BMAD ships a first-class `kiro` platform (verified against
+    # `bmad-method@6.11.0 install --list-tools`), which installs into .kiro/skills —
+    # exactly the workspace skills directory Kiro CLI reads.
+    "kiro_cli" => "kiro"
   }.freeze
 
   BMAD_HIDDEN_PATHS = %w[
@@ -25,6 +29,7 @@ class BmadMethodInjector
     .claude/skills
     .agents/skills
     .gemini/skills
+    .kiro/skills
   ].freeze
 
   VSCODE_SETTINGS_PATH = "/workspace/.vscode/settings.json"

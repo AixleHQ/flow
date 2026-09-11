@@ -18,6 +18,7 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
+  IconBrandAws,
   IconBrandGoogleFilled,
   IconBrandOpenai,
   IconBrandX,
@@ -104,6 +105,12 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; ic
     name: 'Grok',
     description: "xAI's Grok CLI for agentic coding in the terminal",
     icon: IconBrandX,
+  },
+  {
+    type: 'kiro_cli',
+    name: 'Kiro CLI',
+    description: "AWS's Kiro CLI for spec-driven agentic coding in the terminal",
+    icon: IconBrandAws,
   },
 ];
 

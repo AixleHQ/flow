@@ -24,6 +24,11 @@ export const AGENT_BRAND_COLORS: Record<string, string> = {
   // as the monochrome brand and stays visible on both light and dark surfaces,
   // which a literal #000 swatch would not.
   grok: '#71717a',
+  // Kiro's mark is purple, but the violet slot in this palette is already Cursor's.
+  // A darker purple step keeps the family right while staying distinguishable from
+  // #7c3aed at swatch size. Replace with the published brand value if one is ever
+  // sourced — no primary source states a hex today.
+  kiro_cli: '#7e22ce',
 };
 
 /** Google's four-color mark, for the "Sign in with Google" button only. */

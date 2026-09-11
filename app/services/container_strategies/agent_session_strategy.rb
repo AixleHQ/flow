@@ -123,8 +123,13 @@ module ContainerStrategies
       logs_count, log_contents = collect_logs(container, session, agent_service)
       logs_count += collect_terminal_output(container, session)
       outputs_count = collect_outputs(container, session)
-      collect_usage(session, agent_service, log_contents)
+      # Refresh first: an agent that rotates its token during a session leaves the
+      # stored credential stale, and usage collection may need to call the vendor with
+      # it (Kiro reads its credit counter, Grok prices models from the catalogue).
+      # Collecting first would spend the run's last API call on an expired token.
       persist_refreshed_credentials(container, session, agent_service)
+      persist_credential_metadata(container, SessionCompany.agent_credentials_for(session).find_by(agent_type: input[:agent_type]), agent_service, :session)
+      collect_usage(session, agent_service, log_contents)
       IntegrationCleanupService.release_session_locks!(session)
 
       Rails.logger.info("[AgentSession] Cleanup: #{logs_count} logs, #{outputs_count} outputs")

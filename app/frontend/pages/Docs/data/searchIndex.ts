@@ -130,7 +130,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'runtimes',
     title: 'Runtimes',
     section: 'User guide',
-    desc: 'The six LLM CLI runtimes: claude_code, cursor_cli, codex, gemini_cli, antigravity_cli, and grok.',
+    desc: 'The seven LLM CLI runtimes: claude_code, cursor_cli, codex, gemini_cli, antigravity_cli, grok, and kiro_cli.',
   },
   {
     slug: 'tools',

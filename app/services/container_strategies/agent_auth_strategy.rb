@@ -81,6 +81,9 @@ module ContainerStrategies
         if credential
           result[:credential_id] = credential.id
           Rails.logger.info("[AgentAuth] Credential saved: #{credential.id}")
+          # While this container is still up and signed in: the only chance to ask the
+          # CLI about the account before the user's first session.
+          persist_credential_metadata(container, credential, agent_service, :auth)
         end
       else
         Rails.logger.info("[AgentAuth] before_cleanup: auth not complete (#{auth_files.size} files) — no credential saved")

@@ -40,6 +40,7 @@ const AGENT_OPTIONS = [
   { value: 'gemini_cli', label: 'Gemini CLI' },
   { value: 'antigravity_cli', label: 'Antigravity CLI' },
   { value: 'grok', label: 'Grok' },
+  { value: 'kiro_cli', label: 'Kiro CLI' },
 ];
 
 // The shared status vocabulary — the four values the project feed exposes as

@@ -61,6 +61,10 @@ FactoryBot.define do
       agent_type { "grok" }
     end
 
+    trait :kiro_cli do
+      agent_type { "kiro_cli" }
+    end
+
     # == State Traits ==
 
     trait :expired do

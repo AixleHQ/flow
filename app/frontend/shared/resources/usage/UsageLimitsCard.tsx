@@ -3,12 +3,21 @@ import { Alert, Box, Button, Card, Group, Progress, Stack, Text, Title, Tooltip 
 import { IconRefresh } from '@tabler/icons-react';
 import { useState } from 'react';
 
-/** One rolling quota window as the vendor reports it. `utilization` is a percentage (0-100). */
+/**
+ * One rolling quota window as the vendor reports it. `utilization` is a percentage
+ * (0-100). A vendor that meters in countable units (Kiro bills in credits) also sends
+ * `used`/`limit`/`unit`, and then the row leads with those — "3 of 10000 credits left"
+ * is what the user can act on; a percentage of an allowance they cannot see is not.
+ */
 interface UsageWindow {
   key: string;
   utilization: number;
   resetsAt: string | null;
   windowDurationMins?: number | null;
+  used?: number | null;
+  limit?: number | null;
+  unit?: string | null;
+  plan?: string | null;
 }
 
 /** Pay-as-you-go spend on top of the plan. Fields stay null until something is consumed. */
@@ -33,17 +42,25 @@ const WINDOW_LABELS: Record<string, string> = {
   seven_day: 'Current week (all models)',
   seven_day_opus: 'Current week (Opus)',
   seven_day_sonnet: 'Current week (Sonnet)',
+  kiro_credits: 'Credits this billing period',
 };
 
 const AGENT_LABELS: Record<string, string> = {
   claude_code: 'Claude Code',
   codex: 'OpenAI Codex',
+  kiro_cli: 'Kiro CLI',
 };
 
 const VENDOR_LABELS: Record<string, string> = {
   claude_code: 'Anthropic',
   codex: 'OpenAI',
+  kiro_cli: 'AWS',
 };
+
+/** Credits arrive fractional; whole numbers should not grow a ".00" tail. */
+function formatAmount(value: number): string {
+  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+}
 
 // `ownerName` is null when the card is on the viewer's own Profile. On someone
 // else's profile the copy has to stay in the third person AND stop offering an
@@ -99,15 +116,24 @@ function WindowRow({ quota }: { quota: UsageWindow }) {
   const percent = Math.min(100, Math.max(0, Math.round(quota.utilization)));
   const remaining = 100 - percent;
   const resets = formatResetsIn(quota.resetsAt);
+  const counted =
+    quota.used != null && quota.limit != null
+      ? `${formatAmount(Math.max(0, quota.limit - quota.used))} of ${formatAmount(quota.limit)} ${quota.unit ?? ''} left`.trim()
+      : null;
 
   return (
     <Box>
       <Group justify="space-between" align="baseline" mb={4} gap="xs">
         <Text size="sm" fw={500}>
           {label}
+          {quota.plan && (
+            <Text span size="xs" c="dimmed" ml={6}>
+              {quota.plan}
+            </Text>
+          )}
         </Text>
         <Text size="sm" fw={600} c={utilizationColor(quota.utilization)}>
-          {percent}% used · {remaining}% remaining
+          {counted ?? `${percent}% used · ${remaining}% remaining`}
         </Text>
       </Group>
       <Progress

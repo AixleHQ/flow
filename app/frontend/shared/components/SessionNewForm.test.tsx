@@ -35,7 +35,7 @@ describe('SessionNewForm', () => {
     expect(screen.getByText('Grok')).toBeInTheDocument();
 
     // With no configured agents, every runtime tile is marked as needing setup.
-    expect(screen.getAllByText('Setup')).toHaveLength(6);
+    expect(screen.getAllByText('Setup')).toHaveLength(7);
 
     // Start is disabled because no agent can be selected.
     expect(screen.getByRole('button', { name: /start session/i })).toBeDisabled();

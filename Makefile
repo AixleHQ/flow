@@ -309,6 +309,7 @@ build-agents:
 	docker build -t aixle/gemini-cli:latest -f docker/gemini-cli/Dockerfile docker/ & pids="$$pids $$!"; \
 	docker build -t aixle/antigravity-cli:latest -f docker/antigravity-cli/Dockerfile docker/ & pids="$$pids $$!"; \
 	docker build -t aixle/grok:latest -f docker/grok/Dockerfile docker/ & pids="$$pids $$!"; \
+	docker build -t aixle/kiro-cli:latest -f docker/kiro-cli/Dockerfile docker/ & pids="$$pids $$!"; \
 	fail=0; for p in $$pids; do wait $$p || fail=1; done; \
 	if [ $$fail -ne 0 ]; then echo "ERROR: at least one agent image failed to build"; exit 1; fi
 

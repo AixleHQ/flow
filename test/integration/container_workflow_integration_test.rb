@@ -21,7 +21,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
   # Agent strategy combinations (40 tests)
   # ===========================================================================
 
-  AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli grok].freeze
+  AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli grok kiro_cli].freeze
   CONTAINER_RUNTIMES = %w[docker kubernetes].freeze
   STRATEGIES = %w[auth_setup agent_session].freeze
   MODES = %w[interactive non_interactive].freeze
@@ -115,6 +115,7 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
 
     stub_traefik_http
     stub_container_settings
+    stub_vendor_usage_endpoints
   end
 
   teardown do
@@ -122,6 +123,18 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
   end
 
   private
+
+  # Cleanup refreshes the credential before collecting usage, so an adapter that prices
+  # a session by asking its vendor (Cursor's dashboard) reaches the network in this
+  # sweep with a token the fake runtime just handed it. Those calls are incidental
+  # here — the subject is the container workflow, not the pricing arithmetic, which
+  # each adapter's own test covers — so answer them with an empty result set.
+  def stub_vendor_usage_endpoints
+    stub_request(:post, "https://api2.cursor.sh/aiserver.v1.DashboardService/GetFilteredUsageEvents")
+      .to_return(status: 200,
+                 body: { "usageEventsDisplay" => [] }.to_json,
+                 headers: { "Content-Type" => "application/json" })
+  end
 
   # ---------------------------------------------------------------------------
   # Session helpers
@@ -207,6 +220,12 @@ class ContainerWorkflowIntegrationTest < ActiveSupport::TestCase
     when "grok"
       assert data.dig("auth", "https://accounts.x.ai/sign-in", "key").present?,
         "Expected the signed-in scope's token in grok credential"
+    when "kiro_cli"
+      # Kiro's login is a SQLite database, persisted as an opaque base64 blob that has
+      # to survive the round trip byte for byte.
+      assert data["state_b64"].present?, "Expected state_b64 in kiro_cli credential"
+      assert Base64.strict_decode64(data["state_b64"]).start_with?(Agents::KiroCliAdapter::SQLITE_MAGIC),
+        "Expected the stored kiro_cli blob to decode back to a SQLite database"
     end
   end
 

@@ -176,6 +176,12 @@ gem "faraday-retry", "~> 2.3"
 gem "lograge", "~> 0.15.0"
 gem "minitar"
 
+# Reads ONE credential format, not an application database. Kiro CLI keeps its login in
+# a SQLite file rather than a JSON document, so Agents::KiroCliAdapter has to open that
+# file to lift the bearer token and profile ARN its API calls need. Every other runtime
+# hands us JSON and needs nothing here.
+gem "sqlite3", "~> 2.9"
+
 gem "rotp", "~> 6.3"
 
 # Docker API for container management
