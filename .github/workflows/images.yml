@@ -192,6 +192,9 @@ jobs:
           - image_name: Grok CLI
             image_suffix: grok
             dockerfile: ./docker/grok/Dockerfile
+          - image_name: Kiro CLI
+            image_suffix: kiro-cli
+            dockerfile: ./docker/kiro-cli/Dockerfile
 
     steps:
       - uses: actions/checkout@v7

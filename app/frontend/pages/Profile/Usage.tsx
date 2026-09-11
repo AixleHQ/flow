@@ -40,6 +40,7 @@ const AGENT_LABELS: Record<string, { label: string; color: string }> = {
   codex: { label: 'Codex', color: 'teal' },
   gemini_cli: { label: 'Gemini CLI', color: 'blue' },
   grok: { label: 'Grok', color: 'gray' },
+  kiro_cli: { label: 'Kiro CLI', color: 'grape' },
 };
 
 const STATE_CONFIG: Record<string, { label: string }> = {

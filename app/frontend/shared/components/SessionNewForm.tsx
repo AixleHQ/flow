@@ -69,6 +69,7 @@ const AVAILABLE_AGENTS = [
   { type: 'gemini_cli', label: 'Gemini CLI', color: AGENT_BRAND_COLORS.gemini_cli },
   { type: 'antigravity_cli', label: 'Antigravity CLI', color: AGENT_BRAND_COLORS.antigravity_cli },
   { type: 'grok', label: 'Grok', color: AGENT_BRAND_COLORS.grok },
+  { type: 'kiro_cli', label: 'Kiro CLI', color: AGENT_BRAND_COLORS.kiro_cli },
 ];
 
 const AGENT_MANTINE_COLORS: Record<string, string> = {
@@ -78,6 +79,7 @@ const AGENT_MANTINE_COLORS: Record<string, string> = {
   gemini_cli: 'blue',
   antigravity_cli: 'indigo',
   grok: 'gray',
+  kiro_cli: 'grape',
 };
 
 const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;

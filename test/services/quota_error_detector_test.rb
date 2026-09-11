@@ -241,6 +241,43 @@ class QuotaErrorDetectorTest < ActiveSupport::TestCase
     assert_equal :xai, result.provider
   end
 
+  # --- Kiro ---
+
+  # Kiro exits 1 for every failure, so the rendered message is the only signal that
+  # separates "out of credits" from "bad flag".
+  test "detects kiro monthly and overage limit messages" do
+    [
+      "You've reached your monthly usage limit. Please return next month to continue building.",
+      "You've reached your overage limit"
+    ].each do |text|
+      result = QuotaErrorDetector.detect(text)
+
+      assert result.quota_error?, "Expected #{text.inspect} to be a quota error"
+      assert_equal :kiro, result.provider
+    end
+  end
+
+  test "detects kiro rate-limit message" do
+    result = QuotaErrorDetector.detect("⚠️ Kiro rate limit reached: Request quota exceeded. Please wait a moment and try again.")
+
+    assert result.quota_error?
+    assert_equal :kiro, result.provider
+  end
+
+  test "extracts kiro quota line from terminal capture" do
+    text = <<~TEXT
+      kiro@abc123:/workspace$
+      kiro-cli chat --trust-all-tools
+      You've reached your monthly usage limit. Please return next month to continue building.
+      kiro@abc123:/workspace$
+    TEXT
+
+    result = QuotaErrorDetector.detect(text)
+
+    assert result.quota_error?
+    assert_equal :kiro, result.provider
+  end
+
   test "extracts grok quota line from terminal capture" do
     text = <<~TEXT
       grok@abc123:/workspace$

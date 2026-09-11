@@ -104,6 +104,12 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; co
     description: "xAI's Grok CLI for agentic coding in the terminal",
     color: AGENT_BRAND_COLORS.grok,
   },
+  {
+    type: 'kiro_cli',
+    name: 'Kiro CLI',
+    description: "AWS's Kiro CLI — spec-driven agentic coding in the terminal",
+    color: AGENT_BRAND_COLORS.kiro_cli,
+  },
 ];
 
 const ROLE_COLORS: Record<UserRole, string> = {

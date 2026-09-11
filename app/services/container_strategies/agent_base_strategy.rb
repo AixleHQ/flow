@@ -9,7 +9,7 @@ module ContainerStrategies
   #   - ttyd_command  — command for the ttyd terminal
   #
   class AgentBaseStrategy < BaseStrategy
-    VALID_AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok].freeze
+    VALID_AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok kiro_cli].freeze
 
     DEFAULT_AGENT_IMAGES = {
       "claude_code" => "aixle/claude-code:latest",
@@ -17,7 +17,8 @@ module ContainerStrategies
       "codex" => "aixle/codex:latest",
       "gemini_cli" => "aixle/gemini-cli:latest",
       "antigravity_cli" => "aixle/antigravity-cli:latest",
-      "grok" => "aixle/grok:latest"
+      "grok" => "aixle/grok:latest",
+      "kiro_cli" => "aixle/kiro-cli:latest"
     }.freeze
 
     AUTH_COMMANDS = {
@@ -31,7 +32,18 @@ module ContainerStrategies
       # Device-code, not the default browser flow: nothing in the container can open a
       # browser, so this is the only Grok login that completes here — it prints a URL
       # and a code the user finishes on their own device.
-      "grok" => "grok login --device-auth"
+      "grok" => "grok login --device-auth",
+      # Device-code, like Grok: Kiro's default login opens a browser and fails in a
+      # container ("Failed to open browser for authentication"), and the CLI itself
+      # points at this flag.
+      # Deliberately just the login. An earlier version chained a `whoami` whose output
+      # file the container watcher waited on, because Kiro's credential is a SQLite
+      # database the CLI creates on its FIRST RUN — before the user has entered
+      # anything — so mere existence says nothing. The watcher now reads the database
+      # itself for the token payload's field names instead
+      # (Agents::KiroCliAdapter::AUTH_MARKERS), which appear only once the login has
+      # actually completed, so no marker file is needed.
+      "kiro_cli" => "kiro-cli login --use-device-flow"
     }.freeze
 
     SESSION_COMMANDS = {
@@ -40,7 +52,11 @@ module ContainerStrategies
       "codex" => "codex --yolo",
       "gemini_cli" => "gemini --yolo",
       "antigravity_cli" => "agy --dangerously-skip-permissions",
-      "grok" => "grok --yolo"
+      "grok" => "grok --yolo",
+      # V3 is Kiro's current engine and still opt-in behind --v3 as of CLI 2.21.0.
+      # Overridden by Agents::KiroCliAdapter#session_command; this entry is the
+      # fallback the base strategy reads when no adapter command is resolved.
+      "kiro_cli" => "kiro-cli --v3 chat --trust-all-tools"
     }.freeze
 
     # == before_create_container ==
@@ -231,6 +247,28 @@ module ContainerStrategies
       rescue StandardError => e
         Rails.logger.warn("[#{strategy_name}] Failed to extract #{path}: #{e.message}")
       end
+    end
+
+    # Ask the adapter for anything it can only learn from the CLI inside the container
+    # (see Agents::BaseAdapter#collect_credential_metadata) and merge it into the
+    # credential. Runs on the cleanup path of both agent strategies, after the
+    # credential itself exists. Never fatal: this is enrichment, and losing it costs a
+    # stale model list, not a session.
+    def persist_credential_metadata(container, credential, agent_service, phase)
+      return if credential.blank?
+
+      extras = agent_service.adapter.collect_credential_metadata(runtime, container, credential, phase)
+      return if extras.blank?
+
+      credential.with_lock do
+        merged = (credential.metadata || {}).merge(extras)
+        next if merged == credential.metadata
+
+        credential.update_column(:metadata, merged)
+        Rails.logger.info("[#{self.class.name.demodulize}] Stored #{extras.keys.join(', ')} on credential #{credential.id}")
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[#{self.class.name.demodulize}] Failed to collect credential metadata: #{e.message}")
     end
 
     # True only when one of the auth files actually contains a real credential/token.

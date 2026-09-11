@@ -69,6 +69,7 @@ const AGENT_OPTIONS = [
   { value: 'gemini_cli', label: 'Gemini CLI', color: 'blue' },
   { value: 'antigravity_cli', label: 'Antigravity CLI', color: 'indigo' },
   { value: 'grok', label: 'Grok', color: 'gray' },
+  { value: 'kiro_cli', label: 'Kiro CLI', color: 'grape' },
 ];
 
 const LandingPage = () => {

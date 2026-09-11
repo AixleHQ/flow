@@ -73,6 +73,7 @@ const AGENT_OPTIONS = [
   { value: 'gemini_cli', label: 'Gemini CLI' },
   { value: 'antigravity_cli', label: 'Antigravity CLI' },
   { value: 'grok', label: 'Grok' },
+  { value: 'kiro_cli', label: 'Kiro CLI' },
 ];
 
 // One vocabulary over two state machines — see SessionsRunsFeed::STATUS_FILTERS.

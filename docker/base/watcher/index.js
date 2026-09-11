@@ -24,6 +24,7 @@
 
 const fs = require('fs');
 const http = require('http');
+const net = require('net');
 const path = require('path');
 
 const chokidar = require('chokidar');
@@ -464,6 +465,21 @@ function checkAuthComplete(configContent) {
     return typeof configContent === 'string' && configContent.trim().length > 0;
   }
 
+  // `__contains__:<text>` sentinel: the watched file contains this literal text. For
+  // credentials that are neither JSON nor "created only on success" — Kiro CLI keeps
+  // its login in a SQLite database that exists from the CLI's first run, and writes a
+  // device-registration row as soon as the device code is displayed. Only the finished
+  // login adds the token payload, whose OAuth field names (`access_token`,
+  // `refresh_token`) appear verbatim in the file's bytes and are the same whichever
+  // login method the user picked — unlike the row's key, which is named after it
+  // (`kirocli:odic:token` for Builder ID, `kirocli:social:token` for a social login).
+  // Measured on CLI 2.21.3: absent before and DURING the flow, present after.
+  const containsKeys = AUTH_REQUIRED_KEYS.filter((k) => k.startsWith('__contains__:'));
+  if (containsKeys.length > 0) {
+    if (typeof configContent !== 'string') return false;
+    return containsKeys.some((k) => configContent.includes(k.slice('__contains__:'.length)));
+  }
+
   try {
     const config = JSON.parse(configContent);
 
@@ -487,9 +503,50 @@ function checkAuthComplete(configContent) {
 }
 
 /**
+ * Loopback forwarder for an MCP server that is only reachable over the container
+ * network.
+ *
+ * Kiro CLI's V3 agent refuses a plain-HTTP MCP server unless its host is loopback —
+ * `host must be 127.0.0.1 or localhost, got ...`, from its own source — and the
+ * platform's MCP endpoint is an internal service (`http://web:4002/action_mcp` in
+ * development, a cluster address in production), not HTTPS. Rather than terminate TLS
+ * on an internal hop, the agent container forwards 127.0.0.1:<port> to it, so the URL
+ * the CLI is given is a loopback one and the bytes still go to the same place.
+ *
+ * Inert unless MCP_FORWARD_PORT and MCP_FORWARD_TARGET are both set, so only the
+ * runtimes that need it pay for it.
+ */
+function startMcpForwarder() {
+  const port = parseInt(process.env.MCP_FORWARD_PORT || '', 10);
+  const target = (process.env.MCP_FORWARD_TARGET || '').trim();
+  if (!port || !target) return;
+
+  const separator = target.lastIndexOf(':');
+  const targetHost = target.slice(0, separator);
+  const targetPort = parseInt(target.slice(separator + 1), 10);
+  if (!targetHost || !targetPort) {
+    log.error(`MCP forwarder: cannot parse MCP_FORWARD_TARGET "${target}"`);
+    return;
+  }
+
+  net
+    .createServer((client) => {
+      const upstream = net.connect(targetPort, targetHost);
+      client.pipe(upstream);
+      upstream.pipe(client);
+      // A dead peer on either side must not take the watcher down with it.
+      client.on('error', () => upstream.destroy());
+      upstream.on('error', () => client.destroy());
+    })
+    .on('error', (err) => log.error(`MCP forwarder failed: ${err.message}`))
+    .listen(port, '127.0.0.1', () => log.info(`MCP forwarder: 127.0.0.1:${port} -> ${targetHost}:${targetPort}`));
+}
+
+/**
  * Main server setup
  */
 function startServer() {
+  startMcpForwarder();
   const server = http.createServer(handleRequest);
   const wss = new WebSocketServer({ server });
 

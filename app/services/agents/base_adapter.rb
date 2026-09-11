@@ -506,6 +506,32 @@ module Agents
       nil
     end
 
+    # Facts about an account that can only be had by asking the vendor's own CLI,
+    # collected while a container is still up and merged into the credential's
+    # metadata. Default: nothing.
+    #
+    # This exists for what a server-side API call cannot answer reliably. Kiro is the
+    # case: which service holds the model catalogue changed between its engine
+    # versions, so the CLI knows the endpoint and we do not, and its `--list-models`
+    # gives the catalogue the user's own subscription actually offers.
+    #
+    # Runs on the cleanup path of both the auth and the session strategy, so a freshly
+    # connected runtime has the data before its first session, and it stays current
+    # afterwards.
+    #
+    # @param _runtime [ContainerRuntime::BaseRuntime]
+    # @param _container [Object] runtime-specific container handle
+    # @param _credential [AgentCredential] the row the result is merged into — passed so
+    #   an adapter can see what is already stored and leave it alone
+    # @param _phase [Symbol] :auth when the credential has just been captured, :session
+    #   at the end of an ordinary session. Facts that are only true of a fresh login
+    #   belong to :auth — writing them on every session cleanup is how a "since last
+    #   time" measurement gets reset to zero on the run it was meant to measure.
+    # @return [Hash] merged into AgentCredential#metadata; empty to write nothing
+    def collect_credential_metadata(_runtime, _container, _credential, _phase)
+      {}
+    end
+
     protected
 
     def parse_json(content)

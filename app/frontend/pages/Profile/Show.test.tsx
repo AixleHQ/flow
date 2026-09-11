@@ -330,7 +330,7 @@ describe('Profile/Show', () => {
 
     expect(screen.getByRole('button', { name: 'Re-authenticate' })).toBeInTheDocument();
     // The five unconfigured agents each render an Authenticate button.
-    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(5);
+    expect(screen.getAllByRole('button', { name: 'Authenticate' })).toHaveLength(6);
   });
 
   it('shows the session visibility switches in the state the profile reports', () => {

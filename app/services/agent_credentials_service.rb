@@ -9,7 +9,8 @@ class AgentCredentialsService
     "codex" => Agents::CodexAdapter,
     "gemini_cli" => Agents::GeminiCliAdapter,
     "antigravity_cli" => Agents::AntigravityCliAdapter,
-    "grok" => Agents::GrokAdapter
+    "grok" => Agents::GrokAdapter,
+    "kiro_cli" => Agents::KiroCliAdapter
   }.freeze
 
   attr_reader :adapter, :agent_type

@@ -3,7 +3,7 @@
 A **runtime** is the actual LLM CLI that runs inside an agent's
 container. The persona decides *who* the agent is; the runtime decides
 *what model and tool it drives*. The same persona can run on any of the
-six supported runtimes — pick the one whose model and credentials you
+seven supported runtimes — pick the one whose model and credentials you
 have.
 
 ## Supported runtimes
@@ -16,8 +16,9 @@ have.
 | `gemini_cli`      | Google       | `aixle/gemini-cli`      | Google Gemini CLI.                                                      |
 | `antigravity_cli` | Google       | `aixle/antigravity-cli` | Google Antigravity CLI; separate runtime, not a Gemini CLI replacement. |
 | `grok`            | xAI          | `aixle/grok`            | xAI Grok CLI.                                                           |
+| `kiro_cli`        | AWS          | `aixle/kiro-cli`        | AWS Kiro CLI, run on its V3 engine. Metered in credits, not tokens.     |
 
-All six images are built locally with `make build-agents` and used by
+All seven images are built locally with `make build-agents` and used by
 the platform when starting a step's container. Each runtime has an
 adapter under `app/services/agents/` (`*_adapter.rb`) that knows how to
 launch the CLI, feed it the assembled context, wire up MCP servers, and
@@ -38,6 +39,7 @@ image.
 | `gemini_cli`      | Google AI Studio API key.                                              |
 | `antigravity_cli` | Google account, signed in through `agy`'s own interactive OAuth login. |
 | `grok`            | xAI account, signed in with the device-code flow (or an xAI API key).  |
+| `kiro_cli`        | Kiro account, signed in with the device-code flow.                     |
 
 A step fails immediately with a "no credentials" error if the runtime's
 credentials aren't configured for the user who triggered the run.

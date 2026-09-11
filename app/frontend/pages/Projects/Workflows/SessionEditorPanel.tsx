@@ -340,6 +340,7 @@ export function SessionEditorPanel({
                 { value: 'gemini_cli', label: 'Gemini CLI' },
                 { value: 'antigravity_cli', label: 'Antigravity CLI' },
                 { value: 'grok', label: 'Grok' },
+                { value: 'kiro_cli', label: 'Kiro CLI' },
               ]}
               value={step.requiredAgentRuntime ?? ''}
               onChange={(v) => {

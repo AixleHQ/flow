@@ -48,6 +48,13 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     assert_instance_of Agents::GrokAdapter, service.adapter
   end
 
+  test "initializes with kiro_cli adapter" do
+    service = AgentCredentialsService.new("kiro_cli")
+
+    assert_equal "kiro_cli", service.agent_type
+    assert_instance_of Agents::KiroCliAdapter, service.adapter
+  end
+
   test "raises error for unknown agent type" do
     assert_raises(ArgumentError) do
       AgentCredentialsService.new("unknown_agent")
@@ -72,6 +79,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     assert_includes agents, "antigravity_cli"
     assert_includes agents, "codex"
     assert_includes agents, "grok"
+    assert_includes agents, "kiro_cli"
   end
 
   test "supported? returns true for known agent" do

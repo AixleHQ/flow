@@ -26,7 +26,7 @@ in that order.
 ## Runtimes
 
 The persona runs on top of one of five LLM CLIs — `claude_code`,
-`cursor_cli`, `codex`, `gemini_cli`, or `grok`. Each runs in its own Docker
+`cursor_cli`, `codex`, `gemini_cli`, `grok`, or `kiro_cli`. Each runs in its own Docker
 image and needs its own per-user credentials, configured on the
 **Profile** page. The full runtime table, credential requirements, and
 cost-tracking notes live on the dedicated [Runtimes](runtimes.md) page.
