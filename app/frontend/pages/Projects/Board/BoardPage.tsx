@@ -29,6 +29,7 @@ import {
   Card,
   Checkbox,
   Combobox,
+  CopyButton,
   Drawer,
   Group,
   Loader,
@@ -572,7 +573,7 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
     hasActiveRun = false;
   }
 
-  const tooltipParts: string[] = [task.title];
+  const tooltipParts: string[] = [`#${task.id} · ${task.title}`];
   if (latestRun) {
     if (latestRun.state === 'running' && latestRun.createdAt) {
       tooltipParts.push(`Running — ${formatElapsedTime(latestRun.createdAt)}`);
@@ -621,18 +622,34 @@ function CollapsedTaskChip({ task, onClick }: { task: Task; onClick?: (t: Task) 
         onClick={() => onClick?.(task)}
         style={{
           ...style,
-          width: 30,
-          height: 12,
+          width: 34,
+          height: 16,
           borderRadius: 3,
           backgroundColor: color,
           cursor: 'grab',
           touchAction: 'none',
           flexShrink: 0,
           animation: hasActiveRun ? 'priorityBarPulse 2s ease-in-out infinite' : undefined,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
         {...attributes}
         {...listeners}
-      />
+      >
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            color: 'rgba(255,255,255,0.75)',
+            lineHeight: 1,
+            userSelect: 'none',
+            pointerEvents: 'none',
+          }}
+        >
+          #{task.id}
+        </span>
+      </Box>
     </Tooltip>
   );
 }
@@ -783,6 +800,24 @@ function TaskCardUI({
         <Text size="sm" fw={500} lh={1.3} style={{ flex: 1, wordBreak: 'break-word', fontSize: 13 }}>
           {task.title}
         </Text>
+        <CopyButton value={String(task.id)}>
+          {({ copied, copy }) => (
+            <Tooltip label={copied ? 'Copied' : 'Copy ID'} withArrow>
+              <Text
+                size="sm"
+                c="dimmed"
+                style={{ flexShrink: 0, whiteSpace: 'nowrap', fontSize: 13, cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  copy();
+                }}
+              >
+                #{task.id}
+              </Text>
+            </Tooltip>
+          )}
+        </CopyButton>
       </Group>
 
       {/* Workflow status chip — filled colored badge (AC-11). The chip names only the latest run,
@@ -2357,13 +2392,30 @@ function TaskDetailSidebar({
                 autoFocus
               />
             ) : (
-              <div
-                className={styles.ptTitle}
-                onClick={() => canExecute && setEditingTitle(true)}
-                style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-              >
-                {pendingTitle ?? task.title}
-              </div>
+              // The `#id` is a sibling of the editable title div, never a child of it: putting it
+              // inside would make it part of the text saveTitle reads and persists.
+              <Box style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <div
+                  className={styles.ptTitle}
+                  onClick={() => canExecute && setEditingTitle(true)}
+                  style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                >
+                  {pendingTitle ?? task.title}
+                </div>
+                <CopyButton value={String(task.id)}>
+                  {({ copied, copy }) => (
+                    <Tooltip label={copied ? 'Copied' : 'Copy ID'} withArrow>
+                      <Text
+                        c="dimmed"
+                        style={{ flexShrink: 0, whiteSpace: 'nowrap', cursor: 'pointer' }}
+                        onClick={copy}
+                      >
+                        #{task.id}
+                      </Text>
+                    </Tooltip>
+                  )}
+                </CopyButton>
+              </Box>
             )}
 
             {/* Status chips: type, priority, workflow */}

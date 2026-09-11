@@ -17,7 +17,7 @@ module Api
 
             tasks = scope
               .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_gates, :gates)
-              .in_board_order
+              .then { |s| exact_id_search? ? s.reorder(Arel.sql("(board_tasks.id = #{exact_search_id})::int DESC"), :position, :id) : s.in_board_order }
             tasks = tasks.limit(params[:limit]) if params[:limit].present?
             tasks = tasks.offset(params[:offset]) if params[:offset].present?
             waiting = WorkflowRun.waiting_for_slot_ids(tasks.flat_map { |t| t.workflow_runs.map(&:id) })
@@ -174,6 +174,16 @@ module Api
             when "all" then scope
             else scope.active
             end
+          end
+
+          # Returns the parsed integer id when the search is an exact-id lookup (q[g][0][id_eq]
+          # is present), nil otherwise. Used to promote the matching card to the top of results.
+          def exact_search_id
+            q_params.dig(:g, :"0", :id_eq).presence&.to_i
+          end
+
+          def exact_id_search?
+            exact_search_id.present?
           end
 
           def task_params

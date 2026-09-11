@@ -67,6 +67,18 @@ This is the **BoardContext** builder — one of the layers in the agent
 context stack. See the Agents page (How context is built) for the full
 stack.
 
+## Task IDs
+
+Every task has a numeric id that is stable for its lifetime. It appears next to
+the task title on the card, in collapsed-column chips (hover to see), and in the
+detail drawer header. Clicking `#42` copies the number to the clipboard.
+
+### Finding a card by id
+
+Press `/` to open search and type the id (`42` or `#42`). The exact match
+surfaces first, above any title matches. Title search continues to work as
+before — a query like `login` still finds cards by name.
+
 ## Common gotchas
 
 - **A card "stuck" in a bound column** usually means there's a

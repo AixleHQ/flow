@@ -73,7 +73,7 @@ class BoardTask < ApplicationRecord
   end
 
   def self.ransackable_attributes(_auth_object = nil)
-    %w[title task_type priority assignee_id board_column_id parent_task_id position created_at updated_at]
+    %w[id title task_type priority assignee_id board_column_id parent_task_id position created_at updated_at]
   end
 
   def self.ransackable_associations(_auth_object = nil)
