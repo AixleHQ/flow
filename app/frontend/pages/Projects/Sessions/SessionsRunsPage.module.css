@@ -242,6 +242,18 @@
   padding-right: 12px;
 }
 
+/* The owner's name links to their profile — underlined only on hover, so a
+   column of names does not read as a column of links. */
+.userLink {
+  color: inherit;
+  text-decoration: none;
+}
+
+.userLink:hover {
+  color: var(--app-primary-strong);
+  text-decoration: underline;
+}
+
 .num {
   font-family: var(--app-font-mono);
   font-size: 12px;

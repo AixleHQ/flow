@@ -37,6 +37,7 @@ import { getInitials } from 'shared/lib/getInitials';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { AwsConnectionModal } from 'shared/resources/cloud-connections/AwsConnectionModal';
+import { UsageLimitsCard, type UsageLimitsEntry } from 'shared/resources/usage/UsageLimitsCard';
 import {
   apiV1CloudAwsConnectionPath,
   apiV1TerminalSessionPath,
@@ -51,7 +52,6 @@ import { StatusBadge, type StatusTone } from 'shared/ui/StatusBadge';
 
 import { ProfileTabs } from './ProfileTabs';
 import classes from './Show.module.css';
-import { UsageLimitsCard, type UsageLimitsEntry } from './UsageLimitsCard';
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },

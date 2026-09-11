@@ -45,10 +45,20 @@ const VENDOR_LABELS: Record<string, string> = {
   codex: 'OpenAI',
 };
 
-function statusMessage(entry: UsageLimitsEntry): string {
+// `ownerName` is null when the card is on the viewer's own Profile. On someone
+// else's profile the copy has to stay in the third person AND stop offering an
+// action the viewer cannot take — only the owner can re-authenticate, and the
+// tokens, OAuth URLs and vendor account email that would make it actionable are
+// exactly what must never appear here.
+function statusMessage(entry: UsageLimitsEntry, ownerName: string | null): string {
   const vendor = VENDOR_LABELS[entry.agentType] ?? 'The provider';
-  if (entry.status === 'unauthorized')
-    return `Your ${AGENT_LABELS[entry.agentType] ?? entry.agentType} sign-in no longer works — re-authenticate above to see your limits.`;
+  const agent = AGENT_LABELS[entry.agentType] ?? entry.agentType;
+
+  if (entry.status === 'unauthorized') {
+    return ownerName
+      ? `${ownerName}'s ${agent} sign-in no longer works — only they can reconnect it, from their own profile.`
+      : `Your ${agent} sign-in no longer works — re-authenticate above to see your limits.`;
+  }
   if (entry.status === 'rate_limited') return `${vendor} is throttling usage checks right now. Try again in a minute.`;
   return `Couldn't reach ${vendor} for usage limits.`;
 }
@@ -143,11 +153,11 @@ function ExtraUsageRow({ extraUsage }: { extraUsage: ExtraUsage }) {
   );
 }
 
-function EntryBody({ entry }: { entry: UsageLimitsEntry }) {
+function EntryBody({ entry, ownerName }: { entry: UsageLimitsEntry; ownerName: string | null }) {
   if (entry.status !== 'ok') {
     return (
       <Alert color={entry.status === 'unauthorized' ? 'red' : 'yellow'} variant="light" p="sm">
-        <Text size="sm">{statusMessage(entry)}</Text>
+        <Text size="sm">{statusMessage(entry, ownerName)}</Text>
       </Alert>
     );
   }
@@ -174,8 +184,18 @@ function EntryBody({ entry }: { entry: UsageLimitsEntry }) {
 /**
  * Subscription quota panel. Renders nothing when no credential on this membership
  * bills against a plan — an API key or a Bedrock connection has no window to show.
+ *
+ * Pass `ownerName` when the card is on somebody else's profile (`/user/:id`):
+ * the numbers are identical to what the owner sees on their own Account, only
+ * the copy changes. Omit it on the viewer's own Profile.
  */
-export function UsageLimitsCard({ entries }: { entries: UsageLimitsEntry[] }) {
+export function UsageLimitsCard({
+  entries,
+  ownerName = null,
+}: {
+  entries: UsageLimitsEntry[];
+  ownerName?: string | null;
+}) {
   const [refreshing, setRefreshing] = useState(false);
 
   if (entries.length === 0) return null;
@@ -216,7 +236,7 @@ export function UsageLimitsCard({ entries }: { entries: UsageLimitsEntry[] }) {
                 {AGENT_LABELS[entry.agentType] ?? entry.agentType.replace(/_/g, ' ')}
               </Text>
             )}
-            <EntryBody entry={entry} />
+            <EntryBody entry={entry} ownerName={ownerName} />
           </Box>
         ))}
       </Stack>

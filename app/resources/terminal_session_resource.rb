@@ -10,7 +10,7 @@ class TerminalSessionResource < ApplicationResource
              :cost_cents, :models, :requested_model,
              :artifacts_reviewed,
              :error_message, :container_id,
-             :project_id, :route_token, :configured_agent_id,
+             :project_id, :user_id, :route_token, :configured_agent_id,
              :collected_at, :updated_at
 
   typelize "string | null"

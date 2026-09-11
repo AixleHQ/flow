@@ -9,7 +9,7 @@
 class RunListEntryResource < ApplicationResource
   typelize_from WorkflowRun
 
-  attributes :id, :mode, :started_at, :completed_at, :created_at
+  attributes :id, :mode, :user_id, :started_at, :completed_at, :created_at
 
   # A run waiting for a session slot is itself `running`, so the row would claim
   # work is happening while nothing is. The step sessions are already loaded for

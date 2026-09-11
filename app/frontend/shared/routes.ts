@@ -992,6 +992,11 @@ export function onboardingPath(options?: object): string {
   return "/" + "onboarding" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /user/:id(.:format) */
+export function userPath(id: ScalarType, options?: object): string {
+  return "/" + "user" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /integrations/slack/oauth/callback(.:format) */
 export function slackOauthCallbackPath(options?: object): string {
   return "/" + "integrations" + "/" + "slack" + "/" + "oauth" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

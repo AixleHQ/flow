@@ -10,6 +10,7 @@ type SessionListEntry = {
   mode: string | null;
   totalTokens: number;
   costCents: number;
+  userId: number;
   startedAt: string | null;
   finishedAt: string | null;
   createdAt: string;

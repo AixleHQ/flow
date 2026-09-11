@@ -6,6 +6,7 @@ import type {SessionListEntry} from '@/types/generated'
 type RunListEntry = {
   id: number;
   mode: string;
+  userId: number;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;

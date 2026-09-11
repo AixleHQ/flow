@@ -1,12 +1,10 @@
 # frozen_string_literal: true
 
+# Company-wide "Sessions & Runs" list. Same name, filter bar and row visual
+# system as the project Sessions & Runs page, plus a Project column. Unlike the
+# project feed this stays session-level: a workflow step is its own row, never
+# folded under a parent run — SessionsRunsFeed::LISTABLE_SESSION_TYPES.
 class Web::Company::SessionsController < Web::Company::ApplicationController
-  # Company-wide "Sessions & Runs" list. Same name, filter bar and row visual
-  # system as the project Sessions & Runs page, plus a Project column. Unlike
-  # the project feed this stays session-level: a workflow step is its own row,
-  # never folded under a parent run.
-  LIST_SESSION_TYPES = %w[agent_session workflow_step].freeze
-
   # In-flight states, for the visibility-scoped search below.
   SEARCH_IN_FLIGHT_STATES = %w[not_started queued running ready finishing].freeze
 
@@ -85,7 +83,7 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
     case list_type
     when "run" then %w[workflow_step]
     when "solo" then %w[agent_session]
-    else LIST_SESSION_TYPES
+    else SessionsRunsFeed::LISTABLE_SESSION_TYPES
     end
   end
 
@@ -107,7 +105,8 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   # Distinct users who own a session in this company's list — the User filter's
   # options. Members who never ran anything would only be noise.
   def user_options
-    ids = company_sessions_scope.where(session_type: LIST_SESSION_TYPES).distinct.pluck(:user_id)
+    ids = company_sessions_scope.where(session_type: SessionsRunsFeed::LISTABLE_SESSION_TYPES)
+                                .distinct.pluck(:user_id)
     User.where(id: ids.compact).order(:name).map { |u| { id: u.id, name: u.name.presence || u.email } }
   end
 end
