@@ -120,8 +120,14 @@ class AzureGitCredentialsTest < ActionDispatch::IntegrationTest
     assert_response :forbidden
   end
 
-  test "an operator credential problem is not reported as a user authorization failure" do
-    Settings.azure_devops.apps["default"]["client_secret"] = nil
+  # Configured, and Entra refuses the credential anyway — a rotated or expired
+  # secret. That is an operator's problem, not the caller's, so it must not
+  # arrive as a permission failure the user would go hunting in Azure for.
+  test "a rejected app credential is reported as an operator problem, not a user authorization failure" do
+    stub_azure_token(
+      tenant_id: @integration.azure_devops_installation.tenant_id, status: 401,
+      body: { error: "invalid_client", error_description: "AADSTS7000215: Invalid client secret provided." }
+    )
 
     post PATH, params: { repository_id: @repository.id }, headers: headers
 

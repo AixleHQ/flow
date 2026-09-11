@@ -20,8 +20,25 @@ module AzureDevops
         new(key: key.to_s, raw: raw)
       end
 
+      # There is no separate on/off setting, on purpose. A boolean beside the
+      # credentials can only ever disagree with them: "enabled but not
+      # configured" fails at the first Azure call with a confusing error, and
+      # "configured but disabled" is a switch somebody has to remember to flip
+      # after doing all the real work. So the feature is offered exactly when an
+      # operator has set up something that can actually reach Azure.
+      #
+      # PAT mode counts because its credential is supplied per connection by a
+      # user, so there is no deployment configuration to derive it from — it
+      # stays an explicit setting because it is a policy decision (those
+      # connections act as the token's owner), not a redundant copy of one.
       def enabled?
-        Settings.azure_devops&.enabled.present? && Settings.azure_devops.enabled != false
+        pat_mode_enabled? || default_app_usable?
+      end
+
+      def default_app_usable?
+        fetch("default").usable?
+      rescue CredentialActionRequired
+        false
       end
 
       def pat_mode_enabled?

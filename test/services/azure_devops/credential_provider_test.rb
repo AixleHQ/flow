@@ -28,11 +28,24 @@ module AzureDevops
       assert credential[:expires_in].positive?
     end
 
-    test "refuses every connection while the deployment switch is off" do
-      Settings.stubs(:azure_devops).returns(Hashie::Mash.new(enabled: false))
+    test "refuses every connection on a deployment nobody configured" do
+      with_azure_devops_unconfigured
 
       error = assert_raises(IntegrationUnavailable) { CredentialProvider.resolve!(@integration) }
       assert_match(/not enabled/, error.message)
+    end
+
+    # The other half of deriving availability from configuration: a deployment
+    # that only permits PAT mode still offers the feature, because that
+    # credential arrives per connection rather than from operator settings.
+    test "PAT mode alone makes the feature available without any app credential" do
+      Settings.stubs(:azure_devops).returns(
+        Hashie::Mash.new(pat_mode_enabled: true, api_host: AZURE_API_HOST,
+                         apps: { "default" => { "client_id" => nil } })
+      )
+      pat_integration = create(:integration, :azure_devops_pat, :active)
+
+      assert_equal :pat, CredentialProvider.resolve!(pat_integration).mode
     end
 
     test "refuses an inactive connection" do

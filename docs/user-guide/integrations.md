@@ -87,7 +87,10 @@ Notes and limits:
   acts as the token's owner and carries that person's permissions.
 - Completing or merging a pull request, reviewers and votes, Azure
   Pipelines and Service Hooks are a later parity extension.
-- `AZURE_DEVOPS_ENABLED` gates the whole feature per deployment.
+- The connect entry appears only once an operator has configured the
+  deployment's Entra application (`AZURE_DEVOPS_CLIENT_ID` plus a
+  certificate or secret), or switched on personal-access-token mode.
+  There is no separate enable flag.
 
 ### Linear
 
