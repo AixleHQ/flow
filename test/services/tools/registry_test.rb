@@ -50,4 +50,28 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     assert_equal 22, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
     assert_equal 3, defs.count { |d| d.inject_rules.intersect?(%i[container_tools_present non_interactive_session]) }
   end
+
+  test "ui_groups offer one entry per visible tag, session tools only" do
+    groups = Tools::Registry.ui_groups
+
+    assert_equal %w[board slack coder assets session_supervision], groups.map { |g| g[:tag] }
+    assert_equal "Slack", groups.find { |g| g[:tag] == "slack" }[:label]
+    assert_equal %w[slack_delete_message slack_post_message slack_read_thread slack_update_message],
+                 groups.find { |g| g[:tag] == "slack" }[:tool_names]
+
+    defs = groups.flat_map { |g| g[:tool_names] }.map { |n| Tools::Registry.fetch(n) }
+
+    # A personal (audience :user) tool shares tags with the session ones but has
+    # no shadow row, so it must never be pulled into a picker group.
+    assert defs.all? { |d| d.audience == :session }, "picker groups must hold session tools only"
+    assert defs.all?(&:user_attachable)
+  end
+
+  test "no tool carries two picker-visible tags" do
+    doubled = Tools::Registry.definitions.values.select do |d|
+      d.tags.count { |t| Tools::TagCatalog.ui_visible?(t) } > 1
+    end
+
+    assert_empty doubled.map(&:name), "a tool in two picker groups would fight over its own ids"
+  end
 end

@@ -2,15 +2,11 @@ import { MultiSelect, Switch } from '@mantine/core';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
+import { toolIdsFromPickerValue, toolPickerData, toolPickerValue, type ToolGroup } from 'shared/lib/toolPicker';
+
 interface NamedItem {
   id: number;
   name: string;
-}
-
-interface ToolGroup {
-  tag: string;
-  label: string;
-  toolIds: number[];
 }
 
 interface Workflow {
@@ -36,8 +32,6 @@ interface BaseResourcesTabProps {
   onWorkflowChange: (field: string, value: unknown) => void;
 }
 
-const GROUP_PREFIX = 'grp:';
-
 export function BaseResourcesTab({
   workflow,
   tools,
@@ -50,36 +44,9 @@ export function BaseResourcesTab({
   readOnly,
   onWorkflowChange,
 }: BaseResourcesTabProps) {
-  const groupedToolIds = new Set(toolGroups.flatMap((g) => g.toolIds));
-
-  const toolSelectData = [
-    ...toolGroups.map((g) => ({ value: `${GROUP_PREFIX}${g.tag}`, label: g.label })),
-    ...tools
-      .filter((i) => i?.id != null && !groupedToolIds.has(i.id))
-      .map((i) => ({ value: String(i.id), label: i.name ?? '' })),
-  ];
-
-  const toToolValue = (ids: number[]) => {
-    const set = new Set(Array.isArray(ids) ? ids : []);
-    const groupTokens = toolGroups
-      .filter((g) => g.toolIds.some((id) => set.has(id)))
-      .map((g) => `${GROUP_PREFIX}${g.tag}`);
-    const individual = [...set].filter((id) => !groupedToolIds.has(id)).map(String);
-    return [...groupTokens, ...individual];
-  };
-
-  const fromToolValue = (values: string[]): number[] => {
-    const ids = new Set<number>();
-    (Array.isArray(values) ? values : []).forEach((v) => {
-      if (v.startsWith(GROUP_PREFIX)) {
-        const group = toolGroups.find((g) => `${GROUP_PREFIX}${g.tag}` === v);
-        group?.toolIds.forEach((id) => ids.add(id));
-      } else {
-        ids.add(Number(v));
-      }
-    });
-    return [...ids];
-  };
+  const toolSelectData = toolPickerData(tools, toolGroups);
+  const toToolValue = (ids: number[]) => toolPickerValue(ids, toolGroups);
+  const fromToolValue = (values: string[]) => toolIdsFromPickerValue(values, toolGroups);
 
   const toSelectData = (items: NamedItem[]) =>
     Array.isArray(items)

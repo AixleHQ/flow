@@ -9,6 +9,7 @@ import type { ConfigItemPicker } from '@/types/generated';
 
 import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
 import { apiFetch } from 'shared/lib/apiFetch';
+import type { ToolGroup } from 'shared/lib/toolPicker';
 import {
   apiV1ProjectWorkflowPath,
   apiV1ProjectWorkflowStepsPath,
@@ -38,11 +39,6 @@ interface NamedItem {
   name: string;
 }
 
-interface ToolGroup {
-  tag: string;
-  label: string;
-  toolIds: number[];
-}
 interface SubStep {
   id: number;
   name: string;

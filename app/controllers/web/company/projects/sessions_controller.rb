@@ -97,6 +97,9 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
     {
       agents: agents.map { |a| { id: a.id, name: a.title.presence || a.name } },
       tools: tools.map { |t| { id: t.id, name: t.display_name.presence || t.name } },
+      # Tag groups the picker offers as one-click attach ("Board management" →
+      # every board tool), the same ones the workflow builder offers.
+      tool_groups: Tools::PickerGroups.for_project(current_project),
       skills: skills.map { |s| { id: s.id, name: s.title.presence || s.name } },
       mcp_servers: mcp_servers.map { |m| { id: m.id, name: m.name } },
       assets: assets.map { |a| { id: a.id, name: a.folder.present? ? "#{a.folder}/#{a.name}" : a.name } },

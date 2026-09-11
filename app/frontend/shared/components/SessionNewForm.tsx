@@ -8,6 +8,7 @@ import type { ConfigItemPicker } from '@/types/generated';
 
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { toolIdsFromPickerValue, toolPickerData, type ToolGroup } from 'shared/lib/toolPicker';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
 import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
 import { FormSection, ModeCards, RuntimeTiles } from 'shared/ui/sessions';
@@ -35,6 +36,12 @@ export interface SessionNewFormProps {
   agentModels?: AgentModelsEntry[];
   agents?: NamedItem[];
   tools?: NamedItem[];
+  /**
+   * Tag groups offered as one entry each ("Board management", "Slack"), exactly
+   * as the workflow builder offers them — attaching a family of tools one by
+   * one is what the groups exist to avoid.
+   */
+  toolGroups?: ToolGroup[];
   skills?: NamedItem[];
   mcpServers?: NamedItem[];
   repositories?: NamedItem[];
@@ -91,6 +98,7 @@ export const SessionNewForm = ({
   agentModels = [],
   agents = [],
   tools = [],
+  toolGroups = [],
   skills = [],
   mcpServers = [],
   repositories = [],
@@ -130,6 +138,10 @@ export const SessionNewForm = ({
   const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
   const [selectedConfigItems, setSelectedConfigItems] = useState<string[]>([]);
 
+  // `selectedTools` holds picker values — a group token stands for all of its
+  // members, so every id-shaped use goes through the expanded list.
+  const selectedToolIds = useMemo(() => toolIdsFromPickerValue(selectedTools, toolGroups), [selectedTools, toolGroups]);
+
   const resolvedProjectId = fixedProjectId ? String(fixedProjectId) : projectId;
   const showProjectSelector = !fixedProjectId && projects && projects.length > 0;
 
@@ -153,7 +165,7 @@ export const SessionNewForm = ({
     if (selectedPersona) count++;
     if (selectedModel) count++;
     count +=
-      selectedTools.length +
+      selectedToolIds.length +
       selectedSkills.length +
       selectedMcpServers.length +
       selectedRepos.length +
@@ -164,7 +176,7 @@ export const SessionNewForm = ({
   }, [
     selectedPersona,
     selectedModel,
-    selectedTools,
+    selectedToolIds,
     selectedSkills,
     selectedMcpServers,
     selectedRepos,
@@ -192,7 +204,7 @@ export const SessionNewForm = ({
             initialPrompt: mode === 'non_interactive' ? initialPrompt : null,
             requestedModel: selectedModel || undefined,
             configuredAgentId: selectedPersona ? Number(selectedPersona) : undefined,
-            toolIds: selectedTools.length > 0 ? selectedTools.map(Number) : undefined,
+            toolIds: selectedToolIds.length > 0 ? selectedToolIds : undefined,
             skillIds: selectedSkills.length > 0 ? selectedSkills.map(Number) : undefined,
             mcpServerIds: selectedMcpServers.length > 0 ? selectedMcpServers.map(Number) : undefined,
             repositoryIds: selectedRepos.length > 0 ? selectedRepos.map(Number) : undefined,
@@ -238,7 +250,7 @@ export const SessionNewForm = ({
     bmadEnabled,
     selectedModel,
     selectedPersona,
-    selectedTools,
+    selectedToolIds,
     selectedSkills,
     selectedMcpServers,
     selectedRepos,
@@ -370,7 +382,7 @@ export const SessionNewForm = ({
         <MultiSelect
           label="Tools"
           placeholder="Select tools..."
-          data={tools.map((t) => ({ value: String(t.id), label: t.name }))}
+          data={toolPickerData(tools, toolGroups)}
           value={selectedTools}
           onChange={setSelectedTools}
           searchable
@@ -492,9 +504,9 @@ export const SessionNewForm = ({
                   {agents.find((a) => String(a.id) === selectedPersona)?.name ?? 'Persona'}
                 </Badge>
               )}
-              {selectedTools.length > 0 && (
+              {selectedToolIds.length > 0 && (
                 <Badge size="xs" variant="outline" color="yellow">
-                  {selectedTools.length} tool{selectedTools.length > 1 ? 's' : ''}
+                  {selectedToolIds.length} tool{selectedToolIds.length > 1 ? 's' : ''}
                 </Badge>
               )}
               {selectedSkills.length > 0 && (
