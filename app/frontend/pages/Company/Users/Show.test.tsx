@@ -57,6 +57,15 @@ function seed(overrides: Partial<UserShowProps> = {}): UserShowProps {
   };
 }
 
+// `<Deferred>` (test/setup.ts) renders its children only once the named prop is
+// present on usePage() — so a deferred prop has to be seeded as a page prop as
+// well as passed to the component.
+function renderUser(props: UserShowProps, pageProps: Record<string, unknown> = {}) {
+  return renderAuthedPage(<UserShow {...props} />, {
+    props: { usageLimits: props.usageLimits, ...pageProps },
+  });
+}
+
 const okLimits: UserShowProps['usageLimits'] = [
   {
     agentType: 'claude_code',
@@ -72,7 +81,7 @@ const okLimits: UserShowProps['usageLimits'] = [
 
 describe('Company/Users/Show', () => {
   it('renders the person: name, email, role and membership state', () => {
-    renderAuthedPage(<UserShow {...seed()} />);
+    renderUser(seed());
 
     expect(screen.getByRole('heading', { name: 'Jane Doe' })).toBeInTheDocument();
     expect(screen.getByText('jane@example.com')).toBeInTheDocument();
@@ -81,7 +90,7 @@ describe('Company/Users/Show', () => {
   });
 
   it('marks the viewer when they open their own profile', () => {
-    const { rerender } = renderAuthedPage(<UserShow {...seed()} />);
+    const { rerender } = renderUser(seed());
     expect(screen.queryByText('You')).not.toBeInTheDocument();
 
     rerender(<UserShow {...seed({ viewerIsSelf: true })} />);
@@ -89,7 +98,7 @@ describe('Company/Users/Show', () => {
   });
 
   it('shows the exhausted plan: 100% used, 0% remaining and the reset time', () => {
-    renderAuthedPage(<UserShow {...seed({ usageLimits: okLimits })} />);
+    renderUser(seed({ usageLimits: okLimits }));
 
     expect(screen.getByText('Usage limits')).toBeInTheDocument();
     expect(screen.getAllByText('100% used · 0% remaining').length).toBe(2);
@@ -97,14 +106,12 @@ describe('Company/Users/Show', () => {
   });
 
   it('puts a re-auth failure in the third person and offers the viewer no action', () => {
-    renderAuthedPage(
-      <UserShow
-        {...seed({
-          usageLimits: [
-            { agentType: 'claude_code', status: 'unauthorized', windows: [], fetchedAt: '2026-06-26T12:00:00Z' },
-          ],
-        })}
-      />,
+    renderUser(
+      seed({
+        usageLimits: [
+          { agentType: 'claude_code', status: 'unauthorized', windows: [], fetchedAt: '2026-06-26T12:00:00Z' },
+        ],
+      }),
     );
 
     expect(
@@ -115,13 +122,13 @@ describe('Company/Users/Show', () => {
   });
 
   it('hides the card entirely when no credential bills against a plan', () => {
-    renderAuthedPage(<UserShow {...seed({ usageLimits: [] })} />);
+    renderUser(seed({ usageLimits: [] }));
 
     expect(screen.queryByText('Usage limits')).not.toBeInTheDocument();
   });
 
   it('renders the session list without a User column — the page is already about one person', () => {
-    renderAuthedPage(<UserShow {...seed()} />);
+    renderUser(seed());
 
     const table = screen.getByRole('table');
     expect(within(table).getByText('Refactor the onboarding status chips')).toBeInTheDocument();
@@ -131,13 +138,13 @@ describe('Company/Users/Show', () => {
   });
 
   it('opens rows through the company page for an admin', () => {
-    renderAuthedPage(<UserShow {...seed({ viewerIsAdmin: true })} />);
+    renderUser(seed({ viewerIsAdmin: true }));
 
     expect(screen.getByRole('link', { name: 'Open session #101' })).toHaveAttribute('href', '/company/sessions/101');
   });
 
   it('opens rows through the project page for a non-admin who is on that project', () => {
-    renderAuthedPage(<UserShow {...seed({ viewerIsAdmin: false, accessibleProjectIds: [9] })} />);
+    renderUser(seed({ viewerIsAdmin: false, accessibleProjectIds: [9] }));
 
     expect(screen.getByRole('link', { name: 'Open session #101' })).toHaveAttribute(
       'href',
@@ -146,14 +153,14 @@ describe('Company/Users/Show', () => {
   });
 
   it('keeps a row the viewer has no route to, but not as a link', () => {
-    renderAuthedPage(<UserShow {...seed({ viewerIsAdmin: false, accessibleProjectIds: [] })} />);
+    renderUser(seed({ viewerIsAdmin: false, accessibleProjectIds: [] }));
 
     expect(screen.queryByRole('link', { name: 'Open session #101' })).not.toBeInTheDocument();
     expect(within(screen.getByRole('table')).getByText('$2.50')).toBeInTheDocument();
   });
 
   it('locks a private session: no open link, a lock icon, cost still shown', () => {
-    renderAuthedPage(<UserShow {...seed({ sessions: [makeSession({ viewable: false, initialPrompt: null })] })} />);
+    renderUser(seed({ sessions: [makeSession({ viewable: false, initialPrompt: null })] }));
 
     expect(screen.queryByRole('link', { name: 'Open session #101' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Session #101 is private')).toBeInTheDocument();
@@ -161,7 +168,7 @@ describe('Company/Users/Show', () => {
   });
 
   it('has no account controls — this page is a read', () => {
-    renderAuthedPage(<UserShow {...seed({ usageLimits: okLimits })} />);
+    renderUser(seed({ usageLimits: okLimits }));
 
     expect(screen.queryByRole('button', { name: /leave company/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /connect/i })).not.toBeInTheDocument();
@@ -171,29 +178,27 @@ describe('Company/Users/Show', () => {
 
   it('offers the spend charts for a window the viewer can change', async () => {
     const user = userEvent.setup();
-    renderAuthedPage(<UserShow {...seed()} />);
+    renderUser(seed());
 
     expect(screen.getByRole('heading', { name: 'Usage' })).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText('Usage period'));
-    await user.click(await screen.findByRole('option', { name: 'Last 7 days' }));
+    await user.click(screen.getByDisplayValue('Last 30 days'));
+    await user.click(await screen.findByText('Last 7 days'));
 
     expect(router.get).toHaveBeenCalledWith('/user/7', { period: '7d' }, expect.anything());
   });
 
   it('renders the spend numbers once the deferred usage props arrive', () => {
-    renderAuthedPage(<UserShow {...seed()} />, {
-      props: {
-        summary: {
-          totalSessions: 1234,
-          totalCostCents: 56789,
-          totalTokens: 2_500_000,
-          avgCostCentsPerSession: 46,
-          workflowsRun: 42,
-          projectBreakdowns: [
-            { projectId: 11, projectName: 'Quasar Initiative', sessions: 800, costCents: 40000, tokens: 1_800_000 },
-          ],
-        },
+    renderUser(seed(), {
+      summary: {
+        totalSessions: 1234,
+        totalCostCents: 56789,
+        totalTokens: 2_500_000,
+        avgCostCentsPerSession: 46,
+        workflowsRun: 42,
+        projectBreakdowns: [
+          { projectId: 11, projectName: 'Quasar Initiative', sessions: 800, costCents: 40000, tokens: 1_800_000 },
+        ],
       },
     });
 
@@ -204,7 +209,7 @@ describe('Company/Users/Show', () => {
   });
 
   it('says so plainly when the person has run nothing here', () => {
-    renderAuthedPage(<UserShow {...seed({ sessions: [], total: 0 })} />);
+    renderUser(seed({ sessions: [], total: 0 }));
 
     expect(screen.getByText("Jane Doe hasn't run anything in this company yet")).toBeInTheDocument();
   });
