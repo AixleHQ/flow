@@ -66,10 +66,19 @@ class AssetTest < ActiveSupport::TestCase
     end
   end
 
-  test "folder rejects slashes" do
-    asset = build(:asset, folder: "level1/level2", scope: @company, created_by: @owner)
-    assert { !asset.valid? }
-    assert { asset.errors[:folder].present? }
+  test "folder allows nested slash-separated segments" do
+    %w[level1/level2 dashboard/specs a/b/c].each do |folder|
+      asset = build(:asset, folder: folder, scope: @company, created_by: @owner)
+      assert { asset.valid? }
+    end
+  end
+
+  test "folder rejects leading, trailing or doubled slash" do
+    [ "/level1", "level1/", "level1//level2" ].each do |folder|
+      asset = build(:asset, folder: folder, scope: @company, created_by: @owner)
+      assert { !asset.valid? }
+      assert { asset.errors[:folder].present? }
+    end
   end
 
   test "folder rejects spaces" do

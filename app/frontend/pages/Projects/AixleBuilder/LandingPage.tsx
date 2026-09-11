@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   Group,
-  MultiSelect,
   Select,
   Stack,
   Table,
@@ -19,16 +18,13 @@ import { IconAlertCircle, IconExternalLink, IconSparkles, IconWand } from '@tabl
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useMemo, useState } from 'react';
 
+import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 interface Project {
-  id: number;
-  name: string;
-}
-interface AssetOption {
   id: number;
   name: string;
 }
@@ -58,7 +54,7 @@ interface Props {
   activeSessionId: number | null;
   configuredAgents: string[];
   defaultAgentRuntime?: string | null;
-  assets: AssetOption[];
+  assets: AssetPickerItem[];
   agentModels?: AgentModelsEntry[];
 }
 
@@ -91,7 +87,7 @@ const LandingPage = () => {
       : (configuredAgents[0] ?? null),
   );
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
-  const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
+  const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
   const [starting, setStarting] = useState(false);
 
   const hasActive = activeSessionId !== null;
@@ -112,7 +108,7 @@ const LandingPage = () => {
       {
         agentRuntime: runtime,
         preferredModel: selectedModel || undefined,
-        inputAssetIds: selectedAssets.map(Number),
+        inputAssetIds: selectedAssets,
       },
       {
         onFinish: () => setStarting(false),
@@ -125,8 +121,6 @@ const LandingPage = () => {
       router.visit(`/company/projects/${project.id}/aixle_builder/${activeSessionId}/session`);
     }
   }, [activeSessionId, project.id]);
-
-  const assetData = assets.map((a) => ({ value: String(a.id), label: a.name }));
 
   const modelData = models.map((m) => ({
     value: m.modelId,
@@ -185,15 +179,18 @@ const LandingPage = () => {
               )}
             </Group>
             {assets.length > 0 && (
-              <MultiSelect
-                label="Project Assets"
-                data={assetData}
-                value={selectedAssets}
-                onChange={setSelectedAssets}
-                placeholder="Select assets to include..."
-                searchable
-                size="sm"
-              />
+              <Box>
+                <Text size="sm" fw={500} mb={4}>
+                  Project Assets
+                </Text>
+                <AssetPicker
+                  assets={assets}
+                  value={selectedAssets}
+                  onChange={setSelectedAssets}
+                  placeholder="Select assets to include…"
+                  aria-label="Project Assets"
+                />
+              </Box>
             )}
           </Stack>
 

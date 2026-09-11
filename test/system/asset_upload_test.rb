@@ -24,6 +24,7 @@ class AssetUploadTest < ApplicationSystemTestCase
     assets.load
 
     assets.upload(text_fixture.to_s, folder: "docs")
+    assets.open_folder("docs")
 
     assert_text "test_file.txt", wait: 15
     asset = @company.assets.find_by(name: "test_file.txt")

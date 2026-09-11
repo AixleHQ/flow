@@ -86,20 +86,37 @@ Rails.application.routes.draw do
       end
 
       namespace :company do
-        resources :assets, only: %i[create destroy] do
+        resources :assets, only: %i[create update destroy] do
           member do
             get :download
           end
+          collection do
+            post :bulk_actions
+          end
         end
+
+        # Folder identity is a `path` string, not a numeric id (a folder can exist purely
+        # derived from asset paths, with no row of its own) — so these are addressed by
+        # path in the request body rather than as RESTful member routes.
+        post "folders", to: "folders#create"
+        patch "folders/relocate", to: "folders#relocate"
+        delete "folders", to: "folders#destroy"
       end
 
       resources :projects, only: [] do
         scope module: :projects do
-          resources :assets, only: %i[create destroy] do
+          resources :assets, only: %i[create update destroy] do
             member do
               get :download
             end
+            collection do
+              post :bulk_actions
+            end
           end
+
+          post "folders", to: "folders#create"
+          patch "folders/relocate", to: "folders#relocate"
+          delete "folders", to: "folders#destroy"
 
           resources :workflows, only: %i[show update destroy] do
             scope module: :workflows do

@@ -20,6 +20,7 @@ class Company < ApplicationRecord
   has_many :mcp_servers, as: :scope, dependent: :destroy, class_name: "MCPServer"
   has_many :skills, as: :scope, dependent: :destroy
   has_many :assets, as: :scope, dependent: :destroy
+  has_many :folders, as: :scope, dependent: :destroy
   has_many :integrations, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   # Workflows are owned by projects (company-level workflows were removed).

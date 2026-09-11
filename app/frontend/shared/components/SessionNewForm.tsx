@@ -6,6 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
+import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
@@ -38,7 +39,7 @@ export interface SessionNewFormProps {
   skills?: NamedItem[];
   mcpServers?: NamedItem[];
   repositories?: NamedItem[];
-  assets?: NamedItem[];
+  assets?: AssetPickerItem[];
   configItems?: ConfigItemOption[];
   /** Where to redirect after session creation */
   onCreatedPath: (sessionId: string, projectId: number) => string;
@@ -127,7 +128,7 @@ export const SessionNewForm = ({
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([]);
   const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
-  const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
+  const [selectedAssets, setSelectedAssets] = useState<number[]>([]);
   const [selectedConfigItems, setSelectedConfigItems] = useState<string[]>([]);
 
   const resolvedProjectId = fixedProjectId ? String(fixedProjectId) : projectId;
@@ -196,7 +197,7 @@ export const SessionNewForm = ({
             skillIds: selectedSkills.length > 0 ? selectedSkills.map(Number) : undefined,
             mcpServerIds: selectedMcpServers.length > 0 ? selectedMcpServers.map(Number) : undefined,
             repositoryIds: selectedRepos.length > 0 ? selectedRepos.map(Number) : undefined,
-            inputAssetIds: selectedAssets.length > 0 ? selectedAssets.map(Number) : undefined,
+            inputAssetIds: selectedAssets.length > 0 ? selectedAssets : undefined,
             configItemIds: selectedConfigItems.length > 0 ? selectedConfigItems.map(Number) : undefined,
             sessionConfig: bmadEnabled ? { bmadEnabled: true } : {},
           },
@@ -415,15 +416,18 @@ export const SessionNewForm = ({
       )}
 
       {assets.length > 0 && (
-        <MultiSelect
-          label="Assets"
-          placeholder="Select assets..."
-          data={assets.map((a) => ({ value: String(a.id), label: a.name }))}
-          value={selectedAssets}
-          onChange={setSelectedAssets}
-          searchable
-          clearable
-        />
+        <Box>
+          <Text size="sm" fw={500} mb={4}>
+            Assets
+          </Text>
+          <AssetPicker
+            assets={assets}
+            value={selectedAssets}
+            onChange={setSelectedAssets}
+            placeholder="Select assets…"
+            aria-label="Assets"
+          />
+        </Box>
       )}
 
       {configItems.length > 0 && (

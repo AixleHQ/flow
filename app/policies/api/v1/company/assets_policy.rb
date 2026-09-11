@@ -6,7 +6,9 @@ module Api
       class AssetsPolicy < Api::V1::ApplicationPolicy
         def download? = true # any authenticated company member may read
         def create? = !read_only?
+        def update? = !read_only?
         def destroy? = !read_only?
+        def bulk_actions? = !read_only?
       end
     end
   end

@@ -1,7 +1,7 @@
 import { Head, usePage } from '@inertiajs/react';
 
-import { AssetsContent, type Asset, type AssetVersion } from 'shared/resources/assets/AssetsContent';
-import { apiV1ProjectAssetsPath } from 'shared/routes';
+import { AssetsContent, type Asset, type AssetVersion, type Folder } from 'shared/resources/assets/AssetsContent';
+import { apiV1ProjectAssetsPath, apiV1ProjectFoldersPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -14,10 +14,11 @@ interface Props {
   project: Project;
   assets: Asset[];
   assetVersions?: AssetVersion[];
+  folders?: Folder[];
 }
 
 const AssetsPage = () => {
-  const { project, assets, assetVersions } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, assets, assetVersions, folders } = usePage<{ props: Props }>().props as unknown as Props;
 
   return (
     <>
@@ -25,12 +26,14 @@ const AssetsPage = () => {
       <AssetsContent
         assets={assets}
         assetVersions={assetVersions}
+        folders={folders}
         title="Project Assets"
         subtitle="Files and artifacts for this project. Company assets are also accessible."
         isProjectContext
         projectId={project.id}
         apiBasePath={apiV1ProjectAssetsPath(project.id)}
         createEndpoint={apiV1ProjectAssetsPath(project.id)}
+        foldersApiBase={apiV1ProjectFoldersPath(project.id)}
       />
     </>
   );

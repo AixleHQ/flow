@@ -99,7 +99,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       tools: tools.map { |t| { id: t.id, name: t.display_name.presence || t.name } },
       skills: skills.map { |s| { id: s.id, name: s.title.presence || s.name } },
       mcp_servers: mcp_servers.map { |m| { id: m.id, name: m.name } },
-      assets: assets.map { |a| { id: a.id, name: a.folder.present? ? "#{a.folder}/#{a.name}" : a.name } },
+      assets: assets.map { |a| { id: a.id, name: a.folder.present? ? "#{a.folder}/#{a.name}" : a.name, folder: a.folder } },
       repositories: repositories.map { |r| { id: r.id, name: r.full_name } },
       # Names and types only — a config item's value never reaches a prop.
       config_items: config_items.map { |c| ConfigItemPickerResource.new(c).to_h },
