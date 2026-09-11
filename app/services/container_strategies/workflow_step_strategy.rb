@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "shellwords"
+
 module ContainerStrategies
   # WorkflowStepStrategy
   # Strategy for workflow step containers — reuses AgentSessionStrategy behavior
@@ -202,8 +204,12 @@ module ContainerStrategies
     end
 
     def download_to_container(container, url, target_path)
-      rewritten = rewrite_url_for_container(url)
-      runtime.exec(container, [ "sh", "-c", "curl -sSL -o '#{target_path}' '#{rewritten}'" ])
+      # Asset names are user-supplied and free-form (spaces and quotes included), so the path has
+      # to be escaped rather than wrapped in quotes — a name carrying one would otherwise rewrite
+      # this command instead of naming a file.
+      safe_path = Shellwords.escape(target_path)
+      safe_url = Shellwords.escape(rewrite_url_for_container(url))
+      runtime.exec(container, [ "sh", "-c", "curl -sSL -o #{safe_path} #{safe_url}" ])
       Rails.logger.info("[WorkflowStepStrategy] Downloaded → #{target_path}")
     end
 

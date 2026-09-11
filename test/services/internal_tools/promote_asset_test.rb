@@ -69,6 +69,25 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
     assert_includes payload["share_url"], "/share/#{asset.public_token}"
   end
 
+  # An invalid folder used to surface to the agent as a raw RecordInvalid from deep inside the
+  # export service; it is the agent's own argument, so it gets a tool error it can act on.
+  test "returns a tool error naming the rule when the folder is invalid" do
+    result = run_tool(name: "report.md", folder: "docs/sub")
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "docs/sub"
+    assert { Asset.where(scope: @project, name: "report.md").none? }
+  end
+
+  test "promotes into the trimmed folder, spaces inside it kept" do
+    result = run_tool(name: "report.md", folder: "  Q3 reports  ")
+
+    assert_equal 0, result[:exit_code]
+    payload = JSON.parse(result[:stdout])
+    assert_equal "Q3 reports", payload["folder"]
+    assert_equal "Q3 reports", Asset.find(payload["asset_id"]).folder
+  end
+
   test "returns error when no matching workflow output asset exists" do
     result = run_tool(name: "missing.md")
 

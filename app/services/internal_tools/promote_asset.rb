@@ -18,8 +18,8 @@ module InternalTools
       param :name, type: :string, required: true,
                    description: "Name of the workflow output asset to promote (as produced by the run)."
       param :folder, type: :string,
-                     description: "Optional destination folder within project assets " \
-                                  "(letters, digits, hyphens, underscores only)."
+                     description: "Optional destination folder within project assets: one flat name, " \
+                                  "no slashes (spaces are allowed)."
     end
 
     def execute
@@ -32,8 +32,15 @@ module InternalTools
       promoter = workflow_run&.user
       return error("Cannot determine the promoting user") unless promoter
 
+      if Asset.invalid_folder?(params[:folder])
+        return error("Invalid folder '#{params[:folder]}': one flat name, no slashes or control characters, " \
+                     "at most #{Asset::FOLDER_MAX_LENGTH} characters")
+      end
+
+      folder = Asset.normalize_folder(params[:folder])
+
       result = AssetExportService.new(wra, project: project, user: promoter)
-                                 .export!(folder: params[:folder].presence)
+                                 .export!(folder: folder)
 
       asset = result[:asset]
       success({

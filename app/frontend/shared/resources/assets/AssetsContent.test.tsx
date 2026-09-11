@@ -590,6 +590,65 @@ describe('AssetsContent', () => {
     expect(file).not.toHaveProperty('mime_type');
   });
 
+  // The file is in cache storage by the time the folder is typed, so a folder the server will
+  // refuse has to be caught before the POST — otherwise the upload is thrown away on a 422.
+  it('blocks the save and flags the field when the folder is a path rather than a name', async () => {
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([{ name: 'notes.md', key: 'cache/ccc333-notes.md' }]);
+    await userEvent.type(await screen.findByLabelText(/folder/i), 'docs/sub');
+    await userEvent.click(screen.getByRole('button', { name: /save 1 file/i }));
+
+    expect(await screen.findByText('Folder cannot contain slashes or control characters')).toBeInTheDocument();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // The uploaded file stays staged so the user can fix the folder and retry.
+    expect(screen.getByRole('button', { name: /save 1 file/i })).toBeInTheDocument();
+  });
+
+  // Asset names are free-form, and the folder is half of the same path — a space is not a reason
+  // to refuse the upload.
+  it('posts a folder that contains spaces, trimmed at the ends only', async () => {
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([{ name: 'notes.md', key: 'cache/ddd444-notes.md' }]);
+    await userEvent.type(await screen.findByLabelText(/folder/i), '  Q3 reports  ');
+    await userEvent.click(screen.getByRole('button', { name: /save 1 file/i }));
+
+    expect(lastPostedAsset().folder).toBe('Q3 reports');
+  });
+
+  it('shows the message the server rejected the asset with, and keeps the modal open', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Folder must not contain slashes or control characters' }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([{ name: 'notes.md', key: 'cache/eee555-notes.md' }]);
+    await userEvent.click(await screen.findByRole('button', { name: /save 1 file/i }));
+
+    expect(await screen.findByText('Folder must not contain slashes or control characters')).toBeInTheDocument();
+    expect(router.reload).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /save 1 file/i })).toBeInTheDocument();
+  });
+
+  it('falls back to the generic failure toast when the server sends no message', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([{ name: 'notes.md', key: 'cache/fff666-notes.md' }]);
+    await userEvent.click(await screen.findByRole('button', { name: /save 1 file/i }));
+
+    expect(await screen.findByText('Failed to save uploaded files')).toBeInTheDocument();
+    expect(router.reload).not.toHaveBeenCalled();
+  });
+
   it('sends each uploaded file its own filename, falling back to "file" when Uppy reports none', async () => {
     renderPage(<AssetsContent {...baseProps} assets={[]} />);
     await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));

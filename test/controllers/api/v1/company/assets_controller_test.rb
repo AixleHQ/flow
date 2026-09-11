@@ -26,6 +26,32 @@ module Api
           assert_response :created
         end
 
+        test "create answers 422 and names the offending field for an invalid folder" do
+          post :create, params: {
+            asset: { name: "doc.md", folder: "docs/sub", file: document_file_cache_data }
+          }
+
+          assert_response :unprocessable_entity
+          assert_match(/folder/i, response.parsed_body["error"])
+        end
+
+        # The lookup used to key on name alone, so this second upload moved the first asset into
+        # the new folder instead of creating a sibling.
+        test "create makes a separate asset when the same filename lands in another folder" do
+          post :create, params: {
+            asset: { name: "readme.md", folder: "docs", file: document_file_cache_data }
+          }
+          assert_response :created
+
+          assert_difference -> { @company.assets.count }, 1 do
+            post :create, params: {
+              asset: { name: "readme.md", folder: "reports", file: document_file_cache_data }
+            }
+          end
+
+          assert_equal %w[docs reports], @company.assets.where(name: "readme.md").map(&:folder).sort
+        end
+
         # The browser upload path posts only name/folder/file — no size, no type
         # — so the version has to derive both, otherwise the Assets list renders
         # "—" in the Size column for everything uploaded through the UI.
