@@ -2,12 +2,14 @@ import '@testing-library/jest-dom/vitest';
 import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildSharedProps, buildSharedUser } from 'test/factories/sharedProps';
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { TriggerFormPanel } from './TriggerFormPanel';
 import type { Trigger } from './types';
 
-// TriggerFormPanel takes plain props (no usePage/useForm read) and talks to the backend through
+// TriggerFormPanel takes plain props (it reads only currentUser off usePage, to name who a new
+// trigger will run as) and talks to the backend through
 // apiFetch() -> the global fetch() the test setup stubs. `defaultKind` seeds the create-mode kind and
 // `editing` puts the form into (kind-locked) edit mode, so each trigger kind and its per-kind branches
 // can be rendered directly without driving the kind Select. Tests that assert a request spy on fetch()
@@ -87,6 +89,50 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByRole('button', { name: 'Add trigger' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it('names the signed-in user as who a new off-board trigger will run as', async () => {
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'schedule' })} />, {
+      props: buildSharedProps({ currentUser: buildSharedUser({ name: 'Nils Aker' }) }),
+    });
+
+    expect(screen.getByText('Runs as')).toBeInTheDocument();
+    expect(screen.getByText('Nils Aker')).toBeInTheDocument();
+    expect(screen.getByText(/use their credentials/)).toBeInTheDocument();
+  });
+
+  it('labels a column trigger as created by the signed-in user, not run as them', () => {
+    renderPage(<TriggerFormPanel {...baseProps()} />, {
+      props: buildSharedProps({ currentUser: buildSharedUser({ name: 'Nils Aker' }) }),
+    });
+
+    expect(screen.getByText('Created by')).toBeInTheDocument();
+    expect(screen.getByText(/belongs to whoever the card is on/)).toBeInTheDocument();
+  });
+
+  it('keeps the original creator when editing, and warns when the trigger has none', () => {
+    const editing: Trigger = {
+      id: 9,
+      kind: 'schedule',
+      event_type: 'schedule.fired',
+      schedule_config: { cron: '0 9 * * 1-5', timezone: 'UTC' },
+      created_by: { id: 4, name: 'Ada Ruiz' },
+    };
+
+    const { unmount } = renderPage(<TriggerFormPanel {...baseProps({ editing })} />, {
+      props: buildSharedProps({ currentUser: buildSharedUser({ name: 'Nils Aker' }) }),
+    });
+
+    expect(screen.getByText('Ada Ruiz')).toBeInTheDocument();
+    expect(screen.queryByText('Nils Aker')).not.toBeInTheDocument();
+    unmount();
+
+    renderPage(<TriggerFormPanel {...baseProps({ editing: { ...editing, created_by: null } })} />, {
+      props: buildSharedProps({ currentUser: buildSharedUser({ name: 'Nils Aker' }) }),
+    });
+
+    expect(screen.getByText('Unknown')).toBeInTheDocument();
+    expect(screen.getByText(/cannot start a run/)).toBeInTheDocument();
   });
 
   it('switches the rendered fields when the kind Select changes to slack', async () => {

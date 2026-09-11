@@ -7,6 +7,7 @@ import {
   IconPencil,
   IconPlus,
   IconTrash,
+  IconUser,
   IconWebhook,
 } from '@tabler/icons-react';
 import cronstrue from 'cronstrue';
@@ -78,6 +79,25 @@ function triggerTitle(t: Trigger): string {
     return 'Any Slack message';
   }
   return 'Incoming webhook';
+}
+
+// Off-board triggers fire unattended, so the run belongs to — and uses the
+// credentials of — whoever added the trigger. A column trigger's run belongs to
+// the person the card puts on it, so its creator is shown as provenance only.
+const OFF_BOARD_KINDS = new Set(['slack', 'schedule', 'webhook', 'event']);
+
+function creatorLabel(t: Trigger): string {
+  const name = t.created_by?.name;
+  const runsAsCreator = OFF_BOARD_KINDS.has(t.kind);
+  if (!name) return runsAsCreator ? 'No creator — this trigger cannot start a run' : 'Created by Unknown';
+  return runsAsCreator ? `Runs as ${name}` : `Created by ${name}`;
+}
+
+// A missing creator only breaks the off-board kinds — a column trigger still runs
+// under the person the card is on, so an unknown creator there is just a blank.
+function creatorTone(t: Trigger): string {
+  if (t.created_by) return 'var(--text-2)';
+  return OFF_BOARD_KINDS.has(t.kind) ? 'var(--err)' : 'var(--text-3)';
 }
 
 function triggerMeta(t: Trigger): string {
@@ -402,6 +422,27 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
                         {triggerMeta(t)}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Creator row */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                      color: creatorTone(t),
+                      minWidth: 0,
+                    }}
+                  >
+                    <IconUser size={13} style={{ flexShrink: 0 }} />
+                    {/* The card is narrow enough to clip the longer labels — keep the full text reachable. */}
+                    <span
+                      title={creatorLabel(t)}
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
+                      {creatorLabel(t)}
+                    </span>
                   </div>
 
                   {/* Foot row */}

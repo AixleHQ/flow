@@ -124,6 +124,62 @@ module Api
             assert_response :unprocessable_entity
           end
 
+          test "creating a trigger records the signed-in user as its creator" do
+            post :create, params: {
+              project_id: @project.id, workflow_id: @workflow.id,
+              trigger: { kind: "column", board_column_id: @column.id, trigger_mode: "auto", cooldown_seconds: 5 }
+            }
+            assert_response :created
+            assert_equal({ "id" => @user.id, "name" => @user.name }, json["created_by"])
+            assert_equal @user.id, ColumnWorkflowBinding.find(json["id"]).created_by_id
+
+            post :create, params: {
+              project_id: @project.id, workflow_id: @workflow.id,
+              trigger: { kind: "slack", filter_predicate: { channel: "C1" }, subject_policy: "none" }
+            }
+            assert_response :created
+            assert_equal({ "id" => @user.id, "name" => @user.name }, json["created_by"])
+            assert_equal @user.id, TriggerBinding.find(json["id"]).created_by_id
+          end
+
+          test "index names the creator of each trigger, and reports none for a trigger without one" do
+            ColumnWorkflowBinding.create!(board_column: @column, workflow: @workflow, created_by: @user,
+                                          trigger_mode: :auto, cooldown_seconds: 0)
+            orphan = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                                              event_type: "slack.message")
+            orphan.update_column(:created_by_id, nil)
+
+            get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+
+            assert_response :success
+            by_kind = json["triggers"].index_by { |t| t["kind"] }
+            assert_equal({ "id" => @user.id, "name" => @user.name }, by_kind["column"]["created_by"])
+            assert_nil by_kind["slack"]["created_by"]
+          end
+
+          test "editing a trigger leaves its creator alone" do
+            creator = create(:user, :onboarding_completed, company: @company)
+            binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: creator,
+                                               event_type: "slack.message", name: "before")
+            column_binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: @workflow,
+                                                           created_by: creator, trigger_mode: :auto, cooldown_seconds: 0)
+
+            patch :update, params: {
+              project_id: @project.id, workflow_id: @workflow.id, id: binding.id,
+              trigger: { name: "after", enabled: false }
+            }
+            assert_response :success
+            assert_equal creator.id, binding.reload.created_by_id
+            assert_equal({ "id" => creator.id, "name" => creator.name }, json["created_by"])
+
+            patch :update, params: {
+              project_id: @project.id, workflow_id: @workflow.id, id: column_binding.id, kind: "column",
+              trigger: { trigger_mode: "manual", cooldown_seconds: 30 }
+            }
+            assert_response :success
+            assert_equal creator.id, column_binding.reload.created_by_id
+          end
+
           test "destroy removes an event trigger" do
             binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
             assert_difference -> { TriggerBinding.count }, -1 do
