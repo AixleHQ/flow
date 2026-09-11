@@ -1,4 +1,4 @@
-import { router, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import {
   ActionIcon,
   Avatar,
@@ -30,6 +30,7 @@ import { useMemo, useState } from 'react';
 
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
+import { userPath } from 'shared/routes';
 import type { SharedProps, UserRole } from 'shared/ui';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -96,7 +97,7 @@ const ROLE_ICONS: Partial<Record<UserRole, typeof IconShieldCheck>> = {
   viewer: IconEye,
 };
 
-function RoleTag({ role }: { role: UserRole }) {
+export function RoleTag({ role }: { role: UserRole }) {
   const Icon = ROLE_ICONS[role];
   return (
     <Badge
@@ -293,7 +294,19 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
                         </Avatar>
                         <Box style={{ minWidth: 0 }}>
                           <Group gap={7} wrap="nowrap">
-                            <Text fw={500} size="sm" c="var(--app-text-primary)">
+                            {/* The name is the way into the org-visible member
+                                profile (/user/:id) — every member can open it,
+                                so it is not gated on the admin-only actions
+                                column next to it. */}
+                            <Text
+                              component={Link}
+                              href={userPath(user.id)}
+                              fw={500}
+                              size="sm"
+                              c="var(--app-text-primary)"
+                              td="none"
+                              style={{ textDecoration: 'none' }}
+                            >
                               {user.name}
                             </Text>
                             {isSelf && (

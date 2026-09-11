@@ -250,6 +250,12 @@ Rails.application.routes.draw do
     end
     resource :onboarding, only: %i[show update], controller: "onboarding"
 
+    # The organization-visible member profile. Company-scoped like everything
+    # under /company, but deliberately short and person-shaped: it is linked
+    # from every place a colleague's name appears, and "/company/users/12"
+    # would read as an admin screen rather than as that person's page.
+    get "user/:id", to: "company/users#show", as: :user, constraints: { id: /\d+/ }
+
     # Slack OAuth callback — one deployment-wide redirect URI registered on the
     # Slack app; the project is carried in the signed `state`, not the path.
     get "integrations/slack/oauth/callback", to: "integrations/slack_oauth#callback", as: :slack_oauth_callback

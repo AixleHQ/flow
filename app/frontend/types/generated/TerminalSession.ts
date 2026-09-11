@@ -24,6 +24,7 @@ type TerminalSession = {
   errorMessage: string | null;
   containerId: string | null;
   projectId: number | null;
+  userId: number;
   routeToken: string | null;
   configuredAgentId: number | null;
   collectedAt: string | null;

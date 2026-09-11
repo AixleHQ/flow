@@ -1,0 +1,12 @@
+/*
+ * Organization-visible member profile — page chrome only. The identity block is
+ * Mantine, and the rows belong to the shared feed table
+ * (shared/resources/sessions/SessionFeedTable).
+ */
+
+.count {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  font-family: var(--app-font-mono);
+  white-space: nowrap;
+}

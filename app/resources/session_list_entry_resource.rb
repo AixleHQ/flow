@@ -9,7 +9,7 @@ class SessionListEntryResource < ApplicationResource
   typelize_from TerminalSession
 
   attributes :id, :state, :session_type, :agent_type, :mode,
-             :total_tokens, :cost_cents,
+             :total_tokens, :cost_cents, :user_id,
              :started_at, :finished_at, :created_at
 
   typelize :string
