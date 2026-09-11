@@ -63,14 +63,10 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   def update
     integration = Integration.for_project(current_project).find(params[:id])
 
-    # Provider-aware: this used to run Coder's settings logic against whatever
-    # row was named, so an edit on any other provider's integration silently
-    # went through Coder::IntegrationService.
+    # Azure has its own editable settings (the operation profile, and a
+    # replacement PAT), so it routes away from the Coder path rather than being
+    # refused by it.
     return update_azure_devops(integration) if integration.azure_devops?
-    unless integration.coder?
-      return redirect_to company_project_integrations_path(current_project),
-                         alert: "#{integration.provider.to_s.humanize} integrations have no editable settings"
-    end
 
     Coder::IntegrationService.new(
       company: current_company,

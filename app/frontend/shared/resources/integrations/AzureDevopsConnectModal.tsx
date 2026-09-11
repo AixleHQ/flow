@@ -154,6 +154,9 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
                 setProjectId(null);
               }}
               disabled={installations.length === 0}
+              // Mantine deselects on a second click by default, which here would
+              // silently disable the project field and leave the form dead.
+              allowDeselect={false}
             />
             <Select
               label="Azure project"
@@ -163,6 +166,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
               value={projectId}
               onChange={setProjectId}
               disabled={!selectedInstallation}
+              allowDeselect={false}
               searchable
             />
           </>

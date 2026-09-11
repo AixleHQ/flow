@@ -91,12 +91,16 @@ module AzureDevops
       when 500..599 then retry_or_raise(response, method, segments, params, family, project, body, content_type, raw, attempt)
       else raise Error.new(azure_message(response), code: "azure_error", status: response.status)
       end
-    rescue Faraday::TimeoutError
-      # For a read this is just a timeout. For a write the request may well have
-      # landed, and calling it "failed" is how duplicate pull requests get made.
-      raise OutcomeUnknown, "Azure did not answer in time" unless method == :get
+    rescue Faraday::TimeoutError, Faraday::ConnectionFailed => e
+      # Both are rescued, and both are `unknown` for a write. Faraday reports a
+      # read timeout as TimeoutError and a connect-phase failure as
+      # ConnectionFailed, but the transport does not reliably tell us which side
+      # of "the request was sent" we are on — and calling a write "failed" when
+      # it may have landed is how duplicate pull requests and comments get made.
+      # A read has nothing to duplicate, so it is reported as what it is.
+      raise OutcomeUnknown, "Azure did not answer (#{e.class})" unless method == :get
 
-      raise Error.new("Azure request timed out", code: "timeout")
+      raise Error.new("Azure request failed to complete (#{e.class})", code: "timeout")
     end
 
     # Exactly one reacquisition and one retry. The token provider authenticates

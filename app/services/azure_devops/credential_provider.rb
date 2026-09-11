@@ -47,10 +47,16 @@ module AzureDevops
       # `capability` is the Aixle operation profile name (see §5.4). It is
       # checked BEFORE any Azure request, so a connection with Boards writes
       # switched off never reaches Azure to be told no.
-      def resolve!(integration, capability: nil)
+      #
+      # `allow_inactive` exists for exactly one caller: the connect and repair
+      # flow, which has to reach Azure in order to decide whether the connection
+      # should become active at all. Everything else — tool execution, git
+      # credential vending, repository discovery — leaves it false, so a
+      # disconnected or errored connection stops working immediately.
+      def resolve!(integration, capability: nil, allow_inactive: false)
         raise IntegrationUnavailable, "Azure DevOps is not enabled on this deployment" unless AppConfig.enabled?
         raise IntegrationUnavailable, "Integration is not an Azure DevOps connection" unless integration&.azure_devops?
-        raise IntegrationUnavailable, "Integration is not active" unless integration.active?
+        raise IntegrationUnavailable, "Integration is not active" unless allow_inactive || integration.active?
 
         if capability.present? && !integration.azure_capability_enabled?(capability)
           raise NotAuthorized, "This connection does not enable #{capability}"
@@ -95,8 +101,8 @@ module AzureDevops
 
     # Convenience: a ready client for the resolved connection, scoped to its
     # selected Azure project. Callers never choose the organization themselves.
-    def self.client_for(integration, capability: nil)
-      resolved = resolve!(integration, capability: capability)
+    def self.client_for(integration, capability: nil, allow_inactive: false)
+      resolved = resolve!(integration, capability: capability, allow_inactive: allow_inactive)
       [ Client.new(credential: resolved, organization: resolved.organization), resolved ]
     end
   end
