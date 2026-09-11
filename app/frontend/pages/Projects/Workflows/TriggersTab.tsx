@@ -436,7 +436,11 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
                     }}
                   >
                     <IconUser size={13} style={{ flexShrink: 0 }} />
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {/* The card is narrow enough to clip the longer labels — keep the full text reachable. */}
+                    <span
+                      title={creatorLabel(t)}
+                      style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    >
                       {creatorLabel(t)}
                     </span>
                   </div>
