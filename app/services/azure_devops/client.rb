@@ -49,6 +49,12 @@ module AzureDevops
                                 body: body, content_type: content_type)
     end
 
+    # Named `request_delete` rather than `delete` so it cannot be reached by a
+    # caller that meant Object#delete on a collection.
+    def request_delete(*segments, params: {}, family: :default, project: nil)
+      request(:delete, segments, params: params, family: family, project: project)
+    end
+
     # Follows Azure's `x-ms-continuationtoken` header across pages, bounded by
     # `max_pages` and `limit`. The continuation token is a provider value echoed
     # back as a query parameter — no provider-supplied URL is ever fetched.

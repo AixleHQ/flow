@@ -61,6 +61,14 @@ module AzureDevops
         (Settings.azure_devops&.token_refresh_skew || 300).to_i
       end
 
+      # How long to wait between re-reads while confirming a completion. Azure
+      # merges asynchronously, so this is a real waiting loop — configurable
+      # rather than a constant so a test can set it to zero instead of stubbing
+      # sleep (docs/testing.md R7).
+      def completion_poll_interval
+        (Settings.azure_devops&.completion_poll_interval || 1.0).to_f
+      end
+
       def open_timeout = (Settings.azure_devops&.open_timeout || 5).to_i
       def read_timeout = (Settings.azure_devops&.read_timeout || 30).to_i
 

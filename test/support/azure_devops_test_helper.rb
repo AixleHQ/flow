@@ -22,6 +22,10 @@ module AzureDevopsTestHelper
         api_host: AZURE_API_HOST,
         git_credentials_url: "http://web:4002/azure/git/credentials",
         token_refresh_skew: 300,
+        # Zero, so the completion-confirmation loop does not spend real seconds
+        # in the suite. The interval is configuration precisely so no test has to
+        # stub sleep (docs/testing.md R7).
+        completion_poll_interval: 0,
         open_timeout: 1,
         read_timeout: 2,
         apps: {

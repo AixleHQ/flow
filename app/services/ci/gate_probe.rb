@@ -21,19 +21,28 @@ module Ci
 
     def call
       return ProbeResult.unresolvable("#{gate.gate_type} is not a CI gate type") unless gate.ci?
-      return ProbeResult.unresolvable("gate metadata has no repo_full_name") if repo_full_name.blank?
+      # Azure gates name the repository by GUID; the others by display name.
+      if gate.provider == "azure_devops"
+        return ProbeResult.unresolvable("gate metadata has no external_repository_id") if gate.azure_repository_id.blank?
+      elsif repo_full_name.blank?
+        return ProbeResult.unresolvable("gate metadata has no repo_full_name")
+      end
       return ProbeResult.unresolvable("gate metadata has no #{gate.reference_type}") if gate.reference.blank?
 
       repository = linked_repository
-      return ProbeResult.unresolvable("#{repo_full_name} is not linked to project ##{project&.id}") if repository.nil?
+      if repository.nil?
+        return ProbeResult.unresolvable("#{gate_repository_label} is not linked to project ##{project&.id}")
+      end
 
       integration = repository.integration
       if integration.nil?
-        return ProbeResult.unresolvable("#{repo_full_name} is attached without an integration, so its CI is unreadable")
+        return ProbeResult.unresolvable(
+          "#{gate_repository_label} is attached without an integration, so its CI is unreadable"
+        )
       end
       unless integration.provider.to_s == gate.provider
         return ProbeResult.unresolvable(
-          "#{repo_full_name} is a #{integration.provider} repository but the gate expects #{gate.provider}"
+          "#{gate_repository_label} is a #{integration.provider} repository but the gate expects #{gate.provider}"
         )
       end
       unless integration.active?
@@ -60,7 +69,18 @@ module Ci
         Github::CheckStatusService.new(integration).workflow_run_status(repo_full_name, gate.reference.to_i)
       when "gitlab_pipeline_completed"
         Gitlab::PipelineStatusService.new(integration).pipeline_status(repo_full_name, gate.reference.to_i)
+      when "azure_devops_build_completed"
+        AzureDevops::CheckStatusService.new(integration)
+                                       .build_status(gate.reference, expected_commit: gate.expected_commit)
+      when "azure_devops_pr_policies_satisfied"
+        AzureDevops::CheckStatusService.new(integration)
+                                       .pull_request_policies(linked_repository, gate.reference,
+                                                              expected_commit: gate.expected_commit)
       end
+    end
+
+    def gate_repository_label
+      gate.azure_repository_id.presence || repo_full_name
     end
 
     def repo_full_name
@@ -70,7 +90,12 @@ module Ci
     def linked_repository
       return nil if project.nil?
 
-      Repository.visible_for_project(project).find_by(full_name: repo_full_name)
+      @linked_repository ||=
+        if gate.provider == "azure_devops"
+          Repository.visible_for_project(project).find_by(external_id: gate.azure_repository_id)
+        else
+          Repository.visible_for_project(project).find_by(full_name: repo_full_name)
+        end
     end
 
     def project

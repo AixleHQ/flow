@@ -16,6 +16,7 @@ class Integration < ApplicationRecord
   has_many :repositories, dependent: :destroy
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
   has_many :azure_devops_operations, dependent: :delete_all
+  has_many :azure_devops_subscriptions, dependent: :destroy
 
   validates :name, presence: true
   validates :provider, presence: true
