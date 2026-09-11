@@ -8,8 +8,15 @@ module Api
       CACHE_KEY_PATTERN = %r{\Acache/\h{60}(\.[a-z0-9]{1,16})?\z}
 
       # @summary Generate a presigned URL for direct file upload
+      #
+      # `key` is the object key this URL was signed for, and it is what the browser hands back
+      # once the bytes are stored. @uppy/aws-s3 6.1 honours a `key` alongside `url` in a
+      # signRequest answer — it uses that key for the rest of the upload and reports it to
+      # `upload-success` — so the frontend reads the cache id straight off the response instead
+      # of recovering it by splitting the upload URL on "/cache/".
       def presign
-        render json: { method: "PUT", url: presigned_put_url(cache_id) }
+        id = cache_id
+        render json: { method: "PUT", url: presigned_put_url(id), key: cache_key(id) }
       end
 
       # @summary Upload a file to temporary cache storage (development/test only)
@@ -31,6 +38,15 @@ module Api
         "#{SecureRandom.hex(30)}#{sanitized_extension}"
       end
 
+      # The object key an id lives at. Shrine's :cache storage is mounted under this prefix in
+      # every environment — S3 in production, FileSystem in development, Memory in test, where
+      # #upload stands in for S3 and takes the prefixed key in its path — so one string addresses
+      # the object whichever storage is behind it. Kept next to CACHE_KEY_PATTERN, which is the
+      # same prefix spelled as a guard.
+      def cache_key(id)
+        "cache/#{id}"
+      end
+
       # The extension is cosmetic — it makes cache objects recognisable in a bucket listing and
       # nothing reads it back. It still comes from a client-supplied filename, so allow only a
       # short alphanumeric suffix rather than splicing arbitrary bytes into an S3 key.
@@ -40,15 +56,15 @@ module Api
       end
 
       # The client never chooses the object key. @uppy/aws-s3 v6 generates a key of its own and
-      # passes it to `signRequest`, but we ignore it and sign the one minted here: the browser
-      # PUTs to this URL and the plugin reports it back as the file's uploadURL, so a caller
-      # cannot aim a write at another user's pending cache entry or at `store/`.
+      # passes it to `signRequest`, but we ignore it and sign the one minted here, then tell the
+      # plugin which key we actually signed for — so a caller cannot aim a write at another
+      # user's pending cache entry or at `store/`, and the id it reports back is ours.
       def presigned_put_url(id)
         # S3 signs its own uploads; the FileSystem/Memory storages used locally cannot, so
         # #upload stands in for S3 there. It has to be an absolute URL: the plugin derives the
         # uploadURL by feeding this string to `new URL(...)` with no base, which throws on a
         # path-relative one.
-        return upload_api_v1_assets_url(key: "cache/#{id}") unless cache_storage.respond_to?(:presign)
+        return upload_api_v1_assets_url(key: cache_key(id)) unless cache_storage.respond_to?(:presign)
 
         # Neither :content_type nor :content_disposition is signed here. Both would become
         # SigV4 signed headers that the browser must reproduce exactly, and v6 sends only

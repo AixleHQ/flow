@@ -38,6 +38,9 @@ export type { Asset, AssetVersion } from './types';
 
 const PRESIGN_URL = '/api/v1/assets/presign';
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+// Shrine's :cache storage prefix, which is what /presign signs under. Server-side twin:
+// Api::V1::AssetsController#cache_key.
+const CACHE_PREFIX = 'cache/';
 
 interface CachedFileDescriptor {
   id: string;
@@ -45,17 +48,37 @@ interface CachedFileDescriptor {
   metadata?: { filename: string };
 }
 
+// How the id was read before /presign reported the key: off the upload URL's path. Two layers of
+// escaping had to be undone first — percent-escapes, and `+` for space — and it only worked
+// because the key happens to sit in the path, which is a property of the storage prefixes rather
+// than of the upload contract.
+//
+// Kept only to survive a rolling deploy. A browser can load this bundle from an already-updated
+// pod and still reach an old one for /presign, which answers without `key`; @uppy/aws-s3 then
+// falls back to the key it generated (`signedKey || request.key` — the Uppy file id), which
+// addresses nothing. Delete once every pod serves a /presign that returns `key`.
+function cacheIdFromUploadURL(uploadURL: string): string {
+  if (!uploadURL) return '';
+  const pathname = decodeURIComponent(new URL(uploadURL, window.location.origin).pathname.replace(/\+/g, '%20'));
+  const idx = pathname.indexOf(`/${CACHE_PREFIX}`);
+  return idx === -1 ? '' : pathname.substring(idx + CACHE_PREFIX.length + 1);
+}
+
+// The cache id arrives verbatim rather than being parsed: /presign answers with the object key it
+// signed for, signRequest passes that key on to @uppy/aws-s3 (6.1+ honours a `key` next to `url`),
+// and Uppy carries it through the upload into the 'complete' payload.
+//
 // The filename is the only metadata we send: Shrine's determine_mime_type analyzer needs it to
 // derive a content type for formats without magic bytes (.md, .txt, .json, .csv). Size and MIME
 // type are deliberately omitted — restore_cached_data re-derives both from the stored bytes, and
 // file_size must stay client-untrusted (OutputValidator#validate_size depends on it).
-function extractCachedFileData(uploadURL: string, filename: string): CachedFileDescriptor {
-  const url = new URL(uploadURL, window.location.origin);
-  const pathname = decodeURIComponent(url.pathname.replace(/\+/g, '%20'));
-  const cachePrefix = '/cache/';
-  const idx = pathname.indexOf(cachePrefix);
-  if (idx === -1) throw new Error('Cannot extract cache data from upload URL');
-  return { id: pathname.substring(idx + cachePrefix.length), storage: 'cache', metadata: { filename } };
+function cachedFileDescriptor(key: unknown, uploadURL: string | undefined, filename: string): CachedFileDescriptor {
+  const id =
+    typeof key === 'string' && key.startsWith(CACHE_PREFIX)
+      ? key.slice(CACHE_PREFIX.length)
+      : cacheIdFromUploadURL(uploadURL ?? '');
+  if (!id) throw new Error('Upload finished without a cache key');
+  return { id, storage: 'cache', metadata: { filename } };
 }
 
 interface AssetsContentProps {
@@ -164,7 +187,7 @@ export function AssetsContent({
       // The S3 object key is chosen by the server, not here — /presign mints it and signs a
       // PUT for it, so a client cannot aim an upload at someone else's pending cache entry.
       // signRequest is handed nothing but `{ method, key }`, so the key generated here exists
-      // only to carry the Uppy file id across to it.
+      // only to carry the Uppy file id across to it; the server's key replaces it below.
       generateObjectKey: (file) => file.id,
       signRequest: async ({ key }) => {
         // getFile is typed as always returning a file, but a file removed mid-upload resolves
@@ -173,7 +196,9 @@ export function AssetsContent({
         const qs = new URLSearchParams({ filename: file?.name ?? 'file' });
         const res = await apiFetch(`${PRESIGN_URL}?${qs}`);
         const data = await res.json();
-        return { url: data.url as string };
+        // Returning `key` tells the plugin which object the URL was actually signed for, so it
+        // reports the server's key — not the file id above — once the upload succeeds.
+        return { url: data.url as string, key: data.key as string };
       },
     });
 
@@ -185,7 +210,7 @@ export function AssetsContent({
         const name = f.name ?? 'file';
         return {
           name,
-          cachedFile: extractCachedFileData(f.uploadURL ?? '', name),
+          cachedFile: cachedFileDescriptor(f.response?.body?.key, f.uploadURL, name),
         };
       });
       setUploadedFiles((prev) => [...prev, ...files]);
