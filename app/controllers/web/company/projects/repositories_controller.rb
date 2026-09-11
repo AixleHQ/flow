@@ -8,7 +8,7 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
 
     integrations = Integration.visible_for_project(current_project)
                               .active
-                              .where(provider: %i[github gitlab])
+                              .where(provider: Repository::CODE_HOST_PROVIDERS)
                               .includes(:connected_by)
 
     props = {
@@ -20,12 +20,17 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
     if params[:integration_id].present?
       integration = integrations.find { |i| i.id == params[:integration_id].to_i }
       if integration
+        # Azure repositories are addressed by GUID, not by name: a name lookup
+        # would reach a same-named repository in another project, and a rename
+        # would break every stored reference. So the picker carries an
+        # `externalId` for those and the attach path resolves on it.
         props[:available_repos] = RepositoryService.for(integration).list_available.map do |r|
-          { fullName: r[:full_name], defaultBranch: r[:default_branch] }
+          { fullName: r[:full_name], defaultBranch: r[:default_branch], externalId: r[:external_id] }.compact
         end
 
         if params[:repo].present?
-          props[:available_branches] = RepositoryService.for(integration).list_branches(params[:repo])
+          lookup = integration.azure_devops? ? params[:external_id].presence : params[:repo]
+          props[:available_branches] = lookup.present? ? RepositoryService.for(integration).list_branches(lookup) : []
         end
       end
     end
@@ -41,6 +46,13 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
         rescue PublicRepositoryService::Error => e
           return redirect_to company_project_repositories_path(current_project),
                              inertia: { errors: { public_url: e.message } }
+        end
+      elsif azure_integration
+        begin
+          build_azure_repository(azure_integration)
+        rescue AzureDevops::Error => e
+          return redirect_to company_project_repositories_path(current_project),
+                             inertia: { errors: { external_id: e.message } }
         end
       else
         Repository.new(create_params.merge(scope: current_project))
@@ -87,7 +99,30 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
   # and never accepted from the client: it reaches a `git clone` command line in
   # the session container.
   def create_params
-    params.require(:repository).permit(:full_name, :source_branch, :integration_id, :description, :purpose, :is_private)
+    params.require(:repository).permit(:full_name, :source_branch, :integration_id, :description, :purpose,
+                                       :is_private, :external_id)
+  end
+
+  # The integration named in the request, only when it is an Azure connection
+  # belonging to THIS project. A company-wide or foreign integration id resolves
+  # to nil and falls through to the ordinary path, which rejects it.
+  def azure_integration
+    id = create_params[:integration_id]
+    return nil if id.blank?
+
+    Integration.where(project_id: current_project.id, provider: "azure_devops").find_by(id: id)
+  end
+
+  # Everything on the row comes from Azure's verified answer — ids, names, clone
+  # url, privacy. The request supplies only WHICH repository to look up and an
+  # optional branch, and the branch is validated against the repository's refs.
+  def build_azure_repository(integration)
+    AzureDevops::RepositoryService.new(integration).build_repository(
+      external_id: create_params[:external_id].to_s,
+      scope: current_project,
+      source_branch: create_params[:source_branch].presence,
+      purpose: create_params[:purpose]
+    )
   end
 
   def public_params

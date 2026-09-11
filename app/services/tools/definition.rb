@@ -10,7 +10,7 @@ module Tools
   class Definition
     ATTRS = %i[name display_name description input_schema tags inject_rules
                requires_integration availability unavailable_message annotations
-               user_attachable handler_class_name audience].freeze
+               user_attachable handler_class_name audience repository_binding].freeze
 
     attr_reader(*ATTRS)
 
@@ -30,6 +30,12 @@ module Tools
     # stale across dev reloads.
     def handler_class
       handler_class_name.constantize
+    end
+
+    # True only for handlers that explicitly asked for the legacy GitHub
+    # repository expansion. Nothing infers this from an argument's spelling.
+    def legacy_github_repository_binding?
+      repository_binding == :legacy_github
     end
 
     def available?(ctx)

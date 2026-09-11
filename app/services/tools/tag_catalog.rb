@@ -25,6 +25,7 @@ module Tools
       Entry.new(tag: :board, label: "Board management", ui_visible: true),
       Entry.new(tag: :slack, label: "Slack", ui_visible: true),
       Entry.new(tag: :coder, label: "Coder", ui_visible: true),
+      Entry.new(tag: :azure_devops, label: "Azure DevOps", ui_visible: true),
       Entry.new(tag: :assets, label: "Assets", ui_visible: true),
       # Read-only supervision of the OTHER sessions in the project. Its own tag
       # rather than the personal server's :sessions, so a user-audience tool can

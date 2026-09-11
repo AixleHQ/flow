@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Run a bundled command against THIS worktree using the container toolchain.
+#
+# The repo's compose file pins `networks.default.name: app_default`, so bringing
+# a second project up from a worktree would put its `db` service on the main
+# tree's network and resolve `db` to the wrong Postgres. This runs one throwaway
+# container on no network at all instead: the container's ruby and the shared
+# gem volume, this tree's files, and no route to any database. Lint only.
+set -euo pipefail
+exec docker run --rm --network none \
+  -e GEM_HOME=/bundle_cache -e GEM_PATH=/bundle_cache -e BUNDLE_PATH=/bundle_cache \
+  -e BUNDLE_APP_CONFIG=/usr/local/bundle -e BUNDLE_SILENCE_ROOT_WARNING=1 \
+  -e HOME=/tmp \
+  -v "$PWD:/app" -v app_bundle_cache:/bundle_cache -w /app \
+  web bundle exec "$@"
