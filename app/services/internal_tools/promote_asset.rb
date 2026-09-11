@@ -19,7 +19,7 @@ module InternalTools
                    description: "Name of the workflow output asset to promote (as produced by the run)."
       param :folder, type: :string,
                      description: "Optional destination folder within project assets " \
-                                  "(letters, digits, hyphens, underscores only)."
+                                  "(letters, digits, hyphens, underscores only; use / to nest, e.g. specs/api)."
     end
 
     def execute

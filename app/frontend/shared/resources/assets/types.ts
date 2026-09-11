@@ -8,6 +8,15 @@ export interface AssetVersion {
   createdAt: string | null;
 }
 
+export interface Folder {
+  id: number;
+  path: string;
+  scopeType: string;
+  scopeIndicator: 'company' | 'project';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Asset {
   id: number;
   name: string;

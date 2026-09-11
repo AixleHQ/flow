@@ -73,4 +73,32 @@ class Api::V1::Company::AssetsAuthorizationTest < ActionDispatch::IntegrationTes
       delete api_v1_company_asset_path(create(:asset, :with_company_scope, scope: @company, created_by: @owner))
     end
   end
+
+  # update (move)? == !read_only?, same record-scoping as destroy — a fresh asset
+  # per role iteration, so the foreign admin's cross-company `.find` 404s.
+  test "update: viewer forbidden; same-company non-viewers 200; foreign admin 404" do
+    assert_role_matrix(
+      { owner: :allowed_write, admin: :allowed_write, collaborator: :allowed_write,
+        stranger: :allowed_write, viewer: :denied, foreign_admin: :not_found },
+      transport: :api
+    ) do
+      asset = create(:asset, :with_company_scope, scope: @company, created_by: @owner)
+      patch api_v1_company_asset_path(asset), params: { asset: { folder: "moved" } }, as: :json
+    end
+  end
+
+  # bulk_actions? == !read_only?, no record to scope in the URL (ids are scoped
+  # inside AssetBulkService, not the policy) — the foreign admin clears authz and
+  # gets 200 against their own (empty) result, like create.
+  test "bulk_actions: viewer forbidden; every other role clears authz (200)" do
+    assert_role_matrix(
+      { owner: :allowed_write, admin: :allowed_write, collaborator: :allowed_write,
+        stranger: :allowed_write, foreign_admin: :allowed_write, viewer: :denied },
+      transport: :api
+    ) do
+      asset = create(:asset, :with_company_scope, scope: @company, created_by: @owner)
+      post bulk_actions_api_v1_company_assets_path, params: { action_type: "move", asset_ids: [ asset.id ], folder: "x" },
+                                                      as: :json
+    end
+  end
 end

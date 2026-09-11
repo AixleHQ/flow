@@ -1,3 +1,5 @@
+import { DndContext, PointerSensor, useDraggable, useDroppable, useSensor, useSensors } from '@dnd-kit/core';
+import type { DragEndEvent } from '@dnd-kit/core';
 import { router } from '@inertiajs/react';
 import {
   ActionIcon,
@@ -5,10 +7,11 @@ import {
   Box,
   Button,
   Center,
+  Checkbox,
   Group,
   Modal,
   Progress,
-  Select,
+  SegmentedControl,
   Stack,
   Table,
   Text,
@@ -17,7 +20,22 @@ import {
 } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { IconDownload, IconEye, IconFolder, IconHistory, IconSearch, IconTrash, IconUpload } from '@tabler/icons-react';
+import {
+  IconCheckbox,
+  IconDownload,
+  IconEye,
+  IconFolder,
+  IconFolderPlus,
+  IconFolderShare,
+  IconGripVertical,
+  IconHistory,
+  IconList,
+  IconLock,
+  IconPencil,
+  IconSearch,
+  IconTrash,
+  IconUpload,
+} from '@tabler/icons-react';
 import AwsS3 from '@uppy/aws-s3';
 import Uppy from '@uppy/core';
 import type { Body, Meta, UppyFile } from '@uppy/core';
@@ -32,9 +50,46 @@ import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { AssetPreviewModal } from './AssetPreviewModal';
-import type { Asset, AssetVersion } from './types';
+import { AssetsBreadcrumbs } from './AssetsBreadcrumbs';
+import { AssetsSelectionBar } from './AssetsSelectionBar';
+import { DeleteFolderModal } from './DeleteFolderModal';
+import { FolderFormModal } from './FolderFormModal';
+import {
+  type FolderNode,
+  buildFolderPaths,
+  directChildAssets,
+  directChildFolders,
+  folderItemCount,
+  folderLabel,
+  parentPath,
+  searchAssets,
+  siblingNames,
+} from './folderTree';
+import { MoveToFolderModal } from './MoveToFolderModal';
+import type { Asset, AssetVersion, Folder } from './types';
+import { useAssetMutations } from './useAssetMutations';
+import { useAssetSelection } from './useAssetSelection';
+import { useAssetViewState } from './useAssetViewState';
+import { useFolderMutations } from './useFolderMutations';
 
-export type { Asset, AssetVersion } from './types';
+export type { Asset, AssetVersion, Folder } from './types';
+
+/** What the Move-to-folder modal is currently acting on. */
+type MoveTarget = { kind: 'asset'; asset: Asset } | { kind: 'folder'; path: string } | { kind: 'bulk'; ids: number[] };
+
+const ASSET_DRAG_PREFIX = 'asset:';
+const FOLDER_DROP_PREFIX = 'folder:';
+
+/** Pure resolver for a drag-and-drop end event's (dnd-kit id, dnd-kit id) pair — extracted so the
+ * "what move does this drop mean" logic is unit-testable without simulating a pointer drag in
+ * jsdom (the gesture itself isn't exercised there; see AssetsContent.test.tsx). */
+export function resolveAssetDrop(activeId: string, overId: string): { assetId: number; folder: string } | null {
+  if (!activeId.startsWith(ASSET_DRAG_PREFIX) || !overId.startsWith(FOLDER_DROP_PREFIX)) return null;
+  return {
+    assetId: Number(activeId.slice(ASSET_DRAG_PREFIX.length)),
+    folder: overId.slice(FOLDER_DROP_PREFIX.length),
+  };
+}
 
 const PRESIGN_URL = '/api/v1/assets/presign';
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
@@ -61,11 +116,14 @@ function extractCachedFileData(uploadURL: string, filename: string): CachedFileD
 interface AssetsContentProps {
   assets: Asset[];
   assetVersions?: AssetVersion[];
+  folders?: Folder[];
   title: string;
   subtitle: string;
   isProjectContext?: boolean;
   apiBasePath: string;
   createEndpoint?: string;
+  /** Base URL for folder create/relocate/destroy — omitted where folders aren't supported yet. */
+  foldersApiBase?: string;
   projectId?: number;
 }
 
@@ -74,19 +132,24 @@ const SCOPE_COLORS: Record<string, string> = {
   project: 'gray',
 };
 
+/** Modal target for the shared create/rename folder form. */
+type FolderFormTarget = { mode: 'create' } | { mode: 'rename'; path: string };
+
 export function AssetsContent({
   assets,
   assetVersions,
+  folders = [],
   title,
   subtitle,
   isProjectContext = false,
   apiBasePath,
   createEndpoint,
+  foldersApiBase,
   projectId,
 }: AssetsContentProps) {
   const { canExecute } = useProjectPermissions();
   const [search, setSearch] = useState('');
-  const [folderFilter, setFolderFilter] = useState<string | null>(null);
+  const { viewMode, setViewMode, currentPath, setCurrentPath } = useAssetViewState();
 
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
 
@@ -100,6 +163,15 @@ export function AssetsContent({
 
   const [historyAsset, setHistoryAsset] = useState<Asset | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  const [folderForm, setFolderForm] = useState<FolderFormTarget | null>(null);
+  const [deleteFolderPath, setDeleteFolderPath] = useState<string | null>(null);
+  const folderMutations = useFolderMutations(foldersApiBase ?? '');
+
+  const assetMutations = useAssetMutations(apiBasePath);
+  const selection = useAssetSelection();
+  const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const openHistory = useCallback((asset: Asset) => {
     setHistoryAsset(asset);
@@ -259,22 +331,142 @@ export function AssetsContent({
     uppyRef.current?.cancelAll();
   }, []);
 
-  // --- Filtering ---
-  const folders = useMemo(() => {
-    const set = new Set<string>();
-    for (const a of assets) if (a.folder) set.add(a.folder);
-    return Array.from(set)
-      .sort()
-      .map((f) => ({ value: f, label: f }));
-  }, [assets]);
+  const openUpload = useCallback(
+    (folder: string) => {
+      setUploadFolder(folder);
+      setUploadOpen(true);
+    },
+    [setUploadFolder],
+  );
 
-  const filtered = useMemo(() => {
-    return assets.filter((a) => {
-      if (search && !a.name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (folderFilter && a.folder !== folderFilter) return false;
-      return true;
+  // --- Folder tree ---
+  const paths = useMemo(() => buildFolderPaths(assets, folders), [assets, folders]);
+  const query = search.trim();
+  const isSearching = query.length > 0;
+  const foldersEnabled = !!foldersApiBase;
+  // A caller that doesn't wire folders (foldersApiBase omitted) always sees the flat list — the
+  // folder-view controls (New folder, the view toggle, breadcrumbs) simply don't appear, rather
+  // than navigation silently narrowing the table to whatever the default currentPath happens to be.
+  const effectiveViewMode = foldersEnabled ? viewMode : 'flat';
+
+  const folderRows: FolderNode[] =
+    isSearching || effectiveViewMode === 'flat' ? [] : directChildFolders(paths, currentPath);
+  const fileRows: Asset[] = isSearching
+    ? searchAssets(assets, query)
+    : effectiveViewMode === 'flat'
+      ? assets
+      : directChildAssets(assets, currentPath);
+  const showFolderColumn = isSearching || effectiveViewMode === 'flat';
+  const showBreadcrumbs = foldersEnabled && effectiveViewMode === 'folder' && !isSearching;
+  const totalCount = folderRows.length + fileRows.length;
+  const countLabel = isSearching
+    ? `${fileRows.length} result${fileRows.length === 1 ? '' : 's'}`
+    : effectiveViewMode === 'flat'
+      ? `${fileRows.length} file${fileRows.length === 1 ? '' : 's'}`
+      : `${totalCount} item${totalCount === 1 ? '' : 's'}`;
+
+  // --- Folder CRUD ---
+  const openCreateFolder = useCallback(() => setFolderForm({ mode: 'create' }), []);
+  const openRenameFolder = useCallback((path: string) => setFolderForm({ mode: 'rename', path }), []);
+  const closeFolderForm = useCallback(() => {
+    setFolderForm(null);
+    folderMutations.setError(null);
+  }, [folderMutations]);
+
+  const folderFormExistingNames =
+    folderForm?.mode === 'create'
+      ? siblingNames(paths, assets, currentPath)
+      : folderForm
+        ? siblingNames(paths, assets, parentPath(folderForm.path))
+        : [];
+  const folderFormInitialName = folderForm?.mode === 'rename' ? folderLabel(folderForm.path) : undefined;
+  const folderFormParentLabel = currentPath ? folderLabel(currentPath) : '';
+
+  const submitFolderForm = useCallback(
+    async (name: string) => {
+      if (!folderForm) return;
+      const ok =
+        folderForm.mode === 'create'
+          ? await folderMutations.create(currentPath ? `${currentPath}/${name}` : name)
+          : await folderMutations.relocate(
+              folderForm.path,
+              parentPath(folderForm.path) ? `${parentPath(folderForm.path)}/${name}` : name,
+            );
+      if (ok) setFolderForm(null);
+    },
+    [folderForm, folderMutations, currentPath],
+  );
+
+  const confirmDeleteFolder = useCallback(
+    async (recursive: boolean) => {
+      if (!deleteFolderPath) return;
+      const result = await folderMutations.destroy(deleteFolderPath, recursive);
+      if (result.ok) setDeleteFolderPath(null);
+    },
+    [deleteFolderPath, folderMutations],
+  );
+
+  // --- Move (row action, drag-and-drop, and the bulk-select bar all funnel through this modal) ---
+  const allFolderPaths = useMemo(() => [...paths.keys()], [paths]);
+
+  const moveModalSubjectLabel =
+    moveTarget?.kind === 'asset'
+      ? moveTarget.asset.name
+      : moveTarget?.kind === 'folder'
+        ? folderLabel(moveTarget.path)
+        : moveTarget?.kind === 'bulk'
+          ? `${moveTarget.ids.length} file${moveTarget.ids.length === 1 ? '' : 's'}`
+          : '';
+
+  // A folder can't be moved into itself or anything nested under it.
+  const moveModalDisabledPaths =
+    moveTarget?.kind === 'folder'
+      ? allFolderPaths.filter((p) => p === moveTarget.path || p.startsWith(`${moveTarget.path}/`))
+      : [];
+
+  const confirmMove = useCallback(
+    async (destination: string) => {
+      if (!moveTarget) return;
+      if (moveTarget.kind === 'asset') {
+        if (await assetMutations.move(moveTarget.asset.id, destination)) setMoveTarget(null);
+      } else if (moveTarget.kind === 'folder') {
+        const label = folderLabel(moveTarget.path);
+        const to = destination ? `${destination}/${label}` : label;
+        if (await folderMutations.relocate(moveTarget.path, to)) setMoveTarget(null);
+      } else {
+        const result = await assetMutations.bulk('move', moveTarget.ids, destination);
+        if (result) {
+          setMoveTarget(null);
+          selection.exitBulkMode();
+        }
+      }
+    },
+    [moveTarget, assetMutations, folderMutations, selection],
+  );
+
+  const confirmBulkDelete = useCallback(() => {
+    const ids = [...selection.selectedIds];
+    if (ids.length === 0) return;
+    modals.openConfirmModal({
+      title: `Delete ${ids.length} file${ids.length === 1 ? '' : 's'}`,
+      children: <Text size="sm">These assets will be moved to trash and can be restored within 30 days.</Text>,
+      labels: { confirm: 'Move to Trash', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: async () => {
+        if (await assetMutations.bulk('delete', ids)) selection.exitBulkMode();
+      },
     });
-  }, [assets, search, folderFilter]);
+  }, [selection, assetMutations]);
+
+  // --- Drag-and-drop: a file row onto a folder row moves it there. ---
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      if (!event.over) return;
+      const drop = resolveAssetDrop(String(event.active.id), String(event.over.id));
+      if (drop) assetMutations.move(drop.assetId, drop.folder);
+    },
+    [assetMutations],
+  );
 
   // --- Download URL builder ---
   const downloadUrl = useCallback(
@@ -287,43 +479,75 @@ export function AssetsContent({
     [projectId],
   );
 
+  const emptyStateKind = isSearching ? 'search' : totalCount > 0 ? null : currentPath ? 'folder' : 'root';
+
   return (
     <Box>
       <PageHeader
         title={title}
         subtitle={subtitle}
         actions={
-          canExecute &&
-          createEndpoint && (
-            <Button leftSection={<IconUpload size={16} />} onClick={() => setUploadOpen(true)}>
-              Upload
-            </Button>
-          )
+          <Group gap="xs">
+            {canExecute && foldersEnabled && (
+              <Button variant="default" leftSection={<IconFolderPlus size={16} />} onClick={openCreateFolder}>
+                New folder
+              </Button>
+            )}
+            {canExecute && createEndpoint && (
+              <Button leftSection={<IconUpload size={16} />} onClick={() => openUpload(currentPath)}>
+                Upload
+              </Button>
+            )}
+          </Group>
         }
       />
 
-      <Group gap="sm" mb="lg">
-        <TextInput
-          placeholder="Search assets..."
-          leftSection={<IconSearch size={16} />}
-          value={search}
-          onChange={(e) => setSearch(e.currentTarget.value)}
-          maw={300}
+      {selection.bulkMode ? (
+        <AssetsSelectionBar
+          count={selection.selectedIds.size}
+          submitting={assetMutations.submitting}
+          onMove={() => setMoveTarget({ kind: 'bulk', ids: [...selection.selectedIds] })}
+          onDelete={confirmBulkDelete}
+          onExit={selection.exitBulkMode}
         />
-        {folders.length > 0 && (
-          <Select
-            placeholder="All folders"
-            data={folders}
-            value={folderFilter}
-            onChange={setFolderFilter}
-            clearable
-            size="sm"
-            w={180}
+      ) : (
+        <Group gap="sm" mb={foldersEnabled ? 6 : 'lg'}>
+          <TextInput
+            placeholder="Search assets..."
+            leftSection={<IconSearch size={16} />}
+            value={search}
+            onChange={(e) => setSearch(e.currentTarget.value)}
+            maw={300}
           />
-        )}
-      </Group>
+          {foldersEnabled && (
+            <SegmentedControl
+              value={viewMode}
+              onChange={(v) => setViewMode(v as 'folder' | 'flat')}
+              data={[
+                { value: 'folder', label: <ViewOptionLabel icon={<IconFolder size={14} />} text="Folders" /> },
+                { value: 'flat', label: <ViewOptionLabel icon={<IconList size={14} />} text="All files" /> },
+              ]}
+            />
+          )}
+          {fileRows.length > 0 && (
+            <Button
+              variant="default"
+              size="sm"
+              leftSection={<IconCheckbox size={14} />}
+              onClick={selection.enterBulkMode}
+            >
+              Select
+            </Button>
+          )}
+          <Text size="sm" c="dimmed" ml="auto">
+            {countLabel}
+          </Text>
+        </Group>
+      )}
 
-      {filtered.length === 0 ? (
+      {showBreadcrumbs && <AssetsBreadcrumbs currentPath={currentPath} onNavigate={setCurrentPath} />}
+
+      {totalCount === 0 ? (
         <Box
           style={{
             border: '1px solid var(--app-border-default)',
@@ -331,187 +555,153 @@ export function AssetsContent({
             backgroundColor: 'var(--app-bg-paper)',
           }}
         >
-          <EmptyState
-            icon={<IconFolder size={22} />}
-            title={search || folderFilter ? 'No assets match your filters' : 'No assets yet'}
-            description={
-              search || folderFilter
-                ? undefined
-                : 'Assets are files your agents can read during a session and write results back to.'
-            }
-            action={
-              !search &&
-              !folderFilter &&
-              canExecute &&
-              createEndpoint && (
-                <Button variant="outline" onClick={() => setUploadOpen(true)}>
-                  Upload your first file
-                </Button>
-              )
-            }
-          />
+          {emptyStateKind === 'search' ? (
+            <EmptyState
+              icon={<IconSearch size={22} />}
+              title="No matches"
+              description={`No assets match "${query}". Try a different name or clear the search.`}
+            />
+          ) : emptyStateKind === 'folder' ? (
+            <EmptyState
+              icon={<IconFolder size={22} />}
+              title="This folder is empty"
+              description={`Upload a file into "${folderLabel(currentPath)}", or create a subfolder to organize further.`}
+              action={
+                canExecute && (
+                  <Group gap="xs">
+                    {createEndpoint && (
+                      <Button variant="outline" onClick={() => openUpload(currentPath)}>
+                        Upload here
+                      </Button>
+                    )}
+                    {foldersEnabled && (
+                      <Button variant="default" leftSection={<IconFolderPlus size={16} />} onClick={openCreateFolder}>
+                        New folder
+                      </Button>
+                    )}
+                  </Group>
+                )
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={<IconFolder size={22} />}
+              title="No assets yet"
+              description="Assets are files your agents can read during a session and write results back to."
+              action={
+                canExecute && (
+                  <Group gap="xs">
+                    {createEndpoint && (
+                      <Button variant="outline" onClick={() => openUpload(currentPath)}>
+                        Upload your first file
+                      </Button>
+                    )}
+                    {foldersEnabled && (
+                      <Button variant="default" leftSection={<IconFolderPlus size={16} />} onClick={openCreateFolder}>
+                        New folder
+                      </Button>
+                    )}
+                  </Group>
+                )
+              }
+            />
+          )}
         </Box>
       ) : (
         <Box
           style={{
             border: '1px solid var(--app-border-default)',
             borderRadius: 'var(--mantine-radius-md)',
-            overflow: 'hidden',
+            overflow: 'auto',
           }}
         >
-          <Table highlightOnHover>
-            <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
-              <Table.Tr>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Name
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Folder
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Size
-                  </Text>
-                </Table.Th>
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Version
-                  </Text>
-                </Table.Th>
-                {isProjectContext && (
+          <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
+            <Table highlightOnHover miw={showFolderColumn ? 860 : 720}>
+              <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
+                <Table.Tr>
+                  {selection.bulkMode && <Table.Th w={36} />}
                   <Table.Th>
                     <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                      Scope
+                      Name
                     </Text>
                   </Table.Th>
-                )}
-                <Table.Th>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
-                    Date
-                  </Text>
-                </Table.Th>
-                <Table.Th w={140}>
-                  <Text fz={12} fw={600} c="dimmed" tt="uppercase" ta="right" style={{ letterSpacing: 0.5 }}>
-                    Actions
-                  </Text>
-                </Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {filtered.map((asset) => (
-                <Table.Tr key={`${asset.scopeType}-${asset.id}`}>
-                  <Table.Td>
-                    <Text fz={14} fw={500} c="var(--app-text-primary)">
-                      {asset.name}
-                    </Text>
-                    {asset.latestVersion?.contentType && (
-                      <Text fz={12} c="dimmed">
-                        {asset.latestVersion.contentType}
+                  {showFolderColumn && (
+                    <Table.Th>
+                      <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                        Folder
                       </Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    {asset.folder ? (
-                      <Group gap={4}>
-                        <IconFolder size={14} color="var(--mantine-color-dimmed)" />
-                        <Text fz={13}>{asset.folder}</Text>
-                      </Group>
-                    ) : (
-                      <Text fz={13} c="dimmed">
-                        —
-                      </Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <Text fz={13} ff="JetBrains Mono, monospace" c="dimmed">
-                      {formatFileSize(asset.latestVersion?.fileSize ?? null)}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Text fz={13} ff="JetBrains Mono, monospace">
-                      v{asset.latestVersion?.version ?? 1}
-                      {asset.versionsCount > 1 && (
-                        <Text component="span" fz={11} c="dimmed" ml={4}>
-                          ({asset.versionsCount})
-                        </Text>
-                      )}
-                    </Text>
-                  </Table.Td>
-                  {isProjectContext && (
-                    <Table.Td>
-                      <Badge color={SCOPE_COLORS[asset.scopeIndicator] ?? 'gray'} size="sm" variant="light">
-                        {asset.scopeIndicator}
-                      </Badge>
-                    </Table.Td>
+                    </Table.Th>
                   )}
-                  <Table.Td>
-                    <Text fz={13} c="dimmed">
-                      {formatDateMedium(asset.updatedAt)}
+                  <Table.Th>
+                    <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                      Size
                     </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <Group gap={4} justify="flex-end">
-                      {asset.latestVersion?.fileUrl && (
-                        <Tooltip label="Preview">
-                          <ActionIcon
-                            aria-label="Preview"
-                            variant="subtle"
-                            size="sm"
-                            onClick={() => setPreviewAsset(asset)}
-                          >
-                            <IconEye size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      )}
-                      {asset.latestVersion && (
-                        <Tooltip label="Download">
-                          <ActionIcon
-                            aria-label="Preview"
-                            variant="subtle"
-                            size="sm"
-                            component="a"
-                            href={downloadUrl(asset)}
-                            target="_blank"
-                            rel="noopener"
-                          >
-                            <IconDownload size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      )}
-                      <Tooltip label="Version history">
-                        <ActionIcon aria-label="Download" variant="subtle" size="sm" onClick={() => openHistory(asset)}>
-                          <IconHistory size={16} />
-                        </ActionIcon>
-                      </Tooltip>
-                      {canExecute && canDelete(asset) ? (
-                        <Tooltip label="Delete">
-                          <ActionIcon
-                            aria-label="Version history"
-                            variant="subtle"
-                            size="sm"
-                            color="red"
-                            onClick={() => handleSoftDelete(asset)}
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      ) : (
-                        <Tooltip label="Company-managed">
-                          <ActionIcon aria-label="Delete" variant="subtle" size="sm" color="red" disabled>
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      )}
-                    </Group>
-                  </Table.Td>
+                  </Table.Th>
+                  <Table.Th>
+                    <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                      Version
+                    </Text>
+                  </Table.Th>
+                  {isProjectContext && (
+                    <Table.Th>
+                      <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                        Scope
+                      </Text>
+                    </Table.Th>
+                  )}
+                  <Table.Th>
+                    <Text fz={12} fw={600} c="dimmed" tt="uppercase" style={{ letterSpacing: 0.5 }}>
+                      Date
+                    </Text>
+                  </Table.Th>
+                  <Table.Th w={showFolderColumn ? 168 : 140}>
+                    <Text fz={12} fw={600} c="dimmed" tt="uppercase" ta="right" style={{ letterSpacing: 0.5 }}>
+                      Actions
+                    </Text>
+                  </Table.Th>
                 </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+              </Table.Thead>
+              <Table.Tbody>
+                {folderRows.map((folder) => (
+                  <FolderRow
+                    key={folder.path}
+                    folder={folder}
+                    count={folderItemCount(paths, assets, folder.path)}
+                    showFolderColumn={showFolderColumn}
+                    isProjectContext={isProjectContext}
+                    bulkMode={selection.bulkMode}
+                    // Mirrors canDelete(asset): a company-scoped row is only read-only when
+                    // viewed from a project — on the Company page itself it's the viewer's own.
+                    isCompanyLocked={isProjectContext && folder.scopeIndicator === 'company'}
+                    canExecute={canExecute}
+                    onNavigate={setCurrentPath}
+                    onRename={openRenameFolder}
+                    onMove={(path) => setMoveTarget({ kind: 'folder', path })}
+                    onDelete={setDeleteFolderPath}
+                  />
+                ))}
+                {fileRows.map((asset) => (
+                  <FileRow
+                    key={`${asset.scopeType}-${asset.id}`}
+                    asset={asset}
+                    showFolderColumn={showFolderColumn}
+                    isProjectContext={isProjectContext}
+                    downloadUrl={downloadUrl(asset)}
+                    onPreview={() => setPreviewAsset(asset)}
+                    onHistory={() => openHistory(asset)}
+                    onDelete={() => handleSoftDelete(asset)}
+                    onMove={() => setMoveTarget({ kind: 'asset', asset })}
+                    canDelete={canExecute && canDelete(asset)}
+                    canMove={canExecute}
+                    bulkMode={selection.bulkMode}
+                    selected={selection.selectedIds.has(asset.id)}
+                    onToggleSelect={() => selection.toggle(asset.id)}
+                    draggable={canExecute && !selection.bulkMode}
+                  />
+                ))}
+              </Table.Tbody>
+            </Table>
+          </DndContext>
         </Box>
       )}
 
@@ -543,7 +733,7 @@ export function AssetsContent({
               <TextInput
                 label="Folder (optional)"
                 placeholder="Leave empty for root"
-                description="Lowercase letters, numbers, hyphens, underscores"
+                description='Use "/" to nest, e.g. specs/api. Letters, digits, hyphens, underscores.'
                 value={uploadFolder}
                 onChange={(e) => setUploadFolder(e.currentTarget.value)}
               />
@@ -704,6 +894,369 @@ export function AssetsContent({
           </Center>
         )}
       </Modal>
+
+      {/* Create / Rename Folder Modal */}
+      {foldersEnabled && (
+        <FolderFormModal
+          opened={!!folderForm}
+          onClose={closeFolderForm}
+          mode={folderForm?.mode ?? 'create'}
+          parentLabel={folderFormParentLabel}
+          initialName={folderFormInitialName}
+          existingNames={folderFormExistingNames}
+          submitting={folderMutations.submitting}
+          serverError={folderMutations.error}
+          onSubmit={submitFolderForm}
+        />
+      )}
+
+      {/* Delete Folder Modal */}
+      {foldersEnabled && (
+        <DeleteFolderModal
+          opened={!!deleteFolderPath}
+          onClose={() => setDeleteFolderPath(null)}
+          folderLabel={deleteFolderPath ? folderLabel(deleteFolderPath) : ''}
+          itemCount={deleteFolderPath ? folderItemCount(paths, assets, deleteFolderPath) : 0}
+          submitting={folderMutations.submitting}
+          onConfirm={confirmDeleteFolder}
+        />
+      )}
+
+      {/* Move to Folder Modal — row action, and the bulk-select bar */}
+      <MoveToFolderModal
+        opened={!!moveTarget}
+        onClose={() => setMoveTarget(null)}
+        subjectLabel={moveModalSubjectLabel}
+        folderPaths={allFolderPaths}
+        disabledPaths={moveModalDisabledPaths}
+        submitting={assetMutations.submitting}
+        onConfirm={confirmMove}
+      />
     </Box>
+  );
+}
+
+function ViewOptionLabel({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <Group gap={6} wrap="nowrap" justify="center">
+      {icon}
+      <span>{text}</span>
+    </Group>
+  );
+}
+
+interface FolderRowProps {
+  folder: FolderNode;
+  count: number;
+  showFolderColumn: boolean;
+  isProjectContext: boolean;
+  isCompanyLocked: boolean;
+  canExecute: boolean;
+  bulkMode: boolean;
+  onNavigate: (path: string) => void;
+  onRename: (path: string) => void;
+  onMove: (path: string) => void;
+  onDelete: (path: string) => void;
+}
+
+/** A folder row — click navigates into it; it's also a drop target for dragging a file in. */
+function FolderRow({
+  folder,
+  count,
+  showFolderColumn,
+  isProjectContext,
+  isCompanyLocked,
+  canExecute,
+  bulkMode,
+  onNavigate,
+  onRename,
+  onMove,
+  onDelete,
+}: FolderRowProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `${FOLDER_DROP_PREFIX}${folder.path}`,
+    disabled: isCompanyLocked,
+  });
+
+  return (
+    <Table.Tr
+      ref={setNodeRef}
+      style={{ cursor: 'pointer', background: isOver ? 'var(--app-action-selected)' : undefined }}
+      onClick={() => onNavigate(folder.path)}
+    >
+      {bulkMode && <Table.Td />}
+      <Table.Td>
+        <Group gap={11} wrap="nowrap">
+          <Box
+            style={{
+              width: 30,
+              height: 30,
+              flexShrink: 0,
+              borderRadius: 7,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'var(--app-action-selected)',
+              color: 'var(--app-primary-strong)',
+            }}
+          >
+            <IconFolder size={15} />
+          </Box>
+          <Box style={{ minWidth: 0 }}>
+            <Text fz={14} fw={500} c="var(--app-text-primary)" truncate="end" title={folder.label}>
+              {folder.label}
+            </Text>
+            <Text fz={12} c="dimmed">
+              {count} item{count === 1 ? '' : 's'}
+            </Text>
+          </Box>
+        </Group>
+      </Table.Td>
+      {showFolderColumn && <Table.Td />}
+      <Table.Td>
+        <Text fz={13} c="dimmed">
+          —
+        </Text>
+      </Table.Td>
+      <Table.Td>
+        <Text fz={13} c="dimmed">
+          —
+        </Text>
+      </Table.Td>
+      {isProjectContext && (
+        <Table.Td>
+          <Text fz={13} c="dimmed">
+            —
+          </Text>
+        </Table.Td>
+      )}
+      <Table.Td>
+        <Text fz={13} c="dimmed">
+          —
+        </Text>
+      </Table.Td>
+      <Table.Td onClick={(e) => e.stopPropagation()}>
+        {isCompanyLocked ? (
+          <Group gap={4} justify="flex-end">
+            <Tooltip label="Company-managed">
+              <ActionIcon aria-label="Company-managed" variant="subtle" size="sm" disabled>
+                <IconLock size={14} />
+              </ActionIcon>
+            </Tooltip>
+          </Group>
+        ) : (
+          canExecute && (
+            <Group gap={4} justify="flex-end">
+              <Tooltip label="Rename">
+                <ActionIcon
+                  aria-label={`Rename ${folder.label}`}
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => onRename(folder.path)}
+                >
+                  <IconPencil size={14} />
+                </ActionIcon>
+              </Tooltip>
+              <Tooltip label="Move">
+                <ActionIcon
+                  aria-label={`Move ${folder.label}`}
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => onMove(folder.path)}
+                >
+                  <IconFolderShare size={14} />
+                </ActionIcon>
+              </Tooltip>
+              {folder.persisted && (
+                <Tooltip label="Delete">
+                  <ActionIcon
+                    aria-label={`Delete ${folder.label}`}
+                    variant="subtle"
+                    size="sm"
+                    color="red"
+                    onClick={() => onDelete(folder.path)}
+                  >
+                    <IconTrash size={14} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+            </Group>
+          )
+        )}
+      </Table.Td>
+    </Table.Tr>
+  );
+}
+
+interface FileRowProps {
+  asset: Asset;
+  showFolderColumn: boolean;
+  isProjectContext: boolean;
+  downloadUrl: string;
+  onPreview: () => void;
+  onHistory: () => void;
+  onDelete: () => void;
+  onMove: () => void;
+  canDelete: boolean;
+  canMove: boolean;
+  bulkMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
+  draggable: boolean;
+}
+
+/** A file row — draggable onto a folder row (outside bulk-select mode) to move it there. */
+function FileRow({
+  asset,
+  showFolderColumn,
+  isProjectContext,
+  downloadUrl,
+  onPreview,
+  onHistory,
+  onDelete,
+  onMove,
+  canDelete,
+  canMove,
+  bulkMode,
+  selected,
+  onToggleSelect,
+  draggable,
+}: FileRowProps) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `${ASSET_DRAG_PREFIX}${asset.id}`,
+    disabled: !draggable,
+  });
+
+  return (
+    <Table.Tr ref={setNodeRef} style={{ opacity: isDragging ? 0.4 : 1 }}>
+      {bulkMode && (
+        <Table.Td onClick={(e) => e.stopPropagation()}>
+          <Checkbox checked={selected} onChange={onToggleSelect} aria-label={`Select ${asset.name}`} />
+        </Table.Td>
+      )}
+      <Table.Td>
+        <Group gap={6} wrap="nowrap">
+          {draggable && (
+            // dnd-kit's `attributes` default to role="button" + tabIndex=0, meant for a
+            // keyboard-operable drag handle — but only a PointerSensor is configured (no
+            // KeyboardSensor), so that role would be a non-functional "button" a screen reader
+            // or `getAllByRole('button')` query would trip over. Pointer listeners still work;
+            // the handle is just decorative for anything else querying the row.
+            <Box
+              {...attributes}
+              {...listeners}
+              role={undefined}
+              tabIndex={undefined}
+              aria-label={`Drag ${asset.name}`}
+              style={{ display: 'flex', cursor: 'grab', touchAction: 'none', flexShrink: 0 }}
+            >
+              <IconGripVertical size={14} style={{ opacity: 0.35 }} />
+            </Box>
+          )}
+          <Box style={{ minWidth: 0 }}>
+            <Text fz={14} fw={500} c="var(--app-text-primary)">
+              {asset.name}
+            </Text>
+            {asset.latestVersion?.contentType && (
+              <Text fz={12} c="dimmed">
+                {asset.latestVersion.contentType}
+              </Text>
+            )}
+          </Box>
+        </Group>
+      </Table.Td>
+      {showFolderColumn && (
+        <Table.Td>
+          {asset.folder ? (
+            <Group gap={4}>
+              <IconFolder size={14} color="var(--mantine-color-dimmed)" />
+              <Text fz={13}>{asset.folder}</Text>
+            </Group>
+          ) : (
+            <Text fz={13} c="dimmed">
+              —
+            </Text>
+          )}
+        </Table.Td>
+      )}
+      <Table.Td>
+        <Text fz={13} ff="JetBrains Mono, monospace" c="dimmed">
+          {formatFileSize(asset.latestVersion?.fileSize ?? null)}
+        </Text>
+      </Table.Td>
+      <Table.Td>
+        <Text fz={13} ff="JetBrains Mono, monospace">
+          v{asset.latestVersion?.version ?? 1}
+          {asset.versionsCount > 1 && (
+            <Text component="span" fz={11} c="dimmed" ml={4}>
+              ({asset.versionsCount})
+            </Text>
+          )}
+        </Text>
+      </Table.Td>
+      {isProjectContext && (
+        <Table.Td>
+          <Badge color={SCOPE_COLORS[asset.scopeIndicator] ?? 'gray'} size="sm" variant="light">
+            {asset.scopeIndicator}
+          </Badge>
+        </Table.Td>
+      )}
+      <Table.Td>
+        <Text fz={13} c="dimmed">
+          {formatDateMedium(asset.updatedAt)}
+        </Text>
+      </Table.Td>
+      <Table.Td>
+        <Group gap={4} justify="flex-end">
+          {asset.latestVersion?.fileUrl && (
+            <Tooltip label="Preview">
+              <ActionIcon aria-label="Preview" variant="subtle" size="sm" onClick={onPreview}>
+                <IconEye size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {asset.latestVersion && (
+            <Tooltip label="Download">
+              <ActionIcon
+                aria-label="Download"
+                variant="subtle"
+                size="sm"
+                component="a"
+                href={downloadUrl}
+                target="_blank"
+                rel="noopener"
+              >
+                <IconDownload size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          <Tooltip label="Version history">
+            <ActionIcon aria-label="Version history" variant="subtle" size="sm" onClick={onHistory}>
+              <IconHistory size={16} />
+            </ActionIcon>
+          </Tooltip>
+          {canMove && (
+            <Tooltip label="Move">
+              <ActionIcon aria-label={`Move ${asset.name}`} variant="subtle" size="sm" onClick={onMove}>
+                <IconFolderShare size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+          {canDelete ? (
+            <Tooltip label="Delete">
+              <ActionIcon aria-label="Delete" variant="subtle" size="sm" color="red" onClick={onDelete}>
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          ) : (
+            <Tooltip label="Company-managed">
+              <ActionIcon aria-label="Delete" variant="subtle" size="sm" color="red" disabled>
+                <IconTrash size={16} />
+              </ActionIcon>
+            </Tooltip>
+          )}
+        </Group>
+      </Table.Td>
+    </Table.Tr>
   );
 }

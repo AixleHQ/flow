@@ -54,4 +54,19 @@ class Api::V1::Projects::AssetsAuthorizationTest < ActionDispatch::IntegrationTe
       delete api_v1_project_asset_path(@project, create(:asset, :with_project_scope, scope: @project, created_by: @owner))
     end
   end
+
+  test "update (move) is a project write" do
+    assert_project_write(transport: :api) do |role|
+      asset = create(:asset, :with_project_scope, scope: @project, created_by: @owner)
+      patch api_v1_project_asset_path(@project, asset), params: { asset: { folder: "moved-#{role}" } }, as: :json
+    end
+  end
+
+  test "bulk_actions is a project write" do
+    assert_project_write(transport: :api) do |role|
+      asset = create(:asset, :with_project_scope, scope: @project, created_by: @owner)
+      post bulk_actions_api_v1_project_assets_path(@project),
+           params: { action_type: "move", asset_ids: [ asset.id ], folder: "moved-#{role}" }, as: :json
+    end
+  end
 end

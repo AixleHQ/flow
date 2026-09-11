@@ -19,7 +19,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
       active_session_id: -> { active_session&.id },
       configured_agents: -> { current_project_membership&.configured_agents || [] },
       default_agent_runtime: -> { current_project_membership&.default_agent_runtime },
-      assets: -> { Asset.accessible_from_project(current_project).map { |a| PickerResource.new(a).to_h } },
+      assets: -> { Asset.accessible_from_project(current_project).map { |a| AssetPickerResource.new(a).to_h } },
       agent_models: InertiaRails.defer { current_project_membership&.agent_models_for_props || [] }
     }
   end
