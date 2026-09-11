@@ -164,5 +164,5 @@ View visibility (Outline, Timeline panels) is stored in the **browser's IndexedD
 ## Building
 
 ```bash
-docker build -t palad-base:latest docker/base/
+docker build -t aixle/agent-base-core:latest -f docker/base/Dockerfile docker/base
 ```
