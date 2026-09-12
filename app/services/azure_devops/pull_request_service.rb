@@ -369,22 +369,27 @@ module AzureDevops
       }.compact
     end
 
-    # Azure's `_links.web.href` is a provider string; it is only surfaced when it
-    # is an https URL on the configured API host, so a tool result can never hand
-    # an agent a link somewhere else.
+    # Azure does not return a browser link for a pull request: `_links` carries
+    # self, repository, branches and commits, and no `web` entry at all. Reading
+    # one meant every tool result promised a `url` and shipped nothing.
+    #
+    # So it is built from the repository's own `webUrl` — provider data, not a
+    # guess — and still checked to be https on the configured host, so a tool
+    # result can never hand an agent a link somewhere else.
     def web_url(pr)
-      href = pr.dig("_links", "web", "href").to_s
-      return nil if href.blank?
+      base = pr.dig("repository", "webUrl").to_s
+      return nil if base.blank?
 
       uri = begin
-        URI.parse(href)
+        URI.parse(base)
       rescue URI::InvalidURIError
         nil
       end
       return nil unless uri.is_a?(URI::HTTPS)
       return nil unless uri.host == URI.parse(AppConfig.api_host).host
 
-      href
+      id = pr["pullRequestId"]
+      id.present? ? "#{base.chomp('/')}/pullrequest/#{id}" : nil
     end
   end
 end

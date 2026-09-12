@@ -65,11 +65,16 @@ module AzureDevops
       assert_raises(NotAuthorized) { @client.get("_apis", "test") }
     end
 
+    # 412 is in here because a failed JSON Patch `test` on /rev — the optimistic
+    # lock the work item guard is built on — returns Precondition Failed, not
+    # 409. It was missing, so every revision conflict reached the agent as a
+    # generic provider error with no current revision to re-read.
     test "maps Azure statuses onto the adapter's stable codes" do
       {
         403 => PermissionDenied,
         404 => NotFound,
         409 => Conflict,
+        412 => Conflict,
         400 => ValidationFailed
       }.each do |status, klass|
         stub_request(:get, %r{/_apis/case-#{status}}).to_return(
@@ -165,6 +170,43 @@ module AzureDevops
       WorkItemService.new(@integration).query(filters: { title_contains: "#{'a' * 199}'" })
 
       assert_equal 0, wiql.count("'") % 2, "WIQL has an unbalanced quote: #{wiql}"
+    end
+
+    # Regression, found only by talking to Azure: a stale revision comes back as
+    # 412 with a TestPatchOperationFailedException, and the caller needs the
+    # CURRENT revision to re-read — not a bare provider message.
+    test "a stale work item revision is a conflict carrying the current revision" do
+      stub_request(:patch, %r{/_apis/wit/workitems/11}).to_return(
+        status: 412, headers: { "Content-Type" => "application/json" },
+        body: { typeKey: "TestPatchOperationFailedException",
+                message: "VS403351: Test Operation for path /rev failed" }.to_json
+      )
+      stub_request(:get, %r{/_apis/wit/workitems/11}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { id: 11, rev: 3, fields: { "System.TeamProject" => @integration.azure_project_name } }.to_json
+      )
+
+      error = assert_raises(Conflict) do
+        WorkItemService.new(@integration).update(11, fields: { state: "Active" }, expected_revision: 1)
+      end
+      assert_equal({ current_revision: 3 }, error.details)
+    end
+
+    # Regression: Azure returns no `_links.web` for a pull request at all, so
+    # reading one meant every result promised a url and shipped nothing.
+    test "a pull request carries a browser url built from the repository's own" do
+      repository = create(:repository, :azure_devops, integration: @integration, scope: @integration.project)
+      stub_request(:get, %r{/pullrequests/7}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { pullRequestId: 7, status: "active",
+                repository: { id: repository.external_id,
+                              project: { id: @integration.azure_project_id },
+                              webUrl: "#{AZURE_API_HOST}/contoso/Proj/_git/api" } }.to_json
+      )
+
+      pr = PullRequestService.new(@integration).get(repository, 7)
+
+      assert_equal "#{AZURE_API_HOST}/contoso/Proj/_git/api/pullrequest/7", pr[:url]
     end
 
     test "paginate follows Azure's continuation header and stops at the limit" do

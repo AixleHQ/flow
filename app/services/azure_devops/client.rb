@@ -91,7 +91,7 @@ module AzureDevops
       when 401 then handle_unauthorized(method, segments, params, family, project, body, content_type, raw, attempt)
       when 403 then raise PermissionDenied, "Azure denied this operation"
       when 404 then raise NotFound, "Azure has no such resource, or this identity cannot see it"
-      when 409 then raise Conflict, azure_message(response)
+      when 409, 412 then raise Conflict, azure_message(response)
       when 429 then handle_throttled(response, method, segments, params, family, project, body, content_type, raw, attempt)
       when 400, 422 then raise ValidationFailed.new(azure_message(response), details: azure_details(response))
       when 500..599 then retry_or_raise(response, method, segments, params, family, project, body, content_type, raw, attempt)
