@@ -160,7 +160,7 @@ module ContainerRuntime
       # Agents::CodexAdapter#credential_preflight stats the auth file directly —
       # answer from the virtual FS: exit 0 + size in bytes when present, non-zero
       # exit (empty stdout) when absent, mirroring what `stat -c%s` reports.
-      if (probe = command_string(cmd).match(/\bstat -c(?:%s|'%s\|%a\|%U\|%G') (\S+)/))
+      if (probe = command_string(cmd).match(/\bstat -c\s*(?:%s|'%s\|%a\|%U\|%G')\s+(\S+)/))
         path = probe[1]
         content = @unreadable_paths.include?(path) ? nil : @fs[path]
         return [ [ "" ], [ "stat: cannot stat #{path}" ], 1 ] if content.nil?

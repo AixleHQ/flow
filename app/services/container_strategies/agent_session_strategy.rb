@@ -94,7 +94,8 @@ module ContainerStrategies
       adapter = AgentCredentialsService.for(input[:agent_type]).adapter
       credential = input[:credential]
 
-      if credential.nil? && AgentCredentialsService.supported?(input[:agent_type]) && session.mode != "interactive"
+      first_login = credential.nil? && session.mode == "interactive" && session.session_type == "agent_session"
+      if credential.nil? && AgentCredentialsService.supported?(input[:agent_type]) && !first_login
         raise_unresolved_credential!(session)
       end
 

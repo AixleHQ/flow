@@ -288,7 +288,7 @@ module ContainerStrategies
     end
 
     test "interactive first login proceeds without a stored credential" do
-      @session.update!(agent_type: "codex", mode: "interactive")
+      @session.update!(agent_type: "codex", mode: "interactive", session_type: "agent_session")
       strategy = AgentSessionStrategy.new(
         user_id: @user.id, agent_type: "codex", session_id: @session.id,
         route_token: @session.route_token, credential: nil
