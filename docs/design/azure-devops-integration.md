@@ -358,7 +358,20 @@ Disconnecting one project integration blocks its new token requests/API calls, r
 
 Implement `InternalTools::AzureDevops*` handlers with `tool do` definitions, `requires_integration :azure_devops`, and an Azure tag in `Tools::TagCatalog`. Use the existing code registry/reconciler; no separate seed registry or per-tool MCP server is needed.
 
-Expose the tools as an attachable **Azure DevOps** group. Tool attachment authorizes project-scoped Azure API usage; repository operations additionally require that repository to be attached to the session. Work-item tools work without a cloned repository. Provider presence alone controls discovery, not permission to execute a particular operation.
+The tools are **injected, not picked**. An earlier draft offered them as an attachable "Azure DevOps" picker group; that was dropped because attachment would have been a second, weaker way of saying what the project already says — and a way to attach half a working set, so an agent could open a pull request but not answer the review it triggered.
+
+Two injection rules, matching the two ways a tool is scoped:
+
+| Rule | Fires when | Covers |
+| ---- | ---------- | ------ |
+| `azure_repositories_attached` | the session holds a repository whose integration is Azure | the 13 tools taking a `repository_id` — pull requests, threads, reviewers, votes, policies, `link_work_item` |
+| `azure_integration_connected` | the project has an active Azure connection | the 10 tools taking an `integration_id` — work items, builds, `list_connections` |
+
+The split is not cosmetic. A repository tool has nothing to act on without an attached clone, so injecting it would only produce a tool that answers "not attached to this session". A work item tool is scoped by the connection, so a project keeping its Boards in Azure while its code lives elsewhere still reaches it — a case a repository-only rule would make unreachable, with no picker left to work around it.
+
+`TagCatalog` therefore marks `:azure_devops` hidden and every handler declares `user_attachable false`. Availability still applies on top: `requires_integration :azure_devops` hides an injected tool whose connection is inactive, so a disabled integration is distinguishable from a missing entitlement.
+
+This does NOT widen what an agent may do. Injection decides which tools are *offered*; §8.2 and `Concerns::AzureDevopsContext` decide what a call may touch, and the connection's capability profile decides which calls are sent at all. `azure_devops_complete_pull_request` is injected like the rest and still refuses unless `pull_requests.complete` is ticked — which it is not by default.
 
 ### 8.1 Core tool contracts
 

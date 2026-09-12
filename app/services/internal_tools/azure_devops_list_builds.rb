@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps List Builds"
       description "List recent Azure Pipelines builds for a connection, newest first, optionally filtered to one repository and branch. `status` is the lifecycle (notStarted, inProgress, completed) and `result` is the verdict — a completed build with no result is not a pass. Returns JSON: {builds: [{id, build_number, status, result, definition, branch, commit, url}]}."
       tags :azure_devops
+      inject_when :azure_integration_connected
+      user_attachable false
       requires_integration :azure_devops
       read_only
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true

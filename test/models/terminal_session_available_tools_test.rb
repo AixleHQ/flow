@@ -101,6 +101,54 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     refute_includes session.available_tools.map(&:name), "refresh_github_token"
   end
 
+  # == Azure DevOps: injected, never picked ==
+  #
+  # Two rules rather than one. The repository tools all take a `repository_id`
+  # that must already be attached, so a session without an Azure clone has
+  # nothing to point them at; the work item and build tools are scoped by
+  # connection, so a project keeping its Boards in Azure while its code lives
+  # elsewhere still reaches them.
+
+  test "Azure repository tools are injected for a session holding an Azure repository" do
+    integration = create(:integration, :azure_devops, :active, company: @company,
+      project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.repositories << create(:repository, :azure_devops, integration: integration, scope: @project)
+
+    names = session.available_tools.map(&:name)
+
+    assert_includes names, "azure_devops_create_pull_request"
+    assert_includes names, "azure_devops_reply_pull_request_thread"
+  end
+
+  test "Azure repository tools are NOT injected for a session holding only a GitHub repository" do
+    create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
+    github = create(:integration, company: @company, connected_by: @user, status: :active)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.repositories << create(:repository, integration: github, scope: @project)
+
+    refute_includes session.available_tools.map(&:name), "azure_devops_create_pull_request"
+  end
+
+  test "Azure work item tools follow the connection, not the repositories" do
+    create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    names = session.available_tools.map(&:name)
+
+    assert_includes names, "azure_devops_create_work_item"
+    assert_includes names, "azure_devops_list_connections"
+    refute_includes names, "azure_devops_create_pull_request"
+  end
+
+  test "no Azure tool reaches a project without an Azure connection" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    names = session.available_tools.map(&:name)
+
+    assert names.none? { |n| n.start_with?("azure_devops_") }, "Azure tools leaked into an unconnected project"
+  end
+
   # == System tools: explicitly attached ==
 
   test "system tool is NOT included unless explicitly selected" do

@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps Create Work Item"
       description "Create a work item in a connection's Azure project. `type` must be one the project's process defines — call azure_devops_list_work_item_types first, and check its required fields. `operation_key` is required and makes the call replay-safe. Returns JSON: {id, type, title, state, url}."
       tags :azure_devops
+      inject_when :azure_integration_connected
+      user_attachable false
       requires_integration :azure_devops
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
       param :type, type: :string, description: "Work item type name from azure_devops_list_work_item_types, e.g. Bug.", required: true

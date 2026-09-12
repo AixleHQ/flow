@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps Reply To Pull Request Thread"
       description "Reply inside an existing review conversation on an Azure Repos pull request. `thread_id` comes from azure_devops_list_pull_request_threads; replying by comment id is not possible in Azure. `operation_key` is required and makes the call replay-safe. Returns the posted comment as JSON."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true
       param :pull_request_id, type: :integer, description: "Azure pull request id.", required: true

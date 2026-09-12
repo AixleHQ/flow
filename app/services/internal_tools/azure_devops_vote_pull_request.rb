@@ -11,6 +11,8 @@ module InternalTools
       display_name "Azure DevOps Vote On Pull Request"
       description "Cast or reset this connection's review vote on an Azure Repos pull request. `reviewer_id` is an Azure identity id from azure_devops_list_pull_request_reviewers. Voting approve does NOT merge anything — completion is a separate tool and branch policies still apply. Returns the updated reviewer entry."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       idempotent
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true

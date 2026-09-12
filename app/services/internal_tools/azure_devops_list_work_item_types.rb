@@ -13,6 +13,8 @@ module InternalTools
       display_name "Azure DevOps List Work Item Types"
       description "List the work item types available in a connection's Azure project, with each type's allowed states and its always-required fields. Call this before creating or transitioning a work item — types and states are defined by the project's process, so they differ between projects. Returns JSON: {types: [{name, reference_name, states: [{name, category}], required_fields}]}."
       tags :azure_devops
+      inject_when :azure_integration_connected
+      user_attachable false
       requires_integration :azure_devops
       read_only
       param :integration_id, type: :integer, description: "Azure DevOps connection id from azure_devops_list_connections.", required: true

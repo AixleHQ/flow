@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps Create Pull Request Thread"
       description "Start a new review conversation on an Azure Repos pull request. Omit `file_path` for a general comment; supply `file_path` and `right_line` for an inline one. Line numbers are interpreted against the pull request iteration, so pass the `iteration` you read the changes at — coordinates from a different iteration anchor the comment to unrelated code. `operation_key` is required and makes the call replay-safe."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true
       param :pull_request_id, type: :integer, description: "Azure pull request id.", required: true

@@ -11,6 +11,8 @@ module InternalTools
       display_name "Azure DevOps Create Pull Request"
       description "Open a pull request in an attached Azure Repos repository. Push the source branch first — Azure rejects a PR whose source ref does not exist. Created as a DRAFT unless `draft` is explicitly false. `operation_key` is required and makes the call replay-safe: the same key returns the original result instead of opening a second pull request. Returns JSON: {id, title, url, source_branch, target_branch, is_draft}."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       destructive false
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true

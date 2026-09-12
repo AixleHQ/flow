@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps Update Pull Request"
       description "Change an Azure Repos pull request's title, description, or draft state. Completing or merging a pull request is a separate operation and is not available here. Returns the updated pull request as JSON."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       idempotent
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true

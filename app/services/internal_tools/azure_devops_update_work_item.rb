@@ -11,6 +11,8 @@ module InternalTools
       display_name "Azure DevOps Update Work Item"
       description "Update fields on an Azure Boards work item. Pass `expected_revision` — the `rev` you last read — so a concurrent edit is rejected rather than overwritten; on a mismatch this returns `conflict` with the current revision, and you should re-read before retrying. `state` must be one the type's process allows. Returns the updated work item as JSON."
       tags :azure_devops
+      inject_when :azure_integration_connected
+      user_attachable false
       requires_integration :azure_devops
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
       param :work_item_id, type: :integer, description: "Azure work item id.", required: true

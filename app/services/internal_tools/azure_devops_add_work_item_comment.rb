@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps Add Work Item Comment"
       description "Add a comment to an Azure Boards work item. `operation_key` is required and makes the call replay-safe: the same key returns the original result instead of posting the comment twice. Returns JSON: {id, created_at}."
       tags :azure_devops
+      inject_when :azure_integration_connected
+      user_attachable false
       requires_integration :azure_devops
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
       param :work_item_id, type: :integer, description: "Azure work item id.", required: true

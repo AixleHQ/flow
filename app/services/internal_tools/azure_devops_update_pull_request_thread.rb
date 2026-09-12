@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps Resolve Pull Request Thread"
       description "Resolve or reopen a review conversation on an Azure Repos pull request by setting its status. Valid statuses: active (reopen), fixed, wontFix, closed, pending, byDesign. Returns the updated thread as JSON."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       idempotent
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true

@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps List Pull Requests"
       description "List pull requests in an attached Azure Repos repository. `repository_id` is the Aixle repository id from azure_devops_list_connections. Returns JSON: {pull_requests: [{id, title, status, is_draft, source_branch, target_branch, author, merge_status, url}], has_more, next_cursor}. Descriptions are truncated here — use azure_devops_get_pull_request for the full body."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       read_only
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true

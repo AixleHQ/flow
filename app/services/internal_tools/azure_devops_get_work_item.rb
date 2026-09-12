@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps Get Work Item"
       description "Read one Azure Boards work item: fields, current revision, relations and browser URL. The `rev` in the response is what azure_devops_update_work_item expects as `expected_revision`. Returns JSON."
       tags :azure_devops
+      inject_when :azure_integration_connected
+      user_attachable false
       requires_integration :azure_devops
       read_only
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true

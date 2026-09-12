@@ -39,8 +39,9 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   test "injectable covers the auto-injection rule groups" do
     rules = Tools::Registry.injectable.flat_map(&:inject_rules).uniq.sort
 
-    assert_equal %i[coder_integration_connected config_items_attached container_tools_present
-                    github_repositories_attached non_interactive_session workflow_step_session], rules
+    assert_equal %i[azure_integration_connected azure_repositories_attached coder_integration_connected
+                    config_items_attached container_tools_present github_repositories_attached
+                    non_interactive_session workflow_step_session], rules
   end
 
   test "grouping axes cover every definition" do
@@ -49,12 +50,20 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     assert_equal 30, defs.count { |d| d.tags.include?(:builder) }
     assert_equal 22, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
     assert_equal 3, defs.count { |d| d.inject_rules.intersect?(%i[container_tools_present non_interactive_session]) }
+
+    # Azure is injected rather than picked, so every one of its tools must
+    # carry a rule and none may be attachable — a tool that fell out of this
+    # would be unreachable: hidden from the picker AND never injected.
+    azure = defs.select { |d| d.tags.include?(:azure_devops) }
+    assert_equal 23, azure.size
+    assert azure.none?(&:user_attachable), "Azure tools must not be offered in the picker"
+    assert azure.all? { |d| d.inject_rules.intersect?(%i[azure_repositories_attached azure_integration_connected]) }
   end
 
   test "ui_groups offer one entry per visible tag, session tools only" do
     groups = Tools::Registry.ui_groups
 
-    assert_equal %w[board slack coder azure_devops assets session_supervision], groups.map { |g| g[:tag] }
+    assert_equal %w[board slack coder assets session_supervision], groups.map { |g| g[:tag] }
     assert_equal "Slack", groups.find { |g| g[:tag] == "slack" }[:label]
     assert_equal %w[slack_delete_message slack_post_message slack_read_thread slack_update_message],
                  groups.find { |g| g[:tag] == "slack" }[:tool_names]

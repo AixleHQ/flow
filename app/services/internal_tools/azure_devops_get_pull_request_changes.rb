@@ -8,6 +8,8 @@ module InternalTools
       display_name "Azure DevOps Get Pull Request Changes"
       description "List the files changed in one iteration of an Azure Repos pull request. This returns FILE METADATA ONLY — Azure does not serve a textual patch here, and the response says so. For the actual changes, read the files at the iteration's commits or run `git diff` in the checkout. Returns JSON: {iteration, changes: [{path, change_type}], diff_available: false, has_more, next_cursor}."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       read_only
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true

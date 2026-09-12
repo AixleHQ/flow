@@ -11,6 +11,8 @@ module InternalTools
       display_name "Azure DevOps Link Work Item To Pull Request"
       description "Attach a pull request to an Azure Boards work item as an artifact link, so the fix is traceable from the task. This only creates the link — it never changes the work item's state. Re-linking an existing pair is a no-op. Both must be in this connection's Azure project. Returns the updated work item as JSON."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       idempotent
       param :repository_id, type: :integer, description: "Aixle repository id holding the pull request.", required: true

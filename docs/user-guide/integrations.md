@@ -74,6 +74,18 @@ credential helper that fetches a short-lived token per git operation, so
 nothing is stored in the checkout; ordinary `git fetch` and `git push`
 work with no extra step.
 
+**The Azure tools are not something you attach.** There is no Azure group
+in the tool picker: an agent gets the work-item and build tools as soon
+as the project has a connection, and the pull-request tools as soon as
+the session has an Azure repository attached. Attaching the repository is
+the opt-in. This is deliberate — a picker would let someone attach half a
+set, so an agent could open a pull request and then be unable to answer
+the review it started.
+
+What an agent may *do* with them is still yours to set: the capability
+checkboxes on the connection decide which calls are sent at all, and
+completing pull requests stays off unless you tick it.
+
 Notes and limits:
 
 - **Azure DevOps Services on `dev.azure.com` with Git repositories

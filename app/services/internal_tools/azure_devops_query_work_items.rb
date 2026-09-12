@@ -12,6 +12,8 @@ module InternalTools
       display_name "Azure DevOps Query Work Items"
       description "Find work items in a connection's Azure project using structured filters. Results are always restricted to that project. Returns JSON: {work_items: [{id, rev, type, title, state, assigned_to, tags, area_path}], total_matched, has_more, next_cursor}. Pass `next_cursor` back to page; ordering is by id descending and is stable."
       tags :azure_devops
+      inject_when :azure_integration_connected
+      user_attachable false
       requires_integration :azure_devops
       read_only
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true

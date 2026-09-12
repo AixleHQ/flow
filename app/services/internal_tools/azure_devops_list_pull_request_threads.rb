@@ -12,6 +12,8 @@ module InternalTools
       display_name "Azure DevOps List Pull Request Threads"
       description "Read the review conversations on an Azure Repos pull request. Each thread carries its status, its file and line when it is an inline comment, and its comments in order. Reply with azure_devops_reply_pull_request_thread using the thread's `id` — a comment id alone is not enough to reply. Returns JSON: {threads: [{id, status, file_path, right_line, comments: [{id, author, content}]}], has_more}."
       tags :azure_devops
+      inject_when :azure_repositories_attached
+      user_attachable false
       requires_integration :azure_devops
       read_only
       param :repository_id, type: :integer, description: "Aixle repository id.", required: true

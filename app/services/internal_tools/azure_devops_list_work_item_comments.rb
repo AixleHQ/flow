@@ -11,6 +11,8 @@ module InternalTools
       display_name "Azure DevOps List Work Item Comments"
       description "Read the comments on an Azure Boards work item, oldest first, with authors and timestamps. Returns JSON: {comments: [{id, author, text, created_at}], has_more, next_cursor}."
       tags :azure_devops
+      inject_when :azure_integration_connected
+      user_attachable false
       requires_integration :azure_devops
       read_only
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
