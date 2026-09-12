@@ -50,8 +50,9 @@ class TemporalHelperContractTest < ActiveSupport::TestCase
 
   # :handle is the one real success key the canned seams intentionally omit — no
   # success-path caller consumes it (SessionService reads :ok/:workflow_id/:run_id;
-  # WorkflowService and Tool ignore the returned hash). Pin the omission so nobody
-  # "fixes" the helper by inventing a fake handle the callers never use.
+  # WorkflowService#dispatch! reads :ok and, on failure, :error; Tool ignores the
+  # hash). Pin the omission so nobody "fixes" the helper by inventing a fake handle
+  # the callers never use.
   test "canned seams omit :handle, the only real success key no caller consumes" do
     mock_temporal_start
     start_canned = TemporalService.start_workflow(:workflow, :input)
