@@ -339,16 +339,12 @@ module Agents
     # existing ProvisioningError / ContainerService#run_phase convention.
     #
     # Exactly one stat. No retry, no rewrite, no delay, no token refresh.
-    def credential_preflight(runtime, container, _container_id)
-      stdout, _stderr, status = runtime.exec(
-        container, [ "/bin/sh", "-c", "stat -c%s #{Shellwords.escape(config_path)} 2>/dev/null" ], stdout: true, stderr: true
-      )
-      return { valid: false, error_code: "auth_file_missing" } unless status.to_i.zero?
+    def credential_preflight(runtime, container, container_id)
+      details = credential_file_metadata(runtime, container, container_id, config_path)
+      return details.merge(valid: false, error_code: "auth_file_missing") unless details[:exists]
+      return details.merge(valid: false, error_code: "auth_file_empty") if details[:size].to_i.zero?
 
-      size = Array(stdout).join.strip.to_i
-      return { valid: false, error_code: "auth_file_empty" } if size.zero?
-
-      { valid: true, error_code: nil }
+      details.merge(valid: true, error_code: nil)
     end
 
     # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive

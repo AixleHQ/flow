@@ -54,6 +54,14 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     assert @admission.reload.released_at
   end
 
+  test "a definitive credential preflight failure is not left uncertain" do
+    stub_exec_raising(ContainerStrategies::AgentSessionStrategy::ProvisioningError.new("auth_file_missing", {}))
+
+    assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
+
+    assert_equal "retryable", @admission.session_runtime_operations.find_by(phase: "exec").state
+  end
+
   test "an absent runtime finalizes session and releases its slot" do
     @runtime.expects(:session_absent?).with("runtime-id").returns(true)
     @runtime.expects(:cleanup_session).never

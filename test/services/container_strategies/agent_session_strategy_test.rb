@@ -272,6 +272,33 @@ module ContainerStrategies
       end
 
       assert_equal "auth_file_missing", error.code
+      assert_equal Agents::CodexAdapter.new.config_path, error.details[:path]
+      assert_equal false, error.details[:exists]
+      assert_equal 3, error.details[:attempts]
+    end
+
+    test "Codex preflight reseeds and retries when the written auth file disappears" do
+      strategy, runtime, container = build_codex_preflight_strategy(nil)
+      auth_path = Agents::CodexAdapter.new.config_path
+      SessionContextService.expects(:inject_credential).once do
+        runtime.write_file(container, auth_path, '{"tokens":{}}')
+      end.returns(true)
+
+      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
+    end
+
+    test "interactive first login proceeds without a stored credential" do
+      @session.update!(agent_type: "codex", mode: "interactive")
+      strategy = AgentSessionStrategy.new(
+        user_id: @user.id, agent_type: "codex", session_id: @session.id,
+        route_token: @session.route_token, credential: nil
+      )
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      strategy.stubs(:runtime).returns(stub(container_identifier: "abc123"))
+      SessionContextService.expects(:assemble_session_context).with(container, @session, credential: nil)
+
+      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
     end
 
     test "Codex preflight rejects a zero-byte auth file" do
@@ -833,6 +860,8 @@ module ContainerStrategies
       strategy.stubs(:resolve_container).returns(container)
       strategy.stubs(:runtime).returns(runtime)
       SessionContextService.stubs(:assemble_session_context).returns(true)
+      SessionContextService.stubs(:inject_credential).returns(true)
+      strategy.stubs(:sleep)
       [ strategy, runtime, container ]
     end
   end

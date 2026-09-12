@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "base64"
+require "shellwords"
 
 module Agents
   # Base adapter interface for agent-specific credential handling
@@ -504,6 +505,25 @@ module Agents
     #   agent has nothing to check
     def credential_preflight(_runtime, _container, _container_id)
       nil
+    end
+
+    def credential_file_metadata(runtime, container, container_id, path)
+      stdout, stderr, status = runtime.exec(
+        container, [ "/bin/sh", "-c", "stat -c '%s|%a|%U|%G' #{Shellwords.escape(path)} 2>&1" ], stdout: true, stderr: true
+      )
+      output = Array(stdout).join.strip
+      size, mode, owner, group = output.split("|", 4) if status.to_i.zero?
+      {
+        path: path,
+        container: container_id.to_s,
+        exists: status.to_i.zero?,
+        size: size&.to_i,
+        mode: mode,
+        owner: owner,
+        group: group,
+        stat_exit_status: status.to_i,
+        stat_error: status.to_i.zero? ? nil : Array(stderr).join.strip.presence || output.presence
+      }
     end
 
     # Facts about an account that can only be had by asking the vendor's own CLI,
