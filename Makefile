@@ -1,5 +1,5 @@
 # Application Management
-.PHONY: deps db-prepare db-reset check check_all be_check_all fe_check_all be_check fe_check lint typescript test rails-test fe-test rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup git-hooks up down reset worker shell build-web build-otlp-ingest build-agents restore-dump help
+.PHONY: deps db-prepare db-reset check check_all be_check_all fe_check_all be_check fe_check lint typescript test rails-test fe-test worker-boot rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup git-hooks up down reset worker shell build-web build-otlp-ingest build-agents restore-dump help
 
 DOCKER_COMPOSE ?= docker compose
 
@@ -79,6 +79,11 @@ define run_be_checks
 	@# React SPA never mounts → system tests fail "Unable to find field Email". Unset it so
 	@# test chunks resolve relative to the Capybara test server.
 	@( env -u VITE_RUBY_ASSET_HOST -u ASSET_HOST VITE_RUBY_MODE=test bin/vite build --force > $(CHECK_RESULTS)/vite-build.log 2>&1; echo $$? > $(CHECK_RESULTS)/vite-build.status )
+	@echo "Running the worker boot smoke (nothing else in the repo ever loads bin/temporal_worker)..."
+	@# Sequential, not part of the parallel batch below: it boots Rails against the test
+	@# database and the tools registry reconciles on boot, so racing it against the suite
+	@# writing the same database buys a few seconds and a class of flake.
+	@( bin/worker_boot_check > $(CHECK_RESULTS)/worker-boot.log 2>&1; echo $$? > $(CHECK_RESULTS)/worker-boot.status )
 	@echo "Running rails-test, rubocop, brakeman, system-test in parallel (DB-touching runs serialized by flock)..."
 	@( $(RAILS_TEST_COV_ENV) $(TEST_LOCK) bundle exec rails test > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
 	 ( SKIP_COVERAGE=1 $(TEST_LOCK) bundle exec rails test:system   > $(CHECK_RESULTS)/system-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/system-test.status ) & \
@@ -192,6 +197,11 @@ rails-test:
 # Run frontend tests (Vitest, node-only — no backend). Runs inside the web container; also part of check_all.
 fe-test:
 	yarn test
+
+# Boot bin/temporal_worker far enough to prove it can start (see the script header).
+# Part of be_check_all; standalone here for a quick local check after touching the worker.
+worker-boot:
+	bin/worker_boot_check
 
 # Run Rubocop
 rubocop:
