@@ -26,7 +26,8 @@ module Activities
         # legitimate first-time login (see AgentSessionStrategy#before_exec's first_login check) and
         # is deliberately let through instead of raising here; non_interactive can't complete that
         # login, so it must still hit raise_unresolved_credential! for this test to exercise it.
-        session = create(:terminal_session, :agent_session, user: @user, agent_type: "codex", mode: "non_interactive")
+        session = create(:terminal_session, :agent_session, user: @user, agent_type: "codex",
+                                                              mode: "non_interactive", initial_prompt: "Run tests")
 
         error = assert_raises(Temporalio::Error::ApplicationError) do
           run_activity(
