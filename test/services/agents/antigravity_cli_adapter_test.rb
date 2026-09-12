@@ -80,14 +80,19 @@ module Agents
         { "token" => { "access_token" => "tok-123" }, "auth_method" => "consumer" }.to_json
       )
 
-      assert_equal({ valid: true, error_code: nil }, @adapter.credential_preflight(runtime, container, "abc123"))
+      result = @adapter.credential_preflight(runtime, container, "abc123")
+
+      assert result[:valid]
+      assert_nil result[:error_code]
     end
 
     test "credential_preflight rejects a migrated API-key credential" do
       runtime, container = preflight_runtime({ "token" => { "api_key" => "legacy-key" } }.to_json)
 
-      assert_equal({ valid: false, error_code: "oauth_token_missing" },
-                   @adapter.credential_preflight(runtime, container, "abc123"))
+      result = @adapter.credential_preflight(runtime, container, "abc123")
+
+      refute result[:valid]
+      assert_equal "oauth_token_missing", result[:error_code]
     end
 
     private
