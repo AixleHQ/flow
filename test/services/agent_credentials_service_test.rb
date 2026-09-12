@@ -274,7 +274,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
       credential.write_to_container("container123")
     end
 
-    assert_equal false, error.details[:exists]
+    refute error.details[:exists]
     assert_nil credential.reload.last_used_at
   end
 

@@ -273,7 +273,7 @@ module ContainerStrategies
 
       assert_equal "auth_file_missing", error.code
       assert_equal Agents::CodexAdapter.new.config_path, error.details[:path]
-      assert_equal false, error.details[:exists]
+      refute error.details[:exists]
       assert_equal 3, error.details[:attempts]
     end
 
