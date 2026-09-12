@@ -1,23 +1,26 @@
 import { Head, usePage } from '@inertiajs/react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
+import type LlmCall from 'types/generated/LlmCall';
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import { SessionShowContent } from 'shared/components/SessionShowContent/SessionShowContent';
 
 interface Props {
   session: TerminalSession;
+  llmCalls: LlmCall[];
   cableStream: string;
 }
 
 const SessionShowPage = () => {
-  const { session, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
+  const { session, llmCalls, cableStream } = usePage<{ props: Props }>().props as unknown as Props;
 
   return (
     <AuthLayout noPadding>
       <Head title="Session" />
       <SessionShowContent
         session={session}
+        llmCalls={llmCalls}
         cableStream={cableStream}
         context={{
           backPath: '/company/sessions',

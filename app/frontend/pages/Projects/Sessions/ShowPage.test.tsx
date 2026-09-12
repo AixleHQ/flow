@@ -68,6 +68,7 @@ describe('Projects/Sessions/ShowPage', () => {
         project,
         session: makeSession({ state: 'finished', initialPrompt: 'Refactor onboarding status chips' }),
         workflowContext: null,
+        llmCalls: [],
         cableStream: 'stream-token',
       },
     });
@@ -88,6 +89,7 @@ describe('Projects/Sessions/ShowPage', () => {
         project,
         session: makeSession({ state: 'finished', pendingArtifactsCount: 3 }),
         workflowContext: null,
+        llmCalls: [],
         cableStream: 'stream-token',
       },
     });
@@ -102,6 +104,7 @@ describe('Projects/Sessions/ShowPage', () => {
         project,
         session: makeSession({ state: 'running', finishedAt: null }),
         workflowContext: null,
+        llmCalls: [],
         cableStream: 'stream-token',
       },
     });
@@ -124,6 +127,7 @@ describe('Projects/Sessions/ShowPage', () => {
           stepPosition: 1,
           stepsTotal: 1,
         },
+        llmCalls: [],
         cableStream: 'stream-token',
       },
     });
@@ -137,7 +141,13 @@ describe('Projects/Sessions/ShowPage', () => {
 
   it('offers a new session from a finished one', async () => {
     renderAuthedPage(<ProjectSessionShowPage />, {
-      props: { project, session: makeSession({ state: 'finished' }), workflowContext: null, cableStream: 'stream' },
+      props: {
+        project,
+        session: makeSession({ state: 'finished' }),
+        workflowContext: null,
+        llmCalls: [],
+        cableStream: 'stream',
+      },
     });
 
     await userEvent.click(screen.getByRole('button', { name: /new session/i }));

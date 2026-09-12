@@ -402,6 +402,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
     t.index ["status"], name: "index_integrations_on_status"
   end
 
+  create_table "llm_calls", force: :cascade do |t|
+    t.integer "cache_read_tokens", default: 0, null: false
+    t.integer "cache_write_tokens", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.integer "input_tokens", default: 0, null: false
+    t.string "model", null: false
+    t.datetime "occurred_at", null: false
+    t.integer "output_tokens", default: 0, null: false
+    t.string "source", null: false
+    t.bigint "step_run_id"
+    t.bigint "terminal_session_id", null: false
+    t.decimal "total_cents_precise", precision: 12, scale: 8, default: "0.0", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "workflow_run_id"
+    t.index ["terminal_session_id", "occurred_at"], name: "index_llm_calls_on_terminal_session_id_and_occurred_at"
+    t.index ["workflow_run_id", "occurred_at"], name: "index_llm_calls_on_workflow_run_id_and_occurred_at"
+    t.index ["workflow_run_id", "step_run_id"], name: "index_llm_calls_on_workflow_run_id_and_step_run_id"
+  end
+
   create_table "mcp_servers", force: :cascade do |t|
     t.jsonb "args", default: []
     t.string "auth_type", default: "none", null: false
@@ -1240,6 +1259,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects"
   add_foreign_key "integrations", "users", column: "connected_by_id"
+  add_foreign_key "llm_calls", "step_runs"
+  add_foreign_key "llm_calls", "terminal_sessions"
+  add_foreign_key "llm_calls", "workflow_runs"
   add_foreign_key "oauth_clients", "mcp_servers"
   add_foreign_key "oauth_credentials", "mcp_servers"
   add_foreign_key "oauth_credentials", "oauth_clients"

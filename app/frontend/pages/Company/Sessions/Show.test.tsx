@@ -60,7 +60,7 @@ function buildSession(overrides: Partial<TerminalSession> = {}): TerminalSession
 describe('Company/Sessions/Show', () => {
   it('renders the detail header with runtime, live status and the Finish action', () => {
     renderAuthedPage(<SessionShowPage />, {
-      props: { session: buildSession({ state: 'running' }), cableStream: 'stream-token' },
+      props: { session: buildSession({ state: 'running' }), llmCalls: [], cableStream: 'stream-token' },
     });
 
     expect(screen.getByText('Claude Code')).toBeInTheDocument();
@@ -93,6 +93,7 @@ describe('Company/Sessions/Show', () => {
           models: ['claude-opus'],
           pendingArtifactsCount: 3,
         }),
+        llmCalls: [],
         cableStream: 'stream-token',
       },
     });
@@ -113,6 +114,7 @@ describe('Company/Sessions/Show', () => {
           finishedAt: '2026-06-26T10:05:00Z',
           errorMessage: 'Container exited unexpectedly',
         }),
+        llmCalls: [],
         cableStream: 'stream-token',
       },
     });

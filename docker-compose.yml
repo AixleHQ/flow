@@ -194,7 +194,19 @@ services:
     image: aixle/otlp-ingest:latest
     ports:
       - '4318:4318'
+    environment:
+      - OTLP_INGEST_PORT
+      - OTLP_INGEST_WEB_BASE_URL
+      - OTLP_INGEST_PROXY_URL
     attach: false
+
+  otlp-proxy-consumer:
+    profiles: [debug]
+    image: mendhak/http-https-echo
+    environment:
+      - HTTP_PORT=9999
+    ports:
+      - "9999:9999"
 
   remote:
     profiles: [infra]
