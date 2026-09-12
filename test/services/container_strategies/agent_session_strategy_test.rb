@@ -280,7 +280,7 @@ module ContainerStrategies
     test "Codex preflight reseeds and retries when the written auth file disappears" do
       strategy, runtime, container = build_codex_preflight_strategy(nil)
       auth_path = Agents::CodexAdapter.new.config_path
-      SessionContextService.expects(:inject_credential).once do
+      SessionContextService.expects(:inject_credential).once.with do |_container, _credential, _config|
         runtime.write_file(container, auth_path, '{"tokens":{}}')
       end.returns(true)
 
