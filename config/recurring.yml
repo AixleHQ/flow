@@ -1,0 +1,37 @@
+# Solid Queue recurring tasks.
+#
+# config/queue.yml says everything recurring belongs to Temporal, and for WORK
+# that is right — one scheduler, one place to look. QueueHealthCheckJob is the
+# deliberate exception, and the only entry this file should ever grow lightly:
+# it is the watch, not the work, and it cannot be hosted by the process it
+# watches. On 2026-09-12 every safety net in the installation was a Temporal
+# schedule, the Temporal worker crashlooped, and so they all stopped together
+# with nothing left to notice. The Solid Queue supervisor (`jobs`) stayed up.
+#
+# Anything else recurring still goes in app/temporal/schedules.yml.
+#
+# Every minute: the check is a handful of indexed COUNT/MIN queries, and
+# detection latency is the product being sold.
+default: &default
+  queue_health_check:
+    class: QueueHealthCheckJob
+    schedule: every minute
+
+development:
+  <<: *default
+
+# Deliberately empty in test: the suite exercises QueueHealthCheck and the job
+# directly, and a supervisor-scheduled tick during a test run would be a source
+# of noise, not of coverage. An explicit empty mapping rather than a bare key —
+# config/puma.rb still loads the Solid Queue plugin unless SOLID_QUEUE_IN_PUMA is
+# false, and a nil here is a worse thing to hand it than no tasks.
+test: {}
+
+qa:
+  <<: *default
+
+staging:
+  <<: *default
+
+production:
+  <<: *default
