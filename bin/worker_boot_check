@@ -1,0 +1,100 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Boot smoke for bin/temporal_worker.
+#
+# WHY THIS EXISTS: nothing in the repository ever loaded bin/temporal_worker.
+# `assets:precompile` does not, the test suite does not, and rubocop only parses
+# it. So a runtime error in that file reached production as a green build. On
+# 2026-09-12 it did: sentry-ruby 7.0.0 removed `enable_logs`, the worker's own
+# second `Sentry.init` still set it, every worker-ruby pod hit CrashLoopBackOff,
+# and — because the raise happened inside `Sentry.init` itself, above the
+# `begin/rescue` that reports fatal errors — Sentry never heard about it either.
+# Nothing polled the Temporal task queue for nearly two hours and every
+# WorkflowRun created in that window sat in `pending`.
+#
+# WHAT IT PROVES: the worker process gets as far as announcing its registry,
+# which means Rails booted, `Sentry.init` ran against the real gem, the workflow
+# and activity classes all loaded, and each one could be instantiated. That is
+# the whole class of failure above, at the cost of one Rails boot.
+#
+# WHAT IT DOES NOT PROVE: anything past the registry announcement — schedule
+# sync, the Temporal connection, task polling. Those need a live server, which
+# this check deliberately does not require (TEMPORAL_ENABLED=false).
+
+require "timeout"
+
+# The last thing the worker logs before it needs a Temporal server. Reaching it
+# means every workflow and activity class loaded and instantiated.
+MARKER = "Ruby worker - registered activities"
+
+# A Rails boot plus the registry walk. Generous: a cold CI container with a cold
+# bootsnap cache is much slower than a warm local one, and a flake here reads as
+# a broken worker.
+TIMEOUT_SECONDS = Integer(ENV.fetch("WORKER_BOOT_CHECK_TIMEOUT", "180"))
+
+# Sentry.init only runs when a DSN is configured and the environment is not
+# development — so a check that left either alone would skip the very block that
+# broke production. The DSN is never dialled during init (the transport is lazy
+# and lives in a background thread we kill seconds later), so a syntactically
+# valid unreachable one is enough to execute the real configuration path.
+child_env = {
+  "RAILS_ENV" => "test",
+  "TEMPORAL_ENABLED" => "false",
+  "SENTRY_TEMPORAL_DSN" => ENV.fetch("SENTRY_TEMPORAL_DSN", "https://worker-boot-check@example.invalid/1")
+}
+
+worker = File.expand_path("temporal_worker", __dir__)
+output = +""
+found = false
+
+# Array form so the command is exec'd directly rather than through a shell, and
+# stderr folded into stdout — the crash this exists to catch prints there.
+io = IO.popen(child_env, [ worker ], "r", err: [ :child, :out ])
+
+begin
+  Timeout.timeout(TIMEOUT_SECONDS) do
+    io.each_line do |line|
+      output << line
+      next unless line.include?(MARKER)
+
+      found = true
+      break
+    end
+  end
+rescue Timeout::Error
+  output << "\n[worker_boot_check] timed out after #{TIMEOUT_SECONDS}s\n"
+ensure
+  # The worker is a long-running process: on a pass it is still alive and still
+  # holding a DB connection, so it has to be taken down either way. TERM first so
+  # it can close cleanly; KILL only if it ignores that. Every "already gone" error
+  # is benign here — it means the child exited on its own, which `found` judges.
+  #
+  # The pipe is deliberately not closed: IO#close on a popen handle reaps the
+  # child a second time and raises ECHILD after the waits below. This script exits
+  # within milliseconds of here, so the descriptor goes with the process.
+  begin
+    Process.kill("TERM", io.pid)
+    Timeout.timeout(10) { Process.wait(io.pid) }
+  rescue Timeout::Error
+    begin
+      Process.kill("KILL", io.pid)
+      Process.wait(io.pid)
+    rescue Errno::ESRCH, Errno::ECHILD
+      nil
+    end
+  rescue Errno::ESRCH, Errno::ECHILD
+    nil
+  end
+end
+
+if found
+  puts "[worker_boot_check] OK — bin/temporal_worker reached #{MARKER.inspect}"
+  exit 0
+end
+
+warn "[worker_boot_check] FAILED — bin/temporal_worker never reached #{MARKER.inspect}."
+warn "[worker_boot_check] The worker cannot boot; every Temporal schedule and task would stop."
+warn "[worker_boot_check] --- worker output ---"
+warn output.empty? ? "(no output)" : output
+exit 1
