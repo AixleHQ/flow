@@ -1,31 +1,28 @@
 import { router } from '@inertiajs/react';
-import { Alert, Button, Checkbox, Group, Modal, PasswordInput, Select, Stack, Text, TextInput } from '@mantine/core';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Group,
+  Modal,
+  PasswordInput,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconAlertCircle } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
+import { useCallback, useState } from 'react';
 
 export interface AzureDevopsProject {
   id: string;
   name: string;
-  description?: string | null;
-}
-
-export interface AzureDevopsInstallation {
-  id: number;
-  organizationSlug: string;
-  tenantId: string;
-  status: string;
-  lastVerifiedAt?: string | null;
-  // Absent until this installation is the one asked about: the server lists an
-  // organization's projects only on request, so the integrations page does not
-  // make a live Azure call for every visitor.
-  projects?: AzureDevopsProject[];
 }
 
 export interface AzureDevopsProps {
   enabled: boolean;
   patModeEnabled?: boolean;
-  installations?: AzureDevopsInstallation[];
 }
 
 interface Props {
@@ -35,9 +32,9 @@ interface Props {
   azureDevops: AzureDevopsProps;
 }
 
-// Mirrors AzureDevops::IntegrationService::DEFAULT_CAPABILITIES. These are
-// Aixle's operation profile, not Azure's ACLs: unticking one stops the request
-// being sent at all, while Azure independently decides whether the identity may
+// Mirrors AzureDevops::IntegrationService::ALL_CAPABILITIES. These are Aixle's
+// operation profile, not Azure's ACLs: unticking one stops the request being
+// sent at all, while Azure independently decides whether the identity may
 // perform the ones that are sent.
 const CAPABILITIES: { value: string; label: string; hint: string }[] = [
   { value: 'repositories.read', label: 'Read repositories', hint: 'Clone, fetch and inspect code' },
@@ -59,45 +56,51 @@ const CAPABILITIES: { value: string; label: string; hint: string }[] = [
 // defaults, so it starts unticked.
 const DEFAULT_CAPABILITIES = CAPABILITIES.map((c) => c.value).filter((v) => v !== 'pull_requests.complete');
 
+interface Inspection {
+  organization: string;
+  tenantId: string;
+  identity: string | null;
+  alreadyBound: boolean;
+  projects: AzureDevopsProject[];
+}
+
+// These two endpoints answer JSON rather than an Inertia redirect, because the
+// modal keeps its state across the two steps.
+const postJson = async (url: string, body: Record<string, unknown>) => {
+  const token = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': token, Accept: 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.message || 'Azure DevOps rejected the request');
+  return payload;
+};
+
 export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops }: Props) => {
-  const installations = useMemo(() => azureDevops.installations ?? [], [azureDevops.installations]);
   const patAvailable = !!azureDevops.patModeEnabled;
 
   const [authMode, setAuthMode] = useState<'service_principal' | 'pat'>('service_principal');
-  const [installationId, setInstallationId] = useState<string | null>(installations[0]?.id?.toString() ?? null);
+  const [organization, setOrganization] = useState('');
+  const [adminPat, setAdminPat] = useState('');
+  const [inspection, setInspection] = useState<Inspection | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [organizationSlug, setOrganizationSlug] = useState('');
+
   const [patProjectId, setPatProjectId] = useState('');
   const [pat, setPat] = useState('');
+
   const [capabilities, setCapabilities] = useState<string[]>(DEFAULT_CAPABILITIES);
+  const [verifying, setVerifying] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loadingProjects, setLoadingProjects] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const selectedInstallation = useMemo(
-    () => installations.find((i) => i.id.toString() === installationId) ?? null,
-    [installations, installationId],
-  );
-  const projects = selectedInstallation?.projects;
-
-  // Ask the server for this organization's approved projects the first time it
-  // is selected, the same partial-reload shape the repository picker uses.
-  useEffect(() => {
-    if (!opened || !installationId || projects !== undefined) return;
-
-    setLoadingProjects(true);
-    router.reload({
-      data: { azure_devops_installation_id: installationId },
-      only: ['azure_devops'],
-      preserveUrl: true,
-      onFinish: () => setLoadingProjects(false),
-    });
-  }, [opened, installationId, projects]);
 
   const reset = useCallback(() => {
     setAuthMode('service_principal');
+    setOrganization('');
+    setAdminPat('');
+    setInspection(null);
     setProjectId(null);
-    setOrganizationSlug('');
     setPatProjectId('');
     setPat('');
     setCapabilities(DEFAULT_CAPABILITIES);
@@ -109,115 +112,171 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     reset();
   }, [onClose, reset]);
 
-  const submit = useCallback(() => {
-    // Inertia's RequestPayload does not accept an index-signature object, so the
-    // payload is typed as the record shape it actually is.
-    const payload: Record<string, string | string[]> = {
-      provider: 'azure_devops',
-      authMode,
-      enabledCapabilities: capabilities,
-    };
-
-    if (authMode === 'service_principal') {
-      if (!installationId || !projectId) return;
-      payload.azureDevopsInstallationId = installationId;
-      payload.azureProjectId = projectId;
-    } else {
-      if (!organizationSlug.trim() || !patProjectId.trim() || !pat.trim()) return;
-      payload.organizationSlug = organizationSlug.trim();
-      payload.azureProjectId = patProjectId.trim();
-      payload.personalAccessToken = pat.trim();
+  // Step one: prove this company may bind the organization at all, and see what
+  // it holds. An organization already bound needs no token — the binding is the
+  // proof, established once by someone who demonstrated control.
+  const verify = useCallback(async () => {
+    if (!organization.trim()) return;
+    setError(null);
+    setVerifying(true);
+    try {
+      const result = (await postJson(`${basePath}/azure_devops_inspect`, {
+        organization: organization.trim(),
+        personal_access_token: adminPat.trim(),
+      })) as Inspection;
+      setInspection(result);
+      setProjectId(result.projects[0]?.id ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not verify the organization');
+    } finally {
+      setVerifying(false);
     }
+  }, [adminPat, basePath, organization]);
 
+  // Step two: entitle the application in the organization, record the binding,
+  // then create the project connection on top of it.
+  const connect = useCallback(async () => {
+    if (!inspection || !projectId) return;
     setError(null);
     setLoading(true);
-    router.post(basePath, payload, {
-      preserveScroll: true,
-      onSuccess: () => {
-        // Cleared on the way out as well as on success: the token must not
-        // survive in component state after the request leaves.
-        close();
-      },
-      onError: (errors) => {
-        const message = typeof errors === 'object' && errors ? Object.values(errors).join(' ') : '';
-        setError(message || 'Failed to connect Azure DevOps');
-        notifications.show({ message: 'Failed to connect Azure DevOps', color: 'red' });
-      },
-      onFinish: () => {
-        setLoading(false);
-        setPat('');
-      },
-    });
-  }, [authMode, basePath, capabilities, close, installationId, organizationSlug, pat, patProjectId, projectId]);
+    try {
+      const bound = (await postJson(`${basePath}/azure_devops_connect`, {
+        organization: inspection.organization,
+        personal_access_token: adminPat.trim(),
+        project_ids: [projectId],
+      })) as { installationId: number };
 
-  const canSubmit =
-    authMode === 'service_principal'
-      ? !!installationId && !!projectId
-      : !!organizationSlug.trim() && !!patProjectId.trim() && !!pat.trim();
+      // The token has done its job and does not outlive it — on the server it
+      // was never written down, and here it leaves component state now.
+      setAdminPat('');
+
+      router.post(
+        basePath,
+        {
+          provider: 'azure_devops',
+          authMode: 'service_principal',
+          azureDevopsInstallationId: String(bound.installationId),
+          azureProjectId: projectId,
+          enabledCapabilities: capabilities,
+        },
+        {
+          preserveScroll: true,
+          onSuccess: () => close(),
+          onError: (errors) => {
+            const message = typeof errors === 'object' && errors ? Object.values(errors).join(' ') : '';
+            setError(message || 'Failed to connect Azure DevOps');
+          },
+          onFinish: () => setLoading(false),
+        },
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not connect Azure DevOps');
+      setLoading(false);
+    }
+  }, [adminPat, basePath, capabilities, close, inspection, projectId]);
+
+  const submitPat = useCallback(() => {
+    if (!organization.trim() || !patProjectId.trim() || !pat.trim()) return;
+    setError(null);
+    setLoading(true);
+    router.post(
+      basePath,
+      {
+        provider: 'azure_devops',
+        authMode: 'pat',
+        organizationSlug: organization.trim(),
+        azureProjectId: patProjectId.trim(),
+        personalAccessToken: pat.trim(),
+        enabledCapabilities: capabilities,
+      },
+      {
+        preserveScroll: true,
+        onSuccess: () => close(),
+        onError: (errors) => {
+          const message = typeof errors === 'object' && errors ? Object.values(errors).join(' ') : '';
+          setError(message || 'Failed to connect Azure DevOps');
+          notifications.show({ message: 'Failed to connect Azure DevOps', color: 'red' });
+        },
+        onFinish: () => {
+          setLoading(false);
+          setPat('');
+        },
+      },
+    );
+  }, [basePath, capabilities, close, organization, pat, patProjectId]);
+
+  const missingPrincipal = !!error && error.includes('missing a service principal');
 
   return (
     <Modal opened={opened} onClose={close} title="Connect Azure DevOps" centered size="lg">
       <Stack gap="md">
-        {installations.length === 0 && authMode === 'service_principal' && (
-          <Alert color="yellow" icon={<IconAlertCircle size={16} />} title="No approved organization yet">
-            <Text size="sm">
-              Azure DevOps access is approved per organization before a project can connect to it. Your Entra
-              administrator provisions a service principal for Aixle&apos;s application in your tenant, an Azure DevOps
-              administrator adds it to the organization with at least a Basic access level, and an Aixle operator
-              records the approval. Ask your operator to set that up, then come back here.
-            </Text>
-          </Alert>
-        )}
-
         {authMode === 'service_principal' ? (
           <>
-            <Select
+            <TextInput
               label="Azure organization"
-              description="Organizations your company has been approved for"
-              placeholder="Select an organization"
-              data={installations.map((i) => ({ value: i.id.toString(), label: i.organizationSlug }))}
-              value={installationId}
-              onChange={(value) => {
-                setInstallationId(value);
-                setProjectId(null);
+              description="The name in https://dev.azure.com/<organization>"
+              placeholder="contoso"
+              value={organization}
+              onChange={(e) => {
+                setOrganization(e.currentTarget.value);
+                setInspection(null);
               }}
-              disabled={installations.length === 0}
-              // Mantine deselects on a second click by default, which here would
-              // silently disable the project field and leave the form dead.
-              allowDeselect={false}
+              disabled={!!inspection}
             />
-            <Select
-              label="Azure project"
-              description="Only projects inside this organization's approved scope are listed. The selection cannot be changed later — connect again to work against a different project."
-              placeholder={
-                loadingProjects
-                  ? 'Loading projects...'
-                  : selectedInstallation
-                    ? 'Select a project'
-                    : 'Select an organization first'
-              }
-              data={(projects ?? []).map((p) => ({ value: p.id, label: p.name }))}
-              value={projectId}
-              onChange={setProjectId}
-              disabled={!selectedInstallation || loadingProjects}
-              allowDeselect={false}
-              searchable
-            />
+
+            {!inspection && (
+              <>
+                <PasswordInput
+                  label="Administrator personal access token"
+                  description="Used once, in this request, to prove the organization is yours and to add Aixle to it. It is never stored, and the connection runs on Aixle's own identity afterwards. Needs the Member Entitlement Management (read & write) scope. Leave empty if your company has already connected this organization."
+                  value={adminPat}
+                  onChange={(e) => setAdminPat(e.currentTarget.value)}
+                />
+                <Group justify="flex-end">
+                  <Button onClick={verify} loading={verifying} disabled={!organization.trim()}>
+                    Verify organization
+                  </Button>
+                </Group>
+              </>
+            )}
+
+            {inspection && (
+              <>
+                <Alert color="green" icon={<IconCheck size={16} />} title="Organization verified">
+                  <Text size="sm">
+                    {inspection.alreadyBound
+                      ? 'Your company has already connected this organization, so no token was needed.'
+                      : `Verified${inspection.identity ? ` as ${inspection.identity}` : ''}. Aixle will be added to this organization with a Basic access level.`}
+                  </Text>
+                </Alert>
+                <Select
+                  label="Azure project"
+                  description="This connection works against one project. The selection cannot be changed later — connect again to work against another."
+                  placeholder="Select a project"
+                  data={inspection.projects.map((p) => ({ value: p.id, label: p.name }))}
+                  value={projectId}
+                  onChange={setProjectId}
+                  allowDeselect={false}
+                  searchable
+                />
+              </>
+            )}
           </>
         ) : (
           <>
             <Alert color="orange" icon={<IconAlertCircle size={16} />} title="This acts as you, not as Aixle">
               <Text size="sm">
                 A personal access token carries its owner&apos;s own Azure permissions, and pull requests and comments
-                are attributed to that person. It is meant for a pilot; the service principal is the production mode.
+                are attributed to that person. It is meant for a pilot, or for an organization on a personal Microsoft
+                account, where a service principal cannot be used at all.
               </Text>
             </Alert>
             <TextInput
               label="Organization"
               description="The name in https://dev.azure.com/<organization>"
               placeholder="contoso"
-              value={organizationSlug}
-              onChange={(e) => setOrganizationSlug(e.currentTarget.value)}
+              value={organization}
+              onChange={(e) => setOrganization(e.currentTarget.value)}
             />
             <TextInput
               label="Azure project ID"
@@ -262,6 +321,13 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
         {error && (
           <Alert color="red" icon={<IconAlertCircle size={16} />}>
             {error}
+            {missingPrincipal && (
+              <Text size="sm" mt="xs">
+                Aixle&apos;s application has not been added to your Microsoft Entra directory yet. A directory
+                administrator runs <code>az ad sp create --id &lt;client id&gt;</code> once — nothing is consented to
+                and no permission is granted, it only makes the application nameable in your organization.
+              </Text>
+            )}
           </Alert>
         )}
 
@@ -272,10 +338,11 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
               size="compact-sm"
               onClick={() => {
                 setAuthMode(authMode === 'pat' ? 'service_principal' : 'pat');
+                setInspection(null);
                 setError(null);
               }}
             >
-              {authMode === 'pat' ? 'Use the approved organization instead' : 'Use a personal access token instead'}
+              {authMode === 'pat' ? 'Use Aixle’s own identity instead' : 'Use a personal access token instead'}
             </Button>
           ) : (
             <span />
@@ -284,9 +351,19 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
             <Button variant="default" onClick={close}>
               Cancel
             </Button>
-            <Button onClick={submit} loading={loading} disabled={!canSubmit}>
-              Connect
-            </Button>
+            {authMode === 'pat' ? (
+              <Button
+                onClick={submitPat}
+                loading={loading}
+                disabled={!organization.trim() || !patProjectId.trim() || !pat.trim()}
+              >
+                Connect
+              </Button>
+            ) : (
+              <Button onClick={connect} loading={loading} disabled={!inspection || !projectId}>
+                Connect
+              </Button>
+            )}
           </Group>
         </Group>
       </Stack>

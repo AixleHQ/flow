@@ -163,7 +163,16 @@ Core-release onboarding is an explicit operator-assisted setup:
 
 A successful app-only API call proves that **the application** can access an organization; it does not prove that the requesting Aixle company owns that access. Knowing a tenant ID, organization URL, or client ID is never proof of authority. Check the approved company binding before discovery, attachment, tool execution, or Git credential issuance. Refuse reuse of a cache entry as a substitute for this authorization.
 
-Self-service onboarding may be added later with authenticated organization-authority verification. Entra admin consent/provisioning alone does not grant Azure DevOps resource permissions. If an admin-consent callback is used, its returned `tenant` field is not authenticated ownership proof; Microsoft explicitly warns against using it to authorize users. [Admin-consent callback security](https://learn.microsoft.com/en-us/entra/identity-platform/v2-admin-consent). The default app-only runtime does not need a user consent callback or changes to `Oauth::State`.
+**Superseded: onboarding is self-service, and the authority check is technical.** The operator step above was never adding information — it was a human vouching, which is unauditable and is the one place a typo grants company A access to company B's organization. It has been replaced by proof the requester supplies:
+
+1. They name the organization. Its Entra tenant is discovered from Azure's own `WWW-Authenticate: Bearer authorization_uri=…` header, so nobody pastes a tenant GUID.
+2. They supply a personal access token carrying **Member Entitlement Management (read & write)**, which is used to call an endpoint only an organization administrator can call. That is the same authority that would otherwise add the application to the organization by hand, so holding it is the claim being made.
+3. With that same token the application is added to the organization — Basic access level, Contributor on the chosen projects — via `ServicePrincipalEntitlements`. The `originId` it needs is the application's object id in that tenant, which arrives as the `oid` claim of the app-only token Entra just issued rather than being looked up in a portal.
+4. Access is confirmed with the **application's** credential, not the user's token, before the binding is recorded.
+
+The token is used inside one request and is never persisted, logged, or used again; the connection runs on the service principal. A token is required only for the FIRST bind of an organization and for widening its approved project list — afterwards the binding itself is the proof.
+
+Entra admin consent/provisioning alone still does not grant Azure DevOps resource permissions, and an admin-consent callback's `tenant` field is still not authenticated ownership proof; Microsoft explicitly warns against using it to authorize users. [Admin-consent callback security](https://learn.microsoft.com/en-us/entra/identity-platform/v2-admin-consent). The customer's directory administrator still has to instantiate the application in their tenant once (`az ad sp create`), because that is an Entra operation an Azure DevOps token cannot perform.
 
 ### 5.3 App-only token acquisition
 
@@ -499,7 +508,9 @@ Implementation touchpoints beyond the new service classes:
 - `config/routes.rb`, policies, `config/settings.yml`, `.env.example`, and deployment configuration: feature enablement, trusted app/client/certificate-or-secret configuration and generation, installation setup, optional PAT mode, timeouts. Application code reads `Settings.*`.
 - `docs/user-guide/integrations.md` and its in-app documentation mirror: one-time app setup, per-tenant/per-organization onboarding, identity permissions, Git/fallback usage, and operator credential rotation/repair when the feature ships.
 
-Operator onboarding is `lib/tasks/azure_devops.rake` (`approve`, `verify`, `scope`, `disable`, `list`) rather than a UI: §5.2's verification step is a human judgement about who controls an Azure organization, and nothing a form collects is evidence of it.
+Onboarding is self-service (§5.2) — there is no rake task and no operator console step. The two endpoints are `azure_devops_inspect` (prove control, list projects) and `azure_devops_connect` (entitle the application, record the binding).
+
+The integrations page deliberately does NOT enumerate the organizations a company is bound to: listing them told every project member which Azure organizations the company works with, and bought nothing, since the user names the organization and the server resolves it against that company's own bindings.
 
 Migrations are additive and leave GitHub/GitLab identity columns null. Azure connect controls and tools are hidden until the deployment is actually configured — the design's proposed `Settings.azure_devops.enabled` flag was dropped for a derived predicate, because a boolean beside the credentials can only ever disagree with them ("enabled but unconfigured" fails at the first call; "configured but disabled" is a switch to forget). Disabling the feature stops new Azure setup and execution without removing existing data; account for live sessions and outstanding credentials. A rollback must not route Azure records through GitHub fallback behavior.
 
@@ -530,7 +541,7 @@ The live spike must cover a tenant distinct from the app's home tenant, two orga
 
 These are bounded follow-ups, not missing definitions of the core feature:
 
-- **Cross-tenant onboarding:** the default is one operator-owned multi-tenant app, tenant-local principals, and separately approved organization installations. Verify that sequence in the first customer tenant. Self-service onboarding is a later enhancement to operator-assisted setup, not a different runtime identity.
+- **Cross-tenant onboarding:** one operator-owned multi-tenant app, tenant-local principals, and per-organization bindings the customer establishes themselves by proving control (§5.2). Verify the sequence in the first customer tenant. What remains outside Flow is the single Entra step — instantiating the application in the customer's directory — which no Azure DevOps credential can perform.
 - **Actual app permissions and access level:** confirm the principal's Azure DevOps ACLs and license with live clone, push, PR thread, and work-item calls. Do not add delegated scopes or broaden to administration after an error.
 - **Pilot PAT availability:** enable only where organization policy permits it; never make PAT the automatic fallback for failed service-principal setup. The one case where PAT is not a pilot but the only option is an MSA-backed organization with no connected Entra tenant (§1); detect it and say so, rather than presenting it as a service-principal error the customer can fix.
 - **Git bearer transport:** the core release ships the Microsoft-documented header-injection path. Promote `authtype` negotiation only after a live spike shows Azure Repos accepting it on an image whose Git advertises the capability (§7).

@@ -43,31 +43,29 @@ Azure DevOps is **project-scoped**: one connection names one Azure
 organization and one Azure project inside it. Agents clone, push, open
 and review pull requests, and read and update Azure Boards work items.
 
-Unlike GitHub and GitLab, a project owner cannot connect it alone —
-access is approved per organization first, because knowing a tenant id
-or an organization URL is not proof that your company owns that
-organization. Setup runs in three places:
+Connecting is self-service, with one step outside Flow:
 
-1. **Your Entra administrator** provisions a service principal for
-   Aixle's application in your tenant, using the client id your Aixle
-   operator publishes. No new app registration is needed, and Aixle's
-   private key is never shared.
-2. **An Azure DevOps administrator** adds that service principal to the
-   organization under **Organization settings → Users**, with at least a
-   **Basic** access level (Stakeholder cannot read repositories) and the
-   project permissions the agents need. Grant repository Read and
-   Contribute, pull-request Contribute, and Boards access to the area
-   paths in scope — never project-collection administration or policy
-   bypass.
-3. **Your Aixle operator** records the approval and the list of Azure
-   projects it covers (`rake azure_devops:approve` / `:verify` /
-   `:scope`).
+1. **Once per directory,** an Entra administrator instantiates Aixle's
+   application in your tenant: `az ad sp create --id <client id>`, with
+   the client id your Aixle operator publishes. Nothing is consented to
+   and no permission is granted — it only makes the application nameable
+   in your organization. Aixle's private key is never shared, and you do
+   not register an application of your own.
+2. **In Flow,** open **Project → Integrations → Connect → Azure DevOps**,
+   type your organization name, and paste a personal access token from
+   someone who can administer it (scope: **Member Entitlement Management
+   (read & write)**).
 
-Then, in **Project → Integrations → Connect → Azure DevOps**, pick the
-approved organization and one of its approved projects, and choose what
-agents may do. The selected Azure project is fixed for the life of the
-connection: changing it would silently re-point existing repository and
-work-item references, so connect again instead.
+That token is used once, in that request: it proves the organization is
+yours, and it adds Aixle to it with a **Basic** access level and
+Contributor rights on the project you pick. It is never stored, and the
+connection runs on Aixle's own identity afterwards — not on your token.
+Colleagues connecting further projects in the same organization are not
+asked for one, because the first connection already established it.
+
+The selected Azure project is fixed for the life of the connection:
+changing it would silently re-point existing repository and work-item
+references, so connect again instead.
 
 Operations run as the **application's identity**, not as the person who
 connected it — pull requests and comments are authored by it, and an

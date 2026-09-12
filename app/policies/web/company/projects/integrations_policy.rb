@@ -12,6 +12,10 @@ module Web
         # spends the deployment's credential and reports provider diagnostics,
         # so it sits with the other management actions rather than with #index.
         def test_connection? = manage_integrations?
+        # Binding an Azure organization is a connect, and it additionally
+        # requires proving control of that organization to Azure itself.
+        def azure_devops_inspect? = manage_integrations?
+        def azure_devops_connect? = manage_integrations?
         def slack_oauth_start? = manage_integrations?
         def github_app_install? = manage_integrations?
 

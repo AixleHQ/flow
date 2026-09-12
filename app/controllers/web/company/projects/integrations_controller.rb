@@ -112,6 +112,48 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     end
   end
 
+  # Step one of Azure DevOps self-service onboarding: prove the caller
+  # administers the organization, and show what it holds.
+  #
+  # The personal access token is used inside this request and nowhere else — it
+  # is not persisted, not logged, and not what the connection later runs on.
+  # It is the proof that this company may bind this organization at all, which
+  # is the one thing our application's own access cannot establish: with a
+  # multi-tenant application the answer to "can we reach that organization" is
+  # legitimately yes for every customer that installed us.
+  def azure_devops_inspect
+    result = azure_onboarding.inspect!(
+      organization: params[:organization].to_s,
+      personal_access_token: params[:personal_access_token].to_s
+    )
+
+    render json: {
+      organization: result.organization,
+      tenantId: result.tenant_id,
+      identity: result.identity,
+      alreadyBound: result.already_bound,
+      projects: result.projects.map { |p| { id: p[:id], name: p[:name] } }
+    }
+  rescue AzureDevops::Error => e
+    render json: { error: e.code, message: e.message }, status: :unprocessable_content
+  end
+
+  # Step two: entitle the application in the organization and record the
+  # binding. Idempotent — reconnecting an organization already bound widens its
+  # approved project list rather than duplicating it.
+  def azure_devops_connect
+    installation = azure_onboarding.complete!(
+      organization: params[:organization].to_s,
+      personal_access_token: params[:personal_access_token].to_s,
+      project_ids: params[:project_ids]
+    )
+
+    render json: { installationId: installation.id, organization: installation.organization_slug,
+                   projects: installation.allowed_project_ids }
+  rescue AzureDevops::Error => e
+    render json: { error: e.code, message: e.message }, status: :unprocessable_content
+  end
+
   # Kick off the Slack OAuth install for this project: redirect to Slack's consent
   # screen with a signed `state` that carries the project. Slack redirects back to
   # the deployment-wide callback (Web::Integrations::SlackOauthController#callback).
@@ -148,48 +190,17 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
   private
 
-  # What the page needs to offer Azure DevOps at all: whether the deployment
-  # enables it, and which approved organization installations this company
-  # holds. An arbitrary organization URL is never enough — the binding has to
-  # exist first.
+  # Whether the page may offer Azure DevOps at all, and nothing else.
   #
-  # The project list for one installation is fetched only when the connect modal
-  # asks for it (`?azure_devops_installation_id=`), the same partial-reload shape
-  # the repository picker uses. Listing projects for every installation on every
-  # page load would put a live Azure call — and a token acquisition — on the
-  # critical path of a page most visitors are not connecting anything from.
+  # It deliberately does NOT list the organizations this company is bound to.
+  # Enumerating them told every project member which Azure organizations the
+  # company works with, and it bought nothing: the user types the organization
+  # they mean, and the server resolves it against this company's own bindings.
+  # What is not listed cannot be browsed.
   def azure_devops_props
     return { enabled: false } unless AzureDevops::AppConfig.enabled?
 
-    installations = AzureDevopsInstallation.for_company(current_company).active.order(:organization_slug)
-    selected_id = params[:azure_devops_installation_id].presence
-
-    {
-      enabled: true,
-      pat_mode_enabled: AzureDevops::AppConfig.pat_mode_enabled?,
-      installations: installations.map do |installation|
-        {
-          id: installation.id,
-          organization_slug: installation.organization_slug,
-          tenant_id: installation.tenant_id,
-          status: installation.status.to_s,
-          last_verified_at: installation.last_verified_at,
-          # Approved scope only. Azure's own answer is intersected with the
-          # approved list in the service; showing everything Azure returns would
-          # advertise projects nobody signed off on.
-          projects: selected_id.to_s == installation.id.to_s ? azure_projects_for(installation) : nil
-        }.compact
-      end
-    }
-  end
-
-  # Best effort: a listing failure must not take the whole integrations page
-  # down, and the card can explain a connection problem on its own.
-  def azure_projects_for(installation)
-    AzureDevops::InstallationService.new(company: current_company).approved_projects(installation)
-  rescue AzureDevops::Error => e
-    Rails.logger.warn("[Integrations] Azure project listing failed for installation #{installation.id}: #{e.code}")
-    []
+    { enabled: true, pat_mode_enabled: AzureDevops::AppConfig.pat_mode_enabled? }
   end
 
   # Array of strings, whatever shape the parameter arrives in. An
@@ -203,6 +214,10 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     when nil then []
     else [ raw.to_s ]
     end
+  end
+
+  def azure_onboarding
+    AzureDevops::Onboarding.new(company: current_company, actor: current_user)
   end
 
   def create_azure_devops

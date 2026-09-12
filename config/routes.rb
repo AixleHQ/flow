@@ -344,6 +344,11 @@ Rails.application.routes.draw do
             collection do
               get :slack_oauth_start
               get :github_app_install
+              # Azure DevOps self-service onboarding. `inspect` proves the
+              # caller administers the organization and lists its projects;
+              # `connect` entitles the application and records the binding.
+              post :azure_devops_inspect
+              post :azure_devops_connect
             end
             member do
               post :test_connection
