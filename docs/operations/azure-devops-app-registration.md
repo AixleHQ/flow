@@ -11,18 +11,32 @@ The customer-facing half is in [user-guide/integrations.md](../user-guide/integr
 
 ## 0. Decide which mode you need
 
-This is the only decision that changes the work, so make it first.
-
-| | **Single-tenant** | **Multi-tenant** | **PAT** |
+| | **Multi-tenant** | **Single-tenant** | **PAT** |
 |---|---|---|---|
-| Who can it reach | Azure DevOps organizations backed by **your own** Entra tenant | Organizations in **any** customer tenant that provisions it | One organization |
-| Setup effort | ~10 minutes, all in one place | Adds a provisioning step in every customer tenant | ~2 minutes, no Entra work |
+| Who can it reach | Organizations in **any** tenant that installs it | Organizations backed by **your own** tenant, and nothing else ever | One organization |
 | Acts as | The application | The application | **The token's owner** |
-| Use it for | A first live test; a single-company deployment | The product: one Flow deployment serving many customers | A smoke test, or an MSA-backed organization |
+| Use it for | Anything a customer will ever touch | A deployment that will only ever serve its own directory | A smoke test, or an MSA-backed organization |
 
-**For a first run, pick single-tenant.** It skips §3 entirely and is the same
-code path — switching the registration to multi-tenant later is one radio button
-plus the per-tenant provisioning, and changes nothing in Flow.
+**Register as multi-tenant unless you are certain the deployment will never serve
+another directory.**
+
+Single-tenant is not "the simpler start" — it is a dead end. Another tenant
+cannot provision a service principal for a single-tenant application at all:
+`az ad sp create` there does not work, and no permission grant fixes it. And it
+buys nothing in exchange, because a multi-tenant registration creates its service
+principal in the home tenant exactly the same way — so a first test against an
+organization in your own directory is identical work either way, and §3 is
+skipped either way.
+
+The exposure of multi-tenant is close to nothing. Anyone who knows the client ID
+can instantiate the application in their own directory, and that grants them
+nothing: the application requests no permissions, and reaching anything requires
+*their* Azure DevOps administrator to add it to *their* organization. The worst
+someone can do is give our application access to an organization they control —
+which is the install.
+
+Already registered as single-tenant? **Authentication → Supported account types**
+switches it. The client ID and everything else survive.
 
 **Hard limit:** a service principal can only be added to an Azure DevOps
 organization from the Entra tenant that organization is connected to. An
@@ -45,15 +59,11 @@ Done once per Flow deployment, by whoever owns the deployment.
 3. **Account types.** The portal currently offers four; two of them are never
    right here, because a personal Microsoft account cannot be a service
    principal in Azure DevOps.
-   - single-tenant → *Single tenant only - `<your directory>`*
-   - multi-tenant → *Multiple Entra ID tenants*
+   - **Multiple Entra ID tenants** — this one, per §0.
+   - *Single tenant only - `<your directory>`* — only for a deployment that will
+     never serve another directory; see §0 before choosing it.
    - *Any Entra ID Tenant + Personal Microsoft accounts* and *Personal accounts
      only* — not these, ever.
-
-   Single-tenant reaches only organizations backed by **this** directory. Check
-   before choosing: `https://dev.azure.com/<org>` → **Organization settings →
-   Overview → Microsoft Entra directory**. A different directory there means
-   multi-tenant plus §3.
 4. **Redirect URI:** leave blank, despite the form saying a value is required for
    most authentication scenarios — that note is about browser sign-in flows.
    Client credentials never redirect.
