@@ -287,6 +287,21 @@ module ContainerStrategies
       assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
     end
 
+    test "credential preflight retries when the initial verified write fails" do
+      strategy, runtime, container = build_codex_preflight_strategy(nil)
+      auth_path = Agents::CodexAdapter.new.config_path
+      write_error = AgentCredentialsService::CredentialWriteError.new(
+        path: auth_path, container: "abc123", write_outcome: "verification_failed"
+      )
+      SessionContextService.unstub(:assemble_session_context)
+      SessionContextService.expects(:assemble_session_context).once.raises(write_error)
+      SessionContextService.expects(:inject_credential).once.with do |_container, _credential, _config|
+        runtime.write_file(container, auth_path, '{"tokens":{}}')
+      end.returns(true)
+
+      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
+    end
+
     test "interactive first login proceeds without a stored credential" do
       @session.update!(agent_type: "codex", mode: "interactive", session_type: "agent_session")
       strategy = AgentSessionStrategy.new(
