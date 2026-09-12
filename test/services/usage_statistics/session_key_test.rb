@@ -19,10 +19,10 @@ module UsageStatistics
       assert_not_equal Agents::SessionKey.generate(session), SessionKey.generate(session.route_token)
     end
 
-    test "resource attributes carry the token and its key, and nothing for a session without one" do
-      session = build(:terminal_session, route_token: "tok-a")
+    test "resource attributes carry the token, its key and the agent type, and nothing for a session without one" do
+      session = build(:terminal_session, route_token: "tok-a", agent_type: "claude_code")
 
-      assert_equal "terminal_session_token=tok-a,terminal_session_key=#{SessionKey.generate('tok-a')}",
+      assert_equal "terminal_session_token=tok-a,terminal_session_key=#{SessionKey.generate('tok-a')},agent_type=claude_code",
                    SessionKey.resource_attributes(session)
       assert_nil SessionKey.resource_attributes(nil)
     end
@@ -35,6 +35,13 @@ module UsageStatistics
 
       assert SessionKey.required_for?(with_marker)
       assert SessionKey.required_for?(without_marker)
+    end
+
+    test "resource attributes omit the agent type when the session has none" do
+      session = build(:terminal_session, route_token: "tok-a", agent_type: nil)
+
+      assert_equal "terminal_session_token=tok-a,terminal_session_key=#{SessionKey.generate('tok-a')}",
+                   SessionKey.resource_attributes(session)
     end
   end
 end

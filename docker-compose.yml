@@ -207,8 +207,20 @@ services:
     image: aixle/otlp-ingest:latest
     ports:
       - '${BIND_ADDRESS:-127.0.0.1}:${OTLP_HOST_PORT:-4318}:4318'
+    environment:
+      - OTLP_INGEST_PORT
+      - OTLP_INGEST_WEB_BASE_URL
+      - OTLP_INGEST_PROXY_URL
     networks: [ default, agents ]
     attach: false
+
+  otlp-proxy-consumer:
+    profiles: [debug]
+    image: mendhak/http-https-echo
+    environment:
+      - HTTP_PORT=9999
+    ports:
+      - "9999:9999"
 
 volumes:
   pg_data:
