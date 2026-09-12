@@ -15,7 +15,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   # == start ==
 
   test "start creates workflow run with step runs and starts temporal" do
-    TemporalWorkflowRegistry.expects(:start_workflow_execution).once
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
 
     run = WorkflowService.start(
       workflow: @workflow,
@@ -31,7 +31,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   end
 
   test "start persists agent_runtime when provided" do
-    TemporalWorkflowRegistry.expects(:start_workflow_execution).once
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
 
     run = WorkflowService.start(
       workflow: @workflow,
@@ -45,7 +45,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   end
 
   test "start with task associates board_task" do
-    TemporalWorkflowRegistry.expects(:start_workflow_execution).once
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
 
     board = create(:board, project: @project)
     column = create(:board_column, board: board)
@@ -79,7 +79,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   # == cancel ==
 
   test "cancel sends signal and cancels active step runs" do
-    TemporalWorkflowRegistry.stubs(:start_workflow_execution)
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
     run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
     run.start! if run.may_start?
 
@@ -94,7 +94,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   # The cancellation itself is not the news — the reason is. A session killed by a
   # spend limit or a lost node has one, and the step is where a user sees it.
   test "cancel carries the session's diagnosed reason onto the step run" do
-    TemporalWorkflowRegistry.stubs(:start_workflow_execution)
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
     TemporalService.stubs(:send_signal)
     run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
     run.start! if run.may_start?
@@ -110,7 +110,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   end
 
   test "cancel leaves the step run unexplained when the generic reason is all there is" do
-    TemporalWorkflowRegistry.stubs(:start_workflow_execution)
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
     TemporalService.stubs(:send_signal)
     run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
     run.start! if run.may_start?
@@ -125,7 +125,7 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   end
 
   test "cancel records a workflow_cancelled activity on the task's board" do
-    TemporalWorkflowRegistry.stubs(:start_workflow_execution)
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
     TemporalService.stubs(:send_signal)
     board = create(:board, project: @project)
     column = create(:board_column, board: board)
@@ -139,6 +139,80 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     activity = BoardActivity.by_event_type(:workflow_cancelled).sole
     assert_equal task.id, activity.board_task_id
     assert_equal run.id, activity.metadata["workflow_run_id"]
+  end
+
+  # == dispatch (transactional outbox) ==
+
+  test "start marks the run dispatched once Temporal confirms the execution" do
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true)
+
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+
+    assert_equal "dispatched", run.reload.relay_state
+    assert_equal 1, run.relay_attempts
+    assert_nil run.relay_error
+  end
+
+  # The failure this whole mechanism exists for: TemporalService.start_workflow
+  # answers a failed RPC with { ok: false }, not an exception, so the old code
+  # discarded it and reported a run that would never execute as started.
+  test "start raises and leaves the run enrolled in the outbox when Temporal refuses the start" do
+    TemporalService.stubs(:enabled?).returns(true)
+    TemporalWorkflowRegistry.expects(:start_workflow_execution)
+      .once.returns(ok: false, error: "storage is (re)initializing")
+
+    error = assert_raises(WorkflowService::DispatchFailed) do
+      WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    end
+
+    assert_match(/storage is \(re\)initializing/, error.message)
+
+    run = WorkflowRun.sole
+    assert_equal "pending", run.relay_state
+    assert_equal "pending", run.state
+    assert_equal 1, run.relay_attempts
+    assert_match(/storage is/, run.relay_error)
+  end
+
+  # A run that was never handed to Temporal is worth nothing without its steps
+  # being re-drivable too, so the row has to survive the raise.
+  test "a run stranded by a failed dispatch keeps its step runs and becomes relay work" do
+    TemporalService.stubs(:enabled?).returns(true)
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: false, error: "unavailable")
+
+    assert_raises(WorkflowService::DispatchFailed) do
+      WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    end
+
+    run = WorkflowRun.sole
+    assert_equal 2, run.step_runs.count
+    assert_empty WorkflowRun.stuck_for_relay
+    travel_to(WorkflowRun::RELAY_GRACE.from_now + 1.second) do
+      assert_equal [ run.id ], WorkflowRun.stuck_for_relay.pluck(:id)
+    end
+  end
+
+  # Development and test run with Temporal switched off. Nothing is stranded there
+  # — there is no executor to strand it from, and no relay either, since the relay
+  # is itself a Temporal schedule.
+  test "dispatch! does not raise when the deployment has Temporal switched off" do
+    TemporalService.stubs(:enabled?).returns(false)
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: false, error: "Temporal is disabled")
+
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, relay_state: "pending")
+
+    assert_nothing_raised { WorkflowService.dispatch!(run) }
+    assert_equal "pending", run.reload.relay_state
+  end
+
+  test "dispatch! is safe to repeat and settles a run Temporal already had" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, relay_state: "pending")
+    # A rejected duplicate is reported as success: the execution this run needs exists.
+    TemporalWorkflowRegistry.expects(:start_workflow_execution).once.returns(ok: true, workflow_id: "workflow-execution-#{run.id}")
+
+    WorkflowService.dispatch!(run)
+
+    assert_equal "dispatched", run.reload.relay_state
   end
 
   # == approve_step ==

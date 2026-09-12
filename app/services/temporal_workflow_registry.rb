@@ -124,6 +124,13 @@ class TemporalWorkflowRegistry
         wf,
         { workflow_run_id: workflow_run.id },
         id: "workflow-execution-#{workflow_run.id}",
+        # What makes re-dispatch safe, and therefore the outbox relay possible
+        # (WorkflowRunRelay). The id is per-run, so a duplicate start can only
+        # mean this run's execution already exists — which is success, not a
+        # failure, and is how a re-drive of a run Temporal did receive settles.
+        # It also forbids reusing the id after the execution closed, so a
+        # finished run can never be silently re-run.
+        reject_duplicate: true,
         # Queue time is not execution budget (AD-7), so an admitted run gets far
         # more than a day — but it still gets a ceiling. "No timeout at all"
         # means a wedged run is invisible to every deadline we have.

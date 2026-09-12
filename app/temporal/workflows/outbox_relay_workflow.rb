@@ -2,8 +2,9 @@
 
 module Workflows
   # Safety-net relay for the transactional outbox. Runs on a Temporal cron
-  # schedule (see app/temporal/schedules.yml) with SKIP-overlap, and drains any
-  # trigger events left "pending" by a producer that crashed before dispatching.
+  # schedule (see app/temporal/schedules.yml) with SKIP-overlap, and drains both
+  # halves: trigger events left "pending" by a producer that crashed before
+  # dispatching, and runs whose Temporal execution was never confirmed started.
   # The happy path dispatches inline; this only catches the stragglers.
   class OutboxRelayWorkflow < Base
     def run(_input = nil)
