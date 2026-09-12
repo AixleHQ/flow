@@ -819,7 +819,7 @@ module Agents
     # Default environment variables for Claude Code runtime.
     def default_env_vars(session)
       route_token = session.route_token
-      resource_attributes = "terminal_session_token=#{route_token}"
+      resource_attributes = "terminal_session_token=#{route_token},agent_type=claude_code"
 
       {
         # MITM proxy — intercept Anthropic API traffic
