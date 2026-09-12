@@ -15,6 +15,12 @@ Rails.application.routes.draw do
   # rather than a user session — see CloudAuth::SessionKey.
   post "/cloud/aws/credentials", to: "cloud_credentials#create"
 
+  # Git credential vending for Azure DevOps repositories, posted to by the
+  # in-container `git-credential-aixle-azure` helper. Authenticated by a derived
+  # per-session key (AzureDevops::GitSessionKey), NOT by the session's mcp_key —
+  # see the controller for why. Not an MCP tool and not in any tool list.
+  post "/azure/git/credentials", to: "azure_git_credentials#create"
+
   # CSP violation report sink (report-only mode, M-16). Browsers POST here with
   # Content-Type application/csp-report; no session/CSRF token is sent.
   post "/csp-violation-report-endpoint", to: "csp_reports#create"
@@ -28,6 +34,12 @@ Rails.application.routes.draw do
 
   # GitLab webhook endpoint (public, no session auth — verified via per-repository secret)
   post "/webhooks/gitlab", to: "webhooks/gitlab#receive"
+
+  # Azure DevOps Service Hooks. The endpoint id ROUTES a delivery to one
+  # subscription and is not a secret: Azure authenticates with HTTP basic auth
+  # and sends no signature, so the subscription's own password is the credential.
+  post "/webhooks/azure_devops/:endpoint_id", to: "webhooks/azure_devops#receive",
+                                              as: :azure_devops_webhook
 
   # Generic inbound webhook gateway (arbitrary sources, public — verified
   # per-endpoint via WebhookEndpoint#verification_strategy on the raw body).
@@ -332,6 +344,9 @@ Rails.application.routes.draw do
             collection do
               get :slack_oauth_start
               get :github_app_install
+            end
+            member do
+              post :test_connection
             end
           end
           resources :agents, only: %i[index create update destroy]

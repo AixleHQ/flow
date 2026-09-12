@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
@@ -9,6 +9,94 @@ import { AddRepositoryModal } from './AddRepositoryModal';
 const integration = { id: 7, name: 'Acme Org', provider: 'github', status: 'active' };
 
 describe('AddRepositoryModal', () => {
+  // Reset between tests: some cases give router.reload an implementation that
+  // finishes immediately, and others assert the picker's loading state, which
+  // only holds while the reload does NOT finish. Without this the suite passes
+  // or fails on test order.
+  beforeEach(() => {
+    vi.mocked(router.reload).mockReset();
+    vi.mocked(router.post).mockReset();
+  });
+
+  // == Azure DevOps ==
+  //
+  // Azure repositories are addressed by GUID. A name would reach a same-named
+  // repository in another project and would break on a rename, so the picker
+  // carries the external id alongside the display name and sends both.
+  const azureIntegration = { id: 9, name: 'contoso/Customer Platform', provider: 'azure_devops', status: 'active' };
+  const AZURE_REPO_ID = '33333333-3333-3333-3333-333333333333';
+  const azureRepo = {
+    fullName: 'azure_devops:contoso/Customer Platform/api',
+    defaultBranch: 'main',
+    externalId: AZURE_REPO_ID,
+  };
+
+  // The sole integration auto-selects on open and fires a reload; letting it
+  // "finish" is what takes the repository picker out of its loading state.
+  const renderAzureModal = (props: Record<string, unknown> = {}) => {
+    vi.mocked(router.reload).mockImplementation((opts) => {
+      (opts as { onFinish?: () => void } | undefined)?.onFinish?.();
+    });
+    return renderPage(
+      <AddRepositoryModal
+        opened
+        onClose={vi.fn()}
+        basePath="/projects/1/repositories"
+        existingRepoNames={new Set<string>()}
+      />,
+      { props: { integrations: [azureIntegration], ...props } },
+    );
+  };
+
+  it('labels an Azure connection by provider in the integration picker', async () => {
+    renderAzureModal();
+
+    await userEvent.click(screen.getByRole('combobox', { name: /integration/i }));
+
+    expect(await screen.findByRole('option', { name: 'contoso/Customer Platform (Azure DevOps)' })).toBeInTheDocument();
+  });
+
+  it('loads branches by repository GUID rather than by display name', async () => {
+    renderAzureModal({ availableRepos: [azureRepo] });
+
+    const repoField = await screen.findByRole('combobox', { name: /^repository/i });
+    await userEvent.click(repoField);
+    await userEvent.click(await screen.findByRole('option', { name: azureRepo.fullName }));
+
+    await waitFor(() =>
+      expect(router.reload).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { integration_id: '9', repo: azureRepo.fullName, external_id: AZURE_REPO_ID },
+          only: ['available_branches'],
+        }),
+      ),
+    );
+  });
+
+  it('submits the repository GUID so the server resolves identity from the provider', async () => {
+    renderAzureModal({ availableRepos: [azureRepo], availableBranches: ['main'] });
+
+    const repoField = await screen.findByRole('combobox', { name: /^repository/i });
+    await userEvent.click(repoField);
+    await userEvent.click(await screen.findByRole('option', { name: azureRepo.fullName }));
+    await userEvent.click(screen.getByRole('button', { name: 'Add Repository' }));
+
+    await waitFor(() => expect(router.post).toHaveBeenCalled());
+    const payload = vi.mocked(router.post).mock.calls.at(-1)?.[1] as { repository: Record<string, unknown> };
+    expect(payload.repository).toMatchObject({
+      integrationId: 9,
+      fullName: azureRepo.fullName,
+      externalId: AZURE_REPO_ID,
+      sourceBranch: 'main',
+    });
+  });
+
+  it('tells the agent-facing story about credentials for an Azure connection', async () => {
+    renderAzureModal({ availableRepos: [azureRepo] });
+
+    expect(await screen.findByText(/short-lived credential issued per operation/)).toBeInTheDocument();
+  });
+
   it('renders the title and form fields when opened', () => {
     renderPage(
       <AddRepositoryModal

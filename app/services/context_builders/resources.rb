@@ -33,6 +33,11 @@ module ContextBuilders
       cloned = repos.reject { |r| failed.include?(r.id) }
       return nil if cloned.empty?
 
+      # The path the provisioner actually chose, not a path recomputed from the
+      # repository name. Two repositories can share a basename, and a rename
+      # upstream does not move a checkout that already exists.
+      paths = RepositoryWorkspacePath.for_session(session, cloned)
+
       lines = [ "## Available Repositories" ]
       lines << ""
       lines << "The following code repositories have been cloned into this session:"
@@ -42,10 +47,18 @@ module ContextBuilders
       cloned.each do |repo|
         purpose = repo.purpose.presence || "—"
         access = repo.public_source? ? "public, read-only" : "integration"
-        lines << "| #{repo.id} | #{repo.full_name} | /workspace/repo/#{repo.repo_name} | #{repo.source_branch} | #{access} | #{purpose} |"
+        lines << "| #{repo.id} | #{repo.full_name} | #{paths[repo.id]} | #{repo.source_branch} | #{access} | #{purpose} |"
       end
       lines << ""
       lines << "Use the repository **ID** when calling tools that require a `repository_id` parameter."
+      if cloned.any?(&:azure_devops?)
+        lines << ""
+        lines << "Azure DevOps repositories authenticate through a credential helper configured in each " \
+                 "checkout, so ordinary `git fetch` and `git push` work without any extra step and keep " \
+                 "working after the underlying token expires. Do not add credentials to the remote URL. " \
+                 "Pull requests, review threads and Boards work items are reached with the " \
+                 "`azure_devops_*` tools, not with `gh`."
+      end
       if cloned.any?(&:public_source?)
         lines << ""
         lines << "Repositories marked **public, read-only** were cloned anonymously. There are no " \

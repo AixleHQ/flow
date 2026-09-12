@@ -13,7 +13,21 @@ class Repository < ApplicationRecord
 
   # Providers a repository can be cloned from. Integrations also cover Linear,
   # Coder and Slack, none of which host git.
-  CODE_HOST_PROVIDERS = %w[github gitlab].freeze
+  CODE_HOST_PROVIDERS = %w[github gitlab azure_devops].freeze
+
+  # Azure project and repository names may contain spaces and other characters
+  # the owner/repo format below rejects, and Azure identity is a triple of GUIDs
+  # rather than a path — so `full_name` is a DISPLAY value for these rows and
+  # carries a provider discriminator. The colon is what keeps the two namespaces
+  # apart: it is invalid under FULL_NAME_FORMAT, so no GitHub or GitLab row can
+  # ever be mistaken for an Azure one. A slash-only prefix would have collided
+  # with legitimate nested GitLab groups.
+  AZURE_FULL_NAME_PREFIX = "azure_devops:"
+  FULL_NAME_FORMAT = %r{\A[a-zA-Z0-9._-]+(/[a-zA-Z0-9._-]+)+\z}
+  # Display names only. Control characters are excluded because this string is
+  # rendered in agent context files and the browser; the path components used to
+  # build URLs come from verified IDs, never from here.
+  AZURE_FULL_NAME_FORMAT = %r{\A#{AZURE_FULL_NAME_PREFIX}[^/\x00-\x1f]+/[^/\x00-\x1f]+/[^/\x00-\x1f]+\z}
 
   belongs_to :scope, polymorphic: true
   # Public repositories have no integration: nothing is authenticated, so there
@@ -23,8 +37,13 @@ class Repository < ApplicationRecord
   before_validation :set_clone_url, if: -> { clone_url.blank? && full_name.present? && integration.present? }
   before_validation :mark_public_source_as_public, if: :public_source?
 
-  validates :full_name, presence: true,
-                        format: { with: %r{\A[a-zA-Z0-9._-]+(/[a-zA-Z0-9._-]+)+\z}, message: "must be in owner/repo format (e.g. org/repo or group/subgroup/repo)" }
+  validates :full_name, presence: true
+  validates :full_name,
+            format: { with: FULL_NAME_FORMAT, message: "must be in owner/repo format (e.g. org/repo or group/subgroup/repo)" },
+            unless: :azure_devops?
+  validates :full_name,
+            format: { with: AZURE_FULL_NAME_FORMAT, message: "must be azure_devops:<organization>/<project>/<repository>" },
+            if: :azure_devops?
   validates :full_name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
   validates :source_branch, presence: true
   validates :clone_url, presence: true
@@ -32,6 +51,7 @@ class Repository < ApplicationRecord
   validate :integration_hosts_code, if: -> { integration.present? }
   validate :public_clone_url_is_anonymous, if: -> { public_source? && clone_url.present? && full_name.present? }
   validate :owner_matches_installation_account, if: -> { integration.present? && integration.github? }
+  validate :azure_identity_is_complete, if: :azure_devops?
 
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
   scope :for_integration, ->(integration) { where(integration: integration) }
@@ -60,8 +80,25 @@ class Repository < ApplicationRecord
     full_name&.split("/")&.last
   end
 
+  # Meaningless for an Azure row — it would read back "azure_devops:<org>" —
+  # which is why the only caller (owner_matches_installation_account) is gated on
+  # `integration.github?`. Kept unchanged so GitHub and GitLab behaviour is
+  # byte-identical.
   def owner_name
     full_name&.split("/")&.first
+  end
+
+  def azure_devops?
+    integration.present? && integration.provider.to_s == "azure_devops"
+  end
+
+  # Display halves of the Azure `full_name`. Never used to address the API —
+  # that is external_organization_id / external_project_id / external_id.
+  def azure_display_parts
+    return {} unless azure_devops? && full_name.to_s.start_with?(AZURE_FULL_NAME_PREFIX)
+
+    org, project, repo = full_name.delete_prefix(AZURE_FULL_NAME_PREFIX).split("/", 3)
+    { organization: org, project: project, repository: repo }
   end
 
   # Attached without an integration: cloned anonymously, read-only, and invisible
@@ -89,11 +126,23 @@ class Repository < ApplicationRecord
   private
 
   def set_clone_url
-    base = case integration.provider.to_s
-    when "github" then "https://github.com"
-    when "gitlab" then "https://gitlab.com"
+    case integration.provider.to_s
+    when "github" then self.clone_url = "https://github.com/#{full_name}.git"
+    when "gitlab" then self.clone_url = "https://gitlab.com/#{full_name}.git"
+    when "azure_devops" then self.clone_url = azure_clone_url
     end
-    self.clone_url = "#{base}/#{full_name}.git" if base
+  end
+
+  # Credential-free HTTPS on dev.azure.com, each path component encoded on its
+  # own so a project called "Customer Platform" does not produce a broken or
+  # traversable URL. Built from the DISPLAY names because that is what the Azure
+  # Git endpoint routes on; the GUIDs remain the identity used for REST calls.
+  def azure_clone_url
+    parts = azure_display_parts
+    return nil if parts.values.any?(&:blank?)
+
+    encoded = parts.values_at(:organization, :project, :repository).map { |p| ERB::Util.url_encode(p) }
+    "#{AzureDevops::AppConfig.api_host}/#{encoded[0]}/#{encoded[1]}/_git/#{encoded[2]}"
   end
 
   def mark_public_source_as_public
@@ -113,7 +162,23 @@ class Repository < ApplicationRecord
   def integration_hosts_code
     return if CODE_HOST_PROVIDERS.include?(integration.provider.to_s)
 
-    errors.add(:integration, "must be a GitHub or GitLab integration")
+    errors.add(:integration, "must be a GitHub, GitLab or Azure DevOps integration")
+  end
+
+  # An Azure row is addressed by organization + project + repository GUID. A row
+  # missing any of the three has no stable identity: a rename would orphan it and
+  # a tool call would have nothing to route on. The values come from verified
+  # provider responses (AzureDevops::RepositoryService), never from the request.
+  def azure_identity_is_complete
+    %i[external_organization_id external_project_id external_id].each do |attr|
+      errors.add(attr, "is required for an Azure DevOps repository") if public_send(attr).blank?
+    end
+
+    return if integration.blank? || external_project_id.blank?
+    return if integration.azure_project_id.blank?
+    return if integration.azure_project_id == external_project_id
+
+    errors.add(:external_project_id, "does not belong to the integration's selected Azure project")
   end
 
   # A public repository is cloned by running `git clone <clone_url>` in the

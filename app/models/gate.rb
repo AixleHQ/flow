@@ -5,13 +5,19 @@ class Gate < ApplicationRecord
 
   # CI gate types, i.e. every gate whose resolving event comes from a CI provider
   # and can therefore be reconciled against that provider's API.
-  CI_GATE_TYPES = %w[github_checks_completed github_workflow_completed gitlab_pipeline_completed].freeze
+  CI_GATE_TYPES = %w[
+    github_checks_completed github_workflow_completed gitlab_pipeline_completed
+    azure_devops_build_completed azure_devops_pr_policies_satisfied
+  ].freeze
 
   # Provider conclusions that mean "the checks passed" — GitHub's `success` /
   # `neutral` / `skipped` and GitLab's `success` / `skipped`. Anything else a
   # provider reports for a COMPLETED run is a failure, including `nil`: a
   # completed run without a conclusion is not evidence of success.
-  PASSING_CONCLUSIONS = %w[success neutral skipped].freeze
+  # Azure adds `succeeded` (a build) and `approved` (branch policies): its own
+  # vocabulary, not a translation into GitHub's, so a provider that grows a new
+  # terminal state cannot be silently read as a pass.
+  PASSING_CONCLUSIONS = %w[success neutral skipped succeeded approved].freeze
 
   # Newest-first entries kept in `reconciliation_log`. A gate is reconciled every
   # few minutes for at most its TTL, so this is enough to see the whole story of
@@ -26,7 +32,10 @@ class Gate < ApplicationRecord
   # TTL ran out while the run was still going). It stops blocking the column
   # auto-trigger — a gate nothing can ever resolve would wedge the task forever —
   # and carries `diagnostic_reason` so the board can say why.
-  enumerize :gate_type, in: %i[github_checks_completed github_workflow_completed gitlab_pipeline_completed], predicates: true
+  enumerize :gate_type,
+            in: %i[github_checks_completed github_workflow_completed gitlab_pipeline_completed
+                   azure_devops_build_completed azure_devops_pr_policies_satisfied],
+            predicates: true
   enumerize :status, in: %i[pending resolved stale], default: :pending, predicates: true, scope: true
 
   validates :gate_type, presence: true
@@ -84,11 +93,35 @@ class Gate < ApplicationRecord
       .where("(metadata->>'pipeline_id')::bigint = ?", pipeline_id.to_i)
   }
 
+  # Scope gates by Azure build id.
+  scope :for_azure_build_id, ->(build_id) {
+    where(gate_type: "azure_devops_build_completed")
+      .where("(metadata->>'build_id')::bigint = ?", build_id.to_i)
+  }
+
+  # Scope gates by Azure pull request id.
+  scope :for_azure_pull_request_id, ->(pull_request_id) {
+    where(gate_type: "azure_devops_pr_policies_satisfied")
+      .where("(metadata->>'pull_request_id')::bigint = ?", pull_request_id.to_i)
+  }
+
   # Scope gates to tasks whose boards belong to projects connected to the given
   # repository. Handles both project-scoped and company-scoped repositories.
   scope :for_repository, ->(repo_full_name) {
     joins(board_task: { board_column: { board: :project } })
       .where(projects: { id: Repository.project_ids_for(repo_full_name) })
+  }
+
+  # The Azure equivalent, and deliberately NOT `for_repository`: that one fans an
+  # event out to every project that registered a repository with the same
+  # `full_name`, which for Azure is a DISPLAY value that two organizations can
+  # share and that a rename changes. Routing is on the repository GUID instead.
+  scope :for_azure_repository, ->(external_repository_id) {
+    project_ids = Repository.where(external_id: external_repository_id, scope_type: "Project")
+                            .pluck(:scope_id).uniq
+    joins(board_task: { board_column: { board: :project } })
+      .where(projects: { id: project_ids })
+      .where("metadata->>'external_repository_id' = ?", external_repository_id.to_s)
   }
 
   class << self
@@ -160,15 +193,30 @@ class Gate < ApplicationRecord
     case gate_type.to_s
     when "github_checks_completed", "github_workflow_completed" then "github"
     when "gitlab_pipeline_completed" then "gitlab"
+    when "azure_devops_build_completed", "azure_devops_pr_policies_satisfied" then "azure_devops"
     end
   end
 
   def reference_type
     case gate_type.to_s
-    when "github_checks_completed"    then "pr_number"
-    when "github_workflow_completed"  then "run_id"
-    when "gitlab_pipeline_completed"  then "pipeline_id"
+    when "github_checks_completed"           then "pr_number"
+    when "github_workflow_completed"         then "run_id"
+    when "gitlab_pipeline_completed"         then "pipeline_id"
+    when "azure_devops_build_completed"      then "build_id"
+    when "azure_devops_pr_policies_satisfied" then "pull_request_id"
     end
+  end
+
+  # Azure gates route on the repository GUID rather than on a display name.
+  def azure_repository_id
+    metadata["external_repository_id"].presence
+  end
+
+  # The commit the gate was created for. A build or a policy evaluation that
+  # answers about a different commit is not evidence about this gate: the branch
+  # moved on, and the verdict belongs to code nobody is waiting for.
+  def expected_commit
+    metadata["expected_commit"].presence
   end
 
   def reference

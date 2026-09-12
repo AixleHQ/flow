@@ -42,6 +42,107 @@ describe('IntegrationsContent', () => {
     expect(screen.getByText('2 integrations')).toBeInTheDocument();
   });
 
+  // == Azure DevOps ==
+
+  const azureIntegration = (overrides: Partial<Integration> = {}): Integration =>
+    makeIntegration({
+      id: 3,
+      name: 'contoso/Customer Platform',
+      provider: 'azure_devops',
+      scopeIndicator: 'project',
+      azureAuthMode: 'service_principal',
+      azureOrganization: 'contoso',
+      azureProjectName: 'Customer Platform',
+      azureIdentity: 'Aixle',
+      azureUrl: 'https://dev.azure.com/contoso',
+      ...overrides,
+    });
+
+  const azureDevopsProps = {
+    enabled: true,
+    patModeEnabled: false,
+    installations: [
+      {
+        id: 7,
+        organizationSlug: 'contoso',
+        tenantId: 't',
+        status: 'active',
+        projects: [{ id: 'p1', name: 'Customer Platform' }],
+      },
+    ],
+  };
+
+  it('offers Azure DevOps in a project only when the deployment enables it', async () => {
+    const { rerender } = renderPage(
+      <IntegrationsContent title="Integrations" basePath="/company/projects/1/integrations" integrations={[]} />,
+      { props: settingsProps },
+    );
+
+    expect(screen.queryByRole('button', { name: 'Azure DevOps' })).not.toBeInTheDocument();
+
+    rerender(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[]}
+        azureDevops={azureDevopsProps}
+      />,
+    );
+
+    expect(await screen.findByRole('button', { name: 'Azure DevOps' })).toBeInTheDocument();
+  });
+
+  it('shows which Azure project a connection is pinned to and whose identity it acts as', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[azureIntegration()]}
+        azureDevops={azureDevopsProps}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.getByText('Azure DevOps')).toBeInTheDocument();
+    expect(screen.getByText(/contoso \/ Customer Platform · as Aixle/)).toBeInTheDocument();
+  });
+
+  it('names the token owner rather than the application for a PAT connection', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[azureIntegration({ azureAuthMode: 'pat', azureIdentity: null })]}
+        azureDevops={azureDevopsProps}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.getByText(/as Jane Doe \(token\)/)).toBeInTheDocument();
+  });
+
+  it('testing a connection posts to its test_connection action', async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[azureIntegration()]}
+        azureDevops={azureDevopsProps}
+      />,
+      { props: settingsProps },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /Test connection for contoso/ }));
+
+    await waitFor(() =>
+      expect(router.post).toHaveBeenCalledWith(
+        '/company/projects/1/integrations/3/test_connection',
+        {},
+        expect.anything(),
+      ),
+    );
+  });
+
   it('shows the empty state when there are no integrations', () => {
     renderPage(
       <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,

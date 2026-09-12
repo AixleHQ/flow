@@ -37,6 +37,7 @@ a document is added, removed, or moved here, update this index in the same chang
   - **[design/session-admission-queue/TECH-DESIGN.md](./design/session-admission-queue/TECH-DESIGN.md)** — The reasoning behind them: inspected baseline behaviour, limit selection, data model, runtime idempotency, capacity waiting, alternatives and open decisions
   - **[design/session-admission-queue/ROLLOUT.md](./design/session-admission-queue/ROLLOUT.md)** — Operator runbook: deployment settings, the drain-then-`session_admission:sync` cutover, legacy quota removal under a reviewed UID allowlist, pause/resume and recovery
   - **[design/session-admission-queue/reviews/](./design/session-admission-queue/reviews/)** — Design-phase review records (invariants, evidence, coverage, editorial) kept alongside the contract they checked
+- **[design/azure-devops-integration.md](./design/azure-devops-integration.md)** — Azure DevOps integration: Entra service-principal auth with approved organization installations, GUID-based repository identity, session Git via a derived-key credential endpoint, PR/Boards agent tools, and a phased CI/webhook parity extension
 - **[design/grok-runtime-integration.md](./design/grok-runtime-integration.md)** — Grok (xAI) runtime decisions: the official `@xai-official/grok` CLI, device-code auth with `~/.grok/auth.json` as the credential, model catalogue + pricing from `/v1/language-models`, and why usage comes from the MITM log rather than OTLP
 
 ## Feature Pipeline
@@ -85,6 +86,7 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/mcp.md](./user-guide/mcp.md)** — MCP transports, the internal `aixle-tools` server, config-item credentials
 - **[user-guide/integrations.md](./user-guide/integrations.md)** — GitHub, GitLab, Linear, Google OAuth, and webhooks
 - **[user-guide/configuration.md](./user-guide/configuration.md)** — Env vars, OAuth, agent credentials, and other knobs
+- **[operations/azure-devops-app-registration.md](./operations/azure-devops-app-registration.md)** — Operator runbook: register the Entra application, provision the service principal, add it to the Azure DevOps organization, and record the approval in Flow
 - **[quickstart.md](./quickstart.md)** — Get a local instance running and see one card move
 - **[reference/index.md](./reference/index.md)** — Reference set: [API](./reference/api.md), [CLI](./reference/cli.md), [configuration](./reference/configuration.md)
 

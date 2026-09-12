@@ -54,7 +54,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   test "ui_groups offer one entry per visible tag, session tools only" do
     groups = Tools::Registry.ui_groups
 
-    assert_equal %w[board slack coder assets session_supervision], groups.map { |g| g[:tag] }
+    assert_equal %w[board slack coder azure_devops assets session_supervision], groups.map { |g| g[:tag] }
     assert_equal "Slack", groups.find { |g| g[:tag] == "slack" }[:label]
     assert_equal %w[slack_delete_message slack_post_message slack_read_thread slack_update_message],
                  groups.find { |g| g[:tag] == "slack" }[:tool_names]

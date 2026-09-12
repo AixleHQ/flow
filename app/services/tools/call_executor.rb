@@ -10,7 +10,7 @@ module Tools
 
     class << self
       def execute(tool, arguments, session, mcp_server: nil)
-        params = resolve_repository_params(arguments || {}, session)
+        params = resolve_repository_params(arguments || {}, session, tool)
 
         if tool.execution_mode.app?
           tool.execute(
@@ -61,12 +61,36 @@ module Tools
 
       private
 
-      # When arguments contain repository_id, validate ownership and resolve
-      # REPO (full_name) + GITHUB_TOKEN from the integration automatically.
-      def resolve_repository_params(arguments, session)
+      # The legacy GitHub repository expansion: `repository_id` is swapped for
+      # REPO (full_name), GITHUB_TOKEN and BRANCH before the tool runs.
+      #
+      # This used to fire on ANY argument spelled `repository_id`, which made an
+      # argument NAME imply GitHub authentication. That is fine while GitHub is
+      # the only credentialled provider and wrong the moment a second one
+      # exists: a native Azure DevOps handler declaring `repository_id` would
+      # have its argument deleted and be handed a GitHub token for a repository
+      # the executor already refused.
+      #
+      # So the binding is now declared, not inferred:
+      #
+      # - container tools keep it unconditionally. They are the actual consumers
+      #   — user-authored shell tools whose scripts read $REPO and $GITHUB_TOKEN
+      #   — and their contract is unchanged.
+      # - code-defined app tools opt in with `repository_binding :legacy_github`.
+      #   No session-audience platform tool declared `repository_id` when this
+      #   changed, so nothing needed migrating; new handlers resolve their own
+      #   credentials in Rails instead.
+      def legacy_github_binding?(tool)
+        return true unless tool.respond_to?(:execution_mode) && tool.execution_mode.app?
+
+        !!tool.definition&.legacy_github_repository_binding?
+      end
+
+      def resolve_repository_params(arguments, session, tool = nil)
         arguments = arguments.deep_stringify_keys if arguments.respond_to?(:deep_stringify_keys)
         repo_id = arguments["repository_id"]
         return arguments unless repo_id.present?
+        return arguments unless tool.nil? || legacy_github_binding?(tool)
 
         repo = session.repositories.find_by(id: repo_id)
         raise "Repository #{repo_id} is not attached to this session" unless repo

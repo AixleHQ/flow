@@ -65,6 +65,14 @@ module Tools
 
       def requires_integration(provider) = @h[:requires_integration] = provider
 
+      # Opt in to the legacy GitHub repository expansion in Tools::CallExecutor:
+      # a `repository_id` argument is replaced by REPO / GITHUB_TOKEN / BRANCH
+      # before the handler runs. Declared rather than inferred from the argument
+      # name — see the comment on CallExecutor#resolve_repository_params. Native
+      # provider handlers (Azure DevOps) declare nothing and receive their own
+      # arguments untouched.
+      def repository_binding(value) = @h[:repository_binding] = value.to_sym
+
       # :session (default) — served inside terminal sessions, materialized as
       # a shadow row. :user — served only by the personal (token) MCP server,
       # never materialized, never injected, never in pickers.

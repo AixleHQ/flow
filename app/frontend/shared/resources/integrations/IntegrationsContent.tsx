@@ -21,6 +21,7 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
+  IconBrandAzure,
   IconBrandGithub,
   IconBrandSlack,
   IconCheck,
@@ -30,6 +31,7 @@ import {
   IconLink,
   IconPencil,
   IconPlus,
+  IconRefresh,
   IconSearch,
   IconSettings,
   IconTrash,
@@ -44,6 +46,10 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
+import { AzureDevopsConnectModal, type AzureDevopsProps } from './AzureDevopsConnectModal';
+
+export type { AzureDevopsProps } from './AzureDevopsConnectModal';
+
 export interface Integration {
   id: number;
   name: string;
@@ -57,6 +63,13 @@ export interface Integration {
   coderMachinePrefix?: string | null;
   coderLockTtlMinutes?: number | null;
   slackRequestUrl?: string | null;
+  azureAuthMode?: string | null;
+  azureOrganization?: string | null;
+  azureProjectName?: string | null;
+  azureProjectId?: string | null;
+  azureIdentity?: string | null;
+  azureCapabilities?: string[];
+  azureUrl?: string | null;
   connectedBy: { id: number; name: string };
   createdAt: string;
 }
@@ -65,6 +78,9 @@ interface IntegrationsContentProps {
   integrations: Integration[];
   basePath: string;
   title: string;
+  // Absent on the company page and whenever the deployment has Azure DevOps
+  // switched off, which is what hides the connect entry entirely.
+  azureDevops?: AzureDevopsProps;
 }
 
 const GitlabIcon = () => <img src="/images/gitlab.svg" alt="GitLab" width={20} height={20} />;
@@ -77,6 +93,7 @@ const ProviderIcon = ({ provider, size = 18 }: { provider: string; size?: number
   if (provider === 'gitlab') return <img src="/images/gitlab.svg" alt="GitLab" width={size} height={size} />;
   if (provider === 'coder') return <img src="/images/coder.svg" alt="Coder" width={size} height={size} />;
   if (provider === 'slack') return <IconBrandSlack size={size} />;
+  if (provider === 'azure_devops') return <IconBrandAzure size={size} />;
   return <IconLink size={size} />;
 };
 
@@ -85,6 +102,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   gitlab: 'GitLab',
   coder: 'Coder',
   slack: 'Slack',
+  azure_devops: 'Azure DevOps',
 };
 
 const SCOPE_COLORS: Record<string, string> = {
@@ -95,12 +113,15 @@ const SCOPE_COLORS: Record<string, string> = {
 // Mirrors the server-side fallback in Coder::LockService#ttl_minutes.
 const DEFAULT_CODER_LOCK_TTL = 120;
 
-export const IntegrationsContent = ({ integrations, basePath, title }: IntegrationsContentProps) => {
+export const IntegrationsContent = ({ integrations, basePath, title, azureDevops }: IntegrationsContentProps) => {
   const { canExecute } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
   const [search, setSearch] = useState('');
   const [scopeFilter, setScopeFilter] = useState('all');
   const [connectMenuOpened, setConnectMenuOpened] = useState(false);
+
+  const [azureOpen, setAzureOpen] = useState(false);
+  const azureAvailable = !!azureDevops?.enabled;
 
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
@@ -296,6 +317,23 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
     );
   }, [basePath, coderEditPrefix, coderEditTarget, coderEditTemplate, coderEditTtl]);
 
+  // Re-verify an Azure connection. "Test" and "repair" are the same operation:
+  // the integration id and its repository attachments are kept either way, and a
+  // failed check never replaces a working credential.
+  const handleTestAzure = useCallback(
+    (integration: Integration) => {
+      router.post(
+        `${basePath}/${integration.id}/test_connection`,
+        {},
+        {
+          preserveScroll: true,
+          onError: () => notifications.show({ message: 'Connection test failed', color: 'red' }),
+        },
+      );
+    },
+    [basePath],
+  );
+
   // Slack connects via OAuth: redirect to the project-scoped start action, which
   // bounces to Slack's consent screen. The install binds to this project.
   const handleConnectSlack = useCallback(() => {
@@ -340,6 +378,11 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                 <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
                   Coder
                 </Menu.Item>
+                {isProjectContext && azureAvailable && (
+                  <Menu.Item leftSection={<IconBrandAzure size={16} />} onClick={() => setAzureOpen(true)}>
+                    Azure DevOps
+                  </Menu.Item>
+                )}
                 {isProjectContext && (
                   <Menu.Item leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
                     Slack
@@ -410,6 +453,15 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                     <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
                       Coder
                     </Button>
+                    {isProjectContext && azureAvailable && (
+                      <Button
+                        variant="outline"
+                        leftSection={<IconBrandAzure size={16} />}
+                        onClick={() => setAzureOpen(true)}
+                      >
+                        Azure DevOps
+                      </Button>
+                    )}
                     {isProjectContext && (
                       <Button variant="outline" leftSection={<IconBrandSlack size={16} />} onClick={handleConnectSlack}>
                         Slack
@@ -491,6 +543,19 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                               </CopyButton>
                             </Group>
                           )}
+                          {/* Which Azure project this connection is pinned to, and
+                              WHOSE identity it acts as — a PAT connection acts as
+                              the token's owner, not as the application. */}
+                          {integration.provider === 'azure_devops' && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {integration.azureOrganization ?? '—'}
+                              {integration.azureProjectName ? ` / ${integration.azureProjectName}` : ''}
+                              {' · '}
+                              {integration.azureAuthMode === 'pat'
+                                ? `as ${integration.connectedBy.name} (token)`
+                                : `as ${integration.azureIdentity ?? 'the Aixle application'}`}
+                            </Text>
+                          )}
                           {integration.provider === 'coder' && integration.coderUrl && (
                             <Text fz={11} c="dimmed" truncate maw={200}>
                               {integration.coderUrl}
@@ -562,6 +627,32 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
                             </ActionIcon>
                           </Tooltip>
                         )}
+                        {integration.provider === 'azure_devops' && canExecute && !readOnly && (
+                          <Tooltip label="Test connection">
+                            <ActionIcon
+                              aria-label={`Test connection for ${integration.name}`}
+                              variant="subtle"
+                              size="sm"
+                              onClick={() => handleTestAzure(integration)}
+                            >
+                              <IconRefresh size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {integration.provider === 'azure_devops' && integration.azureUrl && !readOnly && (
+                          <Tooltip label="Open in Azure DevOps">
+                            <ActionIcon
+                              aria-label={`Open ${integration.name} in Azure DevOps`}
+                              variant="subtle"
+                              size="sm"
+                              component="a"
+                              href={integration.azureUrl}
+                              target="_blank"
+                            >
+                              <IconSettings size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
                         {integration.provider === 'coder' && canExecute && !readOnly && (
                           <Tooltip label="Edit settings">
                             <ActionIcon
@@ -595,6 +686,15 @@ export const IntegrationsContent = ({ integrations, basePath, title }: Integrati
             </Table.Tbody>
           </Table>
         </ResourceTableShell>
+      )}
+
+      {azureDevops && (
+        <AzureDevopsConnectModal
+          opened={azureOpen}
+          onClose={() => setAzureOpen(false)}
+          basePath={basePath}
+          azureDevops={azureDevops}
+        />
       )}
 
       <Modal

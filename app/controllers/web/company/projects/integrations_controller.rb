@@ -3,12 +3,13 @@
 class Web::Company::Projects::IntegrationsController < Web::Company::Projects::ApplicationController
   def index
     integrations = Integration.visible_for_project(current_project)
-                              .includes(:connected_by)
+                              .includes(:connected_by, :azure_devops_installation)
                               .order(created_at: :desc)
 
     render inertia: "Projects/Integrations/IntegrationsPage", props: {
       project: project_props,
-      integrations: integrations.map { |i| IntegrationResource.new(i).to_h }
+      integrations: integrations.map { |i| IntegrationResource.new(i).to_h },
+      azure_devops: azure_devops_props
     }
   end
 
@@ -40,6 +41,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
         machine_prefix:   params[:machine_prefix].presence,
         lock_ttl_minutes: params[:lock_ttl_minutes].presence
       )
+    when "azure_devops"
+      return create_azure_devops
     end
     # Slack connects via OAuth (see #slack_oauth_start + Web::Integrations::SlackOauthController),
     # not this paste-credentials path.
@@ -59,6 +62,11 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # project, so it is not editable from one project's page.
   def update
     integration = Integration.for_project(current_project).find(params[:id])
+
+    # Azure has its own editable settings (the operation profile, and a
+    # replacement PAT), so it routes away from the Coder path rather than being
+    # refused by it.
+    return update_azure_devops(integration) if integration.azure_devops?
 
     Coder::IntegrationService.new(
       company: current_company,
@@ -80,6 +88,28 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     integration = Integration.for_project(current_project).find(params[:id])
     integration.destroy
     redirect_to company_project_integrations_path(current_project), notice: "Integration removed"
+  end
+
+  # Re-verify a connection without mutating anything in Azure. Used by the
+  # card's "Test connection" and "Repair connection" buttons, which are the same
+  # operation: repair keeps the integration id and its repository attachments.
+  def test_connection
+    integration = Integration.for_project(current_project).find(params[:id])
+    unless integration.azure_devops?
+      return redirect_to company_project_integrations_path(current_project),
+                         alert: "This integration has no connection test"
+    end
+
+    result = AzureDevops::IntegrationService.new(
+      company: current_company, connected_by: current_user, project: current_project
+    ).test(integration)
+
+    if result[:status] == :active
+      redirect_to company_project_integrations_path(current_project), notice: "Connection verified"
+    else
+      redirect_to company_project_integrations_path(current_project),
+                  alert: "Connection failed: #{result[:message]}"
+    end
   end
 
   # Kick off the Slack OAuth install for this project: redirect to Slack's consent
@@ -114,5 +144,121 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     # allow_other_host: github.com install URL built from deployment Settings — never user-supplied.
     redirect_to "https://github.com/apps/#{slug}/installations/new?state=#{CGI.escape(state)}",
                 allow_other_host: true
+  end
+
+  private
+
+  # What the page needs to offer Azure DevOps at all: whether the deployment
+  # enables it, and which approved organization installations this company
+  # holds. An arbitrary organization URL is never enough — the binding has to
+  # exist first.
+  #
+  # The project list for one installation is fetched only when the connect modal
+  # asks for it (`?azure_devops_installation_id=`), the same partial-reload shape
+  # the repository picker uses. Listing projects for every installation on every
+  # page load would put a live Azure call — and a token acquisition — on the
+  # critical path of a page most visitors are not connecting anything from.
+  def azure_devops_props
+    return { enabled: false } unless AzureDevops::AppConfig.enabled?
+
+    installations = AzureDevopsInstallation.for_company(current_company).active.order(:organization_slug)
+    selected_id = params[:azure_devops_installation_id].presence
+
+    {
+      enabled: true,
+      pat_mode_enabled: AzureDevops::AppConfig.pat_mode_enabled?,
+      installations: installations.map do |installation|
+        {
+          id: installation.id,
+          organization_slug: installation.organization_slug,
+          tenant_id: installation.tenant_id,
+          status: installation.status.to_s,
+          last_verified_at: installation.last_verified_at,
+          # Approved scope only. Azure's own answer is intersected with the
+          # approved list in the service; showing everything Azure returns would
+          # advertise projects nobody signed off on.
+          projects: selected_id.to_s == installation.id.to_s ? azure_projects_for(installation) : nil
+        }.compact
+      end
+    }
+  end
+
+  # Best effort: a listing failure must not take the whole integrations page
+  # down, and the card can explain a connection problem on its own.
+  def azure_projects_for(installation)
+    AzureDevops::InstallationService.new(company: current_company).approved_projects(installation)
+  rescue AzureDevops::Error => e
+    Rails.logger.warn("[Integrations] Azure project listing failed for installation #{installation.id}: #{e.code}")
+    []
+  end
+
+  # Array of strings, whatever shape the parameter arrives in. An
+  # ActionController::Parameters hash responds to neither to_ary nor to_a, so
+  # `Array()` would wrap it whole and stringify it into junk.
+  def capability_params
+    raw = params[:enabled_capabilities]
+    case raw
+    when ActionController::Parameters then raw.values.map(&:to_s)
+    when Array then raw.map(&:to_s)
+    when nil then []
+    else [ raw.to_s ]
+    end
+  end
+
+  def create_azure_devops
+    service = AzureDevops::IntegrationService.new(
+      company: current_company, connected_by: current_user, project: current_project
+    )
+
+    integration =
+      if params[:auth_mode].to_s == "pat"
+        service.create_with_pat(
+          organization_slug: params[:organization_slug].to_s,
+          azure_project_id: params[:azure_project_id].to_s,
+          personal_access_token: params[:personal_access_token].to_s,
+          enabled_capabilities: params.key?(:enabled_capabilities) ? capability_params : nil
+        )
+      else
+        service.create_with_installation(
+          installation_id: params[:azure_devops_installation_id],
+          azure_project_id: params[:azure_project_id].to_s,
+          enabled_capabilities: params.key?(:enabled_capabilities) ? capability_params : nil
+        )
+      end
+
+    redirect_to company_project_integrations_path(current_project),
+                notice: "Azure DevOps connected as #{integration.name}"
+  rescue AzureDevops::IntegrationService::ConfigurationError => e
+    redirect_to company_project_integrations_path(current_project), alert: e.message
+  end
+
+  # Editable on an Azure connection: the operation profile, and a replacement
+  # PAT. The organization and the selected Azure project are deliberately not
+  # editable — changing either would silently re-point existing repository and
+  # work-item references at a different target, so that is a new connection.
+  def update_azure_devops(integration)
+    service = AzureDevops::IntegrationService.new(
+      company: current_company, connected_by: current_user, project: current_project
+    )
+
+    if params[:personal_access_token].present?
+      service.replace_pat(integration, personal_access_token: params[:personal_access_token].to_s)
+    end
+
+    # `key?`, not `present?`: unticking every box submits an empty list, and
+    # treating that as "said nothing" silently kept the old set — the one edit a
+    # user makes to revoke everything was the one that did not work.
+    if params.key?(:enabled_capabilities)
+      integration.settings = integration.settings.to_h.merge(
+        "enabled_capabilities" => AzureDevops::IntegrationService.sanitize_capabilities(
+          capability_params
+        )
+      )
+      integration.save!
+    end
+
+    redirect_to company_project_integrations_path(current_project), notice: "Integration settings saved"
+  rescue AzureDevops::IntegrationService::ConfigurationError, AzureDevops::Error => e
+    redirect_to company_project_integrations_path(current_project), alert: e.message
   end
 end
