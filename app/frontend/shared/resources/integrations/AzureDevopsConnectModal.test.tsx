@@ -132,7 +132,10 @@ describe('AzureDevopsConnectModal', () => {
     const user = userEvent.setup();
     mockFetch(() => ({
       ok: false,
-      payload: { error: 'not_authorized', message: 'The client application is missing a service principal in the tenant' },
+      payload: {
+        error: 'not_authorized',
+        message: 'The client application is missing a service principal in the tenant',
+      },
     }));
     renderModal();
 
@@ -146,9 +149,7 @@ describe('AzureDevopsConnectModal', () => {
   it('unticking a capability removes it from the submitted profile', async () => {
     const user = userEvent.setup();
     mockFetch((url) =>
-      url.endsWith('azure_devops_inspect')
-        ? { payload: inspectionPayload() }
-        : { payload: { installationId: 7 } },
+      url.endsWith('azure_devops_inspect') ? { payload: inspectionPayload() } : { payload: { installationId: 7 } },
     );
     renderModal();
 

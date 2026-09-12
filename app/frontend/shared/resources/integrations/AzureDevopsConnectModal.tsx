@@ -1,16 +1,5 @@
 import { router } from '@inertiajs/react';
-import {
-  Alert,
-  Button,
-  Checkbox,
-  Group,
-  Modal,
-  PasswordInput,
-  Select,
-  Stack,
-  Text,
-  TextInput,
-} from '@mantine/core';
+import { Alert, Button, Checkbox, Group, Modal, PasswordInput, Select, Stack, Text, TextInput } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { useCallback, useState } from 'react';
