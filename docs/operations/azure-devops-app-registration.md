@@ -42,11 +42,21 @@ Done once per Flow deployment, by whoever owns the deployment.
 2. **Name:** something an Azure DevOps administrator will recognize in a user
    list — they will be adding it by display name. `Aixle Flow` is fine;
    `aixle-prod-sp-01` will get declined by someone who does not know what it is.
-3. **Supported account types:**
-   - single-tenant → *Accounts in this organizational directory only*
-   - multi-tenant → *Accounts in any organizational directory (Any Microsoft Entra ID tenant - Multitenant)*
-4. **Redirect URI:** leave blank. This is a service-to-service identity; there is
-   no browser flow and no callback.
+3. **Account types.** The portal currently offers four; two of them are never
+   right here, because a personal Microsoft account cannot be a service
+   principal in Azure DevOps.
+   - single-tenant → *Single tenant only - `<your directory>`*
+   - multi-tenant → *Multiple Entra ID tenants*
+   - *Any Entra ID Tenant + Personal Microsoft accounts* and *Personal accounts
+     only* — not these, ever.
+
+   Single-tenant reaches only organizations backed by **this** directory. Check
+   before choosing: `https://dev.azure.com/<org>` → **Organization settings →
+   Overview → Microsoft Entra directory**. A different directory there means
+   multi-tenant plus §3.
+4. **Redirect URI:** leave blank, despite the form saying a value is required for
+   most authentication scenarios — that note is about browser sign-in flows.
+   Client credentials never redirect.
 5. Register, then copy from the **Overview** page:
    - **Application (client) ID** → `AZURE_DEVOPS_CLIENT_ID`
    - **Directory (tenant) ID** → the `TENANT_ID` for step 5, if the organization
