@@ -1,8 +1,19 @@
 # frozen_string_literal: true
 
+require "shellwords"
+
 # Facade service for agent-specific credential operations
 # Delegates to appropriate adapter based on agent type
 class AgentCredentialsService
+  class CredentialWriteError < StandardError
+    attr_reader :details
+
+    def initialize(details)
+      @details = details
+      super("Credential file write could not be verified: #{details[:path]}")
+    end
+  end
+
   ADAPTERS = {
     "claude_code" => Agents::ClaudeCodeAdapter,
     "cursor_cli" => Agents::CursorCliAdapter,
@@ -121,15 +132,41 @@ class AgentCredentialsService
 
   def write_container_file(container_id, path, content)
     ok = runtime.write_file(container_id, path, content)
-    if ok
-      Rails.logger.info("Wrote #{path} to container #{container_id}")
-      true
-    else
-      raise "runtime.write_file returned false for #{path}"
+    details = container_file_metadata(container_id, path).merge(write_succeeded: !!ok)
+    unless ok && details[:exists] && details[:size].to_i == content.to_s.bytesize
+      Rails.logger.error("[AgentCredentials] Credential write verification failed: #{details.inspect}")
+      raise CredentialWriteError, details
     end
+
+    Rails.logger.info("[AgentCredentials] Credential write verified: #{details.inspect}")
+    true
+  rescue CredentialWriteError
+    raise
   rescue StandardError => e
     Rails.logger.error("Failed to write #{path} to container #{container_id}: #{e.message}")
     raise
+  end
+
+  def container_file_metadata(container_id, path)
+    stdout, stderr, status = runtime.exec(
+      container_id,
+      [ "/bin/sh", "-c", "stat -c '%s|%a|%U|%G' #{Shellwords.escape(path)} 2>&1" ],
+      stdout: true,
+      stderr: true
+    )
+    output = Array(stdout).join.strip
+    size, mode, owner, group = output.split("|", 4) if status.to_i.zero?
+    {
+      path: path,
+      container: container_id.to_s,
+      exists: status.to_i.zero?,
+      size: size&.to_i,
+      mode: mode,
+      owner: owner,
+      group: group,
+      stat_exit_status: status.to_i,
+      stat_error: status.to_i.zero? ? nil : Array(stderr).join.strip.presence || output.presence
+    }
   end
 
   def runtime

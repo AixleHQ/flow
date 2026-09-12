@@ -137,10 +137,8 @@ class SessionContextService
       credential_write_result = nil
       if credential.present?
         measure_step("credentials") do
-          resolved_model = resolve_session_model(session, credential)
-          workflow_config = { enabled_mcp_servers: mcp_server_names, model: resolved_model, mode: session.mode }.compact
-          Rails.logger.info("[SessionContext] Writing credentials with workflow_config: #{workflow_config.inspect}")
-          credential_write_result = credential.write_to_container(container_id, workflow_config)
+          workflow_config = credential_workflow_config(session, credential, mcp_server_names)
+          credential_write_result = inject_credential(container_id, credential, workflow_config)
           context_log.record(:credentials, agent_type: credential.agent_type, config_keys: credential.config_data.keys, workflow_config: workflow_config)
         end
       end
@@ -182,6 +180,16 @@ class SessionContextService
 
       Rails.logger.info("[SessionContext] Assembly complete for session #{session.id}")
       credential_write_result
+    end
+
+    def inject_credential(container_id, credential, workflow_config)
+      Rails.logger.info("[SessionContext] Writing credentials with workflow_config: #{workflow_config.inspect}")
+      credential.write_to_container(container_id, workflow_config)
+    end
+
+    def credential_workflow_config(session, credential, mcp_server_names = nil)
+      mcp_server_names ||= build_all_servers(session).map { |server| MCPServer.config_key_for(server.name) }
+      { enabled_mcp_servers: mcp_server_names, model: resolve_session_model(session, credential), mode: session.mode }.compact
     end
 
     # == Story 9.2: Config File Injection ==

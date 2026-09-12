@@ -95,13 +95,16 @@ module Agents
     # launching `agy`. Those rows contain `api_key`, not an OAuth access token;
     # allowing them through would make interactive sessions fall back to login
     # and leave automatic sessions waiting indefinitely.
-    def credential_preflight(runtime, container, _container_id)
+    def credential_preflight(runtime, container, container_id)
+      details = credential_file_metadata(runtime, container, container_id, config_path)
+      return details.merge(valid: false, error_code: "auth_file_missing") unless details[:exists]
+
       stdout, _stderr, status = runtime.exec(container, [ "cat", config_path ], stdout: true, stderr: true)
-      return { valid: false, error_code: "auth_file_missing" } unless status.to_i.zero?
+      return details.merge(valid: false, error_code: "auth_file_missing") unless status.to_i.zero?
 
-      return { valid: true, error_code: nil } if auth_complete?(Array(stdout).join)
+      return details.merge(valid: true, error_code: nil) if auth_complete?(Array(stdout).join)
 
-      { valid: false, error_code: "oauth_token_missing" }
+      details.merge(valid: false, error_code: "oauth_token_missing")
     end
 
     def session_command(mode:, prompt: nil, model: nil)
