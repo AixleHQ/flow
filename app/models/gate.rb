@@ -212,6 +212,18 @@ class Gate < ApplicationRecord
     metadata["external_repository_id"].presence
   end
 
+  # How this gate's repository is named to a person. GitHub and GitLab gates
+  # store `repo_full_name`; Azure gates store only the repository GUID, because
+  # a display name there is mutable and a gate that routed on one would break
+  # when somebody renamed a repo. Reading `repo_full_name` directly is how the
+  # stale-gate diagnostic came out as "pull request 813 on  cannot be read" —
+  # an operator message naming no repository at all.
+  def repository_label
+    metadata["repo_full_name"].presence ||
+      (azure_repository_id && Repository.find_by(external_id: azure_repository_id)&.full_name) ||
+      azure_repository_id
+  end
+
   # The commit the gate was created for. A build or a policy evaluation that
   # answers about a different commit is not evidence about this gate: the branch
   # moved on, and the verdict belongs to code nobody is waiting for.

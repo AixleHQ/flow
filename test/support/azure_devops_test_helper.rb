@@ -13,10 +13,14 @@ module AzureDevopsTestHelper
   AZURE_TOKEN_HOST = "https://login.microsoftonline.com"
   AZURE_API_HOST = "https://dev.azure.com"
 
-  def with_azure_devops_enabled(pat_mode: false, credential_generation: "v1")
+  # `webhook_base_url` is what switches Service Hooks on: absent, the feature
+  # is off and nothing is provisioned, which is the default here because most
+  # tests are about the on-demand path.
+  def with_azure_devops_enabled(pat_mode: false, credential_generation: "v1", webhook_base_url: nil)
     Settings.stubs(:azure_devops).returns(
       Hashie::Mash.new(
         pat_mode_enabled: pat_mode,
+        webhook_base_url: webhook_base_url,
         resource: "https://app.vssps.visualstudio.com/.default",
         login_host: AZURE_TOKEN_HOST,
         api_host: AZURE_API_HOST,

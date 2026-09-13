@@ -80,7 +80,7 @@ module Ci
     end
 
     def gate_repository_label
-      gate.azure_repository_id.presence || repo_full_name
+      gate.repository_label
     end
 
     def repo_full_name

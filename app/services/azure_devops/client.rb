@@ -22,7 +22,11 @@ module AzureDevops
       wit_comments: "7.1-preview.4",
       core: "7.1",
       build: "7.1",
-      policy: "7.1"
+      # Policy Evaluations has never left preview either, and says so rather
+      # than falling back: asking for plain 7.1 gets a 400
+      # VssInvalidPreviewVersionException, which is how PR-policy gates spent
+      # every probe reporting `validation_failed` instead of a verdict.
+      policy: "7.1-preview.1"
     }.freeze
 
     MAX_RETRIES = 2

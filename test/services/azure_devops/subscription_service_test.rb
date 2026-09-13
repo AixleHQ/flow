@@ -17,6 +17,26 @@ module AzureDevops
                    body: { id: id, status: "enabled" }.to_json)
     end
 
+    # Subscriptions are created once, at connect time, and best effort. A
+    # connection made while webhooks were switched off — or by an identity that
+    # could not create them yet — would otherwise never get them, and its CI
+    # gates would depend on the five-minute recovery sweep forever. Testing the
+    # connection is the retry path; it replaced a rake task nobody would run.
+    test "testing a connection provisions the Service Hooks it is missing" do
+      with_azure_devops_enabled(webhook_base_url: "https://aixle.test")
+      stub_request(:get, %r{/_apis/projects/#{@integration.azure_project_id}})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { id: @integration.azure_project_id, name: "Customer Platform",
+                           visibility: "private" }.to_json)
+      stub_create
+
+      IntegrationService.new(company: @integration.company, connected_by: @integration.connected_by,
+                             project: @integration.project).test(@integration)
+
+      assert_equal AzureDevopsSubscription::EVENT_TYPES.sort,
+                   @integration.azure_devops_subscriptions.reload.pluck(:event_type).sort
+    end
+
     test "creates a subscription scoped to the connection's own Azure project" do
       stub_create
       subscription = @service.create!(event_type: "build.complete", base_url: "https://aixle.test")

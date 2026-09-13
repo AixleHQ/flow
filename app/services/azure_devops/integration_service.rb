@@ -103,6 +103,12 @@ module AzureDevops
     def test(integration)
       project_info = verify_selected_project!(integration)
       apply_verified(integration, project_info)
+      # Also the retry path for Service Hooks. They are provisioned once, at
+      # connect time, and best-effort — so a connection made while webhooks were
+      # switched off, or while this identity could not yet create them, would
+      # otherwise never get them at all and CI gates would fall back to the
+      # five-minute sweep forever. `ensure_all!` is idempotent.
+      provision_subscriptions(integration)
       { status: :active, project: project_info }
     rescue Error => e
       record_error(integration, e.code)
@@ -191,7 +197,7 @@ module AzureDevops
     # Creating them needs organization-level permission this connection may not
     # have, and everything on demand works without them — so a failure is logged
     # and the subscription row carries its own error, rather than failing a
-    # connection that is otherwise fine. `rake azure_devops:hooks` retries.
+    # connection that is otherwise fine. Testing the connection retries it.
     def provision_subscriptions(integration)
       return unless AppConfig.webhooks_enabled?
 

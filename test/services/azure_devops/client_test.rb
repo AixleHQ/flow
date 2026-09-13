@@ -35,6 +35,21 @@ module AzureDevops
       assert_requested stub
     end
 
+    # Found against a live tenant: policy evaluations answers plain 7.1 with a
+    # 400 VssInvalidPreviewVersionException. Every PR-policy gate probe was
+    # coming back `validation_failed` instead of a verdict, so the gate went
+    # stale on a pull request whose policies were perfectly readable.
+    test "policy evaluations use their own preview version, not the GA one" do
+      stub = stub_request(:get, "#{AZURE_API_HOST}/#{@resolved.organization}/proj/_apis/policy/evaluations")
+             .with(query: hash_including({ "api-version" => "7.1-preview.1" }))
+             .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { value: [] }.to_json)
+
+      @client.get("_apis", "policy", "evaluations", family: :policy, project: "proj",
+                  params: { artifactId: "vstfs:///CodeReview/CodeReviewId/proj%2F7" })
+
+      assert_requested stub
+    end
+
     test "a path segment cannot smuggle a separator or a traversal" do
       stub = stub_request(:get, "#{AZURE_API_HOST}/#{@resolved.organization}/_apis/git/repositories/..%2F..%2Fadmin")
              .with(query: { "api-version" => "7.1" })

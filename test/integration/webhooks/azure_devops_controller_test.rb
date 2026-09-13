@@ -30,6 +30,36 @@ class Webhooks::AzureDevopsControllerTest < ActionDispatch::IntegrationTest
     }
   end
 
+  # Shaped from Microsoft's published Service Hooks event reference rather than
+  # from what we happen to read, so the fixture would still look like an Azure
+  # delivery if the resolver changed its mind about which fields matter.
+  # https://learn.microsoft.com/en-us/azure/devops/service-hooks/events
+  #
+  # The details that are easy to get wrong and are pinned here on purpose:
+  # `pullRequestId` is a number, the repository id lives at `repository.id`, and
+  # `lastMergeSourceCommit` is an OBJECT carrying `commitId` — not a string.
+  def pull_request_payload(event_id: SecureRandom.uuid, event_type: "git.pullrequest.merged",
+                           pull_request_id: 813, repository_id: nil)
+    {
+      subscriptionId: SecureRandom.uuid, notificationId: 3,
+      id: event_id, eventType: event_type, publisherId: "tfs",
+      message: { text: "Pull request 813 merged" },
+      detailedMessage: { text: "Pull request 813 merged" },
+      resource: {
+        pullRequestId: pull_request_id, status: "completed", mergeStatus: "succeeded",
+        sourceRefName: "refs/heads/topic", targetRefName: "refs/heads/main",
+        lastMergeSourceCommit: { commitId: "b" * 40 },
+        repository: { id: repository_id || @repository.external_id, name: "api",
+                      project: { id: @integration.azure_project_id, name: "Customer Platform" } }
+      },
+      resourceVersion: "1.0-preview.1",
+      resourceContainers: { collection: { id: SecureRandom.uuid },
+                            account: { id: SecureRandom.uuid },
+                            project: { id: @integration.azure_project_id } },
+      createdDate: Time.current.utc.iso8601
+    }
+  end
+
   # == authentication ==
 
   test "rejects a delivery with no credentials" do
@@ -106,6 +136,32 @@ class Webhooks::AzureDevopsControllerTest < ActionDispatch::IntegrationTest
 
   # Azure retries anything non-2xx forever, so an event we cannot deduplicate is
   # processed rather than dropped; the duplicate risk goes to the log instead.
+  # The resolver routes on exactly three fields out of a large delivery —
+  # `resource.id` for a build, `resource.pullRequestId` and
+  # `resource.repository.id` for a pull request — and re-reads everything else
+  # from Azure. Pinned against the documented names, because a rename upstream
+  # would make the integration go quiet rather than fail.
+  test "a pull request delivery reaches the resolver with the ids it routes on" do
+    post path, params: pull_request_payload.to_json,
+               headers: auth.merge("CONTENT_TYPE" => "application/json")
+
+    assert_response :ok
+    delivered = enqueued_jobs.find { |j| j["job_class"] == "ResolveAzureDevopsEventJob" }["arguments"].first
+    assert_equal "git.pullrequest.merged", delivered["event_type"]
+    assert_equal 813, delivered["resource"]["pullRequestId"]
+    assert_equal @repository.external_id, delivered["resource"]["repository"]["id"]
+    assert_equal "b" * 40, delivered["resource"]["lastMergeSourceCommit"]["commitId"]
+  end
+
+  test "a resource that is not an object is replaced with an empty one" do
+    post path, params: build_payload.merge(resource: "not-an-object").to_json,
+               headers: auth.merge("CONTENT_TYPE" => "application/json")
+
+    assert_response :ok
+    delivered = enqueued_jobs.find { |j| j["job_class"] == "ResolveAzureDevopsEventJob" }["arguments"].first
+    assert_empty delivered["resource"].except("_aj_symbol_keys")
+  end
+
   test "an event with no id is still processed" do
     assert_enqueued_with(job: ResolveAzureDevopsEventJob) do
       post path, params: { eventType: "build.complete", resource: { id: 1 } }, as: :json, headers: auth
