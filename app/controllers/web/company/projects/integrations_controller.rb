@@ -229,14 +229,16 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       if params[:auth_mode].to_s == "pat"
         service.create_with_pat(
           organization_slug: params[:organization_slug].to_s,
-          azure_project_id: params[:azure_project_id].to_s,
+          azure_project_ids: azure_project_id_params,
+          azure_project_names: azure_project_name_params,
           personal_access_token: params[:personal_access_token].to_s,
           enabled_capabilities: params.key?(:enabled_capabilities) ? capability_params : nil
         )
       else
         service.create_with_installation(
           installation_id: params[:azure_devops_installation_id],
-          azure_project_id: params[:azure_project_id].to_s,
+          azure_project_ids: azure_project_id_params,
+          azure_project_names: azure_project_name_params,
           enabled_capabilities: params.key?(:enabled_capabilities) ? capability_params : nil
         )
       end
@@ -245,6 +247,22 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
                 notice: "Azure DevOps connected as #{integration.name}"
   rescue AzureDevops::IntegrationService::ConfigurationError => e
     redirect_to company_project_integrations_path(current_project), alert: e.message
+  end
+
+  # Accepts the list, and the single value connections were created with before
+  # it — a browser tab left open across the deploy still posts the old shape.
+  def azure_project_id_params
+    ids = params[:azure_project_ids].presence || params[:azure_project_id]
+    Array(ids).map(&:to_s).reject(&:blank?).uniq
+  end
+
+  # Display names only; IntegrationService intersects them with the ids it
+  # actually approved, so nothing here reaches settings unchecked.
+  def azure_project_name_params
+    names = params[:azure_project_names]
+    return {} unless names.respond_to?(:to_unsafe_h) || names.is_a?(Hash)
+
+    (names.respond_to?(:to_unsafe_h) ? names.to_unsafe_h : names).to_h
   end
 
   # Editable on an Azure connection: the operation profile, and a replacement

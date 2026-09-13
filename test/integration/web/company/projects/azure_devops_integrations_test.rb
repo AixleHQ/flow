@@ -287,7 +287,7 @@ class Web::Company::Projects::AzureDevopsIntegrationsTest < ActionDispatch::Inte
     stub_project_get
     AzureDevops::IntegrationService.new(company: @company, connected_by: @user, project: @project)
                                    .create_with_installation(installation_id: @installation.id,
-                                                             azure_project_id: @azure_project_id)
+                                                             azure_project_ids: [ @azure_project_id ])
   end
 
   def stub_projects_list

@@ -91,13 +91,58 @@ class Integration < ApplicationRecord
     azure_devops_installation&.organization_slug || settings&.dig("organization_slug")
   end
 
-  def azure_project_id
-    settings&.dig("azure_project_id")
+  # A connection reaches one or more Azure projects inside its organization.
+  #
+  # It used to reach exactly one, and `azure_project_id` was a scalar in
+  # settings. Connections made before the change still carry that key, so it is
+  # read as a one-element list rather than migrated: the scalar is the truth for
+  # those rows and rewriting settings in a migration would touch every customer
+  # connection to change nothing.
+  def azure_project_ids
+    stored = settings&.dig("azure_project_ids")
+    return Array(stored).map(&:to_s) if stored.present?
+
+    Array(settings&.dig("azure_project_id")).map(&:to_s)
   end
 
-  def azure_project_name
-    settings&.dig("azure_project_name")
+  # id => name, for display. Names are not authorization: everything that
+  # decides access uses the ids.
+  def azure_project_names
+    stored = settings&.dig("azure_project_names")
+    return stored.to_h { |k, v| [ k.to_s, v.to_s ] } if stored.is_a?(Hash) && stored.present?
+
+    legacy_id = settings&.dig("azure_project_id")
+    legacy_name = settings&.dig("azure_project_name")
+    legacy_id.present? && legacy_name.present? ? { legacy_id.to_s => legacy_name.to_s } : {}
   end
+
+  def azure_project_name(project_id = nil)
+    return azure_project_names[project_id.to_s] if project_id.present?
+
+    azure_project_names.values.first
+  end
+
+  # The gate every Azure call passes: a project this connection was actually
+  # given. Knowing an id is not enough — the ids are visible to anyone who can
+  # read the organization.
+  def azure_project_selected?(project_id)
+    project_id.present? && azure_project_ids.include?(project_id.to_s)
+  end
+
+  # The single project, where there is exactly one. Callers that can accept a
+  # default use this; tools that act on a caller-named project must not.
+  #
+  # Deliberately nil when the connection covers several. Returning "the first"
+  # would make an unqualified call act on whichever project sorted first, which
+  # is the failure this whole change exists to prevent — better a loud refusal
+  # naming the ambiguity.
+  def azure_default_project_id
+    ids = azure_project_ids
+    ids.one? ? ids.first : nil
+  end
+
+  # Reads naturally where a connection has one project, and is the same value.
+  alias azure_project_id azure_default_project_id
 
   def azure_personal_access_token
     credentials_data["personal_access_token"]
@@ -170,9 +215,11 @@ class Integration < ApplicationRecord
       return errors.add(:azure_devops_installation, "is required in service-principal mode") if installation.nil?
       errors.add(:azure_devops_installation, "belongs to another company") if installation.company_id != company_id
 
-      selected = azure_project_id
-      if selected.present? && !installation.approved_project?(selected)
-        errors.add(:azure_project_id, "is not in the installation's approved scope")
+      selected = azure_project_ids
+      errors.add(:azure_project_ids, "must name at least one Azure project") if selected.empty?
+      outside = selected.reject { |id| installation.approved_project?(id) }
+      if outside.any?
+        errors.add(:azure_project_ids, "are not in the installation's approved scope: #{outside.join(', ')}")
       end
     elsif installation.present?
       errors.add(:azure_devops_installation, "must be absent in PAT mode")

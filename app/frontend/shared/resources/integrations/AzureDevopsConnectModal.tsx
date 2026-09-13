@@ -1,5 +1,16 @@
 import { router } from '@inertiajs/react';
-import { Alert, Button, Checkbox, Group, Modal, PasswordInput, Select, Stack, Text, TextInput } from '@mantine/core';
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Group,
+  Modal,
+  MultiSelect,
+  PasswordInput,
+  Stack,
+  Text,
+  TextInput,
+} from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { useCallback, useState } from 'react';
@@ -36,14 +47,14 @@ const CAPABILITIES: { value: string; label: string; hint: string }[] = [
   {
     value: 'pull_requests.complete',
     label: 'Complete pull requests',
-    hint: 'Merging. Off by default, and branch policies still apply',
+    hint: 'Merging. Branch policies still apply and are never bypassed',
   },
 ];
 
-// Mirrors AzureDevops::IntegrationService::DEFAULT_CAPABILITIES. Completing pull
-// requests is the one action nobody should acquire by accepting a form's
-// defaults, so it starts unticked.
-const DEFAULT_CAPABILITIES = CAPABILITIES.map((c) => c.value).filter((v) => v !== 'pull_requests.complete');
+// Mirrors AzureDevops::IntegrationService::DEFAULT_CAPABILITIES — all of them,
+// merging included. Azure's branch policies decide whether a merge is allowed;
+// this list decides only which requests Aixle sends at all.
+const DEFAULT_CAPABILITIES = CAPABILITIES.map((c) => c.value);
 
 interface Inspection {
   organization: string;
@@ -74,7 +85,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
   const [organization, setOrganization] = useState('');
   const [adminPat, setAdminPat] = useState('');
   const [inspection, setInspection] = useState<Inspection | null>(null);
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projectIds, setProjectIds] = useState<string[]>([]);
 
   const [patProjectId, setPatProjectId] = useState('');
   const [pat, setPat] = useState('');
@@ -89,7 +100,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
     setOrganization('');
     setAdminPat('');
     setInspection(null);
-    setProjectId(null);
+    setProjectIds([]);
     setPatProjectId('');
     setPat('');
     setCapabilities(DEFAULT_CAPABILITIES);
@@ -114,7 +125,9 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
         personal_access_token: adminPat.trim(),
       })) as Inspection;
       setInspection(result);
-      setProjectId(result.projects[0]?.id ?? null);
+      // Nothing is preselected: a connection reaches what someone chose,
+      // not what happened to come back first.
+      setProjectIds([]);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not verify the organization');
     } finally {
@@ -125,14 +138,14 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
   // Step two: entitle the application in the organization, record the binding,
   // then create the project connection on top of it.
   const connect = useCallback(async () => {
-    if (!inspection || !projectId) return;
+    if (!inspection || projectIds.length === 0) return;
     setError(null);
     setLoading(true);
     try {
       const bound = (await postJson(`${basePath}/azure_devops_connect`, {
         organization: inspection.organization,
         personal_access_token: adminPat.trim(),
-        project_ids: [projectId],
+        project_ids: projectIds,
       })) as { installationId: number };
 
       // The token has done its job and does not outlive it — on the server it
@@ -145,7 +158,10 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
           provider: 'azure_devops',
           authMode: 'service_principal',
           azureDevopsInstallationId: String(bound.installationId),
-          azureProjectId: projectId,
+          azureProjectIds: projectIds,
+          azureProjectNames: Object.fromEntries(
+            inspection.projects.filter((p) => projectIds.includes(p.id)).map((p) => [p.id, p.name]),
+          ),
           enabledCapabilities: capabilities,
         },
         {
@@ -162,7 +178,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
       setError(e instanceof Error ? e.message : 'Could not connect Azure DevOps');
       setLoading(false);
     }
-  }, [adminPat, basePath, capabilities, close, inspection, projectId]);
+  }, [adminPat, basePath, capabilities, close, inspection, projectIds]);
 
   const submitPat = useCallback(() => {
     if (!organization.trim() || !patProjectId.trim() || !pat.trim()) return;
@@ -174,7 +190,10 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
         provider: 'azure_devops',
         authMode: 'pat',
         organizationSlug: organization.trim(),
-        azureProjectId: patProjectId.trim(),
+        azureProjectIds: patProjectId
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean),
         personalAccessToken: pat.trim(),
         enabledCapabilities: capabilities,
       },
@@ -217,7 +236,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
               <>
                 <PasswordInput
                   label="Administrator personal access token"
-                  description="Used once, in this request: it proves the organization is yours, adds Aixle to it, and lets Aixle manage its own Service Hooks. It is never stored, and the connection runs on Aixle’s own identity afterwards. Needs the Member Entitlement Management (read & write) and Security (manage) scopes. Leave empty if your company has already connected this organization."
+                  description="Used once, in this request: it proves the organization is yours, adds Aixle to it, and lets Aixle manage its own Service Hooks. It is never stored, and the connection runs on Aixle’s own identity afterwards. Needs three scopes: Member Entitlement Management (read & write), Project and team (read), and Security (manage). Leave empty if your company has already connected this organization."
                   value={adminPat}
                   onChange={(e) => setAdminPat(e.currentTarget.value)}
                 />
@@ -238,15 +257,15 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
                       : `Verified${inspection.identity ? ` as ${inspection.identity}` : ''}. Aixle will be added to this organization with a Basic access level.`}
                   </Text>
                 </Alert>
-                <Select
-                  label="Azure project"
-                  description="This connection works against one project. The selection cannot be changed later — connect again to work against another."
-                  placeholder="Select a project"
+                <MultiSelect
+                  label="Azure projects"
+                  description="Everything this connection can reach. Repositories, work items and builds outside these projects stay out of reach, and the list cannot be changed later — connect again to cover others."
+                  placeholder={projectIds.length === 0 ? 'Select one or more projects' : undefined}
                   data={inspection.projects.map((p) => ({ value: p.id, label: p.name }))}
-                  value={projectId}
-                  onChange={setProjectId}
-                  allowDeselect={false}
+                  value={projectIds}
+                  onChange={setProjectIds}
                   searchable
+                  clearable
                 />
               </>
             )}
@@ -268,9 +287,9 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
               onChange={(e) => setOrganization(e.currentTarget.value)}
             />
             <TextInput
-              label="Azure project ID"
-              description="The project's GUID, from Project settings → Overview"
-              placeholder="00000000-0000-0000-0000-000000000000"
+              label="Azure project IDs"
+              description="The project GUIDs, comma separated, from Project settings → Overview"
+              placeholder="00000000-0000-0000-0000-000000000000, 11111111-..."
               value={patProjectId}
               onChange={(e) => setPatProjectId(e.currentTarget.value)}
             />
@@ -349,7 +368,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
                 Connect
               </Button>
             ) : (
-              <Button onClick={connect} loading={loading} disabled={!inspection || !projectId}>
+              <Button onClick={connect} loading={loading} disabled={!inspection || projectIds.length === 0}>
                 Connect
               </Button>
             )}

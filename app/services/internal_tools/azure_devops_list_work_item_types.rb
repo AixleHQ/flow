@@ -18,12 +18,14 @@ module InternalTools
       requires_integration :azure_devops
       read_only
       param :integration_id, type: :integer, description: "Azure DevOps connection id from azure_devops_list_connections.", required: true
+      param :azure_project_id, type: :string, description: "Azure project id. Required when the connection covers more than one; call azure_devops_list_connections to see them."
     end
 
     def execute
       azure_guard do
         integration = resolve_integration!
-        success({ types: AzureDevops::WorkItemService.new(integration).work_item_types }.to_json)
+        success({ types: AzureDevops::WorkItemService.new(integration)
+                          .work_item_types(project_id: resolve_project_id!(integration)) }.to_json)
       end
     end
   end

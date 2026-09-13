@@ -12,6 +12,7 @@ module InternalTools
       user_attachable false
       requires_integration :azure_devops
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
+      param :azure_project_id, type: :string, description: "Azure project id. Required when the connection covers more than one; call azure_devops_list_connections to see them."
       param :type, type: :string, description: "Work item type name from azure_devops_list_work_item_types, e.g. Bug.", required: true
       param :title, type: :string, description: "Work item title.", required: true
       param :description, type: :string, description: "Body. Azure renders this as HTML."
@@ -32,7 +33,9 @@ module InternalTools
         payload = { type: params[:type] }.merge(fields)
 
         with_operation(integration, "create_work_item", payload) do
-          AzureDevops::WorkItemService.new(integration).create(type: params[:type], fields: fields)
+          AzureDevops::WorkItemService.new(integration).create(
+            type: params[:type], fields: fields, project_id: resolve_project_id!(integration)
+          )
         end
       end
     end

@@ -86,7 +86,7 @@ module FakeAzureDevops
       @error ? [] : @repositories
     end
 
-    def find_repo(identifier)
+    def find_repo(identifier, project_id: nil)
       authorize!(:"repositories.read")
       record(:find_repo, identifier: identifier)
       raise @error if @error
@@ -94,7 +94,7 @@ module FakeAzureDevops
       @repositories.find { |r| r[:external_id] == identifier.to_s }
     end
 
-    def list_branches(identifier)
+    def list_branches(identifier, project_id: nil)
       authorize!(:"repositories.read")
       record(:list_branches, identifier: identifier)
       @error ? [] : @branches
@@ -296,7 +296,7 @@ module FakeAzureDevops
       @calls = []
     end
 
-    def work_item_types
+    def work_item_types(project_id: nil)
       authorize!(:"work_items.read")
       record(:work_item_types)
       raise @error if @error
@@ -306,7 +306,7 @@ module FakeAzureDevops
           required_fields: [ "System.Title" ] } ]
     end
 
-    def query(filters: {}, limit: 50, cursor: nil)
+    def query(filters: {}, limit: 50, cursor: nil, project_id: nil)
       authorize!(:"work_items.read")
       record(:query, filters: filters, limit: limit, cursor: cursor)
       raise @error if @error
@@ -314,7 +314,7 @@ module FakeAzureDevops
       { work_items: [ @work_item ], total_matched: 1, has_more: false }
     end
 
-    def get(work_item_id)
+    def get(work_item_id, project_id: nil)
       authorize!(:"work_items.read")
       record(:get, work_item_id: work_item_id)
       raise @error if @error
@@ -322,7 +322,7 @@ module FakeAzureDevops
       @work_item
     end
 
-    def comments(work_item_id, limit: 50, cursor: nil)
+    def comments(work_item_id, limit: 50, cursor: nil, project_id: nil)
       authorize!(:"work_items.read")
       record(:comments, work_item_id: work_item_id, limit: limit, cursor: cursor)
       raise @error if @error
@@ -330,7 +330,7 @@ module FakeAzureDevops
       { comments: [ { id: 1, author: "Ada", text: "looking" } ], has_more: false }
     end
 
-    def add_comment(work_item_id, text:)
+    def add_comment(work_item_id, text:, project_id: nil)
       authorize!(:"work_items.write")
       record(:add_comment, work_item_id: work_item_id, text: text)
       raise @error if @error
@@ -338,7 +338,7 @@ module FakeAzureDevops
       { id: 2, created_at: Time.current.iso8601 }
     end
 
-    def create(type:, fields: {})
+    def create(type:, fields: {}, project_id: nil)
       raise AzureDevops::ValidationFailed, "At least System.Title is required" if fields.blank?
 
       authorize!(:"work_items.write")
@@ -348,7 +348,7 @@ module FakeAzureDevops
       @work_item.merge(type: type, title: fields[:title])
     end
 
-    def update(work_item_id, fields: {}, expected_revision: nil)
+    def update(work_item_id, fields: {}, expected_revision: nil, project_id: nil)
       authorize!(:"work_items.write")
       record(:update, work_item_id: work_item_id, fields: fields, expected_revision: expected_revision)
       raise @error if @error
@@ -356,7 +356,7 @@ module FakeAzureDevops
       @work_item.merge(fields).merge(rev: @work_item[:rev] + 1)
     end
 
-    def link_pull_request(work_item_id, artifact_id:, expected_revision: nil, comment: nil)
+    def link_pull_request(work_item_id, artifact_id:, expected_revision: nil, comment: nil, project_id: nil)
       authorize!(:"work_items.write")
       record(:link_pull_request, work_item_id: work_item_id, artifact_id: artifact_id,
                                  expected_revision: expected_revision, comment: comment)
@@ -384,7 +384,7 @@ module FakeAzureDevops
       @calls = []
     end
 
-    def list(repository: nil, branch: nil, limit: 25)
+    def list(repository: nil, branch: nil, limit: 25, project_id: nil)
       authorize!(:"builds.read")
       record(:list, repository: repository, branch: branch, limit: limit)
       raise @error if @error
@@ -392,7 +392,7 @@ module FakeAzureDevops
       [ @build ]
     end
 
-    def get(build_id)
+    def get(build_id, project_id: nil)
       authorize!(:"builds.read")
       record(:get, build_id: build_id)
       raise @error if @error

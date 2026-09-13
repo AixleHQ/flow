@@ -13,6 +13,7 @@ module InternalTools
       requires_integration :azure_devops
       read_only
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
+      param :azure_project_id, type: :string, description: "Azure project id. Required when the connection covers more than one; call azure_devops_list_connections to see them."
       param :repository_id, type: :integer, description: "Aixle repository id, to list only its builds."
       param :branch, type: :string, description: "Branch name, e.g. main."
       param :limit, type: :integer, description: "How many builds (default 25, max 100)."
@@ -33,7 +34,8 @@ module InternalTools
 
         builds = AzureDevops::BuildService.new(integration)
                                           .list(repository: repository, branch: params[:branch],
-                                                limit: params[:limit] || 25)
+                                                limit: params[:limit] || 25,
+                                                project_id: resolve_project_id!(integration))
         success({ builds: builds }.to_json)
       end
     end

@@ -161,8 +161,16 @@ Everything after that they do themselves.
 
 In **Project → Integrations → Connect → Azure DevOps** they type their
 organization name and paste a personal access token from someone who can
-administer it (**Member Entitlement Management (read & write)** and
-**Security (manage)**).
+administer it (**Member Entitlement Management (read & write)**, **Project and
+team (read)** and **Security (manage)** — all three live behind **Show all
+scopes** in the token form).
+
+`Project and team (read)` is what lists the projects to choose from. The
+application cannot list them itself: at first bind it is not in the
+organization yet and Azure refuses its token outright, so the administrator's
+token is the only credential that can. A token without this scope used to
+verify successfully and then offer an empty dropdown; it now says which scope
+is missing.
 
 `Security (manage)` is spent on exactly one access control entry: *View
 subscriptions* + *Edit subscriptions* on the ServiceHooks namespace, scoped to

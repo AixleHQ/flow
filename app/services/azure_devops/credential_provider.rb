@@ -53,7 +53,17 @@ module AzureDevops
       # should become active at all. Everything else — tool execution, git
       # credential vending, repository discovery — leaves it false, so a
       # disconnected or errored connection stops working immediately.
-      def resolve!(integration, capability: nil, allow_inactive: false)
+      # `project_id` names which of the connection's Azure projects this call is
+      # for. A connection can hold several, so the project is an argument rather
+      # than a property of the credential: resolving it here is what stops a
+      # caller reaching a project the connection was never given, and the ids
+      # are visible to anyone who can read the organization, so knowing one
+      # proves nothing.
+      #
+      # Omitting it is allowed only where there is exactly one project to mean —
+      # `azure_default_project_id` returns nil otherwise, and the resolution
+      # below refuses rather than picking.
+      def resolve!(integration, capability: nil, allow_inactive: false, project_id: nil)
         raise IntegrationUnavailable, "Azure DevOps is not enabled on this deployment" unless AppConfig.enabled?
         raise IntegrationUnavailable, "Integration is not an Azure DevOps connection" unless integration&.azure_devops?
         raise IntegrationUnavailable, "Integration is not active" unless allow_inactive || integration.active?
@@ -62,18 +72,38 @@ module AzureDevops
           raise NotAuthorized, "This connection does not enable #{capability}"
         end
 
-        integration.azure_pat? ? resolve_pat(integration) : resolve_service_principal(integration)
+        selected = select_project!(integration, project_id)
+
+        integration.azure_pat? ? resolve_pat(integration, selected) : resolve_service_principal(integration, selected)
       end
 
       private
 
-      def resolve_service_principal(integration)
+      # Which project this call acts on, refused rather than guessed.
+      def select_project!(integration, requested)
+        requested = requested.to_s.presence
+        return integration.azure_default_project_id if requested.nil? && integration.azure_project_ids.one?
+
+        if requested.nil?
+          raise ValidationFailed,
+                "This connection covers #{integration.azure_project_ids.size} Azure projects — name the one to use"
+        end
+        unless integration.azure_project_selected?(requested)
+          raise NotAuthorized, "Azure project #{requested} is not one this connection covers"
+        end
+
+        requested
+      end
+
+      def resolve_service_principal(integration, project_id)
         installation = integration.azure_devops_installation
         raise NotAuthorized, "No approved Azure organization installation for this connection" if installation.nil?
         raise NotAuthorized, "The approved installation belongs to another company" if installation.company_id != integration.company_id
         raise IntegrationUnavailable, "The Azure organization installation is disabled" unless installation.active?
 
-        project_id = integration.azure_project_id
+        # Selection and approval are two different facts: the company approved a
+        # set of projects once, and this connection selected some of them. Both
+        # are checked, because an installation's scope can be narrowed later.
         unless installation.approved_project?(project_id)
           raise NotAuthorized, "Azure project #{project_id} is not in this installation's approved scope"
         end
@@ -85,7 +115,7 @@ module AzureDevops
         )
       end
 
-      def resolve_pat(integration)
+      def resolve_pat(integration, project_id)
         raise IntegrationUnavailable, "PAT mode is not enabled on this deployment" unless AppConfig.pat_mode_enabled?
         raise CredentialActionRequired, "This connection has no stored personal access token" if integration.azure_personal_access_token.blank?
 
@@ -94,15 +124,16 @@ module AzureDevops
 
         Resolved.new(
           integration: integration, installation: nil, mode: :pat,
-          organization: organization, project_id: integration.azure_project_id, token_service: nil
+          organization: organization, project_id: project_id, token_service: nil
         )
       end
     end
 
     # Convenience: a ready client for the resolved connection, scoped to its
     # selected Azure project. Callers never choose the organization themselves.
-    def self.client_for(integration, capability: nil, allow_inactive: false)
-      resolved = resolve!(integration, capability: capability, allow_inactive: allow_inactive)
+    def self.client_for(integration, capability: nil, allow_inactive: false, project_id: nil)
+      resolved = resolve!(integration, capability: capability, allow_inactive: allow_inactive,
+                          project_id: project_id)
       [ Client.new(credential: resolved, organization: resolved.organization), resolved ]
     end
   end

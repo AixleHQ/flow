@@ -8,6 +8,7 @@ import type { AzureDevopsProps } from './AzureDevopsConnectModal';
 import { AzureDevopsConnectModal } from './AzureDevopsConnectModal';
 
 const PROJECT_ID = '11111111-1111-1111-1111-111111111111';
+const SECOND_PROJECT_ID = '33333333-3333-3333-3333-333333333333';
 const BASE = '/company/projects/1/integrations';
 
 const renderModal = (props: Partial<AzureDevopsProps> = {}) =>
@@ -34,9 +35,21 @@ const inspectionPayload = (overrides: Record<string, unknown> = {}) => ({
   tenantId: '22222222-2222-2222-2222-222222222222',
   identity: 'ada@contoso.com',
   alreadyBound: false,
-  projects: [{ id: PROJECT_ID, name: 'Customer Platform' }],
+  projects: [
+    { id: PROJECT_ID, name: 'Customer Platform' },
+    { id: SECOND_PROJECT_ID, name: 'Payments' },
+  ],
   ...overrides,
 });
+
+// The project picker is a Mantine MultiSelect: the input opens the dropdown and
+// each option is picked by its visible name.
+const pickProjects = async (user: ReturnType<typeof userEvent.setup>, names: string[]) => {
+  for (const name of names) {
+    await user.click(screen.getByRole('combobox', { name: /Azure projects/ }));
+    await user.click(await screen.findByRole('option', { name }));
+  }
+};
 
 describe('AzureDevopsConnectModal', () => {
   beforeEach(() => {
@@ -87,7 +100,20 @@ describe('AzureDevopsConnectModal', () => {
     expect(await screen.findByText(/already connected this organization, so no token was needed/)).toBeInTheDocument();
   });
 
-  it('binds the organization and then creates the connection for the chosen project', async () => {
+  it('preselects nothing — a connection reaches what someone chose', async () => {
+    const user = userEvent.setup();
+    mockFetch(() => ({ payload: inspectionPayload() }));
+    renderModal();
+
+    await user.type(screen.getByLabelText(/Azure organization/), 'contoso');
+    await user.type(screen.getByLabelText(/Administrator personal access token/), 'pat-123');
+    await user.click(screen.getByRole('button', { name: 'Verify organization' }));
+    await screen.findByText('Organization verified');
+
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeDisabled();
+  });
+
+  it('binds the organization and then creates the connection for the chosen projects', async () => {
     const user = userEvent.setup();
     mockFetch((url) =>
       url.endsWith('azure_devops_inspect')
@@ -100,6 +126,7 @@ describe('AzureDevopsConnectModal', () => {
     await user.type(screen.getByLabelText(/Administrator personal access token/), 'pat-123');
     await user.click(screen.getByRole('button', { name: 'Verify organization' }));
     await screen.findByText('Organization verified');
+    await pickProjects(user, ['Customer Platform', 'Payments']);
     await user.click(screen.getByRole('button', { name: 'Connect' }));
 
     await waitFor(() => expect(router.post).toHaveBeenCalled());
@@ -109,7 +136,13 @@ describe('AzureDevopsConnectModal', () => {
       provider: 'azure_devops',
       authMode: 'service_principal',
       azureDevopsInstallationId: '7',
-      azureProjectId: PROJECT_ID,
+      azureProjectIds: [PROJECT_ID, SECOND_PROJECT_ID],
+    });
+    // Names travel for display only; the server intersects them with the ids
+    // it actually approved.
+    expect((payload as Record<string, Record<string, string>>).azureProjectNames).toEqual({
+      [PROJECT_ID]: 'Customer Platform',
+      [SECOND_PROJECT_ID]: 'Payments',
     });
   });
 
@@ -157,6 +190,7 @@ describe('AzureDevopsConnectModal', () => {
     await user.type(screen.getByLabelText(/Administrator personal access token/), 'pat-123');
     await user.click(screen.getByRole('button', { name: 'Verify organization' }));
     await screen.findByText('Organization verified');
+    await pickProjects(user, ['Customer Platform']);
     await user.click(screen.getByRole('checkbox', { name: /Edit work items/ }));
     await user.click(screen.getByRole('button', { name: 'Connect' }));
 
@@ -166,10 +200,10 @@ describe('AzureDevopsConnectModal', () => {
     expect(payload.enabledCapabilities).toContain('work_items.read');
   });
 
-  it('leaves merging unticked by default', () => {
+  it('offers the whole operation profile ticked, merging included', () => {
     renderModal();
 
-    expect(screen.getByRole('checkbox', { name: /Complete pull requests/ })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Complete pull requests/ })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Read repositories/ })).toBeChecked();
   });
 

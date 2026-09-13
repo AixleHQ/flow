@@ -59,6 +59,27 @@ module InternalTools
         integration
       end
 
+      # Which of the connection's Azure projects this call is for.
+      #
+      # A connection can cover several, and the ids are visible to anyone who
+      # can read the organization, so naming one is not authority to reach it —
+      # CredentialProvider checks membership again when it resolves. Defaulting
+      # is allowed only where there is exactly one project to mean: with more
+      # than one, "the first" would make which project an agent just filed a bug
+      # in depend on row order.
+      def resolve_project_id!(integration)
+        requested = params[:azure_project_id].presence
+        return requested if requested
+
+        default = integration.azure_default_project_id
+        return default if default
+
+        raise AzureDevops::ValidationFailed,
+              "azure_project_id is required — this connection covers " \
+              "#{integration.azure_project_ids.size} Azure projects. " \
+              "Call azure_devops_list_connections to see them."
+      end
+
       # Tool attachment authorizes project-scoped Azure usage. A connection from
       # another project — or another company — is out of reach even when the
       # caller knows its id.

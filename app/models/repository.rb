@@ -175,10 +175,10 @@ class Repository < ApplicationRecord
     end
 
     return if integration.blank? || external_project_id.blank?
-    return if integration.azure_project_id.blank?
-    return if integration.azure_project_id == external_project_id
+    return if integration.azure_project_ids.empty?
+    return if integration.azure_project_selected?(external_project_id)
 
-    errors.add(:external_project_id, "does not belong to the integration's selected Azure project")
+    errors.add(:external_project_id, "does not belong to any Azure project this connection covers")
   end
 
   # A public repository is cloned by running `git clone <clone_url>` in the

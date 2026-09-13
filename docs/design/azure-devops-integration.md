@@ -64,10 +64,16 @@ One integration represents:
 Aixle company + approved AzureDevopsInstallation
   → one Azure organization and tenant-local service principal
   → one Aixle project Integration
-  → one selected Azure project
+  → one or more selected Azure projects
 ```
 
-Multiple integrations can exist in one Aixle project. Connecting another Azure project creates another integration referencing the approved organization installation; it does not require another Entra app registration. The selected Azure project is immutable after activation; changing it creates a new connection so existing repository and work-item references cannot silently switch targets.
+A connection covers a SET of the organization's projects — the same shape as a GitHub App installation covering several repositories. It started as exactly one, and that was wrong for the ordinary case: a company keeps its code and its boards in several Azure projects, and forcing one connection per project multiplied the connections without adding any isolation, since they all run on the same service principal anyway.
+
+Two lists, and they are not the same list. The **installation** records what the company approved when it proved control of the organization; the **integration** records which of those a connector chose. Both are checked on every call, because an installation's approved scope can be narrowed after a connection was made.
+
+Multiple integrations can still exist in one Aixle project. The selected set is immutable after activation: adding a project would silently widen what every already-attached agent can reach, and removing one would strand repositories and work-item references pointing into it.
+
+Where a connection covers more than one project, the project is an argument rather than a property of the credential. `CredentialProvider.resolve!(integration, project_id:)` refuses an id the connection does not cover, and refuses to guess when several are possible — `Integration#azure_default_project_id` is nil unless there is exactly one. Repository-scoped calls take the project from `repository.external_project_id`, so they never need one; work item and build tools take an explicit `azure_project_id`.
 
 The default connection uses the **application's service principal**: authorized project sessions create PRs/comments as that application identity. `connected_by` records the Aixle user who attached it, not the Azure acting identity. PAT mode acts as the PAT owner and must be labeled separately. Project agents share the permissions of the selected connection; an employee leaving Aixle does not itself revoke the application's Azure identity.
 
@@ -76,7 +82,7 @@ The default connection uses the **application's service principal**: authorized 
 1. Project owner/admin selects **Azure DevOps** in Project → Integrations. Apply the existing [IntegrationsPolicy](../../app/policies/web/company/projects/integrations_policy.rb).
 2. Select an organization installation already approved for the current Aixle company. For first-time setup, enter the organization URL and tenant ID to start the admin onboarding in §5.2; an arbitrary organization URL never grants access through the shared app.
 3. The default **Service principal** mode uses the application's server-side credential. No personal Microsoft sign-in, authorization-code callback, or refresh token is required for runtime authentication. Optional PAT mode has an explicit token form.
-4. Rails obtains an app-only access token, verifies the installation's Azure access, and lists only the Azure projects allowed by both its approved project list and Azure permissions. Select one project. Verify a browser-supplied project ID before activation.
+4. Rails obtains an app-only access token, verifies the installation's Azure access, and lists only the Azure projects allowed by both its approved project list and Azure permissions. Select one or more. Every selected id is verified against Azure before activation — all of them, not just the first: a connection that half works is one whose failures arrive later, on a tool call, with nothing pointing at the cause.
 5. Save the organization/project IDs, display names, acting identity, auth mode, and observed capabilities. A successful token exchange alone does not mean the selected project is accessible.
 6. In Repositories, select this integration, then a repository and source branch. Resolve repository details server-side before saving. Show organization/project labels to distinguish duplicate names.
 7. The integration card shows **Service principal**, the bot identity and organization, and offers **Test connection**, **Repair connection**, and **Disconnect**. PAT mode additionally offers **Replace token**. App certificate/secret rotation is an installation/operator operation, not a per-project user login.
@@ -373,7 +379,7 @@ The split is not cosmetic. A repository tool has nothing to act on without an at
 
 `TagCatalog` therefore marks `:azure_devops` hidden and every handler declares `user_attachable false`. Availability still applies on top: `requires_integration :azure_devops` hides an injected tool whose connection is inactive, so a disabled integration is distinguishable from a missing entitlement.
 
-This does NOT widen what an agent may do. Injection decides which tools are *offered*; §8.2 and `Concerns::AzureDevopsContext` decide what a call may touch, and the connection's capability profile decides which calls are sent at all. `azure_devops_complete_pull_request` is injected like the rest and still refuses unless `pull_requests.complete` is ticked — which it is not by default.
+This does NOT widen what an agent may do. Injection decides which tools are *offered*; §8.2 and `Concerns::AzureDevopsContext` decide what a call may touch, and the connection's capability profile decides which calls are sent at all. `azure_devops_complete_pull_request` is injected like the rest and still refuses unless `pull_requests.complete` is ticked. It is ticked by default, because merging is part of the delivery cycle an agent is here to run and Azure's branch policies — never bypassed — are what actually decide whether a merge may happen. Unticking it stops the request being sent at all.
 
 ### 8.1 Core tool contracts
 

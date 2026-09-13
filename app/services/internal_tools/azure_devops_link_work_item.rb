@@ -36,7 +36,8 @@ module InternalTools
           params[:work_item_id],
           artifact_id: pull_requests.artifact_id(repository, params[:pull_request_id]),
           expected_revision: params[:expected_revision],
-          comment: params[:comment]
+          comment: params[:comment],
+          project_id: repository.external_project_id
         )
         success(result.to_json)
       end

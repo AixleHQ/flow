@@ -48,7 +48,7 @@ class RepositoryAzureDevopsTest < ActiveSupport::TestCase
                                     external_project_id: SecureRandom.uuid)
 
     refute_predicate repository, :valid?
-    assert_includes repository.errors[:external_project_id].to_sentence, "selected Azure project"
+    assert_includes repository.errors[:external_project_id].to_sentence, "any Azure project this connection covers"
   end
 
   test "the clone url is derived credential-free with each path component encoded" do

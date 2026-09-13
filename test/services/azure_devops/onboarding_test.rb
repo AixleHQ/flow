@@ -173,6 +173,24 @@ module AzureDevops
       assert_not_equal "active", AzureDevopsInstallation.find_by(company: @company)&.status.to_s
     end
 
+    # A token that administers the organization but cannot read its projects
+    # used to verify happily and hand back an empty dropdown — nothing to pick
+    # and nothing to explain. The scopes are invisible from our side, so the
+    # error has to name the missing one.
+    test "a token that cannot list projects says which scope is missing" do
+      stub_tenant
+      stub_admin_probe
+      stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/projects})
+        .to_return(status: 401, headers: { "Content-Type" => "application/json" }, body: "{}")
+
+      error = assert_raises(NotAuthorized) do
+        @onboarding.inspect!(organization: "contoso", personal_access_token: "admin-pat")
+      end
+
+      assert_match(/Project and team \(read\)/, error.message)
+      assert_equal 0, AzureDevopsInstallation.count
+    end
+
     # == service hooks ==
 
     test "complete grants the application permission to manage its own Service Hooks" do

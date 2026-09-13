@@ -25,11 +25,13 @@ class InternalTools::AzureDevopsParityToolsTest < ActiveSupport::TestCase
 
   # == completion guards ==
 
-  # Merging is not something to acquire by accepting a form's defaults, so a
-  # connection created with the defaults cannot do it at all.
-  test "completion is refused on a connection that did not enable it" do
+  # Merging is enabled by default — Azure's branch policies are what decide
+  # whether it may happen — but unticking it has to be a real switch, not a
+  # label: the request is then never sent, whatever Azure would have allowed.
+  test "completion is refused on a connection that unticked it" do
     @integration.settings = @integration.settings.merge(
-      "enabled_capabilities" => AzureDevops::IntegrationService::DEFAULT_CAPABILITIES
+      "enabled_capabilities" =>
+        AzureDevops::IntegrationService::DEFAULT_CAPABILITIES - %w[pull_requests.complete]
     )
     @integration.save!
 

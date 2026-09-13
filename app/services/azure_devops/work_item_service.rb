@@ -35,8 +35,8 @@ module AzureDevops
     # Process metadata: which types exist here, and for each which states and
     # which required fields. Without this an agent guesses "Bug" and gets a
     # validation error it cannot interpret.
-    def work_item_types
-      client, resolved = client_for(:"work_items.read")
+    def work_item_types(project_id: nil)
+      client, resolved = client_for(:"work_items.read", project_id: project_id)
       payload = client.get("_apis", "wit", "workitemtypes", family: :wit, project: resolved.project_id)
 
       Array(payload["value"]).map do |type|
@@ -54,8 +54,8 @@ module AzureDevops
     # pinned as a predicate and every value bound through an escaper — a
     # caller-supplied WIQL fragment cannot be made safe by appending a project
     # clause to it, because the fragment can close the clause itself.
-    def query(filters: {}, limit: DEFAULT_LIMIT, cursor: nil)
-      client, resolved = client_for(:"work_items.read")
+    def query(filters: {}, limit: DEFAULT_LIMIT, cursor: nil, project_id: nil)
+      client, resolved = client_for(:"work_items.read", project_id: project_id)
       wiql = build_wiql(filters)
 
       # WIQL has no generic $skip. Paging is done over the ORDERED id list it
@@ -76,8 +76,8 @@ module AzureDevops
       }.compact
     end
 
-    def get(work_item_id)
-      client, resolved = client_for(:"work_items.read")
+    def get(work_item_id, project_id: nil)
+      client, resolved = client_for(:"work_items.read", project_id: project_id)
       item = client.get("_apis", "wit", "workitems", work_item_id.to_s,
                         family: :wit, project: resolved.project_id,
                         params: { "$expand" => "relations" })
@@ -89,8 +89,8 @@ module AzureDevops
     # Comments are their own API under their own preview version. System.History
     # is not a complete discussion feed and reading it instead silently drops
     # comments.
-    def comments(work_item_id, limit: DEFAULT_LIMIT, cursor: nil)
-      client, resolved = client_for(:"work_items.read")
+    def comments(work_item_id, limit: DEFAULT_LIMIT, cursor: nil, project_id: nil)
+      client, resolved = client_for(:"work_items.read", project_id: project_id)
       payload = client.get("_apis", "wit", "workItems", work_item_id.to_s, "comments",
                            family: :wit_comments, project: resolved.project_id,
                            params: { "$top" => clamp(limit), continuationToken: cursor.presence })
@@ -105,8 +105,8 @@ module AzureDevops
       }.compact
     end
 
-    def add_comment(work_item_id, text:)
-      client, resolved = client_for(:"work_items.write")
+    def add_comment(work_item_id, text:, project_id: nil)
+      client, resolved = client_for(:"work_items.write", project_id: project_id)
       comment = client.post("_apis", "wit", "workItems", work_item_id.to_s, "comments",
                             body: { text: text.to_s }, family: :wit_comments, project: resolved.project_id)
       { id: comment["id"], created_at: comment["createdDate"] }.compact
@@ -114,8 +114,8 @@ module AzureDevops
 
     # The type goes in the path with a `$` prefix — that is the API's shape, not
     # a typo. Fields are supplied as JSON Patch adds against `/fields/<ref>`.
-    def create(type:, fields: {})
-      client, resolved = client_for(:"work_items.write")
+    def create(type:, fields: {}, project_id: nil)
+      client, resolved = client_for(:"work_items.write", project_id: project_id)
       patch = allowed_fields(fields).map { |ref, value| { op: "add", path: "/fields/#{ref}", value: value } }
       raise ValidationFailed, "At least System.Title is required" if patch.empty?
 
@@ -128,8 +128,8 @@ module AzureDevops
     # `expected_revision` becomes a JSON Patch `test` on /rev, so a concurrent
     # edit makes Azure reject the whole patch rather than letting it overwrite
     # somebody's change. bypassRules is never set.
-    def update(work_item_id, fields: {}, expected_revision: nil)
-      client, resolved = client_for(:"work_items.write")
+    def update(work_item_id, fields: {}, expected_revision: nil, project_id: nil)
+      client, resolved = client_for(:"work_items.write", project_id: project_id)
       patch = []
       patch << { op: "test", path: "/rev", value: expected_revision.to_i } if expected_revision.present?
       patch.concat(allowed_fields(fields).map { |ref, value| { op: "add", path: "/fields/#{ref}", value: value } })
@@ -158,8 +158,8 @@ module AzureDevops
 
     # Attaches the PR as an ArtifactLink relation. Deliberately separate from any
     # state change: a linked pull request must not close the work item by itself.
-    def link_pull_request(work_item_id, artifact_id:, expected_revision: nil, comment: nil)
-      client, resolved = client_for(:"work_items.write")
+    def link_pull_request(work_item_id, artifact_id:, expected_revision: nil, comment: nil, project_id: nil)
+      client, resolved = client_for(:"work_items.write", project_id: project_id)
       patch = []
       patch << { op: "test", path: "/rev", value: expected_revision.to_i } if expected_revision.present?
       patch << {
@@ -184,8 +184,8 @@ module AzureDevops
 
     private
 
-    def client_for(capability)
-      CredentialProvider.client_for(integration, capability: capability)
+    def client_for(capability, project_id: nil)
+      CredentialProvider.client_for(integration, capability: capability, project_id: project_id)
     end
 
     def clamp(limit)

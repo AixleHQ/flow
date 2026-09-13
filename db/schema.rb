@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_13_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -169,6 +169,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_120000) do
   end
 
   create_table "azure_devops_subscriptions", force: :cascade do |t|
+    t.string "azure_project_id"
     t.string "azure_subscription_id"
     t.datetime "created_at", null: false
     t.text "encrypted_password", null: false
@@ -181,7 +182,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_120000) do
     t.string "status", default: "pending", null: false
     t.datetime "updated_at", null: false
     t.index ["endpoint_id"], name: "index_azure_devops_subscriptions_on_endpoint_id", unique: true
-    t.index ["integration_id", "event_type"], name: "idx_ado_subscriptions_integration_event", unique: true
+    t.index ["integration_id", "azure_project_id", "event_type"], name: "idx_ado_subscriptions_integration_project_event", unique: true
     t.index ["integration_id"], name: "index_azure_devops_subscriptions_on_integration_id"
   end
 

@@ -17,6 +17,7 @@ module InternalTools
       requires_integration :azure_devops
       read_only
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
+      param :azure_project_id, type: :string, description: "Azure project id. Required when the connection covers more than one; call azure_devops_list_connections to see them."
       param :ids, type: :array, description: "Specific work item ids.", items: { type: "integer" }
       param :type, type: :string, description: "Work item type name, e.g. Bug or User Story. See azure_devops_list_work_item_types."
       param :state, type: :string, description: "Exact state name, e.g. Active."
@@ -34,7 +35,8 @@ module InternalTools
         filters = params.slice(:ids, :type, :state, :assigned_to, :title_contains, :tag, :open_only)
                         .symbolize_keys
         result = AzureDevops::WorkItemService.new(integration).query(
-          filters: filters, limit: params[:limit], cursor: params[:cursor]
+          filters: filters, limit: params[:limit], cursor: params[:cursor],
+          project_id: resolve_project_id!(integration)
         )
         success(result.to_json)
       end

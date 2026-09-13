@@ -125,7 +125,9 @@ module AzureDevops
       # until it is edited.
       assert_equal IntegrationService::DEFAULT_CAPABILITIES, service.class.sanitize_capabilities(nil)
       assert_empty service.class.sanitize_capabilities([])
-      refute_includes IntegrationService::DEFAULT_CAPABILITIES, "pull_requests.complete"
+      # Merging is on by default: Azure branch policies decide whether it may
+      # happen, and this list decides only what Aixle sends.
+      assert_includes IntegrationService::DEFAULT_CAPABILITIES, "pull_requests.complete"
     end
 
     test "refuses a non-Azure integration outright" do

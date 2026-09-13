@@ -16,8 +16,11 @@ module AzureDevops
 
     attr_reader :integration
 
-    def list(repository: nil, branch: nil, limit: 25)
-      client, resolved = client_for
+    # `project_id` is required unless the connection covers exactly one project
+    # or a repository names it — a build list is project-scoped in Azure, and
+    # picking one for the caller would silently answer about the wrong one.
+    def list(repository: nil, branch: nil, limit: 25, project_id: nil)
+      client, resolved = client_for(project_id: project_id || repository&.external_project_id)
       params = {
         "$top" => limit.to_i.clamp(1, 100),
         queryOrder: "queueTimeDescending",
@@ -32,16 +35,31 @@ module AzureDevops
       Array(payload["value"]).map { |build| summarize(build) }
     end
 
-    def get(build_id)
-      client, resolved = client_for
-      summarize(client.get("_apis", "build", "builds", build_id.to_s, family: :build, project: resolved.project_id))
+    # A build id is unique per organization but the endpoint is project-scoped,
+    # so with several projects the right one is searched for rather than
+    # guessed. `project_id` skips the search when the caller knows it.
+    def get(build_id, project_id: nil)
+      return fetch_build(build_id, project_id) if project_id.present?
+
+      candidates = integration.azure_project_ids
+      return fetch_build(build_id, candidates.first) if candidates.one?
+
+      candidates.each do |candidate|
+        found = begin
+          fetch_build(build_id, candidate)
+        rescue NotFound
+          nil
+        end
+        return found if found
+      end
+      raise NotFound, "Azure has no build #{build_id} in any project this connection covers"
     end
 
     # Branch-policy evaluations for one pull request, which is what actually
     # decides completion. The artifact id is the same vstfs identifier the
     # work-item link uses.
     def policy_evaluations(repository, pull_request_id)
-      client, resolved = client_for
+      client, resolved = client_for(project_id: repository&.external_project_id)
       artifact_id = "vstfs:///CodeReview/CodeReviewId/#{resolved.project_id}%2F#{pull_request_id}"
 
       payload = client.get("_apis", "policy", "evaluations",
@@ -74,8 +92,13 @@ module AzureDevops
 
     private
 
-    def client_for
-      CredentialProvider.client_for(integration, capability: :"builds.read")
+    def fetch_build(build_id, project_id)
+      client, resolved = client_for(project_id: project_id)
+      summarize(client.get("_apis", "build", "builds", build_id.to_s, family: :build, project: resolved.project_id))
+    end
+
+    def client_for(project_id: nil)
+      CredentialProvider.client_for(integration, capability: :"builds.read", project_id: project_id)
     end
 
     def qualified_ref(branch)

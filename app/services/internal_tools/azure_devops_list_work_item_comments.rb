@@ -16,6 +16,7 @@ module InternalTools
       requires_integration :azure_devops
       read_only
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
+      param :azure_project_id, type: :string, description: "Azure project id. Required when the connection covers more than one; call azure_devops_list_connections to see them."
       param :work_item_id, type: :integer, description: "Azure work item id.", required: true
       param :limit, type: :integer, description: "How many to return (default 50, max 100)."
       param :cursor, type: :string, description: "Pass `next_cursor` from a previous call."
@@ -25,7 +26,8 @@ module InternalTools
       azure_guard do
         integration = resolve_integration!
         result = AzureDevops::WorkItemService.new(integration).comments(
-          params[:work_item_id], limit: params[:limit], cursor: params[:cursor]
+          params[:work_item_id], limit: params[:limit], cursor: params[:cursor],
+          project_id: resolve_project_id!(integration)
         )
         success(result.to_json)
       end

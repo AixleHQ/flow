@@ -36,7 +36,7 @@ class AzureDevopsSubscription < ApplicationRecord
 
   validates :endpoint_id, presence: true, uniqueness: true
   validates :event_type, presence: true, inclusion: { in: EVENT_TYPES },
-                        uniqueness: { scope: :integration_id }
+                        uniqueness: { scope: %i[integration_id azure_project_id] }
   validate :integration_is_azure
 
   scope :live, -> { where(status: %w[pending active probation]) }

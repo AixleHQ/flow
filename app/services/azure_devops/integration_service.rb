@@ -19,10 +19,16 @@ module AzureDevops
       pull_requests.complete builds.read
     ].freeze
 
-    # What a new connection gets. Completing pull requests is deliberately NOT
-    # among them: merging is the one agent action nobody should acquire by
-    # accepting a form's defaults, so it is switched on explicitly or not at all.
-    DEFAULT_CAPABILITIES = (ALL_CAPABILITIES - %w[pull_requests.complete]).freeze
+    # What a new connection gets: everything, including completing pull
+    # requests. Merging is part of the delivery cycle an agent is here to run,
+    # and an integration that can open a pull request but never land it leaves
+    # the last step to a human for no security gain — Azure's branch policies
+    # are what actually decide whether a merge is allowed, `bypassPolicy` is
+    # never sent, and the completion guard still refuses if the source branch
+    # moved since the caller read it.
+    #
+    # Unticking it remains a real switch: the request is then not sent at all.
+    DEFAULT_CAPABILITIES = ALL_CAPABILITIES
 
     # Capability lists arrive from the browser and land in `settings`, which
     # IntegrationResource serializes whole — so an unrecognized entry would be
@@ -51,12 +57,22 @@ module AzureDevops
     # Service-principal mode: bind an already-approved installation to one
     # Azure project. The project id arrives from the browser, so it is checked
     # against the approved scope and then against Azure itself — never trusted.
-    def create_with_installation(installation_id:, azure_project_id:, enabled_capabilities: nil)
+    # `azure_project_ids` is a list because a connection covers as many of the
+    # organization's projects as the company approved and the connector chose —
+    # the same shape as a GitHub App installation covering several repositories.
+    def create_with_installation(installation_id:, azure_project_ids:, azure_project_names: {},
+                                 enabled_capabilities: nil)
       installation = AzureDevopsInstallation.find_by(id: installation_id, company_id: company.id)
       raise ConfigurationError, "No approved Azure organization installation for this company" if installation.nil?
       raise ConfigurationError, "The Azure organization installation is disabled" unless installation.active?
-      unless installation.approved_project?(azure_project_id)
-        raise ConfigurationError, "That Azure project is not in the approved scope for this organization"
+
+      ids = Array(azure_project_ids).map(&:to_s).reject(&:blank?).uniq
+      raise ConfigurationError, "Choose at least one Azure project" if ids.empty?
+
+      outside = ids.reject { |id| installation.approved_project?(id) }
+      if outside.any?
+        raise ConfigurationError,
+              "#{outside.size} of the chosen Azure projects are not in the approved scope for this organization"
       end
 
       integration = build_integration(
@@ -68,7 +84,8 @@ module AzureDevops
           "tenant_id" => installation.tenant_id,
           "client_id" => installation.client_id,
           "service_principal_object_id" => installation.service_principal_object_id,
-          "azure_project_id" => azure_project_id.to_s,
+          "azure_project_ids" => ids,
+          "azure_project_names" => self.class.sanitize_project_names(azure_project_names, ids),
           "enabled_capabilities" => self.class.sanitize_capabilities(enabled_capabilities)
         }
       )
@@ -76,10 +93,24 @@ module AzureDevops
       activate(integration)
     end
 
+    # Names are display only, and they arrive from the browser — so they are
+    # intersected with the ids that were actually approved, exactly like
+    # capabilities, rather than persisted as sent.
+    def self.sanitize_project_names(names, ids)
+      return {} unless names.respond_to?(:to_h)
+
+      names.to_h.filter_map do |id, name|
+        next unless ids.include?(id.to_s)
+
+        [ id.to_s, name.to_s.truncate(200) ]
+      end.to_h
+    end
+
     # PAT mode. A different identity: operations act as the token's owner and
     # carry that person's upstream permissions, so it is labelled separately
     # everywhere and is never selected automatically when app setup fails.
-    def create_with_pat(organization_slug:, azure_project_id:, personal_access_token:, enabled_capabilities: nil)
+    def create_with_pat(organization_slug:, azure_project_ids:, personal_access_token:,
+                        azure_project_names: {}, enabled_capabilities: nil)
       raise ConfigurationError, "PAT mode is not enabled on this deployment" unless AppConfig.pat_mode_enabled?
       raise ConfigurationError, "A personal access token is required" if personal_access_token.blank?
 
@@ -88,7 +119,8 @@ module AzureDevops
         settings: {
           "auth_mode" => "pat",
           "organization_slug" => organization_slug.to_s.strip,
-          "azure_project_id" => azure_project_id.to_s,
+          "azure_project_ids" => (ids = Array(azure_project_ids).map(&:to_s).reject(&:blank?).uniq),
+          "azure_project_names" => self.class.sanitize_project_names(azure_project_names, ids),
           "enabled_capabilities" => self.class.sanitize_capabilities(enabled_capabilities)
         }
       )
@@ -185,7 +217,7 @@ module AzureDevops
     # error code to the browser while reporting itself active.
     def apply_verified(integration, info)
       integration.settings = integration.settings.to_h.merge(
-        "azure_project_name" => info[:name],
+        "azure_project_names" => info[:names],
         "identity_display_name" => info[:identity_display_name],
         "last_verified_at" => Time.current.iso8601
       ).compact.except("error", "error_message")
@@ -214,19 +246,29 @@ module AzureDevops
       # allow_inactive: this IS the check that decides whether the connection
       # becomes active. Requiring active here would make a new connection
       # unverifiable and a repair impossible once one had errored.
-      client, resolved = CredentialProvider.client_for(integration, allow_inactive: true)
-      project_id = integration.azure_project_id
-      raise ConfigurationError, "No Azure project selected" if project_id.blank?
+      project_ids = integration.azure_project_ids
+      raise ConfigurationError, "No Azure project selected" if project_ids.empty?
 
-      payload = client.get("_apis", "projects", project_id, family: :core)
+      names = {}
+      resolved = nil
+      project_ids.each do |project_id|
+        client, resolved = CredentialProvider.client_for(integration, allow_inactive: true,
+                                                         project_id: project_id)
+        payload = client.get("_apis", "projects", project_id, family: :core)
 
-      # Azure answering about a DIFFERENT project than the one asked for would
-      # mean the id was resolved by name somewhere; refuse rather than record it.
-      if payload["id"].present? && payload["id"] != project_id
-        raise ValidationFailed, "Azure returned a different project than the one selected"
+        # Azure answering about a DIFFERENT project than the one asked for would
+        # mean the id was resolved by name somewhere; refuse rather than record it.
+        if payload["id"].present? && payload["id"] != project_id
+          raise ValidationFailed, "Azure returned a different project than the one selected"
+        end
+
+        names[project_id] = payload["name"]
       end
 
-      { id: payload["id"], name: payload["name"], identity_display_name: identity_name(resolved) }
+      # EVERY selected project has to be readable, not just one: a connection
+      # that half works is a connection whose failures arrive later, on a tool
+      # call, with nothing pointing at the cause.
+      { names: names, identity_display_name: identity_name(resolved) }
     end
 
     # Best-effort: who Azure thinks we are, for the connection card. A failure

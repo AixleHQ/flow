@@ -66,7 +66,8 @@ export interface Integration {
   azureAuthMode?: string | null;
   azureOrganization?: string | null;
   azureProjectName?: string | null;
-  azureProjectId?: string | null;
+  azureProjectIds?: string[];
+  azureProjectDisplayNames?: string[];
   azureIdentity?: string | null;
   azureCapabilities?: string[];
   azureUrl?: string | null;
@@ -549,7 +550,11 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
                           {integration.provider === 'azure_devops' && (
                             <Text fz={11} c="dimmed" truncate maw={260}>
                               {integration.azureOrganization ?? '—'}
-                              {integration.azureProjectName ? ` / ${integration.azureProjectName}` : ''}
+                              {integration.azureProjectDisplayNames?.length
+                                ? ` / ${integration.azureProjectDisplayNames.join(', ')}`
+                                : integration.azureProjectName
+                                  ? ` / ${integration.azureProjectName}`
+                                  : ''}
                               {' · '}
                               {integration.azureAuthMode === 'pat'
                                 ? `as ${integration.connectedBy.name} (token)`

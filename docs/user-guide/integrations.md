@@ -40,8 +40,9 @@ the project level) and paste a token with `api` scope.
 ### Azure DevOps
 
 Azure DevOps is **project-scoped**: one connection names one Azure
-organization and one Azure project inside it. Agents clone, push, open
-and review pull requests, and read and update Azure Boards work items.
+organization and one or more Azure projects inside it. Agents clone,
+push, open and review pull requests, and read and update Azure Boards
+work items — in those projects and nowhere else.
 
 Connecting is self-service, with one step outside Flow:
 
@@ -53,8 +54,10 @@ Connecting is self-service, with one step outside Flow:
    not register an application of your own.
 2. **In Flow,** open **Project → Integrations → Connect → Azure DevOps**,
    type your organization name, and paste a personal access token from
-   someone who can administer it (scopes: **Member Entitlement Management
-   (read & write)** and **Security (manage)**).
+   someone who can administer it. The token needs three scopes:
+   **Member Entitlement Management (read & write)**, **Project and team
+   (read)**, and **Security (manage)**. They are not in the short list the
+   token form shows first — click **Show all scopes**.
 
 The second scope is spent on a single permission: it lets Aixle create
 its own Service Hooks, which is how a CI gate on a board task closes the
@@ -70,9 +73,16 @@ connection runs on Aixle's own identity afterwards — not on your token.
 Colleagues connecting further projects in the same organization are not
 asked for one, because the first connection already established it.
 
-The selected Azure project is fixed for the life of the connection:
-changing it would silently re-point existing repository and work-item
-references, so connect again instead.
+The selected Azure projects are fixed for the life of the connection.
+Adding one later would silently widen what every agent and every tool in
+the Flow project can already reach, and removing one would leave
+repositories and work-item references pointing at a project the
+connection no longer covers — so connect again instead.
+
+Where a connection covers more than one project, tools that act on a
+project rather than on a repository (work items, builds) take an explicit
+project id. They refuse rather than pick one, so which project an agent
+filed a bug in never depends on ordering.
 
 Operations run as the **application's identity**, not as the person who
 connected it — pull requests and comments are authored by it, and an

@@ -81,8 +81,15 @@ module AzureDevops
     end
 
     # The projects this administrator can see, listed with THEIR token rather
-    # than the application's — at this point the application may not be in the
-    # organization yet, and the point is to let them choose what it may reach.
+    # than the application's — at this point the application is not in the
+    # organization yet and its own token is refused outright, so this is the
+    # only credential that can produce the list.
+    #
+    # A failure here is NOT an empty list. It used to be: any non-200 returned
+    # `[]`, so a token missing the project scope produced a cheerful "verified"
+    # and an empty dropdown with nothing to pick and nothing to explain. The
+    # scopes are not guessable from the outside, so the error has to name the
+    # one that is missing.
     def projects(limit: 200)
       response = Faraday.new(url: AppConfig.api_host) { |f| transport(f) }
                         .get("/#{ERB::Util.url_encode(@organization)}/_apis/projects") do |req|
@@ -90,14 +97,26 @@ module AzureDevops
         req.params["api-version"] = Client::API_VERSIONS[:core]
         req.params["$top"] = limit
       end
-      return [] unless response.status == 200
+
+      if signed_out?(response) || [ 401, 403 ].include?(response.status)
+        raise NotAuthorized,
+              "That token proved you administer '#{@organization}', but it cannot list its projects. " \
+              "Add the Project and team (read) scope to it — Azure does not include project access " \
+              "in the Member Entitlement Management scope."
+      end
+      unless response.status == 200
+        raise Error.new("Azure answered #{response.status} while listing the organization's projects",
+                        code: "project_listing_failed", status: response.status)
+      end
 
       Array(JSON.parse(response.body)["value"]).map do |project|
         { id: project["id"], name: project["name"], description: project["description"],
           visibility: project["visibility"] }.compact
       end
-    rescue JSON::ParserError, Faraday::Error
-      []
+    rescue JSON::ParserError
+      raise Error.new("Azure's project list could not be read", code: "project_listing_failed")
+    rescue Faraday::TimeoutError, Faraday::ConnectionFailed => e
+      raise Error.new("Could not reach Azure DevOps (#{e.class})", code: "azure_unreachable")
     end
 
     private

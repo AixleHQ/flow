@@ -33,14 +33,25 @@ class IntegrationResource < ApplicationResource
     integration.azure_devops? ? integration.azure_organization_slug : nil
   end
 
+  # A connection covers one or more Azure projects. The list is what the UI
+  # shows; `azure_project_name` stays for the single-project case so a card that
+  # names one project keeps reading naturally.
   typelize :string?
   attribute :azure_project_name do |integration|
     integration.azure_devops? ? integration.azure_project_name : nil
   end
 
-  typelize :string?
-  attribute :azure_project_id do |integration|
-    integration.azure_devops? ? integration.azure_project_id : nil
+  typelize "string[]"
+  attribute :azure_project_ids do |integration|
+    integration.azure_devops? ? integration.azure_project_ids : []
+  end
+
+  typelize "string[]"
+  attribute :azure_project_display_names do |integration|
+    next [] unless integration.azure_devops?
+
+    names = integration.azure_project_names
+    integration.azure_project_ids.map { |id| names[id].presence || id }
   end
 
   typelize :string?

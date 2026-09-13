@@ -21,27 +21,38 @@ module AzureDevops
     # Ensure a live subscription exists for each event type. Idempotent: an
     # existing live row is left alone rather than recreated, because recreating
     # one rotates its password and orphans the subscription Azure still holds.
+    # A subscription is created against ONE Azure project — `projectId` is part
+    # of the subscription, not of the connection — so a connection covering
+    # several needs one set of subscriptions per project. One project failing
+    # does not stop the others: partial event coverage plus the recovery sweep
+    # beats none.
     def ensure_all!(event_types: AzureDevopsSubscription::EVENT_TYPES, base_url: nil)
-      event_types.filter_map do |event_type|
-        # ANY existing row, not only a live one: the unique index is on
-        # (integration, event_type), so a row left behind by an earlier failed
-        # attempt must be reused rather than duplicated.
-        existing = integration.azure_devops_subscriptions.find_by(event_type: event_type)
-        next existing if existing&.azure_subscription_id.present? && existing.live?
+      integration.azure_project_ids.flat_map do |project_id|
+        event_types.filter_map do |event_type|
+          # ANY existing row, not only a live one: the unique index is on
+          # (integration, project, event_type), so a row left behind by an
+          # earlier failed attempt must be reused rather than duplicated.
+          existing = integration.azure_devops_subscriptions
+                                .find_by(event_type: event_type, azure_project_id: project_id)
+          next existing if existing&.azure_subscription_id.present? && existing.live?
 
-        create!(event_type: event_type, base_url: base_url, subscription: existing)
-      rescue Error => e
-        Rails.logger.warn("[AzureDevops::SubscriptionService] #{event_type} failed for " \
-                          "integration #{integration.id}: #{e.code}")
-        nil
+          create!(event_type: event_type, project_id: project_id, base_url: base_url, subscription: existing)
+        rescue Error => e
+          Rails.logger.warn("[AzureDevops::SubscriptionService] #{event_type} in project #{project_id} " \
+                            "failed for integration #{integration.id}: #{e.code}")
+          nil
+        end
       end
     end
 
-    def create!(event_type:, base_url: nil, subscription: nil)
-      subscription ||= integration.azure_devops_subscriptions.find_or_initialize_by(event_type: event_type)
+    def create!(event_type:, project_id: nil, base_url: nil, subscription: nil)
+      project_id ||= integration.azure_default_project_id
+      subscription ||= integration.azure_devops_subscriptions
+                                  .find_or_initialize_by(event_type: event_type, azure_project_id: project_id)
+      subscription.azure_project_id ||= project_id
       subscription.save! if subscription.new_record?
 
-      client, resolved = CredentialProvider.client_for(integration)
+      client, resolved = CredentialProvider.client_for(integration, project_id: project_id)
       payload = client.post(
         "_apis", "hooks", "subscriptions",
         body: CONSUMER.merge(

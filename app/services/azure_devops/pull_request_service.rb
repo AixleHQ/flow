@@ -18,7 +18,7 @@ module AzureDevops
     attr_reader :integration
 
     def list(repository, state: "active", limit: DEFAULT_LIMIT, skip: 0)
-      client, resolved = client_for(:"repositories.read")
+      client, resolved = client_for(:"repositories.read", project_id: repository.external_project_id)
       payload = client.get(*repo_path(repository), "pullrequests",
                            family: :git, project: resolved.project_id,
                            params: {
@@ -34,7 +34,7 @@ module AzureDevops
     # The list endpoint truncates `description`. Anything that needs the body —
     # which is most of what an agent reads a PR for — has to come from here.
     def get(repository, pull_request_id)
-      client, resolved = client_for(:"repositories.read")
+      client, resolved = client_for(:"repositories.read", project_id: repository.external_project_id)
       pr = client.get(*repo_path(repository), "pullrequests", pull_request_id.to_s,
                       family: :git, project: resolved.project_id,
                       params: { includeCommits: false, includeWorkItemRefs: true })
@@ -47,7 +47,7 @@ module AzureDevops
     # and change types, not a textual patch, and fabricating a diff from that
     # list is how an agent ends up reviewing code that does not exist.
     def changes(repository, pull_request_id, iteration: nil, limit: DEFAULT_LIMIT, skip: 0)
-      client, resolved = client_for(:"repositories.read")
+      client, resolved = client_for(:"repositories.read", project_id: repository.external_project_id)
       iteration_id = iteration.presence || latest_iteration(client, resolved, repository, pull_request_id)
       payload = client.get(*repo_path(repository), "pullrequests", pull_request_id.to_s,
                            "iterations", iteration_id.to_s, "changes",
@@ -74,7 +74,7 @@ module AzureDevops
     # retry contract. Draft by default: an agent opening a PR that is
     # immediately review-ready and policy-triggering should be a deliberate act.
     def create(repository, source_branch:, target_branch:, title:, description: nil, draft: true)
-      client, resolved = client_for(:"pull_requests.write")
+      client, resolved = client_for(:"pull_requests.write", project_id: repository.external_project_id)
       body = {
         # Azure requires fully qualified refs. A bare branch name is accepted by
         # nothing and produces an unhelpful validation error.
@@ -91,7 +91,7 @@ module AzureDevops
     end
 
     def update(repository, pull_request_id, attributes)
-      client, resolved = client_for(:"pull_requests.write")
+      client, resolved = client_for(:"pull_requests.write", project_id: repository.external_project_id)
       body = {
         title: attributes[:title],
         description: attributes[:description],
@@ -105,7 +105,7 @@ module AzureDevops
     end
 
     def list_threads(repository, pull_request_id, limit: DEFAULT_LIMIT)
-      client, resolved = client_for(:"repositories.read")
+      client, resolved = client_for(:"repositories.read", project_id: repository.external_project_id)
       payload = client.get(*repo_path(repository), "pullrequests", pull_request_id.to_s, "threads",
                            family: :git, project: resolved.project_id)
 
@@ -117,7 +117,7 @@ module AzureDevops
     # line coordinates validated against an iteration. Passing line numbers for
     # the wrong iteration silently anchors the comment to unrelated code.
     def create_thread(repository, pull_request_id, content:, file_path: nil, right_line: nil, iteration: nil)
-      client, resolved = client_for(:"pull_request_threads.write")
+      client, resolved = client_for(:"pull_request_threads.write", project_id: repository.external_project_id)
       body = { comments: [ { parentCommentId: 0, content: content.to_s, commentType: "text" } ], status: "active" }
 
       if file_path.present?
@@ -139,7 +139,7 @@ module AzureDevops
     end
 
     def reply_to_thread(repository, pull_request_id, thread_id, content:)
-      client, resolved = client_for(:"pull_request_threads.write")
+      client, resolved = client_for(:"pull_request_threads.write", project_id: repository.external_project_id)
       comment = client.post(*repo_path(repository), "pullrequests", pull_request_id.to_s,
                             "threads", thread_id.to_s, "comments",
                             body: { content: content.to_s, commentType: "text" },
@@ -151,7 +151,7 @@ module AzureDevops
       allowed = %w[active fixed wontFix closed pending byDesign]
       raise ValidationFailed, "status must be one of #{allowed.join(', ')}" unless allowed.include?(status.to_s)
 
-      client, resolved = client_for(:"pull_request_threads.write")
+      client, resolved = client_for(:"pull_request_threads.write", project_id: repository.external_project_id)
       thread = client.patch(*repo_path(repository), "pullrequests", pull_request_id.to_s, "threads", thread_id.to_s,
                             body: { status: status.to_s }, family: :git, project: resolved.project_id)
       summarize_thread(thread)
@@ -160,7 +160,7 @@ module AzureDevops
     # ----- Parity extension: reviewers, votes, completion -----
 
     def reviewers(repository, pull_request_id)
-      client, resolved = client_for(:"repositories.read")
+      client, resolved = client_for(:"repositories.read", project_id: repository.external_project_id)
       payload = client.get(*repo_path(repository), "pullrequests", pull_request_id.to_s, "reviewers",
                            family: :git, project: resolved.project_id)
 
@@ -171,7 +171,7 @@ module AzureDevops
     # and an unknown id is a 400 rather than a no-op. Resolution happens in the
     # tool layer so this stays a thin translation.
     def add_reviewer(repository, pull_request_id, reviewer_id:, required: false)
-      client, resolved = client_for(:"pull_requests.write")
+      client, resolved = client_for(:"pull_requests.write", project_id: repository.external_project_id)
       reviewer = client.patch(*repo_path(repository), "pullrequests", pull_request_id.to_s,
                               "reviewers", reviewer_id.to_s,
                               body: { vote: 0, isRequired: required },
@@ -189,7 +189,7 @@ module AzureDevops
       value = VOTES[vote.to_s]
       raise ValidationFailed, "vote must be one of #{VOTES.keys.join(', ')}" if value.nil?
 
-      client, resolved = client_for(:"pull_requests.write")
+      client, resolved = client_for(:"pull_requests.write", project_id: repository.external_project_id)
       reviewer = client.patch(*repo_path(repository), "pullrequests", pull_request_id.to_s,
                               "reviewers", reviewer_id.to_s,
                               body: { vote: value },
@@ -217,7 +217,7 @@ module AzureDevops
       end
       raise ValidationFailed, "expected_commit is required to complete a pull request" if expected_commit.blank?
 
-      client, resolved = client_for(:"pull_requests.complete")
+      client, resolved = client_for(:"pull_requests.complete", project_id: repository.external_project_id)
       body = {
         status: "completed",
         lastMergeSourceCommit: { commitId: expected_commit.to_s },
@@ -267,8 +267,8 @@ module AzureDevops
 
     private
 
-    def client_for(capability)
-      CredentialProvider.client_for(integration, capability: capability)
+    def client_for(capability, project_id: nil)
+      CredentialProvider.client_for(integration, capability: capability, project_id: project_id)
     end
 
     def repo_path(repository)

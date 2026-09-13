@@ -13,7 +13,7 @@ module InternalTools
 
     tool do
       display_name "Azure DevOps List Connections"
-      description "List this project's Azure DevOps connections: connection id, organization, selected Azure project, auth mode and enabled capabilities. Call this first — the work item tools need an explicit `integration_id`. Returns JSON: {connections: [{integration_id, organization, azure_project, azure_project_id, auth_mode, capabilities, status}]}. No credentials are ever returned."
+      description "List this project's Azure DevOps connections: connection id, organization, the Azure projects it covers, auth mode and enabled capabilities. Call this first — the work item and build tools need an explicit `integration_id`, and an explicit `azure_project_id` whenever a connection covers more than one project. Returns JSON: {connections: [{integration_id, organization, azure_projects: [{id, name}], auth_mode, capabilities, status}]}. No credentials are ever returned."
       tags :azure_devops
       inject_when :azure_integration_connected
       user_attachable false
@@ -28,8 +28,12 @@ module InternalTools
           {
             integration_id: integration.id,
             organization: integration.azure_organization_slug,
-            azure_project: integration.azure_project_name,
-            azure_project_id: integration.azure_project_id,
+            # The list, not "the" project: a connection covers as many of the
+            # organization's projects as it was given, and a tool that acts on
+            # one has to name which.
+            azure_projects: integration.azure_project_ids.map do |id|
+              { id: id, name: integration.azure_project_names[id] }.compact
+            end,
             # Surfaced because the two modes act as different identities: a PAT
             # connection acts as the token's owner, a service-principal one as
             # the application.

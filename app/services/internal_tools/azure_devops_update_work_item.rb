@@ -15,6 +15,7 @@ module InternalTools
       user_attachable false
       requires_integration :azure_devops
       param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
+      param :azure_project_id, type: :string, description: "Azure project id. Required when the connection covers more than one; call azure_devops_list_connections to see them."
       param :work_item_id, type: :integer, description: "Azure work item id.", required: true
       param :expected_revision, type: :integer, description: "The `rev` you last read. Strongly recommended."
       param :title, type: :string, description: "New title."
@@ -36,7 +37,8 @@ module InternalTools
         return error({ error: "validation_failed", message: "No fields to update" }.to_json) if fields.empty?
 
         result = AzureDevops::WorkItemService.new(integration).update(
-          params[:work_item_id], fields: fields, expected_revision: params[:expected_revision]
+          params[:work_item_id], fields: fields, expected_revision: params[:expected_revision],
+          project_id: resolve_project_id!(integration)
         )
         success(result.to_json)
       end

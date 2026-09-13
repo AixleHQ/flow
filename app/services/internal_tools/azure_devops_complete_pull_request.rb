@@ -18,7 +18,7 @@ module InternalTools
 
     tool do
       display_name "Azure DevOps Complete Pull Request"
-      description "Complete (merge) an Azure Repos pull request. Requires the connection to enable `pull_requests.complete`, which is off by default. `expected_commit` is the `last_merge_source_commit` you read from the pull request — Azure refuses if the source branch has moved since, which is what stops this merging code you did not review. Branch policies are never bypassed; check azure_devops_get_pull_request_policies first. Returns JSON with `completed: true` only once a re-read confirms the merge; `pending: true` means Azure accepted the request and it has not landed — re-read rather than calling this again."
+      description "Complete (merge) an Azure Repos pull request. Requires the connection to enable `pull_requests.complete`. `expected_commit` is the `last_merge_source_commit` you read from the pull request — Azure refuses if the source branch has moved since, which is what stops this merging code you did not review. Branch policies are never bypassed; check azure_devops_get_pull_request_policies first. Returns JSON with `completed: true` only once a re-read confirms the merge; `pending: true` means Azure accepted the request and it has not landed — re-read rather than calling this again."
       tags :azure_devops
       inject_when :azure_repositories_attached
       user_attachable false

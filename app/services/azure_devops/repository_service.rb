@@ -16,32 +16,37 @@ module AzureDevops
 
     attr_reader :integration
 
+    # Every repository in every project this connection covers. One project that
+    # cannot be read does not hide the others: a connection can outlive a project
+    # being archived or its access being narrowed, and answering with nothing
+    # would look like an empty organization.
     def list_available
-      client, resolved = client_for(:"repositories.read")
-      payload = client.get("_apis", "git", "repositories", family: :git, project: resolved.project_id)
-
-      Array(payload["value"]).map { |repo| summarize(repo, resolved) }
-    rescue Error => e
-      Rails.logger.warn("[AzureDevops::RepositoryService] list failed for integration #{integration.id}: #{e.code}")
-      []
+      integration.azure_project_ids.flat_map { |project_id| repositories_in(project_id) }
     end
 
     # `identifier` is an Azure repository GUID. Deliberately not a name: a name
     # lookup would let a caller reach a repository in another project that
     # happens to share it.
-    def find_repo(identifier)
-      client, resolved = client_for(:"repositories.read")
-      repo = client.get("_apis", "git", "repositories", identifier.to_s, family: :git, project: resolved.project_id)
+    # `project_id` is optional because the caller does not always know it — a
+    # GUID pasted into the repository form carries no project. It is searched
+    # for in the connection's projects rather than assumed, and the result is
+    # still checked against the project it was found in, so a GUID from a
+    # project this connection does not cover finds nothing.
+    def find_repo(identifier, project_id: nil)
+      candidates = project_id.present? ? [ project_id.to_s ] : integration.azure_project_ids
 
-      verify_scope!(repo, resolved)
-      summarize(repo, resolved)
-    rescue Error => e
-      Rails.logger.warn("[AzureDevops::RepositoryService] find #{identifier} failed: #{e.code}")
+      candidates.each do |candidate|
+        repo = fetch_repo(identifier, candidate)
+        return repo if repo
+      end
       nil
     end
 
-    def list_branches(identifier)
-      client, resolved = client_for(:"repositories.read")
+    def list_branches(identifier, project_id: nil)
+      project_id ||= find_repo(identifier)&.dig(:external_project_id)
+      return [] if project_id.blank?
+
+      client, resolved = client_for(:"repositories.read", project_id: project_id)
       refs, = client.paginate("_apis", "git", "repositories", identifier.to_s, "refs",
                               family: :git, project: resolved.project_id,
                               params: { filter: "heads/", "$top" => 200 }, limit: 500)
@@ -93,8 +98,30 @@ module AzureDevops
 
     private
 
-    def client_for(capability)
-      CredentialProvider.client_for(integration, capability: capability)
+    def repositories_in(project_id)
+      client, resolved = client_for(:"repositories.read", project_id: project_id)
+      payload = client.get("_apis", "git", "repositories", family: :git, project: resolved.project_id)
+
+      Array(payload["value"]).map { |repo| summarize(repo, resolved) }
+    rescue Error => e
+      Rails.logger.warn("[AzureDevops::RepositoryService] listing project #{project_id} for " \
+                        "integration #{integration.id} failed: #{e.code}")
+      []
+    end
+
+    def fetch_repo(identifier, project_id)
+      client, resolved = client_for(:"repositories.read", project_id: project_id)
+      repo = client.get("_apis", "git", "repositories", identifier.to_s, family: :git, project: resolved.project_id)
+
+      verify_scope!(repo, resolved)
+      summarize(repo, resolved)
+    rescue Error => e
+      Rails.logger.debug { "[AzureDevops::RepositoryService] #{identifier} not in #{project_id}: #{e.code}" }
+      nil
+    end
+
+    def client_for(capability, project_id: nil)
+      CredentialProvider.client_for(integration, capability: capability, project_id: project_id)
     end
 
     # A repository Azure returns must belong to the project this connection
