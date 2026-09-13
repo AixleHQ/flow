@@ -210,6 +210,9 @@ The distinction that matters: is it the **credential** (yours to fix) or the
 | *"The Git repository with name or identifier does not exist or you do not have permissions"* | Almost always a **Stakeholder** license, not a missing repository | Raise to Basic |
 | Connect → *"cannot read the chosen projects yet"* | Entitlement is not always instant | Try again in a moment; the binding is not recorded until the application can actually read them |
 | Connect → *"is not backed by a Microsoft Entra directory"* | The organization is on a personal Microsoft account | Personal-access-token mode; a service principal cannot be used there at all |
+| Connect → *"cannot list its projects"* | The token administers the organization but has no project scope | Add **Project and team (read)**; it is behind *Show all scopes* |
+| Subscriptions exist and report *enabled*, but no event ever arrives | A `publisherInputs` FILTER matched nothing. Azure does not reject an unrecognized filter value — it accepts the subscription, reports it healthy and silently never fires | Compare against `_apis/hooks/publishers/tfs/eventtypes`, which lists each input's accepted values. Flow sends only `projectId` for this reason |
+| CI gates only ever close ~10 minutes late | The Service Hooks were never provisioned — most likely `AZURE_DEVOPS_WEBHOOK_BASE_URL` was unset at connect time | Set it, then **Test connection**, which is the retry path |
 
 ## Rotation
 

@@ -136,10 +136,22 @@ module AzureDevops
 
     # Scoped to the connection's own Azure project, so a subscription cannot
     # deliver events from elsewhere in the organization.
-    def publisher_inputs(event_type, resolved)
-      inputs = { projectId: resolved.project_id }
-      inputs[:buildStatus] = "Completed" if event_type == "build.complete"
-      inputs
+    # Only the project. Every other input on these publishers is a FILTER, and
+    # an unrecognized filter value is not rejected — Azure accepts the
+    # subscription, reports it enabled, and silently matches nothing.
+    #
+    # This sent `buildStatus: "Completed"`, which reads right and is not one of
+    # the values Azure accepts (`""`, Succeeded, PartiallySucceeded, Failed,
+    # Stopped — ask `_apis/hooks/publishers/tfs/eventtypes`). The result was
+    # three healthy-looking subscriptions and zero deliveries, with nothing
+    # anywhere saying why.
+    #
+    # Filtering by result would be wrong even spelled correctly: a gate has to
+    # hear about a FAILED build too, or it waits for a verdict that already
+    # happened. `build.complete` fires only on completion, so the event itself
+    # is the filter, and the resolver re-reads the build for the verdict.
+    def publisher_inputs(_event_type, resolved)
+      { projectId: resolved.project_id }
     end
 
     # Same convention as Gitlab::RepositoryService's hook URL. Unlike the

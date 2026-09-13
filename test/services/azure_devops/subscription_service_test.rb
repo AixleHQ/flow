@@ -37,6 +37,20 @@ module AzureDevops
                    @integration.azure_devops_subscriptions.reload.pluck(:event_type).sort
     end
 
+    # Found live: a subscription carrying an unrecognized filter value is
+    # accepted, reported enabled, and never fires. `buildStatus: "Completed"`
+    # reads perfectly and is not one of the values Azure accepts, so the only
+    # symptom was silence. Nothing but the project may be sent.
+    test "carries no filter but the project, so nothing can silently match nothing" do
+      stub_create
+
+      @service.create!(event_type: "build.complete", base_url: "https://aixle.test")
+
+      assert_requested(:post, %r{/_apis/hooks/subscriptions}) do |req|
+        JSON.parse(req.body)["publisherInputs"].keys == [ "projectId" ]
+      end
+    end
+
     test "creates a subscription scoped to the connection's own Azure project" do
       stub_create
       subscription = @service.create!(event_type: "build.complete", base_url: "https://aixle.test")
