@@ -53,8 +53,15 @@ Connecting is self-service, with one step outside Flow:
    not register an application of your own.
 2. **In Flow,** open **Project → Integrations → Connect → Azure DevOps**,
    type your organization name, and paste a personal access token from
-   someone who can administer it (scope: **Member Entitlement Management
-   (read & write)**).
+   someone who can administer it (scopes: **Member Entitlement Management
+   (read & write)** and **Security (manage)**).
+
+The second scope is spent on a single permission: it lets Aixle create
+its own Service Hooks, which is how a CI gate on a board task closes the
+moment a build finishes instead of on the next five-minute sweep. Without
+it the connection still works — gates just resolve more slowly. Aixle
+does not create the hooks *with* your token on purpose: a subscription
+made that way belongs to you, and stops firing when you leave.
 
 That token is used once, in that request: it proves the organization is
 yours, and it adds Aixle to it with a **Basic** access level and

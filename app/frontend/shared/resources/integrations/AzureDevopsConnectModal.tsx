@@ -217,7 +217,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
               <>
                 <PasswordInput
                   label="Administrator personal access token"
-                  description="Used once, in this request, to prove the organization is yours and to add Aixle to it. It is never stored, and the connection runs on Aixle's own identity afterwards. Needs the Member Entitlement Management (read & write) scope. Leave empty if your company has already connected this organization."
+                  description="Used once, in this request: it proves the organization is yours, adds Aixle to it, and lets Aixle manage its own Service Hooks. It is never stored, and the connection runs on Aixle’s own identity afterwards. Needs the Member Entitlement Management (read & write) and Security (manage) scopes. Leave empty if your company has already connected this organization."
                   value={adminPat}
                   onChange={(e) => setAdminPat(e.currentTarget.value)}
                 />

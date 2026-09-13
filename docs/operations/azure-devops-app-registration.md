@@ -161,7 +161,17 @@ Everything after that they do themselves.
 
 In **Project → Integrations → Connect → Azure DevOps** they type their
 organization name and paste a personal access token from someone who can
-administer it (**Member Entitlement Management (read & write)**).
+administer it (**Member Entitlement Management (read & write)** and
+**Security (manage)**).
+
+`Security (manage)` is spent on exactly one access control entry: *View
+subscriptions* + *Edit subscriptions* on the ServiceHooks namespace, scoped to
+the chosen project. Azure grants those to project administrators only, so
+without it the application cannot create the Service Hooks its CI gates resolve
+on, and the gates fall back to the recovery sweep. Creating the subscriptions
+with the administrator's token instead would tie them to that person's
+continued access — see `AzureDevops::ServiceHookGrant`. The grant is best
+effort; a refusal is logged and does not fail the connection.
 
 That token, in one request: proves the organization is theirs, adds the
 application to it with a Basic access level and Contributor rights on the chosen

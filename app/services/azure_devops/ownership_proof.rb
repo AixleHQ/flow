@@ -20,7 +20,10 @@ module AzureDevops
   #
   # The PAT needs **Member Entitlement Management (read & write)** — the same
   # permission family as adding a user to the organization, which is exactly the
-  # authority being claimed.
+  # authority being claimed — and **Security (manage)**, which onboarding spends
+  # on one grant so the application can manage its own Service Hooks afterwards
+  # (see AzureDevops::ServiceHookGrant). Only the first is checked here: the
+  # second buys events rather than access, and a connection without it works.
   class OwnershipProof
     # Member Entitlement Management lives on its own host, not dev.azure.com.
     HOST = "https://vsaex.dev.azure.com"

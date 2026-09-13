@@ -40,6 +40,23 @@ module AzureDevops
                    body: { value: [ { id: @project_id, name: "Customer Platform" } ] }.to_json)
     end
 
+    # Creating a Service Hook needs a permission Azure gives only to project
+    # administrators, so onboarding spends the token once on granting it to the
+    # application rather than on creating subscriptions that would belong to a
+    # person. Stubbed here because every `complete!` now passes through it.
+    def stub_service_hook_grant(descriptor: nil)
+      stub_request(:get, %r{https://vssps.dev.azure.com/contoso/_apis/identities})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { value: [ { descriptor: descriptor || sp_descriptor } ] }.to_json)
+      stub_request(:post, %r{#{AZURE_API_HOST}/contoso/_apis/accesscontrolentries/#{ServiceHookGrant::NAMESPACE_ID}})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { count: 1 }.to_json)
+    end
+
+    def sp_descriptor(oid = "9550df62-80e0-4551-821e-ba38e4a7e876")
+      "Microsoft.VisualStudio.Services.Claims.AadServicePrincipal;#{@tenant}\\#{oid}"
+    end
+
     # == the proof ==
 
     test "a first bind without a token is refused before anything is written" do
@@ -115,6 +132,8 @@ module AzureDevops
         .to_return(status: 200, headers: { "Content-Type" => "application/json" },
                    body: { value: [ { id: @project_id, name: "Customer Platform" } ] }.to_json)
 
+      stub_service_hook_grant
+
       installation = @onboarding.complete!(organization: "contoso", personal_access_token: "admin-pat",
                                            project_ids: [ @project_id ])
 
@@ -144,6 +163,7 @@ module AzureDevops
         .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: "{}")
       stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/projects})
         .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { value: [] }.to_json)
+      stub_service_hook_grant(descriptor: sp_descriptor("oid-1"))
 
       error = assert_raises(Error) do
         @onboarding.complete!(organization: "contoso", personal_access_token: "admin-pat",
@@ -151,6 +171,60 @@ module AzureDevops
       end
       assert_equal "entitlement_not_effective", error.code
       assert_not_equal "active", AzureDevopsInstallation.find_by(company: @company)&.status.to_s
+    end
+
+    # == service hooks ==
+
+    test "complete grants the application permission to manage its own Service Hooks" do
+      stub_tenant
+      stub_admin_probe
+      stub_azure_token(tenant_id: @tenant, token: token_with_oid("9550df62-80e0-4551-821e-ba38e4a7e876"))
+      stub_request(:post, %r{#{ENTITLEMENTS}/contoso/_apis/serviceprincipalentitlements})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { isSuccess: true }.to_json)
+      stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/projects})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { value: [ { id: @project_id, name: "Customer Platform" } ] }.to_json)
+      stub_service_hook_grant
+
+      @onboarding.complete!(organization: "contoso", personal_access_token: "admin-pat",
+                            project_ids: [ @project_id ])
+
+      assert_requested(:post, %r{/_apis/accesscontrolentries/#{ServiceHookGrant::NAMESPACE_ID}}) do |req|
+        body = JSON.parse(req.body)
+        ace = body["accessControlEntries"].first
+        body["token"] == "PublisherSecurity/#{@project_id}" &&
+          # merge, so an organization that already set its own service hook
+          # permissions keeps them.
+          body["merge"] == true &&
+          ace["descriptor"] == sp_descriptor &&
+          # View (1) + Edit (2). Delete (4) is not granted: Azure's own
+          # reference says Edit can already remove a subscription.
+          ace["allow"] == 3 && ace["deny"] == 0
+      end
+    end
+
+    # The grant is a convenience, not the connection. An organization that
+    # refuses it still gets a working integration whose gates resolve through
+    # the recovery sweep instead of through events.
+    test "a refused Service Hooks grant does not fail the binding" do
+      stub_tenant
+      stub_admin_probe
+      stub_azure_token(tenant_id: @tenant, token: token_with_oid("9550df62-80e0-4551-821e-ba38e4a7e876"))
+      stub_request(:post, %r{#{ENTITLEMENTS}/contoso/_apis/serviceprincipalentitlements})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: { isSuccess: true }.to_json)
+      stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/projects})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { value: [ { id: @project_id, name: "Customer Platform" } ] }.to_json)
+      stub_request(:get, %r{https://vssps.dev.azure.com/contoso/_apis/identities})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { value: [ { descriptor: sp_descriptor } ] }.to_json)
+      stub_request(:post, %r{/_apis/accesscontrolentries/#{ServiceHookGrant::NAMESPACE_ID}})
+        .to_return(status: 403, headers: { "Content-Type" => "application/json" }, body: "{}")
+
+      installation = @onboarding.complete!(organization: "contoso", personal_access_token: "admin-pat",
+                                           project_ids: [ @project_id ])
+
+      assert installation.active?
     end
 
     # == the second time ==

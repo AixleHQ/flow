@@ -108,6 +108,18 @@ module AzureDevops
       entitle!(organization: organization, personal_access_token: personal_access_token,
                principal_object_id: principal_object_id, project_ids: project_ids)
 
+      # Spend the token once more, on a permission rather than on a resource:
+      # from here the application can create its own Service Hook subscriptions,
+      # at connect time and on every later re-test. Creating them WITH this
+      # token instead would tie every subscription to one person's continued
+      # access — see ServiceHookGrant.
+      #
+      # Best effort. An organization that refuses it still gets a working
+      # connection; its CI gates resolve through the recovery sweep instead of
+      # through events, which is slower and not broken.
+      grant_service_hook_permission(installation, principal_object_id,
+                                    personal_access_token, project_ids)
+
       # Prove it worked using the APPLICATION's credential rather than the
       # user's token. Until this passes, the binding would be a promise about
       # access nobody has demonstrated.
@@ -204,6 +216,18 @@ module AzureDevops
                       code: "entitlement_failed", status: response.status)
     rescue Faraday::TimeoutError, Faraday::ConnectionFailed => e
       raise Error.new("Could not reach Azure DevOps (#{e.class})", code: "azure_unreachable")
+    end
+
+    def grant_service_hook_permission(installation, principal_object_id, personal_access_token, project_ids)
+      ServiceHookGrant.new(
+        organization: installation.organization_slug,
+        personal_access_token: personal_access_token,
+        tenant_id: installation.tenant_id,
+        principal_object_id: principal_object_id
+      ).call(project_ids)
+    rescue Error => e
+      @logger.warn("[AzureDevops::Onboarding] Service Hooks permission not granted for " \
+                   "#{installation.organization_slug}: #{e.code}")
     end
 
     def confirm_application_access!(installation, project_ids)
