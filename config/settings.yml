@@ -176,9 +176,14 @@ azure_devops:
   login_host: <%= ENV['AZURE_DEVOPS_LOGIN_HOST'] || 'https://login.microsoftonline.com' %>
   api_host: <%= ENV['AZURE_DEVOPS_API_HOST'] || 'https://dev.azure.com' %>
   # Where Azure posts Service Hook deliveries. The ONLY part of this integration
-  # that needs a publicly reachable host — everything else is outbound. Defaults
-  # to the deployment's own domain; set it when that domain is not reachable from
-  # Azure (a tunnel in development, say).
+  # that needs a publicly reachable host — everything else is outbound.
+  #
+  # Blank on purpose: AppConfig falls back to the deployment's own domain
+  # (`protocol://domain`), the same source every other webhook in the app uses.
+  # Set it ONLY when that domain is not reachable from Azure — a tunnel in
+  # development. A deployment whose effective host is loopback or private
+  # provisions no subscriptions at all, because one pointing at an unreachable
+  # host is accepted by Azure and then fails every delivery in silence.
   webhook_base_url: <%= ENV['AZURE_DEVOPS_WEBHOOK_BASE_URL'] %>
   # Where the in-container git credential helper asks for a short-lived token.
   # Reached over the docker network like cloud.credentials_url — never a public

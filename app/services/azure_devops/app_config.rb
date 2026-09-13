@@ -70,12 +70,41 @@ module AzureDevops
       # configured. Without this a development deployment would create
       # subscriptions pointing at localhost that Azure accepts and can never
       # deliver to, and then go on probation trying.
+      # Service Hooks are on when Azure can actually reach us, not when an extra
+      # variable happens to be set.
+      #
+      # This used to be `webhook_base_url.present?` against a setting with no
+      # default, while the comment beside it claimed it defaulted to the
+      # deployment's domain. So a production deployment with DOMAIN set
+      # correctly had Service Hooks silently OFF, and its CI gates always
+      # closed on the five-minute sweep with nothing anywhere saying why.
       def webhooks_enabled?
-        webhook_base_url.present?
+        reachable_from_azure?(webhook_base_url)
       end
 
+      # The deployment's own domain, like every other webhook in the app
+      # (`Gitlab::RepositoryService` builds its hook URL the same way). The
+      # override exists for the case the default cannot cover: a domain Azure
+      # cannot resolve, which in practice means a tunnel in development.
       def webhook_base_url
-        Settings.azure_devops&.webhook_base_url.presence
+        Settings.azure_devops&.webhook_base_url.presence ||
+          "#{Settings.protocol}://#{Settings.domain}"
+      end
+
+      # A subscription pointing at a host Azure cannot resolve is worse than no
+      # subscription: Azure accepts it, reports it enabled, and every delivery
+      # fails until it is disabled — the same shape of silent failure as an
+      # unrecognized event filter. So `localhost:4000` provisions nothing, and
+      # the operator is told to set a tunnel URL instead.
+      def reachable_from_azure?(url)
+        host = URI.parse(url.to_s).host
+        return false if host.blank?
+        return false unless host.include?(".")
+        return false if host.end_with?(".local", ".internal", ".localdomain")
+
+        !host.match?(/\A(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/)
+      rescue URI::InvalidURIError
+        false
       end
 
       def completion_poll_interval
