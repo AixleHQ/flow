@@ -35,6 +35,7 @@ module ContainerRuntime
       @agent_type = agent_type
       @fs = filesystem || build_filesystem(agent_type)
       @execs = []
+      @written_files = {}
       @exec_failures = []
       @unreachable_execs = []
       @raising_execs = []
@@ -180,10 +181,17 @@ module ContainerRuntime
 
     # -- File I/O -------------------------------------------------------------
 
+    # Ownership is recorded, not just the bytes: a file written as root is one
+    # the container's own user can neither read nor delete, and `exec` here does
+    # not run as root.
     def write_file(_id, path, content, mode: 0o644, uid: 0, gid: 0)
       @fs[path] = content
+      @written_files[path] = { mode: mode, uid: uid, gid: gid }
       true
     end
+
+    # What was written where, for tests that care who owns it.
+    def file_attributes(path) = @written_files[path]
 
     def read_file(_id, path)
       return nil if @unreadable_paths.include?(path.to_s)

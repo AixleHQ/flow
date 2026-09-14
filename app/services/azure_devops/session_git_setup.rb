@@ -63,7 +63,14 @@ module AzureDevops
       # `ps` and in the session's own terminal log. The script reads it into the
       # environment git inherits, deletes it, and unsets it before anything else
       # runs in that shell.
-      runtime.write_file(container_id, header_path, authorization_header(credential), mode: 0o600, uid: 0, gid: 0)
+      #
+      # Owned by the SESSION's uid, not by root. `exec` runs as the container's
+      # own user, so a root-owned 0600 file is one this script can neither read
+      # — "cat: Permission denied", and an empty workspace — nor delete, which
+      # left the credential sitting in /tmp after the failure. 0600 still means
+      # only that user, and it is the user git runs as anyway.
+      runtime.write_file(container_id, header_path, authorization_header(credential),
+                         mode: 0o600, uid: uid, gid: uid)
 
       branch = Shellwords.escape(repository.source_branch)
       url = Shellwords.escape(repository.clone_url)

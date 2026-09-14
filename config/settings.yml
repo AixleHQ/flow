@@ -207,7 +207,13 @@ azure_devops:
       # Exactly one of these. The certificate is the production credential; the
       # secret is a setup/pilot alternative. Both stay on the server.
       client_secret: "<%= ENV['AZURE_DEVOPS_CLIENT_SECRET'] %>"
-      private_key: "<%= ENV['AZURE_DEVOPS_PRIVATE_KEY'] %>"
+      # `to_json` rather than bare interpolation: a PEM is multi-line, and YAML
+      # FOLDS line breaks inside a double-quoted scalar into spaces. The key
+      # arrived intact in the environment and reached OpenSSL as one long line
+      # with spaces where its newlines had been — "Neither PUB key nor PRIV key",
+      # from a file that was perfectly correct. JSON quotes it with the breaks
+      # escaped, which YAML then reads back as real newlines.
+      private_key: <%= ENV['AZURE_DEVOPS_PRIVATE_KEY'].to_json %>
       certificate_thumbprint: "<%= ENV['AZURE_DEVOPS_CERT_THUMBPRINT'] %>"
       # Bumped by the operator on every rotation. Cached tokens minted under an
       # older generation stop being served the moment this changes.

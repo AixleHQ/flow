@@ -33,6 +33,27 @@ class AzureGitCredentialsTest < ActionDispatch::IntegrationTest
     assert_equal "no-store", response.headers["Cache-Control"]
   end
 
+  # A connection can cover several Azure projects, and resolving a credential
+  # without naming one is refused rather than guessed. The repository knows its
+  # own project — reading the connection's instead produced a clone that failed
+  # with "Azure credential unavailable (validation_failed)" and an empty
+  # workspace, on a connection where everything else worked.
+  test "vends for a repository on a connection covering several projects" do
+    second_project = SecureRandom.uuid
+    installation = @integration.azure_devops_installation
+    installation.update!(allowed_project_ids: installation.allowed_project_ids + [ second_project ])
+    @integration.update!(settings: @integration.settings.merge(
+      "azure_project_ids" => [ @integration.azure_project_ids.first, second_project ]
+    ))
+
+    assert_nil @integration.reload.azure_default_project_id, "the connection must be ambiguous for this test"
+
+    post PATH, params: { repository_id: @repository.id }, headers: headers
+
+    assert_response :success
+    assert_equal "git-token", response.parsed_body["password"]
+  end
+
   test "rejects a request with no key" do
     post PATH, params: { repository_id: @repository.id }, headers: { "X-Session-Id" => @session.id.to_s }
 

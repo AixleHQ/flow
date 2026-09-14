@@ -42,7 +42,13 @@ module AzureDevops
 
       verify_requested_url!(repository, requested_url)
 
-      resolved = CredentialProvider.resolve!(integration, capability: :"repositories.read")
+      # The repository's OWN project, not the connection's. A connection covers
+      # several, so resolving without one is refused rather than guessed — which
+      # is how a clone on a two-project connection came back as
+      # "Azure credential unavailable (validation_failed)" with an empty
+      # workspace and no other clue.
+      resolved = CredentialProvider.resolve!(integration, capability: :"repositories.read",
+                                             project_id: repository.external_project_id)
       verify_repository_scope!(repository, resolved)
 
       credential = resolved.git_credential

@@ -91,11 +91,15 @@ module AzureDevops
     # probation is not delivering, and from this side that is indistinguishable
     # from "nothing has happened" — so it is read and recorded rather than
     # assumed healthy.
+    # Reading and deleting a subscription are ORGANIZATION-level calls, but the
+    # credential still has to name a project it covers — `resolve!` refuses to
+    # pick one when a connection covers several. Each subscription knows which
+    # project it belongs to, so that is what is used.
     def refresh_status!
-      client, = CredentialProvider.client_for(integration)
-
       integration.azure_devops_subscriptions.find_each do |subscription|
         next if subscription.azure_subscription_id.blank?
+
+        client, = CredentialProvider.client_for(integration, project_id: subscription.azure_project_id)
 
         remote = client.get("_apis", "hooks", "subscriptions", subscription.azure_subscription_id, family: :default)
         subscription.update!(status: map_status(remote["status"]), last_checked_at: Time.current)
@@ -113,11 +117,10 @@ module AzureDevops
     # left behind is a subscription posting to an endpoint that no longer
     # authenticates, which fails closed.
     def remove_all!
-      client, = CredentialProvider.client_for(integration)
-
       integration.azure_devops_subscriptions.find_each do |subscription|
         if subscription.azure_subscription_id.present?
           begin
+            client, = CredentialProvider.client_for(integration, project_id: subscription.azure_project_id)
             client.request_delete("_apis", "hooks", "subscriptions", subscription.azure_subscription_id)
           rescue Error => e
             Rails.logger.warn("[AzureDevops::SubscriptionService] could not delete subscription " \
