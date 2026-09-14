@@ -369,7 +369,7 @@ module Agents
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
         "MITM_TRACKED_DOMAINS" => "chatgpt.com",
-        "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}"
+        "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token},agent_type=codex"
       }
     end
 

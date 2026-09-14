@@ -37,8 +37,11 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
 
     session_props = TerminalSessionResource.new(session, params: { viewer: current_user }).to_h
 
+    llm_calls = session.llm_calls.order(occurred_at: :desc).map { |c| LlmCallResource.new(c).to_h }
+
     render inertia: "Company/Sessions/Show", props: {
       session: session_props,
+      llm_calls: llm_calls,
       cable_stream: inertia_cable_stream(session)
     }
   end

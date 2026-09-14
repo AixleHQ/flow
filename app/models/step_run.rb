@@ -7,6 +7,7 @@ class StepRun < ApplicationRecord
   belongs_to :step
   belongs_to :terminal_session, optional: true
 
+  has_many :llm_calls, dependent: :nullify
   has_many :sub_step_runs, dependent: :destroy
   has_many :produced_workflow_run_assets, class_name: "WorkflowRunAsset", foreign_key: :produced_by_step_run_id,
                                          dependent: :nullify, inverse_of: :produced_by_step_run
