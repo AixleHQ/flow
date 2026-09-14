@@ -13,5 +13,11 @@ export const buildIntegration = (overrides: Partial<Integration> = {}): Integrat
   settings: {},
   scopeIndicator: 'company',
   connectedBy: { id: 1, name: 'Ada' },
+  // Always present, empty for every provider but Azure DevOps: the operation
+  // profile and the covered projects are lists the server always serializes,
+  // not optional fields.
+  azureCapabilities: [],
+  azureProjectIds: [],
+  azureProjectDisplayNames: [],
   ...overrides,
 });

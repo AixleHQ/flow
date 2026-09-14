@@ -165,6 +165,12 @@ RUN chmod +x /usr/local/bin/ttyd && ttyd --version
 COPY tmux-osc52 /usr/local/bin/tmux-osc52
 RUN chmod +x /usr/local/bin/tmux-osc52
 
+# The Azure DevOps git credential helper is deliberately NOT here. The platform
+# writes it into each session at clone time (AzureDevops::SessionGitSetup), so a
+# checkout can never be configured to call a helper this image predates — which
+# is what happened when it lived here: a five-week-old image met a newer
+# platform and every push failed with "could not read Username".
+
 # -----------------------------------------------------------------------------
 # Install OpenVSCode Server from GitHub releases
 # -----------------------------------------------------------------------------

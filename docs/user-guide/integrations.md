@@ -37,6 +37,95 @@ the project level) and paste a token with `api` scope.
 - Webhook endpoint: `https://<your-host>/webhooks/gitlab`, verified with
   a per-repository secret.
 
+### Azure DevOps
+
+Azure DevOps is **project-scoped**: one connection names one Azure
+organization and one or more Azure projects inside it. Agents clone,
+push, open and review pull requests, and read and update Azure Boards
+work items — in those projects and nowhere else.
+
+Connecting is self-service, with one step outside Flow:
+
+1. **Once per directory,** an Entra administrator instantiates Aixle's
+   application in your tenant: `az ad sp create --id <client id>`, with
+   the client id your Aixle operator publishes. Nothing is consented to
+   and no permission is granted — it only makes the application nameable
+   in your organization. Aixle's private key is never shared, and you do
+   not register an application of your own.
+2. **In Flow,** open **Project → Integrations → Connect → Azure DevOps**,
+   type your organization name, and paste a personal access token from
+   someone who can administer it. The token needs three scopes:
+   **Member Entitlement Management (read & write)**, **Project and team
+   (read)**, and **Security (manage)**. They are not in the short list the
+   token form shows first — click **Show all scopes**.
+
+The second scope is spent on a single permission: it lets Aixle create
+its own Service Hooks, which is how a CI gate on a board task closes the
+moment a build finishes instead of on the next five-minute sweep. Without
+it the connection still works — gates just resolve more slowly. Aixle
+does not create the hooks *with* your token on purpose: a subscription
+made that way belongs to you, and stops firing when you leave.
+
+That token is used once, in that request: it proves the organization is
+yours, and it adds Aixle to it with a **Basic** access level and
+Contributor rights on the project you pick. It is never stored, and the
+connection runs on Aixle's own identity afterwards — not on your token.
+Colleagues connecting further Flow projects against the same organization
+are not asked for one, because the first connection already established
+it — they choose from the Azure projects that connection approved.
+
+Reaching an Azure project outside that set needs a token again: the
+approved list is the company's boundary on the organization, not a
+per-connection preference, so widening it is the same act as
+establishing it. Paste one and the full list of projects you can
+administer is offered, with the approved ones already among them.
+
+The selected Azure projects are fixed for the life of the connection.
+Adding one later would silently widen what every agent and every tool in
+the Flow project can already reach, and removing one would leave
+repositories and work-item references pointing at a project the
+connection no longer covers — so connect again instead.
+
+Where a connection covers more than one project, tools that act on a
+project rather than on a repository (work items, builds) take an explicit
+project id. They refuse rather than pick one, so which project an agent
+filed a bug in never depends on ordering.
+
+Operations run as the **application's identity**, not as the person who
+connected it — pull requests and comments are authored by it, and an
+employee leaving does not revoke it. Repositories authenticate through a
+credential helper that fetches a short-lived token per git operation, so
+nothing is stored in the checkout; ordinary `git fetch` and `git push`
+work with no extra step.
+
+**The Azure tools are not something you attach.** There is no Azure group
+in the tool picker: an agent gets the work-item and build tools as soon
+as the project has a connection, and the pull-request tools as soon as
+the session has an Azure repository attached. Attaching the repository is
+the opt-in. This is deliberate — a picker would let someone attach half a
+set, so an agent could open a pull request and then be unable to answer
+the review it started.
+
+What an agent may *do* with them is still yours to set: the capability
+checkboxes on the connection decide which calls are sent at all, and
+completing pull requests stays off unless you tick it.
+
+Notes and limits:
+
+- **Azure DevOps Services on `dev.azure.com` with Git repositories
+  only.** Azure DevOps Server (on-premises), TFVC, Artifacts, Test Plans
+  and Wiki management are out of scope.
+- An organization backed by a personal Microsoft account, with no
+  connected Entra tenant, cannot use a service principal at all. Those
+  organizations need the optional personal-access-token mode, which
+  acts as the token's owner and carries that person's permissions.
+- Completing or merging a pull request, reviewers and votes, Azure
+  Pipelines and Service Hooks are a later parity extension.
+- The connect entry appears only once an operator has configured the
+  deployment's Entra application (`AZURE_DEVOPS_CLIENT_ID` plus a
+  certificate or secret), or switched on personal-access-token mode.
+  There is no separate enable flag.
+
 ### Linear
 
 Linear is supported as an issue-tracker integration (connected under
@@ -71,8 +160,11 @@ internal server, Config Items credentials, and URL-safety rules — and
 
 | Source        | Endpoint                          | Auth                                        |
 | ------------- | --------------------------------- | ------------------------------------------- |
-| GitHub        | `POST /webhooks/github`           | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
-| GitLab        | `POST /webhooks/gitlab`           | Per-repository secret                       |
+| GitHub        | `POST /webhooks/github`                      | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
+| GitLab        | `POST /webhooks/gitlab`                      | Per-repository secret                       |
+| Azure DevOps  | `POST /webhooks/azure_devops/<endpoint id>`  | HTTP Basic, one password per subscription   |
 
-Both endpoints are public (no session auth) — verification is
-signature-based.
+All three are public (no session auth). GitHub and GitLab are verified by
+signature; Azure DevOps sends none, so the subscription's own password is
+the entire credential — which is why the endpoint id in the URL is a
+route, never a secret.

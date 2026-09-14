@@ -37,6 +37,7 @@ a document is added, removed, or moved here, update this index in the same chang
   - **[design/session-admission-queue/TECH-DESIGN.md](./design/session-admission-queue/TECH-DESIGN.md)** — The reasoning behind them: inspected baseline behaviour, limit selection, data model, runtime idempotency, capacity waiting, alternatives and open decisions
   - **[design/session-admission-queue/ROLLOUT.md](./design/session-admission-queue/ROLLOUT.md)** — Operator runbook: deployment settings, the drain-then-`session_admission:sync` cutover, legacy quota removal under a reviewed UID allowlist, pause/resume and recovery
   - **[design/session-admission-queue/reviews/](./design/session-admission-queue/reviews/)** — Design-phase review records (invariants, evidence, coverage, editorial) kept alongside the contract they checked
+- **[design/azure-devops-integration.md](./design/azure-devops-integration.md)** — Azure DevOps integration: Entra service-principal auth with approved organization installations, GUID-based repository identity, session Git via a derived-key credential endpoint, PR/Boards agent tools, and a phased CI/webhook parity extension
 - **[design/grok-runtime-integration.md](./design/grok-runtime-integration.md)** — Grok (xAI) runtime decisions: the official `@xai-official/grok` CLI, device-code auth with `~/.grok/auth.json` as the credential, model catalogue + pricing from `/v1/language-models`, and why usage comes from the MITM log rather than OTLP
 
 ## Feature Pipeline
@@ -67,8 +68,8 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
 
 ## Product
 
-- **[product/user-guide-outline.md](./product/user-guide-outline.md)** — Outline of the end-user product guide: the board → workflow → agent → results loop, section-by-section skeleton following the product sidebar, two end-to-end stories, terminology notes (issue #550)
-- **[product/changelog-product-areas.md](./product/changelog-product-areas.md)** — Frozen user-facing product map used as the changelog taxonomy: named product areas, changelog rules, area → guide-chapter map, snapshot baseline (issue #551)
+- **[product/user-guide-outline.md](./product/user-guide-outline.md)** — Outline of the end-user product guide: the board → workflow → agent → results loop, section-by-section skeleton following the product sidebar, two end-to-end stories, terminology notes
+- **[product/changelog-product-areas.md](./product/changelog-product-areas.md)** — Frozen user-facing product map used as the changelog taxonomy: named product areas, changelog rules, area → guide-chapter map, snapshot baseline
 
 ## Operator documentation
 
@@ -84,7 +85,9 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/tools.md](./user-guide/tools.md)** — Tool kinds, execution modes, built-in board tools, resource resolution
 - **[user-guide/mcp.md](./user-guide/mcp.md)** — MCP transports, the internal `aixle-tools` server, config-item credentials
 - **[user-guide/integrations.md](./user-guide/integrations.md)** — GitHub, GitLab, Linear, Google OAuth, and webhooks
+- **[user-guide/azure-devops.md](./user-guide/azure-devops.md)** — Connecting an Azure DevOps organization end to end: what differs between SaaS and self-hosted, the one Entra step in the customer directory, the three personal-access-token scopes and what each is spent on, choosing Azure projects and widening that set later
 - **[user-guide/configuration.md](./user-guide/configuration.md)** — Env vars, OAuth, agent credentials, and other knobs
+- **[operations/azure-devops-app-registration.md](./operations/azure-devops-app-registration.md)** — Operator runbook: register the Entra application, give it a credential, and publish the client ID. Customers bind their own organizations from inside Flow by proving they administer them
 - **[quickstart.md](./quickstart.md)** — Get a local instance running and see one card move
 - **[reference/index.md](./reference/index.md)** — Reference set: [API](./reference/api.md), [CLI](./reference/cli.md), [configuration](./reference/configuration.md)
 

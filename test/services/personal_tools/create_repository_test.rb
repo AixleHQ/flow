@@ -70,7 +70,7 @@ module PersonalTools
         result = execute("full_name" => "acme/app", "integration_id" => linear.id)
 
         assert_not_equal 0, result[:exit_code]
-        assert_match(/GitHub or GitLab/, result[:stderr])
+        assert_match(/GitHub, GitLab or Azure DevOps/, result[:stderr])
       end
     end
   end

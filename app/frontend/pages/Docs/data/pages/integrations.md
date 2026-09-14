@@ -37,6 +37,26 @@ the project level) and paste a token with `api` scope.
 - Webhook endpoint: `https://<your-host>/webhooks/gitlab`, verified with
   a per-repository secret.
 
+### Azure DevOps
+
+Azure DevOps connects **per project**, not per company: one connection
+names one Azure organization and one or more Azure projects inside it.
+Agents clone, push, open and review pull requests, and read and write
+Azure Boards work items in those projects and nowhere else.
+
+Connecting is self-service — someone who administers the organization
+pastes a personal access token once, and the connection runs on Aixle's
+own identity afterwards, not on that token. The full walkthrough,
+including what differs between the SaaS and self-hosted deployments, is
+on the [Azure DevOps](/docs/azure-devops) page.
+
+- Webhook endpoint: `https://<your-host>/webhooks/azure_devops/<endpoint id>`.
+  Subscriptions are created automatically and authenticate with a
+  per-subscription password — Azure sends no signature of any kind.
+- Repositories authenticate through a credential helper that fetches a
+  short-lived token per git operation, so nothing is stored in the
+  checkout.
+
 ### Public repositories (no integration)
 
 A project can also attach any **public** github.com or gitlab.com
@@ -92,8 +112,11 @@ the tools themselves are.
 
 | Source        | Endpoint                          | Auth                                        |
 | ------------- | --------------------------------- | ------------------------------------------- |
-| GitHub        | `POST /webhooks/github`           | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
-| GitLab        | `POST /webhooks/gitlab`           | Per-repository secret                       |
+| GitHub        | `POST /webhooks/github`                      | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
+| GitLab        | `POST /webhooks/gitlab`                      | Per-repository secret                       |
+| Azure DevOps  | `POST /webhooks/azure_devops/<endpoint id>`  | HTTP Basic, one password per subscription   |
 
-Both endpoints are public (no session auth) — verification is
-signature-based.
+All three are public (no session auth). GitHub and GitLab are verified by
+signature; Azure DevOps sends none, so the subscription's own password is
+the entire credential — which is why the endpoint id in the URL is a
+route, never a secret.

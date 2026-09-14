@@ -162,6 +162,27 @@ class GateReconcilerTest < ActiveSupport::TestCase
     assert_match(/PR #42 not found/, gate.diagnostic_reason)
   end
 
+  # Azure gates carry the repository GUID, never a `repo_full_name` — a display
+  # name there is mutable and a gate routing on one would break on a rename. The
+  # diagnostic used to read `repo_full_name` directly and so came out as
+  # "pull request 813 on  cannot be read", naming nothing at all.
+  test "an Azure gate's stale reason names its repository" do
+    integration = create(:integration, :azure_devops, :active, company: @company,
+      project: @project, connected_by: @user)
+    repository = create(:repository, :azure_devops, integration: integration, scope: @project)
+    gate = create_gate(
+      gate_type: :azure_devops_pr_policies_satisfied, created_at: 1.hour.ago,
+      metadata: { "pull_request_id" => "813", "external_repository_id" => repository.external_id }
+    )
+    stub_probe(Ci::ProbeResult.unresolvable("pull request 813 has no blocking branch policies"))
+
+    GateReconciler.reconcile_all
+
+    assert gate.reload.stale?
+    assert_match(/pull request 813 on #{Regexp.escape(repository.full_name)} cannot be read/,
+                 gate.diagnostic_reason)
+  end
+
   test "escalates a stale gate onto the board activity feed with its reason" do
     create_gate(created_at: 1.hour.ago)
     stub_probe(Ci::ProbeResult.unresolvable("PR #42 not found in org/app"))

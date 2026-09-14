@@ -52,6 +52,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'workflows', label: 'Workflows' },
       { slug: 'triggers-and-gates', label: 'Triggers and gates' },
       { slug: 'integrations', label: 'Integrations' },
+      { slug: 'azure-devops', label: 'Azure DevOps' },
       { slug: 'configuration', label: 'Configuration' },
     ],
   },

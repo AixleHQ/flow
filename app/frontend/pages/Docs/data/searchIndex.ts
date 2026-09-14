@@ -169,6 +169,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Connect Aixle Flow with GitHub, GitLab, Linear, Coder, and Slack.',
   },
   {
+    slug: 'azure-devops',
+    title: 'Azure DevOps',
+    section: 'User guide',
+    desc: 'Connect an Azure DevOps organization: the Entra service principal step, the personal access token and its three scopes, choosing Azure projects, and how SaaS differs from self-hosted.',
+  },
+  {
     slug: 'configuration',
     title: 'Configuration',
     section: 'User guide',

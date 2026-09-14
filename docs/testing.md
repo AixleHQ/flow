@@ -87,6 +87,7 @@ New controllers get `ActionDispatch::IntegrationTest` request tests; do not add 
 | Container runtimes | `stub_container_runtime` (`test/support/stub_support.rb`) injects `ContainerRuntime::FakeRuntime` via the `ContainerRuntime.build` seam | `test/support/fakes/fake_runtime.rb` (real `BaseRuntime`, in-memory FS) |
 | Slack | `Slack::Client` (app-owned, `app/services/slack/client.rb`) | `FakeSlackClient` + `SlackTestHelper` (`stub_slack_client!`) + WebMock contract test |
 | GitHub / GitLab | `Github::*Service` / `Gitlab::*Service` | `FakeGithub`/`FakeGitlab` + WebMock contract tests |
+| Azure DevOps | `AzureDevops::{Repository,PullRequest,WorkItem,Build}Service` via `stub_azure_devops!` | `FakeAzureDevops` (`test/support/fakes/fake_azure_devops.rb`) + WebMock contract tests in `test/services/azure_devops/`. `CredentialProvider` and `Client` stay REAL — the authorization chain is usually what is under test |
 | HTTP in general | WebMock global fence (`disable_net_connect!`) | `stub_request` belongs in adapter contract tests only |
 | FE backend | `@inertiajs/react` + `@rails/actioncable` mocks in `setup.ts` | keep the mock surface minimal; don't extend it per-test |
 
