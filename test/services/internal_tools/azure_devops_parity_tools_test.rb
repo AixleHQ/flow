@@ -23,6 +23,49 @@ class InternalTools::AzureDevopsParityToolsTest < ActiveSupport::TestCase
     klass.new(params: params, session: @session).execute
   end
 
+  # Voting needs a reviewer, and listing only reports the ones already there —
+  # so a pull request with none was a loop with no exit. The service could add
+  # one all along; nothing exposed it.
+  test "a reviewer can be added, which is what makes voting reachable" do
+    result = run_tool(InternalTools::AzureDevopsAddPullRequestReviewer, {
+      repository_id: @repository.id, pull_request_id: 9, reviewer_id: "identity-1"
+    })
+
+    assert_equal 0, result[:exit_code]
+    call = @fakes.pull_requests.calls_to(:add_reviewer).last
+    assert_equal "identity-1", call[:reviewer_id]
+    # Optional unless asked: a required reviewer blocks completion, which is not
+    # something to acquire from a default.
+    refute call[:required]
+  end
+
+  test "a required reviewer is only required when asked for" do
+    run_tool(InternalTools::AzureDevopsAddPullRequestReviewer, {
+      repository_id: @repository.id, pull_request_id: 9, reviewer_id: "identity-1", required: true
+    })
+
+    assert @fakes.pull_requests.calls_to(:add_reviewer).last[:required]
+  end
+
+  # `completed: true` alone could not be told apart from a merge this call
+  # performed, so an agent retrying after a timeout had no way to know whether
+  # it had landed the pull request or found it landed. The ledger reports a
+  # replay; this is the provider-state equivalent.
+  test "a pull request that had already landed says so, and nothing is sent" do
+    @fakes.pull_requests.stub_pull_request(9, status: "completed")
+
+    result = run_tool(InternalTools::AzureDevopsCompletePullRequest, {
+      repository_id: @repository.id, pull_request_id: 9,
+      expected_commit: "abc123", operation_key: "already-done"
+    })
+
+    assert_equal 0, result[:exit_code]
+    payload = JSON.parse(result[:stdout])
+    assert payload["completed"]
+    assert payload["already_completed"], "a no-op must not look like a merge"
+    assert_empty @fakes.pull_requests.calls_to(:complete)
+  end
+
   # == completion guards ==
 
   # Merging is enabled by default — Azure's branch policies are what decide

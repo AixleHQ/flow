@@ -55,7 +55,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     # carry a rule and none may be attachable — a tool that fell out of this
     # would be unreachable: hidden from the picker AND never injected.
     azure = defs.select { |d| d.tags.include?(:azure_devops) }
-    assert_equal 23, azure.size
+    assert_equal 24, azure.size
     assert azure.none?(&:user_attachable), "Azure tools must not be offered in the picker"
     assert azure.all? { |d| d.inject_rules.intersect?(%i[azure_repositories_attached azure_integration_connected]) }
   end

@@ -229,6 +229,15 @@ module AzureDevops
       raise ValidationFailed, "expected_commit is required to complete a pull request" if expected_commit.blank?
 
       client, resolved = client_for(:"pull_requests.complete", project_id: repository.external_project_id)
+
+      # Read before writing. A pull request that is already completed needs no
+      # request at all, and answering plain `completed: true` for both cases hid
+      # which of them happened — an agent could not tell a merge it performed
+      # from a no-op on something merged last week. The ledger reports a replay
+      # the same way; this is the provider-state equivalent.
+      current = get(repository, pull_request_id)
+      return current.merge(completed: true, already_completed: true) if current[:status] == "completed"
+
       body = {
         status: "completed",
         lastMergeSourceCommit: { commitId: expected_commit.to_s },

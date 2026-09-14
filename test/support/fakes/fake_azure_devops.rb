@@ -156,6 +156,12 @@ module FakeAzureDevops
       @pull_request
     end
 
+    # Override what a read answers, for callers that branch on provider state —
+    # completion skips its write when the pull request has already landed.
+    def stub_pull_request(_id, **attrs)
+      @pull_request = @pull_request.merge(attrs)
+    end
+
     def changes(repository, pull_request_id, iteration: nil, limit: 50, skip: 0)
       authorize!(:"repositories.read")
       record(:changes, repository: repository, pull_request_id: pull_request_id, iteration: iteration)
@@ -262,6 +268,15 @@ module FakeAzureDevops
       end
 
       authorize!(:"pull_requests.complete")
+
+      # Mirrors the real adapter: a pull request that has already landed is
+      # answered from the read, and no completion is sent. Recorded AFTER this
+      # so `calls_to(:complete)` stays the honest question "did we try to
+      # merge", which is what the guard tests assert on.
+      if @pull_request[:status] == "completed"
+        return @pull_request.merge(completed: true, already_completed: true)
+      end
+
       record(:complete, repository: repository, pull_request_id: pull_request_id,
                         expected_commit: expected_commit, merge_strategy: merge_strategy,
                         delete_source_branch: delete_source_branch, commit_message: commit_message)

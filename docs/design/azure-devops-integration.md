@@ -405,6 +405,7 @@ All names below are proposed. `repository_id` always means an Aixle repository I
 | `azure_devops_update_work_item`           | Integration/work item IDs, expected revision, allowed fields                       | Revision-checked update                                                         |
 | `azure_devops_add_work_item_comment`      | Integration/work item IDs, text, `operation_key`                                   | Added comment                                                                   |
 | `azure_devops_link_work_item`             | Repository/PR IDs, work item ID, expected revision                                 | Link within the selected project; duplicate relation is a no-op                 |
+| `azure_devops_add_pull_request_reviewer`  | Repository/PR IDs, `reviewer_id`, `required`                                       | Adds a reviewer, which is what makes voting reachable; optional by default       |
 
 The parity extension adds reviewer lookup/assignment, votes, policy/build status, and `azure_devops_complete_pull_request`. Completion takes the expected source commit and explicit merge strategy, respects Azure branch policies, and never enables policy bypass or automatic work-item state transitions implicitly. Re-read the PR until completion is confirmed or report it as pending; a successful update response alone is not proof of a completed merge. [Update/complete PR](https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/update?view=azure-devops-rest-7.1).
 
