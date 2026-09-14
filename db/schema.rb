@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_13_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1166,6 +1166,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
     t.jsonb "input_asset_ids", default: []
     t.string "mode", default: "interactive", null: false
     t.bigint "project_id", null: false
+    t.integer "relay_attempts", default: 0, null: false
+    t.string "relay_error"
+    t.string "relay_state", default: "dispatched", null: false
     t.jsonb "repository_ids", default: [], null: false
     t.jsonb "shared_context", default: {}
     t.datetime "started_at"
@@ -1179,6 +1182,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_11_140000) do
     t.index ["board_task_id"], name: "index_workflow_runs_on_board_task_id"
     t.index ["failed_agent_credential_id"], name: "index_workflow_runs_on_failed_agent_credential_id"
     t.index ["project_id"], name: "index_workflow_runs_on_project_id"
+    t.index ["relay_state", "created_at"], name: "index_workflow_runs_pending_relay", where: "((relay_state)::text = 'pending'::text)"
     t.index ["state"], name: "index_workflow_runs_on_state"
     t.index ["user_id", "created_at"], name: "index_workflow_runs_on_user_id_and_created_at"
     t.index ["user_id"], name: "index_workflow_runs_on_user_id"
