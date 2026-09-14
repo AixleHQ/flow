@@ -42,6 +42,12 @@ module ContainerStrategies
       assert_equal "claude-sonnet-5", build_strategy.send(:resolve_model, @session)
     end
 
+    test "resolve_model passes an Antigravity session selection through to launch" do
+      @session.update!(agent_type: "antigravity_cli", requested_model: "claude-sonnet-4-6")
+
+      assert_equal "claude-sonnet-4-6", build_strategy(agent_type: "antigravity_cli").send(:resolve_model, @session)
+    end
+
     # == Inheritance Tests ==
 
     test "inherits from AgentBaseStrategy" do

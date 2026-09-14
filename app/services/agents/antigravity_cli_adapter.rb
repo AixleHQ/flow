@@ -36,6 +36,22 @@ module Agents
     SETTINGS_PATH = ".gemini/antigravity-cli/settings.json"
     OAUTH_TOKEN_PATH = ".gemini/antigravity-cli/antigravity-oauth-token"
 
+    # `agy models` requires an interactive account, so the web process cannot
+    # discover this catalogue itself. Keep the slugs documented by the pinned
+    # CLI available to the shared model picker instead.
+    AVAILABLE_MODELS = [
+      { model_id: "gemini-3.8-flash-high", display_name: "Gemini 3.8 Flash (High)" },
+      { model_id: "gemini-3.8-flash-medium", display_name: "Gemini 3.8 Flash (Medium)" },
+      { model_id: "gemini-3.7-flash-high", display_name: "Gemini 3.7 Flash (High)" },
+      { model_id: "gemini-3.7-flash-medium", display_name: "Gemini 3.7 Flash (Medium)" },
+      { model_id: "gemini-3.6-flash-high", display_name: "Gemini 3.6 Flash (High)" },
+      { model_id: "gemini-3.6-flash-medium", display_name: "Gemini 3.6 Flash (Medium)" },
+      { model_id: "gemini-3.1-pro-high", display_name: "Gemini 3.1 Pro (High)" },
+      { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6 (Thinking)" },
+      { model_id: "claude-opus-4-6-thinking", display_name: "Claude Opus 4.6 (Thinking)" },
+      { model_id: "gpt-oss-120b-medium", display_name: "GPT-OSS 120B (Medium)" }
+    ].freeze
+
     def self.default_config_paths
       [ "~/.gemini/antigravity-cli/settings.json", "~/.gemini/config/mcp_config.json", "GEMINI.md" ]
     end
@@ -89,6 +105,14 @@ module Agents
 
     def default_env_vars(_session)
       { "AGY_CLI_HIDE_LOGO" => "1" }
+    end
+
+    def fetch_available_models(_credentials, credential: nil)
+      AVAILABLE_MODELS
+    end
+
+    def fetch_available_models_with_source(_credentials, credential: nil)
+      { models: AVAILABLE_MODELS, source: :fallback }
     end
 
     # Reject credentials saved by the earlier API-key implementation before

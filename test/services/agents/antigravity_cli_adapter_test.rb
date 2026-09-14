@@ -63,6 +63,23 @@ module Agents
                    @adapter.session_command(mode: "non_interactive", model: "gemini-3.5-pro")
     end
 
+    test "offers the Antigravity model catalogue to the shared picker" do
+      result = @adapter.fetch_available_models_with_source({ "access_token" => "tok-123" })
+
+      assert_equal :fallback, result[:source]
+      assert_includes result[:models],
+                      { model_id: "gemini-3.8-flash-medium", display_name: "Gemini 3.8 Flash (Medium)" }
+      assert_includes result[:models],
+                      { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6 (Thinking)" }
+      assert_includes result[:models],
+                      { model_id: "gpt-oss-120b-medium", display_name: "GPT-OSS 120B (Medium)" }
+    end
+
+    test "omits the model flag when none is selected so Antigravity uses its default" do
+      assert_equal "agy --dangerously-skip-permissions --print --output-format stream-json",
+                   @adapter.session_command(mode: "non_interactive", model: nil)
+    end
+
     test "generates Antigravity MCP schema" do
       server = stub(name: "Remote API", transport: "http", url: "https://example.test/mcp", headers: { "X-Key" => "x" })
       config = JSON.parse(@adapter.mcp_config([ server ]).values.first)
