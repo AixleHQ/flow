@@ -147,8 +147,13 @@ module AzureDevops
       # retries the same invalid request forever.
       raise e if expected_revision.blank?
 
+      # `project_id:` is not optional here even though the caller already passed
+      # it: on a connection covering several projects an unqualified read is
+      # refused, the rescue below swallowed it, and the conflict went out with
+      # `current_revision: null` — promising the caller a revision to retry with
+      # and handing it nothing.
       current = begin
-        get(work_item_id)[:rev]
+        get(work_item_id, project_id: project_id)[:rev]
       rescue StandardError
         nil
       end
@@ -179,7 +184,7 @@ module AzureDevops
       # the caller wanted to be true, so it is a no-op rather than an error.
       raise e unless e.message.to_s.match?(/relation already exists|RelationAlreadyExists/i)
 
-      get(work_item_id).merge(already_linked: true)
+      get(work_item_id, project_id: project_id).merge(already_linked: true)
     end
 
     private

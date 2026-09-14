@@ -84,7 +84,13 @@ module AzureDevops
         # "Everything that can block is approved." Reported rather than inferred
         # from a build status, because a build is only one of the things a policy
         # set can require.
-        all_blocking_satisfied: blocking.any? && blocking.all? { |e| e[:status] == "approved" },
+        # Vacuously true when nothing blocks. `blocking.any? &&` used to make it
+        # false, which read as "something is unsatisfied" on a pull request with
+        # no policies at all — `blocking_count: 0`, `unsatisfied: []`, and a
+        # verdict telling the caller not to merge. The two internal consumers
+        # both branch on `blocking_count` being zero before they ever look at
+        # this, so the guard protected nothing and only misled the tool.
+        all_blocking_satisfied: blocking.all? { |e| e[:status] == "approved" },
         blocking_count: blocking.size,
         unsatisfied: blocking.reject { |e| e[:status] == "approved" }.map { |e| e[:type] }.compact
       }

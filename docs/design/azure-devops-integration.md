@@ -325,7 +325,7 @@ Git operations run in the existing Docker/Kubernetes session runtime. PR/Boards 
 
 Microsoft documents Entra Git authentication using `Authorization: Bearer` and PAT authentication using Basic authorization. Do not reuse GitHub's username/password URL convention for Entra. [Git authentication overview](https://learn.microsoft.com/en-us/azure/devops/repos/git/auth-overview?view=azure-devops).
 
-The transport is a dedicated Git credential helper, provisionally `git-credential-aixle-azure`, which reaches Rails for a short-lived token and hands it to Git.
+The transport is a dedicated Git credential helper, `git-credential-aixle-azure`, which reaches Rails for a short-lived token and hands it to Git. It is written into the session at clone time under `/workspace/.aixle/`, NOT baked into the agent image: in the image it made the platform and every agent image a matched pair, and an image built before the helper existed produced a checkout configured to call a file that was not there — every push failing with "could not read Username", with nothing connecting the symptom to a stale image. Shipping it with the code that configures it also means the two can never disagree about the protocol between them.
 
 **Which Git mechanism carries the bearer token.** Microsoft documents exactly one shape for Entra Git auth — an `Authorization: bearer <token>` header supplied through `http.extraheader`, with `--config-env` as the way to keep it out of argv:
 

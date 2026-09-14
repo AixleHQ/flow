@@ -38,6 +38,37 @@ module AzureDevops
       assert_equal 0o600, attrs[:mode]
     end
 
+    # Baked into the agent image, the helper made the platform and every image a
+    # matched pair: an image predating it produced a checkout configured to call
+    # a file that was not there, and every push failed with "could not read
+    # Username" with nothing pointing at the image.
+    test "the credential helper is installed into the session, not assumed present" do
+      @setup.clone(@repository, "/workspace/repo/api", 1001)
+
+      helper = @runtime.fs[SessionGitSetup::HELPER]
+      assert helper, "the helper itself must be written into the container"
+      assert_includes helper, "AIXLE_AZURE_GIT_KEY", "the real script, not a placeholder"
+
+      attrs = @runtime.file_attributes(SessionGitSetup::HELPER)
+      assert_equal 0o700, attrs[:mode]
+      assert_equal 1001, attrs[:uid]
+
+      commands = @runtime.execs.map { |c| Array(c).join(" ") }
+      assert commands.any? { |c| c.include?("config credential.") && c.include?(SessionGitSetup::HELPER) },
+             "the checkout must point at the helper that was just installed"
+    end
+
+    # Only sessions that actually clone an Azure repository get it. In the image
+    # every agent carried it whether or not it would ever speak to Azure.
+    test "a session with no Azure repository never receives the helper" do
+      other = SessionGitSetup.new(runtime: @runtime, container_id: "c1", session: @session)
+      assert_nil @runtime.fs[SessionGitSetup::HELPER], "nothing is installed before a clone"
+
+      other.clone(@repository, "/workspace/repo/api", 1001)
+
+      assert @runtime.fs[SessionGitSetup::HELPER], "installing it is part of cloning, not of starting a session"
+    end
+
     test "the token is never an argument, only a file the script reads" do
       @setup.clone(@repository, "/workspace/repo/api", 1001)
 

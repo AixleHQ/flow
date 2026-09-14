@@ -224,6 +224,58 @@ module AzureDevops
       assert_equal "#{AZURE_API_HOST}/contoso/Proj/_git/api/pullrequest/7", pr[:url]
     end
 
+    # A pull request with no branch policies is not blocked by anything, and
+    # saying otherwise told a documentation-following agent not to merge it.
+    # The two internal consumers branch on blocking_count first, so only the
+    # tool ever saw the contradiction: count 0, unsatisfied [], verdict false.
+    test "a pull request with no policies is reported as unblocked" do
+      repository = create(:repository, :azure_devops, integration: @integration, scope: @integration.project)
+      stub_request(:get, %r{/_apis/policy/evaluations}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" }, body: { value: [] }.to_json
+      )
+
+      result = BuildService.new(@integration).policy_evaluations(repository, 7)
+
+      assert_equal 0, result[:blocking_count]
+      assert_empty result[:unsatisfied]
+      assert result[:all_blocking_satisfied], "nothing blocking means nothing to satisfy"
+    end
+
+    test "an unapproved blocking policy is still reported as blocking" do
+      repository = create(:repository, :azure_devops, integration: @integration, scope: @integration.project)
+      stub_request(:get, %r{/_apis/policy/evaluations}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { value: [ { evaluationId: "e1", status: "rejected",
+                           configuration: { isBlocking: true, isEnabled: true,
+                                            type: { displayName: "Minimum number of reviewers" } } } ] }.to_json
+      )
+
+      result = BuildService.new(@integration).policy_evaluations(repository, 7)
+
+      assert_equal 1, result[:blocking_count]
+      assert_not result[:all_blocking_satisfied]
+      assert_equal [ "Minimum number of reviewers" ], result[:unsatisfied]
+    end
+
+    # Azure's own complaint here names `isFlagged` and `hasDeclined`, fields this
+    # adapter never sends and no caller can set — unactionable, and silent about
+    # the reviewer id that was actually wrong.
+    test "an unknown reviewer is reported as an unknown reviewer" do
+      repository = create(:repository, :azure_devops, integration: @integration, scope: @integration.project)
+      stub_request(:patch, %r{/pullrequests/7/reviewers/}).to_return(
+        status: 400, headers: { "Content-Type" => "application/json" },
+        body: { message: "Invalid argument value.\r\nParameter name: Either isFlagged or hasDeclined must be set.",
+                typeKey: "InvalidArgumentValueException" }.to_json
+      )
+
+      error = assert_raises(ValidationFailed) do
+        PullRequestService.new(@integration).vote(repository, 7, reviewer_id: "nobody", vote: "approve")
+      end
+
+      assert_match(/does not recognize reviewer nobody/, error.message)
+      assert_no_match(/isFlagged/, error.message)
+    end
+
     test "paginate follows Azure's continuation header and stops at the limit" do
       base = "#{AZURE_API_HOST}/#{@resolved.organization}/_apis/paged"
       stub_request(:get, base).with(query: { "api-version" => "7.1" })

@@ -165,13 +165,11 @@ RUN chmod +x /usr/local/bin/ttyd && ttyd --version
 COPY tmux-osc52 /usr/local/bin/tmux-osc52
 RUN chmod +x /usr/local/bin/tmux-osc52
 
-# Azure DevOps git credential helper. Lives in the shared base rather than one
-# agent image because every agent clones, fetches and pushes. It asks the
-# platform for a short-lived token per network operation, so nothing is
-# persisted in the remote URL or .git/config — unlike the GitHub and GitLab
-# clone path, which embeds its token in the remote.
-COPY azure/git-credential-aixle-azure /usr/local/bin/git-credential-aixle-azure
-RUN chmod +x /usr/local/bin/git-credential-aixle-azure
+# The Azure DevOps git credential helper is deliberately NOT here. The platform
+# writes it into each session at clone time (AzureDevops::SessionGitSetup), so a
+# checkout can never be configured to call a helper this image predates — which
+# is what happened when it lived here: a five-week-old image met a newer
+# platform and every push failed with "could not read Username".
 
 # -----------------------------------------------------------------------------
 # Install OpenVSCode Server from GitHub releases

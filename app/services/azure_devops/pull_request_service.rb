@@ -195,6 +195,17 @@ module AzureDevops
                               body: { vote: value },
                               family: :git, project: resolved.project_id)
       summarize_reviewer(reviewer)
+    rescue ValidationFailed => e
+      # Azure answers an unknown reviewer id with a complaint about `isFlagged`
+      # and `hasDeclined` — internal fields of an API this tool does not expose,
+      # so the message points at parameters the caller cannot set and says
+      # nothing about the one that was wrong.
+      raise e unless e.message.to_s.match?(/isFlagged|hasDeclined/i)
+
+      raise ValidationFailed,
+            "Azure does not recognize reviewer #{reviewer_id} on pull request #{pull_request_id}. " \
+            "Reviewer ids come from azure_devops_list_pull_request_reviewers; an identity that is not " \
+            "already a reviewer on this pull request cannot vote on it."
     end
 
     # Completion, with two guards the design insists on.

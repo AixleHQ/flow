@@ -9,7 +9,7 @@ module InternalTools
 
     tool do
       display_name "Azure DevOps Get Pull Request Policies"
-      description "Read the branch-policy evaluations for an Azure Repos pull request — what is still blocking it from completing. A green build is NOT merge eligibility: policies can also require reviewers, linked work items or resolved comments. Returns JSON: {evaluations: [{type, status, blocking}], all_blocking_satisfied, blocking_count, unsatisfied}. Check `all_blocking_satisfied` before attempting completion."
+      description "Read the branch-policy evaluations for an Azure Repos pull request — what is still blocking it from completing. A green build is NOT merge eligibility: policies can also require reviewers, linked work items or resolved comments. Returns JSON: {evaluations: [{type, status, blocking}], all_blocking_satisfied, blocking_count, unsatisfied}. Check `all_blocking_satisfied` before attempting completion. `blocking_count: 0` means the branch has no policies at all, and `all_blocking_satisfied` is then true — nothing is in the way."
       tags :azure_devops
       inject_when :azure_repositories_attached
       user_attachable false

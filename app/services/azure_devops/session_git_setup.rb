@@ -21,7 +21,19 @@ module AzureDevops
   # detection rather than assumed — see `authtype_supported?`.
   class SessionGitSetup
     AUTHTYPE_MIN_GIT = Gem::Version.new("2.46.0")
-    HELPER = "/usr/local/bin/git-credential-aixle-azure"
+    # Written into the session at clone time rather than baked into the agent
+    # image.
+    #
+    # It used to be a COPY in docker/base/Dockerfile, which made the platform and
+    # every agent image a matched pair: an image built before this helper existed
+    # produced a checkout configured to call a file that was not there, and every
+    # push failed with "could not read Username for https://dev.azure.com". That
+    # is exactly what happened — the image in use was five weeks old.
+    #
+    # Under /workspace it also needs no root: the session's own user owns it, and
+    # the same user runs git.
+    HELPER = "/workspace/.aixle/git-credential-aixle-azure"
+    HELPER_SOURCE = Rails.root.join("docker/base/azure/git-credential-aixle-azure")
 
     def initialize(runtime:, container_id:, session:, logger: Rails.logger)
       @runtime = runtime
@@ -71,6 +83,7 @@ module AzureDevops
       # only that user, and it is the user git runs as anyway.
       runtime.write_file(container_id, header_path, authorization_header(credential),
                          mode: 0o600, uid: uid, gid: uid)
+      install_helper!(uid)
 
       branch = Shellwords.escape(repository.source_branch)
       url = Shellwords.escape(repository.clone_url)
@@ -97,6 +110,14 @@ module AzureDevops
       rescue StandardError
         nil
       end
+    end
+
+    # The helper itself, placed once per session. Idempotent: writing it again
+    # for a second repository costs one small file and keeps the clone path free
+    # of ordering assumptions.
+    def install_helper!(uid)
+      runtime.exec(container_id, [ "sh", "-c", "mkdir -p #{Shellwords.escape(File.dirname(HELPER))}" ])
+      runtime.write_file(container_id, HELPER, File.read(HELPER_SOURCE), mode: 0o700, uid: uid, gid: uid)
     end
 
     # Repository-local configuration so the agent's own `git fetch`/`git push`
