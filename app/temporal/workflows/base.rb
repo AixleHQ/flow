@@ -51,7 +51,15 @@ class Workflows::Base < Temporalio::Workflow::Definition
 
   def extract_error_message(activity_error)
     cause = activity_error.cause
-    cause ? cause.message : activity_error.message
+    return activity_error.message unless cause
+
+    return cause.message unless cause.respond_to?(:type) && cause.type == "ContainerService::PhaseError"
+
+    raw_details = cause.respond_to?(:details) ? cause.details : nil
+    details = raw_details.is_a?(Array) ? raw_details : [ raw_details ].compact
+    return cause.message if details.empty?
+
+    "#{cause.message} | diagnostics=#{details.map(&:inspect).join(", ")}"
   end
 
   def default_retry_policy

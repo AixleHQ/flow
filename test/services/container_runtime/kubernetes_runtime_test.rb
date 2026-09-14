@@ -142,9 +142,74 @@ module ContainerRuntime
       refute @runtime.write_file("id", nil, "content")
     end
 
+    test "write_file closes only stdin and waits for the remote exit status" do
+      handle = OpenStruct.new(namespace: "default", pod_name: "pod", container_name: "main")
+      client = FakeExecWebsocket.new
+      @runtime.stubs(:resolve_handle).returns(handle)
+      @runtime.stubs(:build_exec_url).returns(URI("wss://example.test/exec"))
+      @runtime.stubs(:websocket_headers).with(close_stdin: true)
+        .returns("Sec-WebSocket-Protocol" => "v5.channel.k8s.io")
+
+      connect = lambda do |_url, headers:, &block|
+        assert_equal "v5.channel.k8s.io", headers["Sec-WebSocket-Protocol"]
+        block.call(client)
+        client.trigger(:open)
+        client
+      end
+
+      WebSocket::Client::Simple.stub(:connect, connect) do
+        assert @runtime.write_file(handle, "/tmp/file.txt", "hello")
+      end
+
+      assert_includes client.frames, [ 255, 0 ].pack("C*")
+      assert client.status_sent, "expected exec to remain open until the status frame"
+    end
+
     test "read_file returns nil when path blank" do
       assert_nil @runtime.read_file("id", "")
       assert_nil @runtime.read_file("id", nil)
+    end
+
+    class FakeExecWebsocket
+      Message = Struct.new(:data)
+
+      attr_reader :frames
+      attr_accessor :status_sent
+
+      def initialize
+        @callbacks = {}
+        @frames = []
+        @open = true
+        @status_sent = false
+      end
+
+      def on(event, &block)
+        @callbacks[event] = block
+      end
+
+      def trigger(event, data = nil)
+        @callbacks.fetch(event).call(Message.new(data))
+      end
+
+      def send(frame)
+        @frames << frame
+        return unless frame == [ 255, 0 ].pack("C*")
+
+        @status_sent = true
+        status = { status: "Success" }.to_json
+        trigger(:message, [ 3 ].pack("C") + status)
+      end
+
+      def open?
+        @open
+      end
+
+      def close
+        return unless @open
+
+        @open = false
+        trigger(:close)
+      end
     end
 
     test "read_file returns nil when copy_from yields empty archive" do
