@@ -423,7 +423,9 @@ function ConnectAgentsStep({
                   <Box
                     mt="sm"
                     style={{
-                      height: 280,
+                      // Auth output (e.g. Cursor CLI's QR code) can run ~35 lines; 280px
+                      // only fit ~16 and clipped the QR under the footer (issue #630).
+                      height: 560,
                       border: '1px solid var(--app-border-default)',
                       borderRadius: 6,
                       overflow: 'hidden',

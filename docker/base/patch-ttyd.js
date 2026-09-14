@@ -36,10 +36,18 @@ const replacement = `        terminal.loadAddon(clipboardAddon);
         // Works around xterm.js #5412 (WebLinksAddon only stitches isWrapped rows;
         // tmux/Claude emit hard newlines). A "URL piece" row is non-empty with no
         // internal whitespace; consecutive pieces are concatenated and matched.
+        //
+        // Not every CLI prints the URL alone on its own row — Cursor CLI prefixes it
+        // with prose on the same line ("Open a browser and navigate to this link:
+        // https://..."), so that first row is NOT a bare "piece" (it has spaces before
+        // the URL). Such a row still starts the link if it contains "https://"; only
+        // its CONTINUATION rows (the hard-wrapped remainder) need to be pure pieces
+        // (issue #630 — the URL was never recognized as a link for Cursor CLI at all).
         const _isPiece = (str: string) => {
             const t = str.replace(/\\s+$/, '');
             return t.length > 0 && !/\\s/.test(t);
         };
+        const _hasUrlStart = (str: string) => /https?:\\/\\//.test(str);
         terminal.registerLinkProvider({
             provideLinks: (bufferLineNumber: number, callback) => {
                 const buf = terminal.buffer.active;
@@ -47,23 +55,55 @@ const replacement = `        terminal.loadAddon(clipboardAddon);
                     const l = buf.getLine(n - 1);
                     return l ? l.translateToString(true) : '';
                 };
-                if (!_isPiece(get(bufferLineNumber))) {
+                const cur = get(bufferLineNumber);
+                if (!_isPiece(cur) && !_hasUrlStart(cur)) {
                     callback(undefined);
                     return;
                 }
                 let start = bufferLineNumber;
-                while (start > 1 && _isPiece(get(start - 1))) start--;
+                while (start > 1) {
+                    const prevLine = get(start - 1);
+                    if (_isPiece(prevLine)) {
+                        start--;
+                        continue;
+                    }
+                    if (_hasUrlStart(prevLine)) start--;
+                    break;
+                }
                 let end = bufferLineNumber;
                 while (end < buf.length && _isPiece(get(end + 1))) end++;
-                let joined = '';
-                for (let n = start; n <= end; n++) joined += get(n).trim();
+                const rowTexts: string[] = [];
+                for (let n = start; n <= end; n++) rowTexts.push(get(n));
+                const joined = rowTexts.join('');
                 const m = joined.match(/https?:\\/\\/[^\\s]+/);
                 if (!m) {
                     callback(undefined);
                     return;
                 }
                 const url = m[0];
-                const range = { start: { x: 1, y: start }, end: { x: terminal.cols, y: end } };
+                // Map the match's offset in the joined string back to (row, col), so the
+                // underline/click target covers only the URL itself — not any leading
+                // prose on its row (e.g. Cursor CLI's "Open a browser...: ") or the blank
+                // padding after a short final row.
+                const urlStartOffset = m.index ?? 0;
+                const urlEndOffset = urlStartOffset + url.length;
+                let rowOffset = 0;
+                let startPos = { x: 1, y: start };
+                let endPos = { x: terminal.cols, y: end };
+                for (let i = 0; i < rowTexts.length; i++) {
+                    const len = rowTexts[i].length;
+                    const rowStart = rowOffset;
+                    const rowEnd = rowOffset + len;
+                    const rowNum = start + i;
+                    if (urlStartOffset >= rowStart && urlStartOffset < rowEnd) {
+                        startPos = { x: urlStartOffset - rowStart + 1, y: rowNum };
+                    }
+                    if (urlEndOffset - 1 >= rowStart && urlEndOffset - 1 < rowEnd) {
+                        endPos = { x: urlEndOffset - rowStart, y: rowNum };
+                    }
+                    rowOffset = rowEnd;
+                }
+                const range = { start: startPos, end: endPos };
                 callback([
                     {
                         range,
