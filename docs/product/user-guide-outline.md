@@ -1,6 +1,6 @@
 # Aixle Flow User Guide — Outline
 
-> Deliverable for issue #550. This is the outline of the end-user product guide —
+> The outline of the end-user product guide:
 > the skeleton a writer expands into full chapters. It follows the product
 > sidebar, uses the names a person sees on screen, and stays at product level:
 > no architecture, no APIs, no configuration, no file paths.

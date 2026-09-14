@@ -68,8 +68,8 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
 
 ## Product
 
-- **[product/user-guide-outline.md](./product/user-guide-outline.md)** — Outline of the end-user product guide: the board → workflow → agent → results loop, section-by-section skeleton following the product sidebar, two end-to-end stories, terminology notes (issue #550)
-- **[product/changelog-product-areas.md](./product/changelog-product-areas.md)** — Frozen user-facing product map used as the changelog taxonomy: named product areas, changelog rules, area → guide-chapter map, snapshot baseline (issue #551)
+- **[product/user-guide-outline.md](./product/user-guide-outline.md)** — Outline of the end-user product guide: the board → workflow → agent → results loop, section-by-section skeleton following the product sidebar, two end-to-end stories, terminology notes
+- **[product/changelog-product-areas.md](./product/changelog-product-areas.md)** — Frozen user-facing product map used as the changelog taxonomy: named product areas, changelog rules, area → guide-chapter map, snapshot baseline
 
 ## Operator documentation
 
@@ -85,6 +85,7 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/tools.md](./user-guide/tools.md)** — Tool kinds, execution modes, built-in board tools, resource resolution
 - **[user-guide/mcp.md](./user-guide/mcp.md)** — MCP transports, the internal `aixle-tools` server, config-item credentials
 - **[user-guide/integrations.md](./user-guide/integrations.md)** — GitHub, GitLab, Linear, Google OAuth, and webhooks
+- **[user-guide/azure-devops.md](./user-guide/azure-devops.md)** — Connecting an Azure DevOps organization end to end: what differs between SaaS and self-hosted, the one Entra step in the customer directory, the three personal-access-token scopes and what each is spent on, choosing Azure projects and widening that set later
 - **[user-guide/configuration.md](./user-guide/configuration.md)** — Env vars, OAuth, agent credentials, and other knobs
 - **[operations/azure-devops-app-registration.md](./operations/azure-devops-app-registration.md)** — Operator runbook: register the Entra application, give it a credential, and publish the client ID. Customers bind their own organizations from inside Flow by proving they administer them
 - **[quickstart.md](./quickstart.md)** — Get a local instance running and see one card move

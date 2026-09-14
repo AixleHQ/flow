@@ -21,12 +21,22 @@ class Web::DocsController < Web::ApplicationController
 
   private
 
+  # Mirrors the slugs registered in
+  # app/frontend/pages/Docs/data/pages/index.ts, because the page bodies are
+  # bundled into the client and Rails only decides whether the route exists.
+  #
+  # Two lists in two languages with nothing tying them together: a page added to
+  # the bundle but not here renders a 404 that looks like a missing document
+  # rather than a missing line. DocsControllerTest compares the two and fails
+  # when they drift.
+  PAGES = %w[using-flow getting-started project-home tasks running-workflows starting-work
+             sessions-and-runs assets personas agent-capabilities repositories ai-builder
+             people-and-access secrets analytics company-workspace examples
+             user-guide quick-start agents runtimes tools mcp board workflows
+             triggers-and-gates integrations azure-devops configuration reference cli-ref
+             api-guide config-schema user-guide-outline changelog-product-areas].freeze
+
   def page_exists?(slug)
-    %w[using-flow getting-started project-home tasks running-workflows starting-work
-       sessions-and-runs assets personas agent-capabilities repositories ai-builder
-       people-and-access secrets analytics company-workspace examples
-       user-guide quick-start agents runtimes tools mcp board workflows
-       triggers-and-gates integrations configuration reference cli-ref api-guide
-       config-schema user-guide-outline changelog-product-areas].include?(slug)
+    PAGES.include?(slug)
   end
 end
