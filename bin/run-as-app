@@ -8,6 +8,15 @@ set -e
 # forever) and why symlinks must never be dereferenced here.
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /bundle_cache /home/app
+  # Linux bind-mounts keep the host uid — see bin/docker-entrypoint.
+  app_uid=$(id -u app)
+  app_gid=$(id -g app)
+  mnt_uid=$(stat -c '%u' /app 2>/dev/null || echo 0)
+  mnt_gid=$(stat -c '%g' /app 2>/dev/null || echo 0)
+  if [ "$mnt_uid" -gt 0 ] 2>/dev/null && [ "$mnt_uid" != "$app_uid" ]; then
+    sed -i "s/^app:x:${app_uid}:${app_gid}/app:x:${mnt_uid}:${mnt_gid}/" /etc/passwd
+    sed -i "s/^app:x:${app_gid}/app:x:${mnt_gid}/" /etc/group
+  fi
   chown -Rh app:app /bundle_cache /home/app 2>/dev/null || true
   # Worker bind-mounts the host Docker socket for container lifecycle
   # management (docker-api gem); it's root:root 660 on the host side, so the

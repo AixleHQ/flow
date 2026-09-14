@@ -22,6 +22,19 @@ set -e
 # coreutils — where dereferencing is the default — can't silently reintroduce it.
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /bundle_cache /home/app
+  # Linux bind-mounts keep the host uid. The image `app` user is uid 100, so
+  # yarn cannot mkdir /app/node_modules on a uid-1000 checkout (EACCES on
+  # `make setup`). Align app with /app's owner when that owner is not root
+  # and is not already app. No-op when /app is the image tree (CI, production).
+  # Keep this block in sync with bin/run-as-app.
+  app_uid=$(id -u app)
+  app_gid=$(id -g app)
+  mnt_uid=$(stat -c '%u' /app 2>/dev/null || echo 0)
+  mnt_gid=$(stat -c '%g' /app 2>/dev/null || echo 0)
+  if [ "$mnt_uid" -gt 0 ] 2>/dev/null && [ "$mnt_uid" != "$app_uid" ]; then
+    sed -i "s/^app:x:${app_uid}:${app_gid}/app:x:${mnt_uid}:${mnt_gid}/" /etc/passwd
+    sed -i "s/^app:x:${app_gid}/app:x:${mnt_gid}/" /etc/group
+  fi
   chown -Rh app:app /bundle_cache /home/app 2>/dev/null || true
   # See bin/run-as-app: grant the app user access to the host Docker socket
   # when it's mounted (root:root 660 on the host side). No-op otherwise.
