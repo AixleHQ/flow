@@ -339,8 +339,8 @@ module Agents
     # existing ProvisioningError / ContainerService#run_phase convention.
     #
     # Exactly one stat. No retry, no rewrite, no delay, no token refresh.
-    def credential_preflight(runtime, container, container_id)
-      details = credential_file_metadata(runtime, container, container_id, config_path)
+    def credential_preflight(runtime, _container, container_id)
+      details = credential_file_metadata(runtime, container_id, config_path)
       return details.merge(valid: false, error_code: "auth_file_missing") unless details[:exists]
       return details.merge(valid: false, error_code: "auth_file_empty") if details[:size].to_i.zero?
 

@@ -507,9 +507,9 @@ module Agents
       nil
     end
 
-    def credential_file_metadata(runtime, container, container_id, path)
+    def credential_file_metadata(runtime, container_id, path)
       stdout, stderr, status = runtime.exec(
-        container, [ "/bin/sh", "-c", "stat -c '%s|%a|%U|%G' #{Shellwords.escape(path)} 2>&1" ], stdout: true, stderr: true
+        container_id, [ "/bin/sh", "-c", "stat -c '%s|%a|%U|%G' #{Shellwords.escape(path)} 2>&1" ], stdout: true, stderr: true
       )
       output = Array(stdout).join.strip
       size, mode, owner, group = output.split("|", 4) if status.to_i.zero?

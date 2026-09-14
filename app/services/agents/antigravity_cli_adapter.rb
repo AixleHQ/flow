@@ -96,7 +96,7 @@ module Agents
     # allowing them through would make interactive sessions fall back to login
     # and leave automatic sessions waiting indefinitely.
     def credential_preflight(runtime, container, container_id)
-      details = credential_file_metadata(runtime, container, container_id, config_path)
+      details = credential_file_metadata(runtime, container_id, config_path)
       return details.merge(valid: false, error_code: "auth_file_missing") unless details[:exists]
 
       stdout, _stderr, status = runtime.exec(container, [ "cat", config_path ], stdout: true, stderr: true)

@@ -274,32 +274,41 @@ module ContainerStrategies
       assert_equal "auth_file_missing", error.code
       assert_equal Agents::CodexAdapter.new.config_path, error.details[:path]
       refute error.details[:exists]
-      assert_equal 3, error.details[:attempts]
+      assert_equal 1, error.details[:attempts]
     end
 
-    test "Codex preflight reseeds and retries when the written auth file disappears" do
-      strategy, runtime, container = build_codex_preflight_strategy(nil)
-      auth_path = Agents::CodexAdapter.new.config_path
-      SessionContextService.expects(:inject_credential).once.with do |_container, _credential, _config|
-        runtime.write_file(container, auth_path, '{"tokens":{}}')
-      end.returns(true)
+    # Review decision on PR #252: a retry would mask a real seed/entrypoint race
+    # instead of surfacing it, so a preflight failure fails the session on the
+    # first attempt — no reseed.
+    test "Codex preflight fails immediately when the written auth file disappears, without reseeding" do
+      strategy, = build_codex_preflight_strategy(nil)
+      SessionContextService.expects(:inject_credential).never
 
-      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_file_missing", error.code
+      assert_equal 1, error.details[:attempts]
     end
 
-    test "credential preflight retries when the initial verified write fails" do
-      strategy, runtime, container = build_codex_preflight_strategy(nil)
+    test "credential preflight fails immediately when the initial verified write fails, without reseeding" do
+      strategy, = build_codex_preflight_strategy(nil)
       auth_path = Agents::CodexAdapter.new.config_path
       write_error = AgentCredentialsService::CredentialWriteError.new(
         path: auth_path, container: "abc123", write_outcome: "verification_failed"
       )
       SessionContextService.unstub(:assemble_session_context)
       SessionContextService.expects(:assemble_session_context).once.raises(write_error)
-      SessionContextService.expects(:inject_credential).once.with do |_container, _credential, _config|
-        runtime.write_file(container, auth_path, '{"tokens":{}}')
-      end.returns(true)
+      SessionContextService.expects(:inject_credential).never
 
-      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_file_write_failed", error.code
+      assert_equal 1, error.details[:attempt]
+      assert_equal 1, error.details[:attempts]
     end
 
     test "interactive first login proceeds without a stored credential" do
@@ -876,7 +885,6 @@ module ContainerStrategies
       strategy.stubs(:runtime).returns(runtime)
       SessionContextService.stubs(:assemble_session_context).returns(true)
       SessionContextService.stubs(:inject_credential).returns(true)
-      strategy.stubs(:sleep)
       [ strategy, runtime, container ]
     end
   end
