@@ -294,6 +294,32 @@ class AgentCredentialTest < ActiveSupport::TestCase
     refute_includes due_now, null_expiry
   end
 
+  # The closed loop this scope used to hold shut: expires_at is only written when
+  # config_data is written, config_data is only routinely written by a refresh, and
+  # `where.not(expires_at: nil)` meant such a row was never selected to be refreshed.
+  # A NULL expiry is not "never expires" for an agent whose adapter can read the token.
+  test "refresh_due selects a cursor_cli credential whose expires_at was never derived" do
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
+                                     config_data: { "accessToken" => cursor_jwt(1.day.ago),
+                                                    "refreshToken" => "r1" })
+    cred.update_column(:expires_at, nil)
+
+    assert_includes AgentCredential.refresh_due, cred.reload
+  end
+
+  # For everyone else a NULL expiry still means "these tokens carry no expiry" — and
+  # their adapters refresh on every call, so selecting them would rotate a live grant
+  # every five minutes.
+  test "refresh_due still excludes null-expiry credentials of agents whose adapter cannot read the token" do
+    claude = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                       config_data: { "primaryApiKey" => "sk-ant" })
+    codex = create(:agent_credential, user: @user, agent_type: "codex")
+
+    due_now = AgentCredential.refresh_due
+    refute_includes due_now, claude
+    refute_includes due_now, codex
+  end
+
   test "refresh_due honors a custom window argument" do
     cred = create(:agent_credential, user: @user, agent_type: "claude_code",
                                      config_data: claude_config(expires_at: 90.minutes.from_now))
@@ -368,6 +394,13 @@ class AgentCredentialTest < ActiveSupport::TestCase
                  headers: { "Content-Type" => "application/json" })
   end
 
+  def stub_cursor_token_endpoint
+    stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL)
+      .to_return(status: 200,
+                 body: { access_token: cursor_jwt(30.days.from_now), refresh_token: "new-cursor-ref" }.to_json,
+                 headers: { "Content-Type" => "application/json" })
+  end
+
   test "refresh_if_expiring! leaves a token with plenty of life alone" do
     cred = create(:agent_credential, user: @user, agent_type: "claude_code",
                                      config_data: refreshable_claude_config(expires_at: 3.hours.from_now))
@@ -410,6 +443,86 @@ class AgentCredentialTest < ActiveSupport::TestCase
     result = cred.refresh_if_expiring!(excluding_session_id: launching.id)
 
     assert_equal :refreshed, result[:status]
+  end
+
+  # A launch is the other production caller, and it gated on the same column: for a NULL
+  # expiry #expiring_within? is false, so it returned :not_needed and the adapter — the
+  # only thing holding the token — was never asked. This is the acceptance case for
+  # "refreshed through a production caller, not only when #refresh! is called directly".
+  test "refresh_if_expiring! refreshes a cursor_cli credential whose expires_at was never derived" do
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
+                                     config_data: { "accessToken" => cursor_jwt(1.day.ago),
+                                                    "refreshToken" => "r1" })
+    dead_token = cred.config_data["accessToken"]
+    cred.update_column(:expires_at, nil)
+    stub_cursor_token_endpoint
+
+    result = cred.reload.refresh_if_expiring!
+
+    assert_equal :refreshed, result[:status]
+    assert_not_equal dead_token, cred.reload.config_data["accessToken"]
+    # And the write closes the loop: sync_expires_at now has a readable exp to derive.
+    assert_not_nil cred.expires_at
+  end
+
+  # The adapter decides, so reaching it is not the same as rotating: a healthy token
+  # with a NULL column is left alone rather than burning its single-use grant.
+  test "refresh_if_expiring! leaves a healthy cursor_cli token alone even with a null expires_at" do
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
+                                     config_data: { "accessToken" => cursor_jwt(30.days.from_now),
+                                                    "refreshToken" => "r1" })
+    cred.update_column(:expires_at, nil)
+
+    assert_equal :not_needed, cred.reload.refresh_if_expiring![:status]
+  end
+
+  # --- credential_unusable_reason: the launch gate asks the token, not the columns ---
+
+  # A Cursor accessToken is a JWT: its `exp` claim is the only real statement about
+  # when the credential dies. Minimal unsigned form — nothing verifies the signature.
+  def cursor_jwt(expires_at)
+    header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
+    payload = Base64.urlsafe_encode64({ exp: expires_at.to_i }.to_json, padding: false)
+    "#{header}.#{payload}.sig"
+  end
+
+  # The production row this exists for: the sweep never selected it (NULL expiry), so it
+  # is `active` with no refresh error while its token expired weeks ago — and with no
+  # refreshToken there is nothing left to rescue it at provisioning either.
+  test "credential_unusable_reason reports a dead cursor token the sweep never marked" do
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
+                                     config_data: { "accessToken" => cursor_jwt(1.day.ago) })
+    cred.update_column(:expires_at, nil)
+
+    assert cred.reload.active?
+    assert_equal "token_expired", cred.credential_unusable_reason
+  end
+
+  test "credential_unusable_reason is nil for a cursor token with life left in it" do
+    config = { "accessToken" => cursor_jwt(30.days.from_now), "refreshToken" => "r1" }
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli", config_data: config)
+
+    assert_nil cred.credential_unusable_reason
+  end
+
+  # An expired accessToken with a live refreshToken is not a broken credential: the
+  # provisioning step rotates it a few steps after preflight, exactly as
+  # Oauth::Preflight.usable? and CloudAuth::Preflight.unusable_reason allow for.
+  test "credential_unusable_reason is nil for an expired cursor token that can still be refreshed" do
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
+                                     config_data: { "accessToken" => cursor_jwt(1.day.ago),
+                                                    "refreshToken" => "r1" })
+
+    assert_nil cred.credential_unusable_reason
+  end
+
+  # An API key or a Bedrock connection legitimately carries no readable `exp`; refusing
+  # those would lock a working login out of every launch.
+  test "credential_unusable_reason is nil for an agent whose auth carries no readable expiry" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: { "primaryApiKey" => "sk-ant" })
+
+    assert_nil cred.credential_unusable_reason
   end
 
   # --- status / refresh error lifecycle ---

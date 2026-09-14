@@ -404,6 +404,110 @@ module Agents
       assert_equal :error, @adapter.refresh!(credential)[:status]
     end
 
+    # The whole point of the margin: the adapter decides from the token it is holding,
+    # not from the denormalised expires_at column that put a live credential in a closed
+    # never-refreshed loop.
+    test "refresh! returns not_needed when the stored token outlives the margin" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user, config_data: {
+        "accessToken" => jwt_with_exp(2.hours.from_now.to_i), "refreshToken" => "r1"
+      })
+
+      assert_equal({ status: :not_needed, detail: nil }, @adapter.refresh!(credential))
+      assert_not_requested :post, CursorCliAdapter::CURSOR_AUTH_URL
+    end
+
+    test "refresh! rotates a token that expires inside the margin" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user, config_data: {
+        "accessToken" => jwt_with_exp(5.minutes.from_now.to_i), "refreshToken" => "r1"
+      })
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .to_return(status: 200, body: { access_token: "new", refresh_token: "r2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal :refreshed, @adapter.refresh!(credential)[:status]
+      assert_equal "new", credential.reload.config_data["accessToken"]
+    end
+
+    test "refresh! rotates an already-expired token" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user, config_data: {
+        "accessToken" => jwt_with_exp(1.day.ago.to_i), "refreshToken" => "r1"
+      })
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .to_return(status: 200, body: { access_token: "new", refresh_token: "r2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal :refreshed, @adapter.refresh!(credential)[:status]
+      assert_equal "new", credential.reload.config_data["accessToken"]
+    end
+
+    # An unreadable exp is not "never expires" — the token still dies with its grant.
+    test "refresh! rotates a token whose exp cannot be read" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "opaque", "refreshToken" => "r1" })
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .to_return(status: 200, body: { access_token: "new", refresh_token: "r2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal :refreshed, @adapter.refresh!(credential)[:status]
+      assert_equal "new", credential.reload.config_data["accessToken"]
+    end
+
+    test "refresh! honours a caller-supplied margin" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user, config_data: {
+        "accessToken" => jwt_with_exp(30.minutes.from_now.to_i), "refreshToken" => "r1"
+      })
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .to_return(status: 200, body: { access_token: "new", refresh_token: "r2" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      # Beyond the sweep's own 15-minute margin, inside a session launch's 60-minute one.
+      assert_equal :not_needed, @adapter.refresh!(credential)[:status]
+      assert_equal :refreshed, @adapter.refresh!(credential, margin_ms: 60.minutes.in_milliseconds)[:status]
+    end
+
+    # =========================================================================
+    # credential_unusable_reason — session-start preflight verdict (no network)
+    # =========================================================================
+
+    test "credential_unusable_reason passes a token with life left in it" do
+      assert_nil @adapter.credential_unusable_reason({ "accessToken" => jwt_with_exp(2.hours.from_now.to_i) })
+    end
+
+    test "credential_unusable_reason reports an expired token that cannot be refreshed" do
+      assert_equal "token_expired",
+                   @adapter.credential_unusable_reason({ "accessToken" => jwt_with_exp(1.minute.ago.to_i) })
+    end
+
+    # Only what is beyond saving is refused. An expired accessToken with a live
+    # refreshToken is rotated at provisioning by
+    # AgentSessionStrategy#refresh_expiring_credential!, so refusing it here would send
+    # the user to a manual re-auth they did not need — and would kill a workflow step
+    # outright, since launch_step_session_activity wraps PreflightError in a
+    # non-retryable Temporal ApplicationError.
+    test "credential_unusable_reason passes an expired token that still has a refresh token" do
+      assert_nil @adapter.credential_unusable_reason(
+        { "accessToken" => jwt_with_exp(1.minute.ago.to_i), "refreshToken" => "r1" }
+      )
+    end
+
+    test "credential_unusable_reason passes an unreadable token that still has a refresh token" do
+      assert_nil @adapter.credential_unusable_reason({ "accessToken" => "opaque", "refreshToken" => "r1" })
+    end
+
+    # Garbage counts as expired (CloudAuth::Preflight.past?) once nothing can refresh it:
+    # better to prompt a reconnect than to hand a session a dead credential.
+    test "credential_unusable_reason reports an unrefreshable token whose exp cannot be read" do
+      assert_equal "expiry_unreadable", @adapter.credential_unusable_reason({ "accessToken" => "opaque" })
+      assert_equal "expiry_unreadable", @adapter.credential_unusable_reason({})
+      assert_equal "expiry_unreadable",
+                   @adapter.credential_unusable_reason({ "accessToken" => "opaque", "refreshToken" => "" })
+    end
+
     test "token_expires_at decodes the JWT exp (ms) from the accessToken" do
       exp = 2.hours.from_now.to_i
       assert_equal exp * 1000, @adapter.token_expires_at({ "accessToken" => jwt_with_exp(exp) })
