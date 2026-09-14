@@ -50,7 +50,7 @@ module Agents
       { model_id: "gemini-3.7-flash-medium", display_name: "Gemini 3.7 Flash (Medium)" },
       { model_id: "gemini-3.6-flash-high", display_name: "Gemini 3.6 Flash (High)" },
       { model_id: "gemini-3.6-flash-medium", display_name: "Gemini 3.6 Flash (Medium)" },
-      { model_id: "gemini-3.1-pro-high", display_name: "Gemini 3.1 Pro (High)" },
+      { model_id: "gemini-pro-agent", display_name: "Gemini Pro" },
       { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6 (Thinking)" },
       { model_id: "claude-opus-4-6-thinking", display_name: "Claude Opus 4.6 (Thinking)" },
       { model_id: "gpt-oss-120b-medium", display_name: "GPT-OSS 120B (Medium)" }

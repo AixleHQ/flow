@@ -115,6 +115,14 @@ module Agents
                       { model_id: "gpt-oss-120b-medium", display_name: "GPT-OSS 120B (Medium)" }
     end
 
+    test "fallback catalogue offers the supported replacement, not the deprecated Gemini 3.1 Pro id" do
+      result = @adapter.fetch_available_models_with_source({})
+
+      model_ids = result[:models].pluck(:model_id)
+      assert_includes model_ids, "gemini-pro-agent"
+      refute_includes model_ids, "gemini-3.1-pro-high"
+    end
+
     test "falls back when the Antigravity catalogue request fails" do
       stub_request(:post, AntigravityCliAdapter::MODELS_URL).to_return(status: 401)
 
