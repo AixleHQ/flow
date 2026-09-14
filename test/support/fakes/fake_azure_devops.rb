@@ -277,6 +277,17 @@ module FakeAzureDevops
         return @pull_request.merge(completed: true, already_completed: true)
       end
 
+      # Mirrors the real adapter's guard. Azure does not enforce the expected
+      # commit, so the adapter does — a fake that merged regardless would let
+      # the protection rot without a test noticing.
+      actual = @pull_request[:last_merge_source_commit]
+      if actual.present? && actual != expected_commit.to_s
+        raise AzureDevops::Conflict.new(
+          "Pull request #{pull_request_id} has moved to #{actual} since #{expected_commit} was read.",
+          details: { current_commit: actual, expected_commit: expected_commit.to_s }
+        )
+      end
+
       record(:complete, repository: repository, pull_request_id: pull_request_id,
                         expected_commit: expected_commit, merge_strategy: merge_strategy,
                         delete_source_branch: delete_source_branch, commit_message: commit_message)

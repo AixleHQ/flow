@@ -207,6 +207,24 @@ describe('AzureDevopsConnectModal', () => {
     expect(screen.getByRole('checkbox', { name: /Read repositories/ })).toBeChecked();
   });
 
+  // The one step that happens outside Flow, in another portal, usually by
+  // another person. Learning about it from a failed verification means going
+  // away and coming back, so the command is on screen before anything is typed
+  // — with this deployment's own client id, which documentation cannot carry
+  // because it differs between the hosted deployment and every self-hosted one.
+  it('shows the directory step with this deployment’s client id, before verifying', () => {
+    renderModal({ clientId: 'a734e297-bc89-4c1e-81c7-e8697e671206' });
+
+    expect(screen.getByText(/One step in your Entra directory first/)).toBeInTheDocument();
+    expect(screen.getByText(/az ad sp create --id a734e297-bc89-4c1e-81c7-e8697e671206/)).toBeInTheDocument();
+  });
+
+  it('says nothing about a directory step when the deployment publishes no client id', () => {
+    renderModal();
+
+    expect(screen.queryByText(/One step in your Entra directory first/)).not.toBeInTheDocument();
+  });
+
   it('offers no personal-access-token path while the deployment has it switched off', () => {
     renderModal();
 

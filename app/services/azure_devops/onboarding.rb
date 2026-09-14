@@ -52,6 +52,24 @@ module AzureDevops
       bound = existing_installation(tenant)
 
       if bound&.active?
+        # A token widens the approved set. Without one this branch could only
+        # ever offer what the FIRST connection approved, so a company that later
+        # wanted a second Azure project had no way to add it: `complete!` can
+        # widen the installation, and nothing ever showed the wider list to
+        # choose from.
+        if personal_access_token.present?
+          proof = OwnershipProof.new(organization: organization, personal_access_token: personal_access_token)
+          verified = proof.call
+
+          return Inspection.new(
+            organization: tenant.organization, tenant_id: tenant.tenant_id,
+            identity: verified.identity, already_bound: true,
+            # Everything the administrator can see, not just the approved slice —
+            # approving more is the point of having supplied a token.
+            projects: proof.projects
+          )
+        end
+
         return Inspection.new(
           organization: tenant.organization, tenant_id: tenant.tenant_id,
           identity: nil, already_bound: true,

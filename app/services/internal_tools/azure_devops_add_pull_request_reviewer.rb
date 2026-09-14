@@ -1,12 +1,11 @@
 # frozen_string_literal: true
 
 module InternalTools
-  # Adding a reviewer is what makes voting possible at all.
+  # Membership on a review, and whether that membership is binding.
   #
-  # `azure_devops_vote_pull_request` needs an identity that is already a reviewer
-  # on the pull request, and `azure_devops_list_pull_request_reviewers` only
-  # reports the ones that are. On a pull request with no reviewers there was no
-  # way out of that loop: the service could add one, and nothing exposed it.
+  # It was introduced believing voting required it — Azure adds the voter itself,
+  # so it does not. What it is actually for is putting SOMEONE ELSE on a review,
+  # and making an approval required rather than optional.
   #
   # `required: false` by default. A required reviewer is a branch-policy-level
   # obligation on other people's work, which is not something to acquire from a
@@ -16,7 +15,7 @@ module InternalTools
 
     tool do
       display_name "Azure DevOps Add Pull Request Reviewer"
-      description "Add a reviewer to an Azure Repos pull request. `reviewer_id` is an Azure identity id — a user or a group. Adding one is what lets that identity vote: azure_devops_vote_pull_request only works for reviewers already on the pull request. Optional by default; `required: true` makes the reviewer's approval mandatory, which blocks completion until they vote. Returns the reviewer entry: {id, display_name, vote, required}."
+      description "Add a reviewer to an Azure Repos pull request. `reviewer_id` is an Azure identity id — a user or a group. Use it to put someone on the review, or to make an existing reviewer's approval required. Voting does not need it — azure_devops_vote_pull_request adds the identity itself. Re-adding an existing reviewer keeps their current vote. Optional by default; `required: true` makes the reviewer's approval mandatory, which blocks completion until they vote. Returns the reviewer entry: {id, display_name, vote, required}."
       tags :azure_devops
       inject_when :azure_repositories_attached
       user_attachable false

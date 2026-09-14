@@ -257,23 +257,88 @@ module AzureDevops
       assert_equal [ "Minimum number of reviewers" ], result[:unsatisfied]
     end
 
-    # Azure's own complaint here names `isFlagged` and `hasDeclined`, fields this
-    # adapter never sends and no caller can set — unactionable, and silent about
-    # the reviewer id that was actually wrong.
-    test "an unknown reviewer is reported as an unknown reviewer" do
+    # Azure's reviewer endpoints are PUT on the reviewer itself. PATCH does not
+    # 404 — it reaches a different handler and complains about `isFlagged` and
+    # `hasDeclined`, which reads like a payload problem and is not one. Both
+    # adding a reviewer and voting were sending PATCH, so neither worked at all,
+    # and the complaint was mapped to "Azure does not recognize reviewer X" —
+    # confidently wrong about a reviewer that existed.
+    test "a reviewer is added with PUT on the reviewer itself" do
       repository = create(:repository, :azure_devops, integration: @integration, scope: @integration.project)
-      stub_request(:patch, %r{/pullrequests/7/reviewers/}).to_return(
-        status: 400, headers: { "Content-Type" => "application/json" },
-        body: { message: "Invalid argument value.\r\nParameter name: Either isFlagged or hasDeclined must be set.",
-                typeKey: "InvalidArgumentValueException" }.to_json
+      # Adding reads the current reviewers first, so an existing vote survives.
+      stub_request(:get, %r{/pullrequests/7/reviewers}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" }, body: { value: [] }.to_json
+      )
+      stub_request(:put, %r{/pullrequests/7/reviewers/identity-1}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { id: "identity-1", displayName: "Aixle Flow", vote: 0, isRequired: true }.to_json
       )
 
-      error = assert_raises(ValidationFailed) do
-        PullRequestService.new(@integration).vote(repository, 7, reviewer_id: "nobody", vote: "approve")
+      PullRequestService.new(@integration).add_reviewer(repository, 7, reviewer_id: "identity-1", required: true)
+
+      assert_requested(:put, %r{/pullrequests/7/reviewers/identity-1}) do |req|
+        JSON.parse(req.body)["isRequired"] == true
+      end
+    end
+
+    test "a vote is cast with PUT on the reviewer itself" do
+      repository = create(:repository, :azure_devops, integration: @integration, scope: @integration.project)
+      stub_request(:put, %r{/pullrequests/7/reviewers/identity-1}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { id: "identity-1", displayName: "Aixle Flow", vote: 10 }.to_json
+      )
+
+      PullRequestService.new(@integration).vote(repository, 7, reviewer_id: "identity-1", vote: "approve")
+
+      assert_requested(:put, %r{/pullrequests/7/reviewers/identity-1}) do |req|
+        JSON.parse(req.body)["vote"] == 10
+      end
+    end
+
+    # The guard the description promised and did not have. Azure does NOT refuse
+    # a completion whose `lastMergeSourceCommit` no longer matches — a
+    # completion carrying an all-zeros commit id merged the branch anyway. So it
+    # is compared here, against the same state the caller was told to read
+    # `expected_commit` from.
+    test "a pull request that moved since it was read is not completed" do
+      repository = create(:repository, :azure_devops, integration: @integration, scope: @integration.project)
+      stub_request(:get, %r{/pullrequests/7}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { pullRequestId: 7, status: "active",
+                lastMergeSourceCommit: { commitId: "b" * 40 },
+                repository: { id: repository.external_id, project: { id: @integration.azure_project_id },
+                              webUrl: "#{AZURE_API_HOST}/contoso/Proj/_git/api" } }.to_json
+      )
+      completion = stub_request(:patch, %r{/pullrequests/7})
+
+      error = assert_raises(Conflict) do
+        PullRequestService.new(@integration).complete(repository, 7, expected_commit: "a" * 40)
       end
 
-      assert_match(/does not recognize reviewer nobody/, error.message)
-      assert_no_match(/isFlagged/, error.message)
+      assert_equal({ current_commit: "b" * 40, expected_commit: "a" * 40 }, error.details)
+      assert_not_requested completion
+    end
+
+    # Adding a reviewer is about membership. Sending a flat `vote: 0` reset an
+    # existing approval — silently, and on a policy-protected branch that
+    # un-blocks and re-blocks the merge.
+    test "adding an existing reviewer keeps the vote they already cast" do
+      repository = create(:repository, :azure_devops, integration: @integration, scope: @integration.project)
+      stub_request(:get, %r{/pullrequests/7/reviewers}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { value: [ { id: "identity-1", displayName: "Ada", vote: 10, isRequired: false } ] }.to_json
+      )
+      stub_request(:put, %r{/pullrequests/7/reviewers/identity-1}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { id: "identity-1", displayName: "Ada", vote: 10, isRequired: true }.to_json
+      )
+
+      PullRequestService.new(@integration).add_reviewer(repository, 7, reviewer_id: "identity-1", required: true)
+
+      assert_requested(:put, %r{/pullrequests/7/reviewers/identity-1}) do |req|
+        body = JSON.parse(req.body)
+        body["vote"] == 10 && body["isRequired"] == true
+      end
     end
 
     test "paginate follows Azure's continuation header and stops at the limit" do

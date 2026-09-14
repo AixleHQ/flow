@@ -70,8 +70,15 @@ That token is used once, in that request: it proves the organization is
 yours, and it adds Aixle to it with a **Basic** access level and
 Contributor rights on the project you pick. It is never stored, and the
 connection runs on Aixle's own identity afterwards — not on your token.
-Colleagues connecting further projects in the same organization are not
-asked for one, because the first connection already established it.
+Colleagues connecting further Flow projects against the same organization
+are not asked for one, because the first connection already established
+it — they choose from the Azure projects that connection approved.
+
+Reaching an Azure project outside that set needs a token again: the
+approved list is the company's boundary on the organization, not a
+per-connection preference, so widening it is the same act as
+establishing it. Paste one and the full list of projects you can
+administer is offered, with the approved ones already among them.
 
 The selected Azure projects are fixed for the life of the connection.
 Adding one later would silently widen what every agent and every tool in
@@ -153,8 +160,11 @@ internal server, Config Items credentials, and URL-safety rules — and
 
 | Source        | Endpoint                          | Auth                                        |
 | ------------- | --------------------------------- | ------------------------------------------- |
-| GitHub        | `POST /webhooks/github`           | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
-| GitLab        | `POST /webhooks/gitlab`           | Per-repository secret                       |
+| GitHub        | `POST /webhooks/github`                      | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
+| GitLab        | `POST /webhooks/gitlab`                      | Per-repository secret                       |
+| Azure DevOps  | `POST /webhooks/azure_devops/<endpoint id>`  | HTTP Basic, one password per subscription   |
 
-Both endpoints are public (no session auth) — verification is
-signature-based.
+All three are public (no session auth). GitHub and GitLab are verified by
+signature; Azure DevOps sends none, so the subscription's own password is
+the entire credential — which is why the endpoint id in the URL is a
+route, never a secret.

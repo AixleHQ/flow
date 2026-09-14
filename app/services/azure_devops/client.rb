@@ -48,6 +48,15 @@ module AzureDevops
                                body: body, content_type: content_type)
     end
 
+    # Azure's reviewer endpoints are PUT on the reviewer itself, not PATCH and
+    # not POST on the collection. Sending the wrong verb does not 404 — it lands
+    # on a different handler that complains about `isFlagged`/`hasDeclined`,
+    # which reads like a payload problem and is not one.
+    def put(*segments, body:, params: {}, family: :default, project: nil, content_type: "application/json")
+      request(:put, segments, params: params, family: family, project: project,
+                              body: body, content_type: content_type)
+    end
+
     def patch(*segments, body:, params: {}, family: :default, project: nil, content_type: "application/json")
       request(:patch, segments, params: params, family: family, project: project,
                                 body: body, content_type: content_type)

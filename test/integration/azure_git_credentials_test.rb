@@ -54,6 +54,27 @@ class AzureGitCredentialsTest < ActionDispatch::IntegrationTest
     assert_equal "git-token", response.parsed_body["password"]
   end
 
+  # Git hands the helper a DECODED path, so a project named "Aixle Flow Example"
+  # arrives with real spaces. `URI.parse` refuses that outright, the refusal was
+  # read as an unrecognized request, and every push to a repository with a space
+  # in its organization, project or repository name got a 403 it could not act
+  # on.
+  test "accepts the decoded url git actually sends" do
+    decoded = @repository.clone_url.gsub("%20", " ")
+    assert_not_equal decoded, @repository.clone_url, "this repository must have an encoded name to test"
+
+    post PATH, params: { repository_id: @repository.id, url: decoded }, headers: headers
+
+    assert_response :success
+    assert_equal "git-token", response.parsed_body["password"]
+  end
+
+  test "still accepts the encoded url" do
+    post PATH, params: { repository_id: @repository.id, url: @repository.clone_url }, headers: headers
+
+    assert_response :success
+  end
+
   test "rejects a request with no key" do
     post PATH, params: { repository_id: @repository.id }, headers: { "X-Session-Id" => @session.id.to_s }
 

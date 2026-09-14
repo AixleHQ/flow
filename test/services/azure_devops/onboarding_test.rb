@@ -191,6 +191,28 @@ module AzureDevops
       assert_equal 0, AzureDevopsInstallation.count
     end
 
+    # Without this, the approved set could only ever be what the FIRST connection
+    # chose: a company adding a second Azure project later was offered the old
+    # list and nothing else. `complete!` could widen the installation all along —
+    # nothing ever showed the wider list to pick from.
+    test "an administrator token widens what an already-bound organization offers" do
+      second = SecureRandom.uuid
+      create(:azure_devops_installation, :active, :approved, company: @company,
+             tenant_id: @tenant, organization_slug: "contoso", allowed_project_ids: [ @project_id ])
+      stub_tenant
+      stub_admin_probe
+      stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/projects\?.*\$top})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { value: [ { id: @project_id, name: "Customer Platform" },
+                                    { id: second, name: "Payments" } ] }.to_json)
+
+      result = @onboarding.inspect!(organization: "contoso", personal_access_token: "admin-pat")
+
+      assert result.already_bound
+      assert_equal [ @project_id, second ].sort, result.projects.map { |p| p[:id] }.sort
+      assert_equal "ada@contoso.com", result.identity
+    end
+
     # == service hooks ==
 
     test "complete grants the application permission to manage its own Service Hooks" do

@@ -6,7 +6,7 @@ module InternalTools
 
     tool do
       display_name "Azure DevOps Create Work Item"
-      description "Create a work item in a connection's Azure project. `type` must be one the project's process defines — call azure_devops_list_work_item_types first, and check its required fields. `operation_key` is required and makes the call replay-safe. Returns JSON: {id, type, title, state, url}."
+      description "Create a work item in a connection's Azure project. `type` must be one the project's process defines — call azure_devops_list_work_item_types first, and check its required fields. `operation_key` is required and makes the call replay-safe. Returns JSON: {id, type, title, state, url}. `description` is stored VERBATIM and rendered by Azure as HTML: send raw markup (`<p>…</p>`), never HTML-escaped text, or the entities show up as visible tags."
       tags :azure_devops
       inject_when :azure_integration_connected
       user_attachable false

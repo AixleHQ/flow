@@ -6,7 +6,7 @@ module InternalTools
 
     tool do
       display_name "Azure DevOps Add Work Item Comment"
-      description "Add a comment to an Azure Boards work item. `operation_key` is required and makes the call replay-safe: the same key returns the original result instead of posting the comment twice. Returns JSON: {id, created_at}."
+      description "Add a comment to an Azure Boards work item. `operation_key` is required and makes the call replay-safe: the same key returns the original result instead of posting the comment twice. Returns JSON: {id, created_at}. Posting a comment BUMPS the work item's `rev`, so a revision read before commenting is stale immediately after — re-read before an update that pins `expected_revision`."
       tags :azure_devops
       inject_when :azure_integration_connected
       user_attachable false

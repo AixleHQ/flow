@@ -3,6 +3,7 @@ import {
   Alert,
   Button,
   Checkbox,
+  Code,
   Group,
   Modal,
   MultiSelect,
@@ -23,6 +24,8 @@ export interface AzureDevopsProject {
 export interface AzureDevopsProps {
   enabled: boolean;
   patModeEnabled?: boolean;
+  /** Not a secret: it is what a customer runs `az ad sp create --id` with. */
+  clientId?: string | null;
 }
 
 interface Props {
@@ -232,11 +235,27 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
               disabled={!!inspection}
             />
 
+            {!inspection && azureDevops.clientId && (
+              // Shown BEFORE verifying, not only after it fails: this is the one
+              // step that happens outside Flow, in a different portal, and
+              // usually by a different person. Finding out about it from an
+              // error means going away and coming back.
+              <Alert color="gray" variant="light" title="One step in your Entra directory first">
+                <Text size="sm">
+                  A directory administrator runs this once. Nothing is consented to and no permission is granted — it
+                  only makes Aixle&apos;s application nameable in your organization.
+                </Text>
+                <Code block mt={8}>
+                  az ad sp create --id {azureDevops.clientId}
+                </Code>
+              </Alert>
+            )}
+
             {!inspection && (
               <>
                 <PasswordInput
                   label="Administrator personal access token"
-                  description="Used once, in this request: it proves the organization is yours, adds Aixle to it, and lets Aixle manage its own Service Hooks. It is never stored, and the connection runs on Aixle’s own identity afterwards. Needs three scopes: Member Entitlement Management (read & write), Project and team (read), and Security (manage). Leave empty if your company has already connected this organization."
+                  description="Used once, in this request: it proves the organization is yours, adds Aixle to it, and lets Aixle manage its own Service Hooks. It is never stored, and the connection runs on Aixle’s own identity afterwards. Needs three scopes: Member Entitlement Management (read & write), Project and team (read), and Security (manage). Leave empty if your company has already connected this organization — unless you want to reach an Azure project it has not approved yet, which needs a token again."
                   value={adminPat}
                   onChange={(e) => setAdminPat(e.currentTarget.value)}
                 />
@@ -253,7 +272,7 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
                 <Alert color="green" icon={<IconCheck size={16} />} title="Organization verified">
                   <Text size="sm">
                     {inspection.alreadyBound
-                      ? 'Your company has already connected this organization, so no token was needed.'
+                      ? `Your company has already connected this organization${inspection.identity ? `, and ${inspection.identity} approved more projects just now` : ', so no token was needed'}.`
                       : `Verified${inspection.identity ? ` as ${inspection.identity}` : ''}. Aixle will be added to this organization with a Basic access level.`}
                   </Text>
                 </Alert>
@@ -332,8 +351,11 @@ export const AzureDevopsConnectModal = ({ opened, onClose, basePath, azureDevops
             {missingPrincipal && (
               <Text size="sm" mt="xs">
                 Aixle&apos;s application has not been added to your Microsoft Entra directory yet. A directory
-                administrator runs <code>az ad sp create --id &lt;client id&gt;</code> once — nothing is consented to
-                and no permission is granted, it only makes the application nameable in your organization.
+                administrator runs this once — nothing is consented to and no permission is granted, it only makes the
+                application nameable in your organization:
+                <Code block mt={6}>
+                  az ad sp create --id {azureDevops.clientId ?? '<client id>'}
+                </Code>
               </Text>
             )}
           </Alert>

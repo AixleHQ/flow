@@ -179,6 +179,20 @@ module AzureDevops
                           body: patch, family: :wit, project: resolved.project_id,
                           content_type: "application/json-patch+json")
       detail(item)
+    rescue Conflict => e
+      # Same shape as `update`. This used to leak Azure's own text —
+      # "VS403351: Test Operation for path /rev failed, value 4 was not equal to
+      # test value 3" — leaving the caller to regex a provider error code out of
+      # a message to learn the revision it was told it would be given.
+      raise e if expected_revision.blank?
+
+      current = begin
+        get(work_item_id, project_id: project_id)[:rev]
+      rescue StandardError
+        nil
+      end
+      raise Conflict.new("Work item #{work_item_id} changed since revision #{expected_revision}",
+                         details: { current_revision: current })
     rescue ValidationFailed => e
       # Azure rejects a duplicate relation. Re-adding an existing link is what
       # the caller wanted to be true, so it is a no-op rather than an error.

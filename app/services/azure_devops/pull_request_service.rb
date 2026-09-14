@@ -172,10 +172,17 @@ module AzureDevops
     # tool layer so this stays a thin translation.
     def add_reviewer(repository, pull_request_id, reviewer_id:, required: false)
       client, resolved = client_for(:"pull_requests.write", project_id: repository.external_project_id)
-      reviewer = client.patch(*repo_path(repository), "pullrequests", pull_request_id.to_s,
-                              "reviewers", reviewer_id.to_s,
-                              body: { vote: 0, isRequired: required },
-                              family: :git, project: resolved.project_id)
+      # An identity that is ALREADY a reviewer keeps its vote. Sending a flat
+      # `vote: 0` reset it — adding a reviewer to a pull request that had been
+      # approved silently destroyed the approval, and on a branch with an
+      # approval policy that un-blocks and re-blocks completion with nothing
+      # said. Adding is about membership, not about a verdict.
+      existing = reviewers(repository, pull_request_id).find { |r| r[:id].to_s == reviewer_id.to_s }
+
+      reviewer = client.put(*repo_path(repository), "pullrequests", pull_request_id.to_s,
+                            "reviewers", reviewer_id.to_s,
+                            body: { vote: existing ? existing[:vote].to_i : 0, isRequired: required },
+                            family: :git, project: resolved.project_id)
       summarize_reviewer(reviewer)
     end
 
@@ -190,22 +197,17 @@ module AzureDevops
       raise ValidationFailed, "vote must be one of #{VOTES.keys.join(', ')}" if value.nil?
 
       client, resolved = client_for(:"pull_requests.write", project_id: repository.external_project_id)
-      reviewer = client.patch(*repo_path(repository), "pullrequests", pull_request_id.to_s,
-                              "reviewers", reviewer_id.to_s,
-                              body: { vote: value },
-                              family: :git, project: resolved.project_id)
+      # PUT, like adding one. The `isFlagged`/`hasDeclined` complaint this used
+      # to produce was never about the reviewer being unknown — it was the wrong
+      # verb reaching a different handler. It was mapped to "Azure does not
+      # recognize reviewer X", which turned an unclear error into a confidently
+      # wrong one: the reviewer existed, `list_pull_request_reviewers` returned
+      # it, and the same id worked over PUT with the same token.
+      reviewer = client.put(*repo_path(repository), "pullrequests", pull_request_id.to_s,
+                            "reviewers", reviewer_id.to_s,
+                            body: { vote: value },
+                            family: :git, project: resolved.project_id)
       summarize_reviewer(reviewer)
-    rescue ValidationFailed => e
-      # Azure answers an unknown reviewer id with a complaint about `isFlagged`
-      # and `hasDeclined` — internal fields of an API this tool does not expose,
-      # so the message points at parameters the caller cannot set and says
-      # nothing about the one that was wrong.
-      raise e unless e.message.to_s.match?(/isFlagged|hasDeclined/i)
-
-      raise ValidationFailed,
-            "Azure does not recognize reviewer #{reviewer_id} on pull request #{pull_request_id}. " \
-            "Reviewer ids come from azure_devops_list_pull_request_reviewers; an identity that is not " \
-            "already a reviewer on this pull request cannot vote on it."
     end
 
     # Completion, with two guards the design insists on.
@@ -237,6 +239,26 @@ module AzureDevops
       # the same way; this is the provider-state equivalent.
       current = get(repository, pull_request_id)
       return current.merge(completed: true, already_completed: true) if current[:status] == "completed"
+
+      # The guard, enforced HERE rather than trusted to Azure.
+      #
+      # `lastMergeSourceCommit` is sent below, and the description promised Azure
+      # would refuse a completion whose expected commit no longer matched — "what
+      # stops this merging code you did not review". Azure does no such thing: a
+      # completion with an all-zeros commit id merged the branch anyway. The one
+      # documented protection against landing unreviewed code was inert, and the
+      # parameter was accepted, echoed and never compared.
+      #
+      # Compared against the read above, which is the same state the caller was
+      # told to take `expected_commit` from.
+      actual = current[:last_merge_source_commit]
+      if actual.present? && actual != expected_commit.to_s
+        raise Conflict.new(
+          "Pull request #{pull_request_id} has moved to #{actual} since #{expected_commit} was read. " \
+          "Re-read it and review the new commits before completing.",
+          details: { current_commit: actual, expected_commit: expected_commit.to_s }
+        )
+      end
 
       body = {
         status: "completed",

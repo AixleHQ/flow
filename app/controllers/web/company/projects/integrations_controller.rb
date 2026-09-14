@@ -197,10 +197,18 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # company works with, and it bought nothing: the user types the organization
   # they mean, and the server resolves it against this company's own bindings.
   # What is not listed cannot be browsed.
+  # `client_id` is deliberately included. It is not a secret — Microsoft
+  # publishes it in every authorization URL — and it is the one value a customer
+  # needs before they can connect at all: `az ad sp create --id <it>` in their
+  # own Entra directory. Documentation cannot carry it, because it differs
+  # between the hosted deployment and every self-hosted one; the dialog knows
+  # which deployment this is.
   def azure_devops_props
     return { enabled: false } unless AzureDevops::AppConfig.enabled?
 
-    { enabled: true, pat_mode_enabled: AzureDevops::AppConfig.pat_mode_enabled? }
+    { enabled: true,
+      pat_mode_enabled: AzureDevops::AppConfig.pat_mode_enabled?,
+      client_id: AzureDevops::AppConfig.fetch("default")&.client_id }
   end
 
   # Array of strings, whatever shape the parameter arrives in. An

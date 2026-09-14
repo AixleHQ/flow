@@ -91,11 +91,24 @@ module AzureDevops
       raise NotAuthorized, "Credential request does not match repository #{repository.id}"
     end
 
+    # Git hands the helper a DECODED path, so an organization, project or
+    # repository whose name contains a space arrives as
+    # ".../Aixle Flow Example/_git/..." — which `URI.parse` refuses outright.
+    # That refusal came back as "Unrecognized credential request", a 403, and a
+    # push that could not authenticate, on every repository with a space in its
+    # name. Normalizing here rather than in the helper means any caller gets it,
+    # and a URL that is already encoded is left exactly as it is.
     def parse(url)
-      uri = URI.parse(url.to_s)
+      uri = begin
+        URI.parse(url.to_s)
+      rescue URI::InvalidURIError
+        begin
+          URI.parse(URI::DEFAULT_PARSER.escape(url.to_s))
+        rescue URI::InvalidURIError
+          nil
+        end
+      end
       uri.is_a?(URI::HTTPS) ? uri : nil
-    rescue URI::InvalidURIError
-      nil
     end
   end
 end
