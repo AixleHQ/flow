@@ -63,8 +63,48 @@ module Agents
                    @adapter.session_command(mode: "non_interactive", model: "gemini-3.5-pro")
     end
 
-    test "offers the Antigravity model catalogue to the shared picker" do
+    test "fetches agent models from the authenticated Antigravity catalogue in API order" do
+      stub = stub_request(:post, AntigravityCliAdapter::MODELS_URL)
+             .with(
+               headers: { "Authorization" => "Bearer tok-123", "Content-Type" => "application/json" },
+               body: { project: AntigravityCliAdapter::CONSUMER_PROJECT }.to_json
+             )
+             .to_return(
+               status: 200,
+               body: {
+                 models: {
+                   "gemini-pro-agent" => { displayName: "Gemini Pro" },
+                   "claude-sonnet-4-6" => { displayName: "Claude Sonnet 4.6" },
+                   "image-model" => { displayName: "Image model" }
+                 },
+                 agentModelSorts: [ { groups: [ { modelIds: %w[claude-sonnet-4-6 gemini-pro-agent missing-model] } ] } ]
+               }.to_json
+             )
+
       result = @adapter.fetch_available_models_with_source({ "access_token" => "tok-123" })
+
+      assert_requested stub
+      assert_equal :api, result[:source]
+      assert_equal %w[claude-sonnet-4-6 gemini-pro-agent], result[:models].pluck(:model_id)
+      assert_equal [ "Claude Sonnet 4.6", "Gemini Pro" ], result[:models].pluck(:display_name)
+    end
+
+    test "decodes a gzip-compressed Antigravity catalogue" do
+      payload = { models: { "gemini-pro-agent" => { displayName: "Gemini Pro" } },
+                  agentModelSorts: [ { groups: [ { modelIds: [ "gemini-pro-agent" ] } ] } ] }.to_json
+      compressed = StringIO.new
+      Zlib::GzipWriter.wrap(compressed) { |gzip| gzip.write(payload) }
+      stub_request(:post, AntigravityCliAdapter::MODELS_URL)
+        .to_return(status: 200, body: compressed.string, headers: { "Content-Encoding" => "gzip" })
+
+      result = @adapter.fetch_available_models_with_source({ "access_token" => "tok-123" })
+
+      assert_equal :api, result[:source]
+      assert_equal [ "gemini-pro-agent" ], result[:models].pluck(:model_id)
+    end
+
+    test "offers the fallback Antigravity model catalogue without an access token" do
+      result = @adapter.fetch_available_models_with_source({})
 
       assert_equal :fallback, result[:source]
       assert_includes result[:models],
@@ -73,6 +113,15 @@ module Agents
                       { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6 (Thinking)" }
       assert_includes result[:models],
                       { model_id: "gpt-oss-120b-medium", display_name: "GPT-OSS 120B (Medium)" }
+    end
+
+    test "falls back when the Antigravity catalogue request fails" do
+      stub_request(:post, AntigravityCliAdapter::MODELS_URL).to_return(status: 401)
+
+      result = @adapter.fetch_available_models_with_source({ "access_token" => "expired" })
+
+      assert_equal :fallback, result[:source]
+      assert_equal AntigravityCliAdapter::FALLBACK_MODELS, result[:models]
     end
 
     test "omits the model flag when none is selected so Antigravity uses its default" do

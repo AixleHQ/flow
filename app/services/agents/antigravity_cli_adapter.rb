@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "shellwords"
+require "stringio"
+require "zlib"
 
 module Agents
   # Google Antigravity CLI adapter.
@@ -36,10 +38,12 @@ module Agents
     SETTINGS_PATH = ".gemini/antigravity-cli/settings.json"
     OAUTH_TOKEN_PATH = ".gemini/antigravity-cli/antigravity-oauth-token"
 
-    # `agy models` requires an interactive account, so the web process cannot
-    # discover this catalogue itself. Keep the slugs documented by the pinned
-    # CLI available to the shared model picker instead.
-    AVAILABLE_MODELS = [
+    MODELS_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
+    CONSUMER_PROJECT = "aicode-consumers"
+
+    # Used only when the live catalogue is unavailable or no access token was
+    # captured. The API response is the source of truth for signed-in users.
+    FALLBACK_MODELS = [
       { model_id: "gemini-3.8-flash-high", display_name: "Gemini 3.8 Flash (High)" },
       { model_id: "gemini-3.8-flash-medium", display_name: "Gemini 3.8 Flash (Medium)" },
       { model_id: "gemini-3.7-flash-high", display_name: "Gemini 3.7 Flash (High)" },
@@ -107,12 +111,41 @@ module Agents
       { "AGY_CLI_HIDE_LOGO" => "1" }
     end
 
-    def fetch_available_models(_credentials, credential: nil)
-      AVAILABLE_MODELS
+    def fetch_available_models(credentials, credential: nil)
+      fetch_available_models_with_source(credentials, credential: credential)[:models]
     end
 
-    def fetch_available_models_with_source(_credentials, credential: nil)
-      { models: AVAILABLE_MODELS, source: :fallback }
+    def fetch_available_models_with_source(credentials, credential: nil)
+      access_token = credentials["access_token"]
+      return fallback_models if access_token.blank?
+
+      uri = URI(MODELS_URL)
+      request = Net::HTTP::Post.new(uri)
+      request["Authorization"] = "Bearer #{access_token}"
+      request["Content-Type"] = "application/json"
+      request["Accept-Encoding"] = "gzip"
+      request.body = { project: CONSUMER_PROJECT }.to_json
+
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) do |http|
+        http.request(request)
+      end
+      return fallback_models unless response.is_a?(Net::HTTPSuccess)
+
+      data = JSON.parse(response_body(response))
+      model_ids = data["agentModelSorts"].to_a.flat_map do |sort|
+        sort["groups"].to_a.flat_map { |group| group["modelIds"].to_a }
+      end
+      models = model_ids.uniq.filter_map do |model_id|
+        model = data.dig("models", model_id)
+        next unless model.is_a?(Hash)
+
+        { model_id: model_id, display_name: model["displayName"].presence || model_id }
+      end
+
+      models.present? ? { models: models, source: :api } : fallback_models
+    rescue StandardError => e
+      Rails.logger.warn("[AntigravityCliAdapter] fetch_available_models failed: #{e.message}")
+      fallback_models
     end
 
     # Reject credentials saved by the earlier API-key implementation before
@@ -162,6 +195,16 @@ module Agents
     def mcp_merge_strategy = :merge_json
 
     private
+
+    def fallback_models
+      { models: FALLBACK_MODELS, source: :fallback }
+    end
+
+    def response_body(response)
+      return response.body unless response["Content-Encoding"].to_s.downcase.include?("gzip")
+
+      Zlib::GzipReader.new(StringIO.new(response.body)).read
+    end
 
     def settings
       # Omitting modelProvider selects Antigravity's OAuth-backed default
