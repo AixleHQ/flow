@@ -8,8 +8,10 @@ When empty, all traffic is logged.
 """
 import base64
 import datetime
+import gzip
 import json
 import os
+import zlib
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
@@ -45,10 +47,65 @@ def _looks_like_text(raw: bytes) -> bool:
         return False
 
 
-def _encode_body(raw: Optional[bytes], content_type: str) -> Dict[str, Any]:
+def _decompress(raw: bytes, content_encoding: str) -> Optional[bytes]:
+    """Undo Content-Encoding. None means "compressed, and we could not undo it".
+
+    Bodies are captured off the wire (the streaming interceptor in
+    responseheaders sees exactly what the server sent), so a gzip'd JSON
+    response arrives here still compressed. Decoding those bytes as UTF-8 turns
+    the whole body into replacement characters, which is how it used to be
+    stored: unparseable, and silently so. Google's code-assist endpoints gzip
+    every JSON response, so this is the difference between a usable usage log
+    and a log full of U+FFFD.
+    """
+    enc = (content_encoding or "").lower().strip()
+    if not enc or enc == "identity":
+        return raw
+
+    try:
+        if enc in ("gzip", "x-gzip"):
+            return gzip.decompress(raw)
+        if enc == "deflate":
+            try:
+                return zlib.decompress(raw)
+            except zlib.error:
+                return zlib.decompress(raw, -zlib.MAX_WBITS)
+        if enc == "br":
+            import brotli  # type: ignore
+
+            return brotli.decompress(raw)
+        if enc == "zstd":
+            import zstandard  # type: ignore
+
+            return zstandard.ZstdDecompressor().decompress(raw)
+    except Exception:
+        # Truncated or unsupported — fall through to "keep the bytes as binary"
+        # rather than storing a mangled transliteration of them.
+        return None
+    return None
+
+
+def _encode_body(
+    raw: Optional[bytes], content_type: str, content_encoding: str = ""
+) -> Dict[str, Any]:
     """Encode body for JSON storage. Returns dict with body + metadata."""
     if not raw:
         return {"body": "", "body_encoding": "text", "body_truncated": False}
+
+    decoded = _decompress(raw, content_encoding)
+    if decoded is None:
+        # Still compressed: base64 it, never text.
+        truncated = False
+        data = raw
+        if MAX_BODY > 0 and len(data) > MAX_BODY:
+            data = data[:MAX_BODY]
+            truncated = True
+        return {
+            "body": base64.b64encode(data).decode("ascii"),
+            "body_encoding": "base64",
+            "body_truncated": truncated,
+        }
+    raw = decoded
 
     if _is_text_content(content_type) or (not content_type and _looks_like_text(raw)):
         try:
@@ -77,7 +134,9 @@ def _encode_body(raw: Optional[bytes], content_type: str) -> Dict[str, Any]:
 def _serialize_request(flow: http.HTTPFlow) -> Dict[str, Any]:
     req = flow.request
     ct = req.headers.get("content-type", "")
-    body_info = _encode_body(req.raw_content, ct)
+    body_info = _encode_body(
+        req.raw_content, ct, req.headers.get("content-encoding", "")
+    )
 
     return {
         "ts": datetime.datetime.utcnow().isoformat() + "Z",
@@ -101,7 +160,9 @@ def _serialize_response(flow: http.HTTPFlow) -> Optional[Dict[str, Any]]:
 
     req = flow.request
     ct = resp.headers.get("content-type", "")
-    body_info = _encode_body(resp.raw_content, ct)
+    body_info = _encode_body(
+        resp.raw_content, ct, resp.headers.get("content-encoding", "")
+    )
 
     return {
         "ts": datetime.datetime.utcnow().isoformat() + "Z",
@@ -178,7 +239,9 @@ def response(flow: http.HTTPFlow) -> None:
     buf: Optional[bytearray] = flow.metadata.get("_body_buf")
     if buf is not None:
         ct = flow.response.headers.get("content-type", "")
-        body_info = _encode_body(bytes(buf), ct)
+        body_info = _encode_body(
+            bytes(buf), ct, flow.response.headers.get("content-encoding", "")
+        )
         entry = _serialize_response_with_body(flow, body_info)
     else:
         entry = _serialize_response(flow)
