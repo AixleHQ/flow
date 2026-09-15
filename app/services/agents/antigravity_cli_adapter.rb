@@ -168,7 +168,11 @@ module Agents
       parts = [ "agy" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model.present?
       parts << "--dangerously-skip-permissions"
-      parts += [ "--print", "--output-format", "stream-json" ] if mode == "non_interactive"
+      # --output-format must precede --print: `agy` treats a bare --print as taking
+      # the next token as its own prompt value, so --print immediately followed by
+      # --output-format silently swallows the flag as literal prompt text instead of
+      # parsing it — confirmed against the real 1.1.27 binary.
+      parts += [ "--output-format", "stream-json", "--print" ] if mode == "non_interactive"
       parts.join(" ")
     end
 
@@ -177,6 +181,12 @@ module Agents
     # calling this hook. Only terminal `result` events are used: step_update
     # usage is per-step and the result usage is already the cumulative run total.
     def collect_usage(terminal_session, artifacts = {})
+      # The result event carries the run's cumulative total, and Accumulator.record
+      # always increments — so a cleanup retry (max_attempts: 2) re-parsing the same
+      # log would double every value already persisted. Once a statistic exists for
+      # this session, this source has already had its say.
+      return if terminal_session.usage_statistic.present?
+
       output = artifacts["logs/terminal_output.log"].presence || terminal_output(terminal_session)
       events = usage_events(output, terminal_session)
       return if events.empty?

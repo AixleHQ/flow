@@ -59,8 +59,16 @@ module Agents
 
     test "uses print mode only for automatic sessions" do
       assert_equal "agy --dangerously-skip-permissions", @adapter.session_command(mode: "interactive")
-      assert_equal "agy --model gemini-3.5-pro --dangerously-skip-permissions --print --output-format stream-json",
+      assert_equal "agy --model gemini-3.5-pro --dangerously-skip-permissions --output-format stream-json --print",
                    @adapter.session_command(mode: "non_interactive", model: "gemini-3.5-pro")
+    end
+
+    # Confirmed against the real 1.1.27 binary: --print immediately followed by
+    # another flag swallows it as literal prompt text instead of parsing it, so
+    # --output-format must come first.
+    test "orders --output-format before --print so agy does not swallow it as the prompt" do
+      command = @adapter.session_command(mode: "non_interactive", model: "gemini-3.5-pro")
+      assert_operator command.index("--output-format"), :<, command.index("--print")
     end
 
     test "fetches agent models from the authenticated Antigravity catalogue in API order" do
@@ -133,7 +141,7 @@ module Agents
     end
 
     test "omits the model flag when none is selected so Antigravity uses its default" do
-      assert_equal "agy --dangerously-skip-permissions --print --output-format stream-json",
+      assert_equal "agy --dangerously-skip-permissions --output-format stream-json --print",
                    @adapter.session_command(mode: "non_interactive", model: nil)
     end
 
@@ -200,6 +208,41 @@ module Agents
       @adapter.collect_usage(@session, { "logs/terminal_output.log" => stream })
 
       assert_nil @session.reload.usage_statistic
+    end
+
+    test "collect_usage is idempotent across a cleanup retry" do
+      @session.update!(agent_type: "antigravity_cli", requested_model: "claude-sonnet-4-6")
+      stream = { event: "result", result: { status: "SUCCESS", usage: {
+        input_tokens: 1_000_000, output_tokens: 100_000, cache_read_tokens: 200_000
+      } } }.to_json
+      artifacts = { "logs/terminal_output.log" => stream }
+
+      @adapter.collect_usage(@session, artifacts)
+      @adapter.collect_usage(@session, artifacts)
+
+      stat = @session.reload.usage_statistic
+      assert_equal 1_000_000, stat.input_tokens
+      assert_equal 100_000, stat.output_tokens
+      assert_equal 200_000, stat.cache_read_tokens
+      assert_equal 396, stat.cost_cents
+    end
+
+    test "collect_usage falls back to the persisted terminal output log when no artifact is passed" do
+      @session.update!(agent_type: "antigravity_cli", requested_model: "claude-sonnet-4-6")
+      stream = { event: "result", result: { status: "SUCCESS", usage: {
+        input_tokens: 1_000_000, output_tokens: 100_000, cache_read_tokens: 200_000
+      } } }.to_json
+      io = StringIO.new(stream)
+      io.define_singleton_method(:original_filename) { "terminal_output.log" }
+      SessionLog.create!(terminal_session: @session, name: "terminal_output.log", file: io,
+                          file_size: stream.bytesize, content_type: "text/plain; charset=utf-8")
+
+      @adapter.collect_usage(@session, {})
+
+      stat = @session.reload.usage_statistic
+      assert_equal 1_000_000, stat.input_tokens
+      assert_equal 100_000, stat.output_tokens
+      assert_equal 200_000, stat.cache_read_tokens
     end
 
     test "credential_preflight accepts a valid OAuth token" do
