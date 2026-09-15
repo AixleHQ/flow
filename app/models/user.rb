@@ -44,6 +44,8 @@ class User < ApplicationRecord
   has_many :favorite_projects, through: :project_favorites, source: :project
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :restrict_with_error, inverse_of: :owner
   has_many :terminal_sessions, dependent: :destroy
+  # Personal saved board views — destroyed with the user on permanent deletion.
+  has_many :board_view_presets, dependent: :destroy
   # Credentials belong to a (user, company) pair — the default for a company
   # lives on that CompanyMembership, not here.
   #

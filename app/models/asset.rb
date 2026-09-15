@@ -12,7 +12,7 @@ class Asset < ApplicationRecord
   FOLDER_MAX_LENGTH = 100
 
   belongs_to :scope, polymorphic: true
-  belongs_to :created_by, class_name: "User"
+  belongs_to :created_by, class_name: "User", optional: true
   belongs_to :step_run, optional: true
   belongs_to :terminal_session, optional: true
 

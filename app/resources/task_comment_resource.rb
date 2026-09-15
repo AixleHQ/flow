@@ -5,6 +5,7 @@ class TaskCommentResource < ApplicationResource
 
   typelize :string?
   attribute :author_name do |comment|
-    comment.author&.name
+    # nil once the author is permanently deleted (FK nullifies).
+    comment.author&.name || "Deleted user"
   end
 end
