@@ -36,6 +36,23 @@ module Agents
     SETTINGS_PATH = ".gemini/antigravity-cli/settings.json"
     OAUTH_TOKEN_PATH = ".gemini/antigravity-cli/antigravity-oauth-token"
 
+    # API-equivalent prices in USD per million tokens. Antigravity's result event
+    # reports cache reads as a subset of input tokens, so cached input is removed
+    # from the regular input bucket before pricing. Keep this table beside the
+    # runtime's model catalogue: model ids are Antigravity ids, not provider ids.
+    MODEL_PRICING = {
+      "gemini-3.8-flash-high" => { input: 0.75, output: 3.75, cache_read: 0.075 },
+      "gemini-3.8-flash-medium" => { input: 0.75, output: 3.75, cache_read: 0.075 },
+      "gemini-3.7-flash-high" => { input: 0.75, output: 3.75, cache_read: 0.075 },
+      "gemini-3.7-flash-medium" => { input: 0.75, output: 3.75, cache_read: 0.075 },
+      "gemini-3.6-flash-high" => { input: 1.50, output: 9.00, cache_read: 0.15 },
+      "gemini-3.6-flash-medium" => { input: 1.50, output: 9.00, cache_read: 0.15 },
+      "gemini-pro-agent" => { input: 2.50, output: 15.00, cache_read: 0.25 },
+      "claude-sonnet-4-6" => { input: 3.00, output: 15.00, cache_read: 0.30 },
+      "claude-opus-4-6-thinking" => { input: 5.00, output: 25.00, cache_read: 0.50 },
+      "gpt-oss-120b-medium" => { input: 0.15, output: 0.60, cache_read: 0.015 }
+    }.freeze
+
     # Used only when the live catalogue is unavailable or no access token was
     # captured. The API response is the source of truth for signed-in users.
     FALLBACK_MODELS = [
@@ -151,8 +168,34 @@ module Agents
       parts = [ "agy" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model.present?
       parts << "--dangerously-skip-permissions"
-      parts += [ "--print", "--output-format", "stream-json" ] if mode == "non_interactive"
+      # --output-format must precede --print: `agy` treats a bare --print as taking
+      # the next token as its own prompt value, so --print immediately followed by
+      # --output-format silently swallows the flag as literal prompt text instead of
+      # parsing it — confirmed against the real 1.1.27 binary.
+      parts += [ "--output-format", "stream-json", "--print" ] if mode == "non_interactive"
       parts.join(" ")
+    end
+
+    # Antigravity writes its NDJSON stream to stdout. The base entrypoint pipes
+    # stdout to terminal_output.log, which cleanup persists immediately before
+    # calling this hook. Only terminal `result` events are used: step_update
+    # usage is per-step and the result usage is already the cumulative run total.
+    def collect_usage(terminal_session, artifacts = {})
+      # The result event carries the run's cumulative total, and Accumulator.record
+      # always increments — so a cleanup retry (max_attempts: 2) re-parsing the same
+      # log would double every value already persisted. Once a statistic exists for
+      # this session, this source has already had its say.
+      return if terminal_session.usage_statistic.present?
+
+      output = artifacts["logs/terminal_output.log"].presence || terminal_output(terminal_session)
+      events = usage_events(output, terminal_session)
+      return if events.empty?
+
+      UsageStatistics::Accumulator.record(
+        terminal_session: terminal_session,
+        events: events,
+        source: "antigravity_stream_json"
+      )
     end
 
     def context_file_path = "#{home_dir}/.gemini/GEMINI.md"
@@ -178,6 +221,79 @@ module Agents
     def mcp_merge_strategy = :merge_json
 
     private
+
+    ANSI_ESCAPE = /\e(?:\[[0-?]*[ -\/]*[@-~]|\][^\a]*(?:\a|\e\\))/.freeze
+
+    def terminal_output(terminal_session)
+      terminal_session.session_logs.find_by(name: "terminal_output.log")&.file&.read
+    rescue StandardError => e
+      Rails.logger.warn("[AntigravityCliAdapter] unable to read terminal output: #{e.message}")
+      nil
+    end
+
+    def usage_events(output, terminal_session)
+      return [] if output.blank?
+
+      stream_model = nil
+      output.each_line.filter_map do |raw_line|
+        event = parse_stream_event(raw_line)
+        next unless event
+
+        stream_model ||= event.dig("init", "model") || event["model"]
+        next unless event["event"] == "result"
+
+        result = event["result"]
+        usage = result.is_a?(Hash) ? result["usage"] : nil
+        next unless usage.is_a?(Hash)
+
+        input = usage["input_tokens"].to_i
+        output_tokens = usage["output_tokens"].to_i
+        cached = usage["cache_read_tokens"].to_i
+        next if input.zero? && output_tokens.zero? && cached.zero?
+
+        model = result["model"].presence || stream_model.presence || terminal_session.requested_model.presence ||
+          default_model_for(terminal_session)
+        {
+          "model" => model,
+          "timestamp" => terminal_session.finished_at&.to_i&.to_s,
+          "tokenUsage" => {
+            "inputTokens" => input,
+            "outputTokens" => output_tokens,
+            "cacheReadTokens" => cached,
+            "cacheWriteTokens" => 0,
+            "reasoningTokens" => usage["thinking_tokens"].to_i,
+            "totalCents" => usage_cost_cents(model, input, output_tokens, cached)
+          },
+          "source" => "antigravity_stream_json"
+        }
+      end
+    end
+
+    def parse_stream_event(raw_line)
+      line = raw_line.to_s.gsub(ANSI_ESCAPE, "").strip
+      json_start = line.index("{")
+      return nil unless json_start
+
+      parsed = JSON.parse(line[json_start..])
+      parsed if parsed.is_a?(Hash)
+    rescue JSON::ParserError
+      nil
+    end
+
+    def default_model_for(terminal_session)
+      SessionCompany.agent_credentials_for(terminal_session)
+                    .find_by(agent_type: "antigravity_cli")&.default_model
+    end
+
+    def usage_cost_cents(model, input_tokens, output_tokens, cache_read_tokens)
+      pricing = MODEL_PRICING[model]
+      return 0.0 unless pricing
+
+      cached = [ cache_read_tokens, input_tokens ].min
+      uncached = input_tokens - cached
+      ((uncached * pricing[:input]) + (cached * pricing[:cache_read]) +
+        (output_tokens * pricing[:output])) / 10_000.0
+    end
 
     def fallback_models
       { models: FALLBACK_MODELS, source: :fallback }
