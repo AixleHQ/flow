@@ -15,7 +15,15 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
-import { BoardTaskChip, ConsoleFrame, DetailHeader, StatusTag, type BoardTaskRef, type Crumb, type HeaderStat } from 'shared/ui/sessions';
+import {
+  BoardTaskChip,
+  ConsoleFrame,
+  DetailHeader,
+  StatusTag,
+  type BoardTaskRef,
+  type Crumb,
+  type HeaderStat,
+} from 'shared/ui/sessions';
 
 import classes from './SessionShowContent.module.css';
 import { SessionTerminalReplay } from './SessionTerminalReplay';

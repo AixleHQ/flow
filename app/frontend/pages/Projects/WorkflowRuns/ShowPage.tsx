@@ -17,7 +17,14 @@ import {
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
 } from 'shared/routes';
-import { BoardTaskChip, ConsoleFrame, DetailHeader, SessionCard, TabBar, type SessionCardData } from 'shared/ui/sessions';
+import {
+  BoardTaskChip,
+  ConsoleFrame,
+  DetailHeader,
+  SessionCard,
+  TabBar,
+  type SessionCardData,
+} from 'shared/ui/sessions';
 
 import { persistentProjectLayoutNoPadding, setPageLayout } from '../ProjectLayout';
 
