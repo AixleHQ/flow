@@ -23,9 +23,9 @@ class TaskAssetTest < ActiveSupport::TestCase
     assert asset.errors[:name].present?
   end
 
-  test "invalid without author" do
+  test "author is optional (nullified when the author is permanently deleted)" do
     asset = TaskAsset.new(name: "doc.pdf", board_task: @task)
-    refute_predicate asset, :valid?
+    assert_predicate asset, :valid?
   end
 
   test "author_type defaults to human" do

@@ -33,6 +33,11 @@ module Users
       ActiveRecord::Base.transaction do
         audit!
         transfer_owned_projects!
+        # transfer_owned_projects! moves ownership with a direct UPDATE, which
+        # does not touch @user's already-loaded owned_projects proxy. Without
+        # this reset the has_many :owned_projects, dependent: :restrict_with_error
+        # guard sees the stale in-memory collection and aborts destroy!.
+        @user.owned_projects.reset
         @user.destroy!
       end
     end
