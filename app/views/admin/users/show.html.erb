@@ -30,5 +30,34 @@ copying the whole page. This keeps us in sync with future Administrate updates.
   <% end %>
 <% end %>
 
+<%# Permanent (hard) delete — irreversible, super-admins excluded. Requires the
+    admin to type the exact email; a second data-turbo-confirm gate is added on
+    submit. This is separate from the header's soft-delete Delete action. %>
+<% content_for(:after_main) do %>
+  <% unless page.resource.super_admin? %>
+    <section class="permanent-delete" style="margin-top: 2rem; padding: 1rem; border: 1px solid #c0392b; border-radius: 4px;">
+      <h2 style="color: #c0392b;">Permanently delete user</h2>
+      <p>
+        This <strong>irreversibly</strong> removes
+        <strong><%= page.resource.email %></strong> and their personal data from
+        the system. Owned projects are transferred to a company admin; board and
+        company history is kept but attributed to "Deleted user". The email
+        becomes available again. <strong>This cannot be undone.</strong>
+      </p>
+      <%= form_with(
+        url: permanent_destroy_admin_user_path(page.resource),
+        method: :delete,
+        data: { turbo_confirm: "Permanently delete #{page.resource.email}? This cannot be undone." }
+      ) do |f| %>
+        <label for="confirm_email">
+          Type <strong><%= page.resource.email %></strong> to confirm:
+        </label>
+        <%= f.text_field :confirm_email, autocomplete: "off" %>
+        <%= f.submit "Permanently delete", class: "button button--danger" %>
+      <% end %>
+    </section>
+  <% end %>
+<% end %>
+
 <%# `page` is passed to the show view as a local (namespace/resource_name are helpers), so forward it. %>
 <%= render template: "administrate/application/show", locals: { page: page } %>

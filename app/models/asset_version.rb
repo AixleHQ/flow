@@ -5,7 +5,7 @@ class AssetVersion < ApplicationRecord
   include AssetFileUploader::Attachment(:file)
 
   belongs_to :asset, inverse_of: :versions
-  belongs_to :uploaded_by, class_name: "User"
+  belongs_to :uploaded_by, class_name: "User", optional: true
 
   enumerize :source, in: %i[upload workflow github session slack], default: :upload, predicates: true
 

@@ -27,6 +27,27 @@ module Admin
       end
     end
 
+    # Irreversible hard delete, distinct from the soft-delete #destroy above.
+    # Guarded three ways: super-admin accounts are refused, the admin must type
+    # the exact email to confirm, and the view adds a data-turbo-confirm prompt.
+    def permanent_destroy
+      user = requested_resource
+
+      if user.super_admin?
+        return redirect_to admin_users_path, alert: "Cannot permanently delete a super admin user"
+      end
+
+      if params[:confirm_email].to_s.strip.casecmp?(user.email)
+        Users::PermanentDeletionService.call(user: user, actor: true_user)
+        redirect_to admin_users_path, notice: "User was permanently deleted."
+      else
+        redirect_to admin_user_path(user),
+                    alert: "Confirmation email did not match. User was not deleted."
+      end
+    rescue Users::PermanentDeletionService::OwnershipTransferError => e
+      redirect_to admin_user_path(user), alert: e.message
+    end
+
     def impersonate
       Audited::Audit.create!(
         auditable: requested_resource,

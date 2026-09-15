@@ -181,6 +181,7 @@ Rails.application.routes.draw do
       member do
         post :impersonate
         post :stop_impersonate
+        delete :permanent_destroy
       end
     end
     resources :companies

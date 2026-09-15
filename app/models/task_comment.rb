@@ -4,7 +4,7 @@ class TaskComment < ApplicationRecord
   extend Enumerize
 
   belongs_to :board_task, touch: true
-  belongs_to :author, class_name: "User"
+  belongs_to :author, class_name: "User", optional: true
 
   enumerize :author_type, in: %i[human agent system], default: :human
 
