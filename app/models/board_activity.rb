@@ -5,7 +5,7 @@ class BoardActivity < ApplicationRecord
 
   belongs_to :board
   belongs_to :board_task, optional: true
-  belongs_to :actor, class_name: "User"
+  belongs_to :actor, class_name: "User", optional: true
 
   enumerize :event_type, in: %i[
     task_created task_updated task_deleted task_moved

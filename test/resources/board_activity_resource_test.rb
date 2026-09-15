@@ -28,6 +28,17 @@ class BoardActivityResourceTest < ActiveSupport::TestCase
                  describe_activity("task_archived", actor_type: :human)
   end
 
+  test "a nullified actor (permanently-deleted user) renders as Deleted user" do
+    activity = BoardActivity.create!(
+      board: @board, board_task: @task, event_type: :task_created,
+      actor: nil, actor_type: :human
+    )
+    resource = BoardActivityResource.new(activity).to_h
+
+    assert_equal "Deleted user", resource["actor_name"]
+    assert_equal "Deleted user created 'Ship it'", resource["description"]
+  end
+
   private
 
   def describe_activity(event_type, actor_type: :system, metadata: {})

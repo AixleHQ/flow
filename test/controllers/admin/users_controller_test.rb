@@ -121,6 +121,54 @@ module Admin
       assert_redirected_to admin_users_path
     end
 
+    test "permanent_destroy with matching email removes the users row" do
+      target = create(:user, :with_company)
+      email = target.email
+
+      assert_difference("User.count", -1) do
+        delete :permanent_destroy, params: { id: target.id, confirm_email: email }
+      end
+
+      assert_nil User.find_by(id: target.id)
+      assert_redirected_to admin_users_path
+    end
+
+    test "permanent_destroy with matching email is case-insensitive" do
+      target = create(:user, :with_company)
+
+      assert_difference("User.count", -1) do
+        delete :permanent_destroy, params: { id: target.id, confirm_email: target.email.upcase }
+      end
+
+      assert_nil User.find_by(id: target.id)
+    end
+
+    test "permanent_destroy with wrong email does not delete" do
+      assert_no_difference("User.count") do
+        delete :permanent_destroy, params: { id: @user.id, confirm_email: "wrong@example.com" }
+      end
+
+      assert User.exists?(@user.id)
+      assert_redirected_to admin_user_path(@user)
+    end
+
+    test "permanent_destroy refuses a super admin" do
+      assert_no_difference("User.count") do
+        delete :permanent_destroy, params: { id: @super_admin.id, confirm_email: @super_admin.email }
+      end
+
+      assert User.exists?(@super_admin.id)
+      assert_redirected_to admin_users_path
+    end
+
+    test "permanent_destroy writes an audit record" do
+      target = create(:user, :with_company)
+
+      assert_difference("Audited::Audit.where(action: 'permanent_delete').count", 1) do
+        delete :permanent_destroy, params: { id: target.id, confirm_email: target.email }
+      end
+    end
+
     test "should impersonate user" do
       post :impersonate, params: { id: @user.id }
 

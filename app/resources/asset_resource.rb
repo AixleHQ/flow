@@ -21,7 +21,8 @@ class AssetResource < ApplicationResource
 
   typelize :string?
   attribute :created_by_name do |asset|
-    asset.created_by&.name
+    # nil once the creator is permanently deleted (FK nullifies).
+    asset.created_by&.name || "Deleted user"
   end
 
   typelize %w[company project]
