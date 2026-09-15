@@ -6,9 +6,10 @@ import { useCallback, useMemo, useState } from 'react';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
+import { ToolPicker } from 'shared/components/ToolPicker';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
-import { toolIdsFromPickerValue, toolPickerData, type ToolGroup } from 'shared/lib/toolPicker';
+import { type ToolGroup } from 'shared/lib/toolPicker';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
 import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
 import { FormSection, ModeCards, RuntimeTiles } from 'shared/ui/sessions';
@@ -37,9 +38,9 @@ export interface SessionNewFormProps {
   agents?: NamedItem[];
   tools?: NamedItem[];
   /**
-   * Tag groups offered as one entry each ("Board management", "Slack"), exactly
-   * as the workflow builder offers them — attaching a family of tools one by
-   * one is what the groups exist to avoid.
+   * Tag groups the picker offers as collapsible sections ("Board management",
+   * "Slack"), exactly as the workflow builder offers them: the header attaches
+   * the whole family in one click, the rows under it attach single tools.
    */
   toolGroups?: ToolGroup[];
   skills?: NamedItem[];
@@ -133,16 +134,12 @@ export const SessionNewForm = ({
 
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
-  const [selectedTools, setSelectedTools] = useState<string[]>([]);
+  const [selectedToolIds, setSelectedToolIds] = useState<number[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([]);
   const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
   const [selectedAssets, setSelectedAssets] = useState<string[]>([]);
   const [selectedConfigItems, setSelectedConfigItems] = useState<string[]>([]);
-
-  // `selectedTools` holds picker values — a group token stands for all of its
-  // members, so every id-shaped use goes through the expanded list.
-  const selectedToolIds = useMemo(() => toolIdsFromPickerValue(selectedTools, toolGroups), [selectedTools, toolGroups]);
 
   const resolvedProjectId = fixedProjectId ? String(fixedProjectId) : projectId;
   const showProjectSelector = !fixedProjectId && projects && projects.length > 0;
@@ -381,14 +378,13 @@ export const SessionNewForm = ({
       )}
 
       {tools.length > 0 && (
-        <MultiSelect
+        <ToolPicker
           label="Tools"
           placeholder="Select tools..."
-          data={toolPickerData(tools, toolGroups)}
-          value={selectedTools}
-          onChange={setSelectedTools}
-          searchable
-          clearable
+          tools={tools}
+          groups={toolGroups}
+          value={selectedToolIds}
+          onChange={setSelectedToolIds}
         />
       )}
 

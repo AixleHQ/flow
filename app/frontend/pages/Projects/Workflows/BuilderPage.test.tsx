@@ -439,7 +439,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('offers a tool group as one entry and selects it whole (not each member)', async () => {
+  it('offers a tool group as a section whose members open individually', async () => {
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         tools: [
@@ -452,15 +452,19 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // Open the session-level Tools picker (first "None added" MultiSelect in the Resources section).
+    // Open the session-level Tools picker (first "None added" field in the Resources section).
     await userEvent.click(screen.getAllByPlaceholderText('None added')[0]);
 
-    // The group shows as an option; its member tools are not listed individually.
-    expect((await screen.findAllByText('Board management')).length).toBeGreaterThan(0);
-    expect(screen.queryByText('Board List Tasks')).not.toBeInTheDocument();
-    expect(screen.queryByText('Board Move Task')).not.toBeInTheDocument();
+    // The group shows as a section header; its members stay folded away until asked for.
+    expect(await screen.findByRole('checkbox', { name: /Board management/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Board List Tasks' })).not.toBeInTheDocument();
     // Ungrouped custom tool stays individual.
-    expect(screen.getAllByText('Echo Greeter').length).toBeGreaterThan(0);
+    expect(screen.getByRole('option', { name: 'Echo Greeter' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Expand Board management' }));
+
+    expect(screen.getByRole('option', { name: 'Board List Tasks' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Board Move Task' })).toBeInTheDocument();
   });
 
   it('renders the workflow scope indicator badge in the header', () => {
@@ -554,7 +558,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(body.workflow.config.inheritAllProjectResources).toBe(true);
   });
 
-  it('selecting a base tool group PATCHes config.baseToolIds expanded to its member ids', async () => {
+  it('attaching a base tool group from its header PATCHes config.baseToolIds with every member', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
@@ -574,7 +578,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
     // Open the base-resources Tools picker by placeholder.
     await userEvent.click(await screen.findByPlaceholderText('Select tools…'));
-    await userEvent.click((await screen.findAllByRole('option', { name: 'Board management' }))[0]);
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Board management/ }));
 
     await waitFor(
       () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
@@ -582,8 +586,39 @@ describe('Projects/Workflows/BuilderPage', () => {
     );
     const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
     const body = JSON.parse((call![1] as RequestInit).body as string);
-    // The single group token expands to every member tool id.
+    // One click on the header attaches the whole family.
     expect(body.workflow.config.baseToolIds).toEqual([10, 11]);
+  });
+
+  it('attaching one tool out of a base group PATCHes config.baseToolIds with that id alone', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        tools: [
+          { id: 10, name: 'Board List Tasks' },
+          { id: 11, name: 'Board Move Task' },
+        ],
+        toolGroups: [{ tag: 'board', label: 'Board management', toolIds: [10, 11] }],
+        workflow: makeWorkflow({ inheritAllProjectResources: false }),
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
+    await userEvent.click(await screen.findByPlaceholderText('Select tools…'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Expand Board management' }));
+    await userEvent.click(screen.getByRole('option', { name: 'Board Move Task' }));
+
+    await waitFor(
+      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
+      { timeout: 2000 },
+    );
+    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
+    const body = JSON.parse((call![1] as RequestInit).body as string);
+    // A subset stays a subset — no silent expansion to the whole group.
+    expect(body.workflow.config.baseToolIds).toEqual([11]);
   });
 
   it('selecting a base repository PATCHes config.baseRepositoryIds', async () => {
