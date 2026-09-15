@@ -77,6 +77,17 @@ class ProjectTest < ActiveSupport::TestCase
                  named_projects.favorites_first_for(@project_owner).order(:name).pluck(:name)
   end
 
+  # Regression for PALAD-AI-RAILS-2T: project-scoped integrations must be
+  # destroyed with the project, otherwise the FK on integrations.project_id blocks deletion.
+  test "destroy! succeeds when the project has integrations" do
+    integration = create(:integration, company: @company, project: @project, connected_by: @project_owner)
+
+    assert_difference -> { Project.count } => -1,
+                      -> { Integration.count } => -1 do
+      assert_nothing_raised { @project.destroy! }
+    end
+  end
+
   # Regression for PALAD-AI-RAILS-2M: board must be destroyed before workflows so
   # ColumnWorkflowBindings (and column_transitions) are cleared first.
   test "destroy! succeeds when a workflow is bound to a board column" do

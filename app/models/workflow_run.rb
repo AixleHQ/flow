@@ -32,6 +32,7 @@ class WorkflowRun < ApplicationRecord
 
   has_many :step_runs, dependent: :destroy
   has_many :workflow_run_assets, dependent: :destroy
+  has_many :column_transitions, dependent: :nullify
 
   enumerize :mode, in: %i[interactive non_interactive mixed], default: :interactive, predicates: true
 
