@@ -89,7 +89,28 @@ class Web::Company::Projects::SessionsRenderTest < ActionDispatch::IntegrationTe
         ctx[:runPath] == company_project_workflow_run_path(@project, run) &&
         ctx[:stepName] == "Draft the plan" &&
         ctx[:stepPosition] == 2 &&
-        ctx[:stepsTotal] == 2
+        ctx[:stepsTotal] == 2 &&
+        ctx[:boardTask].nil?
+    end
+  end
+
+  test "show workflow_context carries the board task when the run was started from a card" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column, title: "Fix login timeout")
+    workflow = create(:workflow, scope: @project)
+    step = create(:step, workflow: workflow, name: "Draft", position: 1)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: task)
+    session = create(:terminal_session, session_type: "workflow_step", project: @project, user: @user)
+    create(:step_run, workflow_run: run, step: step, terminal_session: session)
+
+    get company_project_session_path(@project, session)
+
+    assert_response :success
+    assert_inertia_props do |props|
+      ctx = props[:workflowContext]
+      ctx.present? &&
+        ctx[:boardTask] == { "id" => task.id, "title" => "Fix login timeout", "archived" => false }
     end
   end
 
@@ -126,7 +147,25 @@ class Web::Company::Projects::SessionsRenderTest < ActionDispatch::IntegrationTe
         entry[:costCents] == 25 &&
         entry[:stepsCompleted] == 1 &&
         entry[:stepsTotal] == 2 &&
+        entry[:boardTask].nil? &&
         entry[:sessions].map { |s| s[:id] } == [ session_one.id, session_two.id ]
+    end
+  end
+
+  test "index list entry includes boardTask when the run was started from a card" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column, title: "Fix login timeout")
+    workflow = create(:workflow, scope: @project)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: task)
+
+    get company_project_sessions_path(@project, type: "run")
+
+    assert_response :success
+    assert_inertia_props do |props|
+      entry = props[:entries].find { |e| e[:id] == run.id && e[:kind] == "run" }
+      entry.present? &&
+        entry[:boardTask] == { "id" => task.id, "title" => "Fix login timeout", "archived" => false }
     end
   end
 end

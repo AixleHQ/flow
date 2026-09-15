@@ -200,4 +200,25 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
     expect(screen.getByText('$4.78')).toBeInTheDocument();
     expect(screen.getByText('11m 0s')).toBeInTheDocument();
   });
+
+  it('shows a board task chip on a run started from a card', () => {
+    renderWith(
+      seed({
+        entries: [
+          buildRunEntry({
+            boardTask: { id: 142, title: 'Fix login timeout', archived: false },
+          }),
+        ],
+      }),
+    );
+
+    const chip = screen.getByRole('link', { name: 'Open board task #142 Fix login timeout' });
+    expect(chip).toHaveAttribute('href', '/company/projects/7/board?task=142');
+  });
+
+  it('does not invent a task chip when the run has no card', () => {
+    renderWith(seed({ entries: [buildRunEntry({ boardTask: null })] }));
+
+    expect(screen.queryByRole('link', { name: /open board task/i })).not.toBeInTheDocument();
+  });
 });

@@ -1,0 +1,42 @@
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--app-text-secondary);
+  text-decoration: none;
+  border-radius: 4px;
+  transition: color 0.12s;
+}
+
+.chip:hover {
+  color: var(--app-primary-strong);
+  text-decoration: none;
+}
+
+.id {
+  font-family: var(--app-font-mono);
+  color: var(--app-text-tertiary);
+  flex: none;
+}
+
+.chip:hover .id {
+  color: var(--app-primary-strong);
+}
+
+.title {
+  min-width: 0;
+}
+
+.truncate {
+  max-width: 180px;
+}
+
+.truncate .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

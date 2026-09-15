@@ -1,4 +1,5 @@
 export { AgentLogo, agentLabel } from './AgentLogo';
+export { BoardTaskChip, type BoardTaskRef } from './BoardTaskChip';
 export { ConsoleFrame } from './ConsoleFrame';
 export { DetailHeader, type Crumb, type HeaderStat } from './DetailHeader';
 export { ModeTag } from './ModeTag';

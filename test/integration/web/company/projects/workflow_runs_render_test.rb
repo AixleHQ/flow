@@ -57,4 +57,29 @@ class Web::Company::Projects::WorkflowRunsRenderTest < ActionDispatch::Integrati
       props[:run][:workflowDescription] == "Ships the release" && props[:run][:totalTokens] == 350
     end
   end
+
+  test "show includes boardTask when the run was started from a card" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column, title: "Fix login timeout")
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: task)
+
+    get company_project_workflow_run_path(@project, run)
+
+    assert_response :success
+    assert_inertia_props do |props|
+      props[:run][:boardTask] == { "id" => task.id, "title" => "Fix login timeout", "archived" => false }
+    end
+  end
+
+  test "show has a null boardTask when the run has no card" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    get company_project_workflow_run_path(@project, run)
+
+    assert_response :success
+    assert_inertia_props do |props|
+      props[:run].key?(:boardTask) && props[:run][:boardTask].nil?
+    end
+  end
 end

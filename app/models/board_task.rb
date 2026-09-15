@@ -72,6 +72,12 @@ class BoardTask < ApplicationRecord
     archived_at.present?
   end
 
+  # Compact ref for Sessions & Runs (and similar surfaces). `id` is the board
+  # task number shown as `#N`; keep this small — never the full card.
+  def run_link_payload
+    { id: id, title: title, archived: archived? }
+  end
+
   def self.ransackable_attributes(_auth_object = nil)
     %w[id title task_type priority assignee_id board_column_id parent_task_id position created_at updated_at]
   end

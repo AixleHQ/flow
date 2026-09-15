@@ -71,6 +71,13 @@ class WorkflowRunResource < ApplicationResource
     run.step_runs.sum { |sr| sr.terminal_session&.cost_cents.to_i }
   end
 
+  # Present when the run was started from a board card. Null for runs with no
+  # task (and after hard-delete nullifies the FK).
+  typelize "{ id: number; title: string; archived: boolean } | null"
+  attribute :board_task do |run|
+    run.board_task&.run_link_payload
+  end
+
   typelize "StepRun[]"
   attribute :step_runs do |run|
     step_name_map = run.workflow.steps.each_with_object({}) { |s, h| h[s.id] = s.name }

@@ -15,7 +15,7 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
-import { ConsoleFrame, DetailHeader, StatusTag, type Crumb, type HeaderStat } from 'shared/ui/sessions';
+import { BoardTaskChip, ConsoleFrame, DetailHeader, StatusTag, type BoardTaskRef, type Crumb, type HeaderStat } from 'shared/ui/sessions';
 
 import classes from './SessionShowContent.module.css';
 import { SessionTerminalReplay } from './SessionTerminalReplay';
@@ -28,6 +28,7 @@ export interface SessionWorkflowContext {
   stepName: string | null;
   stepPosition: number | null;
   stepsTotal: number;
+  boardTask?: BoardTaskRef | null;
 }
 
 export interface SessionShowContext {
@@ -170,6 +171,11 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
     ? `Step ${workflowContext.stepPosition ?? '?'} of ${workflowContext.stepsTotal} · Workflow step`
     : 'Standalone session';
 
+  const taskMeta =
+    workflowContext?.boardTask && s.projectId
+      ? [{ label: 'Task', value: <BoardTaskChip projectId={s.projectId} boardTask={workflowContext.boardTask} /> }]
+      : [];
+
   const header = (
     <DetailHeader
       crumbs={crumbs}
@@ -181,6 +187,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       agentType={s.agentType}
       userName={s.userName}
       mode={s.mode}
+      extraMeta={taskMeta}
       stats={stats}
       tokens={
         s.totalTokens > 0

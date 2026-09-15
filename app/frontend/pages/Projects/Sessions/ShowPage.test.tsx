@@ -135,6 +135,31 @@ describe('Projects/Sessions/ShowPage', () => {
     expect(screen.getByText('Step 1 of 1 · Workflow step')).toBeInTheDocument();
   });
 
+  it('shows the board task chip when the session belongs to a card-linked run', () => {
+    renderAuthedPage(<ProjectSessionShowPage />, {
+      props: {
+        project,
+        session: makeSession({ state: 'finished' }),
+        workflowContext: {
+          runId: 1443,
+          runName: 'Weekly GA report',
+          runPath: '/company/projects/7/workflow_runs/1443',
+          stepName: 'GA report',
+          stepPosition: 1,
+          stepsTotal: 1,
+          boardTask: { id: 142, title: 'Fix login timeout', archived: false },
+        },
+        cableStream: 'stream-token',
+      },
+    });
+
+    expect(screen.getByText('Task')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open board task #142 Fix login timeout' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/board?task=142',
+    );
+  });
+
   it('offers a new session from a finished one', async () => {
     renderAuthedPage(<ProjectSessionShowPage />, {
       props: { project, session: makeSession({ state: 'finished' }), workflowContext: null, cableStream: 'stream' },

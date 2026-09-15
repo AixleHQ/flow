@@ -147,6 +147,70 @@ class SessionsRunsFeedTest < ActiveSupport::TestCase
     assert_equal [ matching_session.id, run.id ].sort, ids.sort
   end
 
+  test "search matches a run by its board task title" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column, title: "Fix login timeout")
+    matching = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: task)
+    create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    ids = feed(filters: { search: "login timeout" }, type: "run").page(page: 1, limit: 10).entries.map { |e| e.record.id }
+
+    assert_equal [ matching.id ], ids
+  end
+
+  test "search matches a run by board task id with or without a hash" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column, title: "Fix login timeout")
+    matching = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: task)
+    create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    assert_equal [ matching.id ],
+                 feed(filters: { search: "##{task.id}" }, type: "run").page(page: 1, limit: 10).entries.map { |e| e.record.id }
+    assert_equal [ matching.id ],
+                 feed(filters: { search: task.id.to_s }, type: "run").page(page: 1, limit: 10).entries.map { |e| e.record.id }
+  end
+
+  test "run list entry exposes a compact board task ref when linked" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column, title: "Fix login timeout")
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: task)
+
+    payload = RunListEntryResource.new(run).to_h
+
+    assert_equal({ "id" => task.id, "title" => "Fix login timeout", "archived" => false }, payload["boardTask"])
+  end
+
+  test "run list entry board task is null when the run has no card" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user)
+
+    assert_nil RunListEntryResource.new(run).to_h["boardTask"]
+  end
+
+  test "run list entry still exposes an archived board task" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column, title: "Old card", archived_at: Time.current)
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: task)
+
+    payload = RunListEntryResource.new(run).to_h
+
+    assert_equal({ "id" => task.id, "title" => "Old card", "archived" => true }, payload["boardTask"])
+  end
+
+  test "workflow run resource exposes the same board task shape" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column, title: "Fix login timeout")
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: task)
+
+    payload = WorkflowRunResource.new(run).to_h
+
+    assert_equal({ "id" => task.id, "title" => "Fix login timeout", "archived" => false }, payload["boardTask"])
+  end
+
   test "search escapes wildcards instead of treating them as a pattern" do
     standalone(initial_prompt: "rename the importer")
 

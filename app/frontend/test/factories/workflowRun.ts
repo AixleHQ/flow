@@ -21,6 +21,7 @@ export const buildWorkflowRun = (overrides: Partial<WorkflowRun> = {}): Workflow
   totalTokens: 0,
   stepRuns: [],
   controllableByViewer: true,
+  boardTask: null,
   // optional (?) computed attributes — realistic values, no compile-time guarantee.
   // failedAccountName is `string | undefined` (not nullable): omit for "absent".
   workflowName: 'Nebula Pipeline',

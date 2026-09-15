@@ -57,6 +57,26 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
+  it('shows a board task chip in the header when the run belongs to a card', () => {
+    renderAuthedPage(<ShowPage />, {
+      props: seed({
+        run: makeRun({ boardTask: { id: 142, title: 'Fix login timeout', archived: false } }),
+      }),
+    });
+
+    expect(screen.getByText('Task')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open board task #142 Fix login timeout' })).toHaveAttribute(
+      'href',
+      '/company/projects/7/board?task=142',
+    );
+  });
+
+  it('omits the task chip when the run has no board card', () => {
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ boardTask: null }) }) });
+
+    expect(screen.queryByRole('link', { name: /open board task/i })).not.toBeInTheDocument();
+  });
+
   it('renders one session card per step run', () => {
     renderAuthedPage(<ShowPage />, { props: seed() });
 

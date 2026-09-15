@@ -33,7 +33,7 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
 
   def show
     session = current_project.terminal_sessions
-                      .includes(:user, :output_assets, step_run: [ :step, { workflow_run: :workflow } ])
+                      .includes(:user, :output_assets, step_run: [ :step, { workflow_run: [ :workflow, :board_task ] } ])
                       .find(params[:id])
     authorize_session_visibility!(session)
 
@@ -60,7 +60,8 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       run_path: company_project_workflow_run_path(current_project, run),
       step_name: step_run.step&.name,
       step_position: step_run.step&.position,
-      steps_total: run.step_runs_count
+      steps_total: run.step_runs_count,
+      board_task: run.board_task&.run_link_payload
     }
   end
 

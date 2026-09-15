@@ -17,7 +17,7 @@ import {
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
 } from 'shared/routes';
-import { ConsoleFrame, DetailHeader, SessionCard, TabBar, type SessionCardData } from 'shared/ui/sessions';
+import { BoardTaskChip, ConsoleFrame, DetailHeader, SessionCard, TabBar, type SessionCardData } from 'shared/ui/sessions';
 
 import { persistentProjectLayoutNoPadding, setPageLayout } from '../ProjectLayout';
 
@@ -316,6 +316,11 @@ const WorkflowRunShowPage = () => {
           agentType={run.agentType}
           userName={run.userName}
           mode={run.mode}
+          extraMeta={
+            run.boardTask
+              ? [{ label: 'Task', value: <BoardTaskChip projectId={project.id} boardTask={run.boardTask} /> }]
+              : []
+          }
           stats={stats}
           formatTokenValue={formatTokens}
           actions={

@@ -67,6 +67,13 @@ class RunListEntryResource < ApplicationResource
     run.step_runs_count
   end
 
+  # Present when the run was started from a board card. Null for runs with no
+  # task (and after hard-delete nullifies the FK).
+  typelize "{ id: number; title: string; archived: boolean } | null"
+  attribute :board_task do |run|
+    run.board_task&.run_link_payload
+  end
+
   typelize "SessionListEntry[]"
   attribute :sessions do |run|
     ordered_step_runs(run).filter_map do |step_run|

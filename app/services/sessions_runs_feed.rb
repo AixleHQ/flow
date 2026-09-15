@@ -158,7 +158,19 @@ class SessionsRunsFeed
                    .where(terminal_sessions: { agent_type: filters[:agent_type] })
     end
     if filters[:search].present?
-      scope = scope.joins(:workflow).where("workflows.name ILIKE :q", q: "%#{sanitize_like(filters[:search])}%")
+      q = "%#{sanitize_like(filters[:search])}%"
+      # Match workflow name, linked board task title, or exact task id (`#142` / `142`).
+      task_id = filters[:search].to_s.strip.delete_prefix("#")
+      task_id = task_id.match?(/\A\d+\z/) ? task_id.to_i : nil
+
+      scope = scope.left_joins(:workflow, :board_task).where(
+        [
+          "workflows.name ILIKE :q OR board_tasks.title ILIKE :q",
+          ("board_tasks.id = :task_id" if task_id)
+        ].compact.join(" OR "),
+        q: q,
+        task_id: task_id
+      ).distinct
     end
     scope
   end
@@ -188,7 +200,7 @@ class SessionsRunsFeed
 
     sessions = TerminalSession.where(id: session_ids).includes(:user, :project).index_by(&:id)
     runs = WorkflowRun.where(id: run_ids)
-                      .includes(:user, :workflow, step_runs: [ :step, { terminal_session: :user } ])
+                      .includes(:user, :workflow, :board_task, step_runs: [ :step, { terminal_session: :user } ])
                       .index_by(&:id)
 
     rows.filter_map do |row|

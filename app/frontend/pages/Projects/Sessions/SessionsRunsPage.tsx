@@ -20,7 +20,7 @@ import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCable
 import { useWorkflowRunListCableUpdates } from 'shared/lib/hooks/useWorkflowRunListCableUpdates';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
 import { userPath } from 'shared/routes';
-import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
+import { AgentLogo, agentLabel, BoardTaskChip, ModeTag, StatusTag } from 'shared/ui/sessions';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
@@ -40,6 +40,7 @@ export type ListEntry = (SessionListEntry | RunListEntry) & {
   stepsCompleted?: number;
   stepsTotal?: number;
   sessions?: SessionListEntry[];
+  boardTask?: RunListEntry['boardTask'];
 };
 
 type ListType = 'all' | 'run' | 'solo';
@@ -427,6 +428,12 @@ function EntryRow({
               <>
                 <span className={classes.nameSubSep}>·</span>
                 {entry.stepsCompleted}/{entry.stepsTotal} steps
+              </>
+            )}
+            {isRun && entry.boardTask && (
+              <>
+                <span className={classes.nameSubSep}>·</span>
+                <BoardTaskChip projectId={projectId} boardTask={entry.boardTask} truncate />
               </>
             )}
           </div>
