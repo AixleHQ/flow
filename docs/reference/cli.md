@@ -8,8 +8,8 @@ of these from the repo root.
 | Command         | What it does                                                                       |
 | --------------- | ---------------------------------------------------------------------------------- |
 | `make setup`    | One-shot setup: build images, install deps, prepare DB, build agent images.        |
-| `make up`       | Start main services (web, db, redis, traefik, temporal).                           |
-| `make worker`   | Start the Temporal worker. Runs in its own terminal.                               |
+| `make up`       | Start all services (web, worker, db, redis, traefik, temporal).                    |
+| `make worker`   | Start only the Temporal worker. Back-compat alias — `make up` already starts it.   |
 | `make shell`    | Open a bash shell inside the web container.                                        |
 
 ## Dependencies and database
