@@ -23,9 +23,9 @@ class TaskCommentTest < ActiveSupport::TestCase
     assert comment.errors[:body].present?
   end
 
-  test "invalid without author" do
+  test "author is optional (nullified when the author is permanently deleted)" do
     comment = TaskComment.new(body: "Hello", board_task: @task)
-    refute_predicate comment, :valid?
+    assert_predicate comment, :valid?
   end
 
   test "sets created_at on create" do

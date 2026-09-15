@@ -35,7 +35,7 @@ class BoardActivityResourceTest < ActiveSupport::TestCase
     )
     resource = BoardActivityResource.new(activity).to_h
 
-    assert_equal "Deleted user", resource["actor_name"]
+    assert_equal "Deleted user", resource["actorName"]
     assert_equal "Deleted user created 'Ship it'", resource["description"]
   end
 
