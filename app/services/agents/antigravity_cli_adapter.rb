@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require "shellwords"
-require "stringio"
-require "zlib"
 
 module Agents
   # Google Antigravity CLI adapter.
@@ -37,9 +35,6 @@ module Agents
   class AntigravityCliAdapter < BaseAdapter
     SETTINGS_PATH = ".gemini/antigravity-cli/settings.json"
     OAUTH_TOKEN_PATH = ".gemini/antigravity-cli/antigravity-oauth-token"
-
-    MODELS_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels"
-    CONSUMER_PROJECT = "aicode-consumers"
 
     # Used only when the live catalogue is unavailable or no access token was
     # captured. The API response is the source of truth for signed-in users.
@@ -119,19 +114,7 @@ module Agents
       access_token = credentials["access_token"]
       return fallback_models if access_token.blank?
 
-      uri = URI(MODELS_URL)
-      request = Net::HTTP::Post.new(uri)
-      request["Authorization"] = "Bearer #{access_token}"
-      request["Content-Type"] = "application/json"
-      request["Accept-Encoding"] = "gzip"
-      request.body = { project: CONSUMER_PROJECT }.to_json
-
-      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) do |http|
-        http.request(request)
-      end
-      return fallback_models unless response.is_a?(Net::HTTPSuccess)
-
-      data = JSON.parse(response_body(response))
+      data = Antigravity::Api.models(access_token: access_token)
       model_ids = data["agentModelSorts"].to_a.flat_map do |sort|
         sort["groups"].to_a.flat_map { |group| group["modelIds"].to_a }
       end
@@ -198,12 +181,6 @@ module Agents
 
     def fallback_models
       { models: FALLBACK_MODELS, source: :fallback }
-    end
-
-    def response_body(response)
-      return response.body unless response["Content-Encoding"].to_s.downcase.include?("gzip")
-
-      Zlib::GzipReader.new(StringIO.new(response.body)).read
     end
 
     def settings
