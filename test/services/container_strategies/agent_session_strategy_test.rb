@@ -704,6 +704,16 @@ module ContainerStrategies
              "collect_terminal_output must not run capture-pane (pipe-pane already wrote the file)"
     end
 
+    test "collect_terminal_output exposes the redacted stream to usage collection" do
+      strategy = build_strategy
+      artifacts = {}
+      ContainerRuntime::FakeRuntime.any_instance.stubs(:read_file).with("abc123", "/tmp/terminal_output.log")
+        .returns("{\"event\":\"result\"}\n")
+
+      assert_equal 1, strategy.send(:collect_terminal_output, "abc123", @session, artifacts)
+      assert_equal "{\"event\":\"result\"}\n", artifacts["logs/terminal_output.log"]
+    end
+
     test "collect_terminal_output skips blank content" do
       fake = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {
         "/tmp/terminal_output.log" => ""

@@ -44,7 +44,7 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
-      logs_count += collect_terminal_output(container, session)
+      logs_count += collect_terminal_output(container, session, log_contents)
       collect_usage(session, agent_service, log_contents)
       persist_refreshed_credentials(container, session, agent_service)
 

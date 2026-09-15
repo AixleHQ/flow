@@ -129,7 +129,7 @@ module ContainerStrategies
       agent_service = AgentCredentialsService.for(input[:agent_type])
 
       logs_count, log_contents = collect_logs(container, session, agent_service)
-      logs_count += collect_terminal_output(container, session)
+      logs_count += collect_terminal_output(container, session, log_contents)
       outputs_count = collect_outputs(container, session)
       # Refresh first: an agent that rotates its token during a session leaves the
       # stored credential stale, and usage collection may need to call the vendor with
@@ -277,7 +277,7 @@ module ContainerStrategies
       @secret_redactor ||= Sessions::SecretRedactor.for_session(session)
     end
 
-    def collect_terminal_output(container, session)
+    def collect_terminal_output(container, session, artifacts = nil)
       # The file is populated live by the `agent` pane's tmux pipe-pane, set up in
       # docker/base/entrypoint.sh at container start (`tee -a /tmp/terminal_output.log`),
       # so it already holds the raw ANSI stream — no capture-pane snapshot needed.
@@ -288,6 +288,7 @@ module ContainerStrategies
       # of all — is in this stream verbatim. Scrub before it is persisted and
       # replayed in the UI.
       content = secret_redactor(session).call(content)
+      artifacts["logs/terminal_output.log"] = content if artifacts
 
       io = StringIO.new(content)
       io.define_singleton_method(:original_filename) { "terminal_output.log" }
