@@ -92,11 +92,19 @@ module ContainerStrategies
       adapter = AgentCredentialsService.for(input[:agent_type]).adapter
       credential = input[:credential]
 
-      raise_unresolved_credential!(session) if credential.nil? && AgentCredentialsService.supported?(input[:agent_type])
+      first_login = credential.nil? && session.mode == "interactive" && session.session_type == "agent_session"
+      if credential.nil? && AgentCredentialsService.supported?(input[:agent_type]) && !first_login
+        raise_unresolved_credential!(session)
+      end
 
       refresh_expiring_credential!(credential, session)
-      SessionContextService.assemble_session_context(container, session, credential: credential)
-      run_credential_preflight!(adapter, container, cid)
+      initial_write_error = nil
+      begin
+        SessionContextService.assemble_session_context(container, session, credential: credential)
+      rescue AgentCredentialsService::CredentialWriteError => e
+        initial_write_error = e
+      end
+      run_credential_preflight!(adapter, container, cid, initial_write_error: initial_write_error) if credential.present?
       {}
     end
 
@@ -226,11 +234,26 @@ module ContainerStrategies
     # Most agents have nothing to check here, so #credential_preflight returns
     # nil and this is a no-op — the strategy never needs to know which agent
     # type, if any, requires the check.
-    def run_credential_preflight!(adapter, container, container_id)
-      result = adapter.credential_preflight(runtime, container, container_id)
-      return if result.nil?
+    #
+    # Exactly one attempt: a masking retry would hide a real seed/entrypoint
+    # race instead of surfacing it (review decision on PR #252) — the
+    # diagnostic details on ProvisioningError are what make that race
+    # debuggable, not a retry loop.
+    def run_credential_preflight!(adapter, container, container_id, initial_write_error: nil)
+      if initial_write_error
+        details = initial_write_error.details.merge(attempt: 1, attempts: 1)
+        Rails.logger.warn("[AgentSession] Credential write failed: #{details.inspect}")
+        raise ProvisioningError.new("auth_file_write_failed", details)
+      end
 
-      raise ProvisioningError.new(result[:error_code], {}) unless result[:valid]
+      result = adapter.credential_preflight(runtime, container, container_id)
+      return if result.nil? || result[:valid]
+
+      details = result.except(:valid, :error_code).merge(
+        write_outcome: "initial_write_verified", attempt: 1, attempts: 1
+      )
+      Rails.logger.warn("[AgentSession] Credential preflight failed: #{details.merge(error_code: result[:error_code]).inspect}")
+      raise ProvisioningError.new(result[:error_code], details)
     end
 
     def launch_agent_in_tmux(container)

@@ -84,7 +84,8 @@ module Activities
         return unless operation
 
         cause = error.respond_to?(:original_error) ? (error.original_error || error) : error
-        resolved = NEVER_DISPATCHED.any? { |klass| cause.is_a?(klass) }
+        resolved = NEVER_DISPATCHED.any? { |klass| cause.is_a?(klass) } ||
+          cause.is_a?(ContainerStrategies::AgentSessionStrategy::ProvisioningError)
         operation.update!(state: resolved ? "retryable" : "uncertain", error: "#{cause.class}: #{error.message}")
       end
 

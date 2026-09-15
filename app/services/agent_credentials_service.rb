@@ -3,6 +3,15 @@
 # Facade service for agent-specific credential operations
 # Delegates to appropriate adapter based on agent type
 class AgentCredentialsService
+  class CredentialWriteError < StandardError
+    attr_reader :details
+
+    def initialize(details)
+      @details = details
+      super("Credential file write could not be verified: #{details[:path]}")
+    end
+  end
+
   ADAPTERS = {
     "claude_code" => Agents::ClaudeCodeAdapter,
     "cursor_cli" => Agents::CursorCliAdapter,
@@ -121,12 +130,16 @@ class AgentCredentialsService
 
   def write_container_file(container_id, path, content)
     ok = runtime.write_file(container_id, path, content)
-    if ok
-      Rails.logger.info("Wrote #{path} to container #{container_id}")
-      true
-    else
-      raise "runtime.write_file returned false for #{path}"
+    details = adapter.credential_file_metadata(runtime, container_id, path).merge(write_succeeded: !!ok)
+    unless ok && details[:exists] && details[:size].to_i == content.to_s.bytesize
+      Rails.logger.error("[AgentCredentials] Credential write verification failed: #{details.inspect}")
+      raise CredentialWriteError, details
     end
+
+    Rails.logger.info("[AgentCredentials] Credential write verified: #{details.inspect}")
+    true
+  rescue CredentialWriteError
+    raise
   rescue StandardError => e
     Rails.logger.error("Failed to write #{path} to container #{container_id}: #{e.message}")
     raise
