@@ -1,6 +1,7 @@
 import { router, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 
+import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { ConfigItemOption } from 'shared/components/SessionNewForm';
 import type { ToolGroup } from 'shared/lib/toolPicker';
 
@@ -27,7 +28,7 @@ export interface CreateOptions {
   toolGroups: ToolGroup[];
   skills: NamedItem[];
   mcpServers: NamedItem[];
-  assets: NamedItem[];
+  assets: AssetPickerItem[];
   repositories: NamedItem[];
   agentModels: { agentType: string; models: { modelId: string; displayName: string }[] }[];
   configuredAgents: string[];

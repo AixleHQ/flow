@@ -72,20 +72,20 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
   # An invalid folder used to surface to the agent as a raw RecordInvalid from deep inside the
   # export service; it is the agent's own argument, so it gets a tool error it can act on.
   test "returns a tool error naming the rule when the folder is invalid" do
-    result = run_tool(name: "report.md", folder: "docs/sub")
+    result = run_tool(name: "report.md", folder: "my folder")
 
     assert_equal 1, result[:exit_code]
-    assert_includes result[:stderr], "docs/sub"
+    assert_includes result[:stderr], "my folder"
     assert { Asset.where(scope: @project, name: "report.md").none? }
   end
 
-  test "promotes into the trimmed folder, spaces inside it kept" do
-    result = run_tool(name: "report.md", folder: "  Q3 reports  ")
+  test "promotes into the trimmed nested folder" do
+    result = run_tool(name: "report.md", folder: "  docs/sub  ")
 
     assert_equal 0, result[:exit_code]
     payload = JSON.parse(result[:stdout])
-    assert_equal "Q3 reports", payload["folder"]
-    assert_equal "Q3 reports", Asset.find(payload["asset_id"]).folder
+    assert_equal "docs/sub", payload["folder"]
+    assert_equal "docs/sub", Asset.find(payload["asset_id"]).folder
   end
 
   test "returns error when no matching workflow output asset exists" do

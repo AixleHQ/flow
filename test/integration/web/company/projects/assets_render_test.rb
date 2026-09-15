@@ -25,6 +25,25 @@ class Web::Company::Projects::AssetsRenderTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "index includes the project's folders and its company's folders, sorted by path" do
+    create(:folder, path: "reports", scope: @project, created_by: @user)
+    create(:folder, path: "dashboard", scope: @project, created_by: @user)
+    create(:folder, path: "shared", scope: @company, created_by: @user)
+    other_company = create(:company)
+    create(:folder, path: "unrelated", scope: other_company, created_by: @user)
+
+    get company_project_assets_path(@project)
+
+    assert_response :success
+    assert_inertia_props do |props|
+      paths = props[:folders].map { |f| f[:path] }
+      next false unless paths == %w[dashboard reports shared]
+
+      shared = props[:folders].find { |f| f[:path] == "shared" }
+      shared[:scopeIndicator] == "company"
+    end
+  end
+
   test "index includes asset versions when history_asset_id is given" do
     asset = create(:asset, :with_project_scope, scope: @project, created_by: @user)
     create(:asset_version, asset: asset, uploaded_by: @user, version: 1)

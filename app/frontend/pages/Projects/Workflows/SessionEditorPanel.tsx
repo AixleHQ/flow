@@ -15,6 +15,7 @@ import { useState } from 'react';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
+import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { toolIdsFromPickerValue, toolPickerData, toolPickerValue, type ToolGroup } from 'shared/lib/toolPicker';
 
 import classes from './BuilderPage.module.css';
@@ -170,7 +171,7 @@ interface SessionEditorPanelProps {
   toolGroups: ToolGroup[];
   skills: NamedItem[];
   mcpServers: NamedItem[];
-  assets: NamedItem[];
+  assets: AssetPickerItem[];
   repositories: NamedItem[];
   configItems: ConfigItemPicker[];
   agentModels?: AgentModelsEntry[];
@@ -465,17 +466,13 @@ export function SessionEditorPanel({
           <div className={classes.resType}>
             Assets <span className={classes.resTypeSub}>— files loaded into /workspace/input</span>
           </div>
-          <MultiSelect
-            data={toSelectData(assets)}
-            value={toStringArr(step.assetIds)}
-            onChange={(v) => onFieldChange('assetIds', toNumberArr(v), true)}
+          <AssetPicker
+            assets={assets}
+            value={step.assetIds}
+            onChange={(ids) => onFieldChange('assetIds', ids, true)}
             disabled={readOnly}
-            searchable
             placeholder="None added"
             aria-label="Assets"
-            styles={{
-              input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
-            }}
           />
         </div>
 

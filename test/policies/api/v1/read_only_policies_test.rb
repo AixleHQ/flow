@@ -53,8 +53,25 @@ module Api
         v = Projects::AssetsPolicy.new(project_ctx(@viewer), nil)
         assert v.download?
         assert_not v.create?
+        assert_not v.update?
         assert_not v.destroy?
-        assert Projects::AssetsPolicy.new(project_ctx(@employee), nil).create?
+        assert_not v.bulk_actions?
+        e = Projects::AssetsPolicy.new(project_ctx(@employee), nil)
+        assert e.create?
+        assert e.update?
+        assert e.bulk_actions?
+      end
+
+      test "Projects::FoldersPolicy classification" do
+        v = Projects::FoldersPolicy.new(project_ctx(@viewer), nil)
+        assert_not v.create?
+        assert_not v.relocate?
+        assert_not v.destroy?
+
+        e = Projects::FoldersPolicy.new(project_ctx(@employee), nil)
+        assert e.create?
+        assert e.relocate?
+        assert e.destroy?
       end
 
       test "Projects::WorkflowsPolicy classification" do
@@ -145,8 +162,25 @@ module Api
         v = Company::AssetsPolicy.new(base_ctx(@viewer), nil)
         assert v.download?
         assert_not v.create?
+        assert_not v.update?
         assert_not v.destroy?
-        assert Company::AssetsPolicy.new(base_ctx(@employee), nil).create?
+        assert_not v.bulk_actions?
+        e = Company::AssetsPolicy.new(base_ctx(@employee), nil)
+        assert e.create?
+        assert e.update?
+        assert e.bulk_actions?
+      end
+
+      test "Company::FoldersPolicy classification" do
+        v = Company::FoldersPolicy.new(base_ctx(@viewer), nil)
+        assert_not v.create?
+        assert_not v.relocate?
+        assert_not v.destroy?
+
+        e = Company::FoldersPolicy.new(base_ctx(@employee), nil)
+        assert e.create?
+        assert e.relocate?
+        assert e.destroy?
       end
 
       # === fail-closed read_only? ===
