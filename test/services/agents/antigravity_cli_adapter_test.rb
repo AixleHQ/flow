@@ -217,8 +217,12 @@ module Agents
       } } }.to_json
       artifacts = { "logs/terminal_output.log" => stream }
 
+      # Cleanup re-fetches the session on every retry attempt (TerminalSession.find in
+      # AgentSessionStrategy#before_cleanup), so simulate that here rather than reusing
+      # the same in-memory object, whose usage_statistic association would otherwise
+      # stay cached at its pre-first-call value and never see the guard trip.
       @adapter.collect_usage(@session, artifacts)
-      @adapter.collect_usage(@session, artifacts)
+      @adapter.collect_usage(TerminalSession.find(@session.id), artifacts)
 
       stat = @session.reload.usage_statistic
       assert_equal 1_000_000, stat.input_tokens
