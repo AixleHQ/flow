@@ -705,10 +705,12 @@ module ContainerStrategies
     end
 
     test "collect_terminal_output exposes the redacted stream to usage collection" do
+      fake = ContainerRuntime::FakeRuntime.new(agent_type: "antigravity_cli", filesystem: {
+        "/tmp/terminal_output.log" => "{\"event\":\"result\"}\n"
+      })
+      ContainerRuntime.stubs(:build).returns(fake)
       strategy = build_strategy
       artifacts = {}
-      ContainerRuntime::FakeRuntime.any_instance.stubs(:read_file).with("abc123", "/tmp/terminal_output.log")
-        .returns("{\"event\":\"result\"}\n")
 
       assert_equal 1, strategy.send(:collect_terminal_output, "abc123", @session, artifacts)
       assert_equal "{\"event\":\"result\"}\n", artifacts["logs/terminal_output.log"]
