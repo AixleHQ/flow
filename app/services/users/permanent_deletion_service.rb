@@ -89,16 +89,9 @@ module Users
         Company.where(id: Project.where(owner_id: @user.id).select(:company_id)).to_a
     end
 
-    # The company's oldest active admin other than this user — the same
-    # heir-selection rule CompanyMembership uses when a project owner is revoked.
     def heir_membership_for(company)
       (@heirs ||= {})[company.id] ||=
-        company.company_memberships
-               .active
-               .where(role: "admin")
-               .where.not(user_id: @user.id)
-               .default_order
-               .first
+        CompanyMembership.heir_for(company, excluding_user: @user)
     end
   end
 end

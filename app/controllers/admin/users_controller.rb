@@ -49,8 +49,12 @@ module Admin
         redirect_to admin_user_path(user),
                     alert: "Confirmation email did not match. User was not deleted."
       end
-    rescue Users::PermanentDeletionService::OwnershipTransferError => e
+    rescue Users::PermanentDeletionService::Error => e
       redirect_to admin_user_path(user), alert: e.message
+    rescue ActiveRecord::RecordNotDestroyed => e
+      redirect_to admin_user_path(user), alert: "User could not be deleted: #{e.message}"
+    rescue ActiveRecord::InvalidForeignKey
+      redirect_to admin_user_path(user), alert: "User could not be deleted: a database constraint prevented removal. Please contact engineering."
     end
 
     def restore

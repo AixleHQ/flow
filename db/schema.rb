@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_15_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1379,7 +1379,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_15_180000) do
   add_foreign_key "terminal_sessions", "users"
   add_foreign_key "tool_files", "tools", on_delete: :cascade
   add_foreign_key "tool_results", "step_runs", on_delete: :nullify
-  add_foreign_key "tool_results", "terminal_sessions"
+  add_foreign_key "tool_results", "terminal_sessions", on_delete: :nullify
   add_foreign_key "tool_results", "tools", on_delete: :cascade
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade

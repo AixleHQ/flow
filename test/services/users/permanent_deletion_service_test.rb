@@ -47,6 +47,22 @@ module Users
       assert_nil BoardViewPreset.find_by(id: preset.id)
     end
 
+    test "succeeds for a fully-wired user with tool_results and usage_statistics" do
+      other_project = create(:project, company: @company, owner: @heir)
+      session = build(:terminal_session, user: @user, project: other_project)
+      session.save!(validate: false)
+      UsageStatistic.create!(terminal_session: session, tokens: 100, cost_cents: 5)
+      tool_result = create(:tool_result, terminal_session: session)
+
+      assert_difference("User.count", -1) do
+        PermanentDeletionService.call(user: @user, actor: @actor)
+      end
+
+      assert_nil User.find_by(id: @user.id)
+      assert_nil TerminalSession.find_by(id: session.id)
+      assert_nil tool_result.reload.terminal_session_id
+    end
+
     test "transfers owned projects to the company heir admin" do
       project = create(:project, company: @company, owner: @user)
 
