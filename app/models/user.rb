@@ -3,6 +3,8 @@
 class User < ApplicationRecord
   extend Enumerize
 
+  DELETED_DISPLAY_NAME = "Deleted user"
+
   # State machine
   include UserStateMachine
 

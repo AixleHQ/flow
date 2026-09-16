@@ -99,11 +99,8 @@ class IntegrationResource < ApplicationResource
 
   typelize "{ id: number; name: string }"
   attribute :connected_by do |integration|
-    # connected_by is nil once that user is permanently deleted (FK nullifies);
-    # the integration itself is company-level and survives. Frontend reads only
-    # .name, so fall back to "Deleted user".
     user = integration.connected_by
-    { id: user&.id, name: user&.name || "Deleted user" }
+    { id: user&.id, name: user&.name || User::DELETED_DISPLAY_NAME }
   end
 
   typelize :string?

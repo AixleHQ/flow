@@ -6,9 +6,7 @@ class BoardActivityResource < ApplicationResource
 
   typelize metadata: "Record<string, unknown>"
 
-  # actor is nil once the user is permanently deleted (FK nullifies) — fall back
-  # to "Deleted user" so the feed still renders.
-  DELETED_ACTOR_NAME = "Deleted user"
+  DELETED_ACTOR_NAME = User::DELETED_DISPLAY_NAME
 
   typelize :string
   attribute :actor_name do |activity|
