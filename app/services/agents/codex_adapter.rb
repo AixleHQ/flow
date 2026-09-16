@@ -802,6 +802,7 @@ module Agents
         toml << <<~TOML
 
           [otel]
+          log_user_prompt = true
           exporter = { otlp-http = { endpoint = "#{otel_endpoint}/v1/logs", protocol = "binary" } }
         TOML
       end

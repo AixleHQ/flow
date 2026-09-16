@@ -298,7 +298,7 @@ module Agents
           "target" => "local",
           "otlpEndpoint" => Settings.otel.metrics_endpoint.to_s.sub(%r{/v1/\w+\z}, ""),
           "otlpProtocol" => "http",
-          "logPrompts" => false
+          "logPrompts" => true
         },
         # Tools - auto approve all operations (container is the sandbox)
         "tools" => {
