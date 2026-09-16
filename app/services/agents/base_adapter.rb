@@ -435,11 +435,8 @@ module Agents
     #   transient/partial one. Optional: an adapter that omits it falls back to the
     #   sweep's invalid_grant check.
     # @param margin_ms [Integer, nil] how close to expiry a token must be to be worth
-    #   refreshing. An adapter that can read an expiry out of the credential material
-    #   (#token_expires_at) decides for itself and honours this; one whose tokens carry
-    #   no expiry at all refreshes whenever it is called. An expiry the adapter cannot
-    #   read is NOT "never expires": the token still dies with its grant, so such a
-    #   credential must be refreshed, never skipped.
+    #   refreshing. Only agents that store their own expiry (Claude, with a block per
+    #   login) can honour it; single-block agents refresh whenever they are called.
     def refresh!(_credential, margin_ms: nil)
       { status: :not_needed, detail: nil, permanent: false }
     end
@@ -556,11 +553,6 @@ module Agents
     end
 
     protected
-
-    # The current time in the unit token expiries are compared in (epoch milliseconds).
-    def now_ms
-      (Time.current.to_f * 1000).to_i
-    end
 
     def parse_json(content)
       JSON.parse(content)

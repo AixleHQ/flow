@@ -289,16 +289,6 @@ class SessionService
     # Block a launch whose agent credential is broken, so the user gets "sign in again"
     # instead of a container that fails on an expired token.
     #
-    # `status` alone misses the case this guard was added for: the refresh sweep only
-    # selects rows with a non-NULL `expires_at`, so a credential whose expiry was never
-    # derived is never selected, never marked, and stays `active` however dead its token
-    # is. For `cursor_cli` a NULL expiry is not "this login has no expiry" — the
-    # accessToken is a JWT and #sync_expires_at derives the column from it on every
-    # write of config_data — so it can only mean nobody derived it. See the PR
-    # description for the incident this comes from.
-    #
-    # No network, matching Oauth::Preflight and CloudAuth::Preflight.
-    #
     # An auth_setup session is exempt: it exists to REPLACE the broken credential,
     # so gating it on that credential locks the user out of the only flow that can
     # clear the error.

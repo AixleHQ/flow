@@ -139,10 +139,6 @@ module Agents
     CURSOR_MODELS_URL = "https://api2.cursor.sh/aiserver.v1.AiService/GetUsableModels"
     CURSOR_AUTH_URL = "https://authenticator.cursor.sh/oauth/token"
     CURSOR_CLIENT_ID = "cursor-cli"
-    # Proactive server-side token refresh (Temporal sweep). Matches the sweep's own
-    # selection window (RefreshExpiringTokensActivity::REFRESH_WINDOW) and Claude's
-    # margin, so a row the sweep picks up is a row this adapter acts on.
-    REFRESH_MARGIN_MS = 15 * 60 * 1000
 
     def fetch_available_models(credentials, credential: nil)
       access_token = credentials["accessToken"]
@@ -168,30 +164,13 @@ module Agents
       []
     end
 
-    # Proactive-refresh hook (Temporal sweep) and pre-launch refresh. Thin wrapper
-    # over the reactive refresh_cursor_token! which persists under a row lock via
-    # persist_refreshed!.
-    #
-    # The decision is taken HERE, from the stored token, the way ClaudeCodeAdapter
-    # takes it from its OAuth blocks rather than from the denormalised
-    # `agent_credentials.expires_at` column. Both callers still select rows by that
-    # column, so this does not widen what gets refreshed; it makes #refresh! safe to
-    # call without a caller-side gate, and stops the method from burning a single-use
-    # grant on a token that has hours of life left.
-    #
-    # An `exp` this adapter cannot read is deliberately NOT treated as "never expires":
-    # a Cursor accessToken dies with its grant either way, so an unreadable expiry means
-    # refresh, never skip.
-    #
+    # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
+    # refresh_cursor_token! which persists under a row lock via persist_refreshed!.
     # @param credential [AgentCredential]
-    # @param margin_ms [Integer] refresh when the stored token expires within this many
-    #   ms (or has already expired). The sweep uses the default; a session launch passes
-    #   its own, larger, threshold via AgentCredential#refresh_if_expiring!.
-    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil }
-    def refresh!(credential, margin_ms: REFRESH_MARGIN_MS)
-      exp = token_expires_at(credential.config_data).to_i
-      return { status: :not_needed, detail: nil } if exp.positive? && (exp - now_ms) > margin_ms
-
+    # @return [Hash] { status: :refreshed | :error, detail: String | nil }
+    # margin_ms is ignored: this agent stores no per-block expiry to compare it
+    # against, so a call is already the decision to refresh.
+    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
       new_token = refresh_cursor_token!(credential)
       new_token ? { status: :refreshed, detail: nil }
                 : { status: :error, detail: "cursor token refresh failed" }
