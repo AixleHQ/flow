@@ -31,18 +31,29 @@ class ApplicationResource
   # frontend read `gateType` off a payload that said `gate_type`. Camelizing the
   # nested keys here makes one shape for both transports; `preserve_keys` opts an
   # opaque value hash out, as it already did for props.
+  # A resource used as a `many` association target (e.g. `many :tool_files, resource:
+  # ToolFileResource`) has `to_h` invoked directly on the whole collection, not just
+  # per record — Alba's `Association#to_h_with_constantize_resource` instantiates the
+  # resource with the association's collection as `@object` and calls `.to_h` once.
+  # `super` (`Alba::Resource#serializable_hash`) then returns an Array of per-record
+  # hashes rather than a single Hash, so this must camelize/snake each element instead
+  # of treating the whole result as one record's attribute hash.
   def to_h
     result = super
+    result.is_a?(Array) ? result.map { |item| transform_record(item) } : transform_record(result)
+  end
+
+  private
+
+  def transform_record(hash)
     snake = params[:snake_keys]
     keys = self.class._preserve_keys
-    result = snake ? snake_keys(result) : camelize_nested(result, keys)
+    result = snake ? snake_keys(hash) : camelize_nested(hash, keys)
     if keys.any?
       result[snake ? "_preserve_keys" : "_preserveKeys"] = snake ? keys.map { |k| k.to_s.underscore } : keys
     end
     result
   end
-
-  private
 
   # Top-level names are Alba's job (`transform_keys :lower_camel`); this walks the
   # values under them.

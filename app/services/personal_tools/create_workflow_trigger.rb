@@ -95,6 +95,7 @@ module PersonalTools
       serialize_column(ColumnWorkflowBinding.create!(
                          board_column: column,
                          workflow: workflow,
+                         created_by: user,
                          trigger_mode: params[:trigger_mode].presence || "auto",
                          cooldown_seconds: params[:cooldown_seconds].presence || 5
                        ))

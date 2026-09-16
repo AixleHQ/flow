@@ -153,23 +153,20 @@
   position: relative;
 }
 
-/* Title row — gains left padding when card is hovered or in selection mode */
+/* Title row — a fixed slot is always reserved on the right for the selection checkbox, so
+   arming bulk mode (or hovering a card) never inserts a control and reflows the text. */
 .taskCardTop {
-  transition: padding-left 0.12s;
+  padding-right: 22px;
 }
 
-.taskCard:hover .taskCardTop,
-.taskCardSelectionMode .taskCardTop {
-  padding-left: 24px;
-}
-
-/* Checkbox — 16×16 native square, absolutely positioned, hidden at rest */
+/* Checkbox — 16×16 native square, absolutely positioned in the reserved top-right slot.
+   Only rendered while bulk mode is armed, so there is nothing to reveal on hover. */
 .taskCardCheck {
   appearance: none;
   -webkit-appearance: none;
   position: absolute;
-  top: 12px;
-  left: 12px;
+  top: 10px;
+  right: 10px;
   width: 16px;
   height: 16px;
   border-radius: 4px;
@@ -188,7 +185,6 @@
   padding: 0;
 }
 
-.taskCard:hover .taskCardCheck,
 .taskCardSelectionMode .taskCardCheck {
   opacity: 1;
   pointer-events: auto;

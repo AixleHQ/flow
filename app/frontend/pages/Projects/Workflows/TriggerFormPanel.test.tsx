@@ -2,12 +2,14 @@ import '@testing-library/jest-dom/vitest';
 import type { ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { buildSharedProps, buildSharedUser } from 'test/factories/sharedProps';
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { TriggerFormPanel } from './TriggerFormPanel';
 import type { Trigger } from './types';
 
-// TriggerFormPanel takes plain props (no usePage/useForm read) and talks to the backend through
+// TriggerFormPanel takes plain props (it reads only currentUser off usePage, to name who a new
+// trigger will run as) and talks to the backend through
 // apiFetch() -> the global fetch() the test setup stubs. `defaultKind` seeds the create-mode kind and
 // `editing` puts the form into (kind-locked) edit mode, so each trigger kind and its per-kind branches
 // can be rendered directly without driving the kind Select. Tests that assert a request spy on fetch()
@@ -87,6 +89,50 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByRole('button', { name: 'Add trigger' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+
+  it('names the signed-in user as who a new off-board trigger will run as', async () => {
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'schedule' })} />, {
+      props: buildSharedProps({ currentUser: buildSharedUser({ name: 'Nils Aker' }) }),
+    });
+
+    expect(screen.getByText('Runs as')).toBeInTheDocument();
+    expect(screen.getByText('Nils Aker')).toBeInTheDocument();
+    expect(screen.getByText(/use their credentials/)).toBeInTheDocument();
+  });
+
+  it('labels a column trigger as created by the signed-in user, not run as them', () => {
+    renderPage(<TriggerFormPanel {...baseProps()} />, {
+      props: buildSharedProps({ currentUser: buildSharedUser({ name: 'Nils Aker' }) }),
+    });
+
+    expect(screen.getByText('Created by')).toBeInTheDocument();
+    expect(screen.getByText(/belongs to whoever the card is on/)).toBeInTheDocument();
+  });
+
+  it('keeps the original creator when editing, and warns when the trigger has none', () => {
+    const editing: Trigger = {
+      id: 9,
+      kind: 'schedule',
+      event_type: 'schedule.fired',
+      schedule_config: { cron: '0 9 * * 1-5', timezone: 'UTC' },
+      created_by: { id: 4, name: 'Ada Ruiz' },
+    };
+
+    const { unmount } = renderPage(<TriggerFormPanel {...baseProps({ editing })} />, {
+      props: buildSharedProps({ currentUser: buildSharedUser({ name: 'Nils Aker' }) }),
+    });
+
+    expect(screen.getByText('Ada Ruiz')).toBeInTheDocument();
+    expect(screen.queryByText('Nils Aker')).not.toBeInTheDocument();
+    unmount();
+
+    renderPage(<TriggerFormPanel {...baseProps({ editing: { ...editing, created_by: null } })} />, {
+      props: buildSharedProps({ currentUser: buildSharedUser({ name: 'Nils Aker' }) }),
+    });
+
+    expect(screen.getByText('Unknown')).toBeInTheDocument();
+    expect(screen.getByText(/cannot start a run/)).toBeInTheDocument();
   });
 
   it('switches the rendered fields when the kind Select changes to slack', async () => {
@@ -309,6 +355,93 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.queryByText('Task column')).not.toBeInTheDocument();
     await pickOption(/project-level run/, 'Create a task');
     expect(await screen.findByText('Task column')).toBeInTheDocument();
+  });
+
+  // -------------------------------------------------------------------------
+  // Webhook create — success view with the ready-to-run cURL example (issue #624)
+  // -------------------------------------------------------------------------
+  it('stays open on a success view showing the URL, secret, and no-auth cURL after a webhook is created', async () => {
+    installFetch(() =>
+      json({ webhook_url: 'https://example.test/hooks/abc', webhook_secret: '', verification_strategy: 'none' }),
+    );
+    const onSaved = vi.fn();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook', onSaved })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    expect(await screen.findByText('Webhook trigger created')).toBeInTheDocument();
+    expect(screen.getByText('https://example.test/hooks/abc')).toBeInTheDocument();
+    expect(screen.getByText('Request URL')).toBeInTheDocument();
+    expect(screen.queryByText('Secret')).not.toBeInTheDocument();
+    expect(screen.getByText(/Example request \(no auth\)/)).toBeInTheDocument();
+    expect(screen.getByText(/curl -X POST 'https:\/\/example\.test\/hooks\/abc'/)).toBeInTheDocument();
+    expect(onSaved).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('shows the shared-token cURL and the secret when the webhook uses shared_token verification', async () => {
+    installFetch(() =>
+      json({
+        webhook_url: 'https://example.test/hooks/xyz',
+        webhook_secret: 'sek_123',
+        verification_strategy: 'shared_token',
+      }),
+    );
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook' })} />);
+    await pickOption('None', 'Shared token');
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    expect(await screen.findByText('Webhook trigger created')).toBeInTheDocument();
+    expect(screen.getByText('sek_123')).toBeInTheDocument();
+    expect(screen.getByText(/Example request \(shared token\)/)).toBeInTheDocument();
+    expect(screen.getByText(/X-Webhook-Token: sek_123/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy curl' })).toBeInTheDocument();
+  });
+
+  it('shows the HMAC SHA-256 cURL for an hmac_sha256 webhook', async () => {
+    installFetch(() =>
+      json({
+        webhook_url: 'https://example.test/hooks/hm',
+        webhook_secret: 'topsecret',
+        verification_strategy: 'hmac_sha256',
+      }),
+    );
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook' })} />);
+    await pickOption('None', 'HMAC SHA-256');
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    expect(await screen.findByText(/Example request \(HMAC SHA-256\)/)).toBeInTheDocument();
+    expect(screen.getByText(/X-Hub-Signature-256: sha256=\$SIG/)).toBeInTheDocument();
+    expect(screen.getByText(/openssl dgst -sha256 -hmac 'topsecret'/)).toBeInTheDocument();
+  });
+
+  it('refreshes the list (onSaved, not onClose) when the webhook success view is dismissed via the ✕', async () => {
+    installFetch(() => json({ webhook_url: 'https://example.test/hooks/abc', webhook_secret: '' }));
+    const onSaved = vi.fn();
+    const onClose = vi.fn();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook', onSaved, onClose })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+    expect(await screen.findByText('Webhook trigger created')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not show the success view for a non-webhook trigger — it closes via onSaved', async () => {
+    installFetch(() => json({ webhook_url: 'https://example.test/should-be-ignored' }));
+    const onSaved = vi.fn();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'slack', onSaved })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+    expect(screen.queryByText('Webhook trigger created')).not.toBeInTheDocument();
   });
 
   // -------------------------------------------------------------------------

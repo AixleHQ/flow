@@ -19,7 +19,10 @@ if Settings.sentry.temporal_dsn.present? && !Rails.env.development?
     config.release = Settings.app.version
     config.environment = Rails.env
     config.send_default_pii = true
-    config.enable_logs = true
+    # sentry-ruby 7 removed `enable_logs` (logs are unconditionally on), and calling it
+    # raises NoMethodError from inside Sentry.init — which crashed this process on boot.
+    # See the same migration in config/initializers/sentry.rb; this second Sentry.init,
+    # which replaces that configuration for the worker, was missed by it.
     config.traces_sample_rate = 1.0
     config.profiles_sample_rate = 1.0
   end

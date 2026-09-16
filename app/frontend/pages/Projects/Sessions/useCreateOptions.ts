@@ -2,6 +2,7 @@ import { router, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 
 import { ConfigItemOption } from 'shared/components/SessionNewForm';
+import type { ToolGroup } from 'shared/lib/toolPicker';
 
 interface NamedItem {
   id: number;
@@ -23,6 +24,7 @@ interface WorkflowOption {
 export interface CreateOptions {
   agents: NamedItem[];
   tools: NamedItem[];
+  toolGroups: ToolGroup[];
   skills: NamedItem[];
   mcpServers: NamedItem[];
   assets: NamedItem[];

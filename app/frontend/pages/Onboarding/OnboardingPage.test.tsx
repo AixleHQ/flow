@@ -19,6 +19,8 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   mode: 'interactive',
   queuedAt: null,
   waitReason: null,
+  launchPhase: null,
+  launchError: null,
   startedAt: null,
   finishingAt: null,
   finishedAt: null,
@@ -36,6 +38,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   errorMessage: null,
   containerId: null,
   projectId: null,
+  userId: 1,
   viewable: true,
   ownedByViewer: true,
   routeToken: null,
@@ -203,7 +206,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByText('Connect your agents')).toBeInTheDocument();
-    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(6);
+    expect(screen.getAllByText('NOT CONNECTED')).toHaveLength(7);
   });
 
   it('shows the Connected badge and an enabled Get started when an agent is configured', () => {
@@ -219,7 +222,7 @@ describe('Onboarding/OnboardingPage', () => {
     });
 
     expect(screen.getByText('Connected')).toBeInTheDocument();
-    expect(screen.getByText('1 of 6 connected')).toBeInTheDocument();
+    expect(screen.getByText('1 of 7 connected')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Get started/ })).toBeEnabled();
   });
 

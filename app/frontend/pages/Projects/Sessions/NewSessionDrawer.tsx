@@ -35,6 +35,7 @@ export function NewSessionDrawer({ projectId, opened, onClose }: Props) {
           agentModels={options.agentModels}
           agents={options.agents}
           tools={options.tools}
+          toolGroups={options.toolGroups}
           skills={options.skills}
           mcpServers={options.mcpServers}
           repositories={options.repositories}

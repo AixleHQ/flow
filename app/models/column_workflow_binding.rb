@@ -5,6 +5,10 @@ class ColumnWorkflowBinding < ApplicationRecord
 
   belongs_to :board_column
   belongs_to :workflow
+  # Who added this trigger. Recorded on create for every trigger kind so the
+  # Triggers tab can say whose identity a run uses; optional because rows
+  # created before the column kind carried a creator have no source of truth.
+  belongs_to :created_by, class_name: "User", optional: true
 
   enumerize :trigger_mode, in: %i[auto manual], default: :manual, predicates: true
 

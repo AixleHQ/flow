@@ -157,7 +157,7 @@ class GateReconciler
       case kind
       when "unresolvable"
         "CI #{gate.reference_type.to_s.humanize.downcase} #{gate.reference} on " \
-        "#{gate.metadata['repo_full_name']} cannot be read: #{result.detail}"
+        "#{gate.repository_label} cannot be read: #{result.detail}"
       else
         "no CI result after #{ActiveSupport::Duration.build(gate.age_seconds(now)).inspect} " \
         "(TTL #{Gate.ttl.inspect}); last probe: #{result.detail.presence || result.state}"

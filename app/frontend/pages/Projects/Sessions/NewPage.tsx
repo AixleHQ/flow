@@ -3,6 +3,7 @@ import { Box } from '@mantine/core';
 
 import { SessionNewForm } from 'shared/components/SessionNewForm';
 import type { ConfigItemOption, NamedItem, SessionCostHint } from 'shared/components/SessionNewForm';
+import type { ToolGroup } from 'shared/lib/toolPicker';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -27,6 +28,7 @@ interface Props {
   agentModels?: AgentModelsEntry[];
   agents?: NamedItem[];
   tools?: NamedItem[];
+  toolGroups?: ToolGroup[];
   skills?: NamedItem[];
   mcpServers?: NamedItem[];
   repositories?: NamedItem[];
@@ -41,6 +43,7 @@ const ProjectSessionNewPage = () => {
     agentModels = [],
     agents = [],
     tools = [],
+    toolGroups = [],
     skills = [],
     mcpServers = [],
     repositories = [],
@@ -59,6 +62,7 @@ const ProjectSessionNewPage = () => {
           agentModels={agentModels}
           agents={agents}
           tools={tools}
+          toolGroups={toolGroups}
           skills={skills}
           mcpServers={mcpServers}
           repositories={repositories}

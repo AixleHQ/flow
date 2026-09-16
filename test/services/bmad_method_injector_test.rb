@@ -76,6 +76,18 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   end
 
   # ====================================================================
+  # AC 4c: kiro_cli → --tools kiro (BMAD ships a first-class kiro platform)
+  # ====================================================================
+
+  test "kiro_cli session installs with --tools kiro" do
+    session = build_bmad_session(agent_type: "kiro_cli")
+
+    expect_exec_matching("--tools kiro")
+
+    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
+  end
+
+  # ====================================================================
   # AC 5: Custom modules → --modules bmm,cis,bmb
   # ====================================================================
 
@@ -372,7 +384,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   end
 
   test "AGENT_TYPE_TO_BMAD_TOOL covers all valid agent types" do
-    %w[cursor_cli claude_code codex gemini_cli grok].each do |agent_type|
+    %w[cursor_cli claude_code codex gemini_cli grok kiro_cli].each do |agent_type|
       assert BmadMethodInjector::AGENT_TYPE_TO_BMAD_TOOL.key?(agent_type),
         "Missing BMAD tool mapping for #{agent_type}"
     end
@@ -383,7 +395,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   # ====================================================================
 
   test "BMAD_HIDDEN_PATHS contains all required paths" do
-    expected = %w[_bmad .cursor/skills .claude/skills .agents/skills .gemini/skills]
+    expected = %w[_bmad .cursor/skills .claude/skills .agents/skills .gemini/skills .kiro/skills]
     assert_equal expected.sort, BmadMethodInjector::BMAD_HIDDEN_PATHS.sort
   end
 
@@ -408,7 +420,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     injector.send(:hide_bmad_in_vscode)
 
     settings = JSON.parse(captured_content)
-    assert_equal 5, settings["files.exclude"].size
+    assert_equal BmadMethodInjector::BMAD_HIDDEN_PATHS.size, settings["files.exclude"].size
     BmadMethodInjector::BMAD_HIDDEN_PATHS.each do |path|
       assert settings.dig("files.exclude", path), "Expected #{path} to be excluded"
     end
@@ -468,7 +480,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     settings = JSON.parse(captured_content)
     assert_equal 2, settings["editor.tabSize"]
     assert_equal 12, settings["terminal.integrated.fontSize"]
-    assert_equal 5, settings["files.exclude"].size
+    assert_equal BmadMethodInjector::BMAD_HIDDEN_PATHS.size, settings["files.exclude"].size
   end
 
   # ====================================================================
@@ -492,7 +504,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     injector.send(:hide_bmad_in_vscode)
 
     settings = JSON.parse(captured_content)
-    assert_equal 5, settings["files.exclude"].size
+    assert_equal BmadMethodInjector::BMAD_HIDDEN_PATHS.size, settings["files.exclude"].size
   end
 
   # ====================================================================

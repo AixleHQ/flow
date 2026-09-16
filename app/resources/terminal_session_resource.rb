@@ -10,7 +10,7 @@ class TerminalSessionResource < ApplicationResource
              :cost_cents, :models, :requested_model,
              :artifacts_reviewed,
              :error_message, :container_id,
-             :project_id, :route_token, :configured_agent_id,
+             :project_id, :user_id, :route_token, :configured_agent_id,
              :collected_at, :updated_at
 
   typelize "string | null"
@@ -21,6 +21,21 @@ class TerminalSessionResource < ApplicationResource
   typelize "string | null"
   attribute :wait_reason do |session|
     session.session_admission&.wait_reason
+  end
+
+  # Why the session is not up yet, as a fact rather than as the wait_reason
+  # column's insert default — see SessionAdmission#launch_phase.
+  typelize "string | null"
+  attribute :launch_phase do |session|
+    session.session_admission&.launch_phase
+  end
+
+  # Whatever went wrong on the way to the runtime: a preflight the launch relay
+  # refused, a Temporal dispatch that failed, a capacity refusal. Without it
+  # every one of those looked to the user like an ordinary queue wait.
+  typelize "string | null"
+  attribute :launch_error do |session|
+    session.session_admission&.last_error.presence
   end
 
   # Whether the REQUESTING user may open this session — see

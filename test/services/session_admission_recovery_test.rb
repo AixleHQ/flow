@@ -122,6 +122,46 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_equal 0, stats[:pinned_reservations]
   end
 
+  # Four days of production evidence: twelve reservations recorded
+  # "RPCError: workflow not found" once a minute and were never cleaned up,
+  # because the reconciler read Temporal's one definitive negative answer as
+  # "unknown" and skipped the admission. A cap of twenty ran four sessions.
+  test "a workflow Temporal has no record of releases its reservation" do
+    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    admission.session_runtime_operations.create!(phase: "exec", state: "uncertain")
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    runtime.stubs(:session_absent?).returns(true)
+    stub_missing_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert admission.reload.released_at, "an execution that does not exist can never report a result"
+    assert_nil admission.last_error, "the old code recorded this every minute instead of cleaning up"
+  end
+
+  test "a workflow that is merely unreachable keeps its reservation" do
+    session = create(:terminal_session, user: @user, state: "running", started_at: 1.hour.ago)
+    admission = admit(session)
+    session.update!(state: "running", started_at: 1.hour.ago)
+    admission.update!(launch_state: "acknowledged")
+
+    ContainerRuntime.expects(:build).never
+    stub_failing_workflow(session.workflow_id, Temporalio::Error::RPCError::Code::UNAVAILABLE)
+
+    SessionAdmissionReconciler.run
+
+    # Cleaning up behind a workflow we simply cannot reach would race its own
+    # cleanup, so a transport failure has to stay "unknown" (AD-5).
+    assert_nil admission.reload.released_at
+    assert_match(/RPCError/, admission.last_error)
+  end
+
   test "a run stop marker is fanned out to step runs that missed the cancellation" do
     run = create(:workflow_run, :running)
     step_run = create(:step_run, :running, workflow_run: run)
@@ -226,6 +266,22 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   private
+
+  def stub_missing_workflow(workflow_id)
+    stub_failing_workflow(workflow_id, Temporalio::Error::RPCError::Code::NOT_FOUND)
+  end
+
+  def stub_failing_workflow(workflow_id, code)
+    error = Temporalio::Error::RPCError.new(
+      "workflow not found for ID: #{workflow_id}", code: code, raw_grpc_status: nil
+    )
+    handle = mock("workflow handle")
+    handle.stubs(:describe).raises(error)
+    client = mock("temporal client")
+    client.stubs(:workflow_handle).with(workflow_id).returns(handle)
+    TemporalService.stubs(:enabled?).returns(true)
+    TemporalService.stubs(:client).returns(client)
+  end
 
   def stub_closed_workflow(workflow_id)
     description = Struct.new(:status).new(Temporalio::Client::WorkflowExecutionStatus::COMPLETED)

@@ -40,6 +40,37 @@ class WorkflowRun < ApplicationRecord
   broadcasts_to ->(run) { run }, on: :update
   after_commit :broadcast_run_list_update, on: :update
 
+  # Transactional outbox for run dispatch, mirroring TriggerEvent's. `state` is
+  # the run's own lifecycle; `relay_state` answers a different question — was the
+  # Temporal execution that drives this run ever confirmed started?
+  #
+  # WHY IT IS NOT THE SAME QUESTION: WorkflowService.start dials Temporal inline,
+  # and TemporalService.start_workflow does not raise on a failed RPC — it returns
+  # { ok: false, ... }. A run whose start never reached Temporal therefore looked
+  # exactly like one the worker had not picked up yet: `state` "pending", nothing
+  # logged above a Rails.logger.error, and no retry anywhere. It would sit there
+  # forever.
+  RELAY_GRACE = 2.minutes
+
+  # Stop re-dispatching a run whose start keeps failing, so one poison run cannot
+  # churn forever. Same ceiling as TriggerEvent: ~33h at the grace cadence, which
+  # rides out a long outage without burying it.
+  RELAY_MAX_ATTEMPTS = 1000
+
+  # What the relay re-drives. Deliberately narrower than "relay_state pending":
+  #
+  # * `state: "pending"` — a run the worker has already advanced is running
+  #   whether or not our inline call got its confirmation, and re-driving it would
+  #   be pointless. It stops being swept and keeps its honest relay_state.
+  # * `stop_requested_at: nil` — never start an execution for a run somebody
+  #   cancelled while it sat undispatched.
+  scope :stuck_for_relay, ->(now = Time.current) {
+    where(relay_state: "pending", state: "pending", stop_requested_at: nil)
+      .where(relay_attempts: ...RELAY_MAX_ATTEMPTS)
+      .where(created_at: ..(now - RELAY_GRACE))
+      .order(:id)
+  }
+
   scope :active, -> { where(state: %w[pending running paused]) }
   scope :for_project_in_period, ->(project, since) { where(project: project, created_at: since..) }
   scope :for_user_in_project, ->(project, user, since) { where(project: project, user: user, created_at: since..) }

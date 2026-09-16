@@ -67,6 +67,69 @@ module Api
           assert_equal "1", response.headers["X-Total-Count"]
         end
 
+        test "index search groups title and id under OR so a task ID returns the matching task" do
+          by_id = create(:board_task, board: @board, board_column: @col1, title: "Ship the release notes")
+          # A task whose title contains the same digits as the searched ID must still surface — the
+          # grouping is an OR, not an AND.
+          by_title = create(:board_task, board: @board, board_column: @col1, title: "Bug #{by_id.id} regression")
+
+          get :index, params: {
+            project_id: @project.id,
+            q: { g: { "0" => { m: "or", title_cont: by_id.id.to_s, id_eq: by_id.id } } }
+          }
+
+          assert_response :success
+          ids = JSON.parse(response.body).map { |t| t["id"] }
+          assert_includes ids, by_id.id
+          assert_includes ids, by_title.id
+        end
+
+        test "index exact id match is returned first when title also contains the same digits" do
+          by_id = create(:board_task, board: @board, board_column: @col1, title: "Ship the release notes", position: 2)
+          by_title = create(:board_task, board: @board, board_column: @col1, title: "Bug #{by_id.id} regression", position: 1)
+
+          get :index, params: {
+            project_id: @project.id,
+            q: { g: { "0" => { m: "or", title_cont: by_id.id.to_s, id_eq: by_id.id } } }
+          }
+
+          assert_response :success
+          ids = JSON.parse(response.body).map { |t| t["id"] }
+          assert_equal by_id.id, ids.first, "exact id match must rank first regardless of board position"
+          assert_includes ids, by_title.id
+        end
+
+        # The OR combinator lives inside the search group, so it must not widen the sibling
+        # assignee/type/priority filters — a search that matches by title but is owned by a
+        # different assignee stays excluded when an assignee filter is applied.
+        test "index search groups OR internally so sibling filters still AND" do
+          mine = create(:board_task, board: @board, board_column: @col1, title: "Fix login crash", assignee: @user)
+          other_user = create(:user, :onboarding_completed, company: @company)
+          @project.add_collaborator(other_user)
+          create(:board_task, board: @board, board_column: @col1, title: "Fix login timeout", assignee: other_user)
+
+          get :index, params: {
+            project_id: @project.id,
+            q: { g: { "0" => { m: "or", title_cont: "login" } }, assignee_id_eq: @user.id }
+          }
+
+          assert_response :success
+          assert_equal [ mine.id ], JSON.parse(response.body).map { |t| t["id"] }
+        end
+
+        test "index search by title alone (no id_eq) still narrows to the title match" do
+          match = create(:board_task, board: @board, board_column: @col1, title: "Refactor billing")
+          create(:board_task, board: @board, board_column: @col1, title: "Something else")
+
+          get :index, params: {
+            project_id: @project.id,
+            q: { g: { "0" => { m: "or", title_cont: "billing" } } }
+          }
+
+          assert_response :success
+          assert_equal [ match.id ], JSON.parse(response.body).map { |t| t["id"] }
+        end
+
         test "index tags_match=all requires every tag, while the default still matches any" do
           both = create(:board_task, board: @board, board_column: @col1, tags: %w[api ui])
           one = create(:board_task, board: @board, board_column: @col1, tags: %w[api])

@@ -6,9 +6,70 @@ class IntegrationResource < ApplicationResource
   # settings is a free-form jsonb blob; column inference can only see `unknown`.
   # Expose it as an explicit attribute so the keyless `typelize` annotation applies
   # (the keyed form is gated by Typelizer.enabled? at load time and is unreliable).
+  #
+  # `settings` reaches the browser whole, so nothing secret may be written into
+  # it — tokens, app secrets, authorization headers and raw provider errors all
+  # belong elsewhere. The Azure writers keep to identity and status; the two
+  # keys below are surfaced explicitly rather than left for the frontend to dig
+  # out of the blob.
   typelize "Record<string, unknown>"
   attribute :settings do |integration|
     integration.settings
+  end
+
+  # ----- Azure DevOps -----
+  #
+  # Read through the model's accessors, which prefer the authoritative
+  # installation row over the settings copy: a stale or edited settings blob
+  # must never widen what the UI reports as connected.
+
+  typelize :string?
+  attribute :azure_auth_mode do |integration|
+    integration.azure_devops? ? integration.azure_auth_mode : nil
+  end
+
+  typelize :string?
+  attribute :azure_organization do |integration|
+    integration.azure_devops? ? integration.azure_organization_slug : nil
+  end
+
+  # A connection covers one or more Azure projects. The list is what the UI
+  # shows; `azure_project_name` stays for the single-project case so a card that
+  # names one project keeps reading naturally.
+  typelize :string?
+  attribute :azure_project_name do |integration|
+    integration.azure_devops? ? integration.azure_project_name : nil
+  end
+
+  typelize "string[]"
+  attribute :azure_project_ids do |integration|
+    integration.azure_devops? ? integration.azure_project_ids : []
+  end
+
+  typelize "string[]"
+  attribute :azure_project_display_names do |integration|
+    next [] unless integration.azure_devops?
+
+    names = integration.azure_project_names
+    integration.azure_project_ids.map { |id| names[id].presence || id }
+  end
+
+  typelize :string?
+  attribute :azure_identity do |integration|
+    integration.azure_devops? ? integration.settings&.dig("identity_display_name") : nil
+  end
+
+  typelize "string[]"
+  attribute :azure_capabilities do |integration|
+    integration.azure_devops? ? integration.azure_enabled_capabilities : []
+  end
+
+  typelize :string?
+  attribute :azure_url do |integration|
+    next nil unless integration.azure_devops?
+
+    slug = integration.azure_organization_slug
+    slug.present? ? "#{AzureDevops::AppConfig.api_host}/#{slug}" : nil
   end
 
   typelize %w[company project]

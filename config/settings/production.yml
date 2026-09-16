@@ -16,3 +16,4 @@ agents:
     gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'ghcr.io/aixle/aixle-app-gemini-cli' %>
     antigravity_cli: <%= ENV['AGENT_IMAGE_ANTIGRAVITY_CLI'] || 'ghcr.io/aixle/aixle-app-antigravity-cli' %>
     grok: <%= ENV['AGENT_IMAGE_GROK'] || 'ghcr.io/aixle/aixle-app-grok' %>
+    kiro_cli: <%= ENV['AGENT_IMAGE_KIRO_CLI'] || 'ghcr.io/aixle/aixle-app-kiro-cli' %>

@@ -29,6 +29,9 @@ module Api
       # Fail closed: a controller shipped without a policy denies (403) instead of 500.
       rescue_from Pundit::NotDefinedError, with: :user_not_authorized
       rescue_from ActiveRecord::RecordNotFound, with: :record_not_found
+      # A failed validation is the client's problem, not a server fault: without this, every
+      # `save!`/`create!` in the tree answers 500 with no hint of which field was rejected.
+      rescue_from ActiveRecord::RecordInvalid, with: :record_invalid
 
       private
 
@@ -70,6 +73,12 @@ module Api
 
       def record_not_found
         render json: { error: "Record not found" }, status: :not_found
+      end
+
+      def record_invalid(exception)
+        messages = exception.record ? exception.record.errors.full_messages : []
+        messages = [ exception.message ] if messages.empty?
+        render json: { error: messages.to_sentence, errors: messages }, status: :unprocessable_entity
       end
     end
   end

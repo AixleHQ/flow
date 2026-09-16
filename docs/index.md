@@ -37,6 +37,7 @@ a document is added, removed, or moved here, update this index in the same chang
   - **[design/session-admission-queue/TECH-DESIGN.md](./design/session-admission-queue/TECH-DESIGN.md)** — The reasoning behind them: inspected baseline behaviour, limit selection, data model, runtime idempotency, capacity waiting, alternatives and open decisions
   - **[design/session-admission-queue/ROLLOUT.md](./design/session-admission-queue/ROLLOUT.md)** — Operator runbook: deployment settings, the drain-then-`session_admission:sync` cutover, legacy quota removal under a reviewed UID allowlist, pause/resume and recovery
   - **[design/session-admission-queue/reviews/](./design/session-admission-queue/reviews/)** — Design-phase review records (invariants, evidence, coverage, editorial) kept alongside the contract they checked
+- **[design/azure-devops-integration.md](./design/azure-devops-integration.md)** — Azure DevOps integration: Entra service-principal auth with approved organization installations, GUID-based repository identity, session Git via a derived-key credential endpoint, PR/Boards agent tools, and a phased CI/webhook parity extension
 - **[design/grok-runtime-integration.md](./design/grok-runtime-integration.md)** — Grok (xAI) runtime decisions: the official `@xai-official/grok` CLI, device-code auth with `~/.grok/auth.json` as the credential, model catalogue + pricing from `/v1/language-models`, and why usage comes from the MITM log rather than OTLP
 
 ## Feature Pipeline
@@ -54,6 +55,7 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
   - **[planning-artifacts/research/technical-mcp-connector-catalog-research-2026-08-01.md](./planning-artifacts/research/technical-mcp-connector-catalog-research-2026-08-01.md)** — Registry-backed MCP connector catalog: Official MCP Registry integration, `server.json` → `MCPServer` mapping, mirror-vs-proxy decision, security posture without an allowlist, phased roadmap
   - **[planning-artifacts/research/technical-skills-catalog-featured-and-manual-add-research-2026-08-03.md](./planning-artifacts/research/technical-skills-catalog-featured-and-manual-add-research-2026-08-03.md)** — Skills page parity with the connector catalog: skills.sh API reachability (v1 is OIDC-only), mirror-for-browse vs live-search inversion, install-count ranking with measured bulk-publisher inflation, manual `SKILL.md` authoring, CLI-telemetry egress finding, phased roadmap. Includes an addendum from reading the CLI's own source (public audit host, well-known discovery for non-GitHub publishers)
   - **[planning-artifacts/research/technical-mcp-oauth-discovery-in-the-wild-research-2026-08-07.md](./planning-artifacts/research/technical-mcp-oauth-discovery-in-the-wild-research-2026-08-07.md)** — What the catalog's remote MCP servers actually support for OAuth, measured over 178 hosts: Vercel's DCR approves loopback callbacks only (root cause of "couldn't connect"), DCR advertised by 96% but advertisement ≠ acceptance, CIMD at 20%, device flow at 9%, plus two bugs of ours — a probe shape that loses `WWW-Authenticate` on a fifth of hosts, and a protected-resource fallback that is not RFC 9728 path-aware
+  - **[planning-artifacts/research/technical-kiro-cli-as-a-platform-agent-runtime-research-2026-08-28.md](./planning-artifacts/research/technical-kiro-cli-as-a-platform-agent-runtime-research-2026-08-28.md)** — Adding Kiro CLI as the seventh agent runtime: the permitted-use terms now name the CLI and CI/CD automation explicitly (partly reversing the 2026-07-24 Bedrock doc's disqualification), device-code login, credentials in SQLite rather than JSON (and why a file-presence watcher on it closes the auth container early), credits instead of `cost_cents`, the complete touch-point checklist, a generalized "add any new agent runtime" playbook, and as-built appendices (2.65 GB image after removing a 1.4 GB layer duplication; the private CodeWhisperer-lineage catalogue/usage APIs the adapter now calls directly; session cost as a credit delta; v3 engine and the prompts that must be pre-answered)
 - **[implementation-artifacts/](./implementation-artifacts/)** — BMAD quick-dev specs: frozen-intent block + Code Map / Tasks / Spec Change Log / Verification, plus `deferred-work.md` for findings split out of a spec
   - **[implementation-artifacts/spec-skills-catalog.md](./implementation-artifacts/spec-skills-catalog.md)** — Skills catalog: featured browse, `catalog_skills` mirror with a weekly seeded sweep, manual `SKILL.md` authoring, audit badges
   - **[implementation-artifacts/spec-multi-company-membership.md](./implementation-artifacts/spec-multi-company-membership.md)** — Multi-company membership
@@ -66,8 +68,8 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
 
 ## Product
 
-- **[product/user-guide-outline.md](./product/user-guide-outline.md)** — Outline of the end-user product guide: the board → workflow → agent → results loop, section-by-section skeleton following the product sidebar, two end-to-end stories, terminology notes (issue #550)
-- **[product/changelog-product-areas.md](./product/changelog-product-areas.md)** — Frozen user-facing product map used as the changelog taxonomy: named product areas, changelog rules, area → guide-chapter map, snapshot baseline (issue #551)
+- **[product/user-guide-outline.md](./product/user-guide-outline.md)** — Outline of the end-user product guide: the board → workflow → agent → results loop, section-by-section skeleton following the product sidebar, two end-to-end stories, terminology notes
+- **[product/changelog-product-areas.md](./product/changelog-product-areas.md)** — Frozen user-facing product map used as the changelog taxonomy: named product areas, changelog rules, area → guide-chapter map, snapshot baseline
 
 ## Operator documentation
 
@@ -83,7 +85,9 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/tools.md](./user-guide/tools.md)** — Tool kinds, execution modes, built-in board tools, resource resolution
 - **[user-guide/mcp.md](./user-guide/mcp.md)** — MCP transports, the internal `aixle-tools` server, config-item credentials
 - **[user-guide/integrations.md](./user-guide/integrations.md)** — GitHub, GitLab, Linear, Google OAuth, and webhooks
+- **[user-guide/azure-devops.md](./user-guide/azure-devops.md)** — Connecting an Azure DevOps organization end to end: what differs between SaaS and self-hosted, the one Entra step in the customer directory, the three personal-access-token scopes and what each is spent on, choosing Azure projects and widening that set later
 - **[user-guide/configuration.md](./user-guide/configuration.md)** — Env vars, OAuth, agent credentials, and other knobs
+- **[operations/azure-devops-app-registration.md](./operations/azure-devops-app-registration.md)** — Operator runbook: register the Entra application, give it a credential, and publish the client ID. Customers bind their own organizations from inside Flow by proving they administer them
 - **[quickstart.md](./quickstart.md)** — Get a local instance running and see one card move
 - **[reference/index.md](./reference/index.md)** — Reference set: [API](./reference/api.md), [CLI](./reference/cli.md), [configuration](./reference/configuration.md)
 

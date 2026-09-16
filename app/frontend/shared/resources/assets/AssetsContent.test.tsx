@@ -39,9 +39,19 @@ function makeAsset(over: Partial<Asset> = {}): Asset {
 }
 
 // Uppy is stubbed inert (see test/setup.ts), so a finished upload is the 'complete' event the
-// component subscribed to, carrying the cache URL the presigned S3 PUT would have produced.
-function completeUpload(files: Array<{ name?: string; uploadURL: string }>) {
-  act(() => emitUppy('complete', { successful: files }));
+// component subscribed to. Each file carries the response @uppy/aws-s3 builds from the key
+// /presign signed for — `{ body: { location, key } }` — which is where the cache id comes from.
+// `uploadURL` is only there for the mid-deploy fallback case.
+function completeUpload(files: Array<{ name?: string; key?: string; uploadURL?: string }>) {
+  act(() =>
+    emitUppy('complete', {
+      successful: files.map(({ name, key, uploadURL }) => ({
+        name,
+        uploadURL,
+        response: key === undefined ? undefined : { body: { key } },
+      })),
+    }),
+  );
 }
 
 function lastPostedAsset(): { name: string; folder: string | null; file: Record<string, unknown> } {
@@ -561,7 +571,7 @@ describe('AssetsContent', () => {
     renderPage(<AssetsContent {...baseProps} assets={[]} />);
     await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
 
-    completeUpload([{ name: 'release-notes.md', uploadURL: 'https://s3.example/cache/9f8e7d-release-notes.md' }]);
+    completeUpload([{ name: 'release-notes.md', key: 'cache/9f8e7d-release-notes.md' }]);
     await userEvent.click(await screen.findByRole('button', { name: /save 1 file/i }));
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -580,19 +590,115 @@ describe('AssetsContent', () => {
     expect(file).not.toHaveProperty('mime_type');
   });
 
+  // The file is in cache storage by the time the folder is typed, so a folder the server will
+  // refuse has to be caught before the POST — otherwise the upload is thrown away on a 422.
+  it('blocks the save and flags the field when the folder is a path rather than a name', async () => {
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([{ name: 'notes.md', key: 'cache/ccc333-notes.md' }]);
+    await userEvent.type(await screen.findByLabelText(/folder/i), 'docs/sub');
+    await userEvent.click(screen.getByRole('button', { name: /save 1 file/i }));
+
+    expect(await screen.findByText('Folder cannot contain slashes or control characters')).toBeInTheDocument();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    // The uploaded file stays staged so the user can fix the folder and retry.
+    expect(screen.getByRole('button', { name: /save 1 file/i })).toBeInTheDocument();
+  });
+
+  // Asset names are free-form, and the folder is half of the same path — a space is not a reason
+  // to refuse the upload.
+  it('posts a folder that contains spaces, trimmed at the ends only', async () => {
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([{ name: 'notes.md', key: 'cache/ddd444-notes.md' }]);
+    await userEvent.type(await screen.findByLabelText(/folder/i), '  Q3 reports  ');
+    await userEvent.click(screen.getByRole('button', { name: /save 1 file/i }));
+
+    expect(lastPostedAsset().folder).toBe('Q3 reports');
+  });
+
+  it('shows the message the server rejected the asset with, and keeps the modal open', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Folder must not contain slashes or control characters' }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([{ name: 'notes.md', key: 'cache/eee555-notes.md' }]);
+    await userEvent.click(await screen.findByRole('button', { name: /save 1 file/i }));
+
+    expect(await screen.findByText('Folder must not contain slashes or control characters')).toBeInTheDocument();
+    expect(router.reload).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /save 1 file/i })).toBeInTheDocument();
+  });
+
+  it('falls back to the generic failure toast when the server sends no message', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(new Response(null, { status: 500 }));
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([{ name: 'notes.md', key: 'cache/fff666-notes.md' }]);
+    await userEvent.click(await screen.findByRole('button', { name: /save 1 file/i }));
+
+    expect(await screen.findByText('Failed to save uploaded files')).toBeInTheDocument();
+    expect(router.reload).not.toHaveBeenCalled();
+  });
+
   it('sends each uploaded file its own filename, falling back to "file" when Uppy reports none', async () => {
     renderPage(<AssetsContent {...baseProps} assets={[]} />);
     await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
 
-    completeUpload([
-      { name: 'rows.csv', uploadURL: 'https://s3.example/cache/aaa111-rows.csv' },
-      { uploadURL: 'https://s3.example/cache/bbb222-unnamed' },
-    ]);
+    completeUpload([{ name: 'rows.csv', key: 'cache/aaa111-rows.csv' }, { key: 'cache/bbb222-unnamed' }]);
     await userEvent.click(await screen.findByRole('button', { name: /save 2 files/i }));
 
     const bodies = vi
       .mocked(globalThis.fetch)
       .mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string).asset);
     expect(bodies.map((a) => a.file.metadata.filename)).toEqual(['rows.csv', 'file']);
+  });
+
+  // Rolling deploy: this bundle can be served by an updated pod while /presign is still answered
+  // by an old one, which returns no `key`. @uppy/aws-s3 then reports the key it generated itself
+  // — the Uppy file id — which addresses nothing in cache storage, so the upload URL has to carry
+  // the id instead. Delete this case together with the fallback, once prod is fully rolled out.
+  it('falls back to the upload URL when /presign answers without a key', async () => {
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([
+      {
+        name: 'runbook.md',
+        key: 'uppy-runbook/md-1e-text/markdown-1700000000000',
+        uploadURL: 'https://s3.example/cache/ccc333-runbook.md',
+      },
+    ]);
+    await userEvent.click(await screen.findByRole('button', { name: /save 1 file/i }));
+
+    expect(lastPostedAsset().file).toEqual({
+      id: 'ccc333-runbook.md',
+      storage: 'cache',
+      metadata: { filename: 'runbook.md' },
+    });
+  });
+
+  it('prefers the key /presign reported over the upload URL when both are present', async () => {
+    renderPage(<AssetsContent {...baseProps} assets={[]} />);
+    await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
+
+    completeUpload([
+      { name: 'plan.txt', key: 'cache/ddd444-plan.txt', uploadURL: 'https://s3.example/cache/stale-eee555.txt' },
+    ]);
+    await userEvent.click(await screen.findByRole('button', { name: /save 1 file/i }));
+
+    expect(lastPostedAsset().file).toEqual({
+      id: 'ddd444-plan.txt',
+      storage: 'cache',
+      metadata: { filename: 'plan.txt' },
+    });
   });
 });

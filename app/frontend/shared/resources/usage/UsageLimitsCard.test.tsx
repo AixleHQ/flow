@@ -59,6 +59,22 @@ describe('UsageLimitsCard', () => {
     expect(screen.queryByText('Current session (5 hours)')).not.toBeInTheDocument();
   });
 
+  // On somebody else's profile (/user/:id) the viewer cannot fix a broken
+  // sign-in, and the things that would make it actionable — tokens, OAuth URLs,
+  // the vendor account email — must never appear here.
+  it("names the owner and offers no action when the card is somebody else's", () => {
+    renderPage(
+      <UsageLimitsCard entries={[buildEntry({ status: 'unauthorized', windows: [] })]} ownerName="Jane Doe" />,
+    );
+
+    expect(
+      screen.getByText(
+        "Jane Doe's Claude Code sign-in no longer works — only they can reconnect it, from their own profile.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/re-authenticate above/i)).not.toBeInTheDocument();
+  });
+
   it('says the vendor is throttling instead of showing an empty panel', () => {
     renderPage(<UsageLimitsCard entries={[buildEntry({ status: 'rate_limited', windows: [] })]} />);
 

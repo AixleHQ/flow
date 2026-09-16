@@ -174,6 +174,31 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(screen.getByText('auto · cooldown 0s')).toBeInTheDocument();
   });
 
+  it('names the user an off-board trigger runs as, and only who created a column one', async () => {
+    installFetch({
+      triggers: [
+        columnTrigger({ created_by: { id: 5, name: 'Mara Osei' } }),
+        scheduleTrigger({ created_by: { id: 6, name: 'Ida Ferris' } }),
+      ],
+    });
+
+    renderPage(<TriggersTab {...baseProps()} />);
+
+    // The schedule fires unattended under its creator's identity; the column trigger's run belongs to
+    // whoever the card is on, so its creator is provenance only.
+    expect(await screen.findByText('Runs as Ida Ferris')).toBeInTheDocument();
+    expect(screen.getByText('Created by Mara Osei')).toBeInTheDocument();
+  });
+
+  it('flags an off-board trigger with no creator as unable to start a run', async () => {
+    installFetch({ triggers: [scheduleTrigger({ created_by: null }), columnTrigger({ created_by: null })] });
+
+    renderPage(<TriggersTab {...baseProps()} />);
+
+    expect(await screen.findByText('No creator — this trigger cannot start a run')).toBeInTheDocument();
+    expect(screen.getByText('Created by Unknown')).toBeInTheDocument();
+  });
+
   it('renders a schedule trigger with a human cron description and meta', async () => {
     installFetch({ triggers: [scheduleTrigger()] });
 

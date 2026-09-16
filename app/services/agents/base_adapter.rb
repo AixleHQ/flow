@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "base64"
+require "shellwords"
 
 module Agents
   # Base adapter interface for agent-specific credential handling
@@ -536,6 +537,51 @@ module Agents
     #   agent has nothing to check
     def credential_preflight(_runtime, _container, _container_id)
       nil
+    end
+
+    def credential_file_metadata(runtime, container_id, path)
+      stdout, stderr, status = runtime.exec(
+        container_id, [ "/bin/sh", "-c", "stat -c '%s|%a|%U|%G' #{Shellwords.escape(path)} 2>&1" ], stdout: true, stderr: true
+      )
+      output = Array(stdout).join.strip
+      size, mode, owner, group = output.split("|", 4) if status.to_i.zero?
+      {
+        path: path,
+        container: container_id.to_s,
+        exists: status.to_i.zero?,
+        size: size&.to_i,
+        mode: mode,
+        owner: owner,
+        group: group,
+        stat_exit_status: status.to_i,
+        stat_error: status.to_i.zero? ? nil : Array(stderr).join.strip.presence || output.presence
+      }
+    end
+
+    # Facts about an account that can only be had by asking the vendor's own CLI,
+    # collected while a container is still up and merged into the credential's
+    # metadata. Default: nothing.
+    #
+    # This exists for what a server-side API call cannot answer reliably. Kiro is the
+    # case: which service holds the model catalogue changed between its engine
+    # versions, so the CLI knows the endpoint and we do not, and its `--list-models`
+    # gives the catalogue the user's own subscription actually offers.
+    #
+    # Runs on the cleanup path of both the auth and the session strategy, so a freshly
+    # connected runtime has the data before its first session, and it stays current
+    # afterwards.
+    #
+    # @param _runtime [ContainerRuntime::BaseRuntime]
+    # @param _container [Object] runtime-specific container handle
+    # @param _credential [AgentCredential] the row the result is merged into — passed so
+    #   an adapter can see what is already stored and leave it alone
+    # @param _phase [Symbol] :auth when the credential has just been captured, :session
+    #   at the end of an ordinary session. Facts that are only true of a fresh login
+    #   belong to :auth — writing them on every session cleanup is how a "since last
+    #   time" measurement gets reset to zero on the run it was meant to measure.
+    # @return [Hash] merged into AgentCredential#metadata; empty to write nothing
+    def collect_credential_metadata(_runtime, _container, _credential, _phase)
+      {}
     end
 
     protected

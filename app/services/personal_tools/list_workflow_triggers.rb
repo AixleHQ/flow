@@ -9,7 +9,9 @@ module PersonalTools
       description "List everything that can launch a workflow: board-column bindings plus " \
                   "Slack / schedule / webhook / custom-event triggers. Pass the returned id " \
                   "together with its kind to update_workflow_trigger or delete_workflow_trigger — " \
-                  "the two kinds are separate records and their ids can collide."
+                  "the two kinds are separate records and their ids can collide. " \
+                  "created_by is who added the trigger; the off-board kinds fire unattended as " \
+                  "that user and are skipped entirely when it is null."
       audience :user
       tags :workflows
       read_only
@@ -22,8 +24,8 @@ module PersonalTools
       authorize!(project, :show?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
       workflow = find_workflow!(project)
 
-      triggers = column_bindings(project, workflow).map { |t| serialize_column(t) } +
-                 workflow.trigger_bindings.order(:created_at).map { |t| serialize_binding(t) }
+      triggers = column_bindings(project, workflow).includes(:board_column, :created_by).map { |t| serialize_column(t) } +
+                 workflow.trigger_bindings.includes(:created_by).order(:created_at).map { |t| serialize_binding(t) }
       success(project_id: project.id, workflow_id: workflow.id, triggers: triggers)
     end
   end

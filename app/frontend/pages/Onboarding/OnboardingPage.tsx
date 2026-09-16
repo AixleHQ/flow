@@ -18,6 +18,7 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
+  IconBrandAws,
   IconBrandGoogleFilled,
   IconBrandOpenai,
   IconBrandX,
@@ -104,6 +105,12 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; ic
     name: 'Grok',
     description: "xAI's Grok CLI for agentic coding in the terminal",
     icon: IconBrandX,
+  },
+  {
+    type: 'kiro_cli',
+    name: 'Kiro CLI',
+    description: "AWS's Kiro CLI for spec-driven agentic coding in the terminal",
+    icon: IconBrandAws,
   },
 ];
 
@@ -416,7 +423,9 @@ function ConnectAgentsStep({
                   <Box
                     mt="sm"
                     style={{
-                      height: 280,
+                      // Auth output (e.g. Cursor CLI's QR code) can run ~35 lines; 280px
+                      // only fit ~16 and clipped the QR under the footer (issue #630).
+                      height: 560,
                       border: '1px solid var(--app-border-default)',
                       borderRadius: 6,
                       overflow: 'hidden',

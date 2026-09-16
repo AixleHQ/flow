@@ -187,7 +187,7 @@ module ContainerRuntime
         cmd,
         stdin_io: tar_io,
         binary: true,
-        close_on_stdin_eof: true
+        close_stdin_on_eof: true
       )
 
       exit_code.to_i.zero?
@@ -675,7 +675,7 @@ module ContainerRuntime
     def exec_via_websocket(handle, cmd, opts)
       params = build_exec_params(handle, cmd, opts)
       url = build_exec_url(handle, params)
-      headers = websocket_headers
+      headers = websocket_headers(close_stdin: opts[:close_stdin_on_eof])
       timeout = opts[:timeout].to_i
       timeout = 30 if timeout <= 0
 
@@ -683,7 +683,7 @@ module ContainerRuntime
       stderr_io = opts[:stderr_io]
       stdin_io = opts[:stdin_io]
       binary = opts[:binary]
-      close_on_stdin_eof = opts[:close_on_stdin_eof]
+      close_stdin_on_eof = opts[:close_stdin_on_eof]
 
       stdout = +""
       stderr = +""
@@ -715,7 +715,14 @@ module ContainerRuntime
                 break if runtime.send(:websocket_closed?, client, ws_state)
                 client.send([ 0 ].pack("C") + chunk)
               end
-              client.close if close_on_stdin_eof && !runtime.send(:websocket_closed?, client, ws_state)
+              if close_stdin_on_eof && !runtime.send(:websocket_closed?, client, ws_state)
+                # Kubernetes exec protocol v5 can close an individual stream
+                # without tearing down the websocket. Channel 255 is the
+                # stream-close control channel; its payload names stdin (0).
+                # Keep reading after this frame so the process can finish and
+                # channel 3 can report its real exit status.
+                client.send([ 255, 0 ].pack("C*"))
+              end
             rescue StandardError => e
               mutex.synchronize do
                 error = e
@@ -933,10 +940,10 @@ module ContainerRuntime
       url
     end
 
-    def websocket_headers
+    def websocket_headers(close_stdin: false)
       headers = core_client.instance_variable_get(:@headers) || {}
-      # Request v4 exec channel protocol to receive status/exit code frames.
-      headers.merge("Sec-WebSocket-Protocol" => "v4.channel.k8s.io")
+      protocol = close_stdin ? "v5.channel.k8s.io" : "v4.channel.k8s.io"
+      headers.merge("Sec-WebSocket-Protocol" => protocol)
     end
 
     def build_env_vars(env_vars)

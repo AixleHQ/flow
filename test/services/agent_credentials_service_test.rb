@@ -48,6 +48,13 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     assert_instance_of Agents::GrokAdapter, service.adapter
   end
 
+  test "initializes with kiro_cli adapter" do
+    service = AgentCredentialsService.new("kiro_cli")
+
+    assert_equal "kiro_cli", service.agent_type
+    assert_instance_of Agents::KiroCliAdapter, service.adapter
+  end
+
   test "raises error for unknown agent type" do
     assert_raises(ArgumentError) do
       AgentCredentialsService.new("unknown_agent")
@@ -72,6 +79,7 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     assert_includes agents, "antigravity_cli"
     assert_includes agents, "codex"
     assert_includes agents, "grok"
+    assert_includes agents, "kiro_cli"
   end
 
   test "supported? returns true for known agent" do
@@ -177,15 +185,14 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
   test "write_to_container writes config files" do
     service = AgentCredentialsService.new("claude_code")
-
-    runtime_mock = mock("runtime")
-    service.instance_variable_set(:@runtime, runtime_mock)
-
-    runtime_mock.expects(:write_file).at_least_once.returns(true)
+    runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code")
+    service.instance_variable_set(:@runtime, runtime)
 
     credentials = { api_key: "test-key", account_id: "user-123" }
 
     service.write_to_container("container123", credentials)
+
+    assert runtime.fs.key?(service.config_path)
   end
 
   test "write_to_container raises on runtime error" do
@@ -239,9 +246,8 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
 
   test "load_credentials_to_container writes existing credentials" do
     service = AgentCredentialsService.new("claude_code")
-
-    runtime_mock = mock("runtime")
-    service.instance_variable_set(:@runtime, runtime_mock)
+    runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {})
+    service.instance_variable_set(:@runtime, runtime)
 
     credential = create(:agent_credential,
       user: @user,
@@ -250,12 +256,26 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
       config_data: { api_key: "existing-key", account_id: "user-123" }
     )
 
-    runtime_mock.stubs(:write_file).returns(true)
-
     service.load_credentials_to_container(@user, @company, "container123")
 
     credential.reload
     assert credential.last_used_at.present?
+  end
+
+  test "write verification failure does not update last_used_at" do
+    service = AgentCredentialsService.new("claude_code")
+    runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code", filesystem: {})
+    runtime.stubs(:write_file).returns(true)
+    service.instance_variable_set(:@runtime, runtime)
+    ContainerRuntime.stubs(:build).returns(runtime)
+    credential = create(:agent_credential, user: @user, company: @company, agent_type: "claude_code", last_used_at: nil)
+
+    error = assert_raises(AgentCredentialsService::CredentialWriteError) do
+      credential.write_to_container("container123")
+    end
+
+    refute error.details[:exists]
+    assert_nil credential.reload.last_used_at
   end
 
   test "load_credentials_to_container raises when no credentials exist" do

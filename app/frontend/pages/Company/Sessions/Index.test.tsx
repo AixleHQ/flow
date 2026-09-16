@@ -38,8 +38,10 @@ function makeSession(overrides: Partial<SessionFixture> = {}): SessionFixture {
     createdAt: '2026-06-26T09:59:00Z',
     totalTokens: 12000,
     costCents: 250,
+    userId: 3,
     userName: 'Ada Lovelace',
     userEmail: 'ada@example.com',
+    projectId: 9,
     projectName: 'Analytics Revamp',
     artifactsReviewed: null,
     pendingArtifactsCount: 0,
@@ -180,6 +182,14 @@ describe('Company/Sessions/Index', () => {
     expect(within(table).getByText('Codex')).toBeInTheDocument();
     expect(within(table).getByText('Grace Hopper')).toBeInTheDocument();
     expect(within(table).getByText('Billing Service')).toBeInTheDocument();
+  });
+
+  it('links the owner name to their organization-visible profile', () => {
+    renderAuthedPage(
+      <SessionsIndex {...seed({ sessions: [makeSession({ id: 150, userId: 42, userName: 'Ada Lovelace' })] })} />,
+    );
+
+    expect(screen.getByRole('link', { name: 'Ada Lovelace' })).toHaveAttribute('href', '/user/42');
   });
 
   it('links openable rows to the company session show page but not pending ones', () => {

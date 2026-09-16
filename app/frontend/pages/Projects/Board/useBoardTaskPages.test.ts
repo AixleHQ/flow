@@ -76,7 +76,12 @@ describe('boardFilterParams', () => {
       showArchived: true,
     });
 
-    expect(params.get('q[title_cont]')).toBe('auth');
+    expect(params.get('q[g][0][title_cont]')).toBe('auth');
+    expect(params.get('q[g][0][m]')).toBe('or');
+    // A non-numeric term emits no id_eq predicate.
+    expect(params.get('q[g][0][id_eq]')).toBeNull();
+    // The OR combinator lives inside the group, not at the top level, so sibling filters keep AND.
+    expect(params.get('q[m]')).toBeNull();
     expect(params.get('q[assignee_id_eq]')).toBe('3');
     expect(params.get('q[task_type_eq]')).toBe('bug');
     expect(params.get('q[priority_eq]')).toBe('high');
@@ -139,7 +144,7 @@ describe('useBoardTaskPages', () => {
 
     const urls = fetchSpy.mock.calls.map(urlOf);
     expect(urls).toHaveLength(2);
-    for (const url of urls) expect(url).toContain('q%5Btitle_cont%5D=auth');
+    for (const url of urls) expect(url).toContain('q%5Bg%5D%5B0%5D%5Btitle_cont%5D=auth');
     // The props page is replaced by the server's answer rather than filtered in place.
     expect(result.current.tasks.map((t) => t.id)).toEqual([3, 9]);
   });

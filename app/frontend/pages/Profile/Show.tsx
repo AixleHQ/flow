@@ -35,7 +35,9 @@ import { apiFetch } from 'shared/lib/apiFetch';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { AwsConnectionModal } from 'shared/resources/cloud-connections/AwsConnectionModal';
+import { UsageLimitsCard, type UsageLimitsEntry } from 'shared/resources/usage/UsageLimitsCard';
 import {
   apiV1CloudAwsConnectionPath,
   apiV1TerminalSessionPath,
@@ -50,7 +52,6 @@ import { StatusBadge, type StatusTone } from 'shared/ui/StatusBadge';
 
 import { ProfileTabs } from './ProfileTabs';
 import classes from './Show.module.css';
-import { UsageLimitsCard, type UsageLimitsEntry } from './UsageLimitsCard';
 
 const LANGUAGE_OPTIONS = [
   { value: 'en', label: 'English' },
@@ -102,6 +103,12 @@ const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; co
     name: 'Grok',
     description: "xAI's Grok CLI for agentic coding in the terminal",
     color: AGENT_BRAND_COLORS.grok,
+  },
+  {
+    type: 'kiro_cli',
+    name: 'Kiro CLI',
+    description: "AWS's Kiro CLI — spec-driven agentic coding in the terminal",
+    color: AGENT_BRAND_COLORS.kiro_cli,
   },
 ];
 
@@ -461,6 +468,8 @@ function AgentAuthModal({
   const [ttydUrl, setTtydUrl] = useState<string | null>(null);
   const [watcherUrl, setWatcherUrl] = useState<string | null>(null);
   const [cableStream, setCableStream] = useState<string | null>(null);
+  const [launchPhase, setLaunchPhase] = useState<string | null>(null);
+  const [launchError, setLaunchError] = useState<string | null>(null);
   const [authDetected, setAuthDetected] = useState(false);
   // Bedrock writes no auth file, so `authDetected` stays false forever on that path — the
   // signal that the user chose it is the credential helper asking us for credentials.
@@ -480,6 +489,8 @@ function AgentAuthModal({
   const applySessionData = useCallback((s: Record<string, unknown>) => {
     const state = s.state as AuthSessionState;
     setSessionState(state);
+    setLaunchPhase((s.launchPhase as string) ?? null);
+    setLaunchError((s.launchError as string) ?? null);
     if (state === 'ready' && s.websocketUrl) {
       const base = (s.websocketUrl as string)
         .replace('wss://', 'https://')
@@ -657,14 +668,22 @@ function AgentAuthModal({
 
   const renderContent = () => {
     if (sessionState === 'queued' || sessionState === 'cancelled') {
+      const waitingForSlot = isWaitingForSlot(launchPhase);
       return (
         <Stack align="center" justify="center" h={500} gap="sm">
           <Text>
-            {sessionState === 'queued' ? 'Waiting for an available session slot' : 'Authentication session cancelled'}
+            {sessionState === 'cancelled'
+              ? 'Authentication session cancelled'
+              : launchWaitMessage(launchPhase, 'authentication')}
           </Text>
-          {sessionState === 'queued' && (
+          {sessionState === 'queued' && waitingForSlot && (
             <Text size="sm" c="dimmed">
-              Authentication will start automatically when capacity is available.
+              Authentication will start automatically once one of your sessions ends.
+            </Text>
+          )}
+          {sessionState === 'queued' && launchError && (
+            <Text size="sm" c="red.6" ta="center" maw={420}>
+              {launchError}
             </Text>
           )}
           <Button variant="outline" onClick={handleClose}>

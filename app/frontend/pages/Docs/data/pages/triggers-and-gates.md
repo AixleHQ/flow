@@ -41,6 +41,25 @@ answer "what task, if any, is this run about?" — that is [`subject_policy`](#s
 
 > **tip** Column bindings stay configured on the Board (one workflow per column, see [Board](/docs/board)). The other sources live on the workflow, so a workflow declares how it launches — like `on:` in CI.
 
+## Who a trigger runs as
+
+Every trigger records its **creator** — whoever added it, not whoever later
+caused the event (the Slack sender, the webhook caller, the person who moved the
+card). The Triggers tab shows that name on the card and in the add/edit panel.
+
+Off-board runs (schedule / Slack / webhook) belong to the creator and use *their*
+agent credentials, because nobody is at the keyboard when they fire. A trigger
+with no creator therefore cannot start one — it is skipped, and the card says so.
+Triggers created before the creator was recorded show **Unknown**; re-create them
+to give them an owner.
+
+A column trigger's run still belongs to the person the card puts on it (the
+assignee, else whoever moved it), so its creator is provenance only.
+
+The creator is fixed at creation: editing a trigger's name, filter, cron or
+enabled flag never reassigns it, and deleting the creator's account leaves the
+trigger in place without one.
+
 ## subject_policy
 
 Because a `WorkflowRun` may or may not be about a board task (its
@@ -221,7 +240,7 @@ recovers from a crash, so a restart never drops a trigger.
 | `trigger_dispatches` | audit + idempotency ledger (`event → trigger → run`) |
 | `webhook_endpoints` | a registered inbound source (slug, provider, verification, secret) |
 | `received_webhooks` | raw inbound deliveries + idempotency store |
-| `column_workflow_bindings` | board-native column → workflow binding |
+| `column_workflow_bindings` | board-native column → workflow binding (`created_by_id` = who added it) |
 | `gates` | runtime CI gates on a task |
 
 The pipeline is unified; the storage is not. Board bindings and gates keep

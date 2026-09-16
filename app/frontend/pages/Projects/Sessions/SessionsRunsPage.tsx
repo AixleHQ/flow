@@ -19,6 +19,7 @@ import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
 import { useWorkflowRunListCableUpdates } from 'shared/lib/hooks/useWorkflowRunListCableUpdates';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
+import { userPath } from 'shared/routes';
 import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -72,6 +73,7 @@ const AGENT_OPTIONS = [
   { value: 'gemini_cli', label: 'Gemini CLI' },
   { value: 'antigravity_cli', label: 'Antigravity CLI' },
   { value: 'grok', label: 'Grok' },
+  { value: 'kiro_cli', label: 'Kiro CLI' },
 ];
 
 // One vocabulary over two state machines — see SessionsRunsFeed::STATUS_FILTERS.
@@ -436,7 +438,15 @@ function EntryRow({
           <ModeTag mode={entry.mode} />
         </div>
 
-        <span className={classes.user}>{entry.userName ?? '—'}</span>
+        <span className={classes.user}>
+          {entry.userName ? (
+            <Link href={userPath(entry.userId)} className={classes.userLink} onClick={(e) => e.stopPropagation()}>
+              {entry.userName}
+            </Link>
+          ) : (
+            '—'
+          )}
+        </span>
         <span className={`${classes.num} ${classes.right}`}>{formatTokens(entry.totalTokens)}</span>
         <span className={`${classes.num} ${classes.right}`} style={{ color: costColor(entry.costCents) }}>
           {formatCost(entry.costCents)}

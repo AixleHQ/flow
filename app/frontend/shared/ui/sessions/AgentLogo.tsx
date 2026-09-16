@@ -22,6 +22,7 @@ export const AGENT_LABELS: Record<string, string> = {
   gemini_cli: 'Gemini CLI',
   antigravity_cli: 'Antigravity CLI',
   grok: 'Grok',
+  kiro_cli: 'Kiro CLI',
 };
 
 /** `claude_code` → `Claude Code`; unknown runtimes fall back to the raw id. */

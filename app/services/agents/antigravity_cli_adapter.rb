@@ -36,6 +36,21 @@ module Agents
     SETTINGS_PATH = ".gemini/antigravity-cli/settings.json"
     OAUTH_TOKEN_PATH = ".gemini/antigravity-cli/antigravity-oauth-token"
 
+    # Used only when the live catalogue is unavailable or no access token was
+    # captured. The API response is the source of truth for signed-in users.
+    FALLBACK_MODELS = [
+      { model_id: "gemini-3.8-flash-high", display_name: "Gemini 3.8 Flash (High)" },
+      { model_id: "gemini-3.8-flash-medium", display_name: "Gemini 3.8 Flash (Medium)" },
+      { model_id: "gemini-3.7-flash-high", display_name: "Gemini 3.7 Flash (High)" },
+      { model_id: "gemini-3.7-flash-medium", display_name: "Gemini 3.7 Flash (Medium)" },
+      { model_id: "gemini-3.6-flash-high", display_name: "Gemini 3.6 Flash (High)" },
+      { model_id: "gemini-3.6-flash-medium", display_name: "Gemini 3.6 Flash (Medium)" },
+      { model_id: "gemini-pro-agent", display_name: "Gemini Pro" },
+      { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6 (Thinking)" },
+      { model_id: "claude-opus-4-6-thinking", display_name: "Claude Opus 4.6 (Thinking)" },
+      { model_id: "gpt-oss-120b-medium", display_name: "GPT-OSS 120B (Medium)" }
+    ].freeze
+
     def self.default_config_paths
       [ "~/.gemini/antigravity-cli/settings.json", "~/.gemini/config/mcp_config.json", "GEMINI.md" ]
     end
@@ -91,17 +106,45 @@ module Agents
       { "AGY_CLI_HIDE_LOGO" => "1" }
     end
 
+    def fetch_available_models(credentials, credential: nil)
+      fetch_available_models_with_source(credentials, credential: credential)[:models]
+    end
+
+    def fetch_available_models_with_source(credentials, credential: nil)
+      access_token = credentials["access_token"]
+      return fallback_models if access_token.blank?
+
+      data = Antigravity::Api.models(access_token: access_token)
+      model_ids = data["agentModelSorts"].to_a.flat_map do |sort|
+        sort["groups"].to_a.flat_map { |group| group["modelIds"].to_a }
+      end
+      models = model_ids.uniq.filter_map do |model_id|
+        model = data.dig("models", model_id)
+        next unless model.is_a?(Hash)
+
+        { model_id: model_id, display_name: model["displayName"].presence || model_id }
+      end
+
+      models.present? ? { models: models, source: :api } : fallback_models
+    rescue StandardError => e
+      Rails.logger.warn("[AntigravityCliAdapter] fetch_available_models failed: #{e.message}")
+      fallback_models
+    end
+
     # Reject credentials saved by the earlier API-key implementation before
     # launching `agy`. Those rows contain `api_key`, not an OAuth access token;
     # allowing them through would make interactive sessions fall back to login
     # and leave automatic sessions waiting indefinitely.
-    def credential_preflight(runtime, container, _container_id)
+    def credential_preflight(runtime, container, container_id)
+      details = credential_file_metadata(runtime, container_id, config_path)
+      return details.merge(valid: false, error_code: "auth_file_missing") unless details[:exists]
+
       stdout, _stderr, status = runtime.exec(container, [ "cat", config_path ], stdout: true, stderr: true)
-      return { valid: false, error_code: "auth_file_missing" } unless status.to_i.zero?
+      return details.merge(valid: false, error_code: "auth_file_missing") unless status.to_i.zero?
 
-      return { valid: true, error_code: nil } if auth_complete?(Array(stdout).join)
+      return details.merge(valid: true, error_code: nil) if auth_complete?(Array(stdout).join)
 
-      { valid: false, error_code: "oauth_token_missing" }
+      details.merge(valid: false, error_code: "oauth_token_missing")
     end
 
     def session_command(mode:, prompt: nil, model: nil)
@@ -135,6 +178,10 @@ module Agents
     def mcp_merge_strategy = :merge_json
 
     private
+
+    def fallback_models
+      { models: FALLBACK_MODELS, source: :fallback }
+    end
 
     def settings
       # Omitting modelProvider selects Antigravity's OAuth-backed default

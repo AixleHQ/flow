@@ -29,6 +29,7 @@ import {
   Card,
   Checkbox,
   Combobox,
+  CopyButton,
   Drawer,
   Group,
   Loader,
@@ -66,6 +67,7 @@ import {
   IconBookmark,
   IconBug,
   IconCheck,
+  IconCheckbox,
   IconChevronDown,
   IconChevronsRight,
   IconCircleCheck,
@@ -571,7 +573,7 @@ function collapsedTaskStatus(task: Task): { color: string; hasActiveRun: boolean
     hasActiveRun = false;
   }
 
-  const tooltipParts: string[] = [task.title];
+  const tooltipParts: string[] = [`#${task.id} · ${task.title}`];
   if (latestRun) {
     if (latestRun.state === 'running' && latestRun.createdAt) {
       tooltipParts.push(`Running — ${formatElapsedTime(latestRun.createdAt)}`);
@@ -620,18 +622,34 @@ function CollapsedTaskChip({ task, onClick }: { task: Task; onClick?: (t: Task) 
         onClick={() => onClick?.(task)}
         style={{
           ...style,
-          width: 30,
-          height: 12,
+          width: 34,
+          height: 16,
           borderRadius: 3,
           backgroundColor: color,
           cursor: 'grab',
           touchAction: 'none',
           flexShrink: 0,
           animation: hasActiveRun ? 'priorityBarPulse 2s ease-in-out infinite' : undefined,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
         {...attributes}
         {...listeners}
-      />
+      >
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            color: 'rgba(255,255,255,0.75)',
+            lineHeight: 1,
+            userSelect: 'none',
+            pointerEvents: 'none',
+          }}
+        >
+          #{task.id}
+        </span>
+      </Box>
     </Tooltip>
   );
 }
@@ -782,6 +800,24 @@ function TaskCardUI({
         <Text size="sm" fw={500} lh={1.3} style={{ flex: 1, wordBreak: 'break-word', fontSize: 13 }}>
           {task.title}
         </Text>
+        <CopyButton value={String(task.id)}>
+          {({ copied, copy }) => (
+            <Tooltip label={copied ? 'Copied' : 'Copy ID'} withArrow>
+              <Text
+                size="sm"
+                c="dimmed"
+                style={{ flexShrink: 0, whiteSpace: 'nowrap', fontSize: 13, cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  copy();
+                }}
+              >
+                #{task.id}
+              </Text>
+            </Tooltip>
+          )}
+        </CopyButton>
       </Group>
 
       {/* Workflow status chip — filled colored badge (AC-11). The chip names only the latest run,
@@ -2356,13 +2392,30 @@ function TaskDetailSidebar({
                 autoFocus
               />
             ) : (
-              <div
-                className={styles.ptTitle}
-                onClick={() => canExecute && setEditingTitle(true)}
-                style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-              >
-                {pendingTitle ?? task.title}
-              </div>
+              // The `#id` is a sibling of the editable title div, never a child of it: putting it
+              // inside would make it part of the text saveTitle reads and persists.
+              <Box style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <div
+                  className={styles.ptTitle}
+                  onClick={() => canExecute && setEditingTitle(true)}
+                  style={{ cursor: canExecute ? 'text' : 'default', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
+                >
+                  {pendingTitle ?? task.title}
+                </div>
+                <CopyButton value={String(task.id)}>
+                  {({ copied, copy }) => (
+                    <Tooltip label={copied ? 'Copied' : 'Copy ID'} withArrow>
+                      <Text
+                        c="dimmed"
+                        style={{ flexShrink: 0, whiteSpace: 'nowrap', cursor: 'pointer' }}
+                        onClick={copy}
+                      >
+                        #{task.id}
+                      </Text>
+                    </Tooltip>
+                  )}
+                </CopyButton>
+              </Box>
             )}
 
             {/* Status chips: type, priority, workflow */}
@@ -4491,6 +4544,10 @@ const BoardPage = () => {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  // Explicit bulk-selection mode. Off by default: the board stays click-to-open / drag until the
+  // user arms it from the "Bulk" toolbar button, so hovering a dense column never reveals or
+  // reflows a checkbox (issue #581).
+  const [bulkMode, setBulkMode] = useState(false);
 
   const toggleSelect = useCallback((id: number, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -4502,6 +4559,20 @@ const BoardPage = () => {
   }, []);
 
   const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  // Leaving bulk mode always drops the selection — a checkbox left checked under a board that no
+  // longer shows checkboxes would be invisible state.
+  const exitBulkMode = useCallback(() => {
+    setBulkMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  const toggleBulkMode = useCallback(() => {
+    setBulkMode((on) => {
+      if (on) setSelectedIds(new Set());
+      return !on;
+    });
+  }, []);
 
   const {
     execute: executeBulkAction,
@@ -4807,12 +4878,16 @@ const BoardPage = () => {
         e.preventDefault();
         searchInputRef.current?.focus();
       } else if (e.key === 'Escape') {
+        if (bulkMode) {
+          exitBulkMode();
+          return;
+        }
         closeTask();
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
-  }, [closeTask, canExecute]);
+  }, [closeTask, canExecute, bulkMode, exitBulkMode]);
 
   if (!board) {
     return (
@@ -5007,6 +5082,30 @@ const BoardPage = () => {
 
           <Box style={{ flex: 1 }} />
 
+          {/* Bulk — arms explicit selection mode. Hidden for view-only members, who get no
+              selection affordance at all (issue #581). */}
+          {canExecute && (
+            <Button
+              variant="default"
+              size="xs"
+              leftSection={bulkMode ? <IconCheck size={12} /> : <IconCheckbox size={12} />}
+              onClick={toggleBulkMode}
+              styles={
+                bulkMode
+                  ? {
+                      root: {
+                        backgroundColor: 'var(--mantine-color-brand-light)',
+                        color: 'var(--mantine-color-brand-6)',
+                        borderColor: 'var(--mantine-color-brand-light-hover)',
+                      },
+                    }
+                  : undefined
+              }
+            >
+              {bulkMode ? 'Done' : 'Bulk'}
+            </Button>
+          )}
+
           {/* Collapse all */}
           <Button
             variant="default"
@@ -5039,6 +5138,7 @@ const BoardPage = () => {
 
         {/* Selection toolbar — second row, visible only when tasks are selected */}
         <SelectionBar
+          active={bulkMode}
           selectedCount={selectedIds.size}
           selectedIds={selectedIds}
           columns={localColumns}
@@ -5120,9 +5220,9 @@ const BoardPage = () => {
                   isDropTarget={hoverColumnId === col.id}
                   canExecute={canExecute}
                   selectedIds={selectedIds}
-                  onToggleSelect={canExecute ? toggleSelect : undefined}
-                  onToggleColumn={canExecute ? toggleColumn : undefined}
-                  selectionMode={canExecute && selectedIds.size > 0}
+                  onToggleSelect={canExecute && bulkMode ? toggleSelect : undefined}
+                  onToggleColumn={canExecute && bulkMode ? toggleColumn : undefined}
+                  selectionMode={canExecute && bulkMode}
                 />
               ))}
             </SortableContext>

@@ -12,6 +12,7 @@ import { apiFetch } from 'shared/lib/apiFetch';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
 import { ConsoleFrame, DetailHeader, StatusTag, type Crumb, type HeaderStat } from 'shared/ui/sessions';
@@ -69,6 +70,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   const { canExecute } = useProjectPermissions();
   const isTerminal = ['finished', 'failed', 'cancelled'].includes(s.state);
   const isQueued = s.state === 'queued';
+  const waitingForSlot = isWaitingForSlot(s.launchPhase);
   const isFinishing = s.state === 'finishing';
   const isReady = s.state === 'ready';
   const isActive = isReady || s.state === 'running';
@@ -262,19 +264,23 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
           <Stack align="center" gap="md">
             <Loader size="md" />
             <Text size="lg" fw={500}>
-              {isQueued
-                ? 'Waiting for an available session slot'
-                : ['namespace_quota', 'cluster_capacity'].includes(s.waitReason ?? '')
-                  ? 'Waiting for cluster capacity'
-                  : 'Starting session…'}
+              {launchWaitMessage(s.launchPhase)}
             </Text>
             <StatusTag state={s.state}>{SESSION_STATE_LABELS[s.state]}</StatusTag>
-            {isQueued && (
+            {waitingForSlot && (
               <Text size="sm" c="dimmed">
-                Your session will start automatically when capacity is available.
+                Your session will start automatically when a slot frees up.
               </Text>
             )}
-            {isQueued && s.queuedAt && (
+            {/* The launch's own reason for not being up — a refused preflight, a
+                failed dispatch, a capacity refusal. Silence here is what made
+                every launch problem look like an ordinary queue wait. */}
+            {s.launchError && (
+              <Text size="sm" c="red.6" ta="center" maw={480}>
+                {s.launchError}
+              </Text>
+            )}
+            {waitingForSlot && s.queuedAt && (
               <Text size="xs" c="dimmed">
                 Queued at {new Date(s.queuedAt).toLocaleString()}
               </Text>

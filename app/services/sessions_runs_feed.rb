@@ -17,6 +17,12 @@ class SessionsRunsFeed
   # run, and auth/tool setup sessions are plumbing the user never asked for.
   TOP_LEVEL_SESSION_TYPES = %w[agent_session].freeze
 
+  # The session types a FLAT, session-level list shows: standalone sessions plus
+  # workflow steps as rows of their own rather than folded under a run. The
+  # company-wide feed reads this way, and so does one member's slice of it on
+  # /user/:id. Auth/tool-setup sessions are plumbing the user never asked for.
+  LISTABLE_SESSION_TYPES = %w[agent_session workflow_step].freeze
+
   # One status vocabulary over two state machines. A session is "finished" where
   # a run is "completed"; asking a user to know that is asking them to know our
   # schema.

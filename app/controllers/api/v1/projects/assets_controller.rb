@@ -40,12 +40,16 @@ module Api
           redirect_to url, allow_other_host: true # brakeman:ignore — Shrine-generated URL, not user input
         end
 
+        # Name alone does not identify an asset — uniqueness is per (scope, folder), so the
+        # lookup has to carry the folder too. Matching on name only made an upload into a
+        # different folder *move* the existing asset instead of creating a new one.
         def find_or_initialize_asset(scope)
-          asset = scope.assets.find_or_initialize_by(name: asset_params[:name]) do |a|
+          folder = Asset.normalize_folder(asset_params[:folder])
+          asset = scope.assets.find_or_initialize_by(name: asset_params[:name], folder: folder) do |a|
             a.created_by = current_user
           end
           asset.restore! if asset.persisted? && asset.deleted?
-          asset.assign_attributes(asset_params.except(:name))
+          asset.assign_attributes(asset_params.except(:name, :folder))
           asset
         end
 

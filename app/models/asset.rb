@@ -1,6 +1,16 @@
 # frozen_string_literal: true
 
 class Asset < ApplicationRecord
+  # A folder is one flat, human-readable label — spaces and non-Latin scripts included; asset
+  # names have always been free-form, and the folder is half of the same path. What it may not
+  # be is a *path*: a separator would let it address a directory of its own choosing under
+  # /workspace/assets, and a control character would make the directory unnameable at the far
+  # end. Everything that consumes the path shell-escapes it.
+  FOLDER_FORMAT = /\A[^\/\\\x00-\x1F\x7F]+\z/
+  # "." and ".." pass the format but name a directory that already exists.
+  RESERVED_FOLDERS = %w[. ..].freeze
+  FOLDER_MAX_LENGTH = 100
+
   belongs_to :scope, polymorphic: true
   belongs_to :created_by, class_name: "User"
   belongs_to :step_run, optional: true
@@ -8,14 +18,19 @@ class Asset < ApplicationRecord
 
   has_many :versions, class_name: "AssetVersion", dependent: :destroy, inverse_of: :asset
 
+  before_validation :normalize_folder
+
   validates :name, presence: true
   validates :name, uniqueness: { scope: %i[scope_type scope_id folder], message: "already exists in this scope",
                                  conditions: -> { where(deleted_at: nil) } }
   validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
   validates :scope_id, presence: true
   validates :status, presence: true, inclusion: { in: %w[active pending_review dismissed] }
-  validates :folder, format: { with: /\A[a-zA-Z0-9_-]+\z/, message: "must only contain letters, digits, hyphens, or underscores" },
-                     allow_blank: true
+  validates :folder,
+            format: { with: FOLDER_FORMAT, message: "must not contain slashes or control characters" },
+            exclusion: { in: RESERVED_FOLDERS, message: "is not a usable folder name" },
+            length: { maximum: FOLDER_MAX_LENGTH },
+            allow_blank: true
 
   scope :active, -> { where(deleted_at: nil, status: "active") }
   scope :publicly_shared, -> { where(public: true).where.not(public_token: nil) }
@@ -49,6 +64,22 @@ class Asset < ApplicationRecord
           .or(active.where(scope_type: "Company", scope_id: project.company_id))
   }
   scope :visible_for_company, ->(company) { for_company(company) }
+
+  # Canonical form of a folder label: trimmed, with blank meaning "root" (nil). Every write and
+  # every lookup has to agree on it — `find_by(folder: " docs ")` would otherwise miss the row
+  # stored as "docs" and silently create a duplicate asset.
+  def self.normalize_folder(value)
+    value.is_a?(String) ? value.strip.presence : value.presence
+  end
+
+  # The folder rules as a predicate, for callers that reject a bad argument before building the
+  # record (agent tools, which owe their caller a message rather than a RecordInvalid).
+  def self.invalid_folder?(value)
+    folder = normalize_folder(value)
+    return false if folder.nil?
+
+    !folder.match?(FOLDER_FORMAT) || RESERVED_FOLDERS.include?(folder) || folder.length > FOLDER_MAX_LENGTH
+  end
 
   def picker_name
     folder.present? ? "#{folder}/#{name}" : name
@@ -123,5 +154,11 @@ class Asset < ApplicationRecord
 
   def self.ransackable_associations(_auth_object = nil)
     %w[scope created_by terminal_session versions]
+  end
+
+  private
+
+  def normalize_folder
+    self.folder = self.class.normalize_folder(folder)
   end
 end

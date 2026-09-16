@@ -58,6 +58,7 @@ const AGENT_LABELS: Record<string, string> = {
   codex: 'Codex',
   gemini_cli: 'Gemini CLI',
   grok: 'Grok',
+  kiro_cli: 'Kiro CLI',
 };
 
 // ── Meta Activity Types ────────────────────────────

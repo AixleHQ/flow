@@ -52,12 +52,15 @@ module Api
           @current_company || raise(ActiveRecord::RecordNotFound)
         end
 
+        # Uniqueness is per (scope, folder): the lookup must key on both, or an upload into a
+        # different folder moves the existing asset instead of creating a new one.
         def find_or_initialize_asset(scope)
-          asset = scope.assets.find_or_initialize_by(name: asset_params[:name]) do |a|
+          folder = Asset.normalize_folder(asset_params[:folder])
+          asset = scope.assets.find_or_initialize_by(name: asset_params[:name], folder: folder) do |a|
             a.created_by = current_user
           end
           asset.restore! if asset.persisted? && asset.deleted?
-          asset.assign_attributes(asset_params.except(:name))
+          asset.assign_attributes(asset_params.except(:name, :folder))
           asset
         end
 

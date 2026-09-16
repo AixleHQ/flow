@@ -3,7 +3,7 @@
 A **runtime** is the actual LLM CLI that runs inside an agent's
 container. The persona decides *who* the agent is; the runtime decides
 *what model and tool it drives*. The same persona can run on any of the
-five supported runtimes — pick the one whose model and credentials you
+six supported runtimes — pick the one whose model and credentials you
 have.
 
 ## Supported runtimes
@@ -15,8 +15,9 @@ have.
 | `codex`       | OpenAI       | `aixle/codex`       | OpenAI Codex CLI.                    |
 | `gemini_cli`  | Google       | `aixle/gemini-cli`  | Google Gemini CLI.                   |
 | `grok`        | xAI          | `aixle/grok`        | xAI Grok CLI.                        |
+| `kiro_cli`    | AWS          | `aixle/kiro-cli`    | AWS Kiro CLI. Metered in credits.    |
 
-All five images are built locally with `make build-agents` and used by
+All six images are built locally with `make build-agents` and used by
 the platform when starting a step's container. Each runtime has an
 adapter under `app/services/agents/` (`*_adapter.rb`) that knows how to
 launch the CLI, feed it the assembled context, wire up MCP servers, and
@@ -36,6 +37,7 @@ image.
 | `codex`       | OpenAI API key.                                                    |
 | `gemini_cli`  | Google AI Studio API key.                                          |
 | `grok`        | xAI account, signed in with the device-code flow (or an xAI API key). |
+| `kiro_cli`    | Kiro account, signed in with the device-code flow.                  |
 
 A step fails immediately with a "no credentials" error if the runtime's
 credentials aren't configured for the user who triggered the run.
@@ -44,7 +46,9 @@ credentials aren't configured for the user who triggered the run.
 
 The platform records `cost_cents` and token counts per session by
 parsing usage events out of the runtime's logs. This works only on
-runtimes that emit usage — all five currently do. If `cost_cents` is
+runtimes that emit usage. `kiro_cli` does not: Kiro meters in
+credits rather than tokens and publishes no per-request usage outside
+headless mode, so its sessions finish with a null `cost_cents`. If `cost_cents` is
 `null` on a finished session, the runtime didn't emit usage events;
 check **Admin → Session Logs**.
 

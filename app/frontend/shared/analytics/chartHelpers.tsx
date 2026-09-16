@@ -45,6 +45,9 @@ const AGENT_COLOR: Record<string, string> = {
   // No xAI artwork ships in this repo, so a Grok row renders the neutral chip
   // AgentLogo falls back to; naming it here keeps the runtime known, not unmapped.
   grok: CHART_NEUTRAL,
+  // Same as Grok: no Kiro artwork ships here, so the chip is neutral. Naming the
+  // runtime keeps it known rather than silently unmapped.
+  kiro_cli: CHART_NEUTRAL,
 };
 
 export const getAgentColor = (agentType: string): string => AGENT_COLOR[agentType] ?? CHART_NEUTRAL;

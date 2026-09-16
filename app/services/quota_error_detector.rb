@@ -43,6 +43,15 @@ class QuotaErrorDetector
       /You'?ve hit the rate limit for your plan/i,
       /You hit your (?:weekly|free usage) limit/i,
       /Purchase credits to keep using Grok/i
+    ],
+    # Kiro meters in credits, and its CLI exits 1 for every failure — a bad flag and an
+    # exhausted plan are the same exit code — so the rendered message is the only thing
+    # that tells a quota stop apart from a crash.
+    kiro: [
+      /reached your monthly usage limit/i,
+      /reached your overage limit/i,
+      /Kiro rate limit reached/i,
+      /Request quota exceeded/i
     ]
   }.freeze
 

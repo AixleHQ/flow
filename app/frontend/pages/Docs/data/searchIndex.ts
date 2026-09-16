@@ -130,7 +130,7 @@ export const SEARCH_INDEX: SearchResult[] = [
     slug: 'runtimes',
     title: 'Runtimes',
     section: 'User guide',
-    desc: 'The six LLM CLI runtimes: claude_code, cursor_cli, codex, gemini_cli, antigravity_cli, and grok.',
+    desc: 'The seven LLM CLI runtimes: claude_code, cursor_cli, codex, gemini_cli, antigravity_cli, grok, and kiro_cli.',
   },
   {
     slug: 'tools',
@@ -167,6 +167,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     title: 'Integrations',
     section: 'User guide',
     desc: 'Connect Aixle Flow with GitHub, GitLab, Linear, Coder, and Slack.',
+  },
+  {
+    slug: 'azure-devops',
+    title: 'Azure DevOps',
+    section: 'User guide',
+    desc: 'Connect an Azure DevOps organization: the Entra service principal step, the personal access token and its three scopes, choosing Azure projects, and how SaaS differs from self-hosted.',
   },
   {
     slug: 'configuration',

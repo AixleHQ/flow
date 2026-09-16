@@ -65,6 +65,29 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     assert_equal @column.id, ColumnWorkflowBinding.find(trigger["id"]).board_column_id
   end
 
+  test "a trigger created over the personal MCP is owned by the calling user" do
+    body = call_tool("create_workflow_trigger",
+                     { project_id: @project.id, workflow_id: @workflow.id, kind: "column",
+                       board_column_id: @column.id })
+
+    assert_not error?(body)
+    trigger = payload(body)
+    assert_equal({ "id" => @user.id, "name" => @user.name }, trigger["created_by"])
+    assert_equal @user.id, ColumnWorkflowBinding.find(trigger["id"]).created_by_id
+  end
+
+  test "list_workflow_triggers names the creator, and reports none for a trigger without one" do
+    column_trigger!
+    event_trigger!(name: "standup")
+
+    triggers = payload(call_tool("list_workflow_triggers",
+                                 { project_id: @project.id, workflow_id: @workflow.id }))["triggers"]
+
+    assert_nil triggers.find { |t| t["kind"] == "column" }["created_by"]
+    assert_equal({ "id" => @user.id, "name" => @user.name },
+                 triggers.find { |t| t["kind"] == "slack" }["created_by"])
+  end
+
   test "create_workflow_trigger creates a slack trigger with a filter predicate" do
     body = call_tool("create_workflow_trigger",
                      { project_id: @project.id, workflow_id: @workflow.id, kind: "slack",

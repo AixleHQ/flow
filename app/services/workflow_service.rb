@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 class WorkflowService
+  # A run was saved but its Temporal execution could not be started. Raised, not
+  # returned: an undispatched run is an outage, not a validation error, and the
+  # thing that used to happen instead — log a line and hand the caller a run that
+  # looked started — is what let a queue stall go unnoticed for two hours.
+  DispatchFailed = Class.new(StandardError)
+
   class << self
     def update(workflow:, params:)
       attrs = params.to_h
@@ -34,20 +40,64 @@ class WorkflowService
       # SessionAdmissionPolicy.sync! refuses to flip the mode while any run is
       # pending, running or paused.
       run.shared_context = run.shared_context.merge("session_admission" => SessionAdmissionPolicy.enabled?)
+      # Enrol the run in the outbox in the very write that creates it. From here
+      # on a dispatch that never lands is a row the relay can find, instead of a
+      # run indistinguishable from one the worker simply has not reached yet.
+      run.relay_state = "pending"
       return run unless run.save
 
       workflow.steps.not_deleted.order(:position).each do |step|
         run.step_runs.find_or_create_by!(step: step)
       end
 
-      TemporalWorkflowRegistry.start_workflow_execution(run)
+      dispatch!(run)
       record_activity(run, :workflow_started)
       broadcast_task_updated(run)
 
       run
-    rescue StandardError => e
-      Rails.logger.error("[WorkflowService] Failed to start workflow for run ##{run&.id}: #{e.message}")
-      run
+    end
+
+    # Turns a saved run into a Temporal execution, and is the only thing allowed
+    # to call that done.
+    #
+    # Loud on purpose. This used to be a bare call whose return value was
+    # discarded, under a `rescue StandardError` that logged one line and handed
+    # back a run that read as started. TemporalService.start_workflow does not
+    # raise on a failed RPC — it returns { ok: false, ... } — so a Temporal outage
+    # never even reached that rescue: it produced a committed run nobody would
+    # ever execute, and a success response. Now the caller gets an exception (and
+    # Sentry an event), while the run stays enrolled in the outbox so
+    # WorkflowRunRelay re-drives it within WorkflowRun::RELAY_GRACE.
+    #
+    # Safe to call again, which is what makes the relay safe: the execution id is
+    # per-run and duplicates are rejected, with a rejected duplicate reported as
+    # success — the execution this run needs already exists.
+    def dispatch!(run)
+      run.increment!(:relay_attempts)
+      result = TemporalWorkflowRegistry.start_workflow_execution(run)
+
+      if result.is_a?(Hash) && result[:ok]
+        # update_columns, not update!: relay bookkeeping is not a change anyone
+        # should be notified about, and update! would fire the run's broadcast on
+        # every single start.
+        run.update_columns(relay_state: "dispatched", relay_error: nil, updated_at: Time.current)
+        return result
+      end
+
+      error = result.is_a?(Hash) ? result[:error] : "start_workflow_execution returned #{result.inspect}"
+      run.update_columns(relay_error: error.to_s.first(255), updated_at: Time.current)
+
+      # A deployment that has switched Temporal off has no executor to dispatch to
+      # and no relay to recover with — the relay is itself a Temporal schedule.
+      # Nothing is stranded, because nothing was ever going to run. Development and
+      # test work this way; production does not, which is why the check is on the
+      # deployment's own switch and not on the shape of the error.
+      unless TemporalService.enabled?
+        Rails.logger.info("[WorkflowService] Temporal is disabled; run ##{run.id} was not dispatched")
+        return result
+      end
+
+      raise DispatchFailed, "WorkflowRun ##{run.id} was not dispatched to Temporal: #{error}"
     end
 
     def cancel(run:)

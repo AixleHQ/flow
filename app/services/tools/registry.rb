@@ -33,11 +33,15 @@ module Tools
       end
 
       # Groups the tool picker offers as one-click attach ("Board management"
-      # attaches every board tool). Driven by TagCatalog — a group entry with
-      # its user-attachable tool names.
+      # attaches every board tool, "Slack" every Slack tool). Driven by
+      # TagCatalog — one visible entry with its user-attachable tool names.
+      #
+      # Session audience only: the personal MCP tools share tags with the
+      # session ones (:board, :sessions), and a user-audience tool has no
+      # shadow row to attach to a step.
       def ui_groups
-        TagCatalog.ui_entries.select { |e| e.presentation == :group }.filter_map do |e|
-          names = tagged(e.tag).select(&:user_attachable).map(&:name).sort
+        TagCatalog.ui_entries.filter_map do |e|
+          names = tagged(e.tag).select { |d| d.audience == :session && d.user_attachable }.map(&:name).sort
           next if names.empty?
 
           { tag: e.tag.to_s, label: e.label, tool_names: names }

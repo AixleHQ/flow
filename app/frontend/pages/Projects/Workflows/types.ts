@@ -14,4 +14,8 @@ export interface Trigger {
   subject_title_template?: string | null;
   filter_predicate?: Record<string, unknown>;
   schedule_config?: { cron?: string; timezone?: string };
+  // Who added the trigger. Off-board kinds run as this user and use their
+  // credentials; null on rows created before the creator was recorded (or whose
+  // account was deleted), and those are skipped instead of firing unattended.
+  created_by?: { id: number; name: string } | null;
 }

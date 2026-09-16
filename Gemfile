@@ -167,7 +167,7 @@ gem "aws-sdk-bedrockruntime", "~> 1.83"
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
-gem "aws-sdk-bedrock", "~> 1.91"
+gem "aws-sdk-bedrock", "~> 1.92"
 gem "image_processing", "~> 2.1"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 
@@ -175,6 +175,12 @@ gem "faraday-retry", "~> 2.3"
 
 gem "lograge", "~> 0.15.0"
 gem "minitar"
+
+# Reads ONE credential format, not an application database. Kiro CLI keeps its login in
+# a SQLite file rather than a JSON document, so Agents::KiroCliAdapter has to open that
+# file to lift the bearer token and profile ARN its API calls need. Every other runtime
+# hands us JSON and needs nothing here.
+gem "sqlite3", "~> 2.9"
 
 gem "rotp", "~> 6.3"
 

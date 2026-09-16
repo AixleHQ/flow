@@ -71,6 +71,7 @@ module PersonalTools
         column_name: trigger.board_column.name,
         trigger_mode: trigger.trigger_mode,
         cooldown_seconds: trigger.cooldown_seconds,
+        created_by: serialize_creator(trigger.created_by),
         enabled: true
       }
     end
@@ -89,8 +90,18 @@ module PersonalTools
         schedule_config: trigger.schedule_config,
         cooldown_seconds: trigger.cooldown_seconds,
         notify_on_failure: trigger.notify_on_failure,
+        created_by: serialize_creator(trigger.created_by),
         enabled: trigger.enabled
       }
+    end
+
+    # Who the trigger runs as. nil when the creator was never recorded (rows
+    # older than the field) or the account was deleted — the off-board kinds
+    # skip an unattended fire in that state.
+    def serialize_creator(user)
+      return nil unless user
+
+      { id: user.id, name: user.name }
     end
 
     def binding_kind(event_type)

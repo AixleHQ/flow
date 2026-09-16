@@ -14,6 +14,7 @@ require "shellwords"
 #   codex       → --tools codex        → /workspace/.agents/skills/
 #   gemini_cli  → --tools gemini       → /workspace/.agents/skills/
 #   grok        → --tools claude-code  → /workspace/.claude/skills/  (Grok reads Claude's artifacts)
+#   kiro_cli    → --tools kiro         → /workspace/.kiro/skills/
 class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
   AGENT_RUNTIMES = {
     "cursor_cli" => {
@@ -47,6 +48,14 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
       skill_dir: "/workspace/.claude/skills",
       context_path: "/home/grok/.grok/rules/aixle-session-context.md",
       home_dir: "/home/grok"
+    },
+    # BMAD ships a first-class kiro platform, which installs into the workspace
+    # .kiro/skills directory Kiro CLI already reads.
+    "kiro_cli" => {
+      tool_flag: "kiro",
+      skill_dir: "/workspace/.kiro/skills",
+      context_path: "/home/kiro/.kiro/steering/aixle-session-context.md",
+      home_dir: "/home/kiro"
     }
   }.freeze
 
@@ -112,6 +121,14 @@ class BmadE2eAllRuntimesTest < ActiveSupport::TestCase
 
   test "E2E grok: install command, context, skill dir, vscode settings, config.yaml" do
     run_full_pipeline("grok")
+  end
+
+  # ====================================================================
+  # AC 4c: kiro_cli full pipeline
+  # ====================================================================
+
+  test "E2E kiro_cli: install command, context, skill dir, vscode settings, config.yaml" do
+    run_full_pipeline("kiro_cli")
   end
 
   # ====================================================================

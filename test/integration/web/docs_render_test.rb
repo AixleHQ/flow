@@ -19,6 +19,21 @@ class Web::DocsRenderTest < ActionDispatch::IntegrationTest
 
   teardown { Bullet.enable = true }
 
+  # The page bodies live in the client bundle and the routable slugs live in
+  # Ruby, with nothing connecting the two lists. A page added to the bundle and
+  # not to the controller answers 404 — which reads as a missing document rather
+  # than a missing line, and is how a freshly written guide went unreachable.
+  test "every page in the client bundle is routable" do
+    registered = File.read(Rails.root.join("app/frontend/pages/Docs/data/pages/index.ts"))
+                     .scan(/^\s*'?([a-z0-9-]+)'?:\s*\{$/).flatten
+
+    assert_operator registered.size, :>, 20, "the registry should have been parsed, not missed"
+    assert_empty registered - Web::DocsController::PAGES,
+                 "pages in the bundle that the controller will 404"
+    assert_empty Web::DocsController::PAGES - registered,
+                 "routable slugs with no page behind them"
+  end
+
   test "show renders the docs page with the default slug" do
     get docs_path
     assert_response :success

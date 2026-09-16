@@ -1,0 +1,28 @@
+# frozen_string_literal: true
+
+module InternalTools
+  class AzureDevopsGetWorkItem < Base
+    include Concerns::AzureDevopsContext
+
+    tool do
+      display_name "Azure DevOps Get Work Item"
+      description "Read one Azure Boards work item: fields, current revision, relations and browser URL. The `rev` in the response is what azure_devops_update_work_item expects as `expected_revision`. Returns JSON."
+      tags :azure_devops
+      inject_when :azure_integration_connected
+      user_attachable false
+      requires_integration :azure_devops
+      read_only
+      param :integration_id, type: :integer, description: "Azure DevOps connection id.", required: true
+      param :azure_project_id, type: :string, description: "Azure project id. Required when the connection covers more than one; call azure_devops_list_connections to see them."
+      param :work_item_id, type: :integer, description: "Azure work item id.", required: true
+    end
+
+    def execute
+      azure_guard do
+        integration = resolve_integration!
+        success(AzureDevops::WorkItemService.new(integration)
+                                          .get(params[:work_item_id], project_id: resolve_project_id!(integration)).to_json)
+      end
+    end
+  end
+end

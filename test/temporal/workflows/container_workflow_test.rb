@@ -88,5 +88,37 @@ module Workflows
       assert_equal "session done", result["result"]
       assert_equal "exec", result["phase"]
     end
+
+    test "preserves secret-safe activity diagnostics in the final workflow error" do
+      workflow = ContainerWorkflow.new
+      cause = Temporalio::Error::ApplicationError.new(
+        "Phase exec failed: Credential preflight failed: auth_file_missing",
+        { path: "/home/codex/.codex/auth.json", exists: false, container: "terminal-123" },
+        type: "ContainerService::PhaseError",
+        non_retryable: true
+      )
+      activity_error = stub(cause: cause, message: "activity failed")
+
+      message = workflow.send(:extract_error_message, activity_error)
+
+      assert_includes message, "auth_file_missing"
+      assert_includes message, "/home/codex/.codex/auth.json"
+      assert_includes message, "terminal-123"
+      assert_includes message, "exists"
+    end
+
+    test "does not append details from errors outside the secret-safe phase boundary" do
+      workflow = ContainerWorkflow.new
+      cause = Temporalio::Error::ApplicationError.new(
+        "unrelated failure",
+        { untrusted: "detail" },
+        type: "OtherError",
+        non_retryable: true
+      )
+
+      message = workflow.send(:extract_error_message, stub(cause: cause, message: "activity failed"))
+
+      assert_equal "unrelated failure", message
+    end
   end
 end

@@ -3,12 +3,21 @@ import { Alert, Box, Button, Card, Group, Progress, Stack, Text, Title, Tooltip 
 import { IconRefresh } from '@tabler/icons-react';
 import { useState } from 'react';
 
-/** One rolling quota window as the vendor reports it. `utilization` is a percentage (0-100). */
+/**
+ * One rolling quota window as the vendor reports it. `utilization` is a percentage
+ * (0-100). A vendor that meters in countable units (Kiro bills in credits) also sends
+ * `used`/`limit`/`unit`, and then the row leads with those — "3 of 10000 credits left"
+ * is what the user can act on; a percentage of an allowance they cannot see is not.
+ */
 interface UsageWindow {
   key: string;
   utilization: number;
   resetsAt: string | null;
   windowDurationMins?: number | null;
+  used?: number | null;
+  limit?: number | null;
+  unit?: string | null;
+  plan?: string | null;
 }
 
 /** Pay-as-you-go spend on top of the plan. Fields stay null until something is consumed. */
@@ -33,22 +42,40 @@ const WINDOW_LABELS: Record<string, string> = {
   seven_day: 'Current week (all models)',
   seven_day_opus: 'Current week (Opus)',
   seven_day_sonnet: 'Current week (Sonnet)',
+  kiro_credits: 'Credits this billing period',
 };
 
 const AGENT_LABELS: Record<string, string> = {
   claude_code: 'Claude Code',
   codex: 'OpenAI Codex',
+  kiro_cli: 'Kiro CLI',
 };
 
 const VENDOR_LABELS: Record<string, string> = {
   claude_code: 'Anthropic',
   codex: 'OpenAI',
+  kiro_cli: 'AWS',
 };
 
-function statusMessage(entry: UsageLimitsEntry): string {
+/** Credits arrive fractional; whole numbers should not grow a ".00" tail. */
+function formatAmount(value: number): string {
+  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+}
+
+// `ownerName` is null when the card is on the viewer's own Profile. On someone
+// else's profile the copy has to stay in the third person AND stop offering an
+// action the viewer cannot take — only the owner can re-authenticate, and the
+// tokens, OAuth URLs and vendor account email that would make it actionable are
+// exactly what must never appear here.
+function statusMessage(entry: UsageLimitsEntry, ownerName: string | null): string {
   const vendor = VENDOR_LABELS[entry.agentType] ?? 'The provider';
-  if (entry.status === 'unauthorized')
-    return `Your ${AGENT_LABELS[entry.agentType] ?? entry.agentType} sign-in no longer works — re-authenticate above to see your limits.`;
+  const agent = AGENT_LABELS[entry.agentType] ?? entry.agentType;
+
+  if (entry.status === 'unauthorized') {
+    return ownerName
+      ? `${ownerName}'s ${agent} sign-in no longer works — only they can reconnect it, from their own profile.`
+      : `Your ${agent} sign-in no longer works — re-authenticate above to see your limits.`;
+  }
   if (entry.status === 'rate_limited') return `${vendor} is throttling usage checks right now. Try again in a minute.`;
   return `Couldn't reach ${vendor} for usage limits.`;
 }
@@ -89,15 +116,24 @@ function WindowRow({ quota }: { quota: UsageWindow }) {
   const percent = Math.min(100, Math.max(0, Math.round(quota.utilization)));
   const remaining = 100 - percent;
   const resets = formatResetsIn(quota.resetsAt);
+  const counted =
+    quota.used != null && quota.limit != null
+      ? `${formatAmount(Math.max(0, quota.limit - quota.used))} of ${formatAmount(quota.limit)} ${quota.unit ?? ''} left`.trim()
+      : null;
 
   return (
     <Box>
       <Group justify="space-between" align="baseline" mb={4} gap="xs">
         <Text size="sm" fw={500}>
           {label}
+          {quota.plan && (
+            <Text span size="xs" c="dimmed" ml={6}>
+              {quota.plan}
+            </Text>
+          )}
         </Text>
         <Text size="sm" fw={600} c={utilizationColor(quota.utilization)}>
-          {percent}% used · {remaining}% remaining
+          {counted ?? `${percent}% used · ${remaining}% remaining`}
         </Text>
       </Group>
       <Progress
@@ -143,11 +179,11 @@ function ExtraUsageRow({ extraUsage }: { extraUsage: ExtraUsage }) {
   );
 }
 
-function EntryBody({ entry }: { entry: UsageLimitsEntry }) {
+function EntryBody({ entry, ownerName }: { entry: UsageLimitsEntry; ownerName: string | null }) {
   if (entry.status !== 'ok') {
     return (
       <Alert color={entry.status === 'unauthorized' ? 'red' : 'yellow'} variant="light" p="sm">
-        <Text size="sm">{statusMessage(entry)}</Text>
+        <Text size="sm">{statusMessage(entry, ownerName)}</Text>
       </Alert>
     );
   }
@@ -174,8 +210,18 @@ function EntryBody({ entry }: { entry: UsageLimitsEntry }) {
 /**
  * Subscription quota panel. Renders nothing when no credential on this membership
  * bills against a plan — an API key or a Bedrock connection has no window to show.
+ *
+ * Pass `ownerName` when the card is on somebody else's profile (`/user/:id`):
+ * the numbers are identical to what the owner sees on their own Account, only
+ * the copy changes. Omit it on the viewer's own Profile.
  */
-export function UsageLimitsCard({ entries }: { entries: UsageLimitsEntry[] }) {
+export function UsageLimitsCard({
+  entries,
+  ownerName = null,
+}: {
+  entries: UsageLimitsEntry[];
+  ownerName?: string | null;
+}) {
   const [refreshing, setRefreshing] = useState(false);
 
   if (entries.length === 0) return null;
@@ -216,7 +262,7 @@ export function UsageLimitsCard({ entries }: { entries: UsageLimitsEntry[] }) {
                 {AGENT_LABELS[entry.agentType] ?? entry.agentType.replace(/_/g, ' ')}
               </Text>
             )}
-            <EntryBody entry={entry} />
+            <EntryBody entry={entry} ownerName={ownerName} />
           </Box>
         ))}
       </Stack>

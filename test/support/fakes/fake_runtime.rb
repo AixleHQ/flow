@@ -35,6 +35,7 @@ module ContainerRuntime
       @agent_type = agent_type
       @fs = filesystem || build_filesystem(agent_type)
       @execs = []
+      @written_files = {}
       @exec_failures = []
       @unreachable_execs = []
       @raising_execs = []
@@ -160,10 +161,13 @@ module ContainerRuntime
       # Agents::CodexAdapter#credential_preflight stats the auth file directly —
       # answer from the virtual FS: exit 0 + size in bytes when present, non-zero
       # exit (empty stdout) when absent, mirroring what `stat -c%s` reports.
-      if (probe = command_string(cmd).match(/\bstat -c%s (\S+)/))
+      if (probe = command_string(cmd).match(/\bstat -c\s*(?:%s|'%s\|%a\|%U\|%G')\s+(\S+)/))
         path = probe[1]
         content = @unreadable_paths.include?(path) ? nil : @fs[path]
-        return content.nil? ? [ [ "" ], [ "" ], 1 ] : [ [ content.bytesize.to_s ], [ "" ], 0 ]
+        return [ [ "" ], [ "stat: cannot stat #{path}" ], 1 ] if content.nil?
+
+        output = command_string(cmd).include?("%a") ? "#{content.bytesize}|644|root|root" : content.bytesize.to_s
+        return [ [ output ], [ "" ], 0 ]
       end
 
       [ [ resolve_command(cmd) ], [ "" ], 0 ]
@@ -180,10 +184,17 @@ module ContainerRuntime
 
     # -- File I/O -------------------------------------------------------------
 
+    # Ownership is recorded, not just the bytes: a file written as root is one
+    # the container's own user can neither read nor delete, and `exec` here does
+    # not run as root.
     def write_file(_id, path, content, mode: 0o644, uid: 0, gid: 0)
       @fs[path] = content
+      @written_files[path] = { mode: mode, uid: uid, gid: gid }
       true
     end
+
+    # What was written where, for tests that care who owns it.
+    def file_attributes(path) = @written_files[path]
 
     def read_file(_id, path)
       return nil if @unreadable_paths.include?(path.to_s)
@@ -276,6 +287,7 @@ module ContainerRuntime
       return "open\n" if cmd_str.include?("echo 'open'")
       return "0\n" if cmd_str.include?(".agent_done")
       return live_terminal_read(cmd_str) if cmd_str.include?("capture-pane")
+      return KIRO_MODEL_CATALOGUE if cmd_str.include?("--list-models")
 
       if cmd_str.include?("find") && cmd_str.include?("/workspace/outputs")
         return @fs.keys.select { |k| k.start_with?("/workspace/outputs/") }.join("\n")
@@ -384,6 +396,14 @@ module ContainerRuntime
 
           Created file1.txt and file2.txt with sample content.
         LOG
+      when "kiro_cli"
+        <<~LOG
+          kiro-cli 2.20.1
+
+          > Create two test files with sample content
+
+          Created file1.txt and file2.txt with sample content.
+        LOG
       else
         "$ agent running\nTask completed.\n"
       end
@@ -449,13 +469,41 @@ module ContainerRuntime
             "token_type" => "Bearer"
           }
         }.to_json
+      },
+      # Kiro CLI keeps its login in a SQLite database rather than a config document,
+      # and the adapter stores it as an opaque blob. Two things make this fixture what
+      # it is: the file-format header, which is how the adapter recognises the
+      # credential, and the token payload's OAuth field names, which are how both the
+      # watcher and #auth_complete? tell a finished login from a database the CLI merely
+      # created (see Agents::KiroCliAdapter::AUTH_MARKERS). A fixture without them would
+      # be a database from an abandoned login, which correctly saves no credential.
+      "kiro_cli" => {
+        path: "/home/kiro/.local/share/kiro-cli/data.sqlite3",
+        content: "#{Agents::KiroCliAdapter::SQLITE_MAGIC}\x10auth_kv kirocli:odic:token " \
+                 '{"access_token":"placeholder","refresh_token":"placeholder"}'
       }
     }.freeze
+
+    # `kiro-cli --v3 chat --list-models --format json`, trimmed to three entries and
+    # keeping the CLI's snake_case field names — which differ from the CodeWhisperer
+    # API's camelCase, and that difference is the point of the fixture.
+    KIRO_MODEL_CATALOGUE = {
+      "models" => [
+        { "model_name" => "auto", "model_id" => "auto", "description" => "Models chosen by task",
+          "context_window_tokens" => 1_000_000, "rate_multiplier" => 1.0, "rate_unit" => "Credit" },
+        { "model_name" => "claude-opus-5", "model_id" => "claude-opus-5", "description" => "Claude Opus 5",
+          "context_window_tokens" => 1_000_000, "rate_multiplier" => 2.2, "rate_unit" => "Credit" },
+        { "model_name" => "qwen3-coder-next", "model_id" => "qwen3-coder-next", "description" => "Qwen3 Coder Next",
+          "context_window_tokens" => 256_000, "rate_multiplier" => 0.05, "rate_unit" => "Credit" }
+      ],
+      "default_model" => "auto"
+    }.to_json
 
     MITM_LOGS = {
       "claude_code" => "",
       "gemini_cli" => "",
       "grok" => "",
+      "kiro_cli" => "",
       "cursor_cli" => [
         { _source: "http2-logger", direction: "request", scheme: "https", method: "POST",
           host: "api2.cursor.sh", port: 443,

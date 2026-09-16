@@ -8,8 +8,10 @@ require "application_system_test_case"
 # @uppy/core and @uppy/aws-s3 inert (docs/testing.md R8), so it never runs the plugin's
 # signing protocol, and the request tests drive #presign/#upload by hand rather than through
 # Uppy. Here the real @uppy/aws-s3 asks for a signature, PUTs the bytes at the URL it gets
-# back, and the frontend parses the cache id out of the resulting uploadURL and promotes it —
-# which is the whole chain that a major-version bump of the plugin can break.
+# back, carries the key that signature named through to 'complete', and the frontend promotes
+# the file under it — which is the whole chain that a version bump of the plugin can break.
+# The key round trip in particular exists only inside the plugin, so nothing below this layer
+# would notice if it stopped honouring the `key` /presign returns.
 class AssetUploadTest < ApplicationSystemTestCase
   setup do
     @company = create(:company)

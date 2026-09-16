@@ -38,6 +38,25 @@ export type { Asset, AssetVersion } from './types';
 
 const PRESIGN_URL = '/api/v1/assets/presign';
 const MAX_FILE_SIZE = 1024 * 1024 * 1024;
+// Shrine's :cache storage prefix, which is what /presign signs under. Server-side twin:
+// Api::V1::AssetsController#cache_key.
+const CACHE_PREFIX = 'cache/';
+
+// Mirrors Asset::FOLDER_FORMAT / RESERVED_FOLDERS / FOLDER_MAX_LENGTH. Catching it here keeps the
+// file — already uploaded to cache storage by the time the folder is typed — from being thrown
+// away on a server-side 422. A folder is one flat name: spaces are fine, path separators are not.
+// eslint-disable-next-line no-control-regex -- control characters are exactly what this rejects
+const FOLDER_FORBIDDEN = /[/\\\x00-\x1f\x7f]/;
+const RESERVED_FOLDERS = ['.', '..'];
+const FOLDER_MAX_LENGTH = 100;
+const FOLDER_HINT = 'One folder name — spaces are fine, "/" is not';
+
+function folderError(folder: string): string | null {
+  if (FOLDER_FORBIDDEN.test(folder)) return 'Folder cannot contain slashes or control characters';
+  if (RESERVED_FOLDERS.includes(folder)) return 'That folder name is not usable';
+  if (folder.length > FOLDER_MAX_LENGTH) return `Folder must be ${FOLDER_MAX_LENGTH} characters or fewer`;
+  return null;
+}
 
 interface CachedFileDescriptor {
   id: string;
@@ -45,17 +64,49 @@ interface CachedFileDescriptor {
   metadata?: { filename: string };
 }
 
+// How the id was read before /presign reported the key: off the upload URL's path. Two layers of
+// escaping had to be undone first — percent-escapes, and `+` for space — and it only worked
+// because the key happens to sit in the path, which is a property of the storage prefixes rather
+// than of the upload contract.
+//
+// Kept only to survive a rolling deploy. A browser can load this bundle from an already-updated
+// pod and still reach an old one for /presign, which answers without `key`; @uppy/aws-s3 then
+// falls back to the key it generated (`signedKey || request.key` — the Uppy file id), which
+// addresses nothing. Delete once every pod serves a /presign that returns `key`.
+function cacheIdFromUploadURL(uploadURL: string): string {
+  if (!uploadURL) return '';
+  const pathname = decodeURIComponent(new URL(uploadURL, window.location.origin).pathname.replace(/\+/g, '%20'));
+  const idx = pathname.indexOf(`/${CACHE_PREFIX}`);
+  return idx === -1 ? '' : pathname.substring(idx + CACHE_PREFIX.length + 1);
+}
+
+// The cache id arrives verbatim rather than being parsed: /presign answers with the object key it
+// signed for, signRequest passes that key on to @uppy/aws-s3 (6.1+ honours a `key` next to `url`),
+// and Uppy carries it through the upload into the 'complete' payload.
+//
 // The filename is the only metadata we send: Shrine's determine_mime_type analyzer needs it to
 // derive a content type for formats without magic bytes (.md, .txt, .json, .csv). Size and MIME
 // type are deliberately omitted — restore_cached_data re-derives both from the stored bytes, and
 // file_size must stay client-untrusted (OutputValidator#validate_size depends on it).
-function extractCachedFileData(uploadURL: string, filename: string): CachedFileDescriptor {
-  const url = new URL(uploadURL, window.location.origin);
-  const pathname = decodeURIComponent(url.pathname.replace(/\+/g, '%20'));
-  const cachePrefix = '/cache/';
-  const idx = pathname.indexOf(cachePrefix);
-  if (idx === -1) throw new Error('Cannot extract cache data from upload URL');
-  return { id: pathname.substring(idx + cachePrefix.length), storage: 'cache', metadata: { filename } };
+function cachedFileDescriptor(key: unknown, uploadURL: string | undefined, filename: string): CachedFileDescriptor {
+  const id =
+    typeof key === 'string' && key.startsWith(CACHE_PREFIX)
+      ? key.slice(CACHE_PREFIX.length)
+      : cacheIdFromUploadURL(uploadURL ?? '');
+  if (!id) throw new Error('Upload finished without a cache key');
+  return { id, storage: 'cache', metadata: { filename } };
+}
+
+// The API answers a rejected asset with `{ error: "<full messages>" }`; surfacing it beats the
+// static "Failed to save" toast, which told the user nothing about which field was refused.
+async function readErrorMessage(res: Response): Promise<string | null> {
+  try {
+    const body: unknown = await res.json();
+    const error = (body as { error?: unknown })?.error;
+    return typeof error === 'string' && error.length > 0 ? error : null;
+  } catch {
+    return null;
+  }
 }
 
 interface AssetsContentProps {
@@ -95,6 +146,7 @@ export function AssetsContent({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; cachedFile: CachedFileDescriptor }>>([]);
   const [uploadFolder, setUploadFolder] = useState('');
+  const [uploadFolderError, setUploadFolderError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -164,7 +216,7 @@ export function AssetsContent({
       // The S3 object key is chosen by the server, not here — /presign mints it and signs a
       // PUT for it, so a client cannot aim an upload at someone else's pending cache entry.
       // signRequest is handed nothing but `{ method, key }`, so the key generated here exists
-      // only to carry the Uppy file id across to it.
+      // only to carry the Uppy file id across to it; the server's key replaces it below.
       generateObjectKey: (file) => file.id,
       signRequest: async ({ key }) => {
         // getFile is typed as always returning a file, but a file removed mid-upload resolves
@@ -173,7 +225,9 @@ export function AssetsContent({
         const qs = new URLSearchParams({ filename: file?.name ?? 'file' });
         const res = await apiFetch(`${PRESIGN_URL}?${qs}`);
         const data = await res.json();
-        return { url: data.url as string };
+        // Returning `key` tells the plugin which object the URL was actually signed for, so it
+        // reports the server's key — not the file id above — once the upload succeeds.
+        return { url: data.url as string, key: data.key as string };
       },
     });
 
@@ -185,7 +239,7 @@ export function AssetsContent({
         const name = f.name ?? 'file';
         return {
           name,
-          cachedFile: extractCachedFileData(f.uploadURL ?? '', name),
+          cachedFile: cachedFileDescriptor(f.response?.body?.key, f.uploadURL, name),
         };
       });
       setUploadedFiles((prev) => [...prev, ...files]);
@@ -215,8 +269,17 @@ export function AssetsContent({
 
   const handleSaveUpload = useCallback(async () => {
     if (!createEndpoint || uploadedFiles.length === 0) return;
+
+    const folder = uploadFolder.trim();
+    const invalid = folder && folderError(folder);
+    if (invalid) {
+      setUploadFolderError(invalid);
+      return;
+    }
+    setUploadFolderError(null);
     setIsSaving(true);
     let successCount = 0;
+    let failureMessage: string | null = null;
 
     for (const f of uploadedFiles) {
       try {
@@ -224,37 +287,47 @@ export function AssetsContent({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            asset: { name: f.name, folder: uploadFolder || null, file: f.cachedFile },
+            asset: { name: f.name, folder: folder || null, file: f.cachedFile },
           }),
         });
-        if (res.ok) successCount++;
+        if (res.ok) {
+          successCount++;
+        } else {
+          failureMessage ??= await readErrorMessage(res);
+        }
       } catch {
         /* continue with remaining files */
       }
     }
 
     setIsSaving(false);
+
+    if (successCount === 0) {
+      // Every file was refused: keep the modal and the already-cached uploads in place so the
+      // user can fix the folder and retry instead of re-picking the files.
+      notifications.show({ message: failureMessage ?? 'Failed to save uploaded files', color: 'red' });
+      return;
+    }
+
     setUploadOpen(false);
     setUploadedFiles([]);
     setUploadFolder('');
     setUploadProgress(0);
     uppyRef.current?.cancelAll();
 
-    if (successCount > 0) {
-      notifications.show({
-        message: `${successCount} file${successCount > 1 ? 's' : ''} uploaded`,
-        color: 'green',
-      });
-      router.reload();
-    } else {
-      notifications.show({ message: 'Failed to save uploaded files', color: 'red' });
-    }
+    notifications.show({
+      message: `${successCount} file${successCount > 1 ? 's' : ''} uploaded`,
+      color: 'green',
+    });
+    if (failureMessage) notifications.show({ message: failureMessage, color: 'red' });
+    router.reload();
   }, [createEndpoint, uploadedFiles, uploadFolder]);
 
   const handleCloseUpload = useCallback(() => {
     setUploadOpen(false);
     setUploadedFiles([]);
     setUploadFolder('');
+    setUploadFolderError(null);
     setUploadProgress(0);
     uppyRef.current?.cancelAll();
   }, []);
@@ -543,9 +616,13 @@ export function AssetsContent({
               <TextInput
                 label="Folder (optional)"
                 placeholder="Leave empty for root"
-                description="Lowercase letters, numbers, hyphens, underscores"
+                description={FOLDER_HINT}
+                error={uploadFolderError}
                 value={uploadFolder}
-                onChange={(e) => setUploadFolder(e.currentTarget.value)}
+                onChange={(e) => {
+                  setUploadFolder(e.currentTarget.value);
+                  setUploadFolderError(null);
+                }}
               />
               <Group justify="flex-end">
                 <Button

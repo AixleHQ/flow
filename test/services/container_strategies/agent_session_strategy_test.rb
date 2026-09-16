@@ -42,6 +42,12 @@ module ContainerStrategies
       assert_equal "claude-sonnet-5", build_strategy.send(:resolve_model, @session)
     end
 
+    test "resolve_model passes an Antigravity session selection through to launch" do
+      @session.update!(agent_type: "antigravity_cli", requested_model: "claude-sonnet-4-6")
+
+      assert_equal "claude-sonnet-4-6", build_strategy(agent_type: "antigravity_cli").send(:resolve_model, @session)
+    end
+
     # == Inheritance Tests ==
 
     test "inherits from AgentBaseStrategy" do
@@ -272,6 +278,57 @@ module ContainerStrategies
       end
 
       assert_equal "auth_file_missing", error.code
+      assert_equal Agents::CodexAdapter.new.config_path, error.details[:path]
+      refute error.details[:exists]
+      assert_equal 1, error.details[:attempts]
+    end
+
+    # Review decision on PR #252: a retry would mask a real seed/entrypoint race
+    # instead of surfacing it, so a preflight failure fails the session on the
+    # first attempt — no reseed.
+    test "Codex preflight fails immediately when the written auth file disappears, without reseeding" do
+      strategy, = build_codex_preflight_strategy(nil)
+      SessionContextService.expects(:inject_credential).never
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_file_missing", error.code
+      assert_equal 1, error.details[:attempts]
+    end
+
+    test "credential preflight fails immediately when the initial verified write fails, without reseeding" do
+      strategy, = build_codex_preflight_strategy(nil)
+      auth_path = Agents::CodexAdapter.new.config_path
+      write_error = AgentCredentialsService::CredentialWriteError.new(
+        path: auth_path, container: "abc123", write_outcome: "verification_failed"
+      )
+      SessionContextService.unstub(:assemble_session_context)
+      SessionContextService.expects(:assemble_session_context).once.raises(write_error)
+      SessionContextService.expects(:inject_credential).never
+
+      error = assert_raises(AgentSessionStrategy::ProvisioningError) do
+        strategy.before_exec(container_id: "container_ref")
+      end
+
+      assert_equal "auth_file_write_failed", error.code
+      assert_equal 1, error.details[:attempt]
+      assert_equal 1, error.details[:attempts]
+    end
+
+    test "interactive first login proceeds without a stored credential" do
+      @session.update!(agent_type: "codex", mode: "interactive", session_type: "agent_session")
+      strategy = AgentSessionStrategy.new(
+        user_id: @user.id, agent_type: "codex", session_id: @session.id,
+        route_token: @session.route_token, credential: nil
+      )
+      container = mock("container")
+      strategy.stubs(:resolve_container).returns(container)
+      strategy.stubs(:runtime).returns(stub(container_identifier: "abc123"))
+      SessionContextService.expects(:assemble_session_context).with(container, @session, credential: nil)
+
+      assert_nothing_raised { strategy.before_exec(container_id: "container_ref") }
     end
 
     test "Codex preflight rejects a zero-byte auth file" do
@@ -312,6 +369,7 @@ module ContainerStrategies
       strategy.stubs(:collect_logs).returns([ 0, {} ])
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
 
       result = strategy.before_cleanup(container_id: "abc123")
@@ -421,6 +479,7 @@ module ContainerStrategies
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
 
       assert_difference "SessionLog.count", 1 do
@@ -452,6 +511,7 @@ module ContainerStrategies
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
 
       result = strategy.before_cleanup(container_id: "abc123")
@@ -477,6 +537,7 @@ module ContainerStrategies
       strategy.stubs(:collect_outputs).returns(0)
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
       strategy.stubs(:collect_usage)
 
       assert_no_difference "SessionLog.count" do
@@ -503,6 +564,7 @@ module ContainerStrategies
       strategy.stubs(:collect_logs).returns([ 0, {} ])
       strategy.stubs(:collect_terminal_output).returns(0)
       strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
 
       result = strategy.before_cleanup(container_id: "abc123")
 
@@ -828,6 +890,7 @@ module ContainerStrategies
       strategy.stubs(:resolve_container).returns(container)
       strategy.stubs(:runtime).returns(runtime)
       SessionContextService.stubs(:assemble_session_context).returns(true)
+      SessionContextService.stubs(:inject_credential).returns(true)
       [ strategy, runtime, container ]
     end
   end

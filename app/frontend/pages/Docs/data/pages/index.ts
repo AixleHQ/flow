@@ -4,6 +4,7 @@ import aiBuilder from './ai-builder.md?raw';
 import analytics from './analytics.md?raw';
 import apiGuide from './api-guide.md?raw';
 import assets from './assets.md?raw';
+import azureDevops from './azure-devops.md?raw';
 import board from './board.md?raw';
 import changelogProductAreas from './changelog-product-areas.md?raw';
 import cliRef from './cli-ref.md?raw';
@@ -232,6 +233,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: integrations,
     toc: extractToc(integrations),
+  },
+  'azure-devops': {
+    title: 'Azure DevOps',
+    section: 'User guide',
+    content: azureDevops,
+    toc: extractToc(azureDevops),
   },
   configuration: {
     title: 'Configuration',

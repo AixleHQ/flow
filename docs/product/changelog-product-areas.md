@@ -1,13 +1,13 @@
 # Aixle Flow Product Snapshot — Changelog Taxonomy
 
-> Deliverable for issue #551. A user-facing map of Aixle Flow as it exists
+> A user-facing map of Aixle Flow as it exists
 > today, frozen as the changelog taxonomy: after a release, every user-visible
 > change is tagged with one **product area** from the tables below, so each
 > release reads as a change to a named part of the product — not as a list of
 > tickets.
 >
 > **Snapshot date:** 2026-08-20. Area names are verified against the product
-> UI on `develop` (sidebar labels, page titles, and on-screen control copy),
+> UI itself (sidebar labels, page titles, and on-screen control copy),
 > not internal engineering names.
 
 ## What Aixle Flow is

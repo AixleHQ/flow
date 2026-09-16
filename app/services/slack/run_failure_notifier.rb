@@ -30,7 +30,7 @@ module Slack
           channel: channel,
           thread_ts: slack["thread_ts"],
           text: message_for(run)
-        )
+        ).present?
       rescue StandardError => e
         Rails.logger.error("[Slack::RunFailureNotifier] run ##{run&.id}: #{e.message}")
         false
