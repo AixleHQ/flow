@@ -9,8 +9,8 @@ import { AppSidebar } from './AppSidebar';
 import type { SharedMembership, SharedProject } from './types';
 
 const projects: SharedProject[] = [
-  { id: 7, name: 'Aurora Platform', slug: 'aurora-platform', state: 'active' },
-  { id: 8, name: 'Borealis Pipeline', slug: 'borealis-pipeline', state: 'active' },
+  { id: 7, name: 'Aurora Platform', slug: 'aurora-platform', state: 'active', favorite: false },
+  { id: 8, name: 'Borealis Pipeline', slug: 'borealis-pipeline', state: 'active', favorite: false },
 ];
 
 describe('AppSidebar', () => {
@@ -322,6 +322,66 @@ describe('AppSidebar', () => {
     await userEvent.click(within(rail).getByRole('button', { name: /Vega Corp/ }));
 
     expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('lists favorites before non-favorites in the workspace switcher', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[
+          { id: 1, name: 'Alpha', slug: 'alpha', state: 'active', favorite: false },
+          { id: 2, name: 'Zeta', slug: 'zeta', state: 'active', favorite: true },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+    await screen.findByRole('link', { name: /Zeta/ });
+
+    const projectLinks = screen
+      .getAllByRole('link')
+      .filter((el) => /\/company\/projects\/\d+$/.test(el.getAttribute('href') ?? ''));
+    expect(projectLinks.map((el) => el.getAttribute('href'))).toEqual(['/company/projects/2', '/company/projects/1']);
+  });
+
+  it('shows a star mark only on favorited projects', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[
+          { id: 1, name: 'Alpha', slug: 'alpha', state: 'active', favorite: false },
+          { id: 2, name: 'Zeta', slug: 'zeta', state: 'active', favorite: true },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+
+    const zeta = await screen.findByRole('link', { name: /Zeta/ });
+    const alpha = screen.getByRole('link', { name: /Alpha/ });
+    // Favorited rows get IconStarFilled; non-favorites have no svg in the row.
+    expect(zeta.querySelector('svg')).not.toBeNull();
+    expect(alpha.querySelector('svg')).toBeNull();
+  });
+
+  it('hides archived projects from the workspace switcher', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[
+          { id: 1, name: 'Active One', slug: 'active-one', state: 'active', favorite: false },
+          { id: 2, name: 'Old One', slug: 'old-one', state: 'archived', favorite: true },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+
+    expect(await screen.findByRole('link', { name: /Active One/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Old One/ })).not.toBeInTheDocument();
   });
 });
 

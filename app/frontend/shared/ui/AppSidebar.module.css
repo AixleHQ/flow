@@ -464,6 +464,11 @@
   line-height: 1;
 }
 
+.dpFavorite {
+  color: var(--mantine-color-yellow-6);
+  flex-shrink: 0;
+}
+
 .dpCheck {
   color: var(--app-primary-strong);
   flex-shrink: 0;

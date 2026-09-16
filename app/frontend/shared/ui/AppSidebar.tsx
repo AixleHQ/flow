@@ -21,6 +21,7 @@ import {
   IconRobot,
   IconSettings,
   IconSparkles,
+  IconStarFilled,
   IconTerminal2,
   IconTool,
   IconUser,
@@ -421,13 +422,22 @@ function SidebarWorkspaceSwitcher({
 
   const currentProject = currentProjectId ? (projects.find((p) => String(p.id) === currentProjectId) ?? null) : null;
 
-  const filteredProjects = useMemo(
-    () =>
-      search.trim()
-        ? projects.filter((p) => p.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
-        : projects,
-    [search, projects],
-  );
+  // Active-only + favorites first: IndexPage overwrites shared `projects` with
+  // every state, and the switcher's contract is the everyday active set. Client
+  // sort matches the projects grid so a star toggle reorders even when the
+  // incoming array order is stale relative to `favorite` flags.
+  const filteredProjects = useMemo(() => {
+    const ordered = projects
+      .filter((p) => p.state === 'active')
+      .sort(
+        (a, b) =>
+          Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+      );
+
+    if (!search.trim()) return ordered;
+    const query = search.toLocaleLowerCase();
+    return ordered.filter((p) => p.name.toLocaleLowerCase().includes(query));
+  }, [search, projects]);
 
   const handleSwitcherClick = () => {
     if (collapsed) {
@@ -531,6 +541,7 @@ function SidebarWorkspaceSwitcher({
                       <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
                     </div>
                     <span className={classes.dpName}>{project.name}</span>
+                    {project.favorite && <IconStarFilled size={12} className={classes.dpFavorite} aria-hidden />}
                     {isActive && <IconCheck size={12} className={classes.dpCheck} />}
                   </UnstyledButton>
                 );
