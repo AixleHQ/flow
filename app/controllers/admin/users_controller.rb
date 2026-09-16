@@ -2,7 +2,12 @@
 
 module Admin
   class UsersController < Admin::ApplicationController
-    # Override resource_params to handle empty password fields
+    def authorized_action?(resource, action)
+      return false if action.to_sym == :destroy && resource.is_a?(User) && resource.deleted?
+
+      super
+    end
+
     def resource_params
       params_hash = super
       if params_hash[:password].blank? && params_hash[:password_confirmation].blank?
@@ -46,6 +51,17 @@ module Admin
       end
     rescue Users::PermanentDeletionService::OwnershipTransferError => e
       redirect_to admin_user_path(user), alert: e.message
+    end
+
+    def restore
+      user = requested_resource
+
+      unless user.deleted?
+        return redirect_to admin_user_path(user), alert: "User is not deleted."
+      end
+
+      user.restore!
+      redirect_to admin_user_path(user), notice: "User was restored."
     end
 
     def impersonate

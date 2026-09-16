@@ -12,7 +12,16 @@ copying the whole page. This keeps us in sync with future Administrate updates.
 
 <% content_for(:header_last) do %>
   <% unless page.resource.super_admin? %>
-    <% if impersonated? && current_user.id == page.resource.id %>
+    <% if page.resource.deleted? %>
+      <%= button_to(
+        "Restore",
+        restore_admin_user_path(page.resource),
+        method: :post,
+        class: "button",
+        style: "margin-left: 0.5rem;",
+        data: { turbo_confirm: "Restore #{page.resource.email}?" }
+      ) %>
+    <% elsif impersonated? && current_user.id == page.resource.id %>
       <%= button_to(
         t("administrate.actions.stop_impersonate"),
         stop_impersonate_admin_user_path(page.resource),
@@ -35,7 +44,7 @@ copying the whole page. This keeps us in sync with future Administrate updates.
     submit. This is separate from the header's soft-delete Delete action. %>
 <% content_for(:after_main) do %>
   <% unless page.resource.super_admin? %>
-    <section class="permanent-delete" style="margin-top: 2rem; padding: 1rem; border: 1px solid #c0392b; border-radius: 4px;">
+    <section class="permanent-delete" style="margin: 2rem 2rem 0; padding: 1.5rem 2rem; border: 1px solid #c0392b; border-radius: 4px;">
       <h2 style="color: #c0392b;">Permanently delete user</h2>
       <p>
         This <strong>irreversibly</strong> removes
@@ -53,7 +62,9 @@ copying the whole page. This keeps us in sync with future Administrate updates.
           Type <strong><%= page.resource.email %></strong> to confirm:
         </label>
         <%= f.text_field :confirm_email, autocomplete: "off" %>
-        <%= f.submit "Permanently delete", class: "button button--danger" %>
+        <div style="margin-top: 0.75rem;">
+          <%= f.submit "Permanently delete", class: "button button--danger" %>
+        </div>
       <% end %>
     </section>
   <% end %>

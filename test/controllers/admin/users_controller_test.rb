@@ -169,6 +169,25 @@ module Admin
       end
     end
 
+    test "restore brings back a soft-deleted user" do
+      @user.soft_delete!
+      assert @user.reload.deleted?
+
+      post :restore, params: { id: @user.id }
+
+      assert_not @user.reload.deleted?
+      assert_redirected_to admin_user_path(@user)
+    end
+
+    test "restore refuses a non-deleted user" do
+      assert_not @user.deleted?
+
+      post :restore, params: { id: @user.id }
+
+      assert_redirected_to admin_user_path(@user)
+      assert_equal "User is not deleted.", flash[:alert]
+    end
+
     test "should impersonate user" do
       post :impersonate, params: { id: @user.id }
 
