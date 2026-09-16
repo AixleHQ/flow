@@ -20,6 +20,7 @@ import (
 
 type server struct {
 	webBaseURL string
+	proxyURL   string
 	client     *http.Client
 }
 
@@ -32,8 +33,17 @@ func main() {
 		log.Fatalf("invalid OTLP_INGEST_WEB_BASE_URL: %v", err)
 	}
 
+	proxyURL := strings.TrimSpace(os.Getenv("OTLP_INGEST_PROXY_URL"))
+	if proxyURL != "" {
+		if _, err := url.ParseRequestURI(proxyURL); err != nil {
+			log.Fatalf("invalid OTLP_INGEST_PROXY_URL: %v", err)
+		}
+		proxyURL = strings.TrimRight(proxyURL, "/")
+	}
+
 	srv := &server{
 		webBaseURL: strings.TrimRight(webBaseURL, "/"),
+		proxyURL:   proxyURL,
 		client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
@@ -99,6 +109,12 @@ func (s *server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.proxyURL != "" {
+		if err := s.postJSON(r.Context(), s.proxyURL, jsonBody); err != nil {
+			log.Printf("proxy error (metrics): %v", err)
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -147,14 +163,23 @@ func (s *server) handleLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.proxyURL != "" {
+		if err := s.postJSON(r.Context(), s.proxyURL, jsonBody); err != nil {
+			log.Printf("proxy error (logs): %v", err)
+		}
+	}
+
 	w.WriteHeader(http.StatusOK)
 }
 
 func (s *server) postUsage(ctx context.Context, body []byte) error {
+	return s.postJSON(ctx, s.webBaseURL+"/api/v1/internal/usage_statistics", body)
+}
+
+func (s *server) postJSON(ctx context.Context, endpoint string, body []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	endpoint := s.webBaseURL + "/api/v1/internal/usage_statistics"
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -170,7 +195,7 @@ func (s *server) postUsage(ctx context.Context, body []byte) error {
 
 	if response.StatusCode >= 300 {
 		snippet, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return fmt.Errorf("web api error: status=%d body=%s", response.StatusCode, strings.TrimSpace(string(snippet)))
+		return fmt.Errorf("upstream error: status=%d body=%s", response.StatusCode, strings.TrimSpace(string(snippet)))
 	}
 
 	return nil

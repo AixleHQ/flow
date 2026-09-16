@@ -55,6 +55,7 @@ class TerminalSession < ApplicationRecord
   belongs_to :company, optional: true
   belongs_to :configured_agent, class_name: "Agent", optional: true
   has_one :usage_statistic, dependent: :destroy
+  has_many :llm_calls, dependent: :destroy
   has_many :session_logs, dependent: :destroy
   has_many :output_assets, class_name: "Asset", foreign_key: :terminal_session_id
   has_one :step_run, dependent: :nullify
@@ -294,11 +295,13 @@ class TerminalSession < ApplicationRecord
 
   def on_finished
     sync_usage
+    materialize_llm_calls
     update!(finished_at: Time.current, container_id: nil)
   end
 
   def on_failed
     sync_usage
+    materialize_llm_calls
     update!(finished_at: Time.current, container_id: nil)
     notify_workflow_execution_if_step_session
   end
@@ -329,6 +332,49 @@ class TerminalSession < ApplicationRecord
     )
   rescue StandardError => e
     Rails.logger.error("[TerminalSession] Failed to sync usage for #{id}: #{e.message}")
+  end
+
+  def materialize_llm_calls
+    stat = reload_usage_statistic
+    events = stat&.events_data.presence
+    return if events.nil?
+    return if LlmCall.where(terminal_session_id: id).exists?
+
+    run_id  = step_run&.workflow_run_id
+    step_id = step_run&.id
+
+    rows = events.filter_map do |event|
+      usage = event["tokenUsage"] || {}
+      ts_raw = event["timestamp"]
+      occurred =
+        if ts_raw.blank?
+          created_at
+        elsif ts_raw.is_a?(String) && ts_raw.match?(/[T:\-]/)
+          Time.zone.parse(ts_raw)
+        else
+          Time.at(ts_raw.to_i / 1000.0).utc
+        end
+
+      {
+        terminal_session_id: id,
+        workflow_run_id:     run_id,
+        step_run_id:         step_id,
+        model:               event["model"].presence || "unknown",
+        input_tokens:        usage["inputTokens"].to_i,
+        output_tokens:       usage["outputTokens"].to_i,
+        cache_read_tokens:   usage["cacheReadTokens"].to_i,
+        cache_write_tokens:  usage["cacheWriteTokens"].to_i,
+        total_cents_precise: usage["totalCents"].to_f,
+        source:              event["source"].to_s,
+        occurred_at:         occurred,
+        created_at:          Time.current,
+        updated_at:          Time.current
+      }
+    end
+
+    LlmCall.insert_all(rows) if rows.any?
+  rescue StandardError => e
+    Rails.logger.error("[TerminalSession] Failed to materialize llm_calls for #{id}: #{e.message}")
   end
 
   def strategy_params

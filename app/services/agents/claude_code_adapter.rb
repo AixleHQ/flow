@@ -819,7 +819,7 @@ module Agents
     # Default environment variables for Claude Code runtime.
     def default_env_vars(session)
       route_token = session.route_token
-      resource_attributes = "terminal_session_token=#{route_token}"
+      resource_attributes = "terminal_session_token=#{route_token},agent_type=claude_code"
 
       {
         # MITM proxy — intercept Anthropic API traffic
@@ -830,7 +830,12 @@ module Agents
         "OTEL_EXPORTER_OTLP_ENDPOINT" => Settings.otel.endpoint,
         "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
         "OTEL_METRICS_EXPORTER" => "otlp",
+        "OTEL_LOGS_EXPORTER" => "otlp",
         "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
+        "OTEL_LOG_USER_PROMPTS" => "1",
+        "OTEL_LOG_ASSISTANT_RESPONSES" => "1",
+        "OTEL_LOG_TOOL_DETAILS" => "1",
+        "OTEL_LOG_TOOL_CONTENT" => "1",
         "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes,
         # MCP server startup timeout (ms). Default 90s — stdio servers need time for pipx/npx cold start.
         "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s

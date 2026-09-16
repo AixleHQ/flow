@@ -105,7 +105,7 @@ module Agents
 
     # Pass API key as env var — Gemini CLI picks it up automatically
     def default_env_vars(session)
-      env = { "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}" }
+      env = { "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token},agent_type=gemini_cli" }
 
       # Inject the API key from the credential of THIS session's company: keys are per
       # company so the vendor bill lands on the company that ran the session.
@@ -298,7 +298,7 @@ module Agents
           "target" => "local",
           "otlpEndpoint" => Settings.otel.metrics_endpoint.to_s.sub(%r{/v1/\w+\z}, ""),
           "otlpProtocol" => "http",
-          "logPrompts" => false
+          "logPrompts" => true
         },
         # Tools - auto approve all operations (container is the sandbox)
         "tools" => {
