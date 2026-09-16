@@ -192,12 +192,24 @@ module Agents
       "\"#{escaped}\""
     end
 
-    # Env for the MITM proxy, which is where session usage comes from (see
-    # #collect_usage), plus the API key when the credential is an API-key login.
+    # Default environment variables for Grok runtime.
     def default_env_vars(session)
       env = {
+        # MITM proxy — intercept Grok API traffic
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(",")
+        "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(","),
+        # OTLP telemetry
+        "OTEL_EXPORTER_OTLP_ENDPOINT" => Settings.otel.endpoint,
+        "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
+        "OTEL_METRICS_EXPORTER" => "otlp",
+        "OTEL_TRACES_EXPORTER" => "otlp",
+        "OTEL_LOGS_EXPORTER" => "otlp",
+        "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
+        "OTEL_LOG_USER_PROMPTS" => "1",
+        "OTEL_LOG_ASSISTANT_RESPONSES" => "1",
+        "OTEL_LOG_TOOL_DETAILS" => "1",
+        "OTEL_LOG_TOOL_CONTENT" => "1",
+        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
       }
 
       # Inject the API key from the credential of THIS session's company: keys are per
