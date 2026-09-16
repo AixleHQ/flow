@@ -289,29 +289,15 @@ class SessionService
     # Block a launch whose agent credential is broken, so the user gets "sign in again"
     # instead of a container that fails on an expired token.
     #
-    # Two questions, because one is not enough:
+    # `status` alone misses the case this guard was added for: the refresh sweep only
+    # selects rows with a non-NULL `expires_at`, so a credential whose expiry was never
+    # derived is never selected, never marked, and stays `active` however dead its token
+    # is. For `cursor_cli` a NULL expiry is not "this login has no expiry" — the
+    # accessToken is a JWT and #sync_expires_at derives the column from it on every
+    # write of config_data — so it can only mean nobody derived it. See the PR
+    # description for the incident this comes from.
     #
-    # - `status` — what the refresh sweep has already noticed. Necessary but not
-    #   sufficient: the sweep only looks at rows with a non-NULL `expires_at`, so a
-    #   credential whose expiry was never derived is never selected, never marked, and
-    #   stays `active` however dead its token is. That is how a Cursor CLI session ran
-    #   to COMPLETED on a token that had expired weeks earlier — the CLI in the
-    #   container papered over it with its own device login, while every server-side
-    #   call made with the stored token 401'd and the run finished with no usage.
-    # - the token itself — asked of the adapter holding it, the way CloudAuth::Preflight
-    #   inspects a cloud connection's own material rather than a derived flag. Only
-    #   agents for which a missing expiry really means a broken credential answer this
-    #   (BaseAdapter returns nil), so an API-key or Bedrock login is unaffected. And
-    #   only what is beyond saving is refused: an expired token that still carries a
-    #   usable refresh token passes, the way Oauth::Preflight.usable? passes an expired
-    #   credential that is refreshable. Refusing it would send the user to a re-auth
-    #   they did not need — and, since this also runs for workflow steps and
-    #   launch_step_session_activity wraps PreflightError in a NON-RETRYABLE Temporal
-    #   ApplicationError, would kill a run that self-heals today.
-    #
-    # No network, matching Oauth::Preflight and CloudAuth::Preflight — the refresh that
-    # can still save a token expiring soon happens later, at provisioning
-    # (AgentSessionStrategy#refresh_expiring_credential!).
+    # No network, matching Oauth::Preflight and CloudAuth::Preflight.
     #
     # An auth_setup session is exempt: it exists to REPLACE the broken credential,
     # so gating it on that credential locks the user out of the only flow that can
@@ -322,13 +308,10 @@ class SessionService
 
       credential = AgentCredential.find_by(user_id: user.id, company_id: company.id, agent_type: agent_type)
       return if credential.nil?
+
       raise AgentCredential::PreflightError, credential unless credential.active?
-
-      reason = credential.credential_unusable_reason
-      return if reason.nil?
-
-      Rails.logger.warn("[SessionService] Refusing launch for #{agent_type} credential #{credential.id}: #{reason}")
-      raise AgentCredential::PreflightError, credential
+      raise AgentCredential::PreflightError, credential if credential.agent_type == "cursor_cli" &&
+                                                           credential.expires_at.nil?
     end
 
     # Re-validate selected custom MCP server URLs right before launch (F34). The

@@ -173,19 +173,11 @@ module Agents
     # persist_refreshed!.
     #
     # The decision is taken HERE, from the stored token, the way ClaudeCodeAdapter
-    # takes it from its OAuth blocks — not from the denormalised
-    # `agent_credentials.expires_at` column. That column is written only when
-    # config_data is written, and config_data is only routinely written by a refresh,
-    # so a row whose expiry was never derived sat in a closed loop: NULL reads as
-    # "never expires" in `refresh_due` / `#expiring_within?`, so it was never selected,
-    # never refreshed, never written, and stayed NULL.
-    #
-    # Deciding here is only half of it: both callers used to gate on the column before
-    # consulting an adapter, so this method was unreachable for exactly those rows. They
-    # now let a NULL-expiry row through for the agent types listed in
-    # AgentCredential::TOKEN_DERIVED_REFRESH_AGENT_TYPES (`.refresh_due` and
-    # #refresh_worth_attempting?), which is what makes the column an optimisation for
-    # row selection rather than the only gate.
+    # takes it from its OAuth blocks rather than from the denormalised
+    # `agent_credentials.expires_at` column. Both callers still select rows by that
+    # column, so this does not widen what gets refreshed; it makes #refresh! safe to
+    # call without a caller-side gate, and stops the method from burning a single-use
+    # grant on a token that has hours of life left.
     #
     # An `exp` this adapter cannot read is deliberately NOT treated as "never expires":
     # a Cursor accessToken dies with its grant either way, so an unreadable expiry means
@@ -203,41 +195,6 @@ module Agents
       new_token = refresh_cursor_token!(credential)
       new_token ? { status: :refreshed, detail: nil }
                 : { status: :error, detail: "cursor token refresh failed" }
-    end
-
-    # Session-start preflight verdict on the stored token (no network).
-    #
-    # The credential this session would run on is only as good as the accessToken in it,
-    # and neither `status` nor `expires_at` can be trusted to say so: a credential the
-    # refresh sweep never selected is `active` with a NULL expiry no matter how dead its
-    # token is. That is how a Cursor session ran to COMPLETED while every server-side
-    # call made with the stored token — the usage Dashboard API among them — answered
-    # 401, leaving the run with no tokens and no cost. The CLI in the container hides it
-    # by re-authenticating against its own 401 via device login.
-    #
-    # Only what is beyond saving is refused, as in the two preflights this mirrors
-    # (`Oauth::Preflight.usable?` — `!cred.expired? || cred.refreshable?`;
-    # `CloudAuth::Preflight.unusable_reason` — "reauthorization_required" only when the
-    # refresh token is blank AND the expiry is past). A live refreshToken means
-    # AgentSessionStrategy#refresh_expiring_credential! rotates this token at
-    # provisioning, a few steps after this gate, and #refresh! now decides that from the
-    # token rather than from the column — so refusing here would send the user to a
-    # manual re-authentication they did not need. For a workflow step it would be worse:
-    # launch_step_session_activity.rb wraps PreflightError in a NON-RETRYABLE Temporal
-    # ApplicationError, killing a run that self-heals today.
-    #
-    # Without a refreshToken nothing can rescue the token, so an unreadable expiry is
-    # refused alongside an expired one, matching CloudAuth::Preflight.past? ("garbage
-    # counts as expired"): the token still dies at its grant's 60 days, and a reconnect
-    # prompt beats handing a session a credential nothing can refresh.
-    def credential_unusable_reason(credentials)
-      return nil if credentials["refreshToken"].present?
-
-      exp = token_expires_at(credentials).to_i
-      return "expiry_unreadable" unless exp.positive?
-      return "token_expired" if exp <= now_ms
-
-      nil
     end
 
     # Env vars for MITM proxy and http2-logger configuration.

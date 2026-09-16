@@ -444,35 +444,6 @@ module Agents
       { status: :not_needed, detail: nil, permanent: false }
     end
 
-    # Why this credential's STORED token material cannot be handed to a session, or nil
-    # when nothing is wrong. Read at session-start preflight
-    # (SessionService#preflight_agent_credential!) so a launch is refused with the
-    # existing "sign in again" CTA instead of running to completion on a dead token.
-    #
-    # Mirrors CloudAuth::Preflight.unusable_reason, and for the same reason: derived
-    # state lies. `agent_credentials.expires_at` and `status` only say what the refresh
-    # sweep has already noticed, and a credential the sweep never selected looks healthy
-    # in both. The token itself does not.
-    #
-    # Contract for implementers:
-    # - NO network. This runs in front of every launch, mirroring Oauth::Preflight and
-    #   CloudAuth::Preflight; the live exchange happens later, at provisioning.
-    # - Only override where a nil expiry is genuinely evidence of a broken credential.
-    #   Returning a reason for an agent whose auth legitimately carries no readable
-    #   expiry (an API key, a cloud connection) would refuse a working login.
-    # - Condemn only what is beyond saving. A credential that still holds a usable
-    #   refresh token is rotated at provisioning a few steps later
-    #   (AgentSessionStrategy#refresh_expiring_credential!), so returning a reason for
-    #   it sends the user to a re-authentication they did not need — and, for a
-    #   workflow step, kills the run: launch_step_session_activity wraps PreflightError
-    #   in a non-retryable Temporal ApplicationError.
-    #
-    # @param _credentials [Hash] decrypted credential data
-    # @return [String, nil] a short machine reason ("token_expired", …) for logs
-    def credential_unusable_reason(_credentials)
-      nil
-    end
-
     # Persist a freshly-refreshed credential blob under a row lock, guarding
     # against clobbering a concurrently-rotated (newer) token. Mirrors the Claude
     # per-block pattern for single-block agents (Codex, Cursor): reload the locked
