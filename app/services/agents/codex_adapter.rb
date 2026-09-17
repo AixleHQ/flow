@@ -82,6 +82,13 @@ module Agents
       tokens["access_token"].present? || tokens["refresh_token"].present?
     end
 
+    # ChatGPT OAuth: the access token is a JWT whose `exp` we read, and the token endpoint
+    # returns a rotated refresh token when it issues one (#refresh_access_token! keeps the
+    # previous one when it does not).
+    def credential_lifecycle
+      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: nil }.freeze
+    end
+
     # Codex OAuth access/id tokens are JWTs carrying an `exp` claim. Surface the
     # soonest expiry (epoch ms) so AgentCredential#expires_at is populated and the
     # proactive-refresh sweep selects the credential before it expires (instead of

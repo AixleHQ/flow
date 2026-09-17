@@ -383,6 +383,38 @@ module Agents
       nil
     end
 
+    # How this runtime's credential lives and dies. One declaration per adapter, read by
+    # everything that has to decide something about a token: which runtimes the refresh
+    # sweep selects (AgentCredential.refreshable_agent_types is derived from it), whether
+    # an expiry is actionable or only informational, and what the user is told when it
+    # runs out.
+    #
+    # It exists because these facts used to be spread across a hardcoded list of agent
+    # types, an optional #token_expires_at and an optional #refresh!, with nothing tying
+    # them together — so a runtime could ship an expiry with no way to act on it (a
+    # working credential painted "expired" an hour after login) or a refresh the sweep
+    # could never select (a NULL expiry, which is the cursor_cli population). Both shapes
+    # are now rejected by test/services/agents/credential_lifecycle_contract_test.rb.
+    #
+    # Keys:
+    #   expiry   :token  — an expiry is readable from the stored blob (#token_expires_at)
+    #            :none   — the credential does not expire (an API key)
+    #   refresh  :server         — we renew it ourselves (#refresh!), and the sweep does
+    #            :container_only — only the CLI inside the container can renew it
+    #            :reauth_only    — nothing can renew it; the user must sign in again
+    #            :none           — nothing to renew
+    #   rotation :rotating — a refresh invalidates the grant it replaced (single-use
+    #                        refresh token: every other holder of it is now stale)
+    #            :static   — it does not
+    #   nominal_ttl — the vendor's documented/measured token life, nil when unknown
+    #   reauth_required_on_expiry — set only when `expiry: :token` meets a `refresh` that
+    #            cannot renew: the acknowledgement that the expiry we surface is a
+    #            re-login instruction, not something a sweep will fix
+    # @return [Hash]
+    def credential_lifecycle
+      { expiry: :none, refresh: :none, rotation: :static, nominal_ttl: nil }.freeze
+    end
+
     # Expiry (epoch ms) of the login the CLI cannot run without, or nil when this agent
     # has none that expires. Distinct from #token_expires_at, which reports the SOONEST
     # expiry across every stored block so the refresh sweep fires early: an agent that

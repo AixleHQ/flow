@@ -197,6 +197,15 @@ module Agents
       [ state_path ]
     end
 
+    # Kiro's access token lasts about an hour and IS refreshable — both paths (social
+    # login against Kiro's own endpoint, Builder ID/IdC against AWS SSO OIDC) are
+    # implemented on feat/agent-token-refresh-coverage. Until that lands the only renewal
+    # happens inside the container, so no expiry is surfaced: publishing one without a
+    # refresh would paint a working credential "expired" an hour after login.
+    def credential_lifecycle
+      { expiry: :none, refresh: :container_only, rotation: :rotating, nominal_ttl: 1.hour }.freeze
+    end
+
     def auth_watch_path
       state_path
     end

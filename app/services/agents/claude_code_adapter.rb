@@ -184,6 +184,14 @@ module Agents
       OAUTH_BLOCKS.filter_map { |b| credentials.dig(b, "expiresAt") }.map(&:to_i).min
     end
 
+    # claude.ai OAuth: 8 hours, measured across production rows (expires_in 28800), and
+    # the refresh rotates — every container we handed the blob to holds the same
+    # single-use grant. A credential authenticating by primaryApiKey or Bedrock carries no
+    # expiry at all, which #token_expires_at reports as nil.
+    def credential_lifecycle
+      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: 8.hours }.freeze
+    end
+
     # Only the base login gates a launch. An expired designOauth is an add-on the CLI
     # runs fine without, and a credential authenticating by primaryApiKey or Bedrock
     # carries no base expiry at all — both read as nil here, never as "expired".

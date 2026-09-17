@@ -61,6 +61,14 @@ module Agents
     # Watch the OAuth token file, not settings.json: settings.json is written
     # up front by #auth_setup_files, before the user has logged in at all, so
     # watching it would report success prematurely.
+    # Google installed-app OAuth: ~1h access token with a refresh token stored beside it,
+    # renewed by `agy` inside the container. Server-side refresh is possible (the protocol
+    # is recovered) but not implemented, so no expiry is surfaced yet — see
+    # docs/design/agent-credential-lifecycle.md §Layer 1.
+    def credential_lifecycle
+      { expiry: :none, refresh: :container_only, rotation: :rotating, nominal_ttl: 1.hour }.freeze
+    end
+
     def auth_watch_path = config_path
 
     def auth_file_paths = [ config_path, "#{home_dir}/#{SETTINGS_PATH}" ]

@@ -226,6 +226,17 @@ module Agents
       super + %w[/var/log/mitm/http.log]
     end
 
+    # Grok stores `{key, token_type, expires_at}` per scope and no refresh token at all,
+    # so nothing — not the sweep, not the CLI in the container — can renew it. The expiry
+    # is still surfaced, and `reauth_required_on_expiry` is what says that surfacing it
+    # means "sign in again" rather than "wait for the sweep": the launch gate refuses an
+    # expired one (AgentCredential#unrecoverably_expired?) instead of starting a session
+    # that cannot authenticate.
+    def credential_lifecycle
+      { expiry: :token, refresh: :reauth_only, rotation: :static, nominal_ttl: nil,
+        reauth_required_on_expiry: true }.freeze
+    end
+
     # Soonest expiry across the scope entries that carry one, in epoch ms, so
     # AgentCredential#expires_at reflects a Grok session token (they are short-lived —
     # the CLI falls back to a 30-day lifetime only when the server sends no expiry).

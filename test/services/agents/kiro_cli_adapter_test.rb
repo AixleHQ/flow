@@ -348,8 +348,9 @@ module Agents
       assert_nil @adapter.token_expires_at(@adapter.extract_credentials(sqlite_blob))
     end
 
-    test "kiro_cli is not in the refreshable set — there is no refresh endpoint" do
-      refute_includes AgentCredential::REFRESHABLE_AGENT_TYPES, "kiro_cli"
+    test "kiro_cli is not in the refreshable set — renewal happens in the container" do
+      refute_includes AgentCredential.refreshable_agent_types, "kiro_cli"
+      assert_equal :container_only, @adapter.credential_lifecycle[:refresh]
     end
 
     # == Telemetry (the primary cost source) ==

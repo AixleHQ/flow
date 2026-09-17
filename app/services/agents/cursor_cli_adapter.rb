@@ -50,6 +50,13 @@ module Agents
       config["accessToken"].present?
     end
 
+    # Cursor's accessToken is a JWT and #refresh! posts to Cursor's token endpoint, so the
+    # declaration is :server. That the endpoint has been answering 404 since 2026-09-05 is
+    # an open incident, not a different lifecycle — see docs/design/agent-credential-lifecycle.md.
+    def credential_lifecycle
+      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: nil }.freeze
+    end
+
     # Cursor's accessToken is a JWT carrying an `exp` claim. Surface its expiry
     # (epoch ms) so AgentCredential#expires_at is populated and the proactive
     # refresh sweep selects the credential before expiry rather than only on 401.

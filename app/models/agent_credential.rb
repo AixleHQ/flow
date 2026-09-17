@@ -49,13 +49,20 @@ class AgentCredential < ApplicationRecord
 
   broadcasts_to :user
 
-  # Agent types whose credentials carry a refreshable OAuth token.
-  REFRESHABLE_AGENT_TYPES = %w[claude_code codex cursor_cli].freeze
+  # Agent types this platform can renew server-side, derived from each adapter's declared
+  # lifecycle (BaseAdapter#credential_lifecycle) rather than maintained by hand — a list
+  # and an implementation kept in sync by editing habits is how a runtime ships with one
+  # and not the other.
+  def self.refreshable_agent_types
+    @refreshable_agent_types ||= AgentCredentialsService::ADAPTERS.filter_map do |agent_type, adapter_class|
+      agent_type if adapter_class.new.credential_lifecycle[:refresh] == :server
+    end.freeze
+  end
 
   # Scopes
   scope :for_agent, ->(agent_type) { where(agent_type: agent_type) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
-  scope :refreshable, -> { where(agent_type: REFRESHABLE_AGENT_TYPES) }
+  scope :refreshable, -> { where(agent_type: refreshable_agent_types) }
   # Credentials whose token expires within `within` (drives the refresh sweep).
   # NULL-expiry credentials (agents whose tokens carry no expiry) are excluded.
   scope :refresh_due, ->(within = 60.minutes) {
@@ -251,7 +258,7 @@ class AgentCredential < ApplicationRecord
   # container is the dead one.
   def unrecoverably_expired?(excluding_session_id: nil)
     return false unless base_login_expired?
-    return true unless REFRESHABLE_AGENT_TYPES.include?(agent_type)
+    return true unless self.class.refreshable_agent_types.include?(agent_type)
 
     held_by_live_session?(excluding_session_id: excluding_session_id)
   end
