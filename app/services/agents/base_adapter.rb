@@ -119,6 +119,14 @@ module Agents
       }
     end
 
+    # Every file that has to be read back out of a container to reconstruct this
+    # credential. Codex is the one runtime whose auth lives in a single file and nothing
+    # else, which is why the default is that file; every other adapter overrides.
+    # @return [Array<String>]
+    def auth_file_paths
+      [ config_path ]
+    end
+
     # The files that carry token material, and ONLY those. #config_files renders the whole
     # container configuration — settings, MCP wiring, model pins — from a workflow_config
     # that a mid-session token delivery does not have, so re-rendering it would overwrite a

@@ -74,6 +74,19 @@ module ContainerStrategies
       refute env_vars.any? { |v| v.start_with?("MCP_SESSION_KEY=") }
     end
 
+    # Without these the container has no way to report a token the CLI rotated, and the
+    # rotation is lost whenever the pod dies before cleanup.
+    test "builds env vars telling the watcher where to report a rotated token" do
+      strategy = build_strategy
+
+      env_vars = strategy.build_env_vars
+
+      assert_includes env_vars, "CREDENTIAL_SYNC_URL=#{Settings.agents.credential_sync_url}"
+      assert_includes env_vars, "CREDENTIAL_SYNC_KEY=#{Agents::SessionKey.generate(@session)}"
+      paths = env_vars.find { |v| v.start_with?("CREDENTIAL_SYNC_PATHS=") }
+      assert_includes paths.to_s, "/home/claude/.claude/.credentials.json"
+    end
+
     test "TTYD_CMD is bash for agent sessions" do
       strategy = build_strategy(agent_type: "claude_code")
 
