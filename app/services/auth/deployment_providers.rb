@@ -34,10 +34,6 @@ module Auth
       # A customer's own OIDC connection carries its issuer and client
       # credentials on the row, so nothing at deployment level gates the kind.
       when :oidc then true
-      # SAML is different: it runs through the sidecar (AD-8), and an
-      # installation without one cannot complete it however many connections a
-      # company configures.
-      when :saml then Settings.sso_bridge&.url.present?
       # These run through a deployment-level OmniAuth strategy, which cannot be
       # registered without credentials.
       when :google then Settings.google_oauth&.client_id.present?

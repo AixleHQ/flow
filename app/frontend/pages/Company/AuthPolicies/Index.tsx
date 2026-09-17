@@ -1,18 +1,5 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import {
-  Alert,
-  Badge,
-  Button,
-  Group,
-  Paper,
-  SegmentedControl,
-  Stack,
-  Switch,
-  Text,
-  TextInput,
-  Title,
-  Tooltip,
-} from '@mantine/core';
+import { Alert, Badge, Button, Group, Paper, Stack, Switch, Text, TextInput, Title, Tooltip } from '@mantine/core';
 
 import {
   companyAuthPolicyPath,
@@ -42,7 +29,6 @@ interface ScimState {
 
 interface PageProps {
   providers: Provider[];
-  saml_available?: boolean;
   scim?: ScimState;
   scim_token?: string | null;
   permissions?: { is_admin?: boolean };
@@ -50,17 +36,8 @@ interface PageProps {
   [key: string]: unknown;
 }
 
-function ConnectionForm({ onDone, samlAvailable }: { onDone: () => void; samlAvailable: boolean }) {
-  const form = useForm({
-    kind: 'oidc',
-    name: '',
-    issuer: '',
-    client_id: '',
-    client_secret: '',
-    tenant_id: '',
-    metadata_url: '',
-  });
-  const isSaml = form.data.kind === 'saml';
+function ConnectionForm({ onDone }: { onDone: () => void }) {
+  const form = useForm({ name: '', issuer: '', client_id: '', client_secret: '', tenant_id: '' });
 
   return (
     <form
@@ -70,53 +47,31 @@ function ConnectionForm({ onDone, samlAvailable }: { onDone: () => void; samlAva
       }}
     >
       <Stack gap="sm">
-        {samlAvailable && (
-          <SegmentedControl
-            value={form.data.kind}
-            onChange={(value) => form.setData('kind', value)}
-            data={[
-              { label: 'OpenID Connect', value: 'oidc' },
-              { label: 'SAML', value: 'saml' },
-            ]}
-          />
-        )}
         <TextInput
           label="Display name"
           placeholder="Acme SSO"
           value={form.data.name}
           onChange={(e) => form.setData('name', e.currentTarget.value)}
         />
-        {isSaml ? (
-          <TextInput
-            label="IdP metadata URL"
-            description="Your identity provider's SAML metadata document"
-            required
-            value={form.data.metadata_url}
-            onChange={(e) => form.setData('metadata_url', e.currentTarget.value)}
-          />
-        ) : (
-          <>
-            <TextInput
-              label="Issuer URL"
-              description="The OpenID Connect issuer, e.g. https://login.example.com"
-              required
-              value={form.data.issuer}
-              onChange={(e) => form.setData('issuer', e.currentTarget.value)}
-            />
-            <TextInput
-              label="Client ID"
-              required
-              value={form.data.client_id}
-              onChange={(e) => form.setData('client_id', e.currentTarget.value)}
-            />
-            <TextInput
-              label="Client secret"
-              required
-              value={form.data.client_secret}
-              onChange={(e) => form.setData('client_secret', e.currentTarget.value)}
-            />
-          </>
-        )}
+        <TextInput
+          label="Issuer URL"
+          description="The OpenID Connect issuer, e.g. https://login.example.com"
+          required
+          value={form.data.issuer}
+          onChange={(e) => form.setData('issuer', e.currentTarget.value)}
+        />
+        <TextInput
+          label="Client ID"
+          required
+          value={form.data.client_id}
+          onChange={(e) => form.setData('client_id', e.currentTarget.value)}
+        />
+        <TextInput
+          label="Client secret"
+          required
+          value={form.data.client_secret}
+          onChange={(e) => form.setData('client_secret', e.currentTarget.value)}
+        />
         <Group justify="flex-end">
           <Button type="submit" loading={form.processing}>
             Add connection
@@ -247,7 +202,7 @@ export default function AuthPoliciesIndex({ providers }: PageProps) {
               A new connection arrives switched off. Sign in through it once, then enable it here — that way a
               misconfigured connection can never lock your workspace out.
             </Text>
-            <ConnectionForm onDone={() => router.reload()} samlAvailable={page.props.saml_available ?? false} />
+            <ConnectionForm onDone={() => router.reload()} />
           </Stack>
         </Paper>
       )}

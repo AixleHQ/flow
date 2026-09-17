@@ -4,8 +4,8 @@
 #
 # A DEPLOYMENT-scoped provider is a singleton per kind and belongs to the
 # installation: one password provider, one Google provider. A COMPANY-scoped
-# provider is one customer's own connection (their OIDC issuer, their SAML
-# metadata) and belongs to exactly that company.
+# provider is one customer's own connection (their OIDC issuer) and belongs to
+# exactly that company.
 #
 # The split exists because password and Google are not per-company: forcing them
 # into a per-company row would mean one identity per company for a user with one
@@ -19,7 +19,7 @@ class IdentityProvider < ApplicationRecord
   # is deliberately NOT here: it runs through one deployment-wide OmniAuth
   # strategy, and a kind that nothing can create or start is unreachable code
   # dressed up as a feature.
-  COMPANY_KINDS = %i[oidc saml].freeze
+  COMPANY_KINDS = %i[oidc].freeze
 
   enumerize :kind, in: (DEPLOYMENT_KINDS | COMPANY_KINDS), predicates: true, scope: true
   enumerize :scope, in: %i[deployment company], predicates: true, scope: true

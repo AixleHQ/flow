@@ -8,34 +8,25 @@
 # been proved to work.
 class Web::Company::IdentityProvidersController < Web::Company::ApplicationController
   def create
-    kind = provider_params[:kind] == "saml" ? "saml" : "oidc"
     provider = current_company.identity_providers.new(
-      kind: kind,
+      kind: "oidc",
       scope: "company",
       name: provider_params[:name].presence || "SSO",
-      config: config_from(provider_params).merge(kind == "saml" ? saml_keys : {})
+      config: config_from(provider_params)
     )
-    provider.client_secret = provider_params[:client_secret] if kind == "oidc"
-
-    return redirect_to(company_auth_policies_path, inertia: { errors: { base: "SAML is not available on this installation." } }) if kind == "saml" && !SsoBridge::Client.configured?
+    provider.client_secret = provider_params[:client_secret]
 
     if provider.save
-      register_with_bridge(provider) if kind == "saml"
       # Disabled on arrival: the policy row exists so the screen can show it, and
       # enabling it goes through the AD-7 prove-before-enforce guard.
       CompanyAuthPolicy.find_or_create_by!(company: current_company, identity_provider: provider) do |policy|
         policy.enabled = false
       end
-      redirect_to company_auth_policies_path, notice: "#{provider.display_name} added. Sign in through it once to enable it."
+      redirect_to company_auth_policies_path,
+                  notice: "#{provider.display_name} added. Sign in through it once to enable it."
     else
       redirect_to company_auth_policies_path, inertia: { errors: provider.errors }
     end
-  rescue SsoBridge::Client::Error => e
-    # The row and the bridge must not drift: if the bridge refused, the local
-    # connection is worthless and is rolled back rather than left as a stub that
-    # dead-ends at sign-in.
-    provider&.destroy
-    redirect_to company_auth_policies_path, inertia: { errors: { base: "The SAML bridge refused this connection: #{e.message}" } }
   end
 
   def update
@@ -57,7 +48,6 @@ class Web::Company::IdentityProvidersController < Web::Company::ApplicationContr
 
   def destroy
     provider = company_connection!
-    detach_from_bridge(provider) if provider.saml?
     updater.remove(provider)
     redirect_to company_auth_policies_path, notice: "Connection removed."
   rescue Auth::PolicyUpdater::Refused => e
@@ -65,18 +55,6 @@ class Web::Company::IdentityProvidersController < Web::Company::ApplicationContr
   end
 
   private
-
-  # Best effort: a bridge that is down must not block removing a connection
-  # locally, because the local row is what the gate reads.
-  def detach_from_bridge(provider)
-    return unless SsoBridge::Client.configured?
-
-    SsoBridge::Client.new.delete_connection(
-      tenant: provider.config["tenant"], product: provider.config["product"]
-    )
-  rescue SsoBridge::Client::Error => e
-    Rails.logger.warn("[SsoBridge] could not remove connection: #{e.message}")
-  end
 
   # Scoped to this company, so a guessed id is a 404 rather than a cross-tenant
   # write.
@@ -90,28 +68,6 @@ class Web::Company::IdentityProvidersController < Web::Company::ApplicationContr
     )
   end
 
-  # The bridge identifies a connection by tenant+product. Deriving the tenant
-  # from the company id rather than letting an admin type it keeps two customers
-  # from colliding on the same bridge.
-  def saml_keys
-    {
-      "tenant" => "company-#{current_company.id}",
-      "product" => Settings.project_name.to_s.downcase
-    }
-  end
-
-  def register_with_bridge(provider)
-    SsoBridge::Client.new.upsert_connection(
-      tenant: provider.config["tenant"],
-      product: provider.config["product"],
-      name: provider.display_name,
-      metadata_url: provider_params[:metadata_url].presence,
-      raw_metadata: provider_params[:raw_metadata].presence,
-      redirect_url: "#{Settings.protocol}://#{Settings.domain}",
-      default_redirect_url: "#{Settings.protocol}://#{Settings.domain}#{oidc_callback_path}"
-    )
-  end
-
   def config_from(attrs)
     {
       "issuer" => attrs[:issuer].presence,
@@ -121,7 +77,6 @@ class Web::Company::IdentityProvidersController < Web::Company::ApplicationContr
   end
 
   def provider_params
-    params.permit(:name, :kind, :issuer, :client_id, :client_secret, :tenant_id,
-                  :metadata_url, :raw_metadata)
+    params.permit(:name, :issuer, :client_id, :client_secret, :tenant_id)
   end
 end

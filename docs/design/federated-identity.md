@@ -102,15 +102,29 @@ Every assertion is checked against the row it claims to satisfy (AD-13): `iss` a
 
 Passkeys are the one credential kind the company does not own (AD-18). A passkey lives on the user's own device and works across every company they belong to, so registration, listing and deletion belong to the user alone and no company-admin surface touches them. A company may still decline to *accept* a passkey — disabling it in the policy stops a passkey proof from satisfying that company, which an SSO-only buyer will want — but it never deletes or invalidates the credential, which remains usable everywhere else.
 
-### 4.5 SAML without a SAML parser
+### 4.5 No SAML, and why that costs little
 
-`ruby-saml` has had five Critical authentication-bypass advisories in fifteen months, in three separate rounds, each a new angle on the same hazard: two XML parsers, one document, one trust decision. There is no credible alternative in Ruby. Building it in-house means a standing same-week patch obligation, forever, for the protocol a minority of customers will ask for.
+There are two ways to support SAML in a Ruby application and both were rejected.
 
-So SAML never enters the Rails process (AD-8). A `saml` provider row stores sidecar tenant/product keys, not IdP XML metadata, and Rails completes it through the ordinary OIDC adapter. The sidecar — Ory Polis, Apache-2.0, the former BoxyHQ SAML Jackson — is a SAML→OIDC bridge with no user store and no login UI.
+**In the web process** means `ruby-saml` — the only Ruby service provider, and what every wrapper
+sits on. It has had five Critical authentication-bypass advisories in fifteen months, in three
+rounds: September 2024 (XML Signature Wrapping, confirmed exploitable against gitlab.com), March 2025
+(two parser differentials), December 2025 (two more, one published as an *incomplete fix* of
+March's). Each is a new angle on the same hazard — two XML parsers, one document, one trust decision.
+Taking it means a standing same-week patch obligation, forever, in the process that serves the app.
 
-This does not make SAML safe; it makes it a separate process's dependency, with a blast radius that is not our web application. That distinction is the whole argument, and it should be stated honestly rather than sold as elimination.
+**Out of process** means a bridge: a second service to deploy, monitor and upgrade, in a product
+whose self-hosted story is "one Rails app and a Postgres". That was built and then removed —
+the operational cost was not worth what it bought.
 
-Operationally the sidecar is split by reachability (AD-9): its ACS endpoint **must** be publicly routable, because a customer's IdP posts assertions to it, while its admin API stays cluster-internal. It gets its own database; the app talks to its HTTP API and never to that database.
+What it buys is small, because **enterprise SSO does not require SAML**. Per-company OIDC is already
+implemented and tested (§4.1), and every identity provider our customers actually run speaks it:
+Entra ID, Okta, Ping, OneLogin, JumpCloud, Google Workspace. SAML is needed only where a customer's
+IT mandates it specifically, or where they run something older — ADFS, Shibboleth.
+
+So the decision is recorded rather than deferred (AD-28), and it is guarded: `ruby-saml` and its
+wrappers are barred from `Gemfile.lock` by a test. Adding SAML later has to be a deliberate act taken
+with that advisory history in view, not a quiet `bundle add`.
 
 ### 4.6 Provisioning
 
@@ -150,7 +164,7 @@ The exchange is that the operator account holds exactly one key: **password only
 | **ORG-POLICY** ✅ built | `company_auth_policies`, deployment ceiling, entry gate, step-up, the no-stranding guard, admin UI | 3-4 wk |
 | **1. OIDC** ✅ built | Entra (multi-tenant), generic per-company OIDC with PKCE | 4 wk |
 | **2. Passwordless** ✅ built | Passkeys, TOTP (step-up only), magic links | 4-5 wk |
-| **3. SAML** ⚠ built, unverified | Sidecar bridge, per-company connections, optional `sso` compose profile | 2-3 wk |
+| ~~**3. SAML**~~ | **Dropped.** Enterprise SSO is per-company OIDC — see §4.5 | — |
 | **4. SCIM** ✅ built | Inbound provisioning and deprovisioning | 3-4 wk |
 
 Stages 0 and ORG-POLICY are worth doing on their own merits: they fix the missing revocation path and the email-join-key weakness, both of which exist today regardless of whether any SSO ever ships.
@@ -188,7 +202,7 @@ Three further implementation findings:
    and treats absent as false. The test fake was corrected to carry the claim Google actually sends
    — a fake that omitted it never exercised the promotion path.
 
-**All six capabilities are now implemented**, and the port held: every method after the first was an
+**Five of the six capabilities are implemented, and the sixth was deliberately dropped**, and the port held: every method after the first was an
 adapter plus a row kind, with no change to the entry gate.
 
 | Capability | Where |
@@ -198,14 +212,18 @@ adapter plus a row kind, with no change to the entry gate.
 | CAP-4 passkeys | `auth/methods/passkey.rb`, `Web::PasskeysController`, `Web::PasskeySessionsController`, `shared/lib/webauthn.ts` |
 | CAP-4 magic links | `auth/methods/magic_link.rb`, `MagicLinkToken`, `Web::MagicLinksController` |
 | CAP-4 TOTP | `auth/methods/totp.rb`, `Web::TotpController` — step-up only |
-| CAP-5 SAML | `auth/methods/saml.rb`, `SsoBridge::Client`, the `sso` compose profile |
 | CAP-6 SCIM | `Scim::UsersController`, `ScimConfiguration`, the Scimitar mixin on `CompanyMembership` |
 
-**One honest caveat.** CAP-5 is built against the bridge's *documented* admin and OAuth contract,
-with an app-owned adapter, a WebMock contract test and a compose profile — but nothing has run
-against a live bridge in this environment. Open question 1 is therefore still open, and until the
-spike runs, STAGE-3 is code rather than a working feature. Everything else was exercised end to end,
-including a real WebAuthn ceremony and a genuinely signed OIDC `id_token`.
+**On CAP-5.** A sidecar bridge was built, and a spike ran it: the OSS build did take three
+per-company connections with no licence gate, and the adapter's `client_id` shape worked against the
+live authorize endpoint. The spike also found that the published compose image name did not resolve
+at all, that one `entityID` may serve only one tenant, and that the bridge phones analytics home
+unless told not to.
+
+None of that survived the decision that followed it: carrying a second service was not worth what
+SAML buys when per-company OIDC already covers the identity providers our customers run. The
+adapter, the bridge client, the compose profile and their tests are removed; §4.5 records why, and a
+test keeps `ruby-saml` out of the lockfile so the decision cannot erode quietly.
 
 ## 6. Alternatives considered
 

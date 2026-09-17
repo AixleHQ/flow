@@ -9,9 +9,6 @@ class Web::Company::AuthPoliciesController < Web::Company::ApplicationController
   def index
     render inertia: "Company/AuthPolicies/Index", props: {
       providers: available_providers.map { |provider| serialize(provider) },
-      # SAML only appears as an option when this installation actually runs the
-      # bridge (AD-8): offering it otherwise would promise a door with no hinges.
-      saml_available: SsoBridge::Client.configured?,
       scim: scim_state,
       # Shown once, straight after generation, and never read back from storage.
       scim_token: params[:scim_token]

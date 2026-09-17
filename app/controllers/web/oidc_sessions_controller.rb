@@ -107,7 +107,7 @@ class Web::OidcSessionsController < Web::ApplicationController
   def connectable_provider
     # Only kinds that can actually begin a redirect. Anything else would reach
     # an adapter with no #authorize_url and 500 instead of refusing.
-    provider = IdentityProvider.where(scope: "company", kind: %w[oidc saml]).find_by(id: params[:id])
+    provider = IdentityProvider.where(scope: "company", kind: "oidc").find_by(id: params[:id])
     return nil if provider.nil?
     return nil unless Auth::PolicyResolver.allowed_provider_ids(provider.company).include?(provider.id)
 

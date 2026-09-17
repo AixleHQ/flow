@@ -90,52 +90,6 @@ class Web::Company::IdentityProvidersControllerTest < ActionDispatch::Integratio
     refute IdentityProvider.exists?(connection.id)
   end
 
-  test "a SAML connection is registered with the bridge and stored disabled" do
-    Settings.sso_bridge.stubs(:url).returns("https://sso-bridge.test")
-    Settings.sso_bridge.stubs(:admin_url).returns("https://sso-bridge.internal")
-    Settings.sso_bridge.stubs(:api_key).returns("test-api-key")
-    stub_request(:post, "https://sso-bridge.internal/api/v1/sso").to_return(
-      status: 201, headers: { "Content-Type" => "application/json" },
-      body: { clientID: "bridge-id", tenant: "company-#{@company.id}" }.to_json
-    )
-    sign_in_as(@admin)
-
-    post company_identity_providers_path,
-         params: { kind: "saml", name: "Acme SAML", metadata_url: "https://idp.acme.test/metadata" }
-
-    provider = @company.identity_providers.where(kind: "saml").last
-    assert_not_nil provider
-    # The bridge holds the metadata; the row holds only its keys, because the
-    # bridge is the thing that parses XML (AD-8).
-    assert_equal "company-#{@company.id}", provider.config["tenant"]
-    refute CompanyAuthPolicy.find_by!(company: @company, identity_provider: provider).enabled
-    assert_requested :post, "https://sso-bridge.internal/api/v1/sso"
-  end
-
-  test "a bridge refusal leaves no half-made connection behind" do
-    Settings.sso_bridge.stubs(:url).returns("https://sso-bridge.test")
-    Settings.sso_bridge.stubs(:admin_url).returns("https://sso-bridge.internal")
-    Settings.sso_bridge.stubs(:api_key).returns("test-api-key")
-    stub_request(:post, "https://sso-bridge.internal/api/v1/sso").to_return(status: 400, body: "bad metadata")
-    sign_in_as(@admin)
-
-    assert_no_difference "IdentityProvider.count" do
-      post company_identity_providers_path,
-           params: { kind: "saml", name: "Broken SAML", metadata_url: "https://idp.acme.test/metadata" }
-    end
-  end
-
-  test "an installation with no bridge does not accept a SAML connection at all" do
-    Settings.sso_bridge.stubs(:url).returns(nil)
-    Settings.sso_bridge.stubs(:api_key).returns(nil)
-    sign_in_as(@admin)
-
-    assert_no_difference "IdentityProvider.count" do
-      post company_identity_providers_path,
-           params: { kind: "saml", name: "Nope", metadata_url: "https://idp.acme.test/metadata" }
-    end
-  end
-
   test "another company's connection is not reachable" do
     other = create(:company)
     foreign = create(:identity_provider, company: other, kind: "oidc")

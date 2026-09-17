@@ -11,8 +11,7 @@ module Auth
       "oidc" => Auth::Methods::Oidc,
       "magic_link" => Auth::Methods::MagicLink,
       "passkey" => Auth::Methods::Passkey,
-      "totp" => Auth::Methods::Totp,
-      "saml" => Auth::Methods::Saml
+      "totp" => Auth::Methods::Totp
     }.freeze
 
     # The OmniAuth strategy name in /auth/:provider/callback is OmniAuth's
