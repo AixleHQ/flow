@@ -79,6 +79,8 @@ non-secret values.
 | ------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
 | `SESSION_CONCURRENCY_LIMIT`           | no       | unset   | A ceiling over every project queue at once. An explicit project limit is a reservation drawn from it; projects without one share the remainder. Unset means no ceiling. Read live — takes effect on the next boot of each pod. A value that is not a positive integer leaves the installation with no ceiling and is reported. |
 | `SESSION_PROJECT_CONCURRENCY_DEFAULT` | no       | `4`     | Queue size for a project that has set no limit of its own. Read live — takes effect on the next boot of each pod. |
+| `SESSION_PINNED_RELEASE_ENABLED` | no | `true` | `false` stops the reconciler from ending a pinned reservation on its own, leaving it for an operator. A reservation is pinned when a create or start never reported its outcome; the slot is held so a late Pod cannot land on someone else's. |
+| `SESSION_PINNED_RELEASE_CONFIRMATION_MINUTES` | no | `5` | How long the reconciler must keep re-proving that no workload exists before it abandons such an operation and releases the slot. A pass that sees the workload again resets the clock. |
 
 A row in `session_concurrency_limits` overrides the default for one project or
 user; edit those in the admin, not here.

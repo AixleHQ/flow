@@ -125,20 +125,30 @@ module Activities
         # never proof of absence (AD-6). So an unfinished delete comes back as a
         # result the workflow retries on a timer, NOT as an execution failure:
         # the session already ran, and marking it failed here would be a lie.
-        return state.merge(cleanup_pending: true) unless absent
+        unless absent
+          # The clock the release below runs on measures UNINTERRUPTED absence,
+          # so a pass that finds the workload again has to erase what earlier
+          # passes proved. Otherwise the window could be assembled out of
+          # moments that were never continuous.
+          clear_absence_clock(admission)
+          return state.merge(cleanup_pending: true)
+        end
 
         # An unresolved operation blocks the RESERVATION, not the deletion.
         # Refusing to delete was a deadlock: the workload kept the slot honestly
         # occupied, and the operation could never resolve because the thing that
         # would have made absence provable was the deletion being refused. So the
-        # runtime goes above, and only the release waits for an operator — which
-        # is the invariant that actually matters (AD-5: a late create must never
-        # find its slot handed to someone else).
+        # runtime goes above, and only the release waits — which is the invariant
+        # that actually matters (AD-5: a late create must never find its slot
+        # handed to someone else). It no longer waits for an OPERATOR: absence
+        # re-proved for the whole confirmation window ends the wait by itself
+        # (#absence_settled?), because a slot held forever is how the
+        # installation quietly lost capacity.
         #
         # Only a create or a start can produce that late workload. An `exec` we
         # cannot account for is recorded and reported, but by here the container
         # it would have run in is provably gone, so it costs nobody a slot.
-        return state.merge(cleanup_pending: true, unresolved_operation: true) if unresolved
+        return state.merge(cleanup_pending: true, unresolved_operation: true) if unresolved && !absence_settled?(admission)
 
         SessionAdmissionService.release!(admission)
         session.send(:notify_workflow_execution_if_step_session)
@@ -146,6 +156,54 @@ module Activities
         # for it; this runs in a worker, so the fan-out costs the user nothing.
         SessionLaunchRelay.drain(limit: 25)
         state
+      end
+
+      # Whether the absence proved above has held long enough to stop paying for
+      # it with a slot.
+      #
+      # Reaching here means this pass PROVED the workload is gone — the `unless
+      # absent` return above is what guarantees it. So the pin is no longer
+      # protecting against a workload that exists; it is protecting against one
+      # that might still appear, which is what AD-5 is for and why the answer is
+      # a window rather than a single look.
+      #
+      # `absent_since` is the first pass that proved it, re-proved on every pass
+      # since. Once it has held for the configured window the operations are
+      # abandoned — never `completed`, because their outcome stayed unknown — and
+      # the caller falls through to the ordinary release.
+      #
+      # The other half of this problem belongs to replay: while the workflow is
+      # alive an unknown create is resolved by doing it again
+      # (SessionRuntimeOperation#replayable?). Nothing can replay an operation
+      # whose workflow is closed, which is exactly the population that reaches
+      # here — and what used to sit pinned until a human opened a console.
+      def absence_settled?(admission)
+        return false unless SessionAdmissionPolicy.pinned_release_enabled?
+
+        pins = admission.session_runtime_operations.pinning
+        now = Time.current
+        since = pins.minimum(:absent_since)
+
+        if since.nil?
+          pins.update_all(absent_since: now, updated_at: now)
+          return false
+        end
+        return false if now - since < SessionAdmissionPolicy.pinned_release_window
+
+        held = ((now - since) / 60).round
+        pins.update_all(
+          state: SessionRuntimeOperation::ABANDONED, absent_since: nil, updated_at: now,
+          error: "No workload existed for this reservation from #{since.utc.iso8601} to #{now.utc.iso8601}; "                  "the outcome of the operation itself was never learned"
+        )
+        Rails.logger.warn(
+          "[SessionAdmission] admission #{admission.id}: releasing a pinned reservation after #{held} minute(s) of proven absence"
+        )
+        true
+      end
+
+      def clear_absence_clock(admission)
+        admission.session_runtime_operations.pinning.where.not(absent_since: nil)
+                 .update_all(absent_since: nil, updated_at: Time.current)
       end
 
       # Output collection walks the container filesystem and must not repeat on

@@ -112,6 +112,15 @@ class SessionAdmissionPolicy < ApplicationRecord
 
   def self.scope_defaults = SCOPE_DEFAULTS.keys.index_with { |type| scope_default(type) }
 
+  # Whether the reconciler may end a pinned reservation on its own, and how long
+  # proven absence has to hold first. Off, a pinned slot waits for a human again.
+  def self.pinned_release_enabled? = deployment_setting(:pinned_release_enabled) != false
+
+  def self.pinned_release_window
+    minutes = deployment_setting(:pinned_release_confirmation_minutes).to_i
+    (minutes.positive? ? minutes : 5).minutes
+  end
+
   # Only the operator writes policy, and only in a maintenance window. Workers
   # never interpret their ENV for anything gated here.
   # The cutover, and nothing else. The ceiling is read live now, so there is no

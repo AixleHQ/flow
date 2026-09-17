@@ -7,6 +7,12 @@ class SessionRuntimeOperation < ApplicationRecord
   # as a fault.
   UNRESOLVED_STATES = %w[in_flight uncertain].freeze
 
+  # What the reconciler writes when it stops holding a slot for an operation
+  # nobody will ever resolve. Deliberately not `completed`: the outcome stayed
+  # unknown to the end. What became known is narrower and is what the release
+  # rests on — no workload existed for the whole confirmation window.
+  ABANDONED = "abandoned"
+
   # Phases that can bring a workload into existence. AD-5 retains the slot for an
   # unprovable operation so a late Pod never finds its seat handed to someone
   # else — and only a create or a start can produce that Pod. `exec` runs a

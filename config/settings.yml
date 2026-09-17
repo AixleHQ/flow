@@ -458,6 +458,23 @@ container_execution:
 session_admission:
   installation_limit: <%= ENV['SESSION_CONCURRENCY_LIMIT'] %>
   project_default: <%= ENV['SESSION_PROJECT_CONCURRENCY_DEFAULT'] %>
+  # A reservation pinned by an unprovable create/start keeps its slot so a late
+  # Pod can never land on someone else's (AD-5). By the time the pin is honoured
+  # the workload is already PROVEN GONE — cleanup returns earlier otherwise — so
+  # the pin is not waiting for the workload to disappear. It is waiting for that
+  # absence to look settled rather than momentary.
+  #
+  # The reconciler re-proves absence every pass, and after this many minutes of
+  # UNINTERRUPTED proof it abandons the operation and releases the slot. Five
+  # minutes because a session that is genuinely starting has never taken that
+  # long to appear; a pass that sees the workload again resets the clock.
+  #
+  # This is the half of the problem replay cannot reach: an operation whose
+  # workflow is still alive is resolved by redoing it (SessionRuntimeOperation
+  # #replayable?), but once the workflow is closed nothing exists to redo it,
+  # and before this the slot stayed pinned until a human opened a console.
+  pinned_release_enabled: <%= ENV.fetch('SESSION_PINNED_RELEASE_ENABLED', 'true') == 'true' %>
+  pinned_release_confirmation_minutes: <%= (ENV['SESSION_PINNED_RELEASE_CONFIRMATION_MINUTES'] || 5).to_i %>
 
 # How long a tool result's stored payload is kept (ToolResultCleanupJob).
 tool_results:

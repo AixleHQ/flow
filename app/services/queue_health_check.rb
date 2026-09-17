@@ -58,7 +58,10 @@ class QueueHealthCheck
         oldest_undispatched_seconds: age(undispatched.minimum(:created_at), now),
         queued_admissions: waiting.count,
         oldest_admission_wait_seconds: age(waiting.minimum(:created_at), now),
-        pinned_reservations: SessionRuntimeOperation.pinning.count
+        pinned_reservations: SessionRuntimeOperation.pinning.count,
+        pinned_overdue: SessionRuntimeOperation.pinning
+                                               .where(absent_since: ..(now - 2 * SessionAdmissionPolicy.pinned_release_window)).count,
+        pinned_release_disabled: !SessionAdmissionPolicy.pinned_release_enabled?
       }
     end
 
@@ -92,9 +95,17 @@ class QueueHealthCheck
       if stats[:ceiling_misconfigured]
         problems << "SESSION_CONCURRENCY_LIMIT is not a positive integer, so the installation has no ceiling at all"
       end
-      if stats[:pinned_reservations].positive?
-        problems << "#{stats[:pinned_reservations]} reservation(s) pinned by an unprovable runtime " \
-                    "operation, holding capacity until an operator releases them"
+      # A pin on its own is not news any more: the reconciler releases one after a
+      # few minutes of proven absence, so reporting every pin would page somebody
+      # for the ordinary end of a cancelled session. What is news is a pin that
+      # nothing is going to end — the release switched off, or a window that has
+      # gone by twice over without the slot coming back.
+      if stats[:pinned_reservations].positive? && stats[:pinned_release_disabled]
+        problems << "#{stats[:pinned_reservations]} reservation(s) pinned by an unprovable runtime operation, " \
+                    "and automatic release is switched off — they hold capacity until an operator releases them"
+      elsif stats[:pinned_overdue].positive?
+        problems << "#{stats[:pinned_overdue]} reservation(s) have stayed pinned well past the confirmation " \
+                    "window, so the reconciler is not managing to release them"
       end
       problems
     end
