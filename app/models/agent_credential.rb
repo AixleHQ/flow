@@ -59,14 +59,37 @@ class AgentCredential < ApplicationRecord
     end.freeze
   end
 
+  # Agent types whose credentials carry an expiry by construction, so a NULL `expires_at`
+  # is a gap in our own bookkeeping rather than a fact about the token.
+  def self.token_expiry_agent_types
+    @token_expiry_agent_types ||= AgentCredentialsService::ADAPTERS.filter_map do |agent_type, adapter_class|
+      agent_type if adapter_class.new.credential_lifecycle[:expiry] == :token
+    end.freeze
+  end
+
   # Scopes
   scope :for_agent, ->(agent_type) { where(agent_type: agent_type) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
   scope :refreshable, -> { where(agent_type: refreshable_agent_types) }
-  # Credentials whose token expires within `within` (drives the refresh sweep).
-  # NULL-expiry credentials (agents whose tokens carry no expiry) are excluded.
+  # Credentials whose token expires within `within` (drives the refresh sweep), plus the
+  # ones whose expiry was never derived at all.
+  #
+  # A NULL expiry means one of two different things. For a runtime whose credential
+  # genuinely carries no expiry — an API key — it is the truth, and such a row must never
+  # be swept. For a runtime that declares `expiry: :token` it cannot be the truth: the
+  # token has an expiry by construction, so a NULL says nobody ever wrote the column, and
+  # the row sits outside the sweep however dead it is. That is the population behind the
+  # Cursor credentials that stayed `active` with a token months past its end, running
+  # sessions that finished green having authenticated with nothing.
+  #
+  # Selecting them lets the refresh settle which it is: it either succeeds — and
+  # `sync_expires_at` fills the column in on the way through, so the row is never
+  # undetermined again — or it is rejected, and the credential is condemned on evidence
+  # rather than on suspicion.
   scope :refresh_due, ->(within = 60.minutes) {
-    where(status: :active).where.not(expires_at: nil).where(expires_at: ..within.from_now)
+    undetermined = arel_table[:expires_at].eq(nil)
+                                          .and(arel_table[:agent_type].in(token_expiry_agent_types))
+    where(status: :active).where(arel_table[:expires_at].lteq(within.from_now).or(undetermined))
   }
   # Credentials no live container currently holds.
   #

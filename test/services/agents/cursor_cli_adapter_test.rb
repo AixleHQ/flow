@@ -262,16 +262,17 @@ module Agents
         .to_return(status: 200, body: models_body, headers: { "Content-Type" => "application/json" })
       stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
         .to_return(status: 200,
-                   body: { "access_token" => "fresh-token", "refresh_token" => "refresh-2" }.to_json,
+                   body: { "access_token" => "fresh-token", "id_token" => "id", "shouldLogout" => false }.to_json,
                    headers: { "Content-Type" => "application/json" })
 
       models = @adapter.fetch_available_models({ "accessToken" => "stale" }, credential: credential)
 
       assert_equal [ { model_id: "auto", display_name: "Auto", description: "" } ], models
-      # Refreshed credentials are persisted for the next session.
+      # Refreshed credentials are persisted for the next session — the same token in both
+      # slots, because the endpoint returns no new refresh token.
       credential.reload
       assert_equal "fresh-token", credential.config_data["accessToken"]
-      assert_equal "refresh-2", credential.config_data["refreshToken"]
+      assert_equal "fresh-token", credential.config_data["refreshToken"]
     end
 
     # =========================================================================
@@ -366,34 +367,80 @@ module Agents
     end
 
     # =========================================================================
-    # refresh! — proactive-refresh hook (wraps refresh_cursor_token!)
+    # refresh! — the contract read off the desktop IDE and confirmed live
     # =========================================================================
+    #
+    # The endpoint is the one the IDE itself refreshes against: JSON to
+    # api2.cursor.sh/oauth/token with its client id. It answers `access_token` and
+    # `id_token` and NO refresh token, plus `shouldLogout` when the login is over.
 
-    test "refresh! rotates and persists the token, returning refreshed" do
+    test "refresh! posts the IDE's request shape" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "old", "refreshToken" => "r1" })
+      request = stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .with(headers: { "Content-Type" => "application/json" },
+              body: { grant_type: "refresh_token",
+                      client_id: CursorCliAdapter::CURSOR_CLIENT_ID,
+                      refresh_token: "r1" }.to_json)
+        .to_return(status: 200,
+                   body: { access_token: "new", id_token: "id", shouldLogout: false }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_equal({ status: :refreshed, detail: nil }, @adapter.refresh!(credential))
+      assert_requested(request)
+    end
+
+    # No new refresh token comes back, and the one from login carries its own 60-day
+    # expiry — so keeping it would let the credential die on schedule however often we
+    # refreshed. The IDE writes the new access token into both slots; so do we.
+    test "refresh! writes the new token into both slots so the window rolls forward" do
       user = create(:user, company: create(:company))
       credential = create(:agent_credential, :cursor_cli, user: user,
                           config_data: { "accessToken" => "old", "refreshToken" => "r1" })
       stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
         .to_return(status: 200,
-                   body: { access_token: "new", refresh_token: "r2" }.to_json,
+                   body: { access_token: "new", id_token: "id", shouldLogout: false }.to_json,
                    headers: { "Content-Type" => "application/json" })
 
-      assert_equal({ status: :refreshed, detail: nil }, @adapter.refresh!(credential))
+      @adapter.refresh!(credential)
+
       credential.reload
       assert_equal "new", credential.config_data["accessToken"]
-      assert_equal "r2", credential.config_data["refreshToken"]
+      assert_equal "new", credential.config_data["refreshToken"]
     end
 
-    test "refresh! returns error when the refresh endpoint fails" do
+    # 200 with shouldLogout is the server ending the session, not a transient failure:
+    # retrying it three times before condemning the row only delays the sign-in.
+    test "refresh! treats shouldLogout as permanent" do
       user = create(:user, company: create(:company))
       credential = create(:agent_credential, :cursor_cli, user: user,
                           config_data: { "accessToken" => "old", "refreshToken" => "r1" })
-      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL).to_return(status: 401, body: "")
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .to_return(status: 200, body: { shouldLogout: true, error: "policy" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
 
       result = @adapter.refresh!(credential)
 
       assert_equal :error, result[:status]
-      assert_equal "cursor token refresh failed", result[:detail]
+      assert result[:permanent]
+      assert_equal "old", credential.reload.config_data["accessToken"]
+    end
+
+    test "refresh! treats a rejected grant as permanent and a server error as transient" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "old", "refreshToken" => "r1" })
+
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL).to_return(status: 401, body: "")
+      rejected = @adapter.refresh!(credential)
+      assert_equal :error, rejected[:status]
+      assert rejected[:permanent]
+
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL).to_return(status: 500, body: "boom")
+      transient = @adapter.refresh!(credential)
+      assert_equal :error, transient[:status]
+      assert_equal false, transient[:permanent] # rubocop:disable Minitest/RefuteFalse
     end
 
     test "refresh! returns error when no refresh token is present" do
@@ -402,6 +449,18 @@ module Agents
                           config_data: { "accessToken" => "old" })
 
       assert_equal :error, @adapter.refresh!(credential)[:status]
+    end
+
+    test "fetch_available_models does not retry with a logout verdict" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "stale", "refreshToken" => "r1" })
+      stub_request(:post, CursorCliAdapter::CURSOR_MODELS_URL).to_return(status: 401, body: "")
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL)
+        .to_return(status: 200, body: { shouldLogout: true }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      assert_empty @adapter.fetch_available_models({ "accessToken" => "stale" }, credential: credential)
     end
 
     test "token_expires_at decodes the JWT exp (ms) from the accessToken" do

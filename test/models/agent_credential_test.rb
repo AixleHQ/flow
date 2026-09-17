@@ -282,18 +282,36 @@ class AgentCredentialTest < ActiveSupport::TestCase
     refute_includes refreshable, grok
   end
 
-  test "refresh_due returns creds expiring within the window, excluding far-future and null-expiry" do
+  test "refresh_due returns creds expiring within the window and excludes far-future ones" do
     other = create(:user, company: @company)
     due = create(:agent_credential, user: @user, agent_type: "claude_code",
                                     config_data: claude_config(expires_at: 5.minutes.from_now))
     far = create(:agent_credential, user: other, agent_type: "claude_code",
                                     config_data: claude_config(expires_at: 2.hours.from_now))
-    null_expiry = create(:agent_credential, user: @user, agent_type: "codex")
 
     due_now = AgentCredential.refresh_due
     assert_includes due_now, due
     refute_includes due_now, far
-    refute_includes due_now, null_expiry
+  end
+
+  # A runtime that declares `expiry: :token` cannot legitimately carry a NULL expiry — the
+  # token has one by construction — so a NULL says the column was never derived, and the
+  # row sat outside the sweep however dead it was. That is how a Cursor credential stayed
+  # `active` with a token months past its end. Refreshing settles which it is.
+  test "refresh_due picks up a token-bearing runtime whose expiry was never derived" do
+    undetermined = create(:agent_credential, user: @user, agent_type: "codex")
+    assert_nil undetermined.expires_at
+
+    assert_includes AgentCredential.refresh_due, undetermined
+  end
+
+  # The other reading of NULL, and the one that must stay out: an API key does not expire,
+  # so there is nothing to refresh and nothing to derive.
+  test "refresh_due leaves a runtime whose credential genuinely has no expiry alone" do
+    api_key_cred = create(:agent_credential, user: @user, agent_type: "gemini_cli")
+    assert_nil api_key_cred.expires_at
+
+    refute_includes AgentCredential.refresh_due, api_key_cred
   end
 
   test "refresh_due honors a custom window argument" do
