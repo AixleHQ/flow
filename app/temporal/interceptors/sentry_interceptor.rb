@@ -44,20 +44,20 @@ module Interceptors
             raise
           end
         end
+      end
 
-        # `benign:` already means "an expected error" everywhere TemporalExceptions
-        # is raised — cleanup phases, deliberate stops — and the SDK carries it as
-        # the error's category. Nothing honoured it here, so every failure a caller
-        # had deliberately labelled expected still became a Sentry event.
-        #
-        # respond_to? rather than a bare call: the category reader is the SDK's,
-        # and a silent NoMethodError inside an error handler would swallow the
-        # error it was handling.
-        def benign?(error)
-          error.is_a?(Temporalio::Error::ApplicationError) &&
-            error.respond_to?(:category) &&
-            error.category == TemporalExceptions::BENIGN
-        end
+      # `benign:` already means "an expected error" everywhere TemporalExceptions
+      # is raised — cleanup phases, deliberate stops — and the SDK carries it as
+      # the error's category. Nothing honoured it here, so every failure a caller
+      # had deliberately labelled expected still became a Sentry event.
+      #
+      # respond_to? rather than a bare call: the category reader is the SDK's, and
+      # a silent NoMethodError inside an error handler would swallow the error it
+      # was handling.
+      def benign?(error)
+        error.is_a?(Temporalio::Error::ApplicationError) &&
+          error.respond_to?(:category) &&
+          error.category == TemporalExceptions::BENIGN
       end
     end
   end

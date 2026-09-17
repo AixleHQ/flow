@@ -52,6 +52,18 @@ module Interceptors
       assert_same nxt, inbound.next_interceptor
     end
 
+    # `benign:` is the vocabulary every TemporalExceptions caller already uses for
+    # an expected failure — a cleanup phase, a stop somebody asked for. Nothing
+    # here honoured it, so those still became Sentry events and buried the rest.
+    # Pinned against the real wrapper so the two cannot drift apart.
+    test "an error its raiser labelled benign is not worth reporting" do
+      inbound = Interceptors::SentryInterceptor.new.intercept_activity(RecordingInbound.new(result: nil))
+
+      assert inbound.benign?(TemporalExceptions.non_retryable(RuntimeError.new("stopped"), benign: true))
+      assert_not inbound.benign?(TemporalExceptions.non_retryable(RuntimeError.new("a real failure")))
+      assert_not inbound.benign?(RuntimeError.new("never wrapped at all"))
+    end
+
     test "execute returns the wrapped result unchanged on the success path" do
       recording = RecordingInbound.new(result: { ok: true, value: 42 })
 
