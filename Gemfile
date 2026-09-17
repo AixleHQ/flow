@@ -174,9 +174,6 @@ group :test do
   gem "minitest-mock"
   gem "minitest-power_assert"
   gem "mocha"
-  # One-time-password secrets for test fixtures only.
-  gem "rotp", "~> 6.3"
-
   # Coverage and mocking
   gem "simplecov", require: false
   gem "webmock"
@@ -216,6 +213,14 @@ gem "lograge", "~> 0.15.0"
 # file to lift the bearer token and profile ARN its API calls need. Every other runtime
 # hands us JSON and needs nothing here.
 gem "sqlite3", "~> 2.9"
+
+# Time-based one-time codes: a step-up method in production, not just a test
+# fixture — User#totp_secret and Auth::Methods::Totp both run on it.
+gem "rotp", "~> 6.3"
+
+# Renders the otpauth:// URI as the QR an authenticator app scans. Server-side so
+# the enrolment payload stays one response and no QR library reaches the bundle.
+gem "rqrcode", "~> 3.1"
 
 # Docker API for container management
 gem "docker-api", "~> 2.3"
