@@ -150,7 +150,7 @@ module Agents
 
       cost = @adapter.send(:usage_cost_cents, "new-unpriced-model", 100, 20, 0)
 
-      assert_equal 0.0, cost
+      assert_in_delta 0.0, cost
     end
 
     test "falls back when the Antigravity catalogue request fails" do
