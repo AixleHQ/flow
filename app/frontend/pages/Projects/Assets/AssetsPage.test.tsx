@@ -64,14 +64,37 @@ describe('Projects/Assets/AssetsPage', () => {
     expect(screen.queryByText('budget.xlsx')).not.toBeInTheDocument();
   });
 
-  it('shows the "no assets match your filters" state when the search matches nothing', async () => {
+  it('shows the "no matches" state when the search matches nothing', async () => {
     renderAuthedPage(<AssetsPage />, {
       props: { project, assets: [asset({ name: 'design.fig' })] },
     });
 
     await userEvent.type(screen.getByPlaceholderText('Search assets...'), 'zzz');
 
-    expect(screen.getByText('No assets match your filters')).toBeInTheDocument();
+    expect(screen.getByText('No matches')).toBeInTheDocument();
+  });
+
+  it('seeds the folder view with the project and company folders given in props', async () => {
+    renderAuthedPage(<AssetsPage />, {
+      props: {
+        project,
+        assets: [asset({ id: 1, name: 'nested.pdf', folder: 'dashboard' })],
+        folders: [
+          {
+            id: 1,
+            path: 'dashboard',
+            scopeType: 'Project',
+            scopeIndicator: 'project',
+            createdAt: '2026-01-01T00:00:00Z',
+            updatedAt: '2026-01-01T00:00:00Z',
+          },
+        ],
+      },
+    });
+
+    expect(screen.getByText('dashboard')).toBeInTheDocument();
+    await userEvent.click(screen.getByText('dashboard'));
+    expect(screen.getByText('nested.pdf')).toBeInTheDocument();
   });
 
   it('reloads with the asset id when opening version history', async () => {

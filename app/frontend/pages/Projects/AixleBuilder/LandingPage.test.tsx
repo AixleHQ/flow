@@ -91,7 +91,7 @@ describe('Projects/AixleBuilder/LandingPage', () => {
     await user.click(screen.getByRole('combobox', { name: /Model/i }));
     await user.click(await screen.findByRole('option', { name: 'Sonnet 5' }));
 
-    await user.click(screen.getByRole('combobox', { name: /Project Assets/i }));
+    await user.click(screen.getByRole('button', { name: /Project Assets/i }));
     await user.click(await screen.findByRole('option', { name: 'Brand guidelines' }));
 
     await user.click(screen.getByRole('button', { name: /Start Builder/i }));

@@ -32,4 +32,10 @@ class CompanyAssetsPage < SitePrism::Page
     folder_field.set(folder) if folder
     save_button.click
   end
+
+  # The default Assets view is folder-first (#564): a file uploaded into a folder sits inside
+  # it, not at the root the table starts on, so a test asserting on that file has to navigate in.
+  def open_folder(name)
+    find("p", text: name, exact_text: true, wait: 15).click
+  end
 end

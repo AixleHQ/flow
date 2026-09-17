@@ -46,12 +46,26 @@ describe('Company/Assets/Index', () => {
   it('lists assets in the table given seeded props', () => {
     renderAuthedPage(<AssetsIndex />, {
       props: {
-        assets: [asset({ id: 1, name: 'roadmap.pdf' }), asset({ id: 2, name: 'logo.png', folder: 'brand' })],
+        assets: [asset({ id: 1, name: 'roadmap.pdf' }), asset({ id: 2, name: 'logo.png', folder: null })],
       },
     });
 
     expect(screen.getByText('roadmap.pdf')).toBeInTheDocument();
     expect(screen.getByText('logo.png')).toBeInTheDocument();
+  });
+
+  it('lists a nested asset in the All files view, with its folder in the Folder column', async () => {
+    renderAuthedPage(<AssetsIndex />, {
+      props: {
+        assets: [asset({ id: 1, name: 'roadmap.pdf' }), asset({ id: 2, name: 'logo.png', folder: 'brand' })],
+      },
+    });
+
+    await userEvent.click(screen.getByText('All files'));
+
+    expect(screen.getByText('roadmap.pdf')).toBeInTheDocument();
+    expect(screen.getByText('logo.png')).toBeInTheDocument();
+    expect(screen.getByText('brand')).toBeInTheDocument();
   });
 
   it('filters assets by the search query', async () => {
@@ -72,7 +86,7 @@ describe('Company/Assets/Index', () => {
 
     await userEvent.type(screen.getByPlaceholderText('Search assets...'), 'zzz');
 
-    expect(screen.getByText('No assets match your filters')).toBeInTheDocument();
+    expect(screen.getByText('No matches')).toBeInTheDocument();
   });
 
   it('opens the upload modal when the Upload button is clicked', async () => {

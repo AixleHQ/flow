@@ -51,7 +51,7 @@ module Api
             project_id: @project.id,
             asset: {
               name: "proj-doc.md",
-              folder: "docs/sub",
+              folder: "docs/..",
               file: document_file_cache_data
             }
           }
@@ -61,14 +61,14 @@ module Api
           assert { !@project.assets.exists?(name: "proj-doc.md") }
         end
 
-        test "create trims a padded folder and keeps the spaces inside it" do
+        test "create trims a padded folder and keeps the nested path inside it" do
           post :create, params: {
             project_id: @project.id,
-            asset: { name: "proj-doc.md", folder: "  Q3 reports  ", file: document_file_cache_data }
+            asset: { name: "proj-doc.md", folder: "  docs/sub  ", file: document_file_cache_data }
           }
 
           assert_response :created
-          assert_equal "Q3 reports", response.parsed_body["folder"]
+          assert_equal "docs/sub", response.parsed_body["folder"]
         end
 
         # The lookup used to key on name alone, so this second upload moved the first asset into
