@@ -12,6 +12,8 @@ require "test_helper"
 #   * a refresh the sweep can never select — `refresh_due` filters on a non-null expiry,
 #     so a runtime that refreshes but publishes no expiry is never swept (the cursor_cli
 #     NULL-expiry population).
+# Cursor is now the first case: it publishes an expiry and has no refresh at all, which
+# only became provable by reading the shipped CLI (see CursorCliAdapter#credential_lifecycle).
 module Agents
   class CredentialLifecycleContractTest < ActiveSupport::TestCase
     EXPIRY_VALUES   = %i[token none].freeze
@@ -90,8 +92,8 @@ module Agents
     # Today's answer, pinned so a change to the matrix is a deliberate edit rather than a
     # side effect. See docs/design/agent-credential-lifecycle.md §2 for why each is where
     # it is, and §Layer 1 for what closes the gaps.
-    test "the current refresh coverage is claude_code, codex, cursor_cli and kiro_cli" do
-      assert_equal %w[claude_code codex cursor_cli kiro_cli].sort, AgentCredential.refreshable_agent_types.sort
+    test "the current refresh coverage is claude_code, codex and kiro_cli" do
+      assert_equal %w[claude_code codex kiro_cli].sort, AgentCredential.refreshable_agent_types.sort
     end
   end
 end

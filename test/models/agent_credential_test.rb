@@ -265,7 +265,7 @@ class AgentCredentialTest < ActiveSupport::TestCase
 
   # --- refreshable / refresh_due scopes (consumed by the token-refresh sweep) ---
 
-  test "refreshable limits to REFRESHABLE_AGENT_TYPES" do
+  test "refreshable limits to the runtimes that declare a server-side refresh" do
     claude = create(:agent_credential, user: @user, agent_type: "claude_code")
     codex = create(:agent_credential, user: @user, agent_type: "codex")
     cursor = create(:agent_credential, user: @user, agent_type: "cursor_cli")
@@ -277,9 +277,11 @@ class AgentCredentialTest < ActiveSupport::TestCase
     refreshable = AgentCredential.refreshable
     assert_includes refreshable, claude
     assert_includes refreshable, codex
-    assert_includes refreshable, cursor
     refute_includes refreshable, gemini
     refute_includes refreshable, grok
+    # Cursor publishes an expiry and has no refresh endpoint at all — the CLI carries no
+    # token-exchange call, so the sweep has nothing to call on its behalf.
+    refute_includes refreshable, cursor
   end
 
   test "refresh_due returns creds expiring within the window, excluding far-future and null-expiry" do

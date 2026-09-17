@@ -50,11 +50,17 @@ module Agents
       config["accessToken"].present?
     end
 
-    # Cursor's accessToken is a JWT and #refresh! posts to Cursor's token endpoint, so the
-    # declaration is :server. That the endpoint has been answering 404 since 2026-09-05 is
-    # an open incident, not a different lifecycle — see docs/design/agent-credential-lifecycle.md.
+    # No server-side refresh exists for this runtime, and the 404 we were getting was the
+    # evidence rather than an outage: the CLI (2026.09.15) contains exactly three auth
+    # endpoints — `/auth/poll`, `/auth/exchange_user_api_key` and
+    # `/auth/cursor_dev_session_token`, all on api2.cursor.sh — and no token-refresh call
+    # at all. `authenticator.cursor.sh`, which our refresh posted to, appears nowhere in
+    # it. A device login writes both tokens and the CLI never exchanges the refresh one;
+    # the access token simply carries 60 days (measured: issued 2026-09-18, exp
+    # 2026-11-16) and a new login is the only renewal.
     def credential_lifecycle
-      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: nil }.freeze
+      { expiry: :token, refresh: :reauth_only, rotation: :static, nominal_ttl: 60.days,
+        reauth_required_on_expiry: true }.freeze
     end
 
     # Cursor's accessToken is a JWT carrying an `exp` claim. Surface its expiry
@@ -144,8 +150,6 @@ module Agents
 
     # Fetch available models from Cursor API (Connect protocol, JSON format).
     CURSOR_MODELS_URL = "https://api2.cursor.sh/aiserver.v1.AiService/GetUsableModels"
-    CURSOR_AUTH_URL = "https://authenticator.cursor.sh/oauth/token"
-    CURSOR_CLIENT_ID = "cursor-cli"
 
     def fetch_available_models(credentials, credential: nil)
       access_token = credentials["accessToken"]
@@ -153,11 +157,14 @@ module Agents
 
       response = request_models(access_token)
 
-      if response_unauthorized?(response) && credential
-        new_token = refresh_cursor_token!(credential)
-        return [] unless new_token
-
-        response = request_models(new_token)
+      # A 401 here used to trigger a token refresh against an endpoint that does not
+      # exist, roughly ten times an evening in production, recorded nowhere. There is
+      # nothing to retry with: an unauthorized model list means this login is spent, and
+      # the profile already says so (the credential reads `expired` / "Sign-in required").
+      if response_unauthorized?(response)
+        Rails.logger.info("[CursorCliAdapter] model list unauthorized for credential " \
+                          "#{credential&.id}: the login needs renewing")
+        return []
       end
 
       return [] unless response.is_a?(Net::HTTPSuccess)
@@ -169,18 +176,6 @@ module Agents
     rescue StandardError => e
       Rails.logger.warn("[CursorCliAdapter] fetch_available_models failed: #{e.message}")
       []
-    end
-
-    # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
-    # refresh_cursor_token! which persists under a row lock via persist_refreshed!.
-    # @param credential [AgentCredential]
-    # @return [Hash] { status: :refreshed | :error, detail: String | nil }
-    # margin_ms is ignored: this agent stores no per-block expiry to compare it
-    # against, so a call is already the decision to refresh.
-    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
-      new_token = refresh_cursor_token!(credential)
-      new_token ? { status: :refreshed, detail: nil }
-                : { status: :error, detail: "cursor token refresh failed" }
     end
 
     # Env vars for MITM proxy and http2-logger configuration.
@@ -262,46 +257,6 @@ module Agents
 
     def response_unauthorized?(response)
       response.code == "401" || response.code == "403"
-    end
-
-    def refresh_cursor_token!(credential)
-      refresh_token = credential.config_data["refreshToken"]
-      return nil if refresh_token.blank?
-
-      uri = URI(CURSOR_AUTH_URL)
-      body = URI.encode_www_form(
-        grant_type: "refresh_token",
-        client_id: CURSOR_CLIENT_ID,
-        refresh_token: refresh_token
-      )
-      req = Net::HTTP::Post.new(uri)
-      req["Content-Type"] = "application/x-www-form-urlencoded"
-      req.body = body
-
-      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |http| http.request(req) }
-
-      unless response.is_a?(Net::HTTPSuccess)
-        Rails.logger.warn("[CursorCliAdapter] Token refresh failed: #{response.code} #{response.body.to_s.truncate(200)}")
-        return nil
-      end
-
-      data = JSON.parse(response.body)
-      new_access = data["access_token"]
-      return nil if new_access.blank?
-
-      updated = credential.config_data.merge(
-        "accessToken" => new_access,
-        "refreshToken" => data["refresh_token"] || refresh_token
-      )
-      # Persist under a row lock with the rotation guard so a concurrent session
-      # cleanup or sweep can't clobber a newer token.
-      persisted = persist_refreshed!(credential, updated)
-      Rails.logger.info("[CursorCliAdapter] Token refreshed for credential #{credential.id}")
-
-      persisted["accessToken"]
-    rescue StandardError => e
-      Rails.logger.warn("[CursorCliAdapter] Token refresh error: #{e.message}")
-      nil
     end
 
     CURSOR_API_BASE = "https://api2.cursor.sh"

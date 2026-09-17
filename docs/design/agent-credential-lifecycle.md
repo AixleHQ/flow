@@ -43,7 +43,7 @@ Four mechanisms, each independently correct, none aware of the others:
 |---|---|---|---|---|---|
 | `claude_code` | `claudeAiOauth` + `designOauth` + optional `primaryApiKey` | yes, soonest block | **yes** (`platform.claude.com/v1/oauth/token`, rotates) | us + the CLI in every container | multi-holder rotation |
 | `codex` | `tokens.{access,refresh,id}` | yes (JWT `exp`) | **yes** | us + container | — |
-| `cursor_cli` | `accessToken` + `refreshToken` | yes (JWT `exp`) | **yes**, but the endpoint answers 404 HTML (`authenticator.cursor.sh/oauth/token`) | container only, by device re-login | refresh is dead; PR #222 gates launches instead |
+| `cursor_cli` | `accessToken` + `refreshToken` | yes (JWT `exp`, 60 days) | **no — the CLI carries no refresh call at all** | nobody; only a new device login | expiry is real and unavoidable; PR #222 gates the `NULL`-expiry rows |
 | `kiro_cli` | SQLite `auth_kv` rows | no | no | container only | implemented on `feat/agent-token-refresh-coverage`, unmerged |
 | `antigravity_cli` | `token.{access_token,refresh_token,expiry}` | no | no | container only | protocol recovered from the binary, client pair unverified |
 | `grok` | `{key, token_type, expires_at}` per scope | yes | no — **no refresh token is stored at all** | nobody; only re-login | expiry shown with no way to act on it |
@@ -183,7 +183,7 @@ This is what makes the answer to "does every harness refresh?" mechanical instea
 | Runtime | Action | Where it stands |
 |---|---|---|
 | `kiro_cli` | land server-side refresh (social `refreshToken` + IdC `CreateToken`) | **done** — it now declares `refresh: :server` and the sweep selects it |
-| `cursor_cli` | find the web-side caller firing `refresh!` and fix/replace the endpoint; keep PR #222's `NULL`-expiry gate as the safety net | PR #222 open; endpoint 404 open since 2026-09-05 |
+| `cursor_cli` | **answered 2026-09-18: there was nothing to fix.** A login in the freshly built image with the proxy recording showed the CLI talking only to `api2.cursor.sh`; the shipped bundle (2026.09.15) contains three auth endpoints — `/auth/poll`, `/auth/exchange_user_api_key`, `/auth/cursor_dev_session_token` — and no token exchange, while `authenticator.cursor.sh`, the host our refresh posted to, appears nowhere in it. The access token carries 60 days (issued 2026-09-18, exp 2026-11-16). Now declared `reauth_only`; the dead refresh code is gone, and with it ~10 404s an evening from the web process | done |
 | `antigravity_cli` | implement Google `oauth2.googleapis.com/token` refresh; verify which embedded client pair the consumer login uses | needs one live credential to test |
 | `grok` | declare `reauth_only`, surface "re-login required" instead of a silent expiry, refuse the launch | **done** — the declaration, the badge and the launch gate are in |
 | `gemini_cli` | declare `expiry: :none` / static; keep the OAuth picker disallowed | done by design |
