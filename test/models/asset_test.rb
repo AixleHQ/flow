@@ -81,10 +81,17 @@ class AssetTest < ActiveSupport::TestCase
     end
   end
 
-  # A folder path is letters, digits, hyphens or underscores per segment — the same shape
-  # `Folder#path` validates, so an asset's folder and a persisted `Folder` row agree.
-  test "folder rejects spaces, traversal and control characters" do
-    [ "my folder", "Отчёты", "notes (draft)", ".", "..", "tabbed\tname", "a" * 101 ].each do |name|
+  # A folder segment is a label a human types — the same shape `Folder#path` validates, so an
+  # asset's folder and a persisted `Folder` row agree.
+  test "folder accepts the human labels it has always accepted" do
+    [ "my folder", "Отчёты", "notes (draft)", "Q3 — final", "специи/травы" ].each do |name|
+      asset = build(:asset, folder: name, scope: @company, created_by: @owner)
+      assert { asset.valid? }
+    end
+  end
+
+  test "folder rejects traversal, separators and control characters" do
+    [ ".", "..", "a/..", "back\\slash", "tabbed\tname", "a/ /b", "a//b", "/a", "a/", "a" * 101 ].each do |name|
       asset = build(:asset, folder: name, scope: @company, created_by: @owner)
       assert { !asset.valid? }
       assert { asset.errors[:folder].present? }
@@ -107,7 +114,12 @@ class AssetTest < ActiveSupport::TestCase
   test ".normalize_folder canonicalizes a lookup key the same way a write is canonicalized" do
     assert_equal "docs", Asset.normalize_folder(" docs ")
     assert_equal "docs/sub", Asset.normalize_folder("  docs/sub  ")
+    # Per segment, not one outer strip: nesting puts segments where an outer strip can't reach,
+    # and "docs" vs "docs " would otherwise be two folders that render identically.
+    assert_equal "docs/sub", Asset.normalize_folder("docs / sub")
+    assert_equal "my folder/plan", Asset.normalize_folder(" my folder / plan ")
     assert_nil Asset.normalize_folder("")
+    assert_nil Asset.normalize_folder("   ")
     assert_nil Asset.normalize_folder(nil)
   end
 
@@ -116,8 +128,10 @@ class AssetTest < ActiveSupport::TestCase
     assert { !Asset.invalid_folder?("docs/sub") }
     assert { !Asset.invalid_folder?(nil) }
     assert { !Asset.invalid_folder?("  ") }
-    assert { Asset.invalid_folder?("my folder") }
+    assert { !Asset.invalid_folder?("my folder") }
     assert { Asset.invalid_folder?("..") }
+    assert { Asset.invalid_folder?("a/..") }
+    assert { Asset.invalid_folder?("back\\slash") }
     assert { Asset.invalid_folder?("a" * 101) }
   end
 

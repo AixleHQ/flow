@@ -51,7 +51,7 @@ module Api
             project_id: @project.id,
             asset: {
               name: "proj-doc.md",
-              folder: "my folder",
+              folder: "docs/..",
               file: document_file_cache_data
             }
           }

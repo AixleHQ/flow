@@ -15,11 +15,45 @@ class Folder < ApplicationRecord
   # deletion nullifies the column (see NullifyFoldersCreatedByFk).
   belongs_to :created_by, class_name: "User", optional: true
 
-  PATH_FORMAT = /\A[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_-]+)*\z/
+  # A segment is free-form on purpose. Asset folders have always been labels a human types —
+  # spaces and non-Latin scripts included — and narrowing that to `[a-zA-Z0-9_-]` would strand
+  # every folder already named that way: reads would still work, but `update!` runs validations,
+  # so the row could no longer be moved, promoted or even soft-deleted. What a segment may NOT
+  # hold is a separator or a control character: `/` and `\` would let it address a directory of
+  # its own choosing under /workspace/assets, and a control character would make the directory
+  # unnameable at the far end. Everything that consumes the path shell-escapes it.
+  SEGMENT_FORMAT = /[^\/\\\x00-\x1F\x7F]+/
+  PATH_FORMAT = /\A#{SEGMENT_FORMAT}(\/#{SEGMENT_FORMAT})*\z/
+  # These pass the format but name a directory that already exists — and ".." names the parent,
+  # which walks the path out of the assets directory entirely.
+  RESERVED_SEGMENTS = %w[. ..].freeze
+  PATH_MESSAGE = "must be one or more segments separated by /, with no backslashes or control " \
+                 "characters, and no segment blank, \".\" or \"..\""
 
-  validates :path, presence: true, format: { with: PATH_FORMAT,
-                                              message: "must be one or more path segments of letters, " \
-                                                       "digits, hyphens or underscores, separated by /" }
+  # Canonical form of a path: every segment trimmed, blank meaning "no path" (nil). Every write
+  # and every lookup has to agree on it, or "docs" and "docs " are two folders that render
+  # identically and neither can be told from the other. It is per segment rather than one outer
+  # strip because nesting puts segments where an outer strip can't reach — " a / b " is "a/b".
+  # A segment that was only whitespace collapses to empty, which PATH_FORMAT then rejects.
+  def self.normalize_path(value)
+    return value.presence unless value.is_a?(String)
+
+    # split("/", -1) keeps trailing empties, so "a/" stays "a/" and is still rejected.
+    value.split("/", -1).map(&:strip).join("/").presence
+  end
+
+  # The path rules as one predicate, so Asset, FolderService and the agent tools all reject the
+  # same strings. A blank path is not a valid path here; whether blank is acceptable at all is
+  # the caller's question (for Asset it means "root").
+  def self.invalid_path?(path)
+    return true unless path.is_a?(String) && path.match?(PATH_FORMAT)
+
+    path.split("/").any? { |segment| segment.strip.empty? || RESERVED_SEGMENTS.include?(segment) }
+  end
+
+  before_validation :normalize_path
+  validates :path, presence: true
+  validate :path_shape
   validates :path, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
   validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
   validates :scope_id, presence: true
@@ -68,5 +102,18 @@ class Folder < ApplicationRecord
 
   def empty?
     descendant_folder_scope.none? && descendant_asset_scope.none?
+  end
+
+  private
+
+  def normalize_path
+    self.path = self.class.normalize_path(path)
+  end
+
+  def path_shape
+    # `presence` already speaks for a blank path; adding a shape error too would say it twice.
+    return if path.blank?
+
+    errors.add(:path, PATH_MESSAGE) if self.class.invalid_path?(path)
   end
 end

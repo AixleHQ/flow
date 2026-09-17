@@ -72,10 +72,10 @@ class InternalTools::PromoteAssetTest < ActiveSupport::TestCase
   # An invalid folder used to surface to the agent as a raw RecordInvalid from deep inside the
   # export service; it is the agent's own argument, so it gets a tool error it can act on.
   test "returns a tool error naming the rule when the folder is invalid" do
-    result = run_tool(name: "report.md", folder: "my folder")
+    result = run_tool(name: "report.md", folder: "a/..")
 
     assert_equal 1, result[:exit_code]
-    assert_includes result[:stderr], "my folder"
+    assert_includes result[:stderr], "a/.."
     assert { Asset.where(scope: @project, name: "report.md").none? }
   end
 

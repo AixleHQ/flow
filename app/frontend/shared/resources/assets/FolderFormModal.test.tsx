@@ -95,6 +95,46 @@ describe('FolderFormModal', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it('rejects ".." so a folder can never name its own parent', async () => {
+    const onSubmit = vi.fn();
+    renderPage(
+      <FolderFormModal
+        opened
+        onClose={vi.fn()}
+        mode="create"
+        existingNames={[]}
+        submitting={false}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await userEvent.type(screen.getByPlaceholderText('e.g. specs'), '..');
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    expect(screen.getByText('".." is not a usable folder name.')).toBeInTheDocument();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  // Asset folders have always been free-form labels; the folder view must not be narrower.
+  it('accepts a name with a space and non-Latin characters', async () => {
+    const onSubmit = vi.fn();
+    renderPage(
+      <FolderFormModal
+        opened
+        onClose={vi.fn()}
+        mode="create"
+        existingNames={[]}
+        submitting={false}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await userEvent.type(screen.getByPlaceholderText('e.g. specs'), 'Отчёты (Q3)');
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }));
+
+    expect(onSubmit).toHaveBeenCalledWith('Отчёты (Q3)');
+  });
+
   it('rejects a name colliding with an existing sibling', async () => {
     const onSubmit = vi.fn();
     renderPage(

@@ -27,6 +27,7 @@ class FolderService
   end
 
   def create!(path)
+    path = Folder.normalize_path(path)
     validate_format!(path)
 
     parent = folder_parent(path)
@@ -43,6 +44,8 @@ class FolderService
   # transaction, pre-checking every affected row so a partial cascade can never hit the DB's
   # `(scope, folder, name)` unique index mid-flight.
   def relocate!(from_path:, to_path:)
+    from_path = Folder.normalize_path(from_path)
+    to_path = Folder.normalize_path(to_path)
     return { from: from_path, to: to_path } if from_path == to_path
 
     validate_format!(to_path)
@@ -80,6 +83,7 @@ class FolderService
   end
 
   def destroy!(path:, recursive: false)
+    path = Folder.normalize_path(path)
     folder = find_own_folder!(path)
 
     if recursive
@@ -105,9 +109,9 @@ class FolderService
   private
 
   def validate_format!(path)
-    return if path.present? && Folder::PATH_FORMAT.match?(path)
+    return unless Folder.invalid_path?(path)
 
-    raise InvalidPathError, "Folder name must contain only letters, digits, hyphens or underscores."
+    raise InvalidPathError, "Folder path #{Folder::PATH_MESSAGE}."
   end
 
   def find_own_folder!(path)

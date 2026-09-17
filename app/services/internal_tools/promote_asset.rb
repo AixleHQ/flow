@@ -19,7 +19,7 @@ module InternalTools
                    description: "Name of the workflow output asset to promote (as produced by the run)."
       param :folder, type: :string,
                      description: "Optional destination folder within project assets " \
-                                  "(letters, digits, hyphens, underscores only; use / to nest, e.g. specs/api)."
+                                  "(use / to nest, e.g. specs/api; no backslashes or control characters)."
     end
 
     def execute
@@ -33,8 +33,8 @@ module InternalTools
       return error("Cannot determine the promoting user") unless promoter
 
       if Asset.invalid_folder?(params[:folder])
-        return error("Invalid folder '#{params[:folder]}': letters, digits, hyphens or underscores per " \
-                     "segment, separated by /, at most #{Asset::FOLDER_MAX_LENGTH} characters")
+        return error("Invalid folder '#{params[:folder]}': #{Folder::PATH_MESSAGE}, " \
+                     "at most #{Asset::FOLDER_MAX_LENGTH} characters")
       end
 
       folder = Asset.normalize_folder(params[:folder])

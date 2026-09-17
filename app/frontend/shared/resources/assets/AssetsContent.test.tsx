@@ -577,12 +577,12 @@ describe('AssetsContent', () => {
     await userEvent.click(screen.getByRole('button', { name: /upload your first file/i }));
 
     completeUpload([{ name: 'notes.md', key: 'cache/ccc333-notes.md' }]);
-    await userEvent.type(await screen.findByPlaceholderText('Leave empty for root'), 'my folder');
+    await userEvent.type(await screen.findByPlaceholderText('Leave empty for root'), 'docs/..');
     await userEvent.click(screen.getByRole('button', { name: /save 1 file/i }));
 
     expect(
       await screen.findByText(
-        'Folder must be one or more path segments of letters, digits, hyphens or underscores, separated by /',
+        'Folder must be one or more segments separated by /, with no backslashes or control characters, and no segment blank, "." or ".."',
       ),
     ).toBeInTheDocument();
     expect(globalThis.fetch).not.toHaveBeenCalled();

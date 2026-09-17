@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 class Asset < ApplicationRecord
-  # `folder` holds the same path shape as `Folder#path`: one or more segments of letters,
-  # digits, hyphens or underscores, separated by `/`. See `Folder` for why paths (not a
-  # `parent_id`) are the source of truth for nesting.
+  # `folder` holds the same path shape as `Folder#path` — see `Folder::PATH_FORMAT` for what a
+  # segment may contain, and `Folder` for why paths (not a `parent_id`) are the source of truth
+  # for nesting.
   FOLDER_MAX_LENGTH = 100
 
   belongs_to :scope, polymorphic: true
@@ -21,11 +21,8 @@ class Asset < ApplicationRecord
   validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
   validates :scope_id, presence: true
   validates :status, presence: true, inclusion: { in: %w[active pending_review dismissed] }
-  validates :folder, format: { with: Folder::PATH_FORMAT,
-                                message: "must be one or more path segments of letters, digits, hyphens " \
-                                         "or underscores, separated by /" },
-                     length: { maximum: FOLDER_MAX_LENGTH },
-                     allow_blank: true
+  validates :folder, length: { maximum: FOLDER_MAX_LENGTH }, allow_blank: true
+  validate :folder_shape
 
   scope :active, -> { where(deleted_at: nil, status: "active") }
   scope :publicly_shared, -> { where(public: true).where.not(public_token: nil) }
@@ -60,11 +57,11 @@ class Asset < ApplicationRecord
   }
   scope :visible_for_company, ->(company) { for_company(company) }
 
-  # Canonical form of a folder label: trimmed, with blank meaning "root" (nil). Every write and
-  # every lookup has to agree on it — `find_by(folder: " docs ")` would otherwise miss the row
-  # stored as "docs" and silently create a duplicate asset.
+  # Canonical form of a folder, with blank meaning "root" (nil). Every write and every lookup has
+  # to agree on it — `find_by(folder: " docs ")` would otherwise miss the row stored as "docs"
+  # and silently create a duplicate asset. `Folder` owns the rule, since the two must not drift.
   def self.normalize_folder(value)
-    value.is_a?(String) ? value.strip.presence : value.presence
+    Folder.normalize_path(value)
   end
 
   # The folder rules as a predicate, for callers that reject a bad argument before building the
@@ -73,7 +70,7 @@ class Asset < ApplicationRecord
     folder = normalize_folder(value)
     return false if folder.nil?
 
-    !folder.match?(Folder::PATH_FORMAT) || folder.length > FOLDER_MAX_LENGTH
+    Folder.invalid_path?(folder) || folder.length > FOLDER_MAX_LENGTH
   end
 
   def picker_name
@@ -155,5 +152,12 @@ class Asset < ApplicationRecord
 
   def normalize_folder
     self.folder = self.class.normalize_folder(folder)
+  end
+
+  # A blank folder means "root", so only a present one has a shape to check.
+  def folder_shape
+    return if folder.blank?
+
+    errors.add(:folder, Folder::PATH_MESSAGE) if Folder.invalid_path?(folder)
   end
 end

@@ -97,16 +97,22 @@ const MAX_FILE_SIZE = 1024 * 1024 * 1024;
 // Api::V1::AssetsController#cache_key.
 const CACHE_PREFIX = 'cache/';
 
-// Mirrors Asset::FOLDER_MAX_LENGTH / Folder::PATH_FORMAT. Catching it here keeps the file —
-// already uploaded to cache storage by the time the folder is typed — from being thrown away on
-// a server-side 422.
-const FOLDER_PATH_FORMAT = /^[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_-]+)*$/;
+// Mirrors Asset::FOLDER_MAX_LENGTH / Folder::PATH_FORMAT / Folder::RESERVED_SEGMENTS. Catching it
+// here keeps the file — already uploaded to cache storage by the time the folder is typed — from
+// being thrown away on a server-side 422.
+// eslint-disable-next-line no-control-regex -- the point of the rule is to reject control characters
+const FOLDER_SEGMENT_FORMAT = /^[^/\\\x00-\x1f\x7f]+$/;
+const FOLDER_RESERVED_SEGMENTS = ['.', '..'];
 const FOLDER_MAX_LENGTH = 100;
-const FOLDER_HINT = 'Use "/" to nest, e.g. specs/api. Letters, digits, hyphens, underscores.';
+const FOLDER_HINT = 'Use "/" to nest, e.g. specs/api.';
 
 function folderError(folder: string): string | null {
-  if (!FOLDER_PATH_FORMAT.test(folder)) {
-    return 'Folder must be one or more path segments of letters, digits, hyphens or underscores, separated by /';
+  const segments = folder.split('/');
+  const badShape = segments.some(
+    (s) => !FOLDER_SEGMENT_FORMAT.test(s) || !s.trim() || FOLDER_RESERVED_SEGMENTS.includes(s),
+  );
+  if (badShape) {
+    return 'Folder must be one or more segments separated by /, with no backslashes or control characters, and no segment blank, "." or ".."';
   }
   if (folder.length > FOLDER_MAX_LENGTH) return `Folder must be ${FOLDER_MAX_LENGTH} characters or fewer`;
   return null;

@@ -36,10 +36,24 @@ class FolderTest < ActiveSupport::TestCase
     end
   end
 
-  test "path rejects spaces" do
-    folder = build(:folder, path: "my folder", scope: @project, created_by: @owner)
-    assert { !folder.valid? }
-    assert { folder.errors[:path].present? }
+  test "path allows the human labels asset folders have always allowed" do
+    [ "my folder", "Отчёты", "notes (draft)", "Q3 — final/черновик" ].each do |path|
+      folder = build(:folder, path: path, scope: @project, created_by: @owner)
+      assert { folder.valid? }
+    end
+  end
+
+  test "path rejects traversal, separators and control characters" do
+    [ ".", "..", "a/..", "back\\slash", "tabbed\tname", "a/ /b", " " ].each do |path|
+      folder = build(:folder, path: path, scope: @project, created_by: @owner)
+      assert { !folder.valid? }
+      assert { folder.errors[:path].present? }
+    end
+  end
+
+  test "path segments are trimmed on write, so a stray space never forks a folder in two" do
+    folder = create(:folder, path: " docs / sub ", scope: @project, created_by: @owner)
+    assert_equal "docs/sub", folder.path
   end
 
   test "path must be present" do

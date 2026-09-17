@@ -18,7 +18,11 @@ export interface FolderFormModalProps {
   onSubmit: (name: string) => void;
 }
 
-const NAME_FORMAT = /^[a-zA-Z0-9_-]+$/;
+// One segment of Folder::PATH_FORMAT — the modal names a single folder, so "/" is rejected
+// separately below with a message of its own.
+// eslint-disable-next-line no-control-regex -- the point of the rule is to reject control characters
+const NAME_FORMAT = /^[^/\\\x00-\x1f\x7f]+$/;
+const RESERVED_NAMES = ['.', '..'];
 
 export function FolderFormModal({
   opened,
@@ -54,16 +58,19 @@ export function FolderFormModal({
       : trimmed.includes('/')
         ? 'Folder names can’t contain "/".'
         : !NAME_FORMAT.test(trimmed)
-          ? 'Only letters, digits, hyphens and underscores are allowed.'
-          : existingNames.includes(trimmed) && trimmed !== initialName
-            ? `An item named "${trimmed}" already exists here.`
-            : null;
+          ? 'Backslashes and control characters are not allowed.'
+          : RESERVED_NAMES.includes(trimmed)
+            ? `"${trimmed}" is not a usable folder name.`
+            : existingNames.includes(trimmed) && trimmed !== initialName
+              ? `An item named "${trimmed}" already exists here.`
+              : null;
 
   const errorText = clientError ?? serverError ?? null;
 
   const submit = () => {
     setTouched(true);
     if (!trimmed || trimmed.includes('/') || !NAME_FORMAT.test(trimmed)) return;
+    if (RESERVED_NAMES.includes(trimmed)) return;
     if (existingNames.includes(trimmed) && trimmed !== initialName) return;
     onSubmit(trimmed);
   };

@@ -33,8 +33,19 @@ class FolderServiceTest < ActiveSupport::TestCase
   end
 
   test "create! rejects a bad path format" do
-    assert_raises(FolderService::InvalidPathError) { @service.create!("bad name") }
     assert_raises(FolderService::InvalidPathError) { @service.create!("a//b") }
+    assert_raises(FolderService::InvalidPathError) { @service.create!("..") }
+    assert_raises(FolderService::InvalidPathError) { @service.create!("back\\slash") }
+  end
+
+  test "create! accepts a label with a space, the way asset folders always could" do
+    folder = @service.create!("my folder")
+    assert { folder.path == "my folder" }
+  end
+
+  test "create! normalizes each segment, so \"docs \" and \"docs\" are the same folder" do
+    @service.create!("docs")
+    assert_raises(FolderService::CollisionError) { @service.create!(" docs ") }
   end
 
   test "create! rejects a nested path whose parent does not exist" do
