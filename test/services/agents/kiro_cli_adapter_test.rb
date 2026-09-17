@@ -342,14 +342,16 @@ module Agents
       assert_equal %w[KIRO_API_KEY], @adapter.conflicting_env_keys({ "state_b64" => "x" })
     end
 
-    # Kiro meters in credits and publishes no per-request token counts outside headless
-    # mode, so there is deliberately no expiry to derive and no usage to collect.
-    test "the credential carries no derivable expiry" do
+    # The sweep reads the expiry off every credential it considers, including ones the
+    # capture never filled in — a blob that is not a readable database has to answer
+    # "no expiry" rather than raise inside the sweep.
+    test "an unreadable state blob carries no expiry" do
       assert_nil @adapter.token_expires_at(@adapter.extract_credentials(sqlite_blob))
     end
 
-    test "kiro_cli is not in the refreshable set — there is no refresh endpoint" do
-      refute_includes AgentCredential::REFRESHABLE_AGENT_TYPES, "kiro_cli"
+    test "kiro_cli is in the refreshable set — the sweep has to select it" do
+      assert_includes AgentCredential.refreshable_agent_types, "kiro_cli"
+      assert_equal :server, @adapter.credential_lifecycle[:refresh]
     end
 
     # == Telemetry (the primary cost source) ==
@@ -595,6 +597,134 @@ module Agents
 
       assert_equal "tok-abc", record["access_token"]
       assert_equal "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD", record["profile_arn"]
+    end
+
+    # == Token refresh ==
+
+    # A credential in the CLI's own layout for the refresh paths: a token that is about
+    # to expire, and the client registration an IdC refresh has to be signed with. The
+    # row KEY decides which endpoint is used, so it is a parameter here.
+    def refreshable_credentials(key: "kirocli:odic:token", expires_at: 2.minutes.from_now.utc.iso8601,
+                                registration: { "client_id" => "cid", "client_secret" => "sec", "region" => "us-west-2" })
+      Tempfile.create([ "kiro-refresh", ".sqlite3" ]) do |file|
+        db = SQLite3::Database.new(file.path)
+        db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
+        db.execute("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT)")
+        db.execute("INSERT INTO auth_kv VALUES (?, ?)",
+                   [ "kirocli:odic:device-registration", registration.to_json ]) if registration.present?
+        db.execute("INSERT INTO auth_kv VALUES (?, ?)", [ key, {
+          "access_token" => "old-access", "refresh_token" => "old-refresh",
+          "expires_at" => expires_at, "profile_arn" => "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD"
+        }.to_json ])
+        db.close
+
+        { "state_b64" => Base64.strict_encode64(File.binread(file.path)) }
+      end
+    end
+
+    def credential_for(config_data)
+      create(:agent_credential, :kiro_cli, config_data: config_data)
+    end
+
+    # The stored row the CLI will read next time, after a refresh.
+    def stored_token(credential)
+      blob = Base64.strict_decode64(credential.reload.config_data["state_b64"])
+      @adapter.send(:auth_record, blob)
+    end
+
+    # The expiry has to be visible for the sweep to select this credential at all —
+    # `refresh_due` skips rows whose expires_at is NULL.
+    test "token_expires_at reads the row's ISO8601 expiry" do
+      expiry = 45.minutes.from_now.utc.iso8601
+      ms = @adapter.token_expires_at(refreshable_credentials(expires_at: expiry))
+
+      assert_in_delta Time.zone.parse(expiry).to_f * 1000, ms, 1000
+    end
+
+    test "token_expires_at is nil when there is no login to expire" do
+      assert_nil @adapter.token_expires_at({})
+    end
+
+    # Social logins renew against Kiro's own endpoint, where the refresh token is the
+    # whole request. The response is camelCase; the row the CLI reads is snake_case, so
+    # a refresh that did not translate would leave the CLI unable to find its token.
+    test "a social login refreshes against Kiro and is written back in the CLI's own shape" do
+      credential = credential_for(refreshable_credentials(key: "kirocli:social:token"))
+      request = stub_request(:post, Agents::KiroCliAdapter::SOCIAL_REFRESH_URL)
+        .with(body: { refreshToken: "old-refresh" })
+        .to_return(status: 200, body: { accessToken: "new-access", refreshToken: "new-refresh",
+                                        expiresIn: 3600, profileArn: "arn:new" }.to_json)
+
+      result = @adapter.refresh!(credential)
+
+      assert_equal :refreshed, result[:status]
+      assert_requested request
+      token = stored_token(credential)
+      assert_equal "new-access", token["access_token"]
+      assert_equal "new-refresh", token["refresh_token"]
+      assert_equal "arn:new", token["profile_arn"]
+      assert_operator Time.zone.parse(token["expires_at"]), :>, 50.minutes.from_now
+    end
+
+    # Builder ID / IdC is ordinary AWS SSO OIDC, signed with the registration stored
+    # beside the token — and sent to the registration's own region, which need not be
+    # the profile's.
+    test "an IdC login refreshes through SSO OIDC with its stored client registration" do
+      credential = credential_for(refreshable_credentials)
+      request = stub_request(:post, "https://oidc.us-west-2.amazonaws.com/token")
+        .with(body: { clientId: "cid", clientSecret: "sec",
+                      grantType: "refresh_token", refreshToken: "old-refresh" })
+        .to_return(status: 200, body: { accessToken: "new-access", expiresIn: 900 }.to_json)
+
+      assert_equal :refreshed, @adapter.refresh!(credential)[:status]
+      assert_requested request
+      assert_equal "new-access", stored_token(credential)["access_token"]
+    end
+
+    # Fields the response did not mention must survive: an IdC refresh that returns no
+    # new refresh token must not blank the one that still works.
+    test "a refresh keeps every field the response did not mention" do
+      credential = credential_for(refreshable_credentials)
+      stub_request(:post, "https://oidc.us-west-2.amazonaws.com/token")
+        .to_return(status: 200, body: { accessToken: "new-access", expiresIn: 900 }.to_json)
+
+      @adapter.refresh!(credential)
+
+      assert_equal "old-refresh", stored_token(credential)["refresh_token"]
+    end
+
+    # Without the registration there is nothing to sign CreateToken with, and no sweep
+    # will ever fix that — the user has to log in again, so the failure is permanent.
+    test "an IdC login with no stored registration fails permanently" do
+      result = @adapter.refresh!(credential_for(refreshable_credentials(registration: nil)))
+
+      assert_equal :error, result[:status]
+      assert result[:permanent]
+    end
+
+    # A refused refresh token is permanent; a server having a bad minute is not.
+    test "a rejected refresh token is permanent and a server error is not" do
+      credential = credential_for(refreshable_credentials(key: "kirocli:social:token"))
+
+      stub_request(:post, Agents::KiroCliAdapter::SOCIAL_REFRESH_URL)
+        .to_return(status: 400, body: { __type: "InvalidGrantException" }.to_json)
+      assert @adapter.refresh!(credential)[:permanent]
+
+      stub_request(:post, Agents::KiroCliAdapter::SOCIAL_REFRESH_URL)
+        .to_return(status: 503, body: "upstream unavailable")
+      refute @adapter.refresh!(credential)[:permanent]
+    end
+
+    # The sweep passes a margin so it only spends a round trip on tokens that are
+    # actually close to dying.
+    test "a token still far from expiry is left alone" do
+      credential = credential_for(refreshable_credentials(expires_at: 4.hours.from_now.utc.iso8601))
+
+      assert_equal :not_needed, @adapter.refresh!(credential, margin_ms: 15 * 60 * 1000)[:status]
+    end
+
+    test "a credential with no stored login is not an error" do
+      assert_equal :not_needed, @adapter.refresh!(credential_for({}))[:status]
     end
   end
 end

@@ -21,6 +21,12 @@ Rails.application.routes.draw do
   # see the controller for why. Not an MCP tool and not in any tool list.
   post "/azure/git/credentials", to: "azure_git_credentials#create"
 
+  # Credential write-back from agent containers: the in-container watcher posts an auth
+  # file here as soon as the CLI rotates it, so a container that dies without cleanup no
+  # longer takes the rotation with it. Authenticated by a derived per-session key
+  # (Agents::SessionKey), like the two vending endpoints above.
+  post "/agents/credentials", to: "agent_credential_sync#create"
+
   # CSP violation report sink (report-only mode, M-16). Browsers POST here with
   # Content-Type application/csp-report; no session/CSRF token is sent.
   post "/csp-violation-report-endpoint", to: "csp_reports#create"

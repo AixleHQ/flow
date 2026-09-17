@@ -247,6 +247,44 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert_equal 0, @user.terminal_sessions.count
   end
 
+  # The production shape (2026-09-17): a token that died while a live session pinned it
+  # out of the refresh sweep. The row is still `active` — no refresh was ever attempted,
+  # so nothing recorded an error — and the container it would launch could only print
+  # "Login expired" until the no-output watchdog reaped it half an hour later.
+  test "create_and_start blocks launch when an expired login is pinned by a live session" do
+    claude_config = { "claudeAiOauth" => { "accessToken" => "tok",
+                                           "refreshToken" => "rt",
+                                           "expiresAt" => (1.minute.ago.to_f * 1000).to_i } }
+    cred = AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_config)
+    assert cred.active?
+    create(:terminal_session, user: @user, company_id: @company.id,
+                              agent_type: "claude_code", state: "ready")
+
+    assert_raises(AgentCredential::PreflightError) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session",
+        agent_type: "claude_code", params: {}
+      )
+    end
+
+    assert_equal 1, @user.terminal_sessions.count, "only the pre-existing session may exist"
+  end
+
+  test "create_and_start allows an expired login nothing else is holding (launch refreshes it)" do
+    mock_temporal_start
+    claude_config = { "claudeAiOauth" => { "accessToken" => "tok",
+                                           "refreshToken" => "rt",
+                                           "expiresAt" => (1.minute.ago.to_f * 1000).to_i } }
+    AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_config)
+
+    session = SessionService.create_and_start(
+      user: @user, project: @project, session_type: "agent_session",
+      agent_type: "claude_code", params: {}
+    )
+
+    assert session.persisted?
+  end
+
   # The catch-22 this guards: the refresh sweep marks a credential broken, and the
   # only flow that can replace it is an auth_setup session — so gating that session
   # on the same credential locks the user out for good.

@@ -33,6 +33,12 @@ ENV PATH="/home/claude/.local/bin:${PATH}"
 
 USER root
 
+# The CLI version this image actually shipped with, recorded where anything can read it:
+# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
+# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
+# Dockerfile are not the same image and nothing else says which one a container is running.
+RUN /home/claude/.local/bin/claude --version > /etc/aixle-cli-version
+
 # -----------------------------------------------------------------------------
 # AWS CLI v2 — for Amazon Bedrock connections (diagnostics, and the fallback
 # in-container Identity Center login). Deliberately placed AFTER the Claude

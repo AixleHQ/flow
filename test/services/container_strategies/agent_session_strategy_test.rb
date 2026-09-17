@@ -74,6 +74,19 @@ module ContainerStrategies
       refute env_vars.any? { |v| v.start_with?("MCP_SESSION_KEY=") }
     end
 
+    # Without these the container has no way to report a token the CLI rotated, and the
+    # rotation is lost whenever the pod dies before cleanup.
+    test "builds env vars telling the watcher where to report a rotated token" do
+      strategy = build_strategy
+
+      env_vars = strategy.build_env_vars
+
+      assert_includes env_vars, "CREDENTIAL_SYNC_URL=#{Settings.agents.credential_sync_url}"
+      assert_includes env_vars, "CREDENTIAL_SYNC_KEY=#{Agents::SessionKey.generate(@session)}"
+      paths = env_vars.find { |v| v.start_with?("CREDENTIAL_SYNC_PATHS=") }
+      assert_includes paths.to_s, "/home/claude/.claude/.credentials.json"
+    end
+
     test "TTYD_CMD is bash for agent sessions" do
       strategy = build_strategy(agent_type: "claude_code")
 
@@ -183,6 +196,21 @@ module ContainerStrategies
       run_before_exec(build_strategy)
 
       assert_equal "old-tok", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+    end
+
+    # Deferring is only tolerable while the token is alive. A dead one cannot be renewed
+    # from inside the container either, so starting would buy 30 minutes of an agent
+    # staring at a login prompt before the no-output watchdog reaps it.
+    test "before_exec refuses to start on an expired login another live session holds" do
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "dead-tok", "refreshToken" => "dead-ref",
+                             "expiresAt" => (1.minute.ago.to_f * 1000).to_i }
+      })
+      create(:terminal_session, user: @user, company_id: @credential.company_id,
+                                agent_type: "claude_code", state: "ready")
+      SessionContextService.expects(:assemble_session_context).never
+
+      assert_raises(AgentCredential::PreflightError) { run_before_exec(build_strategy) }
     end
 
     test "before_exec rejects a nil credential before assembling context" do

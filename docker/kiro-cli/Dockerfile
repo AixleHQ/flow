@@ -42,6 +42,12 @@ RUN set -eux; \
         kiro-cli --version; \
         kiro-cli chat --help > /dev/null'
 
+# The CLI version this image actually shipped with, recorded where anything can read it:
+# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
+# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
+# Dockerfile are not the same image and nothing else says which one a container is running.
+RUN su kiro -c '/home/kiro/.local/bin/kiro-cli --version' > /etc/aixle-cli-version
+
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)
 # =============================================================================

@@ -61,6 +61,14 @@ module Agents
     # Watch the OAuth token file, not settings.json: settings.json is written
     # up front by #auth_setup_files, before the user has logged in at all, so
     # watching it would report success prematurely.
+    # Google installed-app OAuth: ~1h access token with a refresh token stored beside it,
+    # renewed by `agy` inside the container. Server-side refresh is possible (the protocol
+    # is recovered) but not implemented, so no expiry is surfaced yet — see
+    # docs/design/agent-credential-lifecycle.md §Layer 1.
+    def credential_lifecycle
+      { expiry: :none, refresh: :container_only, rotation: :rotating, nominal_ttl: 1.hour }.freeze
+    end
+
     def auth_watch_path = config_path
 
     def auth_file_paths = [ config_path, "#{home_dir}/#{SETTINGS_PATH}" ]
@@ -102,8 +110,28 @@ module Agents
       { "#{home_dir}/#{SETTINGS_PATH}" => settings.to_json }
     end
 
+    # `agy` is a Go binary, so it honours HTTP(S)_PROXY and its traffic already goes
+    # through the container's MITM proxy — but until now nothing collected the log, so 51
+    # production sessions in 30 days produced zero HTTP records and the refresh protocol
+    # stayed a guess read out of the binary. Google's token endpoint is the one that
+    # matters; bodies for it are dropped by the logger, so what lands is that a refresh
+    # happened, against which endpoint, with what status.
+    MITM_DOMAINS = %w[googleapis.com google.com].freeze
+
     def default_env_vars(_session)
-      { "AGY_CLI_HIDE_LOGO" => "1" }
+      {
+        "AGY_CLI_HIDE_LOGO" => "1",
+        "MITM_LOG_PATH" => "/var/log/mitm/http.log",
+        "MITM_TRACKED_DOMAINS" => MITM_DOMAINS.join(",")
+      }
+    end
+
+    def mitm_tracked_domains
+      MITM_DOMAINS.dup
+    end
+
+    def session_log_paths
+      super + %w[/var/log/mitm/http.log]
     end
 
     def fetch_available_models(credentials, credential: nil)

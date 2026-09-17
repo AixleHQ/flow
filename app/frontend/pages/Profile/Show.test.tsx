@@ -49,6 +49,8 @@ const buildCredential = (overrides: Partial<AgentCredential> = {}): AgentCredent
   lastUsedAt: null,
   expiresAt: null,
   connectionStatus: 'active',
+  refreshError: null,
+  reauthRequired: false,
   createdAt: '2026-01-02T00:00:00Z',
   updatedAt: '2026-01-02T00:00:00Z',
   ...overrides,
@@ -190,6 +192,21 @@ describe('Profile/Show', () => {
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
     expect(screen.getByText('Expiring soon')).toBeInTheDocument();
+    expect(screen.queryByText('Connected')).not.toBeInTheDocument();
+  });
+
+  it('shows a sign-in badge and the vendor reason for a credential the platform gave up on', () => {
+    const credential = buildCredential({
+      agentType: 'claude_code',
+      connectionStatus: 'error',
+      refreshError: 'claudeAiOauth invalid_grant — reconnection required',
+      reauthRequired: true,
+    });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByText('Sign-in required')).toBeInTheDocument();
+    expect(screen.getByText('claudeAiOauth invalid_grant — reconnection required')).toBeInTheDocument();
     expect(screen.queryByText('Connected')).not.toBeInTheDocument();
   });
 

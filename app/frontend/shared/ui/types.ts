@@ -13,7 +13,9 @@ export interface AgentCredential {
   defaultModel: string | null;
   lastUsedAt: string | null;
   expiresAt: string | null;
-  connectionStatus: 'active' | 'expiring' | 'expired';
+  connectionStatus: 'active' | 'expiring' | 'expired' | 'error';
+  refreshError: string | null;
+  reauthRequired: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -207,6 +207,12 @@ module ContainerStrategies
       # on whatever is stored, which may be little. Say so: the alternative is finding
       # out from a 401 halfway through a session and having nothing to correlate it to.
       if result == :held
+        # Deferring is only tolerable while the token is alive. Once the base login has
+        # expired, the copy we would write into this container is dead and nothing inside
+        # it can renew: the container would print "Login expired" and sit there until the
+        # no-output watchdog reaped it half an hour later. Say it now, with the CTA.
+        raise AgentCredential::PreflightError, credential if credential.base_login_expired?
+
         left = credential.expires_at ? ((credential.expires_at - Time.current) / 60).round : nil
         Rails.logger.warn("[AgentSession] Starting session #{session.id} on credential #{credential.id} " \
                           "with #{left || '?'}m of token life: another live session holds these tokens, " \

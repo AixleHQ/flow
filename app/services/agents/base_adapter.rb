@@ -119,6 +119,25 @@ module Agents
       }
     end
 
+    # Every file that has to be read back out of a container to reconstruct this
+    # credential. Codex is the one runtime whose auth lives in a single file and nothing
+    # else, which is why the default is that file; every other adapter overrides.
+    # @return [Array<String>]
+    def auth_file_paths
+      [ config_path ]
+    end
+
+    # The files that carry token material, and ONLY those. #config_files renders the whole
+    # container configuration — settings, MCP wiring, model pins — from a workflow_config
+    # that a mid-session token delivery does not have, so re-rendering it would overwrite a
+    # running session's configuration with defaults. This is the narrow counterpart used
+    # when the only thing that changed is the token (Agents::CredentialDelivery).
+    # @param credentials [Hash] decrypted credential data
+    # @return [Hash] path => content
+    def credential_files(credentials)
+      { config_path => generate_config(credentials).to_json }
+    end
+
     # UID of the container user (used for file ownership in tar headers)
     # @return [Integer]
     def container_uid
@@ -374,6 +393,31 @@ module Agents
       self.class::RETIRED_MODEL_REPLACEMENTS.fetch(model_id, model_id)
     end
 
+    # Normalise an expiry to epoch milliseconds, which is what #token_expires_at
+    # returns and what AgentCredential#sync_expires_at divides back down. Vendors
+    # write the same fact three different ways — an ISO8601 string (Antigravity's
+    # `expiry`, Kiro's `expires_at`), epoch seconds, or already-milliseconds — and an
+    # adapter should not have to care which. Anything unparseable is nil, i.e. "no
+    # expiry known", which leaves the credential permanently active rather than
+    # killing it on a formatting surprise.
+    # @param value [String, Numeric, nil]
+    # @return [Integer, nil]
+    def expiry_ms(value)
+      return nil if value.blank?
+
+      case value
+      when Numeric, /\A\d+\z/
+        seconds_or_ms = value.to_i
+        # An epoch in seconds is ~1.7e9; the same instant in milliseconds is ~1.7e12.
+        seconds_or_ms > 100_000_000_000 ? seconds_or_ms : seconds_or_ms * 1000
+      when String
+        parsed = Time.zone.parse(value)
+        parsed && (parsed.to_f * 1000).round
+      end
+    rescue ArgumentError, TypeError
+      nil
+    end
+
     # Comparable expiry of the credential's primary token, or nil if the agent's
     # tokens don't carry one. Used to avoid overwriting a newer stored token with
     # an older one when sessions run concurrently and refresh-token rotation occurs.
@@ -381,6 +425,50 @@ module Agents
     # @return [Integer, nil]
     def token_expires_at(_credentials)
       nil
+    end
+
+    # How this runtime's credential lives and dies. One declaration per adapter, read by
+    # everything that has to decide something about a token: which runtimes the refresh
+    # sweep selects (AgentCredential.refreshable_agent_types is derived from it), whether
+    # an expiry is actionable or only informational, and what the user is told when it
+    # runs out.
+    #
+    # It exists because these facts used to be spread across a hardcoded list of agent
+    # types, an optional #token_expires_at and an optional #refresh!, with nothing tying
+    # them together — so a runtime could ship an expiry with no way to act on it (a
+    # working credential painted "expired" an hour after login) or a refresh the sweep
+    # could never select (a NULL expiry, which is the cursor_cli population). Both shapes
+    # are now rejected by test/services/agents/credential_lifecycle_contract_test.rb.
+    #
+    # Keys:
+    #   expiry   :token  — an expiry is readable from the stored blob (#token_expires_at)
+    #            :none   — the credential does not expire (an API key)
+    #   refresh  :server         — we renew it ourselves (#refresh!), and the sweep does
+    #            :container_only — only the CLI inside the container can renew it
+    #            :reauth_only    — nothing can renew it; the user must sign in again
+    #            :none           — nothing to renew
+    #   rotation :rotating — a refresh invalidates the grant it replaced (single-use
+    #                        refresh token: every other holder of it is now stale)
+    #            :static   — it does not
+    #   nominal_ttl — the vendor's documented/measured token life, nil when unknown
+    #   reauth_required_on_expiry — set only when `expiry: :token` meets a `refresh` that
+    #            cannot renew: the acknowledgement that the expiry we surface is a
+    #            re-login instruction, not something a sweep will fix
+    # @return [Hash]
+    def credential_lifecycle
+      { expiry: :none, refresh: :none, rotation: :static, nominal_ttl: nil }.freeze
+    end
+
+    # Expiry (epoch ms) of the login the CLI cannot run without, or nil when this agent
+    # has none that expires. Distinct from #token_expires_at, which reports the SOONEST
+    # expiry across every stored block so the refresh sweep fires early: an agent that
+    # layers add-on grants onto a base login (Claude's designOauth) would otherwise read
+    # as unusable whenever an add-on lapses, and refuse launches that would have worked.
+    # Default: the same value, which is correct for every single-block agent.
+    # @param credentials [Hash] decrypted credential data
+    # @return [Integer, nil]
+    def base_token_expires_at(credentials)
+      token_expires_at(credentials)
     end
 
     # Decode the `exp` claim (seconds since epoch) from a JWT payload WITHOUT
@@ -554,9 +642,15 @@ module Agents
 
     protected
 
+    # Unparseable input is {} — including nil, which JSON.parse raises TypeError on
+    # rather than the ParserError this used to catch. Callers reach here with whatever
+    # a container, a vendor file or an absent database row handed over, and "there was
+    # nothing to read" is an ordinary outcome for all three, not an exception.
     def parse_json(content)
+      return {} if content.blank?
+
       JSON.parse(content)
-    rescue JSON::ParserError
+    rescue JSON::ParserError, TypeError
       {}
     end
 

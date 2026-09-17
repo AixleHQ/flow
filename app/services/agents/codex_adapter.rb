@@ -82,6 +82,13 @@ module Agents
       tokens["access_token"].present? || tokens["refresh_token"].present?
     end
 
+    # ChatGPT OAuth: the access token is a JWT whose `exp` we read, and the token endpoint
+    # returns a rotated refresh token when it issues one (#refresh_access_token! keeps the
+    # previous one when it does not).
+    def credential_lifecycle
+      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: nil }.freeze
+    end
+
     # Codex OAuth access/id tokens are JWTs carrying an `exp` claim. Surface the
     # soonest expiry (epoch ms) so AgentCredential#expires_at is populated and the
     # proactive-refresh sweep selects the credential before it expires (instead of
@@ -364,7 +371,9 @@ module Agents
     def default_env_vars(session)
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => "chatgpt.com",
+        # auth.openai.com is the token endpoint the CLI refreshes against; chatgpt.com
+        # alone showed inference and nothing about the login's lifecycle.
+        "MITM_TRACKED_DOMAINS" => "chatgpt.com,auth.openai.com",
         "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}"
       }
     end

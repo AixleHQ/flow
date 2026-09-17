@@ -50,6 +50,13 @@ module Agents
       config["accessToken"].present?
     end
 
+    # Cursor's accessToken is a JWT and #refresh! posts to Cursor's token endpoint, so the
+    # declaration is :server. That the endpoint has been answering 404 since 2026-09-05 is
+    # an open incident, not a different lifecycle — see docs/design/agent-credential-lifecycle.md.
+    def credential_lifecycle
+      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: nil }.freeze
+    end
+
     # Cursor's accessToken is a JWT carrying an `exp` claim. Surface its expiry
     # (epoch ms) so AgentCredential#expires_at is populated and the proactive
     # refresh sweep selects the credential before expiry rather than only on 401.
@@ -182,7 +189,11 @@ module Agents
     def default_env_vars(_session)
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => "cursor.sh"
+        # cursor.com as well as cursor.sh: the filter is a suffix match, Cursor has been
+        # moving off the .sh domain (the installer already lives on cursor.com), and our
+        # own server-side refresh has been answered with a 404 HTML page since 2026-09-05
+        # — which host the CLI actually talks to is exactly what the log has to show.
+        "MITM_TRACKED_DOMAINS" => "cursor.sh,cursor.com"
       }
     end
 
