@@ -383,11 +383,6 @@ module Agents
       super + %w[/var/log/mitm/http.log]
     end
 
-    # #collect_usage prices this session by parsing this file, so it must come back
-    # through the application rather than going straight to storage.
-    def usage_log_paths
-      %w[/var/log/mitm/http.log]
-    end
 
     # OTLP log event names emitted by Codex CLI with token counts.
     LOG_SSE_EVENT = "codex.sse_event"
@@ -416,8 +411,9 @@ module Agents
 
       mitm_log = artifacts["logs/http.log"]
 
-      log_lines = (mitm_log || "").lines.size
-      Rails.logger.info("[CodexAdapter] Session #{terminal_session.id}: MITM log #{mitm_log.present? ? "#{mitm_log.bytesize}B, #{log_lines} lines" : 'EMPTY'}")
+      # Size only: counting the lines meant reading the whole log a third time, and the
+      # log is now a stream rather than a String precisely because it does not fit.
+      Rails.logger.info("[CodexAdapter] Session #{terminal_session.id}: MITM log #{mitm_log.present? ? "#{mitm_log.bytesize}B" : 'EMPTY'}")
 
       events = extract_events_from_otlp_metrics(mitm_log)
 
