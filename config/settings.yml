@@ -435,22 +435,25 @@ container_execution:
 
 # Session admission's deployment inputs.
 #
-# `installation_limit` decides which pool a session belongs to, and re-homing
-# live sessions has to be gated on a drain — so it is not applied on read:
-# `bin/rails session_admission:sync` (or the admin button) copies it into the
-# database policy in a maintenance window. Blank means one queue per project
-# and per project-less user instead of one installation-wide queue.
+# `installation_limit` is a ceiling over every project queue at once, and an
+# explicit project limit is a reservation drawn from it. Read live, like the
+# project default: a ConfigMap edit takes effect as each pod restarts. Blank
+# means no ceiling, and project limits are then the only bound. A value that is
+# not a positive integer leaves the installation with NO ceiling — there is no
+# stored value to fall back to — and is reported in the queue-health line.
 #
-# The two scope defaults ARE read live, i.e. re-read at every boot, so a
-# ConfigMap edit takes effect on the next pod with nothing to run afterwards.
-# A value that is not a positive integer is logged and ignored in favour of the
-# scope's built-in fallback (4 per project, 2 per user) rather than raised — a
-# typo must not wedge every queue in the installation; `session_admission:sync`
-# validates the same inputs strictly, which is where an operator sees it.
+# `project_default` IS read live, i.e. re-read at every boot, so a ConfigMap edit
+# takes effect on the next pod with nothing to run afterwards. A value that is
+# not a positive integer is logged and ignored in favour of the built-in fallback
+# of 4 rather than raised — a typo must not wedge every queue in the
+# installation; the queue-health line reports it, which is where an operator
+# sees it.
+#
+# There is no per-user default: sessions launched outside a project are not
+# queued at all.
 session_admission:
   installation_limit: <%= ENV['SESSION_CONCURRENCY_LIMIT'] %>
   project_default: <%= ENV['SESSION_PROJECT_CONCURRENCY_DEFAULT'] %>
-  user_default: <%= ENV['SESSION_USER_CONCURRENCY_DEFAULT'] %>
 
 # How long a tool result's stored payload is kept (ToolResultCleanupJob).
 tool_results:

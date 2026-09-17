@@ -38,9 +38,10 @@ class SessionConcurrencyLimitDashboard < Administrate::BaseDashboard
     max_sessions
   ].freeze
 
+  # Project is the only scope; the filter is kept so the saved-search UI still has
+  # one, and so a stray legacy row is visible by its absence from it.
   COLLECTION_FILTERS = {
-    project: ->(resources) { resources.where(scope_type: "Project") },
-    user: ->(resources) { resources.where(scope_type: "User") }
+    project: ->(resources) { resources.where(scope_type: "Project") }
   }.freeze
 
   def display_resource(limit)

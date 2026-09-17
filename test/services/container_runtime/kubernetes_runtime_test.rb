@@ -29,46 +29,8 @@ module ContainerRuntime
       Kubeclient::Resource.new(metadata: { name: "aixle-resource-quota", namespace: "aixle-prod-project-27", uid: uid })
     end
 
-    test "remove_managed_session_quota accepts a namespace Kubeclient labelled" do
-      SessionAdmissionPolicy.stubs(:enabled?).returns(true)
-      core = mock("core_client")
-      core.expects(:get_namespace).with("aixle-prod-project-27").returns(managed_namespace)
-      core.expects(:get_resource_quota).returns(quota_resource(uid: "uid-1"))
-      core.expects(:delete_entity).never
-      @runtime.stubs(:core_client).returns(core)
-      @runtime.stubs(:runtime_namespace).returns("aixle-prod")
 
-      quota = @runtime.remove_managed_session_quota(namespace: "aixle-prod-project-27", uid: "uid-1", dry_run: true)
 
-      assert_equal "uid-1", quota.metadata.uid
-    end
-
-    test "remove_managed_session_quota refuses a namespace outside the managed scope" do
-      SessionAdmissionPolicy.stubs(:enabled?).returns(true)
-      core = mock("core_client")
-      core.expects(:get_namespace).returns(managed_namespace(scope: "something-else"))
-      core.expects(:delete_entity).never
-      @runtime.stubs(:core_client).returns(core)
-      @runtime.stubs(:runtime_namespace).returns("aixle-prod")
-
-      assert_raises(RuntimeError) do
-        @runtime.remove_managed_session_quota(namespace: "aixle-prod-project-27", uid: "uid-1")
-      end
-    end
-
-    test "remove_managed_session_quota refuses when the quota has been replaced since the audit" do
-      SessionAdmissionPolicy.stubs(:enabled?).returns(true)
-      core = mock("core_client")
-      core.expects(:get_namespace).returns(managed_namespace)
-      core.expects(:get_resource_quota).returns(quota_resource(uid: "uid-new"))
-      core.expects(:delete_entity).never
-      @runtime.stubs(:core_client).returns(core)
-      @runtime.stubs(:runtime_namespace).returns("aixle-prod")
-
-      assert_raises(RuntimeError) do
-        @runtime.remove_managed_session_quota(namespace: "aixle-prod-project-27", uid: "uid-reviewed")
-      end
-    end
 
     test "pull_image raises when image blank" do
       assert_raises(ArgumentError) { @runtime.pull_image("") }

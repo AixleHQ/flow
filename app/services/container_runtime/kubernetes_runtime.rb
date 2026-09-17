@@ -58,30 +58,6 @@ module ContainerRuntime
       "#{namespace_for(project_id: session.project_id, user_id: session.user_id)}/terminal-#{session.route_token}"
     end
 
-    # Only an operator-reviewed namespace/UID allowlist may remove legacy quotas.
-    # The quota itself predates ownership labels, so verify its namespace too.
-    def remove_managed_session_quota(namespace:, uid:, dry_run: false)
-      raise "Admission must be enabled before removing legacy quotas" unless SessionAdmissionPolicy.enabled?
-      raise ArgumentError, "Quota UID required" if uid.blank?
-      ns = core_client.get_namespace(namespace)
-      # Kubeclient hands labels back as a RecursiveOpenStruct, so #to_h keys are
-      # symbols — and a label name like "aixle.com/scope" read with a string key
-      # is silently nil, which made every check below refuse. The dry run caught
-      # it before it mattered; the lookup is normalised here so it cannot recur.
-      labels = ns.metadata.labels.to_h.transform_keys(&:to_s)
-      unless labels["aixle.com/runtime-origin"] == runtime_namespace &&
-          %w[project user].include?(labels["aixle.com/scope"]) &&
-          namespace.match?(/\A#{Regexp.escape(runtime_namespace)}-(project|user)-\d+\z/)
-        raise "Namespace is not a managed session scope"
-      end
-      quota = core_client.get_resource_quota("aixle-resource-quota", namespace)
-      raise "Quota UID changed; review the allowlist again" unless quota.metadata.uid == uid
-      return quota if dry_run
-
-      core_client.delete_entity("resourcequotas", "aixle-resource-quota", namespace,
-        delete_options: { preconditions: { uid: uid } })
-    end
-
     def cleanup_session(id)
       handle = session_locator(id)
       session_objects(handle).each do |kind, plural, client_key, object|

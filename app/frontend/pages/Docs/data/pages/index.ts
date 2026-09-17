@@ -24,6 +24,7 @@ import repositories from './repositories.md?raw';
 import runningWorkflows from './running-workflows.md?raw';
 import runtimes from './runtimes.md?raw';
 import secrets from './secrets.md?raw';
+import sessionQueues from './session-queues.md?raw';
 import sessionsAndRuns from './sessions-and-runs.md?raw';
 import startingWork from './starting-work.md?raw';
 import tasks from './tasks.md?raw';
@@ -107,6 +108,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'Using Flow',
     content: startingWork,
     toc: extractToc(startingWork),
+  },
+  'session-queues': {
+    title: 'Session queues',
+    section: 'Using Flow',
+    content: sessionQueues,
+    toc: extractToc(sessionQueues),
   },
   'sessions-and-runs': {
     title: 'Sessions & Runs',

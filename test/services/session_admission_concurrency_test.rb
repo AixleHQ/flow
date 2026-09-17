@@ -9,12 +9,17 @@ class SessionAdmissionConcurrencyTest < ActiveSupport::TestCase
     previous_policy = SessionAdmissionPolicy.current.attributes.except("id", "created_at", "updated_at")
     user = create(:user, :with_company)
     company = user.companies.first
+    project = create(:project, owner: user, company: company)
     sessions = []
     admission_ids = []
     pool = nil
-    SessionAdmissionPolicy.sync!(installation_limit: 2)
+    # Two slots of SHARED pool, whatever else this database happens to hold: the
+    # free pool is the ceiling less every reservation, and this test opts out of
+    # transactional cleanup, so a reservation left by anything else would silently
+    # shrink what these six sessions are competing for.
+    with_ceiling(SessionConcurrencyLimit.sum(:max_sessions) + 2)
     6.times do
-      session = create(:terminal_session, user: user)
+      session = create(:terminal_session, user: user, project: project)
       sessions << session
       admission = SessionAdmissionService.enqueue!(session)
       admission_ids << admission.id
@@ -37,6 +42,9 @@ class SessionAdmissionConcurrencyTest < ActiveSupport::TestCase
     SessionAdmission.where(id: admission_ids).delete_all if admission_ids
     TerminalSession.where(id: sessions.map(&:id)).delete_all if sessions
     pool&.destroy! if pool && !pool.session_admissions.exists?
+    # Before the user: projects.owner_id references it, and this test opts out of
+    # transactional cleanup.
+    project&.delete
     user&.company_memberships&.delete_all
     user&.delete
     company&.delete

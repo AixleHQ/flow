@@ -45,7 +45,13 @@ class QueueHealthCheck
       undispatched = WorkflowRun.stuck_for_relay(now)
       waiting = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil)
 
+      policy = SessionAdmissionPolicy
+      reserved_total = SessionConcurrencyLimit.where(scope_type: "Project").sum(:max_sessions)
+
       {
+        installation_limit: policy.installation_limit,
+        reserved_total: reserved_total,
+        ceiling_misconfigured: policy.installation_limit_misconfigured?,
         unstarted_runs: unstarted.count,
         oldest_unstarted_seconds: age(unstarted.minimum(:created_at), now),
         undispatched_runs: undispatched.count,
@@ -73,6 +79,18 @@ class QueueHealthCheck
       end
       if stats[:oldest_admission_wait_seconds] > ADMISSION_WAIT_THRESHOLD.to_i
         problems << "a session has waited #{stats[:oldest_admission_wait_seconds]}s for a slot"
+      end
+      # The ceiling is read live from the deployment, so nothing in the application
+      # can refuse a value that no longer fits the reservations already made. The
+      # drain keeps the ceiling hard, which means the reservations are the promise
+      # being broken — and a broken promise nobody is told about is the worst of
+      # the three possible outcomes.
+      if stats[:installation_limit] && stats[:reserved_total] > stats[:installation_limit]
+        problems << "project reservations total #{stats[:reserved_total]}, above the installation ceiling of " \
+                    "#{stats[:installation_limit]} — the ceiling is being honoured and the reservations are not"
+      end
+      if stats[:ceiling_misconfigured]
+        problems << "SESSION_CONCURRENCY_LIMIT is not a positive integer, so the installation has no ceiling at all"
       end
       if stats[:pinned_reservations].positive?
         problems << "#{stats[:pinned_reservations]} reservation(s) pinned by an unprovable runtime " \

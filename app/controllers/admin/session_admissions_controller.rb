@@ -20,6 +20,7 @@ module Admin
       @policy = SessionAdmissionPolicy.current
       @scope_defaults = SessionAdmissionPolicy.scope_defaults
       @configured_limit = SessionAdmissionPolicy.deployment_setting(:installation_limit).to_s.strip.presence
+      @reserved_total = SessionConcurrencyLimit.where(scope_type: "Project").sum(:max_sessions)
       @overrides = SessionConcurrencyLimit.order(:scope_type, :scope_id)
       @health = SessionAdmissionReconciler.snapshot
 
@@ -56,11 +57,11 @@ module Admin
     end
 
     def activation_notice(policy)
-      return "Admission enabled: one installation-wide queue of #{policy.installation_limit} concurrent sessions." if policy.installation_limit
+      notice = "Admission enabled: one queue per project, #{SessionAdmissionPolicy.scope_default('Project')} " \
+               "concurrent sessions each unless the project sets its own."
+      return notice unless policy.installation_limit
 
-      defaults = SessionAdmissionPolicy.scope_defaults
-      "Admission enabled with per-scope queues: #{defaults['Project']} per project, " \
-        "#{defaults['User']} per user for project-less sessions."
+      "#{notice} All projects together may not exceed #{policy.installation_limit}."
     end
   end
 end

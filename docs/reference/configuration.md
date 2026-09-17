@@ -77,9 +77,8 @@ non-secret values.
 
 | Variable                              | Required | Default | Purpose                                                        |
 | ------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `SESSION_CONCURRENCY_LIMIT`           | no       | unset   | One installation-wide queue of this size. Unset means a queue per project and per project-less user instead. Changing it needs `bin/rails session_admission:sync` (or the admin button) in a maintenance window, because re-homing live sessions is gated on a drain. |
-| `SESSION_PROJECT_CONCURRENCY_DEFAULT` | no       | `4`     | Default queue size per project. Read live — takes effect on the next boot of each pod. |
-| `SESSION_USER_CONCURRENCY_DEFAULT`    | no       | `2`     | Default queue size per project-less user (agent logins).       |
+| `SESSION_CONCURRENCY_LIMIT`           | no       | unset   | A ceiling over every project queue at once. An explicit project limit is a reservation drawn from it; projects without one share the remainder. Unset means no ceiling. Read live — takes effect on the next boot of each pod. A value that is not a positive integer leaves the installation with no ceiling and is reported. |
+| `SESSION_PROJECT_CONCURRENCY_DEFAULT` | no       | `4`     | Queue size for a project that has set no limit of its own. Read live — takes effect on the next boot of each pod. |
 
 A row in `session_concurrency_limits` overrides the default for one project or
 user; edit those in the admin, not here.

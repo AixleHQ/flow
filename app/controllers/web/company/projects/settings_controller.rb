@@ -3,16 +3,28 @@
 class Web::Company::Projects::SettingsController < Web::Company::Projects::ApplicationController
   def show
     render inertia: "Projects/Settings/SettingsPage", props: {
-      project: settings_project_props
+      project: settings_project_props,
+      concurrency: concurrency_props
     }
   end
 
+  # One save, all or nothing. A limit that does not fit the installation budget
+  # must not leave the name change committed behind it: the person is told the
+  # settings were not saved, and that has to be true of all of them.
   def update
-    if current_project.update(project_params)
-      redirect_to company_project_settings_path(current_project), notice: "Project updated successfully"
-    else
+    errors = {}
+
+    ActiveRecord::Base.transaction do
+      errors.merge!(current_project.errors.to_hash) unless current_project.update(project_params)
+      errors.merge!(apply_concurrency_limit) if params.key?(:concurrency)
+      raise ActiveRecord::Rollback if errors.any?
+    end
+
+    if errors.any?
       redirect_back fallback_location: company_project_settings_path(current_project),
-                     inertia: { errors: current_project.errors }
+                    inertia: { errors: errors }
+    else
+      redirect_to company_project_settings_path(current_project), notice: "Project updated successfully"
     end
   end
 
@@ -20,6 +32,53 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
 
   def project_params
     params.require(:project).permit(:name, :description, :preferred_artifacts_language, :state)
+  end
+
+  def settings_policy
+    @settings_policy ||= Web::Company::Projects::SettingsPolicy.new(policy_context, current_project)
+  end
+
+  def concurrency_limit_record
+    @concurrency_limit_record ||= SessionConcurrencyLimit.find_by(scope_type: "Project", scope_id: current_project.id)
+  end
+
+  # Returns the errors to report, empty when there was nothing to refuse. The
+  # single-word key survives prop camelization unchanged, which a
+  # `session_concurrency_limit` would not.
+  def apply_concurrency_limit
+    return { concurrency: "Only a company admin can change the session limit" } unless settings_policy.manage_concurrency?
+
+    requested = params[:concurrency].to_s.strip
+
+    # Cleared field means "no reservation of my own" — the project falls back to
+    # the installation default and stops holding part of the budget.
+    if requested.empty?
+      concurrency_limit_record&.destroy
+      return {}
+    end
+
+    record = concurrency_limit_record ||
+             SessionConcurrencyLimit.new(scope_type: "Project", scope_id: current_project.id)
+    record.max_sessions = requested
+    return {} if record.save
+
+    { concurrency: record.errors[:max_sessions].to_sentence.presence || record.errors.full_messages.to_sentence }
+  end
+
+  def concurrency_props
+    budget = SessionConcurrencyAllocation.new(excluding: concurrency_limit_record&.id)
+    headroom = budget.available
+
+    {
+      max_sessions: concurrency_limit_record&.max_sessions,
+      default: SessionAdmissionPolicy.scope_default("Project"),
+      installation_limit: budget.installation_limit,
+      # What this project could be raised to right now. Nil means no ceiling.
+      available: headroom,
+      allocations: budget.breakdown_for(current_project.company_id),
+      queue_enabled: SessionAdmissionPolicy.enabled?,
+      can_manage: settings_policy.manage_concurrency?
+    }
   end
 
   def settings_project_props

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_17_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_17_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -640,11 +640,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_120000) do
   create_table "session_admission_policies", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.boolean "enabled", default: false, null: false
-    t.integer "installation_limit"
     t.boolean "paused", default: true, null: false
     t.integer "revision", default: 1, null: false
     t.datetime "updated_at", null: false
-    t.check_constraint "id = 1 AND (installation_limit IS NULL OR installation_limit > 0)", name: "valid_session_policy"
+    t.check_constraint "id = 1", name: "valid_session_policy"
   end
 
   create_table "session_admission_pools", force: :cascade do |t|

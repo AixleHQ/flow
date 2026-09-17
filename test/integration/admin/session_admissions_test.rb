@@ -12,18 +12,18 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
                     password: AuthHelper::TEST_PASSWORD)
     sign_in_as(@admin)
     @owner = create(:user, company: @company)
-    SessionAdmissionPolicy.current.update!(enabled: false, paused: true, installation_limit: nil)
+    SessionAdmissionPolicy.current.update!(enabled: false, paused: true)
   end
 
   test "the page reports what the environment currently resolves to" do
-    with_scope_defaults(project: 3, user: 5)
+    with_scope_defaults(project: 3)
 
     get admin_session_admission_path
 
     assert_response :success
     assert_match(/Not enabled/, response.body)
     assert_match(/3 each/, response.body)
-    assert_match(/5 each/, response.body)
+    assert_match(/not queued at all/, response.body)
   end
 
   test "enabling reads the cap from the deployment configuration, not the form" do
@@ -67,9 +67,10 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
 
   test "pausing keeps occupied slots and resuming admits what waited" do
     SessionRuntimeInventory.stubs(:fetch).returns([])
-    SessionAdmissionPolicy.sync!(installation_limit: 1)
-    first = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner))
-    second = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner))
+    with_ceiling(1)
+    project = create(:project, owner: @owner, company: @owner.companies.first)
+    first = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))
+    second = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))
     SessionAdmissionService.drain!
 
     patch admin_session_admission_path, params: { commit_action: "pause" }
