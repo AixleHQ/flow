@@ -19,8 +19,8 @@ building agent containers); subsequent starts are seconds.
 ## 1. Clone
 
 ```bash
-git clone https://github.com/palad-ai/palad-app.git
-cd palad-app
+git clone https://github.com/AixleHQ/flow.git
+cd flow
 ```
 
 ## 2. Configure environment
@@ -59,15 +59,13 @@ This single command:
 
 ## 4. Run
 
-Two terminals required — `make worker` needs to stay attached to a TTY:
-
 ```bash
-# terminal 1 — web, db, redis, traefik, temporal
 make up
-
-# terminal 2 — Temporal worker
-make worker
 ```
+
+This starts every service in one terminal — web, worker, db, redis, traefik,
+and Temporal. The entrypoint runs any pending migrations automatically on each
+start.
 
 Open **<http://localhost:4000>** and sign in with the seeded user (or
 register a new one if registration is enabled in your `.env`).
@@ -83,6 +81,22 @@ register a new one if registration is enabled in your `.env`).
    stdout, token usage, and cost.
 
 If the run fails, see [user-guide/agents.md](user-guide/agents.md#troubleshooting).
+
+## Troubleshooting
+
+### `EACCES: permission denied, mkdir '/app/node_modules'`
+
+On Linux, Docker bind-mounts keep the host file owner. `make setup` runs
+Yarn as the container `app` user; that user used to be uid 100, which
+cannot create `node_modules` in a typical uid-1000 checkout. The Compose
+entrypoint remaps `app` to whoever owns `/app`. Re-run `make setup`.
+
+If it still fails, `/app` is root-owned on the host — `chown` the repo
+back to your user and re-run.
+
+The Yarn `YN0060` / `YN0086` peer-dependency warnings (e.g. `react`
+vs `@emoji-mart/react`) and the `websocket-client-simple` gem notice are
+unrelated and do not fail setup.
 
 ## Common follow-ups
 

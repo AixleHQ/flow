@@ -25,7 +25,7 @@ comfortable install.
 ## Getting the code
 
 ```bash
-git clone https://github.com/aixleHQ/flow.git
+git clone https://github.com/AixleHQ/flow.git
 cd flow
 ```
 
