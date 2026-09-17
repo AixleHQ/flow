@@ -263,6 +263,7 @@ interface Task {
   // what lets a card say which of those four things CI is currently doing. Optional so a payload
   // serialized before this field existed (or a partial reload) still types.
   ciGates?: Gate[];
+  externalResources?: Array<{ type: string; readableId: string; url: string }>;
   createdAt: string;
   updatedAt: string;
 }
