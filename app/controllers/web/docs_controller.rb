@@ -5,6 +5,7 @@ class Web::DocsController < Web::ApplicationController
 
   skip_before_action :redirect_super_admin_to_admin_panel
   skip_before_action :enforce_onboarding
+  skip_before_action :enforce_company_auth_policy
 
   def show
     slug = (params[:slug].presence || "user-guide").downcase

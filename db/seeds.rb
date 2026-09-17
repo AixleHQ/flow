@@ -6,6 +6,12 @@ if Rails.env.production?
   return
 end
 
+# Deployment-scoped auth providers (AD-4). Idempotent, and the same call the
+# backfill migration makes in production, so a freshly seeded dev database and a
+# migrated production database offer exactly the same sign-in methods.
+puts "Ensuring deployment auth providers..."
+Auth::DeploymentProviders.ensure_all!
+
 # Create super admin user (platform-level admin)
 puts "Creating super admin user..."
 super_admin_email = Settings.admin.email

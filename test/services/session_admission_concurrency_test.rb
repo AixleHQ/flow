@@ -46,7 +46,14 @@ class SessionAdmissionConcurrencyTest < ActiveSupport::TestCase
     # transactional cleanup.
     project&.delete
     user&.company_memberships&.delete_all
+    UserIdentity.where(user_id: user.id).delete_all if user
+    AuthSession.where(user_id: user.id).delete_all if user
     user&.delete
+    # This test deletes rows directly (threads run outside the test
+    # transaction), so `dependent: :destroy` never fires — every dependent must
+    # be cleared by hand, the same way memberships already are.
+    CompanyAuthPolicy.where(company_id: company.id).delete_all if company
+    IdentityProvider.where(company_id: company.id).delete_all if company
     company&.delete
     SessionAdmissionPolicy.current.update!(previous_policy) if previous_policy
   end

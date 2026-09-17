@@ -1,5 +1,6 @@
 class Web::HomeController < Web::ApplicationController
   skip_before_action :enforce_onboarding
+  skip_before_action :enforce_company_auth_policy
 
   def show
     if request.path == "/"

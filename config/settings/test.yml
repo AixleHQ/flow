@@ -1,5 +1,18 @@
 protocol: "http"
 
+# The suite exercises both redirect providers through OmniAuth's test mode, so
+# this installation genuinely offers them — and availability is derived from
+# credentials being present (Auth::DeploymentProviders.configured_kinds), not
+# merely declared.
+google_oauth:
+  client_id: "test-google-client-id"
+  client_secret: "test-google-client-secret"
+
+microsoft_oauth:
+  client_id: "test-microsoft-client-id"
+  client_secret: "test-microsoft-client-secret"
+  tenant_id: "common"
+
 # Safe non-production defaults — production requires real env vars (required_env.rb).
 encryption:
   credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] || 'test secret key' %>

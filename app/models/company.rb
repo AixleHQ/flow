@@ -22,6 +22,9 @@ class Company < ApplicationRecord
   has_many :assets, as: :scope, dependent: :destroy
   has_many :folders, as: :scope, dependent: :destroy
   has_many :integrations, dependent: :destroy
+  # Auth policy rows and this company's own IdP connections die with it.
+  has_many :company_auth_policies, dependent: :destroy
+  has_many :identity_providers, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   # Workflows are owned by projects (company-level workflows were removed).
   # A company's workflows are the aggregate of its projects' workflows.
@@ -51,6 +54,9 @@ class Company < ApplicationRecord
 
   # Callbacks
   before_validation :generate_slug, on: :create
+  # An absent policy row means denied (AD-4), so every company gets an explicit,
+  # enabled row per deployment provider the moment it exists.
+  after_create :seed_auth_policies
   before_validation :downcase_email_domain
 
   # White label / branding helpers
@@ -78,6 +84,10 @@ class Company < ApplicationRecord
   end
 
   private
+
+  def seed_auth_policies
+    Auth::CompanyPolicySeeder.seed!(self)
+  end
 
   def generate_slug
     return if slug.present?

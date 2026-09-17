@@ -1,3 +1,5 @@
+require "omniauth/entra_id"
+
 Rails.application.config.middleware.use OmniAuth::Builder do
   provider :google_oauth2, Settings.google_oauth.client_id, Settings.google_oauth.client_secret, {
     scope: "email,profile",
@@ -7,6 +9,19 @@ Rails.application.config.middleware.use OmniAuth::Builder do
     access_type: "offline",
     name: "google"
   }
+
+  # Registered only when this installation actually has Microsoft credentials.
+  # A strategy without them answers every request with a redirect to a broken
+  # consent screen, which is worse than not offering the button at all — and
+  # Auth::DeploymentProviders.configured_kinds keeps the two in step.
+  if Settings.microsoft_oauth&.client_id.present?
+    provider :entra_id, {
+      client_id: Settings.microsoft_oauth.client_id,
+      client_secret: Settings.microsoft_oauth.client_secret,
+      tenant_id: Settings.microsoft_oauth.tenant_id.presence || "common",
+      name: "microsoft"
+    }
+  end
 end
 
 # CVE-2015-9284: OmniAuth's request phase must be POST-only, or an attacker

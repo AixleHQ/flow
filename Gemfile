@@ -24,6 +24,20 @@ gem "bcrypt", "~> 3.1.22"
 gem "omniauth"
 gem "omniauth-google-oauth2"
 gem "omniauth-rails_csrf_protection"
+# Microsoft work/school accounts. The successor to omniauth-azure-activedirectory-v2;
+# multi-tenant by default, and it folds the Entra `tid` into the UID.
+gem "omniauth-entra-id", "~> 3.1"
+# Generic per-company OIDC connections. NOT an OmniAuth strategy: a customer's
+# issuer and client credentials are a database row, and OmniAuth strategies are
+# boot-time initializer constants (AD-4).
+gem "openid_connect", "~> 2.5"
+# Passkeys. Owns the WebAuthn ceremonies and attestation verification; this app
+# still owns credential storage, the UI and account recovery.
+gem "webauthn", "~> 3.4"
+# SCIM 2.0 as a service provider: a customer's directory pushes joiners and
+# leavers to us. The filter-query grammar is genuinely hard ABNF work, which is
+# what justifies the dependency over hand-rolling.
+gem "scimitar", "~> 2.15"
 
 gem "aasm"
 

@@ -112,6 +112,31 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["user_id", "user_type"], name: "user_index"
   end
 
+  create_table "auth_session_proofs", force: :cascade do |t|
+    t.bigint "auth_session_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "identity_provider_id", null: false
+    t.datetime "proved_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["auth_session_id", "identity_provider_id"], name: "index_auth_session_proofs_unique_pair", unique: true
+    t.index ["auth_session_id"], name: "index_auth_session_proofs_on_auth_session_id"
+    t.index ["identity_provider_id"], name: "index_auth_session_proofs_on_identity_provider_id"
+  end
+
+  create_table "auth_sessions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "ip"
+    t.datetime "last_seen_at"
+    t.datetime "revoked_at"
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.string "user_agent"
+    t.bigint "user_id", null: false
+    t.index ["revoked_at"], name: "index_auth_sessions_on_revoked_at", where: "(revoked_at IS NULL)"
+    t.index ["token_digest"], name: "index_auth_sessions_on_token_digest", unique: true
+    t.index ["user_id"], name: "index_auth_sessions_on_user_id"
+  end
+
   create_table "azure_devops_deliveries", force: :cascade do |t|
     t.bigint "azure_devops_subscription_id", null: false
     t.datetime "created_at", null: false
@@ -343,6 +368,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["state"], name: "index_companies_on_state"
   end
 
+  create_table "company_auth_policies", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.boolean "enabled", default: true, null: false
+    t.bigint "identity_provider_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "identity_provider_id"], name: "index_company_auth_policies_unique_pair", unique: true
+    t.index ["company_id"], name: "index_company_auth_policies_on_company_id"
+    t.index ["identity_provider_id"], name: "index_company_auth_policies_on_identity_provider_id"
+  end
+
   create_table "company_memberships", force: :cascade do |t|
     t.datetime "accepted_at"
     t.bigint "company_id", null: false
@@ -458,6 +494,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["status"], name: "index_gates_on_status"
   end
 
+  create_table "identity_providers", force: :cascade do |t|
+    t.bigint "company_id"
+    t.jsonb "config", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.text "encrypted_secret"
+    t.string "kind", null: false
+    t.string "name"
+    t.string "scope", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "kind", "name"], name: "index_identity_providers_unique_company_connection", unique: true, where: "((scope)::text = 'company'::text)"
+    t.index ["company_id"], name: "index_identity_providers_on_company_id"
+    t.index ["kind"], name: "index_identity_providers_unique_deployment_kind", unique: true, where: "((scope)::text = 'deployment'::text)"
+    t.check_constraint "scope::text = 'deployment'::text AND company_id IS NULL OR scope::text = 'company'::text AND company_id IS NOT NULL", name: "identity_providers_scope_company_consistency"
+  end
+
   create_table "integration_data", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "expires_at"
@@ -488,6 +539,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["project_id", "provider"], name: "index_integrations_on_project_id_and_provider", where: "(project_id IS NOT NULL)"
     t.index ["project_id"], name: "index_integrations_on_project_id"
     t.index ["status"], name: "index_integrations_on_status"
+  end
+
+  create_table "magic_link_tokens", force: :cascade do |t|
+    t.datetime "consumed_at"
+    t.datetime "created_at", null: false
+    t.datetime "expires_at", null: false
+    t.string "requested_ip"
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["expires_at"], name: "index_magic_link_tokens_on_expires_at"
+    t.index ["token_digest"], name: "index_magic_link_tokens_on_token_digest", unique: true
+    t.index ["user_id"], name: "index_magic_link_tokens_on_user_id"
   end
 
   create_table "mcp_servers", force: :cascade do |t|
@@ -635,6 +699,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["scope_type", "scope_id", "full_name"], name: "idx_repositories_scope_full_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_repositories_on_scope_type_and_scope_id"
     t.index ["webhook_secret"], name: "index_repositories_on_webhook_secret", unique: true
+  end
+
+  create_table "scim_configurations", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.boolean "enabled", default: true, null: false
+    t.bigint "identity_provider_id"
+    t.datetime "last_seen_at"
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_scim_configurations_on_company_id", unique: true
+    t.index ["identity_provider_id"], name: "index_scim_configurations_on_identity_provider_id"
+    t.index ["token_digest"], name: "index_scim_configurations_on_token_digest", unique: true
   end
 
   create_table "session_admission_policies", force: :cascade do |t|
@@ -1191,11 +1268,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["terminal_session_id"], name: "index_usage_statistics_on_terminal_session_id", unique: true
   end
 
+  create_table "user_identities", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "email"
+    t.boolean "email_verified", default: false, null: false
+    t.bigint "identity_provider_id", null: false
+    t.datetime "last_used_at"
+    t.string "subject", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["identity_provider_id", "subject"], name: "index_user_identities_on_identity_provider_id_and_subject", unique: true
+    t.index ["identity_provider_id"], name: "index_user_identities_on_identity_provider_id"
+    t.index ["user_id"], name: "index_user_identities_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "avatar_url"
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
     t.citext "email", null: false
+    t.text "encrypted_totp_secret"
     t.bigint "last_company_id"
     t.jsonb "mcp_enabled_tools"
     t.string "mcp_token_digest"
@@ -1207,6 +1299,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.boolean "share_completed_sessions", default: true, null: false
     t.string "state", null: false
     t.boolean "super_admin", default: false, null: false
+    t.datetime "totp_confirmed_at"
     t.string "uid"
     t.datetime "updated_at", null: false
     t.index ["deleted_at"], name: "index_users_on_deleted_at", where: "(deleted_at IS NOT NULL)"
@@ -1214,6 +1307,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["mcp_token_digest"], name: "index_users_on_mcp_token_digest", unique: true
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
     t.index ["state"], name: "index_users_on_state"
+  end
+
+  create_table "webauthn_credentials", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "external_id", null: false
+    t.datetime "last_used_at"
+    t.string "nickname"
+    t.string "public_key", null: false
+    t.bigint "sign_count", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["external_id"], name: "index_webauthn_credentials_on_external_id", unique: true
+    t.index ["user_id"], name: "index_webauthn_credentials_on_user_id"
   end
 
   create_table "webhook_endpoints", force: :cascade do |t|
@@ -1307,6 +1413,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "asset_versions", "users", column: "uploaded_by_id", on_delete: :nullify
   add_foreign_key "assets", "terminal_sessions", on_delete: :nullify
   add_foreign_key "assets", "users", column: "created_by_id", on_delete: :nullify
+  add_foreign_key "auth_session_proofs", "auth_sessions"
+  add_foreign_key "auth_session_proofs", "identity_providers"
+  add_foreign_key "auth_sessions", "users"
   add_foreign_key "azure_devops_deliveries", "azure_devops_subscriptions"
   add_foreign_key "azure_devops_installations", "companies"
   add_foreign_key "azure_devops_installations", "users", column: "approved_by_id", on_delete: :nullify
@@ -1331,6 +1440,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "column_workflow_bindings", "board_columns", on_delete: :cascade
   add_foreign_key "column_workflow_bindings", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "column_workflow_bindings", "workflows", on_delete: :cascade
+  add_foreign_key "company_auth_policies", "companies"
+  add_foreign_key "company_auth_policies", "identity_providers"
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
   add_foreign_key "company_memberships", "companies"
   add_foreign_key "company_memberships", "users"
@@ -1338,11 +1449,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "folders", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
+  add_foreign_key "identity_providers", "companies"
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
+  add_foreign_key "magic_link_tokens", "users"
   add_foreign_key "oauth_clients", "mcp_servers", on_delete: :cascade
   add_foreign_key "oauth_credentials", "mcp_servers", on_delete: :cascade
   add_foreign_key "oauth_credentials", "oauth_clients"
@@ -1354,6 +1467,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "received_webhooks", "webhook_endpoints", on_delete: :cascade
   add_foreign_key "repositories", "integrations", on_delete: :cascade
+  add_foreign_key "scim_configurations", "companies"
+  add_foreign_key "scim_configurations", "identity_providers"
   add_foreign_key "session_admissions", "session_admission_pools"
   add_foreign_key "session_admissions", "terminal_sessions"
   add_foreign_key "session_input_assets", "assets", on_delete: :cascade
@@ -1405,6 +1520,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "trigger_events", "projects", on_delete: :nullify
   add_foreign_key "trigger_events", "users", column: "actor_id", on_delete: :nullify
   add_foreign_key "usage_statistics", "terminal_sessions"
+  add_foreign_key "user_identities", "identity_providers"
+  add_foreign_key "user_identities", "users"
+  add_foreign_key "webauthn_credentials", "users"
   add_foreign_key "webhook_endpoints", "companies", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "projects", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "users", column: "created_by_id", on_delete: :nullify
