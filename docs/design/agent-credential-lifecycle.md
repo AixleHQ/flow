@@ -1,6 +1,8 @@
 # Agent credential lifecycle: one contract for every harness
 
-**Status:** design proposal — no implementation yet
+**Status:** design, with the first four layers implemented (branch
+`artempartos/harness-cred-refresh-strategy`). Each section below marks what has landed and
+what has not.
 **Date:** 2026-09-17
 **Scope:** the seven agent runtimes in `CompanyMembership::AVAILABLE_AGENTS`, their stored
 credentials, and everything that reads, refreshes, injects or recaptures them.
@@ -145,7 +147,7 @@ This design takes (a) now and keeps (b) as a measured follow-up.
 
 ## 4. The strategy
 
-### Layer 0 — a declared lifecycle per runtime (the single mechanism)
+### Layer 0 — a declared lifecycle per runtime (the single mechanism) — **LANDED**
 
 Add one descriptor to `BaseAdapter`, overridden by every adapter:
 
@@ -176,18 +178,18 @@ What it buys, immediately:
 
 This is what makes the answer to "does every harness refresh?" mechanical instead of a survey.
 
-### Layer 1 — fill the matrix
+### Layer 1 — fill the matrix — **kiro landed; cursor and antigravity open**
 
 | Runtime | Action | Where it stands |
 |---|---|---|
-| `kiro_cli` | land server-side refresh (social `refreshToken` + IdC `CreateToken`) | commit `3dde5e28` on `feat/agent-token-refresh-coverage`, unmerged, unpushed |
+| `kiro_cli` | land server-side refresh (social `refreshToken` + IdC `CreateToken`) | **done** — it now declares `refresh: :server` and the sweep selects it |
 | `cursor_cli` | find the web-side caller firing `refresh!` and fix/replace the endpoint; keep PR #222's `NULL`-expiry gate as the safety net | PR #222 open; endpoint 404 open since 2026-09-05 |
 | `antigravity_cli` | implement Google `oauth2.googleapis.com/token` refresh; verify which embedded client pair the consumer login uses | needs one live credential to test |
-| `grok` | declare `reauth_only`, surface "re-login required" instead of a silent expiry, refuse the launch | the runtime stores no refresh token — nothing to build |
+| `grok` | declare `reauth_only`, surface "re-login required" instead of a silent expiry, refuse the launch | **done** — the declaration, the badge and the launch gate are in |
 | `gemini_cli` | declare `expiry: :none` / static; keep the OAuth picker disallowed | done by design |
 | `claude_code`, `codex` | nothing new | already both halves |
 
-### Layer 2 — single writer in production (the core fix)
+### Layer 2 — single writer in production (the core fix) — **2a and 2b landed, 2c open**
 
 **2a. Live write-back.** The container already runs the watcher
 (`docker/shared/watcher/index.js`), which already watches an auth path and already knows the
@@ -221,8 +223,16 @@ This is probe 3 of the broker research and it is cheap to run. Until it is answe
 the push to sessions with no in-flight agent turn — which is precisely the idle-`ready`
 population that causes the incident.
 
-**2c. A lease instead of "any active session".** Replace the `without_live_session` /
-`held_by_live_session?` existence check with an explicit, expiring hold:
+**What shipped in place of the first sketch of 2c.** The sweep no longer stands down on
+every held credential. It splits them: a credential whose every holder has been silent for
+ten minutes (`IDLE_BEFORE_REFRESH`, read through the same pane the no-output watchdog
+reads) is refreshed and the result delivered; one with a holder mid-turn still defers, and
+an unreadable container counts as working rather than as idle. That covers the incident
+shape — a session parked for twenty hours — without rotating a grant under an agent that
+is using it.
+
+**2c. A lease, still open.** The idle probe is an exec per holder per sweep and it says
+nothing about a session that never goes quiet. The durable form is an explicit hold:
 
 - the session records `held_until = now + 10.minutes`, refreshed by the same heartbeat that
   already proves the container alive;
@@ -230,8 +240,7 @@ population that causes the incident.
   holder stopped heartbeating.
 
 A wedged or abandoned `ready` session then costs ten minutes of skipped sweeps, not
-twenty-five hours. Order matters: **2a and 2b land before 2c** — expiring the lease is only
-safe once a live container writes its rotations back and receives ours.
+twenty-five hours, and no container has to be probed to find out.
 
 Together the three restore read-through in both directions: the container writes what it
 rotates, we write what we rotate, and the database is the file both sides share.
@@ -246,33 +255,35 @@ the `ANTHROPIC_AUTH_TOKEN` probe (2). For anything the platform runs unattended,
 path remains the strategic answer — an API key has no refresh token, so there is nothing to
 race.
 
-### Layer 4 — make expiry legible
+### Layer 4 — make expiry legible — **status and mail landed; the event log open**
 
 - **An event record per refresh attempt** (`credential_refresh_events`, or a structured log
   line plus a counter if a table is too much): credential, agent, block, trigger
   (`launch` | `sweep` | `container` | `cleanup`), outcome, vendor status + error code, expiry
   before and after, holder count at the time. This is the artefact that answers "when, why and
   how did it expire" without a binary dig or a Sentry archaeology session.
-- **`connection_status` gains `error` and `unknown`**, and the resource exposes
-  `refresh_error`, `refresh_failure_count` and `last_refresh_at`. A condemned credential must
-  not render as active.
-- **A mailer on escalation**, mirroring `OauthMailer#refresh_failed`, and a profile CTA that
-  names the runtime and the reason.
+- **`connection_status` gains `error`** (done), the resource exposes `refresh_error` and
+  `reauth_required` (done), and the profile prints the vendor's reason next to the badge.
+  A condemned credential no longer renders as active.
+- **A mailer on escalation** (done): `AgentCredentialMailer#refresh_failed`, sent once on
+  the crossing into `error`, with the reason and a link to the profile.
 - **Sweep counters per agent type** (`refreshed`, `not_needed`, `held`, `errors`) with two
   alerts: any agent erroring for N consecutive ticks, and an agent whose `held` ratio stays at
   100% (the lease is stuck — the exact shape of B2).
 
-### Layer 5 — image and CLI freshness
+### Layer 5 — image and CLI freshness — **publishing, canary and versions landed**
 
-- **`antigravity-cli` is missing from the `.github/workflows/images.yml` matrix.** The
-  Makefile builds it locally, CI never publishes it, so there is no
-  `ghcr.io/aixlehq/flow-antigravity-cli` for production to pull. Add it.
+- **`antigravity-cli` was missing from the `.github/workflows/images.yml` matrix** — the
+  Makefile built it locally, CI never published it, so there was no
+  `ghcr.io/aixlehq/flow-antigravity-cli` for production to pull. Added.
 - **Three CLIs are installed unpinned from vendor scripts** — `claude.ai/install.sh`,
   `cursor.com/install`, `cli.kiro.dev/install` — so identical Dockerfiles produce different
-  CLIs on different days. Record the installed version as an image label at build time and
-  assert it, the way `grok` and `antigravity-cli` already assert theirs.
-- **Scheduled weekly rebuild** on `main-images` (or a `workflow_dispatch` plus cron) so a
-  vendor-side auth change is found by us, on a schedule, rather than by a user mid-session.
+  CLIs on different days. Every image now records its CLI version at
+  `/etc/aixle-cli-version` (done); comparing two builds is what makes a vendor bump
+  visible.
+- **A weekly canary build** (done) so a vendor-side auth change is found on a Monday
+  morning rather than in a user's session. It publishes only its own tags and never moves
+  `latest` — promoting stays a human act.
 - **A post-rebuild auth check per runtime.** A full login cannot be automated (device codes,
   browsers), so the check is two-part: an automated *shape* assertion that each image's CLI
   starts, reports the expected version, and creates its credential artefacts at the paths the
@@ -283,14 +294,16 @@ race.
 
 ## 5. Sequencing
 
-| Phase | Work | Why first |
+| Phase | Work | State |
 |---|---|---|
-| **P0** | Refuse a launch on an already-expired credential (M4 reads expiry, not just `status`); fail a step whose session ended `cancelled`; name the auth banner in the no-output watchdog | stops a dead token from burning 30 minutes and then reporting green — the §3.1 damage, fixable without touching the token engine |
-| **P0** | Layer 0 contract + test; expose `error` in `connection_status` + mailer; land kiro refresh; land PR #222 | cheap, no infrastructure, stops the silent classes of failure |
-| **P1** | Layer 2a write-back, 2b push-to-container, then 2c lease | the production fix; everything else is mitigation |
-| **P2** | Layer 4 event log + sweep metrics | turns the next incident into a query |
-| **P3** | antigravity refresh; cursor endpoint; Layer 3 broker probes | each blocked on a live credential or a vendor answer |
-| **P4** | Layer 5 image cadence + antigravity publish + version labels | continuous, once the pipeline exists |
+| **P0** | Refuse a launch on an already-expired credential; fail a step whose session ended `cancelled`; name the auth banner in the no-output watchdog | **done** |
+| **P0** | Layer 0 contract + test; `error` in `connection_status` + mailer; kiro refresh | **done** |
+| **P1** | Layer 2a write-back, 2b delivery to holders | **done** |
+| **P1** | 2c lease (replacing the per-sweep idle probe) | open |
+| **P2** | Layer 4 event log + sweep metrics | open — turns the next incident into a query |
+| **P3** | antigravity refresh; the cursor 404; Layer 3 broker probes | open — each blocked on a live credential or a vendor answer |
+| **P4** | Layer 5: publishing, canary, version file | **done**; the per-runtime login pass after a rebuild is manual and open |
+| — | PR #222 (cursor `NULL`-expiry launch gate) | someone else's branch; it touches the same preflight, so it lands before or after this, not alongside |
 
 ## 6. How each phase is verified
 
