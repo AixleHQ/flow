@@ -26,12 +26,15 @@ class WorkflowRun < ApplicationRecord
 
   belongs_to :workflow
   belongs_to :project
-  belongs_to :user
+  # Optional so a permanently-deleted user's runs survive with user_id nullified
+  # (FK is ON DELETE :nullify). A run still requires a user at creation time.
+  belongs_to :user, optional: true
   belongs_to :board_task, optional: true, touch: true
   belongs_to :failed_agent_credential, class_name: "AgentCredential", optional: true
 
   has_many :step_runs, dependent: :destroy
   has_many :workflow_run_assets, dependent: :destroy
+  has_many :column_transitions, dependent: :nullify
 
   enumerize :mode, in: %i[interactive non_interactive mixed], default: :interactive, predicates: true
 

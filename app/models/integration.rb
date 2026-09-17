@@ -9,7 +9,7 @@ class Integration < ApplicationRecord
 
   belongs_to :company
   belongs_to :project, optional: true
-  belongs_to :connected_by, class_name: "User"
+  belongs_to :connected_by, class_name: "User", optional: true
   # Service-principal mode only: the approved company→organization binding this
   # project connection draws its credentials from. Null in PAT mode.
   belongs_to :azure_devops_installation, optional: true

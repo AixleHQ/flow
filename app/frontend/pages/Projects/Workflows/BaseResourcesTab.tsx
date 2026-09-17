@@ -1,8 +1,10 @@
 import { MultiSelect, Switch } from '@mantine/core';
+import type { ReactNode } from 'react';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
-import { toolIdsFromPickerValue, toolPickerData, toolPickerValue, type ToolGroup } from 'shared/lib/toolPicker';
+import { ToolPicker } from 'shared/components/ToolPicker';
+import { type ToolGroup } from 'shared/lib/toolPicker';
 
 interface NamedItem {
   id: number;
@@ -44,10 +46,6 @@ export function BaseResourcesTab({
   readOnly,
   onWorkflowChange,
 }: BaseResourcesTabProps) {
-  const toolSelectData = toolPickerData(tools, toolGroups);
-  const toToolValue = (ids: number[]) => toolPickerValue(ids, toolGroups);
-  const fromToolValue = (values: string[]) => toolIdsFromPickerValue(values, toolGroups);
-
   const toSelectData = (items: NamedItem[]) =>
     Array.isArray(items)
       ? items.filter((i) => i?.id != null).map((i) => ({ value: String(i.id), label: i.name ?? '' }))
@@ -114,18 +112,27 @@ export function BaseResourcesTab({
 
         {/* 2-column grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          {/* Tools alone are picked through the group tree — every other list is a flat MultiSelect. */}
+          <Field label="Tools" isEmpty={workflow.baseToolIds.length === 0} emptyHint="None added">
+            <ToolPicker
+              tools={tools}
+              groups={toolGroups}
+              value={workflow.baseToolIds}
+              onChange={(ids) => onWorkflowChange('baseToolIds', ids)}
+              disabled={readOnly || workflow.inheritAllProjectResources}
+              placeholder="Select tools…"
+              aria-label="Tools"
+              inputStyles={{
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: 5,
+                fontSize: 13,
+                minHeight: 36,
+              }}
+            />
+          </Field>
           {(
             [
-              {
-                label: 'Tools',
-                placeholder: 'Select tools…',
-                data: toolSelectData,
-                value: toToolValue(workflow.baseToolIds),
-                onChange: (v: string[]) => onWorkflowChange('baseToolIds', fromToolValue(v)),
-                isEmpty: workflow.baseToolIds.length === 0,
-                supersededByInherit: true,
-                emptyHint: 'None added',
-              },
               {
                 label: 'Skills',
                 placeholder: 'Select skills…',
@@ -184,17 +191,7 @@ export function BaseResourcesTab({
               },
             ] as const
           ).map(({ label, placeholder, data, value, onChange, isEmpty, supersededByInherit, emptyHint }) => (
-            <div key={label}>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: 'var(--text-1)',
-                  marginBottom: 5,
-                }}
-              >
-                {label}
-              </div>
+            <Field key={label} label={label} isEmpty={isEmpty} emptyHint={emptyHint}>
               <MultiSelect
                 data={data}
                 value={[...value]}
@@ -212,11 +209,30 @@ export function BaseResourcesTab({
                   },
                 }}
               />
-              {isEmpty && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>{emptyHint}</div>}
-            </div>
+            </Field>
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  isEmpty,
+  emptyHint,
+  children,
+}: {
+  label: string;
+  isEmpty: boolean;
+  emptyHint: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-1)', marginBottom: 5 }}>{label}</div>
+      {children}
+      {isEmpty && <div style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6 }}>{emptyHint}</div>}
     </div>
   );
 }

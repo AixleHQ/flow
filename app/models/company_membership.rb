@@ -225,17 +225,22 @@ class CompanyMembership < ApplicationRecord
     state == "revoked" && attribute_was(:state) != "revoked"
   end
 
-  # The company's oldest active admin, excluding this member — where projects go
-  # when their owner is revoked.
+  # The company's oldest active admin excluding a given user — the canonical
+  # heir-selection rule used when a project owner is revoked or permanently
+  # deleted. Shared so both paths always agree on whom to pick.
+  def self.heir_for(company, excluding_user:)
+    company.company_memberships
+           .active
+           .where(role: "admin")
+           .where.not(user_id: excluding_user.id)
+           .default_order
+           .first
+  end
+
   def heir_membership
     return @heir_membership if defined?(@heir_membership)
 
-    @heir_membership = company.company_memberships
-                              .active
-                              .where(role: "admin")
-                              .where.not(user_id: user_id)
-                              .default_order
-                              .first
+    @heir_membership = self.class.heir_for(company, excluding_user: user)
   end
 
   # Project#owner_belongs_to_company requires the owner to hold an ACTIVE

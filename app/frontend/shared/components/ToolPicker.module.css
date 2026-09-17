@@ -1,0 +1,86 @@
+/* ── Tool Picker ────────────────────────────────── */
+
+/* A tag group's header row: chevron on the left, the "select the whole group"
+   control taking the rest of the width. Sits between Combobox.Options, so it
+   matches an option's horizontal padding. */
+.groupRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+}
+
+.chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--mantine-radius-sm);
+  color: var(--mantine-color-dimmed);
+  flex-shrink: 0;
+}
+
+.chevron:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.chevronIcon {
+  transition: transform 120ms ease;
+}
+
+.chevronIconOpen {
+  transform: rotate(90deg);
+}
+
+.groupToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  border-radius: var(--mantine-radius-sm);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 500;
+}
+
+.groupToggle:hover {
+  background: var(--mantine-color-default-hover);
+}
+
+.groupLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* "3/8" — the only thing that tells a collapsed group apart from a full one. */
+.count {
+  margin-left: auto;
+  font-size: var(--mantine-font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--mantine-color-dimmed);
+  flex-shrink: 0;
+}
+
+/* Tool rows sit under their group header, indented past the chevron. */
+.toolOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolOptionNested {
+  padding-left: 26px;
+}
+
+/* Header for the leftovers bucket — a label, not a selectable group. */
+.ungroupedLabel {
+  padding: 6px 8px 2px;
+  font-size: var(--mantine-font-size-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mantine-color-dimmed);
+}

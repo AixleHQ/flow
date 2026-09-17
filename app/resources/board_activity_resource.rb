@@ -6,14 +6,16 @@ class BoardActivityResource < ApplicationResource
 
   typelize metadata: "Record<string, unknown>"
 
+  DELETED_ACTOR_NAME = User::DELETED_DISPLAY_NAME
+
   typelize :string
   attribute :actor_name do |activity|
-    user = activity.actor
+    name = activity.actor&.name || DELETED_ACTOR_NAME
     case activity.actor_type
     when "agent"
-      "Agent (managed by #{user.name})"
+      "Agent (managed by #{name})"
     else
-      user.name
+      name
     end
   end
 
@@ -24,9 +26,10 @@ class BoardActivityResource < ApplicationResource
 
   typelize :string
   attribute :description do |activity|
+    name = activity.actor&.name || DELETED_ACTOR_NAME
     actor = case activity.actor_type
-    when "agent" then "Agent (managed by #{activity.actor.name})"
-    else activity.actor.name
+    when "agent" then "Agent (managed by #{name})"
+    else name
     end
     task = activity.board_task&.title
     meta = activity.metadata || {}

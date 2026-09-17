@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -59,7 +59,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
     t.bigint "file_size"
     t.string "source", default: "upload", null: false
     t.datetime "updated_at", null: false
-    t.bigint "uploaded_by_id", null: false
+    t.bigint "uploaded_by_id"
     t.integer "version", default: 1, null: false
     t.index ["asset_id", "version"], name: "index_asset_versions_on_asset_id_and_version", unique: true
     t.index ["asset_id"], name: "index_asset_versions_on_asset_id"
@@ -67,7 +67,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
 
   create_table "assets", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.bigint "created_by_id", null: false
+    t.bigint "created_by_id"
     t.datetime "deleted_at"
     t.string "folder"
     t.string "name", null: false
@@ -187,7 +187,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
   end
 
   create_table "board_activities", force: :cascade do |t|
-    t.bigint "actor_id", null: false
+    t.bigint "actor_id"
     t.string "actor_type", null: false
     t.bigint "board_id", null: false
     t.bigint "board_task_id"
@@ -296,7 +296,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
   end
 
   create_table "column_transitions", force: :cascade do |t|
-    t.bigint "actor_id", null: false
+    t.bigint "actor_id"
     t.string "actor_type", null: false
     t.bigint "board_task_id", null: false
     t.datetime "created_at", null: false
@@ -461,7 +461,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
   create_table "integrations", force: :cascade do |t|
     t.bigint "azure_devops_installation_id"
     t.bigint "company_id", null: false
-    t.bigint "connected_by_id", null: false
+    t.bigint "connected_by_id"
     t.datetime "created_at", null: false
     t.text "credentials"
     t.string "name", null: false
@@ -961,7 +961,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
   end
 
   create_table "task_assets", force: :cascade do |t|
-    t.bigint "author_id", null: false
+    t.bigint "author_id"
     t.string "author_type", default: "human", null: false
     t.bigint "board_task_id", null: false
     t.datetime "created_at", null: false
@@ -974,7 +974,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
   end
 
   create_table "task_comments", force: :cascade do |t|
-    t.bigint "author_id", null: false
+    t.bigint "author_id"
     t.string "author_type", default: "human", null: false
     t.bigint "board_task_id", null: false
     t.text "body", null: false
@@ -1257,7 +1257,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
     t.integer "step_runs_count", default: 0, null: false
     t.datetime "stop_requested_at"
     t.datetime "updated_at", null: false
-    t.bigint "user_id", null: false
+    t.bigint "user_id"
     t.bigint "workflow_id", null: false
     t.index ["board_task_id"], name: "index_workflow_runs_on_board_task_id"
     t.index ["failed_agent_credential_id"], name: "index_workflow_runs_on_failed_agent_credential_id"
@@ -1291,56 +1291,56 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
 
   add_foreign_key "agent_credentials", "companies"
   add_foreign_key "agent_credentials", "users"
-  add_foreign_key "asset_versions", "assets"
-  add_foreign_key "asset_versions", "users", column: "uploaded_by_id"
+  add_foreign_key "asset_versions", "assets", on_delete: :cascade
+  add_foreign_key "asset_versions", "users", column: "uploaded_by_id", on_delete: :nullify
   add_foreign_key "assets", "terminal_sessions", on_delete: :nullify
-  add_foreign_key "assets", "users", column: "created_by_id"
+  add_foreign_key "assets", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "azure_devops_deliveries", "azure_devops_subscriptions"
   add_foreign_key "azure_devops_installations", "companies"
-  add_foreign_key "azure_devops_installations", "users", column: "approved_by_id"
-  add_foreign_key "azure_devops_operations", "integrations"
-  add_foreign_key "azure_devops_subscriptions", "integrations"
-  add_foreign_key "board_activities", "board_tasks"
-  add_foreign_key "board_activities", "boards"
-  add_foreign_key "board_activities", "users", column: "actor_id"
-  add_foreign_key "board_columns", "boards"
+  add_foreign_key "azure_devops_installations", "users", column: "approved_by_id", on_delete: :nullify
+  add_foreign_key "azure_devops_operations", "integrations", on_delete: :cascade
+  add_foreign_key "azure_devops_subscriptions", "integrations", on_delete: :cascade
+  add_foreign_key "board_activities", "board_tasks", on_delete: :cascade
+  add_foreign_key "board_activities", "boards", on_delete: :cascade
+  add_foreign_key "board_activities", "users", column: "actor_id", on_delete: :nullify
+  add_foreign_key "board_columns", "boards", on_delete: :cascade
   add_foreign_key "board_tasks", "board_columns"
-  add_foreign_key "board_tasks", "board_tasks", column: "parent_task_id"
-  add_foreign_key "board_tasks", "boards"
-  add_foreign_key "board_tasks", "users", column: "assignee_id"
-  add_foreign_key "board_view_presets", "boards"
+  add_foreign_key "board_tasks", "board_tasks", column: "parent_task_id", on_delete: :nullify
+  add_foreign_key "board_tasks", "boards", on_delete: :cascade
+  add_foreign_key "board_tasks", "users", column: "assignee_id", on_delete: :nullify
+  add_foreign_key "board_view_presets", "boards", on_delete: :cascade
   add_foreign_key "board_view_presets", "users"
-  add_foreign_key "boards", "projects"
-  add_foreign_key "column_transitions", "board_columns", column: "from_column_id"
-  add_foreign_key "column_transitions", "board_columns", column: "to_column_id"
-  add_foreign_key "column_transitions", "board_tasks"
-  add_foreign_key "column_transitions", "users", column: "actor_id"
-  add_foreign_key "column_transitions", "workflow_runs"
-  add_foreign_key "column_workflow_bindings", "board_columns"
+  add_foreign_key "boards", "projects", on_delete: :cascade
+  add_foreign_key "column_transitions", "board_columns", column: "from_column_id", on_delete: :cascade
+  add_foreign_key "column_transitions", "board_columns", column: "to_column_id", on_delete: :cascade
+  add_foreign_key "column_transitions", "board_tasks", on_delete: :cascade
+  add_foreign_key "column_transitions", "users", column: "actor_id", on_delete: :nullify
+  add_foreign_key "column_transitions", "workflow_runs", on_delete: :nullify
+  add_foreign_key "column_workflow_bindings", "board_columns", on_delete: :cascade
   add_foreign_key "column_workflow_bindings", "users", column: "created_by_id", on_delete: :nullify
-  add_foreign_key "column_workflow_bindings", "workflows"
+  add_foreign_key "column_workflow_bindings", "workflows", on_delete: :cascade
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
   add_foreign_key "company_memberships", "companies"
   add_foreign_key "company_memberships", "users"
-  add_foreign_key "company_memberships", "users", column: "invited_by_id"
+  add_foreign_key "company_memberships", "users", column: "invited_by_id", on_delete: :nullify
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
-  add_foreign_key "gates", "users", column: "creator_id"
+  add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "companies"
-  add_foreign_key "integrations", "projects"
-  add_foreign_key "integrations", "users", column: "connected_by_id"
-  add_foreign_key "oauth_clients", "mcp_servers"
-  add_foreign_key "oauth_credentials", "mcp_servers"
+  add_foreign_key "integrations", "projects", on_delete: :cascade
+  add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
+  add_foreign_key "oauth_clients", "mcp_servers", on_delete: :cascade
+  add_foreign_key "oauth_credentials", "mcp_servers", on_delete: :cascade
   add_foreign_key "oauth_credentials", "oauth_clients"
-  add_foreign_key "project_collaborators", "projects"
+  add_foreign_key "project_collaborators", "projects", on_delete: :cascade
   add_foreign_key "project_collaborators", "users"
-  add_foreign_key "project_favorites", "projects"
+  add_foreign_key "project_favorites", "projects", on_delete: :cascade
   add_foreign_key "project_favorites", "users"
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "received_webhooks", "webhook_endpoints", on_delete: :cascade
-  add_foreign_key "repositories", "integrations"
+  add_foreign_key "repositories", "integrations", on_delete: :cascade
   add_foreign_key "session_admissions", "session_admission_pools"
   add_foreign_key "session_admissions", "terminal_sessions"
   add_foreign_key "session_input_assets", "assets", on_delete: :cascade
@@ -1361,26 +1361,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
   add_foreign_key "solid_queue_ready_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_recurring_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_scheduled_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
-  add_foreign_key "step_runs", "steps"
+  add_foreign_key "step_runs", "steps", on_delete: :cascade
   add_foreign_key "step_runs", "terminal_sessions"
-  add_foreign_key "step_runs", "workflow_runs"
+  add_foreign_key "step_runs", "workflow_runs", on_delete: :cascade
   add_foreign_key "steps", "agents", on_delete: :nullify
-  add_foreign_key "steps", "workflows"
-  add_foreign_key "sub_step_runs", "step_runs"
+  add_foreign_key "steps", "workflows", on_delete: :cascade
+  add_foreign_key "sub_step_runs", "step_runs", on_delete: :cascade
   add_foreign_key "sub_step_runs", "sub_steps"
   add_foreign_key "sub_steps", "steps"
-  add_foreign_key "task_assets", "board_tasks"
-  add_foreign_key "task_assets", "users", column: "author_id"
-  add_foreign_key "task_comments", "board_tasks"
-  add_foreign_key "task_comments", "users", column: "author_id"
+  add_foreign_key "task_assets", "board_tasks", on_delete: :cascade
+  add_foreign_key "task_assets", "users", column: "author_id", on_delete: :nullify
+  add_foreign_key "task_comments", "board_tasks", on_delete: :cascade
+  add_foreign_key "task_comments", "users", column: "author_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "companies"
-  add_foreign_key "terminal_sessions", "projects"
+  add_foreign_key "terminal_sessions", "projects", on_delete: :nullify
   add_foreign_key "terminal_sessions", "users"
-  add_foreign_key "tool_files", "tools"
+  add_foreign_key "tool_files", "tools", on_delete: :cascade
   add_foreign_key "tool_results", "step_runs", on_delete: :nullify
-  add_foreign_key "tool_results", "terminal_sessions"
-  add_foreign_key "tool_results", "tools"
+  add_foreign_key "tool_results", "terminal_sessions", on_delete: :nullify
+  add_foreign_key "tool_results", "tools", on_delete: :cascade
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
   add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify
@@ -1390,17 +1390,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_13_150000) do
   add_foreign_key "trigger_dispatches", "workflow_runs", on_delete: :nullify
   add_foreign_key "trigger_events", "board_tasks", on_delete: :nullify
   add_foreign_key "trigger_events", "projects", on_delete: :nullify
-  add_foreign_key "trigger_events", "users", column: "actor_id"
+  add_foreign_key "trigger_events", "users", column: "actor_id", on_delete: :nullify
   add_foreign_key "usage_statistics", "terminal_sessions"
   add_foreign_key "webhook_endpoints", "companies", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "projects", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id", on_delete: :nullify
-  add_foreign_key "workflow_run_assets", "workflow_runs"
+  add_foreign_key "workflow_run_assets", "workflow_runs", on_delete: :cascade
   add_foreign_key "workflow_runs", "agent_credentials", column: "failed_agent_credential_id", on_delete: :nullify
-  add_foreign_key "workflow_runs", "board_tasks"
-  add_foreign_key "workflow_runs", "projects"
-  add_foreign_key "workflow_runs", "users"
-  add_foreign_key "workflow_runs", "workflows"
-  add_foreign_key "workflows", "users", column: "published_by_id"
+  add_foreign_key "workflow_runs", "board_tasks", on_delete: :nullify
+  add_foreign_key "workflow_runs", "projects", on_delete: :cascade
+  add_foreign_key "workflow_runs", "users", on_delete: :nullify
+  add_foreign_key "workflow_runs", "workflows", on_delete: :cascade
+  add_foreign_key "workflows", "users", column: "published_by_id", on_delete: :nullify
 end

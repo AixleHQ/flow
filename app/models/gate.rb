@@ -25,7 +25,7 @@ class Gate < ApplicationRecord
   RECONCILIATION_LOG_LIMIT = 20
 
   belongs_to :board_task
-  belongs_to :creator, class_name: "User"
+  belongs_to :creator, class_name: "User", optional: true
 
   # `stale` is terminal like `resolved`, but explicitly NOT a pass: the provider
   # never reported a conclusion (webhook lost and the run/repo unreadable, or the

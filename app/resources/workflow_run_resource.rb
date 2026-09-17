@@ -48,7 +48,7 @@ class WorkflowRunResource < ApplicationResource
 
   typelize :string?
   attribute :user_name do |run|
-    run.user&.name
+    run.user&.name || User::DELETED_DISPLAY_NAME
   end
 
   # May the viewer steer this run (cancel / approve / retry / skip)? Mirrors

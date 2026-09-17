@@ -1,28 +1,46 @@
 <%#
 # User collection item actions
 
-Renders Administrate's stock per-row actions (edit/destroy) and appends an
-Impersonate / Stop Impersonate action on the index page. Overriding this small
-partial (instead of copying the whole `_collection` table) keeps us in sync
-with future Administrate updates. The matching header cell is added in
+Renders per-row actions for the users index: Edit, Destroy/Restore, and
+Impersonate. Replaces Administrate's stock `_collection_item_actions` so we
+can swap Destroy for Restore on soft-deleted rows and hide Impersonate for
+deleted / super-admin users. The matching header cell is added in
 `_collection_header_actions`.
 %>
 
-<%= render(
-  partial: "administrate/application/collection_item_actions",
-  locals: {
-    collection_presenter: collection_presenter,
-    collection_field_name: collection_field_name,
-    page: page,
-    namespace: namespace,
-    resource: resource,
-    table_title: table_title
-  }
-) %>
+<% if existing_action?(collection_presenter.resource_name, :edit) %>
+  <td class="cell-label--action-button"><%= link_to(
+    t("administrate.actions.edit"),
+    [:edit, namespace, resource],
+    class: "action-edit",
+  ) if accessible_action?(resource, :edit) %></td>
+<% end %>
+
+<% if existing_action?(collection_presenter.resource_name, :destroy) %>
+  <td class="cell-label--action-button">
+    <% if resource.is_a?(User) && resource.deleted? %>
+      <%= button_to(
+        "Restore",
+        restore_admin_user_path(resource),
+        method: :post,
+        class: "link",
+        data: { turbo_confirm: "Restore #{resource.email}?" }
+      ) %>
+    <% elsif accessible_action?(resource, :destroy) %>
+      <%= button_to(
+        t("administrate.actions.destroy"),
+        [namespace, resource],
+        class: "link link--danger",
+        method: :delete,
+        data: { turbo_confirm: t("administrate.actions.confirm") }
+      ) %>
+    <% end %>
+  </td>
+<% end %>
 
 <% if action_name == "index" %>
   <td class="cell-label--action-button">
-    <% unless resource.super_admin? %>
+    <% unless resource.super_admin? || resource.deleted? %>
       <% if current_user.id == resource.id %>
         <%= button_to(
           t("administrate.actions.stop_impersonate"),

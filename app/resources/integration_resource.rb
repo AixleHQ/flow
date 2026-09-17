@@ -99,7 +99,8 @@ class IntegrationResource < ApplicationResource
 
   typelize "{ id: number; name: string }"
   attribute :connected_by do |integration|
-    { id: integration.connected_by.id, name: integration.connected_by.name }
+    user = integration.connected_by
+    { id: user&.id, name: user&.name || User::DELETED_DISPLAY_NAME }
   end
 
   typelize :string?
