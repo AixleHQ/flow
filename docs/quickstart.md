@@ -84,6 +84,22 @@ register a new one if registration is enabled in your `.env`).
 
 If the run fails, see [user-guide/agents.md](user-guide/agents.md#troubleshooting).
 
+## Troubleshooting
+
+### `EACCES: permission denied, mkdir '/app/node_modules'`
+
+On Linux, Docker bind-mounts keep the host file owner. `make setup` runs
+Yarn as the container `app` user; that user used to be uid 100, which
+cannot create `node_modules` in a typical uid-1000 checkout. The Compose
+entrypoint remaps `app` to whoever owns `/app`. Re-run `make setup`.
+
+If it still fails, `/app` is root-owned on the host — `chown` the repo
+back to your user and re-run.
+
+The Yarn `YN0060` / `YN0086` peer-dependency warnings (e.g. `react`
+vs `@emoji-mart/react`) and the `websocket-client-simple` gem notice are
+unrelated and do not fail setup.
+
 ## Common follow-ups
 
 - **Connect a real Git repo** → [user-guide/integrations.md](user-guide/integrations.md)
