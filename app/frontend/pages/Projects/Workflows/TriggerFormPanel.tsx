@@ -9,8 +9,8 @@ import { TIMEZONE_OPTIONS } from 'shared/lib/timezones';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 import type { SharedProps } from 'shared/ui';
 
-import type { Trigger } from './types';
 import type { YoutrackIntegrationOption } from './TriggersTab';
+import type { Trigger } from './types';
 
 interface ColumnOption {
   id: number;
@@ -173,10 +173,7 @@ export function TriggerFormPanel({
     { value: 'none', label: 'None — project-level run' },
     { value: 'create_task', label: 'Create a task' },
   ];
-  const youtrackSubjectOptions = [
-    ...sessionOptions,
-    { value: 'existing_task', label: 'Use an existing linked task' },
-  ];
+  const youtrackSubjectOptions = [...sessionOptions, { value: 'existing_task', label: 'Use an existing linked task' }];
   const cronDesc = describeCron(cron);
 
   const submit = useCallback(async () => {
@@ -1248,7 +1245,9 @@ export function TriggerFormPanel({
               </button>
               <button
                 onClick={submit}
-                disabled={saving || (kind === 'schedule' && !cronDesc.ok) || (kind === 'youtrack' && !youtrackIntegrationId)}
+                disabled={
+                  saving || (kind === 'schedule' && !cronDesc.ok) || (kind === 'youtrack' && !youtrackIntegrationId)
+                }
                 style={{
                   background: saving || (kind === 'schedule' && !cronDesc.ok) ? 'var(--accent-dim)' : 'var(--accent)',
                   border: 'none',

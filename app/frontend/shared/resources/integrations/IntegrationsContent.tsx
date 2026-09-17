@@ -41,11 +41,11 @@ import { useCallback, useMemo, useState } from 'react';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
+import type { SharedProps } from 'shared/ui';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
-import type { SharedProps } from 'shared/ui';
 
 import { AzureDevopsConnectModal, type AzureDevopsProps } from './AzureDevopsConnectModal';
 
