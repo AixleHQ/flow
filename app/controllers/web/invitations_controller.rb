@@ -8,6 +8,7 @@ class Web::InvitationsController < Web::ApplicationController
   layout "inertia"
 
   skip_before_action :enforce_onboarding
+  skip_before_action :enforce_company_auth_policy
   skip_before_action :redirect_super_admin_to_admin_panel
 
   # GET /invitations/:token — branches on token validity + who is signed in.
@@ -24,7 +25,7 @@ class Web::InvitationsController < Web::ApplicationController
                           invited_email: mask_email(invitee.email),
                           current_email: current_user.email)
       end
-    elsif invitee.password_digest.present? || invitee.provider.present?
+    elsif invitee.user_identities.any?
       # Existing credentials: continue via the regular login flow. The token is
       # parked in the session and auto-accepted right after sign-in (see
       # AuthConcern#accept_pending_invitation).
@@ -82,7 +83,7 @@ class Web::InvitationsController < Web::ApplicationController
     if invitee.save
       return redirect_to invitation_path(params[:token]) unless safely_accept(membership)
 
-      sign_in(invitee)
+      sign_in(invitee, provider: Auth::LocalCredential.link!(invitee))
       session[:current_company_id] = membership.company_id
       session.delete(:pending_invitation_token)
       membership.reopen_onboarding_if_setup_needed!
@@ -109,9 +110,22 @@ class Web::InvitationsController < Web::ApplicationController
     signed_in? && current_user.id == membership.user_id
   end
 
+  # AD-12: "has credentials" is a question about identities, never about a
+  # password column. AD-11.2: the company must actually accept the kind being
+  # minted — an SSO-only company shows no password form, and minting one here
+  # would hand out a deployment-scoped credential it never authorised.
   def signup_allowed?
     invitee = membership.user
-    !signed_in? && invitee.password_digest.blank? && invitee.provider.blank?
+    return false if signed_in?
+    return false if invitee.user_identities.any?
+
+    password_accepted_by_company?
+  end
+
+  def password_accepted_by_company?
+    Auth::PolicyResolver
+      .allowed_provider_ids(membership.company)
+      .include?(IdentityProvider.password.id)
   end
 
   def signup_params

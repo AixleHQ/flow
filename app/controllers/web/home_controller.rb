@@ -2,6 +2,7 @@
 
 class Web::HomeController < Web::ApplicationController
   skip_before_action :enforce_onboarding
+  skip_before_action :enforce_company_auth_policy
 
   # The landing page is hand-written marketing HTML driven by inline handlers
   # (onclick=…), and it shows no one's data. Inline script stays allowed here; a

@@ -64,9 +64,43 @@ Rails.application.routes.draw do
   get "/share/:token", to: "web/public_assets#show", as: :public_asset
   get "/share/:token/raw", to: "web/public_assets#raw", as: :public_asset_raw
 
+  # Per-company OIDC sign-in (CAP-3). One deployment-wide callback; which
+  # connection issued the code is carried in the SIGNED state, never in the path.
+  post "login/sso", to: "web/oidc_sessions#discover", as: :sso_discovery
+  # Emailed single-use sign-in links (CAP-4). The GET only CONFIRMS; the POST
+  # consumes. Mail scanners fetch every URL in a message, and a link that signed
+  # people in on GET would be burned before its owner ever clicked it.
+  # Passkeys (CAP-4). Registration is for a signed-in person; sign-in is
+  # anonymous, because a discoverable credential names its own account.
+  # Time-based one-time codes, enrolled by the person they belong to (CAP-4).
+  post "totp", to: "web/totp#create", as: :totp
+  post "totp/confirm", to: "web/totp#confirm", as: :confirm_totp
+  delete "totp", to: "web/totp#destroy"
+
+  post "passkeys/options", to: "web/passkeys#options", as: :passkey_options
+  post "passkeys", to: "web/passkeys#create", as: :passkeys
+  delete "passkeys/:id", to: "web/passkeys#destroy", as: :passkey
+  post "login/passkey/options", to: "web/passkey_sessions#options", as: :passkey_login_options
+  post "login/passkey", to: "web/passkey_sessions#create", as: :passkey_login
+
+  post "login/magic", to: "web/magic_links#create", as: :request_magic_link
+  get "login/magic/:token", to: "web/magic_links#show", as: :magic_link
+  post "login/magic/:token", to: "web/magic_links#confirm", as: :confirm_magic_link
+  post "auth/oidc/:id/start", to: "web/oidc_sessions#start", as: :oidc_start
+  get "auth/oidc/callback", to: "web/oidc_sessions#callback", as: :oidc_callback
+
   # OmniAuth callbacks (path_prefix = /auth)
   get "auth/:provider/callback", to: "web/sessions#omniauth", as: :auth_callback
   get "auth/failure", to: "web/sessions#failure", as: :auth_failure
+
+  # SCIM 2.0 (CAP-6). The bearer token decides the company; there is deliberately
+  # no tenant in the path, so a leaked URL reveals nothing and grants nothing.
+  namespace :scim do
+    mount Scimitar::Engine, at: "/"
+    resources :users, only: %i[index show create update destroy] do
+      patch :patch, on: :member, action: :update
+    end
+  end
 
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
@@ -289,6 +323,11 @@ Rails.application.routes.draw do
     post "login", to: "sessions#create"
     delete "logout", to: "sessions#destroy", as: :logout
 
+    # Step-up re-authentication (AD-5). Reached when a live session does not
+    # satisfy the company it is trying to enter; never a sign-out.
+    get "step_up", to: "step_ups#new", as: :step_up
+    post "step_up", to: "step_ups#create"
+
     # Invitation acceptance (public — the signed token is the credential).
     # Tokens can contain dots, which format negotiation would otherwise eat.
     scope constraints: { token: /[^\/]+/ } do
@@ -310,6 +349,9 @@ Rails.application.routes.draw do
       delete :sign_out_other_sessions, on: :member
       delete :disable_mcp_token, on: :member
       patch :update_mcp_tools, on: :member
+      # Passkeys, one-time codes and live sessions — the person's own security
+      # surface (CAP-4, AD-18).
+      get :security, on: :member
     end
     resource :onboarding, only: %i[show update], controller: "onboarding"
 
@@ -348,6 +390,15 @@ Rails.application.routes.draw do
         post :resend, on: :member
       end
       resource :settings, only: %i[show update], controller: "settings"
+      # Which sign-in methods this company accepts (AD-4). The id is an
+      # IdentityProvider id: a deployment-scoped provider or one of this
+      # company's own connections.
+      resources :auth_policies, only: %i[index update]
+      # A company's own OIDC connections. Created disabled; enabling them goes
+      # through the prove-before-enforce guard on auth_policies#update.
+      resources :identity_providers, only: %i[create update destroy]
+      # Directory sync (SCIM). One per company; the token is shown once.
+      resource :scim_configuration, only: %i[create destroy]
       # Config items are Project-scoped only — managed under company/projects/:id/config_items.
       # GitHub App setup callback (single global endpoint; project target carried in `state`).
       # Company-level integration management has been removed — integrations are project-scoped.

@@ -132,6 +132,71 @@ export function publicAssetRawPath(token: ScalarType, options?: object): string 
   return "/" + "share" + "/" + token + "/" + "raw" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
 }
 
+/** /login/sso(.:format) */
+export function ssoDiscoveryPath(options?: object): string {
+  return "/" + "login" + "/" + "sso" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /totp(.:format) */
+export function totpPath(options?: object): string {
+  return "/" + "totp" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /totp/confirm(.:format) */
+export function confirmTotpPath(options?: object): string {
+  return "/" + "totp" + "/" + "confirm" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /passkeys/options(.:format) */
+export function passkeyOptionsPath(options?: object): string {
+  return "/" + "passkeys" + "/" + "options" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /passkeys(.:format) */
+export function passkeysPath(options?: object): string {
+  return "/" + "passkeys" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /passkeys/:id(.:format) */
+export function passkeyPath(id: ScalarType, options?: object): string {
+  return "/" + "passkeys" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /login/passkey/options(.:format) */
+export function passkeyLoginOptionsPath(options?: object): string {
+  return "/" + "login" + "/" + "passkey" + "/" + "options" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /login/passkey(.:format) */
+export function passkeyLoginPath(options?: object): string {
+  return "/" + "login" + "/" + "passkey" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /login/magic(.:format) */
+export function requestMagicLinkPath(options?: object): string {
+  return "/" + "login" + "/" + "magic" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /login/magic/:token(.:format) */
+export function magicLinkPath(token: ScalarType, options?: object): string {
+  return "/" + "login" + "/" + "magic" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /login/magic/:token(.:format) */
+export function confirmMagicLinkPath(token: ScalarType, options?: object): string {
+  return "/" + "login" + "/" + "magic" + "/" + token + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
+}
+
+/** /auth/oidc/:id/start(.:format) */
+export function oidcStartPath(id: ScalarType, options?: object): string {
+  return "/" + "auth" + "/" + "oidc" + "/" + id + "/" + "start" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /auth/oidc/callback(.:format) */
+export function oidcCallbackPath(options?: object): string {
+  return "/" + "auth" + "/" + "oidc" + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /auth/:provider/callback(.:format) */
 export function authCallbackPath(provider: ScalarType, options?: object): string {
   return "/" + "auth" + "/" + provider + "/" + "callback" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["provider","format"]);
@@ -140,6 +205,46 @@ export function authCallbackPath(provider: ScalarType, options?: object): string
 /** /auth/failure(.:format) */
 export function authFailurePath(options?: object): string {
   return "/" + "auth" + "/" + "failure" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /scim */
+export function scimScimitarPath(options?: object): string {
+  return "/" + "scim" + $buildOptions(options, []);
+}
+
+/** /scim/ServiceProviderConfig(.:format) */
+export function scimScimitarScimServiceProviderConfigurationPath(options?: object): string {
+  return "/" + "scim" + "/" + "ServiceProviderConfig" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /scim/ResourceTypes(.:format) */
+export function scimScimitarScimResourceTypesPath(options?: object): string {
+  return "/" + "scim" + "/" + "ResourceTypes" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /scim/ResourceTypes/:name(.:format) */
+export function scimScimitarScimResourceTypePath(name: ScalarType, options?: object): string {
+  return "/" + "scim" + "/" + "ResourceTypes" + "/" + name + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["name","format"]);
+}
+
+/** /scim/Schemas(.:format) */
+export function scimScimitarScimSchemasPath(options?: object): string {
+  return "/" + "scim" + "/" + "Schemas" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /scim/users/:id/patch(.:format) */
+export function patchScimUserPath(id: ScalarType, options?: object): string {
+  return "/" + "scim" + "/" + "users" + "/" + id + "/" + "patch" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /scim/users(.:format) */
+export function scimUsersPath(options?: object): string {
+  return "/" + "scim" + "/" + "users" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /scim/users/:id(.:format) */
+export function scimUserPath(id: ScalarType, options?: object): string {
+  return "/" + "scim" + "/" + "users" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /api/v1/assets/presign(.:format) */
@@ -957,31 +1062,6 @@ export function oasRailsPath(options?: object): string {
   return "/" + "api-docs" + $buildOptions(options, []);
 }
 
-/** /letter_opener */
-export function letterOpenerWebPath(options?: object): string {
-  return "/" + "letter_opener" + $buildOptions(options, []);
-}
-
-/** /letter_opener/ */
-export function letterOpenerWebLettersPath(options?: object): string {
-  return "/" + "letter_opener" + "/" + $buildOptions(options, []);
-}
-
-/** /letter_opener/clear(.:format) */
-export function letterOpenerWebClearLettersPath(options?: object): string {
-  return "/" + "letter_opener" + "/" + "clear" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
-}
-
-/** /letter_opener/:id(/:style)(.:format) */
-export function letterOpenerWebLetterPath(id: ScalarType, options?: object): string {
-  return "/" + "letter_opener" + "/" + id + ($hasPresentOwnProperty(options, "style") ? "/" + (options as any).style : "") + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","style","format"]);
-}
-
-/** /letter_opener/:id/delete(.:format) */
-export function letterOpenerWebDeleteLetterPath(id: ScalarType, options?: object): string {
-  return "/" + "letter_opener" + "/" + id + "/" + "delete" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
-}
-
 /** /docs(.:format) */
 export function docsPath(options?: object): string {
   return "/" + "docs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1010,6 +1090,11 @@ export function loginPath(options?: object): string {
 /** /logout(.:format) */
 export function logoutPath(options?: object): string {
   return "/" + "logout" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /step_up(.:format) */
+export function stepUpPath(options?: object): string {
+  return "/" + "step_up" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /invitations/:token(.:format) */
@@ -1082,6 +1167,11 @@ export function updateMCPToolsProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "update_mcp_tools" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /profile/security(.:format) */
+export function securityProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "security" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /profile(.:format) */
 export function profilePath(options?: object): string {
   return "/" + "profile" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1150,6 +1240,29 @@ export function companyMemberPath(id: ScalarType, options?: object): string {
 /** /company/settings(.:format) */
 export function companySettingsPath(options?: object): string {
   return "/" + "company" + "/" + "settings" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+/** /company/auth_policies(.:format) */
+export function companyAuthPoliciesPath(options?: object): string {
+  return "/" + "company" + "/" + "auth_policies" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/auth_policies/:id(.:format) */
+export function companyAuthPolicyPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "auth_policies" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/identity_providers(.:format) */
+export function companyIdentityProvidersPath(options?: object): string {
+  return "/" + "company" + "/" + "identity_providers" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/identity_providers/:id(.:format) */
+export function companyIdentityProviderPath(id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "identity_providers" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/scim_configuration(.:format) */
+export function companyScimConfigurationPath(options?: object): string {
+  return "/" + "company" + "/" + "scim_configuration" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/integrations/github_setup(.:format) */

@@ -37,6 +37,105 @@ class CompanyMembership < ApplicationRecord
   enumerize :role, in: %i[employee admin viewer], default: :employee, predicates: true, scope: true
   enumerize :position, in: POSITIONS, predicates: true
 
+  # ── SCIM (CAP-6) ──
+  # A customer's directory sees a membership as a User: the person exists
+  # globally, but the directory only owns their presence in ITS company.
+  def self.scim_resource_type = Scimitar::Resources::User
+
+  def self.scim_attributes_map
+    {
+      id: :id,
+      externalId: :scim_external_id,
+      userName: :scim_user_name,
+      name: { givenName: :scim_given_name, familyName: :scim_family_name },
+      emails: [ { match: "type", with: "work", using: { value: :scim_user_name, primary: false } } ],
+      active: :scim_active
+    }
+  end
+
+  # `userName` is deliberately NOT mutable. A directory owns its members'
+  # presence in its own company, not who they are: letting it PATCH userName
+  # would let it repoint an existing membership — with whatever role that row
+  # held — at an unrelated global account, and detach the original holder. The
+  # address is set once, at provisioning; changing it is an account-level act
+  # that belongs to the person, not to a directory.
+  def self.scim_mutable_attributes = %i[scim_given_name scim_family_name scim_active]
+
+  def self.scim_queryable_attributes
+    { "userName" => { column: User.arel_table[:email], associations: [ :user ] } }
+  end
+
+  def self.scim_timestamps_map = { created: :created_at, lastModified: :updated_at }
+
+  # Included AFTER the maps above: the mixin reads them at include time and
+  # raises "You must define ::scim_resource_type" if they are not there yet.
+  include Scimitar::Resources::Mixin
+
+  # The directory's own identifier for this person. Kept so a rename on their
+  # side does not look like a new person on ours.
+  def scim_external_id = user&.id&.to_s
+
+  def scim_user_name = user&.email
+
+  # Provisioning creates the global User if this is the first company to know
+  # them, and always creates the membership. It never creates an identity: the
+  # first real sign-in does that (AD-10).
+  #
+  # On an EXISTING membership this renames the person already on the row. It must
+  # never repoint the row at a different account: a directory that sent
+  # `userName: someone-else@elsewhere.com` in a PATCH would otherwise hand that
+  # stranger whatever role the row already held — including admin — in a company
+  # they have no relationship with, and detach the original holder from their own
+  # membership. The directory owns its members' presence here, not who they are.
+  def scim_user_name=(value)
+    email = value.to_s.strip.downcase
+    return if email.blank?
+
+    if persisted? && user.present?
+      return if user.email.casecmp?(email)
+
+      if User.where(email: email).where.not(id: user_id).exists?
+        raise Scimitar::ResourceInvalidError,
+              "userName #{email} already belongs to another account; it cannot be moved onto this one"
+      end
+
+      user.update!(email: email)
+      return
+    end
+
+    self.user = User.find_or_initialize_by(email: email).tap do |u|
+      u.name = u.name.presence || email.split("@").first
+      u.save!
+    end
+    self.company ||= ScimCurrent.company
+  end
+
+  def scim_given_name = user&.name.to_s.split(" ").first
+  def scim_family_name = user&.name.to_s.split(" ")[1..]&.join(" ")
+
+  def scim_given_name=(value)
+    @scim_given = value
+    apply_scim_name
+  end
+
+  def scim_family_name=(value)
+    @scim_family = value
+    apply_scim_name
+  end
+
+  # `active` is the whole deprovisioning story: a directory flips it to false
+  # when someone leaves, and that must be the SAME transition a human removal
+  # makes, not a parallel path into the same row.
+  def scim_active = active?
+
+  def scim_active=(value)
+    wanted = ActiveModel::Type::Boolean.new.cast(value)
+    @scim_active_target = wanted
+  end
+
+  # Applied after save so the state machine runs on a persisted row.
+  after_save :apply_scim_active_target, if: -> { defined?(@scim_active_target) && !@scim_active_target.nil? }
+
   # Validations
   validates :user_id, uniqueness: { scope: :company_id, message: "already has a membership in this company" }
   validates :preferred_agent_language, inclusion: { in: AGENT_LANGUAGES }, allow_nil: true
@@ -192,6 +291,41 @@ class CompanyMembership < ApplicationRecord
   end
 
   private
+
+  def apply_scim_name
+    return if user.nil?
+
+    full = [ @scim_given, @scim_family ].compact_blank.join(" ")
+    user.update!(name: full) if full.present?
+  end
+
+  def apply_scim_active_target
+    target = @scim_active_target
+    @scim_active_target = nil
+
+    with_lock do
+      if target
+        # Auto-acceptance is only safe inside the domain this company
+        # demonstrably owns (the AD-17 trust anchor). Anyone else is left
+        # `invited` and has to accept, exactly as a hand-written invitation
+        # requires — a directory must not be able to conscript an arbitrary
+        # existing account into its company.
+        if scim_domain_owned_by_company?
+          accept! if may_accept?
+          reactivate! if may_reactivate?
+        elsif may_reactivate?
+          reactivate!
+        end
+      elsif may_revoke?
+        revoke!
+      end
+    end
+  end
+
+  def scim_domain_owned_by_company?
+    domain = user&.email.to_s.split("@").last
+    domain.present? && company&.email_domain.to_s.casecmp?(domain)
+  end
 
   # Fetch the model list for a credential, caching per-credential (not globally —
   # the old key collided across users, so one user's fallback poisoned everyone).

@@ -8,6 +8,8 @@ class UserSession < ApplicationRecord
   belongs_to :user
   belongs_to :impersonator, class_name: "User", optional: true
 
+  has_many :proofs, class_name: "UserSessionProof", dependent: :destroy
+
   # last_seen_at is a timeout clock, not an access log: written at most this often.
   TOUCH_EVERY = 5.minutes
   # Ended rows are kept this long for the record, then removed at the user's next sign-in.
@@ -55,5 +57,9 @@ class UserSession < ApplicationRecord
 
   def touch_if_stale!
     update_column(:last_seen_at, Time.current) if last_seen_at < TOUCH_EVERY.ago
+  end
+
+  def proved_provider_ids
+    proofs.pluck(:identity_provider_id)
   end
 end
