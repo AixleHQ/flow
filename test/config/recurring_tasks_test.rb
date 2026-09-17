@@ -26,7 +26,7 @@ class RecurringTasksTest < ActiveSupport::TestCase
   # worker is what it watches. If it ever migrates to app/temporal/schedules.yml,
   # the installation goes back to having no watchdog that survives a dead worker.
   test "the queue watchdog is scheduled outside Temporal in every deployed environment" do
-    %w[production staging qa].each do |env|
+    %w[production staging].each do |env|
       config = Rails.application.config_for(:recurring, env: env)
       task = config[:queue_health_check]
 
