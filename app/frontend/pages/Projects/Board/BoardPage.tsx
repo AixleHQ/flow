@@ -2858,13 +2858,13 @@ function TaskDetailSidebar({
               </Stack>
             </Box>
           )}
-          {task.externalResources?.length > 0 && (
+          {(task.externalResources?.length ?? 0) > 0 && (
             <Box>
               <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
-                External resources ({task.externalResources.length})
+                External resources ({task.externalResources?.length ?? 0})
               </Text>
               <Stack gap={4}>
-                {task.externalResources.map((resource) => (
+                {(task.externalResources ?? []).map((resource) => (
                   <Text
                     key={`${resource.type}:${resource.url}`}
                     component="a"
