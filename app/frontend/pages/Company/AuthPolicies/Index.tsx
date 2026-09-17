@@ -15,29 +15,29 @@ interface Provider {
   scope: string;
   enabled: boolean;
   issuer?: string | null;
-  client_id?: string | null;
-  tenant_id?: string | null;
-  has_secret: boolean;
+  clientId?: string | null;
+  tenantId?: string | null;
+  hasSecret: boolean;
   proved: boolean;
 }
 
 interface ScimState {
   enabled: boolean;
-  last_seen_at?: string | null;
+  lastSeenAt?: string | null;
   endpoint?: string;
 }
 
 interface PageProps {
   providers: Provider[];
   scim?: ScimState;
-  scim_token?: string | null;
-  permissions?: { is_admin?: boolean };
+  scimToken?: string | null;
+  permissions?: { isAdmin?: boolean };
   errors?: { base?: string };
   [key: string]: unknown;
 }
 
 function ConnectionForm({ onDone }: { onDone: () => void }) {
-  const form = useForm({ name: '', issuer: '', client_id: '', client_secret: '', tenant_id: '' });
+  const form = useForm({ name: '', issuer: '', clientId: '', client_secret: '', tenantId: '' });
 
   return (
     <form
@@ -63,8 +63,8 @@ function ConnectionForm({ onDone }: { onDone: () => void }) {
         <TextInput
           label="Client ID"
           required
-          value={form.data.client_id}
-          onChange={(e) => form.setData('client_id', e.currentTarget.value)}
+          value={form.data.clientId}
+          onChange={(e) => form.setData('clientId', e.currentTarget.value)}
         />
         <TextInput
           label="Client secret"
@@ -84,7 +84,7 @@ function ConnectionForm({ onDone }: { onDone: () => void }) {
 
 export default function AuthPoliciesIndex({ providers }: PageProps) {
   const page = usePage<PageProps>();
-  const isAdmin = page.props.permissions?.is_admin ?? false;
+  const isAdmin = page.props.permissions?.isAdmin ?? false;
   const refusal = page.props.errors?.base;
 
   const toggle = (provider: Provider, enabled: boolean) => {
@@ -175,19 +175,19 @@ export default function AuthPoliciesIndex({ providers }: PageProps) {
               </Text>{' '}
               to add and remove members automatically. Removing someone there removes their access here.
             </Text>
-            {page.props.scim_token && (
+            {page.props.scimToken && (
               <Alert color="yellow">
                 <Stack gap="xs">
                   <Text size="sm">Copy this token now — it is not shown again.</Text>
                   <Text ff="monospace" size="sm">
-                    {page.props.scim_token}
+                    {page.props.scimToken}
                   </Text>
                 </Stack>
               </Alert>
             )}
-            {page.props.scim?.enabled && page.props.scim?.last_seen_at && (
+            {page.props.scim?.enabled && page.props.scim?.lastSeenAt && (
               <Text size="xs" c="dimmed">
-                Last contacted {new Date(page.props.scim.last_seen_at).toLocaleString()}
+                Last contacted {new Date(page.props.scim.lastSeenAt).toLocaleString()}
               </Text>
             )}
           </Stack>

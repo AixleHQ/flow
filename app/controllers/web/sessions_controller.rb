@@ -98,16 +98,9 @@ class Web::SessionsController < Web::ApplicationController
       return
     end
 
-    # Step-up through a redirect provider lands here too. When the same person
-    # is already signed in, the proof APPENDS to the live session (AD-6) instead
-    # of replacing it — otherwise proving Google would discard the password
-    # proof that another company still requires, and the two companies would
-    # bounce the user between step-ups forever.
-    if signed_in? && current_auth_session&.user_id == user.id
-      prove_additional_method(provider)
-    else
-      sign_in(user, provider: provider)
-    end
+    # Step-up through a redirect provider lands here too; the proof appends to a
+    # live session rather than replacing it (AD-6).
+    sign_in_or_prove(user, provider: provider)
 
     target = user.super_admin? ? admin_root_path : onboarding_path
     redirect_to target

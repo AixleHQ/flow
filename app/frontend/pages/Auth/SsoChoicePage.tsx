@@ -10,7 +10,7 @@ interface Connection {
 }
 
 interface PageProps {
-  company_name: string;
+  companyName: string;
   connections: Connection[];
   [key: string]: unknown;
 }
@@ -19,14 +19,14 @@ function getCsrfToken(): string {
   return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
 }
 
-export default function SsoChoicePage({ company_name, connections }: PageProps) {
+export default function SsoChoicePage({ companyName, connections }: PageProps) {
   return (
     <PageShell>
       <Head title="Choose a sign-in method" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">
           <Logo width={96} />
-          <Title order={3}>Sign in to {company_name}</Title>
+          <Title order={3}>Sign in to {companyName}</Title>
           <Text size="sm" c="dimmed">
             This workspace has more than one identity provider. Pick the one you use.
           </Text>

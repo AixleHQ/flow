@@ -10,8 +10,9 @@ class Web::Company::AuthPoliciesController < Web::Company::ApplicationController
     render inertia: "Company/AuthPolicies/Index", props: {
       providers: available_providers.map { |provider| serialize(provider) },
       scim: scim_state,
-      # Shown once, straight after generation, and never read back from storage.
-      scim_token: params[:scim_token]
+      # Shown once, straight after generation, and never read back from storage
+      # — carried in the flash so it never reaches the URL or the access log.
+      scim_token: flash[:scim_token]
     }
   end
 
@@ -27,12 +28,13 @@ class Web::Company::AuthPoliciesController < Web::Company::ApplicationController
 
   def scim_state
     configuration = ScimConfiguration.find_by(company: current_company)
-    return { enabled: false } if configuration.nil?
 
     {
-      enabled: configuration.enabled,
-      last_seen_at: configuration.last_seen_at,
-      endpoint: "#{Settings.protocol}://#{Settings.domain}/scim"
+      # Always present: the admin needs to know where to point their directory
+      # before they generate anything, not after.
+      endpoint: "#{Settings.protocol}://#{Settings.domain}/scim",
+      enabled: configuration&.enabled || false,
+      last_seen_at: configuration&.last_seen_at
     }
   end
 

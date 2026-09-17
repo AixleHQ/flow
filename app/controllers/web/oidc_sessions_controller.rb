@@ -115,13 +115,7 @@ class Web::OidcSessionsController < Web::ApplicationController
   end
 
   def enter(user, provider, return_to)
-    # Same append-vs-replace rule as the OmniAuth callback (AD-6): proving a
-    # second method inside a live session must not discard the first.
-    if signed_in? && current_auth_session&.user_id == user.id
-      prove_additional_method(provider)
-    else
-      sign_in(user, provider: provider)
-    end
+    sign_in_or_prove(user, provider: provider)
 
     session[:current_company_id] = provider.company_id if member_of?(user, provider.company_id)
     redirect_to(safe_return_to(return_to) || company_projects_path)

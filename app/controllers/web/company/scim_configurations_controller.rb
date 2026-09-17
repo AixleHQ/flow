@@ -13,7 +13,11 @@ class Web::Company::ScimConfigurationsController < Web::Company::ApplicationCont
     configuration.save!
     token = configuration.regenerate_token!
 
-    redirect_to company_auth_policies_path(scim_token: token),
+    # The flash, never the query string: a credential in a URL lands in browser
+    # history, server access logs and any Referer sent onward. The flash is
+    # one-shot and stays in the session cookie.
+    flash[:scim_token] = token
+    redirect_to company_auth_policies_path,
                 notice: "Directory sync token generated. Copy it now — it is not shown again."
   end
 

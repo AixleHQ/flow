@@ -16,8 +16,8 @@ interface PageProps {
   error?: string;
   email?: string;
   /** Redirect providers this installation offers. Absent means Google only. */
-  oauth_providers?: string[];
-  passwordless_methods?: string[];
+  oauthProviders?: string[];
+  passwordlessMethods?: string[];
   [key: string]: unknown;
 }
 
@@ -65,15 +65,15 @@ const loginSchema = z.object({
 });
 
 const LoginPage = () => {
-  const { error, email: prefillEmail, oauth_providers } = usePage<PageProps>().props;
+  const { error, email: prefillEmail, oauthProviders } = usePage<PageProps>().props;
   // Absent (an older server, or a page rendered without the prop) falls back to
   // Google alone, which is what this app offered before Microsoft existed.
-  const providers = oauth_providers ?? ['google'];
+  const providers = oauthProviders ?? ['google'];
   // Enterprise SSO discovery: the company is resolved from the address's domain,
   // because a member of an SSO-only company has no other way in before they are
   // signed in (the step-up screen is only reachable afterwards).
   const startSso = () => router.post(ssoDiscoveryPath(), { email: data.email });
-  const passwordless = (usePage<PageProps>().props.passwordless_methods as string[] | undefined) ?? [];
+  const passwordless = (usePage<PageProps>().props.passwordlessMethods as string[] | undefined) ?? [];
   const errorShownRef = useRef(false);
   const [clientErrors, setClientErrors] = useState<Record<string, string | undefined>>({});
 
