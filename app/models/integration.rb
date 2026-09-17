@@ -17,13 +17,20 @@ class Integration < ApplicationRecord
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
   has_many :azure_devops_operations, dependent: :delete_all
   has_many :azure_devops_subscriptions, dependent: :destroy
-  has_one :youtrack_webhook_endpoint, -> { where(provider: "youtrack") },
-    class_name: "WebhookEndpoint", dependent: :destroy
   has_many :trigger_bindings, dependent: :nullify
+
+  before_destroy :destroy_youtrack_webhook_endpoint, if: :youtrack?
 
   def youtrack_base_url = settings&.dig("base_url")
   def youtrack_project_id = settings&.dig("youtrack_project_id")&.to_s
   def youtrack_token = credentials_data["permanent_token"]
+
+  # WebhookEndpoint links back to its integration through `config.integration_id`
+  # (JSONB), not a real FK column — see youtrack-integration-tech-design-v6.md §4/§9.3 —
+  # so this can't be a normal `has_one`.
+  def youtrack_webhook_endpoint
+    WebhookEndpoint.where(provider: "youtrack").find_by("config->>'integration_id' = ?", id.to_s)
+  end
 
   validates :name, presence: true
   validates :provider, presence: true
@@ -235,5 +242,9 @@ class Integration < ApplicationRecord
 
   def encryption_key_setting
     Settings.encryption.integrations_key
+  end
+
+  def destroy_youtrack_webhook_endpoint
+    youtrack_webhook_endpoint&.destroy
   end
 end

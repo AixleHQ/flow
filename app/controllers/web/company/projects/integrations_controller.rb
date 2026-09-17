@@ -3,7 +3,7 @@
 class Web::Company::Projects::IntegrationsController < Web::Company::Projects::ApplicationController
   def index
     integrations = Integration.visible_for_project(current_project)
-                              .includes(:connected_by, :azure_devops_installation, :youtrack_webhook_endpoint)
+                              .includes(:connected_by, :azure_devops_installation)
                               .order(created_at: :desc)
 
     render inertia: "Projects/Integrations/IntegrationsPage", props: {
