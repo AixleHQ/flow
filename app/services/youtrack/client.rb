@@ -50,7 +50,7 @@ module Youtrack
       end
       response = http.request(request)
       raise Error, "YouTrack redirects are not allowed" if response.is_a?(Net::HTTPRedirection)
-      raise AuthenticationError, "YouTrack authentication or permission denied" if [401, 403].include?(response.code.to_i)
+      raise AuthenticationError, "YouTrack authentication or permission denied" if [ 401, 403 ].include?(response.code.to_i)
       raise NotFoundError, "YouTrack resource not found" if response.code.to_i == 404
       raise Error, "YouTrack request failed (HTTP #{response.code})" unless response.is_a?(Net::HTTPSuccess)
       raise Error, "YouTrack response is too large" if response.body.to_s.bytesize > MAX_BYTES

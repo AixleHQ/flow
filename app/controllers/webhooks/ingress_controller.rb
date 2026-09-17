@@ -93,7 +93,7 @@ class Webhooks::IngressController < ActionController::API
       when "youtrack"
         kind = payload["event"]
         source_id = kind == "commentAdded" ? payload.dig("comment", "id") : payload.dig("issue", "id")
-        Digest::SHA256.hexdigest([endpoint.id, kind, source_id].join(":")) if source_id.present?
+        Digest::SHA256.hexdigest([ endpoint.id, kind, source_id ].join(":")) if source_id.present?
       else request.headers["X-Idempotency-Key"] || request.headers["X-GitHub-Delivery"]
       end
 

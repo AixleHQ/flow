@@ -1,11 +1,12 @@
 # frozen_string_literal: true
+
 module InternalTools
   class YoutrackUpdateIssue < Base
     include Concerns::YoutrackContext
     tool do
       display_name "YouTrack Update Issue"; description "Update summary, description, or custom fields on an issue in the connected project."
       tags :youtrack; inject_when :workflow_step_session; requires_integration :youtrack
-      input_schema({ type: "object", required: ["issue_id", "changes"], properties: { issue_id: { type: "string" }, changes: { type: "object" } } })
+      input_schema({ type: "object", required: [ "issue_id", "changes" ], properties: { issue_id: { type: "string" }, changes: { type: "object" } } })
     end
     def execute
       with_youtrack do |c, _|

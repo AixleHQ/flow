@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 module InternalTools
   class YoutrackSearchIssues < Base
     include Concerns::YoutrackContext
@@ -10,7 +11,7 @@ module InternalTools
     def execute
       with_youtrack do |client, integration|
         query = "project: {#{integration.settings['project_short_name']}} #{params[:query]}".strip
-        rows = client.get("/api/issues", query: query, "$top": [params[:top].to_i.nonzero? || 50, 100].min,
+        rows = client.get("/api/issues", query: query, "$top": [ params[:top].to_i.nonzero? || 50, 100 ].min,
           "$skip": params[:skip].to_i, fields: "id,idReadable,summary,project(id,name,shortName)")
         rows.each { |issue| client.assert_selected_project!(issue) }
         json_success(rows)

@@ -50,7 +50,7 @@ module Webhooks
       comment = payload["comment"].to_h
       created = payload["event"] == "issueCreated"
       type = created ? "youtrack.issue.created" : "youtrack.comment.mentioned"
-      text = created ? [issue["summary"], issue["description"]].compact.join("\n\n") : comment["text"]
+      text = created ? [ issue["summary"], issue["description"] ].compact.join("\n\n") : comment["text"]
       {
         event_type: type, subject: issue["id"],
         data: {

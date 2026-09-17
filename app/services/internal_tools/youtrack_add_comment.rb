@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 module InternalTools
   class YoutrackAddComment < Base
     include Concerns::YoutrackContext

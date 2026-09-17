@@ -1,11 +1,12 @@
 # frozen_string_literal: true
+
 module InternalTools
   class YoutrackGetIssueComments < Base
     include Concerns::YoutrackContext
     tool do
       display_name "YouTrack Get Issue Comments"; description "List comments on an issue in the connected project."
       tags :youtrack; inject_when :workflow_step_session; requires_integration :youtrack
-      input_schema({ type: "object", required: ["issue_id"], properties: { issue_id: { type: "string" }, top: { type: "integer" }, skip: { type: "integer" } } })
+      input_schema({ type: "object", required: [ "issue_id" ], properties: { issue_id: { type: "string" }, top: { type: "integer" }, skip: { type: "integer" } } })
     end
     def execute
       with_youtrack do |c, _|

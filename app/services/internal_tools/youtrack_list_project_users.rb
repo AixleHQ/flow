@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 module InternalTools
   class YoutrackListProjectUsers < Base
     include Concerns::YoutrackContext
