@@ -565,14 +565,6 @@ module Agents
       %w[/var/log/context.log]
     end
 
-    # The subset of #session_log_paths whose CONTENT this adapter parses in
-    # #collect_usage. Those have to come back through the application, so they keep the
-    # bounded read; everything else the container can upload to storage itself, which is
-    # what removes the size cap (Sessions::LogCollector).
-    # @return [Array<String>]
-    def usage_log_paths
-      []
-    end
 
     # Collect and verify usage data at session cleanup.
     # Called from AgentSessionStrategy#before_cleanup after artifact collection.
