@@ -189,7 +189,11 @@ module Agents
     def default_env_vars(_session)
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => "cursor.sh"
+        # cursor.com as well as cursor.sh: the filter is a suffix match, Cursor has been
+        # moving off the .sh domain (the installer already lives on cursor.com), and our
+        # own server-side refresh has been answered with a 404 HTML page since 2026-09-05
+        # — which host the CLI actually talks to is exactly what the log has to show.
+        "MITM_TRACKED_DOMAINS" => "cursor.sh,cursor.com"
       }
     end
 

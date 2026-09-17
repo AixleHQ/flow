@@ -255,7 +255,42 @@ the `ANTHROPIC_AUTH_TOKEN` probe (2). For anything the platform runs unattended,
 path remains the strategic answer — an API key has no refresh token, so there is nothing to
 race.
 
-### Layer 4 — make expiry legible — **status and mail landed; the event log open**
+### Layer 4 — make expiry legible — **status, mail and HTTP capture landed; the event log open**
+
+**What the proxy could and could not see (measured on production, 2026-09-17).** Every agent
+image runs a MITM proxy and every runtime's traffic passes through it, but what reaches us is
+decided twice — by `MITM_TRACKED_DOMAINS` and by whether the adapter collects the log at all.
+Both were set so that no runtime's authentication was visible:
+
+| runtime | sessions / 30d | `http.log` rows | hosts actually captured | auth traffic |
+|---|---|---|---|---|
+| `claude_code` | — | 621 | `api.anthropic.com` only | **none** — `platform.claude.com` was not tracked |
+| `codex` | — | 5 | `chatgpt.com`, `ab.chatgpt.com` | **none** — `auth.openai.com` was not tracked |
+| `cursor_cli` | 138 | 44 | `api2.cursor.sh`, `api3.cursor.sh` | **none** — the filter is a suffix match and Cursor's auth lives on `cursor.com` |
+| `kiro_cli` | 22 | 9 | kiro.dev + amazonaws.com hosts | **yes**: `POST oidc.us-west-2.amazonaws.com/token` (21), `POST prod.us-east-1.auth.desktop.kiro.dev/refreshToken` (17), plus `client/register` and `device_authorization` |
+| `antigravity_cli` | 51 | **0** | — | the adapter never collected the log |
+| `gemini_cli` | 8 | **0** | — | nothing reached the proxy at all |
+| `grok` | 11 | **0** | — | nothing reached the proxy at all |
+
+Two conclusions worth keeping. Kiro's live traffic **confirms the protocol this branch
+implements**, including that the IdC path answers on the registration's own region
+(`us-west-2`) rather than the profile's. And `gemini_cli` / `grok` produce no records at all
+despite the proxy being started and their adapters collecting the path — the likely cause is a
+client that ignores `HTTP(S)_PROXY` (Node's `fetch`/undici does, on the image's Node 22), which
+is its own investigation.
+
+**Shipped here:** the auth hosts join each runtime's tracked domains, `antigravity_cli` starts
+collecting its log, and — first, because the rest would be unsafe without it — the logger stops
+writing credentials. Credential-bearing headers (`Authorization`, `Cookie`, `x-api-key`, …) are
+replaced on every entry, which also closes a pre-existing exposure: API hosts carry the access
+token on *every* request, so those tokens were already landing in stored session logs. An auth
+endpoint's request and response bodies are dropped entirely and never buffered — that is where
+refresh tokens live, and a refresh token is the whole grant rather than eight hours of one. The
+endpoint, method, status and timing survive, which is what makes the lifecycle observable.
+
+**Note:** the logger change is baked into the agent images, so it takes effect only after a
+rebuild; the tracked-domain changes are app-side and take effect on the next session.
+
 
 - **An event record per refresh attempt** (`credential_refresh_events`, or a structured log
   line plus a counter if a table is too much): credential, agent, block, trigger

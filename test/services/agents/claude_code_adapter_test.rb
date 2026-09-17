@@ -439,7 +439,10 @@ module Agents
       env = @adapter.default_env_vars(@session)
 
       assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
-      assert_equal "api.anthropic.com", env["MITM_TRACKED_DOMAINS"]
+      # The OAuth host is tracked alongside the inference host: without it the log says
+      # nothing about when this credential was renewed or by whom.
+      assert_equal "api.anthropic.com,platform.claude.com,console.anthropic.com",
+                   env["MITM_TRACKED_DOMAINS"]
       assert_includes env["OTEL_RESOURCE_ATTRIBUTES"], @session.route_token
       assert_equal "90000", env["MCP_TIMEOUT"]
     end

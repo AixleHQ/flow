@@ -371,7 +371,9 @@ module Agents
     def default_env_vars(session)
       {
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => "chatgpt.com",
+        # auth.openai.com is the token endpoint the CLI refreshes against; chatgpt.com
+        # alone showed inference and nothing about the login's lifecycle.
+        "MITM_TRACKED_DOMAINS" => "chatgpt.com,auth.openai.com",
         "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}"
       }
     end
