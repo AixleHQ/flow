@@ -86,7 +86,7 @@
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
     "use-debounce": "^10.1.0",
-    "zod": "^4.6.4"
+    "zod": "^4.6.5"
   },
   "resolutions": {
     "@codemirror/state": "^6.7.1",
