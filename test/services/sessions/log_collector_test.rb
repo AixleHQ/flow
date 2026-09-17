@@ -175,14 +175,25 @@ module Sessions
       assert_not_nil @session.session_logs.find_by(name: "context.log")
     end
 
-    test "keeps the bounded read for a log an adapter parses for usage" do
+    test "hands an uploaded log back as a stream rather than a String" do
+      @runtime.fs["/var/log/mitm/http.log"] = "{\"direction\":\"response\"}\n" * 3
+
+      result = with_filters { collect(cache_storage_key: presigned_cache) }
+
+      source = result.contents["logs/http.log"]
+      assert_kind_of LogSource, source
+      assert_equal 3, source.each_line.count
+    end
+
+    # A log an adapter parses for usage takes the same direct path as every other: the
+    # transfer out of the container is what used to fail, not the parsing.
+    test "uploads the log an adapter parses for usage like any other" do
       @adapter = Agents::CursorCliAdapter.new
       @runtime.fs["/var/log/mitm/http.log"] = "POST /v1/messages\n"
 
       with_filters { collect(cache_storage_key: presigned_cache) }
 
-      assert_not_includes @runtime.uploads.map { |u| u[:path] }, "/var/log/mitm/http.log"
-      assert_includes @runtime.execs.map { |c| c.join(" ") }.join, "tail -c"
+      assert_includes @runtime.uploads.map { |u| u[:path] }, "/var/log/mitm/http.log"
     end
 
     test "falls back to the bounded read when the upload fails, and says so" do

@@ -30,9 +30,10 @@ module Sessions
   # here, which forced every byte through this process; now that the container scrubs its
   # own logs as it writes them (docker/base/logger/aixle_redact.py), it can hand them
   # straight to object storage over a presigned PUT and this process only records the key.
-  # Two things still take the bounded path, and both on purpose: a container built before
-  # those filters shipped, detected rather than assumed, and a log whose CONTENT an
-  # adapter parses for usage (#usage_log_paths).
+  # One thing still takes the bounded path, and on purpose: a container built before those
+  # filters shipped, detected rather than assumed. A log #collect_usage parses is not an
+  # exception — it is handed back as a Sessions::LogSource that streams the stored object,
+  # because the transfer out of the container is what used to fail, not the parsing.
   class LogCollector
     # Chosen against the cleanup phase's 120-second budget, not against storage: the read
     # is one exec per file and the upload one S3 PUT, and several megabytes of either is
@@ -87,7 +88,8 @@ module Sessions
         name = File.basename(path)
 
         if direct_upload?(path) && (uploaded = upload_from_container(path, size, name))
-          persist(name, uploaded, size)
+          log = persist(name, uploaded, size)
+          contents["logs/#{name}"] = LogSource.new(log.file, size: size)
           count += 1
           next
         end
@@ -150,22 +152,20 @@ module Sessions
       ]
     end
 
-    # Whether this file can go straight from the container to storage. Three conditions,
+    # Whether this file can go straight from the container to storage. Two conditions,
     # each one a way the direct path would otherwise be wrong:
     #
     #   * the container scrubs its own logs. Without that the bytes would reach storage
     #     carrying whatever the agent read through get_config_item — so an image built
     #     before those filters shipped keeps the path where this process scrubs;
-    #   * nothing here parses the file. #collect_usage reads some of them
-    #     (`artifacts["logs/http.log"]`), and those have to come back through us;
     #   * the storage can sign a PUT at all. In development and test it is a filesystem
     #     or a memory store, and there is nothing to upload to.
+    #
+    # A log #collect_usage parses is no longer an exception: it is handed back as a
+    # Sessions::LogSource, which reads the stored object a line at a time, and every
+    # parser was already written against `each_line`.
     def direct_upload?(path)
-      @container_redacts && !usage_log_paths.include?(path) && cache_storage.respond_to?(:presign)
-    end
-
-    def usage_log_paths
-      @usage_log_paths ||= Array(adapter.try(:usage_log_paths))
+      @container_redacts && cache_storage.respond_to?(:presign)
     end
 
     # Hands the container a URL it can PUT to and lets it do the transfer. Nothing about
@@ -265,7 +265,8 @@ module Sessions
 
     # `body` is either the bytes this process read or a file the container has already
     # put in cache storage; in the second case the save promotes it to permanent storage
-    # with a server-side copy, so the bytes never travel through here at all.
+    # with a server-side copy, so the bytes never travel through here at all. Returns the
+    # record, because a caller that handed over an upload has no other way to read it back.
     #
     # The name is the basename, so the keys adapters already read
     # (`artifacts["logs/http.log"]`) keep working. For a transcript that basename is the
@@ -286,7 +287,7 @@ module Sessions
       end
 
       log.save!
-      name
+      log
     end
 
     def persist_report

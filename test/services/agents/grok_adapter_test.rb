@@ -377,6 +377,27 @@ module Agents
       assert_equal 50, stat.events_data.first.dig("tokenUsage", "reasoningTokens")
     end
 
+    # The log is a String only while it is small enough to have come through this process.
+    # A container that uploaded its own hands back a Sessions::LogSource, and the parser
+    # must not be able to tell — it was always written against `each_line`.
+    test "collect_usage reads a streamed log exactly as it reads a String" do
+      stub_request(:get, GrokAdapter::MODELS_URL).to_return(status: 401, body: "")
+      content = "#{mitm_line(chat_completion_body)}\n"
+      io = StringIO.new(content)
+      io.define_singleton_method(:original_filename) { "http.log" }
+      stored = SessionLog.create!(terminal_session: @session, name: "http.log", file: io,
+                                  file_size: content.bytesize, content_type: "text/plain")
+
+      @adapter.collect_usage(@session, {
+        "logs/http.log" => Sessions::LogSource.new(stored.file, size: content.bytesize)
+      })
+
+      stat = @session.reload.usage_statistic
+      assert_equal 1_000, stat.input_tokens
+      assert_equal 200, stat.output_tokens
+      assert_equal [ "grok-4.5" ], stat.models
+    end
+
     # The Responses API reports the same counts under different names; a build that
     # speaks it must not silently record zero usage.
     test "collect_usage understands the Responses API field names too" do
