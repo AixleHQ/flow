@@ -68,4 +68,4 @@ A customer's IT department connects their own identity provider, restricts their
 
 ## Open questions
 
-- IdP-initiated SSO inverts the "authenticate, then enter a company" order the entry gate assumes. Enterprise buyers expect it and the sidecar supports it, but the gate was not designed for it. Resolve during the CAP-5 spike.
+- IdP-initiated SSO inverts the "authenticate, then enter a company" order the entry gate assumes. **Withdrawn with CAP-5:** per-company OIDC is SP-initiated, so nothing in the shipped flow starts at the identity provider. It returns only if SAML ever does.
