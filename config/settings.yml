@@ -368,10 +368,12 @@ agents:
     kiro_cli: <%= ENV['AGENT_IMAGE_KIRO_CLI'] %>
   mcp:
     startup_timeout_ms: <%= ENV['AGENT_MCP_STARTUP_TIMEOUT_MS'] || 90000 %>
-  # Where the in-container watcher reports a token the CLI rotated. Reached over the
-  # docker network like cloud.credentials_url — never a public host, since the request
-  # carries a per-session write-back key.
-  credential_sync_url: <%= ENV['AGENT_CREDENTIAL_SYNC_URL'] || 'http://web:4002/agents/credentials' %>
+  # Where the in-container watcher reports a token the CLI rotated. Derived from
+  # `internal_base` like mcp.server_url and cloud.credentials_url, so all three move
+  # together when a deployment's internal host does — a hardcoded default here would
+  # send the report to whatever answers on `web` instead. Never a public host: the
+  # request carries a per-session write-back key.
+  credential_sync_url: <%= ENV['AGENT_CREDENTIAL_SYNC_URL'] || "#{internal_base}/agents/credentials" %>
 
 docker:
   network: <%= ENV['DOCKER_NETWORK'] || 'app_default' %>
