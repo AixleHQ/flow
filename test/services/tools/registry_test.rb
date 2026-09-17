@@ -48,7 +48,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     defs = Tools::Registry.definitions.values
 
     assert_equal 30, defs.count { |d| d.tags.include?(:builder) }
-    assert_equal 22, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
+    assert_equal 29, defs.count { |d| d.inject_rules.include?(:workflow_step_session) }
     assert_equal 3, defs.count { |d| d.inject_rules.intersect?(%i[container_tools_present non_interactive_session]) }
 
     # Azure is injected rather than picked, so every one of its tools must
