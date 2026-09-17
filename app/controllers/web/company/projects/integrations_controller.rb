@@ -94,7 +94,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
   def destroy
     integration = Integration.visible_for_project(current_project).find(params[:id])
-    if integration.company_wide? && !current_project_membership&.admin?
+    if integration.project_id.nil? && !current_project_membership&.admin?
       return head :forbidden
     end
     Integration.transaction do
