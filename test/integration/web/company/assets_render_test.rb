@@ -21,4 +21,18 @@ class Web::Company::AssetsRenderTest < ActionDispatch::IntegrationTest
       props[:assets].any? { |a| a[:id] == @asset.id }
     end
   end
+
+  test "index includes the company's folders, sorted by path" do
+    create(:folder, path: "reports", scope: @company, created_by: @user)
+    create(:folder, path: "dashboard", scope: @company, created_by: @user)
+    other_company = create(:company)
+    create(:folder, path: "unrelated", scope: other_company, created_by: @user)
+
+    get company_assets_path
+
+    assert_response :success
+    assert_inertia_props do |props|
+      props[:folders].map { |f| f[:path] } == %w[dashboard reports]
+    end
+  end
 end

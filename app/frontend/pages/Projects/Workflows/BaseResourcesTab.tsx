@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
+import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { type ToolGroup } from 'shared/lib/toolPicker';
 
@@ -27,7 +28,7 @@ interface BaseResourcesTabProps {
   toolGroups: ToolGroup[];
   skills: NamedItem[];
   mcpServers: NamedItem[];
-  assets: NamedItem[];
+  assets: AssetPickerItem[];
   repositories: NamedItem[];
   configItems: ConfigItemPicker[];
   readOnly: boolean;
@@ -112,7 +113,7 @@ export function BaseResourcesTab({
 
         {/* 2-column grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          {/* Tools alone are picked through the group tree — every other list is a flat MultiSelect. */}
+          {/* Tools are picked through the group tree, assets through the folder tree — the rest are flat MultiSelects. */}
           <Field label="Tools" isEmpty={workflow.baseToolIds.length === 0} emptyHint="None added">
             <ToolPicker
               tools={tools}
@@ -155,10 +156,10 @@ export function BaseResourcesTab({
               },
               {
                 label: 'Assets',
-                placeholder: 'Select assets…',
-                data: toSelectData(assets),
-                value: toStringArr(workflow.baseAssetIds),
-                onChange: (v: string[]) => onWorkflowChange('baseAssetIds', toNumberArr(v)),
+                placeholder: '',
+                data: [],
+                value: [],
+                onChange: () => {},
                 isEmpty: workflow.baseAssetIds.length === 0,
                 supersededByInherit: true,
                 emptyHint: 'None added',
@@ -192,23 +193,34 @@ export function BaseResourcesTab({
             ] as const
           ).map(({ label, placeholder, data, value, onChange, isEmpty, supersededByInherit, emptyHint }) => (
             <Field key={label} label={label} isEmpty={isEmpty} emptyHint={emptyHint}>
-              <MultiSelect
-                data={data}
-                value={[...value]}
-                onChange={onChange}
-                disabled={readOnly || (supersededByInherit && workflow.inheritAllProjectResources)}
-                searchable
-                placeholder={placeholder}
-                styles={{
-                  input: {
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 5,
-                    fontSize: 13,
-                    minHeight: 36,
-                  },
-                }}
-              />
+              {label === 'Assets' ? (
+                <AssetPicker
+                  assets={assets}
+                  value={workflow.baseAssetIds}
+                  onChange={(ids) => onWorkflowChange('baseAssetIds', ids)}
+                  disabled={readOnly || (supersededByInherit && workflow.inheritAllProjectResources)}
+                  placeholder="Select assets…"
+                  aria-label="Assets"
+                />
+              ) : (
+                <MultiSelect
+                  data={data}
+                  value={[...value]}
+                  onChange={onChange}
+                  disabled={readOnly || (supersededByInherit && workflow.inheritAllProjectResources)}
+                  searchable
+                  placeholder={placeholder}
+                  styles={{
+                    input: {
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border)',
+                      borderRadius: 5,
+                      fontSize: 13,
+                      minHeight: 36,
+                    },
+                  }}
+                />
+              )}
             </Field>
           ))}
         </div>

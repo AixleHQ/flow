@@ -8,7 +8,8 @@ class Web::Company::AssetsController < Web::Company::ApplicationController
                             .order(updated_at: :desc)
 
     props = {
-      assets: assets.map { |a| AssetResource.new(a).to_h }
+      assets: assets.map { |a| AssetResource.new(a).to_h },
+      folders: current_company.folders.order(:path).map { |f| FolderResource.new(f).to_h }
     }
 
     if params[:history_asset_id].present?

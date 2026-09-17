@@ -53,7 +53,15 @@ module MCP
       return unauthorized if needs_token_but_has_none?
 
       Result.new(status: :ok, tools: fingerprint(list_tools))
-    rescue StandardError => e
+    rescue StandardError, LoadError => e
+      # LoadError is caught alongside StandardError (it descends from
+      # ScriptError, so it would otherwise escape) because the gem `require`s
+      # its optional dependencies lazily, inside the response path: an SSE
+      # response with `event_stream_parser` missing from the bundle raises one
+      # here. A gem that cannot load is our misconfiguration, but a probe is
+      # allowed to fail — reporting it as a probe failure keeps the connector
+      # installer on its error path instead of 500ing the request.
+      #
       # An MCP server that needs a token answers 401, which the SDK surfaces as
       # an unauthorized request error. That is a fact about the server, not a
       # failure of ours — the installer reads it to decide the server needs an

@@ -94,6 +94,7 @@ module Users
       transition = ColumnTransition.create!(board_task: task, to_column: column,
                                             actor: @user, actor_type: :human)
       comment = create(:task_comment, board_task: task, author: @user)
+      folder = create(:folder, path: "docs", scope: other_project, created_by: @user)
 
       PermanentDeletionService.call(user: @user, actor: @actor)
 
@@ -101,6 +102,7 @@ module Users
       assert_nil activity.actor_id
       assert_nil transition.reload.actor_id
       assert_nil comment.reload.author_id
+      assert_nil folder.reload.created_by_id
     end
 
     test "nullifies invited_by on memberships this user created" do
