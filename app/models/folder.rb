@@ -11,7 +11,9 @@
 # props), but they can never be deleted because they can never be empty.
 class Folder < ApplicationRecord
   belongs_to :scope, polymorphic: true
-  belongs_to :created_by, class_name: "User"
+  # Optional so a folder outlives the user who created it — permanent user
+  # deletion nullifies the column (see NullifyFoldersCreatedByFk).
+  belongs_to :created_by, class_name: "User", optional: true
 
   PATH_FORMAT = /\A[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_-]+)*\z/
 

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_17_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -422,7 +422,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
 
   create_table "folders", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.bigint "created_by_id", null: false
+    t.bigint "created_by_id"
     t.string "path", null: false
     t.bigint "scope_id", null: false
     t.string "scope_type", null: false
@@ -1335,7 +1335,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
   add_foreign_key "company_memberships", "companies"
   add_foreign_key "company_memberships", "users"
   add_foreign_key "company_memberships", "users", column: "invited_by_id", on_delete: :nullify
-  add_foreign_key "folders", "users", column: "created_by_id"
+  add_foreign_key "folders", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
   add_foreign_key "integration_data", "integrations", on_delete: :cascade

@@ -67,9 +67,9 @@ class FolderTest < ActiveSupport::TestCase
     assert { validator.options[:in] == %w[Company Project] }
   end
 
-  test "created_by is required" do
+  test "is valid without a creator, so it survives a permanent user deletion" do
     folder = build(:folder, scope: @project, created_by: nil)
-    assert { !folder.valid? }
+    assert { folder.valid? }
   end
 
   # ====== Derived path attributes ======
