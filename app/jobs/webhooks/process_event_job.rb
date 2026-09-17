@@ -40,8 +40,27 @@ module Webhooks
     def normalize(endpoint, payload)
       case endpoint.provider.to_s
       when "slack"   then normalize_slack(endpoint, payload)
+      when "youtrack" then normalize_youtrack(endpoint, payload)
       else                normalize_generic(endpoint, payload)
       end
+    end
+
+    def normalize_youtrack(endpoint, payload)
+      issue = payload["issue"].to_h
+      comment = payload["comment"].to_h
+      created = payload["event"] == "issueCreated"
+      type = created ? "youtrack.issue.created" : "youtrack.comment.mentioned"
+      text = created ? [issue["summary"], issue["description"]].compact.join("\n\n") : comment["text"]
+      {
+        event_type: type, subject: issue["id"],
+        data: {
+          "integration_id" => endpoint.config["integration_id"], "youtrack_project_id" => issue.dig("project", "id"),
+          "issue_id" => issue["id"], "issue_readable_id" => issue["idReadable"],
+          "summary" => issue["summary"], "description" => issue["description"], "text" => text,
+          "comment_id" => comment["id"], "actor_id" => (comment["author"] || issue["reporter"]).to_h["id"],
+          "actor_login" => (comment["author"] || issue["reporter"]).to_h["login"], "occurred_at" => payload["timestamp"]
+        }.compact
+      }
     end
 
     def normalize_slack(endpoint, payload)

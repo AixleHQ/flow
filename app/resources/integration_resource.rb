@@ -127,4 +127,30 @@ class IntegrationResource < ApplicationResource
   attribute :slack_request_url do |integration|
     integration.slack? ? integration.settings&.dig("request_url") : nil
   end
+
+  typelize :string?
+  attribute :youtrack_callback_url do |integration|
+    endpoint = integration.youtrack? ? integration.youtrack_webhook_endpoint : nil
+    endpoint ? "https://#{Settings.domain}/webhooks/in/#{endpoint.slug}" : nil
+  end
+
+  typelize :string?
+  attribute :youtrack_base_url do |integration|
+    integration.youtrack? ? integration.youtrack_base_url : nil
+  end
+
+  typelize :string?
+  attribute :youtrack_project_name do |integration|
+    integration.youtrack? ? integration.settings&.dig("project_name") : nil
+  end
+
+  typelize :string?
+  attribute :youtrack_bot_login do |integration|
+    integration.youtrack? ? integration.settings&.dig("bot_login") : nil
+  end
+
+  typelize :string?
+  attribute :youtrack_webhook_header do |integration|
+    integration.youtrack? ? integration.settings&.dig("webhook_header") : nil
+  end
 end

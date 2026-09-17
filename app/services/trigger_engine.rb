@@ -107,7 +107,9 @@ class TriggerEngine
     def dispatch(event)
       return [] if event.project_id.blank? && event.company_id.blank?
 
-      TriggerBinding.for_event(event).select { |b| b.matches?(event.data) }.map do |binding|
+      bindings = TriggerBinding.for_event(event)
+      bindings = bindings.where(integration_id: event.data["integration_id"]) if event.event_type.start_with?("youtrack.")
+      bindings.select { |b| b.matches?(event.data) }.map do |binding|
         fire_for_binding(binding: binding, event: event, task: event.board_task, actor: binding.created_by)
       end
     end
@@ -197,7 +199,7 @@ class TriggerEngine
             workflow: workflow, project: project, user: actor,
             task: subject, mode: :non_interactive,
             input_asset_ids: input_asset_ids_for(event, project),
-            shared_context: slack_run_context(event)
+            shared_context: slack_run_context(event).merge(youtrack_run_context(event, subject))
           )
           started = result.try(:persisted?)
           dispatch.update!(
@@ -279,7 +281,7 @@ class TriggerEngine
     # Resolve the board task a binding's run should be about, per subject_policy.
     def resolve_subject(binding:, event:, fallback_task:)
       case binding.subject_policy.to_s
-      when "existing_task" then event.board_task || fallback_task
+      when "existing_task" then youtrack_subject(binding, event) || event.board_task || fallback_task
       when "create_task"   then create_subject_task(binding, event)
       else nil # none → task-less, project-level run
       end
@@ -290,11 +292,12 @@ class TriggerEngine
       return nil if column.nil?
 
       # Create directly (not via TaskService) so we don't re-enter check_auto_trigger.
-      column.board.board_tasks.create!(
-        board_column: column,
-        title: render_title(binding.subject_title_template, event),
-        description: render_subject_body(event)
-      )
+      BoardTask.transaction do
+        task = column.board.board_tasks.create!(board_column: column,
+          title: render_title(binding.subject_title_template, event), description: render_subject_body(event))
+        create_external_resource!(task, binding, event) if event.event_type.start_with?("youtrack.")
+        task
+      end
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("[TriggerEngine] create_task failed for binding ##{binding.id}: #{e.message}")
       nil
@@ -321,6 +324,36 @@ class TriggerEngine
         key = Regexp.last_match(1)
         key == "date" ? (event.occurred_at || Time.current).to_date.to_s : event.data[key].to_s
       end.strip.presence || event.event_type
+    end
+
+    def create_external_resource!(task, binding, event)
+      integration = binding.integration
+      task.external_resources.create!(type: "youtrack_issue", external_instance: integration.youtrack_base_url,
+        external_id: event.data["issue_id"], data: { "readable_id" => event.data["issue_readable_id"],
+          "youtrack_project_id" => event.data["youtrack_project_id"], "workflow_id" => binding.workflow_id,
+          "binding_id" => binding.id, "created_via_integration_id" => integration.id }.compact)
+    end
+
+    def youtrack_subject(binding, event)
+      return unless event.event_type.start_with?("youtrack.") && binding.integration
+      links = ExternalResource.joins(board_task: :board)
+        .where(type: "youtrack_issue", external_instance: binding.integration.youtrack_base_url,
+          external_id: event.data["issue_id"], boards: { project_id: binding.project_id })
+        .merge(BoardTask.active).order(:created_at)
+      same_workflow = links.select { |link| link.data["workflow_id"].to_s == binding.workflow_id.to_s }
+      return same_workflow.first.board_task if same_workflow.any?
+      links.one? ? links.first.board_task : nil
+    end
+
+    def youtrack_run_context(event, task)
+      return {} unless event.event_type.start_with?("youtrack.")
+      data = event.data.slice("integration_id", "youtrack_project_id", "issue_id", "issue_readable_id",
+        "comment_id", "actor_id", "actor_login", "summary", "description", "text", "occurred_at")
+      if task
+        data["linked_task"] = { "id" => task.id, "title" => task.title, "column" => task.board_column&.name,
+          "archived" => task.archived?, "description" => task.description.to_s.truncate(500, omission: "… [truncated]") }
+      end
+      { "youtrack" => data.compact }
     end
 
     # Internal events carry no external dedup_key → key on the event id so a

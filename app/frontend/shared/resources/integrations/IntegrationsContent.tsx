@@ -63,6 +63,11 @@ export interface Integration {
   coderMachinePrefix?: string | null;
   coderLockTtlMinutes?: number | null;
   slackRequestUrl?: string | null;
+  youtrackCallbackUrl?: string | null;
+  youtrackBaseUrl?: string | null;
+  youtrackProjectName?: string | null;
+  youtrackBotLogin?: string | null;
+  youtrackWebhookHeader?: string | null;
   azureAuthMode?: string | null;
   azureOrganization?: string | null;
   azureProjectName?: string | null;
@@ -104,6 +109,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   coder: 'Coder',
   slack: 'Slack',
   azure_devops: 'Azure DevOps',
+  youtrack: 'YouTrack',
 };
 
 const SCOPE_COLORS: Record<string, string> = {
@@ -127,6 +133,12 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
   const [gitlabLoading, setGitlabLoading] = useState(false);
+  const [youtrackOpen, setYoutrackOpen] = useState(false);
+  const [youtrackUrl, setYoutrackUrl] = useState('');
+  const [youtrackToken, setYoutrackToken] = useState('');
+  const [youtrackProjectId, setYoutrackProjectId] = useState('');
+  const [youtrackWebhookToken, setYoutrackWebhookToken] = useState('');
+  const [youtrackLoading, setYoutrackLoading] = useState(false);
 
   const [coderOpen, setCoderOpen] = useState(false);
   const [coderUrl, setCoderUrl] = useState('');
@@ -254,6 +266,20 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
     );
   }, [basePath, gitlabPat]);
 
+  const handleConnectYoutrack = useCallback(() => {
+    setYoutrackLoading(true);
+    router.post(basePath, {
+      provider: 'youtrack', baseUrl: youtrackUrl.trim(), permanentToken: youtrackToken.trim(),
+      youtrackProjectId: youtrackProjectId.trim(), webhookHeader: 'X-YouTrack-Token',
+      webhookToken: youtrackWebhookToken,
+    }, {
+      preserveScroll: true,
+      onSuccess: () => setYoutrackOpen(false),
+      onError: () => notifications.show({ message: 'Failed to connect YouTrack', color: 'red' }),
+      onFinish: () => setYoutrackLoading(false),
+    });
+  }, [basePath, youtrackProjectId, youtrackToken, youtrackUrl, youtrackWebhookToken]);
+
   const handleConnectCoder = useCallback(() => {
     const trimmedUrl = coderUrl.trim();
     const trimmedToken = coderToken.trim();
@@ -379,6 +405,9 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
                 <Menu.Item leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
                   Coder
                 </Menu.Item>
+                <Menu.Item leftSection={<IconLink size={16} />} onClick={() => setYoutrackOpen(true)}>
+                  YouTrack
+                </Menu.Item>
                 {isProjectContext && azureAvailable && (
                   <Menu.Item leftSection={<IconBrandAzure size={16} />} onClick={() => setAzureOpen(true)}>
                     Azure DevOps
@@ -453,6 +482,9 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
                     </Button>
                     <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
                       Coder
+                    </Button>
+                    <Button variant="outline" leftSection={<IconLink size={16} />} onClick={() => setYoutrackOpen(true)}>
+                      YouTrack
                     </Button>
                     {isProjectContext && azureAvailable && (
                       <Button
@@ -543,6 +575,25 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
                                 )}
                               </CopyButton>
                             </Group>
+                          )}
+                          {integration.provider === 'youtrack' && (
+                            <Stack gap={1}>
+                              <Text fz={11} c="dimmed">
+                                {integration.youtrackProjectName ?? 'Project'} · connected as @{integration.youtrackBotLogin ?? 'unknown'}
+                              </Text>
+                              {integration.youtrackCallbackUrl && (
+                                <Group gap={4} wrap="nowrap">
+                                  <Text fz={11} c="dimmed" ff="JetBrains Mono, monospace" truncate maw={180}>
+                                    {integration.youtrackWebhookHeader}: {integration.youtrackCallbackUrl}
+                                  </Text>
+                                  <CopyButton value={integration.youtrackCallbackUrl}>
+                                    {({ copied, copy }) => <ActionIcon aria-label="YouTrack callback URL" variant="subtle" size="xs" onClick={copy}>
+                                      {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                                    </ActionIcon>}
+                                  </CopyButton>
+                                </Group>
+                              )}
+                            </Stack>
                           )}
                           {/* Which Azure project this connection is pinned to, and
                               WHOSE identity it acts as — a PAT connection acts as
@@ -737,6 +788,30 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
               Cancel
             </Button>
             <Button onClick={handleConnectGitlab} loading={gitlabLoading} disabled={!gitlabPat.trim()}>
+              Connect
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      <Modal opened={youtrackOpen} onClose={() => setYoutrackOpen(false)} title="Connect YouTrack" centered size="md">
+        <Stack gap="md">
+          <Text size="sm" c="dimmed">
+            Enter a permanent token and the database ID of one YouTrack project. After connecting, configure the
+            YouTrack Webhook Triggers app manually with the callback URL and header shown on the integration card.
+          </Text>
+          <TextInput label="Base URL" placeholder="https://company.youtrack.cloud" value={youtrackUrl}
+            onChange={(e) => setYoutrackUrl(e.currentTarget.value)} />
+          <PasswordInput label="Permanent token" value={youtrackToken}
+            onChange={(e) => setYoutrackToken(e.currentTarget.value)} />
+          <TextInput label="YouTrack project database ID" value={youtrackProjectId}
+            onChange={(e) => setYoutrackProjectId(e.currentTarget.value)} />
+          <PasswordInput label="Existing webhook token" description="The project-wide token configured in the Webhook Triggers app (minimum 32 characters)."
+            value={youtrackWebhookToken} onChange={(e) => setYoutrackWebhookToken(e.currentTarget.value)} />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setYoutrackOpen(false)}>Cancel</Button>
+            <Button onClick={handleConnectYoutrack} loading={youtrackLoading}
+              disabled={!youtrackUrl.trim() || !youtrackToken.trim() || !youtrackProjectId.trim() || youtrackWebhookToken.length < 32}>
               Connect
             </Button>
           </Group>

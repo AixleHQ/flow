@@ -26,7 +26,7 @@ module Api
               case kind
               when "column" then create_column_trigger
               when "webhook" then create_webhook_trigger
-              when "slack", "schedule", "event" then create_event_trigger(kind)
+              when "slack", "schedule", "event", "youtrack" then create_event_trigger(kind)
               else return render json: { errors: [ "Unsupported trigger kind: #{kind}" ] }, status: :unprocessable_entity
               end
 
@@ -98,6 +98,7 @@ module Api
               case kind
               when "slack"    then "slack.message"
               when "schedule" then "schedule.fired"
+              when "youtrack" then params.dig(:trigger, :event_type).to_s
               else params.dig(:trigger, :event_type).to_s.presence || "webhook.received"
               end
             binding = current_workflow.trigger_bindings.create!(
@@ -135,6 +136,7 @@ module Api
             params.require(:trigger).permit(
               :name, :trigger_mode, :enabled, :cooldown_seconds, :notify_on_failure,
               :subject_policy, :subject_column_id, :subject_title_template,
+              :integration_id,
               filter_predicate: {}, schedule_config: %i[cron timezone]
             )
           end
@@ -181,6 +183,7 @@ module Api
               subject_policy: binding.subject_policy,
               subject_column_id: binding.subject_column_id,
               subject_title_template: binding.subject_title_template,
+              integration_id: binding.integration_id,
               schedule_config: binding.schedule_config,
               cooldown_seconds: binding.cooldown_seconds,
               notify_on_failure: binding.notify_on_failure,
@@ -202,6 +205,7 @@ module Api
             case event_type
             when "slack.message" then "slack"
             when "schedule.fired" then "schedule"
+            when /\Ayoutrack\./ then "youtrack"
             when /\Awebhook\./ then "webhook"
             else "event"
             end

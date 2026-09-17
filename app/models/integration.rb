@@ -4,7 +4,7 @@ class Integration < ApplicationRecord
   include Encryptable
   extend Enumerize
 
-  enumerize :provider, in: %i[github gitlab linear coder slack azure_devops], predicates: true
+  enumerize :provider, in: %i[github gitlab linear coder slack azure_devops youtrack], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
@@ -17,6 +17,13 @@ class Integration < ApplicationRecord
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
   has_many :azure_devops_operations, dependent: :delete_all
   has_many :azure_devops_subscriptions, dependent: :destroy
+  has_one :youtrack_webhook_endpoint, -> { where(provider: "youtrack") },
+    class_name: "WebhookEndpoint", dependent: :destroy
+  has_many :trigger_bindings, dependent: :nullify
+
+  def youtrack_base_url = settings&.dig("base_url")
+  def youtrack_project_id = settings&.dig("youtrack_project_id")&.to_s
+  def youtrack_token = credentials_data["permanent_token"]
 
   validates :name, presence: true
   validates :provider, presence: true

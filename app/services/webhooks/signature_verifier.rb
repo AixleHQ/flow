@@ -12,18 +12,19 @@ module Webhooks
 
     DEFAULT_TOLERANCE = 300 # seconds (Slack/Stripe replay window)
 
-    def self.verify(strategy:, secret:, request:, raw_body:, tolerance: DEFAULT_TOLERANCE, now: Time.current)
+    def self.verify(strategy:, secret:, request:, raw_body:, config: {}, tolerance: DEFAULT_TOLERANCE, now: Time.current)
       new(strategy: strategy, secret: secret, request: request, raw_body: raw_body,
-          tolerance: tolerance, now: now).verify
+          config: config, tolerance: tolerance, now: now).verify
     end
 
-    def initialize(strategy:, secret:, request:, raw_body:, tolerance:, now:)
+    def initialize(strategy:, secret:, request:, raw_body:, config:, tolerance:, now:)
       @strategy = strategy.to_s
       @secret = secret.to_s
       @request = request
       @raw_body = raw_body.to_s
       @tolerance = tolerance
       @now = now
+      @config = config.to_h
     end
 
     def verify
@@ -82,7 +83,7 @@ module Webhooks
 
     # Optional per-endpoint override of the signature/token header name.
     def config_header
-      nil
+      @config["header"] || @config[:header]
     end
 
     def secure_eq?(left, right)

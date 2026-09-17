@@ -3,7 +3,7 @@
 class Web::Company::Projects::IntegrationsController < Web::Company::Projects::ApplicationController
   def index
     integrations = Integration.visible_for_project(current_project)
-                              .includes(:connected_by, :azure_devops_installation)
+                              .includes(:connected_by, :azure_devops_installation, :youtrack_webhook_endpoint)
                               .order(created_at: :desc)
 
     render inertia: "Projects/Integrations/IntegrationsPage", props: {
@@ -43,6 +43,11 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       )
     when "azure_devops"
       return create_azure_devops
+    when "youtrack"
+      Youtrack::IntegrationService.new(company: current_company, connected_by: current_user, project: current_project).create(
+        base_url: params[:base_url], permanent_token: params[:permanent_token],
+        youtrack_project_id: params[:youtrack_project_id], webhook_header: params[:webhook_header],
+        webhook_token: params[:webhook_token], name: params[:name])
     end
     # Slack connects via OAuth (see #slack_oauth_start + Web::Integrations::SlackOauthController),
     # not this paste-credentials path.
@@ -86,7 +91,11 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
   def destroy
     integration = Integration.for_project(current_project).find(params[:id])
-    integration.destroy
+    Integration.transaction do
+      integration.youtrack_webhook_endpoint&.update!(enabled: false) if integration.youtrack?
+      integration.trigger_bindings.update_all(enabled: false) if integration.respond_to?(:trigger_bindings)
+      integration.destroy
+    end
     redirect_to company_project_integrations_path(current_project), notice: "Integration removed"
   end
 

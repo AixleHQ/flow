@@ -2857,6 +2857,30 @@ function TaskDetailSidebar({
               </Stack>
             </Box>
           )}
+          {task.externalResources?.length > 0 && (
+            <Box>
+              <Text size="xs" c="dimmed" fw={600} tt="uppercase" mb={4}>
+                External resources ({task.externalResources.length})
+              </Text>
+              <Stack gap={4}>
+                {task.externalResources.map((resource) => (
+                  <Text
+                    key={`${resource.type}:${resource.url}`}
+                    component="a"
+                    href={resource.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    size="sm"
+                    c="brand"
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, textDecoration: 'none' }}
+                  >
+                    <IconLink size={12} />
+                    {resource.readableId}
+                  </Text>
+                ))}
+              </Stack>
+            </Box>
+          )}
         </Tabs.Panel>
 
         {/* Runs tab — hidden only for manual tasks that never ran (AC-22) */}
