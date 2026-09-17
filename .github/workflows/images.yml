@@ -72,8 +72,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ github.sha }}
-            AUTHOR_NAME=github-actions
-            AUTHOR_EMAIL=github-actions@users.noreply.github.com
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

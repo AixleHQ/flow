@@ -28,8 +28,6 @@ x-db-environment: &db-environment
 x-web-environment: &web-environment
   <<: *db-environment
   APP_VERSION: dev
-  AUTHOR_NAME: author
-  AUTHOR_EMAIL: email
   BUNDLE_PATH: /bundle_cache
   GEM_HOME: /bundle_cache
   GEM_PATH: /bundle_cache

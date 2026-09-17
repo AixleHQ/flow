@@ -4,27 +4,20 @@ module StubSupport
   # ===========================================================================
   # Session concurrency defaults
   #
-  # The size of a project/user session queue is read live from the environment,
-  # so a test that wants a small cap sets the same variable the deployment does.
-  # Each parallel worker is its own process, and tests inside one run serially,
-  # so mutating ENV here is confined to this test.
+  # The queue's deployment inputs are read from Settings, which loads them from
+  # the environment at boot — so a test that wants a small cap replaces the
+  # settings block rather than mutating the process environment. `nil` stands
+  # for an unset variable, and a non-numeric value for a ConfigMap typo.
   # ===========================================================================
 
-  def with_scope_defaults(project: 1, user: 1)
-    previous = ENV.slice(*SessionAdmissionPolicy::SCOPE_DEFAULTS.values.pluck(:variable))
-    ENV["SESSION_PROJECT_CONCURRENCY_DEFAULT"] = project.to_s
-    ENV["SESSION_USER_CONCURRENCY_DEFAULT"] = user.to_s
-    @_scope_defaults_restore = previous
-  end
-
-  def restore_scope_defaults
-    return unless defined?(@_scope_defaults_restore) && @_scope_defaults_restore
-
-    SessionAdmissionPolicy::SCOPE_DEFAULTS.each_value do |config|
-      value = @_scope_defaults_restore[config[:variable]]
-      value.nil? ? ENV.delete(config[:variable]) : ENV[config[:variable]] = value
-    end
-    @_scope_defaults_restore = nil
+  def with_scope_defaults(project: 1, user: 1, installation_limit: nil)
+    Settings.stubs(:session_admission).returns(
+      Hashie::Mash.new(
+        project_default: project,
+        user_default: user,
+        installation_limit: installation_limit
+      )
+    )
   end
 
   # ===========================================================================
@@ -99,7 +92,7 @@ module StubSupport
     Settings.stubs(:docker).returns(Hashie::Mash.new(network: "bridge"))
     Settings.stubs(:traefik).returns(Hashie::Mash.new(ws_base: "wss://test.example.com", internal_url: "http://traefik"))
     Settings.stubs(:mcp).returns(Hashie::Mash.new(server_url: "http://mcp.test/mcp"))
-    Settings.stubs(:otel).returns(Hashie::Mash.new(endpoint: "http://otel:4318", metrics_endpoint: "http://otel:4318/v1/metrics"))
+    Settings.stubs(:otel).returns(Hashie::Mash.new(endpoint: "http://otel:4318"))
     Settings.stubs(:container_asset_host).returns(nil)
     Settings.stubs(:kubernetes).returns(Hashie::Mash.new(namespace: "test-ns", ready_timeout: 0.1, ready_interval: 0))
   end
