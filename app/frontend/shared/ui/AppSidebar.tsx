@@ -20,6 +20,7 @@ import {
   IconPlugConnected,
   IconRobot,
   IconSettings,
+  IconShieldLock,
   IconSparkles,
   IconTerminal2,
   IconTool,
@@ -33,6 +34,7 @@ import { CreateProjectModal } from 'pages/Projects/CreateProjectModal';
 import { getInitials } from 'shared/lib/getInitials';
 import {
   companyAssetsPath,
+  companyAuthPoliciesPath,
   companyMembersPath,
   companyProjectAgentsPath,
   companyProjectAixleBuilderPath,
@@ -180,6 +182,12 @@ const companyNavGroups: NavGroup[] = [
     items: [
       { label: 'Assets', icon: <IconFiles size={18} />, path: companyAssetsPath(), adminOnly: true },
       { label: 'Members', icon: <IconUsers size={18} />, path: companyMembersPath() },
+      {
+        label: 'Sign-in methods',
+        icon: <IconShieldLock size={18} />,
+        path: companyAuthPoliciesPath(),
+        adminOnly: true,
+      },
     ],
   },
 ];

@@ -10,7 +10,10 @@ class Web::MagicLinksController < Web::ApplicationController
 
   # POST /login/magic
   def create
-    user = User.active.not_deleted.find_by(email: params[:email].to_s.strip.downcase)
+    # Stepping up: the address is already known, and asking a signed-in person to
+    # retype it would be theatre. Anonymous callers still supply one.
+    requested = params[:email].presence || (current_user&.email if signed_in?)
+    user = User.active.not_deleted.find_by(email: requested.to_s.strip.downcase)
 
     # Always the same answer, whether or not that address exists: the response
     # must not become an account-existence oracle.
