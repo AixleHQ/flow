@@ -50,8 +50,12 @@ Rails.application.configure do
   # Make template changes take effect immediately.
   config.action_mailer.perform_caching = false
 
-  # Set localhost to be used by links generated in mailer templates.
-  config.action_mailer.default_url_options = { host: "localhost", port: ENV.fetch("PORT", 4000).to_i }
+  # Mailer links deliberately inherit application.rb's default_url_options,
+  # which derive from Settings.domain/Settings.protocol and so honour DOMAIN.
+  # Overriding them here with a hardcoded host and the container-internal PORT
+  # sent every emailed link to the port the app listens on rather than the one
+  # the browser reaches it at — the two differ whenever the app is published
+  # under a different port, which is the normal self-hosted case.
 
   config.action_mailer.delivery_method = :letter_opener_web
   config.action_mailer.perform_deliveries = true
