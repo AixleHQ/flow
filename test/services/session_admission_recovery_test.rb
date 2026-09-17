@@ -124,6 +124,105 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_equal 0, stats[:pinned_reservations]
   end
 
+  # AD-5 holds the slot for a create nobody can account for, so a late Pod never
+  # lands on someone else's. Production showed the other edge of that: on
+  # 2026-09-17 the watchdog — itself only running because its supervisor had
+  # finally been restarted — reported a slot pinned for hours while the workload
+  # behind it was provably gone on every single pass. The pin has to end by
+  # itself, and the evidence it ends on is the absence this very pass proved.
+  test "a pinned reservation is not released by the first pass that proves absence" do
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    runtime.stubs(:session_absent?).returns(true)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert_nil admission.reload.released_at, "one look is not a settled absence"
+    assert op.reload.absent_since, "the pass that proved absence starts the clock"
+    assert_equal "uncertain", op.state
+  end
+
+  test "a pinned reservation is released once proven absence has held the window" do
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
+    # What earlier passes proved, without spending the window in real time.
+    op.update!(absent_since: 10.minutes.ago)
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    runtime.stubs(:session_absent?).returns(true)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert admission.reload.released_at, "an absence that held the window costs the installation nothing to end"
+    assert_equal SessionRuntimeOperation::ABANDONED, op.reload.state,
+      "the outcome was never learned, so it is abandoned rather than completed"
+    assert_match(/No workload existed/, op.error)
+    assert_equal 0, SessionAdmissionReconciler.snapshot[:pinned_reservations]
+  end
+
+  # The window measures uninterrupted absence. A pass that finds the workload
+  # again has to erase what earlier passes proved, or the window could be
+  # assembled out of moments that were never continuous — which is the one way
+  # this could hand a live workload's seat to somebody else.
+  test "a workload that reappears resets the confirmation clock" do
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
+    op.update!(absent_since: 10.minutes.ago)
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    # Present on the first look, and still present after the delete is accepted:
+    # deletion is asynchronous, so this pass proves nothing (AD-6).
+    runtime.stubs(:session_absent?).returns(false, false)
+    runtime.stubs(:cleanup_session)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert_nil admission.reload.released_at
+    assert_nil op.reload.absent_since, "a workload that exists invalidates every earlier proof"
+    assert_equal "uncertain", op.state
+  end
+
+  test "switching the release off leaves the slot pinned for a human" do
+    Settings.stubs(:session_admission).returns(Hashie::Mash.new(project_default: 1, pinned_release_enabled: false))
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
+    op.update!(absent_since: 1.hour.ago)
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    runtime.stubs(:session_absent?).returns(true)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert_nil admission.reload.released_at
+    assert_equal "uncertain", op.reload.state
+  end
+
   # Four days of production evidence: twelve reservations recorded
   # "RPCError: workflow not found" once a minute and were never cleaned up,
   # because the reconciler read Temporal's one definitive negative answer as

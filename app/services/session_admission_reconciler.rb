@@ -97,6 +97,11 @@ class SessionAdmissionReconciler
       operations_in_flight: SessionRuntimeOperation.where(state: "in_flight").count,
       uncertain_operations: SessionRuntimeOperation.where(state: "uncertain").count,
       pinned_reservations: SessionRuntimeOperation.pinning.count,
+      # Of those, the ones whose absence is already being timed. A pin that is
+      # counted here is on its way out; one that is not is either waiting for
+      # this pass to prove absence or waiting for a human, and only the second
+      # is worth waking anybody for.
+      pinned_confirming: SessionRuntimeOperation.pinning.where.not(absent_since: nil).count,
       cleanup_lag_seconds: age(lagging.minimum(:updated_at), now)
     }
   end
