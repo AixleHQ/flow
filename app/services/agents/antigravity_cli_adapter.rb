@@ -43,11 +43,15 @@ module Agents
     MODEL_PRICING = {
       "gemini-3.8-flash-high" => { input: 0.75, output: 3.75, cache_read: 0.075 },
       "gemini-3.8-flash-medium" => { input: 0.75, output: 3.75, cache_read: 0.075 },
+      "gemini-3.8-flash-low" => { input: 0.75, output: 3.75, cache_read: 0.075 },
       "gemini-3.7-flash-high" => { input: 0.75, output: 3.75, cache_read: 0.075 },
       "gemini-3.7-flash-medium" => { input: 0.75, output: 3.75, cache_read: 0.075 },
+      "gemini-3.7-flash-low" => { input: 0.75, output: 3.75, cache_read: 0.075 },
       "gemini-3.6-flash-high" => { input: 1.50, output: 9.00, cache_read: 0.15 },
       "gemini-3.6-flash-medium" => { input: 1.50, output: 9.00, cache_read: 0.15 },
+      "gemini-3.6-flash-low" => { input: 1.50, output: 9.00, cache_read: 0.15 },
       "gemini-pro-agent" => { input: 2.50, output: 15.00, cache_read: 0.25 },
+      "gemini-3.1-pro-low" => { input: 2.50, output: 15.00, cache_read: 0.25 },
       "claude-sonnet-4-6" => { input: 3.00, output: 15.00, cache_read: 0.30 },
       "claude-opus-4-6-thinking" => { input: 5.00, output: 25.00, cache_read: 0.50 },
       "gpt-oss-120b-medium" => { input: 0.15, output: 0.60, cache_read: 0.015 }
@@ -58,11 +62,15 @@ module Agents
     FALLBACK_MODELS = [
       { model_id: "gemini-3.8-flash-high", display_name: "Gemini 3.8 Flash (High)" },
       { model_id: "gemini-3.8-flash-medium", display_name: "Gemini 3.8 Flash (Medium)" },
+      { model_id: "gemini-3.8-flash-low", display_name: "Gemini 3.8 Flash (Low)" },
       { model_id: "gemini-3.7-flash-high", display_name: "Gemini 3.7 Flash (High)" },
       { model_id: "gemini-3.7-flash-medium", display_name: "Gemini 3.7 Flash (Medium)" },
+      { model_id: "gemini-3.7-flash-low", display_name: "Gemini 3.7 Flash (Low)" },
       { model_id: "gemini-3.6-flash-high", display_name: "Gemini 3.6 Flash (High)" },
       { model_id: "gemini-3.6-flash-medium", display_name: "Gemini 3.6 Flash (Medium)" },
+      { model_id: "gemini-3.6-flash-low", display_name: "Gemini 3.6 Flash (Low)" },
       { model_id: "gemini-pro-agent", display_name: "Gemini Pro" },
+      { model_id: "gemini-3.1-pro-low", display_name: "Gemini 3.1 Pro (Low)" },
       { model_id: "claude-sonnet-4-6", display_name: "Claude Sonnet 4.6 (Thinking)" },
       { model_id: "claude-opus-4-6-thinking", display_name: "Claude Opus 4.6 (Thinking)" },
       { model_id: "gpt-oss-120b-medium", display_name: "GPT-OSS 120B (Medium)" }
@@ -287,7 +295,10 @@ module Agents
 
     def usage_cost_cents(model, input_tokens, output_tokens, cache_read_tokens)
       pricing = MODEL_PRICING[model]
-      return 0.0 unless pricing
+      unless pricing
+        Rails.logger.warn("[AntigravityCliAdapter] no configured pricing for model #{model.inspect}")
+        return 0.0
+      end
 
       cached = [ cache_read_tokens, input_tokens ].min
       uncached = input_tokens - cached

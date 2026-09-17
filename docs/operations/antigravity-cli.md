@@ -17,7 +17,7 @@ Account OAuth is fully supported here, unlike the earlier design of this doc ass
 ## Runtime contract
 
 - Interactive sessions run `agy --dangerously-skip-permissions` inside the existing container sandbox.
-- Automatic sessions use `agy --print --output-format stream-json`; the standard Aixle context instructs the agent to call `finish_session` or `fail_session`.
+- Automatic sessions use `agy --output-format stream-json --print`; the option order is significant because `agy` treats the token after `--print` as prompt text.
 - MCP servers use `~/.gemini/config/mcp_config.json` and the documented `serverUrl` schema.
 - Antigravity imports Gemini-compatible `GEMINI.md` and skills, so Aixle writes those established paths.
 - Vendor telemetry is disabled. Antigravity does not expose an OTLP export contract; automatic-run token counts remain available in its stream-JSON result and terminal log.

@@ -131,6 +131,28 @@ module Agents
       refute_includes model_ids, "gemini-3.1-pro-high"
     end
 
+    test "every observed live catalogue model has fallback metadata and configured pricing" do
+      observed_model_ids = %w[
+        gemini-3.8-flash-high gemini-3.8-flash-medium gemini-3.8-flash-low
+        gemini-3.7-flash-high gemini-3.7-flash-medium gemini-3.7-flash-low
+        gemini-3.6-flash-high gemini-3.6-flash-medium gemini-3.6-flash-low
+        gemini-pro-agent gemini-3.1-pro-low claude-sonnet-4-6 claude-opus-4-6-thinking
+        gpt-oss-120b-medium
+      ]
+
+      assert_empty observed_model_ids - AntigravityCliAdapter::FALLBACK_MODELS.pluck(:model_id)
+      assert_empty observed_model_ids - AntigravityCliAdapter::MODEL_PRICING.keys
+    end
+
+    test "warns when a catalogue model has no configured pricing" do
+      Rails.logger.expects(:warn)
+                  .with('[AntigravityCliAdapter] no configured pricing for model "new-unpriced-model"')
+
+      cost = @adapter.send(:usage_cost_cents, "new-unpriced-model", 100, 20, 0)
+
+      assert_equal 0.0, cost
+    end
+
     test "falls back when the Antigravity catalogue request fails" do
       stub_request(:post, Antigravity::Api::MODELS_URL).to_return(status: 401)
 
