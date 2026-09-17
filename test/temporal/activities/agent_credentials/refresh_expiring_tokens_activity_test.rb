@@ -152,6 +152,52 @@ module Activities
         assert_equal "at-new", credential.reload.config_data.dig("claudeAiOauth", "accessToken")
       end
 
+      # == The undetermined-expiry population ==
+      #
+      # A cursor_cli row whose expiry was never derived is `active` with a NULL column
+      # however dead its token is, and until the scope was widened it sat outside every
+      # sweep. One refresh settles it: the token comes back with an exp, and
+      # sync_expires_at writes the column on the way through.
+
+      def jwt_expiring(at)
+        header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
+        payload = Base64.urlsafe_encode64({ exp: at.to_i }.to_json, padding: false)
+        "#{header}.#{payload}.sig"
+      end
+
+      test "refreshes a credential whose expiry was never derived, and fills the column in" do
+        credential = AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
+          "accessToken" => "opaque-old", "refreshToken" => "rt-old"
+        })
+        assert_nil credential.expires_at, "precondition: nothing ever derived this expiry"
+
+        fresh = jwt_expiring(60.days.from_now)
+        stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL).to_return(
+          status: 200,
+          body: { access_token: fresh, id_token: fresh, shouldLogout: false }.to_json,
+          headers: { "Content-Type" => "application/json" }
+        )
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:refreshed]
+        credential.reload
+        assert_equal fresh, credential.config_data["accessToken"]
+        assert_in_delta 60.days.from_now.to_i, credential.expires_at.to_i, 5
+      end
+
+      test "condemns an undetermined credential the vendor rejects" do
+        credential = AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli", {
+          "accessToken" => "opaque-old", "refreshToken" => "rt-dead"
+        })
+        stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL).to_return(status: 401, body: "")
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:errors]
+        assert_equal "error", credential.reload.status
+      end
+
       # == Batch behaviour ==
 
       test "one failing credential does not stop the batch" do

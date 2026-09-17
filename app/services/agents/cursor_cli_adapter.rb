@@ -54,7 +54,11 @@ module Agents
     # declaration is :server. That the endpoint has been answering 404 since 2026-09-05 is
     # an open incident, not a different lifecycle — see docs/design/agent-credential-lifecycle.md.
     def credential_lifecycle
-      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: nil }.freeze
+      # 60 days, measured: a token issued 2026-09-18 expires 2026-11-16, and a refresh
+      # returns another 60. Rotation is :static because the exchange returns no new
+      # refresh token — there is no grant family to invalidate, so no holder can be
+      # rotated out from under another.
+      { expiry: :token, refresh: :server, rotation: :static, nominal_ttl: 60.days }.freeze
     end
 
     # Cursor's accessToken is a JWT carrying an `exp` claim. Surface its expiry
