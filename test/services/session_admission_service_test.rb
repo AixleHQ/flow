@@ -144,6 +144,62 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_equal 2, mine, "and each project is still bounded by its own limit"
   end
 
+  # The point of a reservation: it is capacity the project can count on, not a
+  # number on a screen. An idle reservation is NOT lent to whoever asks first.
+  test "a reserved project reaches its limit even after the shared pool is full" do
+    with_scope_defaults(project: 10)
+    SessionAdmissionPolicy.sync!(installation_limit: 4)
+    reserved_project = create(:project, owner: @user, company: @user.companies.first)
+    SessionConcurrencyLimit.set!(scope: reserved_project, max_sessions: 1)
+
+    # @project has no limit of its own, so it shares the 3 nobody reserved.
+    4.times { enqueue }
+    SessionAdmissionService.drain!
+
+    assert_equal 3, SessionAdmission.occupied.count, "an unreserved project may not occupy the reservation"
+
+    mine = enqueue(project: reserved_project)
+
+    assert_equal [ mine.id ], SessionAdmissionService.drain!, "the reservation was still there for its owner"
+    assert_equal 4, SessionAdmission.occupied.count, "and the ceiling is still the ceiling"
+  end
+
+  test "unreserved projects share only what the reservations leave" do
+    with_scope_defaults(project: 10)
+    SessionAdmissionPolicy.sync!(installation_limit: 5)
+    reserved_project = create(:project, owner: @user, company: @user.companies.first)
+    SessionConcurrencyLimit.set!(scope: reserved_project, max_sessions: 3)
+    5.times { enqueue }
+
+    assert_equal 2, SessionAdmissionService.drain!.size, "5 less the 3 reserved leaves 2 to share"
+  end
+
+  # Clearing a project's limit hands its capacity back to everyone else.
+  test "a project without a limit of its own draws on the shared pool" do
+    with_scope_defaults(project: 10)
+    SessionAdmissionPolicy.sync!(installation_limit: 3)
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 2)
+    other_project = create(:project, owner: @user, company: @user.companies.first)
+    3.times { enqueue(project: other_project) }
+    assert_equal 1, SessionAdmissionService.drain!.size, "only 1 of 3 is unreserved"
+
+    SessionConcurrencyLimit.find_by(scope_type: "Project", scope_id: @project.id).destroy
+
+    assert_equal 2, SessionAdmissionService.drain!.size, "giving the reservation back releases it to the pool"
+  end
+
+  # The budget rule is enforced from the project's side by the limit's own
+  # validation; this is the same rule from the deployment's.
+  test "the ceiling cannot be lowered below what is already reserved" do
+    SessionAdmissionPolicy.sync!(installation_limit: 5)
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 4)
+
+    error = assert_raises(ArgumentError) { SessionAdmissionPolicy.sync!(installation_limit: 3) }
+
+    assert_match(/below the 4 already reserved/, error.message)
+    assert_equal 5, SessionAdmissionPolicy.current.installation_limit, "a refused change changes nothing"
+  end
+
   test "the installation ceiling stops a project short of its own limit" do
     with_scope_defaults(project: 5)
     SessionAdmissionPolicy.sync!(installation_limit: 2)

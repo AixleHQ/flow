@@ -280,7 +280,7 @@ const SettingsPage = () => {
                     label="Concurrent Sessions"
                     description={
                       concurrency.queueEnabled
-                        ? `How many sessions this project may run at the same time. Leave empty to use the default of ${concurrency.default}.`
+                        ? `A reservation: this project can always run this many sessions at once, and nothing else may occupy them. Leave empty to share the unreserved pool instead, up to ${concurrency.default} at a time.`
                         : 'The session queue is switched off for this installation, so this limit is recorded but not enforced yet.'
                     }
                     min={1}
@@ -302,7 +302,7 @@ const SettingsPage = () => {
                     <Text size="sm">
                       {concurrency.maxSessions ?? concurrency.default}
                       <Text span size="xs" c="dimmed" ml={6}>
-                        {concurrency.maxSessions == null ? '(installation default) — ' : ''}
+                        {concurrency.maxSessions == null ? 'from the shared pool — ' : 'reserved — '}
                         only a company admin can change this
                       </Text>
                     </Text>
@@ -312,12 +312,12 @@ const SettingsPage = () => {
                 {concurrency.installationLimit != null && (
                   <Box mt={8}>
                     <Text size="xs" c="dimmed">
-                      {concurrency.available} of {concurrency.installationLimit} still unallocated across the
-                      installation.
+                      {concurrency.available} of {concurrency.installationLimit} is unreserved — shared by every
+                      project that has no limit of its own.
                     </Text>
                     {concurrency.allocations.length > 0 && (
                       <Text size="xs" c="dimmed">
-                        Allocated: {concurrency.allocations.map((a) => `${a.name} ${a.maxSessions}`).join(', ')}
+                        Reserved: {concurrency.allocations.map((a) => `${a.name} ${a.maxSessions}`).join(', ')}
                       </Text>
                     )}
                   </Box>

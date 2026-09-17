@@ -424,8 +424,8 @@ describe('Projects/Settings/SettingsPage', () => {
         },
       });
 
-      expect(screen.getByText(/12 of 20 still unallocated/)).toBeInTheDocument();
-      expect(screen.getByText(/Gateway 3, Other projects 5/)).toBeInTheDocument();
+      expect(screen.getByText(/12 of 20 is unreserved/)).toBeInTheDocument();
+      expect(screen.getByText(/Reserved: Gateway 3, Other projects 5/)).toBeInTheDocument();
     });
 
     it('shows the limit read-only to someone who may not change it', () => {

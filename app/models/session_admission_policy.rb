@@ -44,9 +44,9 @@ class SessionAdmissionPolicy < ApplicationRecord
   # ConfigMap edit takes effect on the next pod with nothing to remember to run.
   #
   # What stays in the database is what cannot be read per-process: whether
-  # admission is on at all, whether it is paused, and which pool mode applies —
-  # a mode change re-homes live sessions and has to be gated on a drain, which a
-  # value re-read at boot could never enforce.
+  # admission is on at all, whether it is paused, and the installation ceiling —
+  # turning admission on puts already-running sessions behind a queue they were
+  # never admitted to, which a value re-read at boot could never gate on.
   #
   # The trade-off of reading live is that a rolling update briefly leaves
   # replicas disagreeing about a scope's size. Bounded by the size of the edit,
@@ -87,6 +87,16 @@ class SessionAdmissionPolicy < ApplicationRecord
       end
       if switching && SessionAdmission.where(released_at: nil).exists?
         raise ArgumentError, "Drain all admissions before cutover"
+      end
+      # The other half of the budget rule. A project limit is a reservation the
+      # project can always reach, which only holds while the reservations fit
+      # inside the ceiling — SessionConcurrencyLimit enforces that from the
+      # project's side, and this is the same rule from the deployment's.
+      reserved = SessionConcurrencyLimit.where(scope_type: "Project").sum(:max_sessions)
+      if cap && cap < reserved
+        raise ArgumentError,
+          "SESSION_CONCURRENCY_LIMIT=#{cap} is below the #{reserved} already reserved by project limits; " \
+          "lower those first"
       end
       policy.update!(installation_limit: cap, enabled: enabled, paused: paused, revision: policy.revision + 1)
       policy

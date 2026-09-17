@@ -1,14 +1,16 @@
 # frozen_string_literal: true
 
 module Admin
-  # Per-scope overrides of the session concurrency cap. Only meaningful while no
-  # installation-wide SESSION_CONCURRENCY_LIMIT is configured — with one set,
-  # every session draws on the single installation pool and these rows are
-  # ignored, which is what the banner on the index says.
+  # Per-project overrides of the session concurrency cap. Each row is a
+  # RESERVATION: that project can always reach its number, and every project
+  # without a row shares what the reservations leave of
+  # SESSION_CONCURRENCY_LIMIT. They used to be ignored whenever an
+  # installation-wide limit was set, because it selected a single pool instead;
+  # it is a ceiling these are drawn from now, so both apply at once.
   #
-  # The defaults these override come from the deployment's environment and are
-  # read live, so there is nothing to edit here; the pool mode lives in the
-  # policy row and only moves in a maintenance window.
+  # The default a row overrides comes from the deployment's environment and is
+  # read live, so there is nothing to edit here. A company admin can set the same
+  # value from the project's own settings.
   class SessionConcurrencyLimitsController < Admin::ApplicationController
     def policy
       @policy ||= SessionAdmissionPolicy.current
