@@ -279,6 +279,16 @@ despite the proxy being started and their adapters collecting the path — the l
 client that ignores `HTTP(S)_PROXY` (Node's `fetch`/undici does, on the image's Node 22), which
 is its own investigation.
 
+**Six months of production traffic say the same.** Every `cursor_cli` HTTP log ever
+collected — 119 of them, spanning 2026-03-15 to 2026-09-15, either side of the April commit
+that introduced our refresh call — contains exactly four hosts (`api2.cursor.sh`,
+`repo42.cursor.sh`, `api3.cursor.sh`, `agentn.us.api5.cursor.sh`) and exactly one auth
+endpoint: `GET api2.cursor.sh/auth/poll`, 156 times. `authenticator.cursor.sh` appears not
+once — and it would have, because the domain filter matched `cursor.sh` by suffix for that
+whole period. What this evidence cannot cover is our own server-side call, which is made by
+the web process and never passes through a container's proxy; for that the only record was
+Sentry, whose retention does not reach April.
+
 **Shipped here:** the auth hosts join each runtime's tracked domains, `antigravity_cli` starts
 collecting its log, and — first, because the rest would be unsafe without it — the logger stops
 writing credentials. Credential-bearing headers (`Authorization`, `Cookie`, `x-api-key`, …) are
