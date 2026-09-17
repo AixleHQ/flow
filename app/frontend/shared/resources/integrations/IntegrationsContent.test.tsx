@@ -29,7 +29,7 @@ describe('IntegrationsContent', () => {
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
-    await userEvent.click(await screen.findByText('YouTrack'));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /YouTrack/i }));
     expect(await screen.findByRole('radiogroup', { name: 'Aixle scope' })).toBeInTheDocument();
     await userEvent.click(screen.getByText('Entire company'));
     await userEvent.type(screen.getByLabelText('Base URL'), 'https://example.youtrack.cloud');
