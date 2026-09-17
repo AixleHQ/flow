@@ -79,13 +79,41 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
     admission
   end
 
-  test "a reservation pinned by an unprovable runtime operation is reported as held capacity" do
+  # A pin is ordinary now: the reconciler ends one after a few minutes of proven
+  # absence, so reporting every pin would page somebody for the ordinary end of a
+  # cancelled session. It is still counted — an operator reading the numbers
+  # should see it — it just is not a problem on its own.
+  test "a reservation pinned by an unprovable runtime operation is counted but not reported" do
     admitted_session_with_operation(phase: "create_container")
 
     stats = QueueHealthCheck.snapshot
 
     assert_equal 1, stats[:pinned_reservations]
-    assert_match(/pinned by an unprovable runtime operation/, QueueHealthCheck.problems(stats).sole)
+    assert_empty QueueHealthCheck.problems(stats).grep(/pinned/)
+  end
+
+  # The two cases nothing is going to end.
+  test "a pin is reported when the operator has switched automatic release off" do
+    admitted_session_with_operation(phase: "create_container")
+    # After the helper, not before: it sets the ceiling through the same settings
+    # block, so an earlier stub would be the one overwritten.
+    Settings.stubs(:session_admission).returns(Hashie::Mash.new(project_default: 5, pinned_release_enabled: false))
+
+    stats = QueueHealthCheck.snapshot
+
+    assert_match(/automatic release is switched off/, QueueHealthCheck.problems(stats).grep(/pinned/).sole)
+  end
+
+  test "a pin that has outlived the confirmation window twice over is reported" do
+    admission = admitted_session_with_operation(phase: "create_container")
+    # Absence proved long ago and the slot still here: the reconciler is not
+    # managing to release it, which is the part worth waking somebody for.
+    admission.session_runtime_operations.pinning.update_all(absent_since: 1.hour.ago)
+
+    stats = QueueHealthCheck.snapshot
+
+    assert_equal 1, stats[:pinned_overdue]
+    assert_match(/stayed pinned well past the confirmation window/, QueueHealthCheck.problems(stats).grep(/pinned/).sole)
   end
 
   # An `exec` nobody can account for is worth seeing elsewhere, but it costs no
