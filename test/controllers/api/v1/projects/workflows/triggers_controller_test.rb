@@ -33,11 +33,11 @@ module Api
           end
 
           test "index lists active visible YouTrack integrations for the trigger form" do
-            project_connection = create(:integration, :youtrack, :active, company: @company, project: @project,
+            project_connection = create(:integration, :active, provider: :youtrack, company: @company, project: @project,
                                                                           connected_by: @user, name: "Project YT")
-            company_connection = create(:integration, :youtrack, :active, company: @company, project: nil,
+            company_connection = create(:integration, :active, provider: :youtrack, company: @company, project: nil,
                                                                           connected_by: @user, name: "Company YT")
-            create(:integration, :youtrack, company: @company, project: @project, connected_by: @user, status: :error)
+            create(:integration, provider: :youtrack, company: @company, project: @project, connected_by: @user, status: :error)
 
             get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
 

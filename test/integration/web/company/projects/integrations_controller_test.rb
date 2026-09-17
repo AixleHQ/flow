@@ -74,7 +74,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   end
 
   test "company admin can create a company-wide YouTrack integration from a project page" do
-    integration = create(:integration, :youtrack, :active, company: @company, project: nil, connected_by: @user)
+    integration = create(:integration, :active, provider: :youtrack, company: @company, project: nil, connected_by: @user)
     service = mock
     Youtrack::IntegrationService.expects(:new).with(
       company: @company, connected_by: @user, project: nil
@@ -91,7 +91,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   end
 
   test "company admin can disconnect a company-wide integration from a project page" do
-    integration = create(:integration, :youtrack, :active, company: @company, project: nil, connected_by: @user)
+    integration = create(:integration, :active, provider: :youtrack, company: @company, project: nil, connected_by: @user)
 
     delete company_project_integration_path(@project, integration)
 
