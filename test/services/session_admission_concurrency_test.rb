@@ -17,7 +17,7 @@ class SessionAdmissionConcurrencyTest < ActiveSupport::TestCase
     # free pool is the ceiling less every reservation, and this test opts out of
     # transactional cleanup, so a reservation left by anything else would silently
     # shrink what these six sessions are competing for.
-    SessionAdmissionPolicy.sync!(installation_limit: SessionConcurrencyLimit.sum(:max_sessions) + 2)
+    with_ceiling(SessionConcurrencyLimit.sum(:max_sessions) + 2)
     6.times do
       session = create(:terminal_session, user: user, project: project)
       sessions << session

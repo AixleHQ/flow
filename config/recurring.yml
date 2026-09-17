@@ -16,13 +16,6 @@ default: &default
   queue_health_check:
     class: QueueHealthCheckJob
     schedule: every minute
-  # The other thing the Temporal worker must not own: applying the deployment's
-  # session ceiling. `session_admission:sync` assumes a shell nobody has in a
-  # deployed installation, and after activation the admin page offers no way to
-  # apply a changed value at all.
-  session_admission_sync:
-    class: SessionAdmissionSyncJob
-    schedule: every minute
 
 development:
   <<: *default

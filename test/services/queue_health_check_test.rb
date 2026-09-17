@@ -71,7 +71,7 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
   # There are no factories for admissions on purpose: a reservation only exists by
   # going through the queue, so the tests build one the way production does.
   def admitted_session_with_operation(phase:, state: "uncertain")
-    SessionAdmissionPolicy.sync!(installation_limit: 5)
+    with_ceiling(5)
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = SessionAdmissionService.enqueue!(session)
     SessionAdmissionService.drain!

@@ -12,7 +12,7 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
                     password: AuthHelper::TEST_PASSWORD)
     sign_in_as(@admin)
     @owner = create(:user, company: @company)
-    SessionAdmissionPolicy.current.update!(enabled: false, paused: true, installation_limit: nil)
+    SessionAdmissionPolicy.current.update!(enabled: false, paused: true)
   end
 
   test "the page reports what the environment currently resolves to" do
@@ -67,7 +67,7 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
 
   test "pausing keeps occupied slots and resuming admits what waited" do
     SessionRuntimeInventory.stubs(:fetch).returns([])
-    SessionAdmissionPolicy.sync!(installation_limit: 1)
+    with_ceiling(1)
     project = create(:project, owner: @owner, company: @owner.companies.first)
     first = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))
     second = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))

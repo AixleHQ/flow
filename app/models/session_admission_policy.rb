@@ -59,6 +59,41 @@ class SessionAdmissionPolicy < ApplicationRecord
   # The trade-off of reading live is that a rolling update briefly leaves
   # replicas disagreeing about a scope's size. Bounded by the size of the edit,
   # and it settles as the rollout finishes.
+  # The ceiling, read live from the deployment exactly like the project default.
+  #
+  # It used to be copied into this row by a rake task, because it selected which
+  # pool a session belonged to and re-homing live sessions had to happen in a
+  # maintenance window. It selects nothing now — it is a number the drain clamps
+  # against — so the copy bought only a step that a deployed installation, with
+  # no shell, could not perform.
+  #
+  # THE COST OF READING LIVE: there is no stored value to fall back to, so a
+  # ConfigMap typo cannot be "ignored in favour of the last good one" the way the
+  # project default can. Refusing to answer would wedge every launch, and
+  # guessing a number would be worse — so the ceiling reads as absent and says so
+  # loudly, and QueueHealthCheck reports it as a problem rather than leaving it in
+  # a log nobody greps.
+  def self.installation_limit
+    raw = deployment_setting(:installation_limit).to_s.strip
+    return nil if raw.empty?
+    return raw.to_i if raw.match?(/\A[1-9]\d*\z/)
+
+    Rails.logger.error(
+      "[SessionAdmission] SESSION_CONCURRENCY_LIMIT=#{raw.inspect} is not a positive integer; " \
+      "the installation has NO ceiling until this is corrected"
+    )
+    nil
+  end
+
+  def self.installation_limit_misconfigured?
+    raw = deployment_setting(:installation_limit).to_s.strip
+    raw.present? && !raw.match?(/\A[1-9]\d*\z/)
+  end
+
+  # Callers hold a policy record and ask it, which kept reading naturally when the
+  # value lived in a column; it is the deployment's answer either way.
+  def installation_limit = self.class.installation_limit
+
   def self.scope_default(scope_type)
     config = SCOPE_DEFAULTS.fetch(scope_type)
     raw = deployment_setting(config[:setting]).to_s.strip
@@ -66,8 +101,8 @@ class SessionAdmissionPolicy < ApplicationRecord
     return raw.to_i if raw.match?(/\A[1-9]\d*\z/)
 
     # Never raise on the grant path: a typo in a ConfigMap must not wedge every
-    # queue in the installation. `session_admission:sync` validates strictly, so
-    # the operator sees it at cutover instead.
+    # queue in the installation. QueueHealthCheck reports it instead, so the
+    # operator sees it without anything having to raise.
     Rails.logger.error(
       "[SessionAdmission] #{config[:variable]}=#{raw.inspect} is not a positive integer; " \
       "falling back to #{config[:fallback]}"
@@ -79,9 +114,11 @@ class SessionAdmissionPolicy < ApplicationRecord
 
   # Only the operator writes policy, and only in a maintenance window. Workers
   # never interpret their ENV for anything gated here.
-  def self.sync!(installation_limit: deployment_setting(:installation_limit), enabled: true, paused: false)
-    raw = installation_limit.to_s.strip
-    cap = raw.empty? ? nil : positive_integer!(raw)
+  # The cutover, and nothing else. The ceiling is read live now, so there is no
+  # deployment value left for this to copy anywhere — only the decision to put
+  # new sessions behind a queue, which is not something a config file should be
+  # able to make on its own.
+  def self.sync!(enabled: true, paused: false)
     current
     transaction do
       policy = lock.find(1)
@@ -96,59 +133,8 @@ class SessionAdmissionPolicy < ApplicationRecord
       if switching && SessionAdmission.where(released_at: nil).exists?
         raise ArgumentError, "Drain all admissions before cutover"
       end
-      # The other half of the budget rule. A project limit is a reservation the
-      # project can always reach, which only holds while the reservations fit
-      # inside the ceiling — SessionConcurrencyLimit enforces that from the
-      # project's side, and this is the same rule from the deployment's.
-      reserved = SessionConcurrencyLimit.where(scope_type: "Project").sum(:max_sessions)
-      if cap && cap < reserved
-        raise ArgumentError,
-          "SESSION_CONCURRENCY_LIMIT=#{cap} is below the #{reserved} already reserved by project limits; " \
-          "lower those first"
-      end
-      policy.update!(installation_limit: cap, enabled: enabled, paused: paused, revision: policy.revision + 1)
+      policy.update!(enabled: enabled, paused: paused, revision: policy.revision + 1)
       policy
-    end
-  end
-
-  # Applies the deployment's ceiling without a human, and touches nothing else.
-  #
-  # WHY IT EXISTS: the ceiling used to select which pool a session belonged to, so
-  # applying it re-homed live sessions and had to happen in a maintenance window.
-  # That is why it is copied into the policy by `session_admission:sync` instead
-  # of being read live. It is a plain number over the same project pools now — and
-  # a deployed installation has nobody with a shell to run that task. After
-  # activation the admin page offers Pause and Resume and nothing else, so a
-  # changed ConfigMap value had no way at all to take effect.
-  #
-  # Deliberately NOT sync!: that method's defaults would also enable admission and
-  # clear a pause. A background reconciler must never do either — enabling is a
-  # cutover with a drain gate behind it, and a pause is somebody's decision.
-  #
-  # Returns { state:, detail: } for the caller to report rather than raising: this
-  # runs every minute, so a ConfigMap typo must not turn into an exception storm.
-  def self.reconcile_installation_limit!
-    raw = deployment_setting(:installation_limit).to_s.strip
-    unless raw.empty? || raw.match?(/\A[1-9]\d*\z/)
-      return { state: :invalid, detail: "SESSION_CONCURRENCY_LIMIT=#{raw.inspect} is not a positive integer" }
-    end
-
-    cap = raw.empty? ? nil : raw.to_i
-    current
-    transaction do
-      policy = lock.find(1)
-      next { state: :unchanged } if policy.installation_limit == cap
-
-      reserved = SessionConcurrencyLimit.where(scope_type: "Project").sum(:max_sessions)
-      if cap && cap < reserved
-        next {
-          state: :refused,
-          detail: "SESSION_CONCURRENCY_LIMIT=#{cap} is below the #{reserved} already reserved by project limits"
-        }
-      end
-
-      policy.update!(installation_limit: cap, revision: policy.revision + 1)
-      { state: :applied, detail: "installation ceiling is now #{cap || 'unset'}" }
     end
   end
 

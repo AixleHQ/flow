@@ -21,26 +21,19 @@ class RecurringTasksTest < ActiveSupport::TestCase
     end
   end
 
-  # The entries this file exists for. Every other recurring job in the app is a
-  # Temporal schedule executed by the worker; these two must not be. One watches
-  # the worker, so it cannot be hosted by it. The other resizes the queue, and a
-  # queue that cannot be resized while the worker is down is a queue nobody can
-  # rescue. If either migrates to app/temporal/schedules.yml, that is lost.
-  {
-    queue_health_check: "QueueHealthCheckJob",
-    session_admission_sync: "SessionAdmissionSyncJob"
-  }.each do |name, klass|
-    test "#{name} is scheduled outside Temporal in every deployed environment" do
-      %w[production staging].each do |env|
-        task = Rails.application.config_for(:recurring, env: env)[name]
+  # The one entry this file exists for. Every other recurring job in the app is a
+  # Temporal schedule executed by the worker; this one must not be, because the
+  # worker is what it watches. If it ever migrates to app/temporal/schedules.yml,
+  # the installation goes back to having no watchdog that survives a dead worker.
+  test "the queue watchdog is scheduled outside Temporal in every deployed environment" do
+    %w[production staging].each do |env|
+      task = Rails.application.config_for(:recurring, env: env)[:queue_health_check]
 
-        assert task, "#{env} does not schedule #{name} outside Temporal"
-        assert_equal klass, task[:class]
-      end
-
-      schedules = File.read(Rails.root.join("app/temporal/schedules.yml"))
-      assert_not schedules.include?(name.to_s),
-        "#{name} must not be a Temporal schedule — it has to survive the worker"
+      assert task, "#{env} does not schedule queue_health_check outside Temporal"
+      assert_equal "QueueHealthCheckJob", task[:class]
     end
+
+    assert_not File.read(Rails.root.join("app/temporal/schedules.yml")).include?("queue_health"),
+      "the queue watchdog must not be a Temporal schedule — the worker is what it watches"
   end
 end

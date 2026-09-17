@@ -21,14 +21,14 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
   end
 
   test "with no installation ceiling a project may be given any positive limit" do
-    SessionAdmissionPolicy.sync!(installation_limit: nil)
+    with_ceiling(nil)
 
     limit = limit_for(@project, 500)
     assert limit.valid?, limit.errors.full_messages.to_sentence
   end
 
   test "explicit project limits are allocated out of the installation ceiling" do
-    SessionAdmissionPolicy.sync!(installation_limit: 10)
+    with_ceiling(10)
     other = create(:project, owner: @user, company: @company)
     SessionConcurrencyLimit.set!(scope: other, max_sessions: 7)
 
@@ -41,7 +41,7 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
 
   # Otherwise raising a project from 4 to 5 would be refused by its own 4.
   test "a project's own current allocation is not counted against changing it" do
-    SessionAdmissionPolicy.sync!(installation_limit: 10)
+    with_ceiling(10)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 10)
 
     existing = SessionConcurrencyLimit.find_by(scope_type: "Project", scope_id: @project.id)
@@ -53,7 +53,7 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
   # The budget is installation-wide, but the person spending it is not: a company
   # admin must not learn the names, or the count, of projects they cannot see.
   test "the refusal names nobody" do
-    SessionAdmissionPolicy.sync!(installation_limit: 4)
+    with_ceiling(4)
     rival = create(:user, :with_company)
     elsewhere = create(:project, owner: rival, company: rival.companies.first, name: "Rival Gateway")
     SessionConcurrencyLimit.set!(scope: elsewhere, max_sessions: 4)
@@ -68,7 +68,7 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
   end
 
   test "a breakdown names this company's own projects and sums the rest" do
-    SessionAdmissionPolicy.sync!(installation_limit: 20)
+    with_ceiling(20)
     mine = create(:project, owner: @user, company: @company, name: "Gateway")
     SessionConcurrencyLimit.set!(scope: mine, max_sessions: 3)
     rival = create(:user, :with_company)
@@ -82,14 +82,14 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
   end
 
   test "a fully allocated ceiling leaves nothing rather than a negative number" do
-    SessionAdmissionPolicy.sync!(installation_limit: 5)
+    with_ceiling(5)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 5)
 
     assert_equal 0, SessionConcurrencyAllocation.new.available
   end
 
   test "no ceiling means no budget to be left of" do
-    SessionAdmissionPolicy.sync!(installation_limit: nil)
+    with_ceiling(nil)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 5)
 
     assert_nil SessionConcurrencyAllocation.new.available

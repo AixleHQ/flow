@@ -11,7 +11,7 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     # Only project sessions are queued, and the launch phases this resource
     # reports are the queue's, so every fixture here is project-bound.
     @project = create(:project, owner: @user, company: @user.companies.first)
-    SessionAdmissionPolicy.sync!(installation_limit: 1)
+    with_ceiling(1)
   end
 
   def payload(session) = TerminalSessionResource.new(session.reload).to_h

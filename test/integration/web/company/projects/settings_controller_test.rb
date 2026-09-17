@@ -46,7 +46,7 @@ class Web::Company::Projects::SettingsControllerTest < ActionDispatch::Integrati
   end
 
   test "a limit past what the installation has left is refused and says what is left" do
-    SessionAdmissionPolicy.sync!(installation_limit: 10)
+    with_ceiling(10)
     other = create(:project, company: @company, owner: @user)
     SessionConcurrencyLimit.set!(scope: other, max_sessions: 7)
 
@@ -64,7 +64,7 @@ class Web::Company::Projects::SettingsControllerTest < ActionDispatch::Integrati
   # "Settings were not saved" has to be true of all of them, or the person is
   # left guessing which half landed.
   test "a refused limit rolls back the rest of the save" do
-    SessionAdmissionPolicy.sync!(installation_limit: 2)
+    with_ceiling(2)
     other = create(:project, company: @company, owner: @user)
     SessionConcurrencyLimit.set!(scope: other, max_sessions: 2)
 

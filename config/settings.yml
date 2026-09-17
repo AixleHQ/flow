@@ -436,18 +436,18 @@ container_execution:
 # Session admission's deployment inputs.
 #
 # `installation_limit` is a ceiling over every project queue at once, and an
-# explicit project limit is a reservation drawn from it. It lives in the database
-# rather than being read per-process so that it can be checked against the
-# reservations already made; SessionAdmissionSyncJob copies it there within a
-# minute of a change, so a ConfigMap edit is the only action required. Blank
-# means no ceiling, and project limits are then the only bound.
+# explicit project limit is a reservation drawn from it. Read live, like the
+# project default: a ConfigMap edit takes effect as each pod restarts. Blank
+# means no ceiling, and project limits are then the only bound. A value that is
+# not a positive integer leaves the installation with NO ceiling — there is no
+# stored value to fall back to — and is reported in the queue-health line.
 #
 # `project_default` IS read live, i.e. re-read at every boot, so a ConfigMap edit
 # takes effect on the next pod with nothing to run afterwards. A value that is
 # not a positive integer is logged and ignored in favour of the built-in fallback
 # of 4 rather than raised — a typo must not wedge every queue in the
-# installation; `session_admission:sync` validates the same inputs strictly,
-# which is where an operator sees it.
+# installation; the queue-health line reports it, which is where an operator
+# sees it.
 #
 # There is no per-user default: sessions launched outside a project are not
 # queued at all.

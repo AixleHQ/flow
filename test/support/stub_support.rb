@@ -19,6 +19,16 @@ module StubSupport
     )
   end
 
+  # Admission on, with a ceiling, the way a deployment gets one: the ceiling is
+  # read live from the configuration, so there is nothing to write to the policy
+  # — `sync!` only performs the cutover. `project:` defaults to the built-in
+  # fallback so a test that only cares about the ceiling keeps the pool caps it
+  # had before this stopped being a policy column.
+  def with_ceiling(limit, project: 4)
+    with_scope_defaults(project: project, installation_limit: limit)
+    SessionAdmissionPolicy.sync!
+  end
+
   # ===========================================================================
   # Container Runtime
   #

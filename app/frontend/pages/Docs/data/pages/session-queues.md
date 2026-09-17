@@ -135,15 +135,18 @@ gives its place to the next one immediately.
 
 ## For operators
 
-The ceiling is `SESSION_CONCURRENCY_LIMIT`. Changing it needs nothing else —
-it is applied within a minute. A value below the sum of project reservations is
-refused and reported rather than applied, so reservations cannot be broken from
-the deployment side. Leaving it unset means no ceiling.
+The ceiling is `SESSION_CONCURRENCY_LIMIT`, read live — an edit takes effect as
+each pod restarts, with nothing to run afterwards. Leaving it unset means no
+ceiling.
+
+Lowering it below the sum of project reservations is possible, and nothing can
+refuse it: the ceiling is honoured and the reservations are not, which the queue
+health line reports as over-commitment. A value that is not a positive integer
+leaves the installation with no ceiling at all, and says so on the admin page.
 
 Turning admission on for the first time is still a deliberate act, because it
 puts already-running sessions behind a queue they were never admitted to: the
-Enable button on the admin's Session admission page, or
-`bin/rails session_admission:sync`.
+Enable button on the admin's Session admission page.
 
 The per-project default is `SESSION_PROJECT_CONCURRENCY_DEFAULT`, read live — a
 config change applies as each pod restarts, with nothing to run afterwards.

@@ -20,6 +20,7 @@ module Admin
       @policy = SessionAdmissionPolicy.current
       @scope_defaults = SessionAdmissionPolicy.scope_defaults
       @configured_limit = SessionAdmissionPolicy.deployment_setting(:installation_limit).to_s.strip.presence
+      @reserved_total = SessionConcurrencyLimit.where(scope_type: "Project").sum(:max_sessions)
       @overrides = SessionConcurrencyLimit.order(:scope_type, :scope_id)
       @health = SessionAdmissionReconciler.snapshot
 
