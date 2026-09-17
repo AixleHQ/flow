@@ -200,6 +200,7 @@ GEM
     et-orbi (1.4.1)
       tzinfo
     event_emitter (0.2.6)
+    event_stream_parser (1.0.0)
     excon (1.5.0)
       logger
     factory_bot (6.6.0)
@@ -792,6 +793,7 @@ DEPENDENCIES
   docker-api (~> 2.3)
   dotenv-rails
   enumerize
+  event_stream_parser (>= 1.0)
   factory_bot_rails
   faker
   faraday-retry (~> 2.3)

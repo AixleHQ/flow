@@ -111,6 +111,14 @@ gem "json_schemer"
 # (McpController + Tools::McpRequestHandler).
 gem "mcp"
 
+# SSE frame parser for the mcp gem's HTTP CLIENT. The gem leaves it out of its
+# gemspec so server-only users don't carry it, and `require`s it lazily the
+# first time a Streamable HTTP server answers `content-type: text/event-stream`
+# — which most remote MCP servers do, GitHub's included. Absent from the bundle
+# that require raises LoadError out of MCP::ToolListProbe and 500s connector
+# installation, so it is a hard dependency for us, not an optional one.
+gem "event_stream_parser", ">= 1.0"
+
 group :development, :test do
   # Testing tools
   gem "factory_bot_rails"
