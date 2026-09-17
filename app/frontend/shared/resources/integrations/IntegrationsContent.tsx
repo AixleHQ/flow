@@ -268,16 +268,23 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
 
   const handleConnectYoutrack = useCallback(() => {
     setYoutrackLoading(true);
-    router.post(basePath, {
-      provider: 'youtrack', baseUrl: youtrackUrl.trim(), permanentToken: youtrackToken.trim(),
-      youtrackProjectId: youtrackProjectId.trim(), webhookHeader: 'X-YouTrack-Token',
-      webhookToken: youtrackWebhookToken,
-    }, {
-      preserveScroll: true,
-      onSuccess: () => setYoutrackOpen(false),
-      onError: () => notifications.show({ message: 'Failed to connect YouTrack', color: 'red' }),
-      onFinish: () => setYoutrackLoading(false),
-    });
+    router.post(
+      basePath,
+      {
+        provider: 'youtrack',
+        baseUrl: youtrackUrl.trim(),
+        permanentToken: youtrackToken.trim(),
+        youtrackProjectId: youtrackProjectId.trim(),
+        webhookHeader: 'X-YouTrack-Token',
+        webhookToken: youtrackWebhookToken,
+      },
+      {
+        preserveScroll: true,
+        onSuccess: () => setYoutrackOpen(false),
+        onError: () => notifications.show({ message: 'Failed to connect YouTrack', color: 'red' }),
+        onFinish: () => setYoutrackLoading(false),
+      },
+    );
   }, [basePath, youtrackProjectId, youtrackToken, youtrackUrl, youtrackWebhookToken]);
 
   const handleConnectCoder = useCallback(() => {
@@ -483,7 +490,11 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
                     <Button variant="outline" leftSection={<CoderIcon size={16} />} onClick={() => setCoderOpen(true)}>
                       Coder
                     </Button>
-                    <Button variant="outline" leftSection={<IconLink size={16} />} onClick={() => setYoutrackOpen(true)}>
+                    <Button
+                      variant="outline"
+                      leftSection={<IconLink size={16} />}
+                      onClick={() => setYoutrackOpen(true)}
+                    >
                       YouTrack
                     </Button>
                     {isProjectContext && azureAvailable && (
@@ -579,7 +590,8 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
                           {integration.provider === 'youtrack' && (
                             <Stack gap={1}>
                               <Text fz={11} c="dimmed">
-                                {integration.youtrackProjectName ?? 'Project'} · connected as @{integration.youtrackBotLogin ?? 'unknown'}
+                                {integration.youtrackProjectName ?? 'Project'} · connected as @
+                                {integration.youtrackBotLogin ?? 'unknown'}
                               </Text>
                               {integration.youtrackCallbackUrl && (
                                 <Group gap={4} wrap="nowrap">
@@ -587,9 +599,16 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
                                     {integration.youtrackWebhookHeader}: {integration.youtrackCallbackUrl}
                                   </Text>
                                   <CopyButton value={integration.youtrackCallbackUrl}>
-                                    {({ copied, copy }) => <ActionIcon aria-label="YouTrack callback URL" variant="subtle" size="xs" onClick={copy}>
-                                      {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                                    </ActionIcon>}
+                                    {({ copied, copy }) => (
+                                      <ActionIcon
+                                        aria-label="YouTrack callback URL"
+                                        variant="subtle"
+                                        size="xs"
+                                        onClick={copy}
+                                      >
+                                        {copied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                                      </ActionIcon>
+                                    )}
                                   </CopyButton>
                                 </Group>
                               )}
@@ -800,18 +819,42 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
             Enter a permanent token and the database ID of one YouTrack project. After connecting, configure the
             YouTrack Webhook Triggers app manually with the callback URL and header shown on the integration card.
           </Text>
-          <TextInput label="Base URL" placeholder="https://company.youtrack.cloud" value={youtrackUrl}
-            onChange={(e) => setYoutrackUrl(e.currentTarget.value)} />
-          <PasswordInput label="Permanent token" value={youtrackToken}
-            onChange={(e) => setYoutrackToken(e.currentTarget.value)} />
-          <TextInput label="YouTrack project database ID" value={youtrackProjectId}
-            onChange={(e) => setYoutrackProjectId(e.currentTarget.value)} />
-          <PasswordInput label="Existing webhook token" description="The project-wide token configured in the Webhook Triggers app (minimum 32 characters)."
-            value={youtrackWebhookToken} onChange={(e) => setYoutrackWebhookToken(e.currentTarget.value)} />
+          <TextInput
+            label="Base URL"
+            placeholder="https://company.youtrack.cloud"
+            value={youtrackUrl}
+            onChange={(e) => setYoutrackUrl(e.currentTarget.value)}
+          />
+          <PasswordInput
+            label="Permanent token"
+            value={youtrackToken}
+            onChange={(e) => setYoutrackToken(e.currentTarget.value)}
+          />
+          <TextInput
+            label="YouTrack project database ID"
+            value={youtrackProjectId}
+            onChange={(e) => setYoutrackProjectId(e.currentTarget.value)}
+          />
+          <PasswordInput
+            label="Existing webhook token"
+            description="The project-wide token configured in the Webhook Triggers app (minimum 32 characters)."
+            value={youtrackWebhookToken}
+            onChange={(e) => setYoutrackWebhookToken(e.currentTarget.value)}
+          />
           <Group justify="flex-end">
-            <Button variant="default" onClick={() => setYoutrackOpen(false)}>Cancel</Button>
-            <Button onClick={handleConnectYoutrack} loading={youtrackLoading}
-              disabled={!youtrackUrl.trim() || !youtrackToken.trim() || !youtrackProjectId.trim() || youtrackWebhookToken.length < 32}>
+            <Button variant="default" onClick={() => setYoutrackOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConnectYoutrack}
+              loading={youtrackLoading}
+              disabled={
+                !youtrackUrl.trim() ||
+                !youtrackToken.trim() ||
+                !youtrackProjectId.trim() ||
+                youtrackWebhookToken.length < 32
+              }
+            >
               Connect
             </Button>
           </Group>
