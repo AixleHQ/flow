@@ -17,8 +17,11 @@ class Web::TotpController < Web::ApplicationController
     current_user.totp_secret = ROTP::Base32.random
     current_user.save!
 
+    provisioning_uri = current_user.totp_provisioning_uri(issuer: Settings.project_name)
+
     render json: {
-      provisioning_uri: current_user.totp_provisioning_uri(issuer: Settings.project_name),
+      provisioning_uri: provisioning_uri,
+      qr_code: Auth::QrCode.data_uri(provisioning_uri),
       secret: current_user.totp_secret
     }
   end

@@ -33,6 +33,20 @@ class Web::TotpStepUpTest < ActionDispatch::IntegrationTest
     refute_predicate @user.reload, :totp_enabled?, "an unconfirmed secret must not count as enabled"
   end
 
+  test "enrolment hands back a scannable QR carrying the same secret" do
+    sign_in_as(@user)
+
+    post totp_path
+
+    body = JSON.parse(response.body)
+    assert_match %r{\Adata:image/svg\+xml;base64,}, body["qr_code"],
+      "the page shows the QR with a plain img tag, so it needs a data: URI"
+    assert_includes Base64.strict_decode64(body["qr_code"].split(",", 2).last), "<svg"
+    # The QR and the typed fallback must not drift apart: both carry the secret
+    # the server just generated.
+    assert_includes body["provisioning_uri"], body["secret"]
+  end
+
   test "a correct code turns it on" do
     enrol!
 

@@ -216,6 +216,10 @@ gem "sqlite3", "~> 2.9"
 
 gem "rotp", "~> 6.3"
 
+# Renders the otpauth:// URI as the QR an authenticator app scans. Server-side so
+# the enrolment payload stays one response and no QR library reaches the bundle.
+gem "rqrcode", "~> 3.1"
+
 # Docker API for container management
 gem "docker-api", "~> 2.3"
 

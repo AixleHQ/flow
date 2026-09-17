@@ -47,7 +47,7 @@ async function postJson(url: string, body: unknown) {
 
 export default function Security({ passkeys, totpEnabled, sessions }: PageProps) {
   const [busy, setBusy] = useState(false);
-  const [totpSecret, setTotpSecret] = useState<string | null>(null);
+  const [totpSetup, setTotpSetup] = useState<{ secret: string; qrCode: string | null } | null>(null);
   const [code, setCode] = useState('');
 
   const addPasskey = async () => {
@@ -67,8 +67,10 @@ export default function Security({ passkeys, totpEnabled, sessions }: PageProps)
   };
 
   const startTotp = async () => {
+    // A plain `render json:` — unlike an Inertia response, its keys are not
+    // camelized, so they are read as the server spells them.
     const { ok, data } = await postJson(totpPath(), {});
-    if (ok) setTotpSecret(data.secret);
+    if (ok) setTotpSetup({ secret: data.secret, qrCode: data.qr_code ?? null });
   };
 
   return (
@@ -117,11 +119,22 @@ export default function Security({ passkeys, totpEnabled, sessions }: PageProps)
                 </Button>
               )}
             </Group>
-            {totpSecret && !totpEnabled && (
+            {totpSetup && !totpEnabled && (
               <Stack gap="xs">
-                <Text size="sm">Add this secret to your authenticator app, then enter the code it shows.</Text>
+                <Text size="sm">
+                  Scan this with your authenticator app — Google Authenticator, 1Password, Authy — then enter the code
+                  it shows.
+                </Text>
+                {totpSetup.qrCode && (
+                  <Card withBorder padding={0} w={180}>
+                    <img src={totpSetup.qrCode} alt="QR code for your authenticator app" width={180} height={180} />
+                  </Card>
+                )}
+                <Text size="sm" c="dimmed">
+                  Cannot scan? Type this into the app instead:
+                </Text>
                 <Card withBorder padding="xs">
-                  <Text ff="monospace">{totpSecret}</Text>
+                  <Text ff="monospace">{totpSetup.secret}</Text>
                 </Card>
                 <Group>
                   <TextInput
