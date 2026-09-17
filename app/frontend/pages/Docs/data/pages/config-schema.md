@@ -100,7 +100,7 @@ user; edit those in the admin, not here.
 
 | Variable                                   | Required | Default             | Purpose                                     |
 | ------------------------------------------ | -------- | ------------------- | ------------------------------------------- |
-| `TEMPORAL_ENABLED`                         | no       | unset (on in dev/QA/prod) | Toggles Temporal workflow execution.  |
+| `TEMPORAL_ENABLED`                         | no       | unset (on in dev and prod) | Toggles Temporal workflow execution. |
 | `TEMPORAL_HOST`                            | no       | `temporal`          | Temporal server host.                       |
 | `TEMPORAL_PORT`                            | no       | `7233`              | Temporal server port.                       |
 | `TEMPORAL_NAMESPACE`                       | no       | `default`           | Temporal namespace.                         |

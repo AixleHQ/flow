@@ -27,9 +27,6 @@ development:
 # false, and a nil here is a worse thing to hand it than no tasks.
 test: {}
 
-qa:
-  <<: *default
-
 staging:
   <<: *default
 

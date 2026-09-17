@@ -28,9 +28,6 @@ development:
 test:
   <<: *default
 
-qa:
-  <<: *default
-
 # Solid Queue looks this file up by Rails.env and falls back to its own gem
 # defaults when the key is missing — silently. Staging had no key, so instead of
 # the settings above it ran three threads polling ten times a second, which is
