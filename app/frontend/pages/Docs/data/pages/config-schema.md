@@ -230,6 +230,10 @@ client id and one credential are present, or PAT mode is on.
 | `GOOGLE_CLIENT_ID`           | no       | unset              | Google SSO client ID.                                        |
 | `GOOGLE_CLIENT_SECRET`       | no       | unset              | Google SSO client secret.                                     |
 | `SUPER_ADMIN_EMAIL`          | no       | `admin@aixle.com`  | First-boot bootstrap: this email becomes super admin.         |
+| `MICROSOFT_CLIENT_ID`        | no       | unset              | Microsoft/Entra app registration client ID. A multi-tenant registration: one per deployment, any customer tenant. |
+| `MICROSOFT_CLIENT_SECRET`    | no       | unset              | Its client secret.                                            |
+| `MICROSOFT_TENANT_ID`        | no       | `common`           | Which Entra directory to accept. `common` accepts any work or school tenant; a GUID restricts sign-in to that one. |
+| `AUTH_ENABLED_KINDS`         | no       | unset              | Comma-separated allowlist narrowing which sign-in methods this deployment offers. Availability is already derived from which credentials are present, so this only ever offers LESS — an installation with no Microsoft credentials never offers Microsoft however this is set. |
 | `ADMIN_PASSWORD`             | no       | unset              | First-boot bootstrap password for that admin.                  |
 | `SLACK_CLIENT_ID`            | no       | unset              | Slack app client ID — one app per deployment, multi-workspace via OAuth. |
 | `SLACK_CLIENT_SECRET`        | no       | unset              | Slack app client secret.                                      |
