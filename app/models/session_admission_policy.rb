@@ -111,6 +111,47 @@ class SessionAdmissionPolicy < ApplicationRecord
     end
   end
 
+  # Applies the deployment's ceiling without a human, and touches nothing else.
+  #
+  # WHY IT EXISTS: the ceiling used to select which pool a session belonged to, so
+  # applying it re-homed live sessions and had to happen in a maintenance window.
+  # That is why it is copied into the policy by `session_admission:sync` instead
+  # of being read live. It is a plain number over the same project pools now — and
+  # a deployed installation has nobody with a shell to run that task. After
+  # activation the admin page offers Pause and Resume and nothing else, so a
+  # changed ConfigMap value had no way at all to take effect.
+  #
+  # Deliberately NOT sync!: that method's defaults would also enable admission and
+  # clear a pause. A background reconciler must never do either — enabling is a
+  # cutover with a drain gate behind it, and a pause is somebody's decision.
+  #
+  # Returns { state:, detail: } for the caller to report rather than raising: this
+  # runs every minute, so a ConfigMap typo must not turn into an exception storm.
+  def self.reconcile_installation_limit!
+    raw = deployment_setting(:installation_limit).to_s.strip
+    unless raw.empty? || raw.match?(/\A[1-9]\d*\z/)
+      return { state: :invalid, detail: "SESSION_CONCURRENCY_LIMIT=#{raw.inspect} is not a positive integer" }
+    end
+
+    cap = raw.empty? ? nil : raw.to_i
+    current
+    transaction do
+      policy = lock.find(1)
+      next { state: :unchanged } if policy.installation_limit == cap
+
+      reserved = SessionConcurrencyLimit.where(scope_type: "Project").sum(:max_sessions)
+      if cap && cap < reserved
+        next {
+          state: :refused,
+          detail: "SESSION_CONCURRENCY_LIMIT=#{cap} is below the #{reserved} already reserved by project limits"
+        }
+      end
+
+      policy.update!(installation_limit: cap, revision: policy.revision + 1)
+      { state: :applied, detail: "installation ceiling is now #{cap || 'unset'}" }
+    end
+  end
+
   def self.positive_integer!(value)
     raise ArgumentError, "Session concurrency must be a positive integer" unless value.to_s.match?(/\A[1-9]\d*\z/)
     value.to_i

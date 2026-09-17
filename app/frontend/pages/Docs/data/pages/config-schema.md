@@ -77,7 +77,7 @@ non-secret values.
 
 | Variable                              | Required | Default | Purpose                                                        |
 | ------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `SESSION_CONCURRENCY_LIMIT`           | no       | unset   | A ceiling over every project queue at once. An explicit project limit is a reservation drawn from it; projects without one share the remainder. Unset means no ceiling. Changing it needs `bin/rails session_admission:sync` (or the admin button), which also refuses a ceiling below what is already reserved. |
+| `SESSION_CONCURRENCY_LIMIT`           | no       | unset   | A ceiling over every project queue at once. An explicit project limit is a reservation drawn from it; projects without one share the remainder. Unset means no ceiling. Applied automatically within a minute; a ceiling below what is already reserved is refused and reported. |
 | `SESSION_PROJECT_CONCURRENCY_DEFAULT` | no       | `4`     | Queue size for a project that has set no limit of its own. Read live — takes effect on the next boot of each pod. |
 
 A row in `session_concurrency_limits` overrides the default for one project or

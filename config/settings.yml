@@ -436,11 +436,11 @@ container_execution:
 # Session admission's deployment inputs.
 #
 # `installation_limit` is a ceiling over every project queue at once, and an
-# explicit project limit is a reservation drawn from it. It is not applied on
-# read — `bin/rails session_admission:sync` (or the admin button) copies it into
-# the database policy, which is also where it is checked against the
-# reservations already made. Blank means no ceiling, and project limits are then
-# the only bound.
+# explicit project limit is a reservation drawn from it. It lives in the database
+# rather than being read per-process so that it can be checked against the
+# reservations already made; SessionAdmissionSyncJob copies it there within a
+# minute of a change, so a ConfigMap edit is the only action required. Blank
+# means no ceiling, and project limits are then the only bound.
 #
 # `project_default` IS read live, i.e. re-read at every boot, so a ConfigMap edit
 # takes effect on the next pod with nothing to run afterwards. A value that is

@@ -44,8 +44,10 @@ currently resolve to and decides only when a change of state is picked up.
         <th>SESSION_CONCURRENCY_LIMIT</th>
         <td>
           <%= @configured_limit || "unset — no installation-wide ceiling" %>
-          <% if @policy.enabled? && @configured_limit.to_s.presence != @policy.installation_limit.to_s.presence %>
-            <strong>— differs from the active policy; activate to apply it.</strong>
+          <% if @configured_limit.to_s.presence != @policy.installation_limit.to_s.presence %>
+            <strong>— differs from the active policy (<%= @policy.installation_limit || "unset" %>).</strong>
+            It is applied automatically within a minute; if it stays here, it was refused —
+            a ceiling below the sum of project reservations cannot be applied. Check the logs.
           <% end %>
         </td>
       </tr>
