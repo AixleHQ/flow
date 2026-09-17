@@ -112,7 +112,7 @@ user; edit those in the admin, not here.
 
 | Variable                       | Required | Default           | Purpose                                                          |
 | ------------------------------ | -------- | ----------------- | ---------------------------------------------------------------- |
-| `CONTAINER_RUNTIME`            | no       | `docker`          | `docker` or `kubernetes`.                                        |
+| `CONTAINER_RUNTIME`            | no       | `docker`          | `kubernetes` (or `k8s`, which the deployed ConfigMaps use) selects the Kubernetes runtime; anything else, including the default, selects Docker. |
 | `DOCKER_NETWORK`               | no       | `app_default`     | Docker network agent containers join.                            |
 | `AGENT_IMAGE_PREFIX`           | no       | `aixle/`          | Registry/name prefix every built-in runtime image is derived from: runtime `claude_code` becomes `<prefix>claude-code[:<tag>]`. Deployed environments default to `ghcr.io/aixle/aixle-app-`. |
 | `AGENT_IMAGE_TAG`              | no       | `latest`          | Tag appended to derived images; blank means the registry default. Deployed environments default to blank. |
@@ -194,6 +194,32 @@ stored on the integration row, not environment variables.
 GitLab access uses a per-integration personal access token (stored encrypted,
 not an environment variable). The GitLab webhook endpoint is verified with a
 per-repository secret, also not an environment variable.
+
+### Azure DevOps
+
+One operator-owned multi-tenant Entra app registration per deployment (see
+`docs/design/azure-devops-integration.md`). Customers do not register their own
+app: their Entra administrator provisions a tenant-local service principal for
+this client id. There is no enable flag — the feature is offered exactly when a
+client id and one credential are present, or PAT mode is on.
+
+| Variable                                | Required | Default                                        | Purpose                                                    |
+| --------------------------------------- | -------- | ---------------------------------------------- | ---------------------------------------------------------- |
+| `AZURE_DEVOPS_CLIENT_ID`                | no       | unset                                          | Client id of the deployment's Entra app registration (public). |
+| `AZURE_DEVOPS_PRIVATE_KEY`              | no       | unset                                          | PEM private key of the certificate uploaded to that app — the production credential. Stays server-side. |
+| `AZURE_DEVOPS_CERT_THUMBPRINT`          | no       | unset                                          | Thumbprint of that certificate.                            |
+| `AZURE_DEVOPS_CLIENT_SECRET`            | no       | unset                                          | Client secret instead of the certificate — a setup/pilot alternative. Set exactly one of the two. |
+| `AZURE_DEVOPS_CREDENTIAL_GENERATION`    | no       | `v1`                                           | Bump on every credential rotation: cached tokens minted under an older generation stop being served. |
+| `AZURE_DEVOPS_PAT_MODE_ENABLED`         | no       | `false`                                        | `true` permits the PAT fallback identity, which acts as the token's owner and carries that person's upstream permissions. Opt-in per deployment. |
+| `AZURE_DEVOPS_RESOURCE`                 | no       | `https://app.vssps.visualstudio.com/.default`  | OAuth resource for the client-credentials flow. Not a legacy ADAL value — do not "fix" it. |
+| `AZURE_DEVOPS_LOGIN_HOST`               | no       | `https://login.microsoftonline.com`            | Entra token endpoint host; sovereign clouds use a different one. |
+| `AZURE_DEVOPS_API_HOST`                 | no       | `https://dev.azure.com`                        | Azure DevOps API host.                                     |
+| `AZURE_DEVOPS_WEBHOOK_BASE_URL`         | no       | `<protocol>://<domain>`                        | Where Azure posts Service Hook deliveries — the only inbound part of this integration. Set it only when the deployment's own domain is not reachable from Azure (a tunnel in development); a loopback or private host provisions no subscriptions at all. |
+| `AZURE_DEVOPS_GIT_CREDENTIALS_URL`      | no       | `<internal base>/azure/git/credentials`        | Where the in-container git credential helper asks for a short-lived token. Never a public host: the request carries a per-session vending key. |
+| `AZURE_DEVOPS_TOKEN_REFRESH_SKEW`       | no       | `300`                                          | Seconds before the recorded expiry at which a cached token counts as spent. |
+| `AZURE_DEVOPS_COMPLETION_POLL_INTERVAL` | no       | `1.0`                                          | Seconds between re-reads while confirming a pull-request completion (Azure merges asynchronously). |
+| `AZURE_DEVOPS_OPEN_TIMEOUT`             | no       | `5`                                            | Connection open timeout, in seconds.                       |
+| `AZURE_DEVOPS_READ_TIMEOUT`             | no       | `30`                                           | Response read timeout, in seconds.                         |
 
 ## Auth & OAuth providers
 

@@ -217,7 +217,7 @@ azure_devops:
   # Where the in-container git credential helper asks for a short-lived token.
   # Reached over the docker network like cloud.credentials_url — never a public
   # host, since the request carries a per-session vending key.
-  git_credentials_url: <%= ENV['AZURE_DEVOPS_GIT_CREDENTIALS_URL'] || 'http://web:4002/azure/git/credentials' %>
+  git_credentials_url: <%= ENV['AZURE_DEVOPS_GIT_CREDENTIALS_URL'] || "#{internal_base}/azure/git/credentials" %>
   # Seconds before the recorded expiry at which a cached token is treated as
   # spent. Entra tokens for this resource live about an hour, so renewal is a
   # hot path on any long session, not a rare event.
