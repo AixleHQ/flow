@@ -314,36 +314,19 @@ module ContainerStrategies
     def collect_logs(container, session, agent_service)
       return [ 0, {} ] unless agent_service.adapter.respond_to?(:session_log_paths)
 
-      count = 0
-      contents = {}
-      redactor = secret_redactor(session)
-      agent_service.adapter.session_log_paths.each do |path|
-        content = read_file_from_container(container, path)
-        next if content.blank?
+      result = Sessions::LogCollector.new(
+        session: session,
+        container: container,
+        adapter: agent_service.adapter,
+        runtime: runtime,
+        redactor: secret_redactor(session)
+      ).call
 
-        # Covers /var/log/mitm/http.log, which holds the FULL provider request
-        # bodies — so every value the agent read is in there, having travelled to
-        # the model as part of the conversation.
-        content = redactor.call(content)
-
-        filename = File.basename(path)
-        contents["logs/#{filename}"] = content
-
-        io = StringIO.new(content)
-        io.define_singleton_method(:original_filename) { filename }
-
-        SessionLog.create!(
-          terminal_session: session,
-          name: filename,
-          file: io,
-          file_size: content.bytesize,
-          content_type: Marcel::MimeType.for(name: filename, extension: File.extname(filename))
-        )
-        count += 1
-      rescue StandardError => e
-        Rails.logger.warn("[AgentSession] Failed to collect log #{path}: #{e.message}")
+      if result.failures.any?
+        Rails.logger.warn("[AgentSession] session=#{session.id} incomplete log collection: #{result.failures.join('; ')}")
       end
-      [ count, contents ]
+
+      [ result.count, result.contents ]
     end
 
     def collect_outputs(container, session)

@@ -41,8 +41,19 @@ module Agents
       "/home/claude"
     end
 
+    # `~/.claude/projects/<escaped-cwd>/<session-id>.jsonl` is Claude Code's own transcript:
+    # every turn, every tool call and every result, as structured JSON. It is the only
+    # artifact that answers "what did this agent actually do" — terminal_output.log is the
+    # raw ANSI redraw stream, in which a tool call is not legible at all, and the run that
+    # prompted this (session 16880, 2026-09-17: a step that reported COMPLETED after
+    # 85 seconds of doing nothing) left no other evidence to read.
+    #
+    # The glob is how it has to be declared: the basename is the CLI's own session id, and
+    # the directory is the working directory with its slashes escaped. That basename is
+    # also what correlates this row with the vendor's telemetry, so it is kept as the
+    # SessionLog name.
     def session_log_paths
-      super + %w[/var/log/mitm/http.log]
+      super + [ "/var/log/mitm/http.log", "#{home_dir}/.claude/projects/*/*.jsonl" ]
     end
 
     # Built-in Claude Code tools (always allowed). DesignSync is an aixle-provided
