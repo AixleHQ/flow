@@ -99,3 +99,7 @@ docs/superpowers/
 bin/aws-login
 bin/dbp-ai
 docker/aws-config.workstation.example
+
+# Python bytecode — docker/base/logger is importable now (aixle_redact)
+__pycache__/
+*.pyc
