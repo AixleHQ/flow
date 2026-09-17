@@ -68,6 +68,27 @@ module Activities
         assert_nil @run.failure_reason
       end
 
+      # The words appear in plenty of healthy output — an agent editing an auth flow, a CLI's
+      # own help text. Only a session that already ended badly is read for them.
+      test "does not fail a finished step whose output merely mentions a login" do
+        session = create(:terminal_session, user: @user, agent_type: "claude_code",
+                         session_type: :workflow_step, state: "finished")
+        SessionLog.create!(
+          terminal_session: session,
+          name: "terminal_output.log",
+          file: StringIO.new("Documented the flow: run `codex login` to authenticate.\n"),
+          file_size: 60,
+          content_type: "text/plain"
+        )
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert_nil result["auth_error"]
+        assert result["valid"]
+        assert_equal "completed", step_run.reload.state
+      end
+
       # --- cancelled session ---
 
       test "fails the step when its session was cancelled rather than failed" do
