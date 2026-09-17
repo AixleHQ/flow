@@ -29,7 +29,7 @@ module ContainerRuntime
       end
     end
 
-    attr_reader :fs, :execs, :agent_type, :deleted_session_resources
+    attr_reader :fs, :execs, :agent_type, :deleted_session_resources, :uploads
 
     def initialize(agent_type: "claude_code", filesystem: nil)
       @agent_type = agent_type
@@ -40,6 +40,8 @@ module ContainerRuntime
       @unreachable_execs = []
       @raising_execs = []
       @unreadable_paths = []
+      @uploads = []
+      @upload_handler = nil
       @terminal_pane = ""
       @terminal_log_mtime = nil
       @default_container_status = :running
@@ -60,6 +62,14 @@ module ContainerRuntime
       else
         @container_statuses[container_id.to_s] = status
       end
+      self
+    end
+
+    # What the container's direct upload does with the bytes. The default records the
+    # transfer and nothing else; a test that needs the object to exist afterwards supplies
+    # a block that puts it wherever it is going to be read from.
+    def on_upload(&block)
+      @upload_handler = block
       self
     end
 
@@ -157,6 +167,19 @@ module ContainerRuntime
       # listing loop contains a `stat -c %s "$f"` that probe would otherwise claim.
       if command_string(cmd).include?("for f in") && command_string(cmd).include?("stat -c %s")
         return [ [ log_listing(command_string(cmd)) ], [ "" ], 0 ]
+      end
+
+      # Sessions::LogCollector has the container PUT a log straight to storage. Record the
+      # transfer and let the test say what "arrived at the other end" means — the fake
+      # models the container, not the object store.
+      if (m = command_string(cmd).match(/curl .*-T (\S+) (\S+)/))
+        source = Shellwords.split(m[1]).first.to_s
+        target = Shellwords.split(m[2]).first.to_s
+        return [ [ "" ], [ "curl: (22) no such file" ], 22 ] unless @fs.key?(source)
+
+        @uploads << { path: source, url: target }
+        @upload_handler&.call(source, target, @fs[source].to_s)
+        return [ [ "" ], [ "" ], 0 ]
       end
 
       # Sessions::LogCollector reads a bounded tail rather than copying the whole file.
@@ -329,10 +352,16 @@ module ContainerRuntime
     def log_listing(cmd_str)
       patterns = cmd_str[/for f in (.+?); do/, 1].to_s.split
       sep = ::Sessions::LogCollector::FIELD_SEPARATOR
-      patterns.flat_map { |pattern| @fs.keys.select { |path| File.fnmatch?(pattern, path) }.sort }
-              .uniq
-              .map { |path| "#{path}#{sep}#{@fs[path].to_s.bytesize}" }
-              .join("\n")
+      lines = patterns.flat_map { |pattern| @fs.keys.select { |path| File.fnmatch?(pattern, path) }.sort }
+                      .uniq
+                      .map { |path| "#{path}#{sep}#{@fs[path].to_s.bytesize}" }
+
+      # The collector probes for the in-container redaction filters in the same exec, and
+      # answers it from the same virtual FS: an image without them keeps the bounded read.
+      marker = ::Sessions::LogCollector::FILTER_MARKER_PATH
+      lines << "#{::Sessions::LogCollector::FILTERS_FIELD}#{sep}1" if @fs.key?(marker)
+
+      lines.join("\n")
     end
 
     # Sessions::LiveLogReader asks for the log's mtime and the pane in one exec,
