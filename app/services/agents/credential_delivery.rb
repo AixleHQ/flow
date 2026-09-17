@@ -30,8 +30,11 @@ module Agents
     # @param sessions [Enumerable<TerminalSession>] the holders to write to
     # @return [Result] how many containers took it, and how many could not be written
     def deliver(credential, sessions:)
-      files = credential.adapter.credential_files(credential.config_data)
+      adapter = credential.adapter
+      files = adapter.credential_files(credential.config_data)
       return Result.new(delivered: 0, failed: 0) if files.blank?
+
+      uid = adapter.container_uid
 
       delivered = 0
       failed = 0
@@ -39,7 +42,7 @@ module Agents
       sessions.each do |session|
         next if session.container_id.blank?
 
-        if write(session, files)
+        if write(session, files, uid)
           delivered += 1
         else
           failed += 1
@@ -57,9 +60,12 @@ module Agents
     # has already rotated the token and persisted it, and the next launch reads the stored
     # copy regardless. A container we could not write to is one that was going to die on
     # its stale token anyway.
-    def write(session, files)
+    # Written as the agent's own user, not as root: the CLI has to be able to rewrite this
+    # file when it rotates the token itself, and a root-owned one leaves it dependent on
+    # the directory permissions to replace it.
+    def write(session, files, uid)
       files.each do |path, content|
-        ok = container_runtime.write_file(session.container_id, path, content)
+        ok = container_runtime.write_file(session.container_id, path, content, uid: uid, gid: uid)
         raise "write_file returned #{ok.inspect} for #{path}" unless ok
       end
       Rails.logger.info("[CredentialDelivery] session=#{session.id} container=#{session.container_id} " \

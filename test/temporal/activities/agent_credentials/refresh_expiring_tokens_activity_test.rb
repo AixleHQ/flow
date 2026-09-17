@@ -98,6 +98,8 @@ module Activities
         delivered = JSON.parse(@runtime.read_file(session.container_id, CREDENTIALS_PATH))
         assert_equal "at-new", delivered.dig("claudeAiOauth", "accessToken")
         assert_equal "rt-new", delivered.dig("claudeAiOauth", "refreshToken")
+        # Owned by the agent user: the CLI has to be able to replace this file itself.
+        assert_equal 1001, @runtime.file_attributes(CREDENTIALS_PATH)[:uid]
       end
 
       test "leaves a credential alone while its holder is mid-turn" do
