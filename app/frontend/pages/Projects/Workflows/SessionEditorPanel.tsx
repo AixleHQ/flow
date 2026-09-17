@@ -15,7 +15,8 @@ import { useState } from 'react';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
-import { toolIdsFromPickerValue, toolPickerData, toolPickerValue, type ToolGroup } from 'shared/lib/toolPicker';
+import { ToolPicker } from 'shared/components/ToolPicker';
+import { type ToolGroup } from 'shared/lib/toolPicker';
 
 import classes from './BuilderPage.module.css';
 
@@ -214,10 +215,6 @@ export function SessionEditorPanel({
     .filter((c) => c?.id != null)
     .map((c) => ({ value: String(c.id), label: c.itemType === 'secret' ? `${c.name} (secret)` : c.name }));
 
-  const toolSelectData = toolPickerData(tools, toolGroups);
-  const toToolValue = (ids: number[]) => toolPickerValue(ids, toolGroups);
-  const fromToolValue = (values: string[]) => toolIdsFromPickerValue(values, toolGroups);
-
   const toSelectData = (items: NamedItem[]) =>
     Array.isArray(items)
       ? items.filter((i) => i?.id != null).map((i) => ({ value: String(i.id), label: i.name ?? '' }))
@@ -411,16 +408,19 @@ export function SessionEditorPanel({
           <div className={classes.resType}>
             Tools <span className={classes.resTypeSub}>— custom functions this session can call</span>
           </div>
-          <MultiSelect
-            data={toolSelectData}
-            value={toToolValue(step.toolIds)}
-            onChange={(v) => onFieldChange('toolIds', fromToolValue(v), true)}
+          <ToolPicker
+            tools={tools}
+            groups={toolGroups}
+            value={step.toolIds}
+            onChange={(ids) => onFieldChange('toolIds', ids, true)}
             disabled={readOnly}
-            searchable
             placeholder="None added"
             aria-label="Tools"
-            styles={{
-              input: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 4, fontSize: 13 },
+            inputStyles={{
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              fontSize: 13,
             }}
           />
         </div>

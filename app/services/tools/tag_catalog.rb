@@ -6,18 +6,19 @@ module Tools
   #
   # Each entry declares, per tag:
   # - label:      human-readable name shown in the picker
-  # - ui_visible: whether the picker offers this tag. A visible tag becomes ONE
-  #               picker entry that attaches every session tool carrying it
-  #               ("Board management", "Slack") — its members are never offered
-  #               one by one. Hidden tags stay out of the picker entirely: they
-  #               auto-inject, are builder-bound, or are surfaced through a
-  #               managed server.
+  # - ui_visible: whether the picker offers this tag. A visible tag becomes a
+  #               picker SECTION ("Board management", "Slack"): its header
+  #               attaches every session tool carrying the tag in one click, and
+  #               the tools under it can each be attached on their own. Hidden
+  #               tags stay out of the picker entirely: they auto-inject, are
+  #               builder-bound, or are surfaced through a managed server.
   #
   # A tag not listed here is treated as hidden. A user_attachable session tool
   # that matches no visible tag falls through to the picker's ungrouped list.
   #
-  # A tool must not carry two visible tags — it would land in two picker groups
-  # whose selections fight over the same ids (asserted in Tools::RegistryTest).
+  # A tool must not carry two visible tags — it would appear under two picker
+  # sections whose headers fight over the same ids (asserted in
+  # Tools::RegistryTest).
   module TagCatalog
     Entry = Struct.new(:tag, :label, :ui_visible, keyword_init: true)
 

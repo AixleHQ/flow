@@ -5,6 +5,9 @@ module Tools
   # project's picker: [{ tag:, label:, tool_ids: [...] }]. Only groups whose
   # tools are actually visible in this project are returned, so the picker
   # never offers an empty "Board management".
+  #
+  # The ids are what the picker renders the group's rows from — the frontend
+  # matches them against the flat tool list to draw one checkbox per member.
   module PickerGroups
     def self.for_project(project)
       visible = Tool.visible_for_project(project).index_by(&:name)

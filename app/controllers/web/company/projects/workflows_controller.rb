@@ -57,8 +57,9 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
       tools: InertiaRails.defer(group: "resources") {
         Tool.visible_for_project(current_project).map { |r| PickerResource.new(r).to_h }
       },
-      # Tag groups the picker offers as one-click attach (e.g. "Board
-      # management" → every board tool), resolved to this project's tool ids.
+      # Tag groups the picker offers as collapsible sections (e.g. "Board
+      # management" attaches every board tool from its header, or one tool at a
+      # time from the rows under it), resolved to this project's tool ids.
       tool_groups: InertiaRails.defer(group: "resources") {
         Tools::PickerGroups.for_project(current_project)
       },
