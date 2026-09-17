@@ -78,6 +78,13 @@ Rails.application.routes.draw do
         post "usage_statistics", to: "usage_statistics#create"
       end
 
+      # First-party Aixle Insights pull API (Bearer afli_ project token).
+      namespace :insights do
+        get "project", to: "projects#show"
+        get "members", to: "members#index"
+        get "session_usages", to: "session_usages#index"
+      end
+
       resources :terminal_sessions, only: %i[show create destroy] do
         member do
           post :finish
@@ -393,7 +400,9 @@ Rails.application.routes.draw do
           end
           resources :config_items, only: %i[index create update destroy]
           resources :members, only: %i[index create destroy]
-          resource :settings, only: %i[show update]
+          resource :settings, only: %i[show update] do
+            post :regenerate_insights_connection_token
+          end
         end
       end
       resources :workflow_catalog, only: :index do

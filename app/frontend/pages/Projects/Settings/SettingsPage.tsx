@@ -1,15 +1,18 @@
 import type { FormDataConvertible } from '@inertiajs/core';
 import { Head, router, usePage } from '@inertiajs/react';
 import {
+  Alert,
   Box,
   Button,
   Card,
+  Code,
   CopyButton,
   Divider,
   Group,
   Modal,
   Select,
   Stack,
+  Switch,
   Text,
   TextInput,
   Textarea,
@@ -22,6 +25,7 @@ import {
   IconAdjustments,
   IconAlertTriangle,
   IconArchive,
+  IconChartBar,
   IconCheck,
   IconCopy,
   IconInfoCircle,
@@ -74,6 +78,11 @@ interface Project {
   ownerName: string;
   ownerEmail: string;
   canDelete: boolean;
+  shareUsageWithInsights: boolean;
+  insightsConnectionConfigured: boolean;
+  insightsConnectionTokenLastUsedAt: string | null;
+  canManageInsightsSharing: boolean;
+  insightsConnectionToken: string | null;
 }
 
 interface Props {
@@ -104,6 +113,8 @@ const SettingsPage = () => {
 
   const [saved, setSaved] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [insightsSaving, setInsightsSaving] = useState(false);
+  const [tokenGenerating, setTokenGenerating] = useState(false);
 
   const handleSubmit = (values: typeof form.values) => {
     setIsSubmitting(true);
@@ -127,6 +138,49 @@ const SettingsPage = () => {
         onError: () => {
           setIsSubmitting(false);
           notifications.show({ message: 'Failed to save settings', color: 'red' });
+        },
+      },
+    );
+  };
+
+  const handleInsightsSharingChange = (checked: boolean) => {
+    if (!project.canManageInsightsSharing) return;
+
+    setInsightsSaving(true);
+    router.patch(
+      `${basePath}/settings`,
+      {
+        project: { shareUsageWithInsights: checked },
+      } as Record<string, FormDataConvertible>,
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          setInsightsSaving(false);
+          notifications.show({
+            message: checked ? 'Insights sharing enabled' : 'Insights sharing disabled',
+            color: 'green',
+          });
+        },
+        onError: () => {
+          setInsightsSaving(false);
+          notifications.show({ message: 'Failed to update Insights sharing', color: 'red' });
+        },
+      },
+    );
+  };
+
+  const handleGenerateToken = () => {
+    if (!project.canManageInsightsSharing || !project.shareUsageWithInsights) return;
+
+    setTokenGenerating(true);
+    router.post(
+      `${basePath}/settings/regenerate_insights_connection_token`,
+      {},
+      {
+        preserveScroll: true,
+        onFinish: () => setTokenGenerating(false),
+        onError: () => {
+          notifications.show({ message: 'Failed to generate connection token', color: 'red' });
         },
       },
     );
@@ -186,6 +240,16 @@ const SettingsPage = () => {
     dotClass: 'statusDotDefault',
   };
 
+  const lastUsedLabel = project.insightsConnectionTokenLastUsedAt
+    ? new Date(project.insightsConnectionTokenLastUsedAt).toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+
   return (
     <>
       <Head title={`Settings — ${project.name}`} />
@@ -196,75 +260,145 @@ const SettingsPage = () => {
       </Box>
 
       <div className={classes.grid2}>
-        {/* LEFT COLUMN: General (editable) */}
-        <Card p={22} withBorder radius={8}>
-          <div className={classes.secLabel}>
-            <IconAdjustments size={14} className={classes.secLabelIcon} />
-            General
-          </div>
+        <Stack gap="md">
+          <Card p={22} withBorder radius={8}>
+            <div className={classes.secLabel}>
+              <IconAdjustments size={14} className={classes.secLabelIcon} />
+              General
+            </div>
 
-          <form onSubmit={form.onSubmit(handleSubmit)}>
-            <Stack gap="md">
-              <TextInput
-                label="Project Name"
-                placeholder="Enter project name"
-                {...form.getInputProps('name')}
-                onChange={(e) => {
-                  form.getInputProps('name').onChange(e);
-                  setSaved(false);
-                }}
-              />
-
-              <Textarea
-                label="Description"
-                placeholder="Enter project description"
-                minRows={3}
-                {...form.getInputProps('description')}
-                onChange={(e) => {
-                  form.getInputProps('description').onChange(e);
-                  setSaved(false);
-                }}
-              />
-
-              <Box>
-                <Text size="sm" fw={500} mb={4}>
-                  Artifacts Language
-                </Text>
-                <Text size="xs" c="dimmed" mb={6}>
-                  Language AI agents use when generating artifacts and summaries
-                </Text>
-                <Select
-                  data={LANGUAGE_OPTIONS}
-                  {...form.getInputProps('preferredArtifactsLanguage')}
-                  onChange={(v) => {
-                    form.getInputProps('preferredArtifactsLanguage').onChange(v);
+            <form onSubmit={form.onSubmit(handleSubmit)}>
+              <Stack gap="md">
+                <TextInput
+                  label="Project Name"
+                  placeholder="Enter project name"
+                  {...form.getInputProps('name')}
+                  onChange={(e) => {
+                    form.getInputProps('name').onChange(e);
                     setSaved(false);
                   }}
                 />
-              </Box>
 
-              <div className={classes.saveRow}>
-                {saved && (
-                  <span className={classes.savedChip}>
-                    <IconCheck size={12} /> Saved
-                  </span>
-                )}
-                <Button
-                  type="submit"
-                  size="compact-sm"
-                  disabled={!form.isDirty() || !form.values.name.trim() || isSubmitting}
-                  loading={isSubmitting}
-                >
-                  Save Changes
-                </Button>
-              </div>
+                <Textarea
+                  label="Description"
+                  placeholder="Enter project description"
+                  minRows={3}
+                  {...form.getInputProps('description')}
+                  onChange={(e) => {
+                    form.getInputProps('description').onChange(e);
+                    setSaved(false);
+                  }}
+                />
+
+                <Box>
+                  <Text size="sm" fw={500} mb={4}>
+                    Artifacts Language
+                  </Text>
+                  <Text size="xs" c="dimmed" mb={6}>
+                    Language AI agents use when generating artifacts and summaries
+                  </Text>
+                  <Select
+                    data={LANGUAGE_OPTIONS}
+                    {...form.getInputProps('preferredArtifactsLanguage')}
+                    onChange={(v) => {
+                      form.getInputProps('preferredArtifactsLanguage').onChange(v);
+                      setSaved(false);
+                    }}
+                  />
+                </Box>
+
+                <div className={classes.saveRow}>
+                  {saved && (
+                    <span className={classes.savedChip}>
+                      <IconCheck size={12} /> Saved
+                    </span>
+                  )}
+                  <Button
+                    type="submit"
+                    size="compact-sm"
+                    disabled={!form.isDirty() || !form.values.name.trim() || isSubmitting}
+                    loading={isSubmitting}
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              </Stack>
+            </form>
+          </Card>
+
+          <Card p={22} withBorder radius={8}>
+            <div className={classes.secLabel}>
+              <IconChartBar size={14} className={classes.secLabelIcon} />
+              Aixle Insights
+            </div>
+
+            <Stack gap="md">
+              <Switch
+                label="Share usage with Aixle Insights"
+                description="When enabled, completed agent session tokens and cost can be pulled into Aixle Insights. Prompts, transcripts, and secrets never leave Flow."
+                checked={project.shareUsageWithInsights}
+                onChange={(e) => handleInsightsSharingChange(e.currentTarget.checked)}
+                disabled={!project.canManageInsightsSharing || insightsSaving}
+              />
+
+              {project.canManageInsightsSharing && project.shareUsageWithInsights && (
+                <Box>
+                  <Text size="sm" fw={500} mb={4}>
+                    Connection token
+                  </Text>
+                  <Text size="xs" c="dimmed" mb="sm">
+                    Paste this token into an Aixle Insights Flow connector. It is shown once after generation.
+                  </Text>
+
+                  {project.insightsConnectionToken && (
+                    <Alert color="yellow" mb="sm" title="Copy this token now">
+                      <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
+                        <Code style={{ wordBreak: 'break-all', flex: 1 }}>{project.insightsConnectionToken}</Code>
+                        <CopyButton value={project.insightsConnectionToken}>
+                          {({ copied, copy }) => (
+                            <Button
+                              variant="light"
+                              size="compact-sm"
+                              onClick={copy}
+                              leftSection={copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                            >
+                              {copied ? 'Copied' : 'Copy'}
+                            </Button>
+                          )}
+                        </CopyButton>
+                      </Group>
+                    </Alert>
+                  )}
+
+                  <Group gap="sm">
+                    <Button
+                      size="compact-sm"
+                      variant="default"
+                      loading={tokenGenerating}
+                      onClick={handleGenerateToken}
+                    >
+                      {project.insightsConnectionConfigured ? 'Regenerate token' : 'Generate token'}
+                    </Button>
+                    {project.insightsConnectionConfigured && !project.insightsConnectionToken && (
+                      <Text size="xs" c="dimmed">
+                        Token configured
+                        {lastUsedLabel ? ` · last used ${lastUsedLabel}` : ' · not used yet'}
+                      </Text>
+                    )}
+                  </Group>
+                </Box>
+              )}
+
+              {!project.canManageInsightsSharing && (
+                <Text size="xs" c="dimmed">
+                  Only the project owner or a company admin can change Insights sharing.
+                </Text>
+              )}
             </Stack>
-          </form>
-        </Card>
+          </Card>
+        </Stack>
 
-        {/* RIGHT COLUMN: Details + Danger Zone */}
         <div className={classes.colSide}>
-          {/* Details (read-only) */}
           <Card p={22} withBorder radius={8}>
             <div className={classes.secLabel}>
               <IconInfoCircle size={14} className={classes.secLabelIcon} />
@@ -330,7 +464,6 @@ const SettingsPage = () => {
             </div>
           </Card>
 
-          {/* Danger Zone */}
           <Card p={22} className={classes.dangerCard}>
             <div className={classes.secLabelDanger}>
               <IconAlertTriangle size={14} className={classes.secLabelDangerIcon} />

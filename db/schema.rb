@@ -587,16 +587,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_120000) do
     t.bigint "company_id", null: false
     t.datetime "created_at", null: false
     t.text "description"
+    t.string "insights_connection_token_digest"
+    t.datetime "insights_connection_token_last_used_at"
     t.string "name", null: false
     t.bigint "owner_id", null: false
     t.string "preferred_artifacts_language", default: "en"
     t.jsonb "settings", default: {}, null: false
+    t.boolean "share_usage_with_insights", default: false, null: false
     t.string "slug", null: false
     t.string "state", null: false
     t.datetime "updated_at", null: false
     t.index ["company_id", "name"], name: "index_projects_on_company_id_and_name", unique: true
     t.index ["company_id", "slug"], name: "index_projects_on_company_id_and_slug", unique: true
     t.index ["company_id"], name: "index_projects_on_company_id"
+    t.index ["insights_connection_token_digest"], name: "index_projects_on_insights_connection_token_digest", unique: true, where: "(insights_connection_token_digest IS NOT NULL)"
     t.index ["owner_id"], name: "index_projects_on_owner_id"
     t.index ["state"], name: "index_projects_on_state"
   end
@@ -687,7 +691,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_120000) do
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
     t.index ["scope_type", "scope_id"], name: "index_session_concurrency_limits_on_scope_type_and_scope_id", unique: true
-    t.check_constraint "max_sessions > 0 AND (scope_type::text = ANY (ARRAY['Project'::character varying, 'User'::character varying]::text[]))", name: "valid_session_scope_limit"
+    t.check_constraint "max_sessions > 0 AND (scope_type::text = ANY (ARRAY['Project'::character varying::text, 'User'::character varying::text]))", name: "valid_session_scope_limit"
   end
 
   create_table "session_config_items", id: false, force: :cascade do |t|

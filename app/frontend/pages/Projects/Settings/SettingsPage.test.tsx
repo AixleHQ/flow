@@ -19,6 +19,11 @@ const project = {
   ownerName: 'Dana Owner',
   ownerEmail: 'dana@example.com',
   canDelete: true,
+  shareUsageWithInsights: false,
+  insightsConnectionConfigured: false,
+  insightsConnectionTokenLastUsedAt: null,
+  canManageInsightsSharing: true,
+  insightsConnectionToken: null,
 };
 
 describe('Projects/Settings/SettingsPage', () => {
@@ -348,5 +353,71 @@ describe('Projects/Settings/SettingsPage', () => {
     await userEvent.click(copyBtn);
 
     expect(screen.getByText('gateway-service')).toBeInTheDocument();
+  });
+
+  it('renders the Aixle Insights section with sharing switch', () => {
+    renderAuthedPage(<SettingsPage />, { props: { project } });
+
+    expect(screen.getByText('Aixle Insights')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /Share usage with Aixle Insights/i })).toBeInTheDocument();
+  });
+
+  it('patches shareUsageWithInsights when the owner toggles the switch on', async () => {
+    renderAuthedPage(<SettingsPage />, { props: { project } });
+
+    await userEvent.click(screen.getByRole('switch', { name: /Share usage with Aixle Insights/i }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/7/settings',
+      expect.objectContaining({
+        project: { shareUsageWithInsights: true },
+      }),
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('shows generate token when sharing is on and posts regenerate', async () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: {
+        project: {
+          ...project,
+          shareUsageWithInsights: true,
+          insightsConnectionConfigured: false,
+        },
+      },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Generate token' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/7/settings/regenerate_insights_connection_token',
+      {},
+      expect.objectContaining({ preserveScroll: true }),
+    );
+  });
+
+  it('shows the one-shot connection token when present', () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: {
+        project: {
+          ...project,
+          shareUsageWithInsights: true,
+          insightsConnectionConfigured: true,
+          insightsConnectionToken: 'afli_test_token_once',
+        },
+      },
+    });
+
+    expect(screen.getByText('afli_test_token_once')).toBeInTheDocument();
+    expect(screen.getByText(/Copy this token now/i)).toBeInTheDocument();
+  });
+
+  it('disables the Insights switch when the user cannot manage sharing', () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: { project: { ...project, canManageInsightsSharing: false } },
+    });
+
+    expect(screen.getByRole('switch', { name: /Share usage with Aixle Insights/i })).toBeDisabled();
+    expect(screen.getByText(/Only the project owner or a company admin/i)).toBeInTheDocument();
   });
 });

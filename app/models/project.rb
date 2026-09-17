@@ -31,16 +31,24 @@ class Project < ApplicationRecord
   has_many :workflows, as: :scope, dependent: :destroy
   has_many :workflow_runs, dependent: :destroy
 
+  # ── Aixle Insights connection token ──
+  # Project-scoped service credential for Insights pull sync. Digest-only
+  # storage; plaintext (afli_-prefixed) is returned once from
+  # regenerate_insights_connection_token! and never persisted.
+  INSIGHTS_CONNECTION_TOKEN_PREFIX = "afli_"
+
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }
   validates :slug, presence: true,
                    uniqueness: { scope: :company_id },
                    format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }
   validates :preferred_artifacts_language, inclusion: { in: ARTIFACTS_LANGUAGES }, allow_nil: false
+  validates :share_usage_with_insights, inclusion: { in: [ true, false ] }
   validate :owner_belongs_to_company
 
   # Callbacks
   before_validation :generate_slug, on: :create
+  before_save :clear_insights_connection_token_when_sharing_disabled
 
   # Scopes
   scope :with_computed_counts, -> {
@@ -129,7 +137,51 @@ class Project < ApplicationRecord
         .order(Arel.sql("CASE WHEN id = #{owner_id} THEN 0 ELSE 1 END"))
   end
 
+  def self.find_by_insights_connection_token(token)
+    return nil unless token.is_a?(String) && token.start_with?(INSIGHTS_CONNECTION_TOKEN_PREFIX)
+
+    find_by(insights_connection_token_digest: Digest::SHA256.hexdigest(token))
+  end
+
+  def regenerate_insights_connection_token!
+    raise ArgumentError, "insights sharing must be enabled" unless share_usage_with_insights?
+
+    token = "#{INSIGHTS_CONNECTION_TOKEN_PREFIX}#{SecureRandom.urlsafe_base64(32)}"
+    update!(
+      insights_connection_token_digest: Digest::SHA256.hexdigest(token),
+      insights_connection_token_last_used_at: nil
+    )
+    token
+  end
+
+  def disable_insights_connection_token!
+    update!(insights_connection_token_digest: nil, insights_connection_token_last_used_at: nil)
+  end
+
+  def insights_connection_configured?
+    insights_connection_token_digest.present?
+  end
+
+  # Touch last_used_at at most once per minute to avoid write amplification
+  # from frequent Insights sync polls.
+  def touch_insights_connection_token_last_used!
+    return if insights_connection_token_digest.blank?
+
+    threshold = 1.minute.ago
+    return if insights_connection_token_last_used_at.present? &&
+              insights_connection_token_last_used_at >= threshold
+
+    update_column(:insights_connection_token_last_used_at, Time.current)
+  end
+
   private
+
+  def clear_insights_connection_token_when_sharing_disabled
+    return unless share_usage_with_insights_changed? && !share_usage_with_insights?
+
+    self.insights_connection_token_digest = nil
+    self.insights_connection_token_last_used_at = nil
+  end
 
   def generate_slug
     return if slug.present?
