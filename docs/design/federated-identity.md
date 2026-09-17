@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Date:** 2026-09-17
-**Scope:** Every way a human proves who they are to this app — multi-identity users, per-company IdP connections, Microsoft Entra and generic OIDC, passkeys/TOTP/magic links, SAML and SCIM through a self-hosted sidecar, server-side sessions — and every rule a company may set about which of those its members may use.
+**Scope:** Every way a human proves who they are to this app — multi-identity users, per-company IdP connections, Microsoft Entra and generic OIDC, passkeys/TOTP/magic links, SCIM directory sync, server-side sessions — and every rule a company may set about which of those its members may use.
 **Invariants:** [`ARCHITECTURE-SPINE.md`](../planning-artifacts/architecture/architecture-federated-identity-2026-09-17/ARCHITECTURE-SPINE.md) — the `AD-n` blocks cited throughout this document.
 **Depends on:** [research report](../research/technical-federated-identity-and-sso-provider-research-2026-09-16.md), [oauth-unification](./oauth-unification.md) (the integrations broker whose state machinery is copied, not reused)
 
@@ -48,7 +48,7 @@ Five structural blockers follow from that audit, and none of them is archaeologi
 - Many identities per user, many connections per company, one place that resolves either.
 - A company admin can enable and disable authentication methods for their company, safely — without locking anyone out, and without the toggle being bypassable from a side entrance.
 - Broad method coverage without a SAML parser in the Rails process.
-- The self-hosted default stays one Rails app and a Postgres. A self-hoster who wants SAML opts into one more container; a self-hoster who does not, gains nothing to run.
+- The self-hosted deployment stays one Rails app and a Postgres. Nothing here adds a second service to run.
 
 **Non-goals.** Becoming an OIDC provider for customers' own tools. Replacing our company model with a vendor's. Per-company login-page branding beyond the existing `Company#branding`.
 
@@ -94,11 +94,11 @@ Members are not left to discover this at sign-in: when an edit would remove the 
 
 ### 4.4 Identity binding
 
-Identity is `(provider, subject)` — never email (AD-3). The subject claim is **binding per kind**, not illustrative: OIDC `sub`, Entra `oid` (never `email` or UPN), a sidecar-bridged SAML `NameID`. An adapter that cannot obtain its bound claim fails the sign-in rather than substituting another.
+Identity is `(provider, subject)` — never email (AD-3). The subject claim is **binding per kind**, not illustrative: OIDC `sub`, Entra `oid` (never `email` or UPN). An adapter that cannot obtain its bound claim fails the sign-in rather than substituting another.
 
 Email may promote an assertion to an existing user only when the provider asserts `email_verified` **present and true** — an absent claim is not a true claim — and only when the asserting provider is company-scoped and the email's domain is that company's. A changed email updates the stored address and never re-links the identity, so mailbox reassignment does not transfer an account.
 
-Every assertion is checked against the row it claims to satisfy (AD-13): `iss` and `aud` for any OIDC connection, `tid` for Entra, the sidecar's tenant and product keys for a sidecar-bridged SAML assertion. Mismatch rejects. There is no email fallback and no "try the other connections" retry — that retry *is* the multi-tenant confused-deputy bug.
+Every assertion is checked against the row it claims to satisfy (AD-13): `iss` and `aud` for any OIDC connection, `tid` for Entra. Mismatch rejects. There is no email fallback and no "try the other connections" retry — that retry *is* the multi-tenant confused-deputy bug.
 
 Passkeys are the one credential kind the company does not own (AD-18). A passkey lives on the user's own device and works across every company they belong to, so registration, listing and deletion belong to the user alone and no company-admin surface touches them. A company may still decline to *accept* a passkey — disabling it in the policy stops a passkey proof from satisfying that company, which an SSO-only buyer will want — but it never deletes or invalidates the credential, which remains usable everywhere else.
 
@@ -237,7 +237,7 @@ test keeps `ruby-saml` out of the lockfile so the decision cannot erode quietly.
 
 It becomes the right answer only if we decide to stop being in the identity business — a strategic choice about what this team maintains, not a component swap. If it is adopted anyway, the least-bad shape is **broker-only**: Keycloak holds no users, Rails stays the system of record, and the bcrypt migration problem disappears.
 
-Because every external provider is consumed as plain OIDC behind one seam, swapping the sidecar for Keycloak, Casdoor or Authentik later — or for a commercial broker, if the constraints ever change — is a connector change, not a re-platforming. Building this does not foreclose Keycloak; adopting Keycloak now forecloses everything else.
+Because every external provider is consumed as plain OIDC behind one seam, putting Keycloak, Casdoor or Authentik in front of it later — or for a commercial broker, if the constraints ever change — is a connector change, not a re-platforming. Building this does not foreclose Keycloak; adopting Keycloak now forecloses everything else.
 
 ## 7. Security requirements that hold regardless
 
@@ -253,13 +253,16 @@ These are requirements, not improvements, and several fix weaknesses that exist 
 
 ## 8. Open questions
 
-| # | Question | Resolve by |
+All five are closed. They are kept rather than deleted because each answer is a
+constraint the code now depends on.
+
+| # | Question | Answer |
 |---|---|---|
-| 1 | **Still open.** Does the bridge's OSS build support enough tenancy for per-company connections? The integration is written and contract-tested, but never run against a live bridge. | Bring up the `sso` compose profile, register two tenants, complete both flows. |
-| 2 | Does a passkey belong to the user or to a company's policy? It is registered once and works everywhere, so a company disabling `passkey` is disabling a credential its members may rely on elsewhere. | Before Stage 2. |
-| 3 | Does `super_admin` bypass the entry gate entirely, or only the activation guard? | Before ORG-POLICY ships. |
-| 4 | IdP-initiated SSO inverts the "authenticate, then enter a company" order that the entry gate assumes. The sidecar supports it; our gate has not been designed for it. | During the Stage 3 spike. |
-| 5 | Live cookie sessions on the Stage 0 deploy: one forced global re-authentication, or a bounded adoption window that mints a `Session` row from a legacy cookie? A product call. | Before Stage 0 ships. |
+| 1 | Does the sidecar bridge's OSS build support enough tenancy for per-company connections? | **Withdrawn with SAML.** The spike answered yes — three connections, no licence gate — and the sidecar was dropped anyway: a second service is not worth what SAML buys. See §4.5. |
+| 2 | Does a passkey belong to the user or to a company's policy? | **To the user.** Registration and deletion are the user's alone; a company may decline to *accept* a passkey but never deletes one (AD-18). |
+| 3 | Does `super_admin` bypass the entry gate entirely, or only the activation guard? | **Entirely**, and it authenticates by password only — no federated provider may ever resolve to a `super_admin`. |
+| 4 | IdP-initiated SSO inverts the "authenticate, then enter a company" order the entry gate assumes. | **Withdrawn with SAML.** Per-company OIDC is SP-initiated; nothing in the shipped flow starts at the IdP. |
+| 5 | Live cookie sessions at the Stage 0 cutover: one forced global re-authentication, or a bounded adoption window? | **One forced re-authentication.** A product call, taken. |
 
 ## 9. Key references (code)
 
