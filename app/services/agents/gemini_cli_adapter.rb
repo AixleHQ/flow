@@ -296,7 +296,7 @@ module Agents
         "telemetry" => {
           "enabled" => true,
           "target" => "local",
-          "otlpEndpoint" => Settings.otel.metrics_endpoint.to_s.sub(%r{/v1/\w+\z}, ""),
+          "otlpEndpoint" => Settings.otel.endpoint.to_s,
           "otlpProtocol" => "http",
           "logPrompts" => false
         },

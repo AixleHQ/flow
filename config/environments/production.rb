@@ -24,7 +24,10 @@ Rails.application.configure do
 
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"
-  config.asset_host = Settings.asset_host if ENV["ASSET_HOST"].present?
+  # Reads the setting, not the variable behind it: the image declares ASSET_HOST
+  # as an ENV, so a build without that arg carries it as "" — present as far as
+  # the process is concerned, blank as far as anyone means it.
+  config.asset_host = Settings.asset_host if Settings.asset_host.present?
 
   # Store uploaded files on the local file system (see config/storage.yml for options).
   config.active_storage.service = :local

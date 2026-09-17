@@ -863,10 +863,10 @@ module Agents
 
     private
 
-    # Base-login client id, from Settings when configured, else the known public id.
+    # Base-login client id. Anthropic publishes one public client id for this
+    # flow, so there is nothing per-deployment to configure — the Settings
+    # lookup that used to sit here read a key no settings file defined.
     def base_oauth_client_id
-      Settings.agents.oauth&.base_client_id.presence || BASE_OAUTH_CLIENT_ID
-    rescue StandardError
       BASE_OAUTH_CLIENT_ID
     end
 

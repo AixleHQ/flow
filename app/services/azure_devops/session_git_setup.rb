@@ -51,8 +51,13 @@ module AzureDevops
       return {} unless Array(session.repositories).any? { |r| r.azure_devops? }
 
       {
-        "AIXLE_AZURE_GIT_URL" => Settings.azure_devops&.git_credentials_url.presence ||
-          "http://web:4002/azure/git/credentials",
+        # One source for this URL: config/settings.yml derives it from the
+        # deployment's internal base (INTERNAL_BASE_URL), like mcp.server_url and
+        # cloud.credentials_url. The literal that used to sit here was a fourth
+        # copy of a host that is only right under compose, where one container
+        # runs both pumas — in the cluster port 4002 belongs to the `mcp`
+        # service (and the NetworkPolicy admits only 4000 to `web`).
+        "AIXLE_AZURE_GIT_URL" => Settings.azure_devops.git_credentials_url,
         "AIXLE_AZURE_GIT_KEY" => GitSessionKey.generate(session),
         # The host the helper will answer for. Configurable because api_host is
         # (sovereign clouds), and a helper hardcoded to dev.azure.com would

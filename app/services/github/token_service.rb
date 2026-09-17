@@ -70,7 +70,7 @@ module Github
       return normalize_pem(key_content) if key_content.present?
 
       key_path = Settings.github.private_key_path
-      raise ConfigurationError, "GitHub App private key not configured (set GITHUB_APP_PRIVATE_KEY or GITHUB_PRIVATE_KEY_PATH)" if key_path.blank?
+      raise ConfigurationError, "GitHub App private key not configured (set GITHUB_APP_PRIVATE_KEY or GITHUB_APP_PRIVATE_KEY_PATH)" if key_path.blank?
       raise ConfigurationError, "GitHub App private key file not found at #{key_path}" unless File.exist?(key_path)
 
       File.read(key_path)

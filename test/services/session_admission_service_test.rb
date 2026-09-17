@@ -8,8 +8,6 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     SessionAdmissionPolicy.sync!(installation_limit: 1)
   end
 
-  teardown { restore_scope_defaults }
-
   def enqueue(user: @user, project: nil)
     session = create(:terminal_session, user: user, project: project)
     SessionAdmissionService.enqueue!(session)
@@ -122,12 +120,9 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "an unusable scope default falls back instead of wedging every queue" do
-    # Both variables are set here rather than assumed: the second assertion is
-    # about an UNSET variable, and a sibling test that sets one leaves this
-    # reading whatever ran before it.
-    with_scope_defaults(project: 1, user: 1)
-    ENV["SESSION_PROJECT_CONCURRENCY_DEFAULT"] = "lots"
-    ENV.delete("SESSION_USER_CONCURRENCY_DEFAULT")
+    # Both inputs are stated rather than assumed: the first is a ConfigMap
+    # typo, the second an unset variable, and each falls back on its own.
+    with_scope_defaults(project: "lots", user: nil)
 
     assert_equal 4, SessionAdmissionPolicy.scope_default("Project")
     assert_equal 2, SessionAdmissionPolicy.scope_default("User"), "an unset variable keeps its own fallback"
