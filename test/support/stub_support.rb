@@ -10,10 +10,9 @@ module StubSupport
   # so mutating ENV here is confined to this test.
   # ===========================================================================
 
-  def with_scope_defaults(project: 1, user: 1)
+  def with_scope_defaults(project: 1)
     previous = ENV.slice(*SessionAdmissionPolicy::SCOPE_DEFAULTS.values.pluck(:variable))
     ENV["SESSION_PROJECT_CONCURRENCY_DEFAULT"] = project.to_s
-    ENV["SESSION_USER_CONCURRENCY_DEFAULT"] = user.to_s
     @_scope_defaults_restore = previous
   end
 

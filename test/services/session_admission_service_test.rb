@@ -5,12 +5,15 @@ require "test_helper"
 class SessionAdmissionServiceTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
+    @project = create(:project, owner: @user, company: @user.companies.first)
     SessionAdmissionPolicy.sync!(installation_limit: 1)
   end
 
   teardown { restore_scope_defaults }
 
-  def enqueue(user: @user, project: nil)
+  # Every queued session belongs to a project — that is what the queue is for.
+  # Pass `project: nil` only to exercise the sessions that are exempt from it.
+  def enqueue(user: @user, project: @project)
     session = create(:terminal_session, user: user, project: project)
     SessionAdmissionService.enqueue!(session)
   end
@@ -94,15 +97,73 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_nil third.reload.admitted_at
   end
 
-  test "unset installation cap gives independent project and user pools" do
-    with_scope_defaults(project: 1, user: 1)
+  test "unset installation cap gives each project its own independent queue" do
+    with_scope_defaults(project: 1)
     SessionAdmissionPolicy.sync!(installation_limit: nil)
-    project = create(:project, owner: @user, company: @user.companies.first)
-    project_first = enqueue(project: project)
-    project_second = enqueue(project: project)
-    personal = enqueue
-    assert_equal [ project_first.id, personal.id ], SessionAdmissionService.drain!
-    assert_nil project_second.reload.admitted_at
+    other_project = create(:project, owner: @user, company: @user.companies.first)
+    mine_first = enqueue
+    mine_second = enqueue
+    theirs = enqueue(project: other_project)
+
+    assert_equal [ mine_first.id, theirs.id ], SessionAdmissionService.drain!
+    assert_nil mine_second.reload.admitted_at, "one project filling up must not hold up another"
+  end
+
+  # The queue is a project feature: a slot is allocated to a project, waited for
+  # in one and shown in one's settings. A session with no project — in practice an
+  # agent login — has no queue to join and launches without a reservation.
+  test "a session with no project is not queued at all" do
+    SessionAdmissionPolicy.sync!(installation_limit: 1)
+
+    assert_nil enqueue(project: nil)
+    assert_equal 0, SessionAdmission.count
+  end
+
+  test "an exempt session does not consume the installation ceiling" do
+    SessionAdmissionPolicy.sync!(installation_limit: 1)
+    enqueue(project: nil)
+    queued = enqueue
+
+    assert_equal [ queued.id ], SessionAdmissionService.drain!
+  end
+
+  # The point of the change: the installation limit and a project's own limit used
+  # to be alternatives — setting one switched the other off. Both apply now.
+  test "a project's own limit and the installation ceiling both apply" do
+    with_scope_defaults(project: 2)
+    SessionAdmissionPolicy.sync!(installation_limit: 3)
+    other_project = create(:project, owner: @user, company: @user.companies.first)
+    3.times { enqueue }
+    3.times { enqueue(project: other_project) }
+
+    granted = SessionAdmissionService.drain!
+
+    assert_equal 3, granted.size, "the ceiling bounds the installation"
+    mine = SessionAdmission.occupied.joins(:session_admission_pool)
+                           .where(session_admission_pools: { key: "project:#{@project.id}" }).count
+    assert_equal 2, mine, "and each project is still bounded by its own limit"
+  end
+
+  test "the installation ceiling stops a project short of its own limit" do
+    with_scope_defaults(project: 5)
+    SessionAdmissionPolicy.sync!(installation_limit: 2)
+    3.times { enqueue }
+
+    assert_equal 2, SessionAdmissionService.drain!.size
+  end
+
+  test "raising the installation ceiling no longer requires a drain" do
+    SessionAdmissionPolicy.sync!(installation_limit: 1)
+    first = enqueue
+    second = enqueue
+    SessionAdmissionService.drain!
+    assert_nil second.reload.admitted_at
+
+    # It used to re-home every live session, so it was refused while any ran.
+    SessionAdmissionPolicy.sync!(installation_limit: 2)
+
+    assert_equal [ second.id ], SessionAdmissionService.drain!
+    assert first.reload.admitted_at, "a moved ceiling must not disturb what is already running"
   end
 
   test "a changed scope default takes effect without writing policy" do
@@ -122,19 +183,14 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "an unusable scope default falls back instead of wedging every queue" do
-    # Both variables are set here rather than assumed: the second assertion is
-    # about an UNSET variable, and a sibling test that sets one leaves this
-    # reading whatever ran before it.
-    with_scope_defaults(project: 1, user: 1)
+    with_scope_defaults(project: 1)
     ENV["SESSION_PROJECT_CONCURRENCY_DEFAULT"] = "lots"
-    ENV.delete("SESSION_USER_CONCURRENCY_DEFAULT")
 
     assert_equal 4, SessionAdmissionPolicy.scope_default("Project")
-    assert_equal 2, SessionAdmissionPolicy.scope_default("User"), "an unset variable keeps its own fallback"
   end
 
   test "a scope override beats the deployment default, which beats nothing" do
-    with_scope_defaults(project: 1, user: 1)
+    with_scope_defaults(project: 1)
     SessionAdmissionPolicy.sync!(installation_limit: nil)
     project = create(:project, owner: @user, company: @user.companies.first)
     SessionConcurrencyLimit.set!(scope: project, max_sessions: 2)
@@ -149,7 +205,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "a session in a project draws on the project pool, not its launcher's" do
-    with_scope_defaults(project: 1, user: 1)
+    with_scope_defaults(project: 1)
     SessionAdmissionPolicy.sync!(installation_limit: nil)
     project = create(:project, owner: @user, company: @user.companies.first)
     other = create(:user, :with_company)
@@ -164,7 +220,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "raising a scope limit admits the queue without waiting for reconciliation" do
-    with_scope_defaults(project: 1, user: 1)
+    with_scope_defaults(project: 1)
     SessionAdmissionPolicy.sync!(installation_limit: nil)
     project = create(:project, owner: @user, company: @user.companies.first)
     first = enqueue(project: project)

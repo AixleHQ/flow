@@ -8,6 +8,8 @@ require "test_helper"
 class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
+    # Only project sessions are queued at all, so recovery is only ever about one.
+    @project = create(:project, owner: @user, company: @user.companies.first)
     SessionAdmissionPolicy.sync!(installation_limit: 1)
   end
 
@@ -18,7 +20,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a closed container workflow releases the reservation it left behind" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 1.hour.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
     session.update!(state: "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: nil)
@@ -37,7 +39,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "an unresolved runtime operation keeps its slot through reconciliation" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 1.hour.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
     session.update!(state: "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged")
@@ -50,7 +52,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a closed workflow strands its in-flight operation instead of leaving it silent" do
-    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: nil)
@@ -71,7 +73,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a wedged admission is examined rather than skipped over" do
-    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "cancelled", started_at: 2.hours.ago)
     # Output collection is a separate concern and reaches the real strategy;
@@ -99,7 +101,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   # for one pinned capacity nothing could reclaim without an operator — which is
   # how sessions that timed out mid-exec ate the installation's slots one by one.
   test "an unaccountable exec stops pinning the slot once the container is gone" do
-    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
@@ -127,7 +129,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   # because the reconciler read Temporal's one definitive negative answer as
   # "unknown" and skipped the admission. A cap of twenty ran four sessions.
   test "a workflow Temporal has no record of releases its reservation" do
-    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
@@ -146,7 +148,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a workflow that is merely unreachable keeps its reservation" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 1.hour.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
     session.update!(state: "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged")
@@ -174,7 +176,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "the stale reaper leaves a reservation that is waiting for cluster capacity alone" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "running", started_at: 2.hours.ago)
     admission.update!(wait_reason: "cluster_capacity")
@@ -187,7 +189,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "the stale reaper tears down an admitted session that stopped making progress" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 2.hours.ago,
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago,
       temporal_workflow_id: "agent-session-x")
     admission = admit(session)
     session.update!(state: "running", started_at: 2.hours.ago)
@@ -203,9 +205,9 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a session that never started is reaped instead of orphaned forever" do
-    lost = create(:terminal_session, user: @user, state: "not_started", started_at: nil,
+    lost = create(:terminal_session, user: @user, project: @project, state: "not_started", started_at: nil,
                   created_at: 2.hours.ago, temporal_workflow_id: nil)
-    fresh = create(:terminal_session, user: @user, state: "not_started", started_at: nil)
+    fresh = create(:terminal_session, user: @user, project: @project, state: "not_started", started_at: nil)
 
     Activities::Session::CleanupStaleActivity.new.run
 

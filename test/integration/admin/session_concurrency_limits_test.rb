@@ -14,7 +14,7 @@ class Admin::SessionConcurrencyLimitsTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
     @owner = create(:user, company: @company)
     @project = create(:project, owner: @owner, company: @company)
-    with_scope_defaults(project: 1, user: 1)
+    with_scope_defaults(project: 1)
     SessionAdmissionPolicy.sync!(installation_limit: nil)
   end
 

@@ -34,6 +34,13 @@ class SessionAdmissionService
     # Returns the admission, or nil when admission is disabled and the caller
     # should take the legacy launch path.
     def enqueue!(session)
+      # The queue is a property of a project: a slot is allocated to one, waited
+      # for in one, and shown in one's settings. A session with no project has no
+      # queue to join — in practice that is an agent login (`auth_setup`), which
+      # is short, interactive, and launched by a person watching a dialog. Nil
+      # sends it down the launch path that needs no reservation.
+      return nil if session.project_id.blank?
+
       # Asked before the writer lock so that a schema that is not there yet
       # answers "no queue" instead of failing the launch. The authoritative
       # re-check still happens under the lock below.
@@ -60,6 +67,12 @@ class SessionAdmissionService
       transaction do |policy|
         next if !policy.enabled? || policy.paused?
 
+        # nil when the installation has no ceiling, which is the common
+        # self-hosted shape: project limits are then the only thing in play.
+        installation_headroom = if policy.installation_limit
+          [ policy.installation_limit - SessionAdmission.occupied.count, 0 ].max
+        end
+
         pools_with_waiting_head.each do |pool|
           pool.lock!
           candidates = pool.session_admissions.unreleased.where(admitted_at: nil, stop_requested_at: nil).order(:id)
@@ -67,13 +80,20 @@ class SessionAdmissionService
           next unless head
 
           key, cap = pool_configuration(policy, head.terminal_session)
-          # A head whose scope no longer maps to this pool means the policy mode
-          # changed under us. Stamping the other mode's cap here would silently
-          # re-scope live capacity, so leave the pool alone for the operator.
-          next unless key == pool.key
+          # A head whose scope no longer maps to this pool is an installation pool
+          # left over from when the installation limit selected a mode instead of
+          # being a ceiling. Nothing is ever added to one again, so it is drained
+          # against the cap it was created with rather than re-scoped or stranded.
+          cap = pool.limit unless key == pool.key
 
-          pool.update!(limit: cap, policy_revision: policy.revision)
+          pool.update!(limit: cap, policy_revision: policy.revision) if key == pool.key
           available = cap - pool.session_admissions.occupied.count
+          # The installation limit is a ceiling over every pool at once, so a
+          # project may not draw its own slots past what the installation has
+          # left. Counted here rather than reserved up front: projects without an
+          # explicit limit hold no allocation, and capacity nobody reserved should
+          # still be usable by whoever asks first.
+          available = [ available, installation_headroom ].min if installation_headroom
           budget = [ available, limit - granted.size ].min.clamp(0, limit)
           candidates.limit(budget).each do |admission|
             session = admission.terminal_session
@@ -85,8 +105,12 @@ class SessionAdmissionService
             end
             admission.update!(admitted_at: Time.current, permit_token: SecureRandom.uuid, wait_reason: "dispatch_pending")
             granted << admission.id
+            # Spend the ceiling as we go: two pools drained in one pass must not
+            # each be told the whole installation is free.
+            installation_headroom -= 1 if installation_headroom
           end
           break if granted.size >= limit
+          break if installation_headroom&.zero?
         end
       end
       granted
@@ -170,11 +194,13 @@ class SessionAdmissionService
       admission.terminal_session.update!(state: "cancelled", finished_at: Time.current)
     end
 
-    def pool_configuration(policy, session)
-      return [ "installation:default", policy.installation_limit ] if policy.installation_limit
-      type, id = session.project_id ? [ "Project", session.project_id ] : [ "User", session.user_id ]
-      default = SessionAdmissionPolicy.scope_default(type)
-      [ "#{type.downcase}:#{id}", SessionConcurrencyLimit.find_by(scope_type: type, scope_id: id)&.max_sessions || default ]
+    # Every admitted session belongs to exactly one pool: its project's. The
+    # installation limit is not one of the choices any more — it is a ceiling over
+    # all of them, spent in #drain!. A session with no project never gets here;
+    # #enqueue! sends it down the unreserved launch path.
+    def pool_configuration(_policy, session)
+      configured = SessionConcurrencyLimit.find_by(scope_type: "Project", scope_id: session.project_id)
+      [ "project:#{session.project_id}", configured&.max_sessions || SessionAdmissionPolicy.scope_default("Project") ]
     end
   end
 end

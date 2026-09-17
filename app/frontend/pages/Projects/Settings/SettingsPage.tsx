@@ -8,6 +8,7 @@ import {
   Divider,
   Group,
   Modal,
+  NumberInput,
   Select,
   Stack,
   Text,
@@ -60,6 +61,12 @@ const schema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(500).optional(),
   preferredArtifactsLanguage: z.string(),
+  // Empty means "no reservation of my own" — the project falls back to the
+  // installation default. The budget arithmetic is the server's to judge.
+  concurrency: z
+    .string()
+    .optional()
+    .refine((v) => !v || /^[1-9]\d*$/.test(v), 'Must be a whole number greater than zero'),
 });
 
 interface Project {
@@ -76,8 +83,27 @@ interface Project {
   canDelete: boolean;
 }
 
+interface ConcurrencyAllocation {
+  name: string;
+  maxSessions: number;
+}
+
+interface Concurrency {
+  /** This project's own limit, or null when it runs on the installation default. */
+  maxSessions: number | null;
+  default: number;
+  /** The ceiling every project shares, or null when the installation sets none. */
+  installationLimit: number | null;
+  /** The most this project could be set to right now; null when there is no ceiling. */
+  available: number | null;
+  allocations: ConcurrencyAllocation[];
+  queueEnabled: boolean;
+  canManage: boolean;
+}
+
 interface Props {
   project: Project;
+  concurrency: Concurrency;
 }
 
 function avatarInitials(name: string): string {
@@ -90,7 +116,8 @@ function avatarInitials(name: string): string {
 }
 
 const SettingsPage = () => {
-  const { project } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, concurrency } = usePage<{ props: Props }>().props as unknown as Props;
+  const pageErrors = (usePage().props as unknown as { errors?: Record<string, string> }).errors;
   const basePath = `/company/projects/${project.id}`;
 
   const form = useForm({
@@ -98,6 +125,7 @@ const SettingsPage = () => {
       name: project.name,
       description: project.description || '',
       preferredArtifactsLanguage: project.preferredArtifactsLanguage || 'en',
+      concurrency: concurrency.maxSessions != null ? String(concurrency.maxSessions) : '',
     },
     validate: zodResolver(schema),
   });
@@ -115,6 +143,9 @@ const SettingsPage = () => {
           description: values.description.trim(),
           preferredArtifactsLanguage: values.preferredArtifactsLanguage,
         },
+        // Sent only when this person may set it: the key's presence is what tells
+        // the server a limit was submitted at all, and an empty one clears it.
+        ...(concurrency.canManage ? { concurrency: values.concurrency.trim() } : {}),
       } as Record<string, FormDataConvertible>,
       {
         preserveScroll: true,
@@ -241,6 +272,56 @@ const SettingsPage = () => {
                     setSaved(false);
                   }}
                 />
+              </Box>
+
+              <Box>
+                {concurrency.canManage ? (
+                  <NumberInput
+                    label="Concurrent Sessions"
+                    description={
+                      concurrency.queueEnabled
+                        ? `How many sessions this project may run at the same time. Leave empty to use the default of ${concurrency.default}.`
+                        : 'The session queue is switched off for this installation, so this limit is recorded but not enforced yet.'
+                    }
+                    min={1}
+                    allowDecimal={false}
+                    allowNegative={false}
+                    placeholder={`Default (${concurrency.default})`}
+                    value={form.values.concurrency}
+                    error={form.errors.concurrency || pageErrors?.concurrency}
+                    onChange={(v) => {
+                      form.setFieldValue('concurrency', v === '' || v == null ? '' : String(v));
+                      setSaved(false);
+                    }}
+                  />
+                ) : (
+                  <>
+                    <Text size="sm" fw={500} mb={4}>
+                      Concurrent Sessions
+                    </Text>
+                    <Text size="sm">
+                      {concurrency.maxSessions ?? concurrency.default}
+                      <Text span size="xs" c="dimmed" ml={6}>
+                        {concurrency.maxSessions == null ? '(installation default) — ' : ''}
+                        only a company admin can change this
+                      </Text>
+                    </Text>
+                  </>
+                )}
+
+                {concurrency.installationLimit != null && (
+                  <Box mt={8}>
+                    <Text size="xs" c="dimmed">
+                      {concurrency.available} of {concurrency.installationLimit} still unallocated across the
+                      installation.
+                    </Text>
+                    {concurrency.allocations.length > 0 && (
+                      <Text size="xs" c="dimmed">
+                        Allocated: {concurrency.allocations.map((a) => `${a.name} ${a.maxSessions}`).join(', ')}
+                      </Text>
+                    )}
+                  </Box>
+                )}
               </Box>
 
               <div className={classes.saveRow}>

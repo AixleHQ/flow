@@ -9,12 +9,13 @@ class SessionAdmissionConcurrencyTest < ActiveSupport::TestCase
     previous_policy = SessionAdmissionPolicy.current.attributes.except("id", "created_at", "updated_at")
     user = create(:user, :with_company)
     company = user.companies.first
+    project = create(:project, owner: user, company: company)
     sessions = []
     admission_ids = []
     pool = nil
     SessionAdmissionPolicy.sync!(installation_limit: 2)
     6.times do
-      session = create(:terminal_session, user: user)
+      session = create(:terminal_session, user: user, project: project)
       sessions << session
       admission = SessionAdmissionService.enqueue!(session)
       admission_ids << admission.id

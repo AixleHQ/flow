@@ -18,7 +18,7 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
   teardown { restore_scope_defaults }
 
   test "the page reports what the environment currently resolves to" do
-    with_scope_defaults(project: 3, user: 5)
+    with_scope_defaults(project: 3)
 
     get admin_session_admission_path
 
@@ -72,8 +72,9 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
   test "pausing keeps occupied slots and resuming admits what waited" do
     SessionRuntimeInventory.stubs(:fetch).returns([])
     SessionAdmissionPolicy.sync!(installation_limit: 1)
-    first = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner))
-    second = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner))
+    project = create(:project, owner: @owner, company: @owner.companies.first)
+    first = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))
+    second = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))
     SessionAdmissionService.drain!
 
     patch admin_session_admission_path, params: { commit_action: "pause" }

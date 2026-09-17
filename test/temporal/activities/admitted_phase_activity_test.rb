@@ -5,8 +5,9 @@ require "test_helper"
 class AdmittedPhaseActivityTest < ActiveSupport::TestCase
   setup do
     user = create(:user, :with_company)
+    project = create(:project, owner: user, company: user.companies.first)
     SessionAdmissionPolicy.sync!(installation_limit: 1)
-    @session = create(:terminal_session, user: user)
+    @session = create(:terminal_session, user: user, project: project)
     @admission = SessionAdmissionService.enqueue!(@session)
     SessionAdmissionService.drain!
     @admission.reload.update!(runtime_kind: "ContainerRuntime::DockerRuntime", runtime_id: "runtime-id")

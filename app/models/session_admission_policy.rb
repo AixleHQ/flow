@@ -2,12 +2,13 @@
 
 class SessionAdmissionPolicy < ApplicationRecord
   # A project is a shared workspace: several people, or one person and a couple
-  # of workflow steps running beside them, is the ordinary case. A user pool only
-  # ever holds project-less sessions, which in practice means agent logins, and
-  # nobody signs into four agents at once.
+  # of workflow steps running beside them, is the ordinary case.
+  #
+  # Project is the only scope. A "User" scope used to hold project-less sessions,
+  # which in practice meant agent logins; those are exempt from admission now
+  # (SessionAdmissionService#enqueue!), so the scope governed nothing.
   SCOPE_DEFAULTS = {
-    "Project" => { variable: "SESSION_PROJECT_CONCURRENCY_DEFAULT", fallback: 4 },
-    "User" => { variable: "SESSION_USER_CONCURRENCY_DEFAULT", fallback: 2 }
+    "Project" => { variable: "SESSION_PROJECT_CONCURRENCY_DEFAULT", fallback: 4 }
   }.freeze
 
   def self.current = find_by(id: 1) || create_or_find_by!(id: 1)
@@ -76,13 +77,16 @@ class SessionAdmissionPolicy < ApplicationRecord
     current
     transaction do
       policy = lock.find(1)
-      mode_changed = policy.installation_limit.present? != cap.present?
-      switching = mode_changed || policy.enabled? != enabled
+      # Only turning admission on or off is a cutover now. The installation limit
+      # used to select which pool a session belonged to, so changing it re-homed
+      # live sessions and had to be drained first; it is a ceiling over the same
+      # project pools today, and a ceiling can be moved while they run.
+      switching = policy.enabled? != enabled
       if switching && (TerminalSession.where(state: %w[not_started running ready finishing]).exists? || WorkflowRun.where(state: %w[pending running paused]).exists?)
-        raise ArgumentError, "Pause and drain legacy/active sessions before cutover or changing pool mode"
+        raise ArgumentError, "Pause and drain legacy/active sessions before cutover"
       end
       if switching && SessionAdmission.where(released_at: nil).exists?
-        raise ArgumentError, "Drain all admissions before changing pool mode"
+        raise ArgumentError, "Drain all admissions before cutover"
       end
       policy.update!(installation_limit: cap, enabled: enabled, paused: paused, revision: policy.revision + 1)
       policy

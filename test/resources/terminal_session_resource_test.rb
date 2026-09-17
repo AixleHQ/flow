@@ -8,16 +8,19 @@ require "test_helper"
 class TerminalSessionResourceTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
+    # Only project sessions are queued, and the launch phases this resource
+    # reports are the queue's, so every fixture here is project-bound.
+    @project = create(:project, owner: @user, company: @user.companies.first)
     SessionAdmissionPolicy.sync!(installation_limit: 1)
   end
 
   def payload(session) = TerminalSessionResource.new(session.reload).to_h
 
   test "a session nobody has a slot for is reported as waiting for one" do
-    holder = create(:terminal_session, user: @user)
+    holder = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(holder)
     SessionAdmissionService.drain!
-    session = create(:terminal_session, user: @user)
+    session = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(session)
     SessionAdmissionService.drain!
 
@@ -31,7 +34,7 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
   # whole launch telling the user to wait for capacity, with the user's own
   # limit nowhere near full.
   test "a session whose slot is already granted is not reported as waiting for capacity" do
-    session = create(:terminal_session, user: @user)
+    session = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(session)
     SessionAdmissionService.drain!
 
@@ -40,7 +43,7 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
   end
 
   test "cluster capacity is reported as itself, not as a queue position" do
-    session = create(:terminal_session, user: @user)
+    session = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(session)
     SessionAdmissionService.drain!
     session.session_admission.update!(wait_reason: "cluster_capacity")
@@ -49,7 +52,7 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
   end
 
   test "a launch that is running reports neither a wait nor an error" do
-    session = create(:terminal_session, user: @user)
+    session = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(session)
     SessionAdmissionService.drain!
     session.session_admission.update!(launch_state: "acknowledged", wait_reason: nil)
@@ -61,7 +64,7 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
   # A refused preflight used to leave the session sitting in `queued` with
   # nothing but the queue's own explanation on screen.
   test "the launch's own failure is carried to the screen" do
-    session = create(:terminal_session, user: @user)
+    session = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(session)
     session.session_admission.update!(last_error: "GitHub token expired; reconnect the integration")
 
@@ -69,7 +72,7 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
   end
 
   test "a session with no admission at all says nothing about slots" do
-    session = create(:terminal_session, user: @user)
+    session = create(:terminal_session, user: @user, project: @project)
 
     assert_nil payload(session)["launchPhase"]
     assert_nil payload(session)["launchError"]

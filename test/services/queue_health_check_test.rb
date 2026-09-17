@@ -72,7 +72,7 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
   # going through the queue, so the tests build one the way production does.
   def admitted_session_with_operation(phase:, state: "uncertain")
     SessionAdmissionPolicy.sync!(installation_limit: 5)
-    session = create(:terminal_session, user: @user, state: "running", started_at: 1.hour.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = SessionAdmissionService.enqueue!(session)
     SessionAdmissionService.drain!
     admission.reload.session_runtime_operations.create!(phase: phase, state: state)

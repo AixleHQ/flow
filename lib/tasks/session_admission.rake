@@ -30,22 +30,22 @@ namespace :session_admission do
       SessionAdmissionPolicy.positive_integer!(raw)
     end
     policy = SessionAdmissionActivation.call
+    # Print what the settings actually resolve to: on an installation that has
+    # been running uncapped, the defaults are a capacity cut, not a no-op.
+    puts "Session admission enabled (revision #{policy.revision}):"
+    puts "  every project: #{SessionAdmissionPolicy.scope_default('Project')} concurrent sessions unless it sets its own"
+    puts "  sessions launched outside a project (agent logins) are not queued"
     if policy.installation_limit
-      puts "Session admission enabled: one installation-wide queue of #{policy.installation_limit} concurrent sessions (revision #{policy.revision})."
+      puts "  installation ceiling: #{policy.installation_limit} concurrent sessions across all projects"
     else
-      # No installation cap means every project and project-less user gets its
-      # own queue. Print what that actually resolves to: on an installation that
-      # has been running uncapped, the defaults are a capacity cut, not a no-op.
-      puts "Session admission enabled with per-scope queues (revision #{policy.revision}):"
-      defaults = SessionAdmissionPolicy.scope_defaults
-      puts "  every project: #{defaults['Project']} concurrent sessions"
-      puts "  every project-less session (agent login): #{defaults['User']} per user"
-      overrides = SessionConcurrencyLimit.order(:scope_type, :scope_id)
-      if overrides.any?
-        overrides.each { |limit| puts "  #{limit.scope_type} ##{limit.scope_id}: #{limit.max_sessions}" }
-      else
-        puts "  no scope overrides — everything is on the defaults above"
-      end
+      puts "  no installation ceiling — project limits are the only bound"
+    end
+    overrides = SessionConcurrencyLimit.order(:scope_id)
+    if overrides.any?
+      overrides.each { |limit| puts "  #{limit.scope_record&.name || limit.scope_type} ##{limit.scope_id}: #{limit.max_sessions}" }
+      puts "  allocated: #{overrides.sum(:max_sessions)}#{" of #{policy.installation_limit}" if policy.installation_limit}"
+    else
+      puts "  no project overrides — everything is on the default above"
     end
   end
 
@@ -77,9 +77,9 @@ namespace :session_admission do
     end
   end
 
-  desc "Set a scoped limit: session_admission:set_limit[Project,123,4] (or User)"
+  desc "Set a project limit: session_admission:set_limit[Project,123,4]"
   task :set_limit, [ :scope_type, :scope_id, :max_sessions ] => :environment do |_task, args|
-    raise ArgumentError, "Scope must be Project or User" unless %w[Project User].include?(args.scope_type)
+    raise ArgumentError, "Scope must be Project" unless args.scope_type == "Project"
     id = SessionAdmissionPolicy.positive_integer!(args.scope_id)
     maximum = SessionAdmissionPolicy.positive_integer!(args.max_sessions)
     SessionConcurrencyLimit.set!(scope: args.scope_type.constantize.find(id), max_sessions: maximum)
