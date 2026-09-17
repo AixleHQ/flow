@@ -790,18 +790,6 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
           <Text size="sm" c="dimmed">
             Enter a GitLab Personal Access Token with <b>api</b> scope to connect your GitLab account.
           </Text>
-          {isProjectContext && permissions?.isAdmin && (
-            <SegmentedControl
-              aria-label="Aixle scope"
-              data={[
-                { value: 'project', label: 'Current project' },
-                { value: 'company', label: 'Entire company' },
-              ]}
-              value={youtrackScope}
-              onChange={(value) => setYoutrackScope(value as 'project' | 'company')}
-              fullWidth
-            />
-          )}
           <PasswordInput
             label="Personal Access Token"
             placeholder="glpat-..."
@@ -835,6 +823,18 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
             Enter a permanent token and the database ID of one YouTrack project. After connecting, configure the
             YouTrack Webhook Triggers app manually with the callback URL and header shown on the integration card.
           </Text>
+          {isProjectContext && permissions?.isAdmin && (
+            <SegmentedControl
+              aria-label="Aixle scope"
+              data={[
+                { value: 'project', label: 'Current project' },
+                { value: 'company', label: 'Entire company' },
+              ]}
+              value={youtrackScope}
+              onChange={(value) => setYoutrackScope(value as 'project' | 'company')}
+              fullWidth
+            />
+          )}
           <TextInput
             label="Base URL"
             placeholder="https://company.youtrack.cloud"
