@@ -17,7 +17,11 @@ project_name: Aixle
 <% traefik_http  = ENV["TRAEFIK_HTTP_BASE"] || "http://localhost" %>
 
 domain: <%= app_domain %>
-asset_host: <%= ENV['ASSET_HOST'] || "localhost:#{app_port}" %>
+# Blank unless a deployment serves assets from somewhere else: an empty value
+# means Rails serves them itself. The old default (`localhost:<port>`) was never
+# read by anything in development, and the image bakes ASSET_HOST as an empty
+# ENV, so `|| default` never fired there anyway — an empty string is truthy.
+asset_host: <%= ENV['ASSET_HOST'].to_s.strip %>
 container_asset_host: <%= ENV['CONTAINER_ASSET_HOST'] || "web:#{app_port}" %>
 protocol: <%= ENV['PROTOCOL'] || "https" %>
 
