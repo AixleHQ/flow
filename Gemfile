@@ -68,6 +68,16 @@ gem "redis"
 # Temporal workflow orchestration (official SDK)
 gem "temporalio"
 
+# Held below json 3.0, which takes the options of `JSON.parse` as keywords only.
+# temporalio's payload converter still passes them positionally
+# (`JSON.parse(payload.data, @parse_options)` in
+# converters/payload_converter/json_plain.rb), so under json 3 every payload
+# decode raises ArgumentError and every workflow task fails — the worker retries
+# them forever rather than erroring out, which reads as a hang, not a failure.
+# Present in temporalio 1.7, 1.8 and 1.9 alike. Drop the pin once the SDK
+# switches to keywords.
+gem "json", "< 3"
+
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 gem "csv" # Required for CSV parsing
