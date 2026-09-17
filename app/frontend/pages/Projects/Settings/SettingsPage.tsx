@@ -312,8 +312,8 @@ const SettingsPage = () => {
                 {concurrency.installationLimit != null && (
                   <Box mt={8}>
                     <Text size="xs" c="dimmed">
-                      {concurrency.available} of {concurrency.installationLimit} is unreserved — shared by every
-                      project that has no limit of its own.
+                      {concurrency.available} of {concurrency.installationLimit} is unreserved — shared by every project
+                      that has no limit of its own.
                     </Text>
                     {concurrency.allocations.length > 0 && (
                       <Text size="xs" c="dimmed">

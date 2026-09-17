@@ -181,9 +181,12 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     3.times { enqueue(project: other_project) }
     assert_equal 1, SessionAdmissionService.drain!.size, "only 1 of 3 is unreserved"
 
+    # The destroy wakes the queue itself (publish_change), so the capacity is
+    # already handed over by the time this returns — asserting on a second drain
+    # would find nothing left and prove the opposite of what it looks like.
     SessionConcurrencyLimit.find_by(scope_type: "Project", scope_id: @project.id).destroy
 
-    assert_equal 2, SessionAdmissionService.drain!.size, "giving the reservation back releases it to the pool"
+    assert_equal 3, SessionAdmission.occupied.count, "giving the reservation back releases it to the pool"
   end
 
   # The budget rule is enforced from the project's side by the limit's own
