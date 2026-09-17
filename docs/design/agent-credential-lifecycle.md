@@ -43,7 +43,7 @@ Four mechanisms, each independently correct, none aware of the others:
 |---|---|---|---|---|---|
 | `claude_code` | `claudeAiOauth` + `designOauth` + optional `primaryApiKey` | yes, soonest block | **yes** (`platform.claude.com/v1/oauth/token`, rotates) | us + the CLI in every container | multi-holder rotation |
 | `codex` | `tokens.{access,refresh,id}` | yes (JWT `exp`) | **yes** | us + container | — |
-| `cursor_cli` | `accessToken` + `refreshToken` | yes (JWT `exp`) | **yes**, but the endpoint answers 404 HTML (`authenticator.cursor.sh/oauth/token`) | container only, by device re-login | refresh is dead; PR #222 gates launches instead |
+| `cursor_cli` | `accessToken` + `refreshToken` | yes (JWT `exp`, 60 days) | **yes** — `api2.cursor.sh/oauth/token`, the endpoint the desktop IDE itself uses | us | fixed 2026-09-18; see §Cursor below |
 | `kiro_cli` | SQLite `auth_kv` rows | no | no | container only | implemented on `feat/agent-token-refresh-coverage`, unmerged |
 | `antigravity_cli` | `token.{access_token,refresh_token,expiry}` | no | no | container only | protocol recovered from the binary, client pair unverified |
 | `grok` | `{key, token_type, expires_at}` per scope | yes | no — **no refresh token is stored at all** | nobody; only re-login | expiry shown with no way to act on it |
@@ -183,11 +183,43 @@ This is what makes the answer to "does every harness refresh?" mechanical instea
 | Runtime | Action | Where it stands |
 |---|---|---|
 | `kiro_cli` | land server-side refresh (social `refreshToken` + IdC `CreateToken`) | **done** — it now declares `refresh: :server` and the sweep selects it |
-| `cursor_cli` | find the web-side caller firing `refresh!` and fix/replace the endpoint; keep PR #222's `NULL`-expiry gate as the safety net | PR #222 open; endpoint 404 open since 2026-09-05 |
+| `cursor_cli` | **done 2026-09-18** — the endpoint was found by reading the desktop IDE's own refresh code and confirmed against the live service; PR #222's `NULL`-expiry gate remains the complement | see §Cursor |
 | `antigravity_cli` | implement Google `oauth2.googleapis.com/token` refresh; verify which embedded client pair the consumer login uses | needs one live credential to test |
 | `grok` | declare `reauth_only`, surface "re-login required" instead of a silent expiry, refuse the launch | **done** — the declaration, the badge and the launch gate are in |
 | `gemini_cli` | declare `expiry: :none` / static; keep the OAuth picker disallowed | done by design |
 | `claude_code`, `codex` | nothing new | already both halves |
+
+### Cursor: where the 404 actually came from
+
+Our refresh had been answering 404 since 2026-09-05 and the reason was ours, not the
+vendor's. Established on 2026-09-18 by logging in inside the freshly built image, probing
+from there, and then reading the desktop IDE's bundle:
+
+* the IDE's `_performAccessTokenRefresh` posts **JSON** to `${backendUrl}/oauth/token` with
+  `backendUrl = https://api2.cursor.sh` and its own client id. Of the four things our call
+  specified, only the path was right — the host, the encoding and the client id were not;
+* `authenticator.cursor.sh` is a real OAuth server (its discovery document advertises the
+  refresh_token and device_code grants, and its token endpoint is `/oauth2/token`), but it
+  does not know our client id, nor the WorkOS client id cursor.com's web login uses;
+* the token itself is a Cursor session JWT (`aud=cursor.com`, `type=session`), which WorkOS
+  rejects — so the IdP was never the place to ask;
+* the CLI never refreshes at all. Both the July and September bundles carry only
+  `/auth/poll`, `/auth/exchange_user_api_key` and `/auth/cursor_dev_session_token`, and the
+  refresh policy they share consumes an API key. Six months of production HTTP logs (119
+  files, 2026-03-15 to 2026-09-15) show one auth endpoint, `GET /auth/poll`, and never
+  `authenticator.cursor.sh` — which the domain filter would have captured.
+
+The working call, confirmed live: `POST https://api2.cursor.sh/oauth/token`, JSON body
+`{grant_type, client_id, refresh_token}`, answering `{access_token, id_token, shouldLogout}`
+with a 60-day token and **no new refresh token**. The IDE stores that access token in both
+slots, and so do we: the login's refresh token carries its own 60-day expiry, so keeping it
+would let the credential die on schedule however often it was refreshed. `shouldLogout` is
+the server ending the session and is treated as permanent.
+
+What this leaves as the general lesson, and the reason the tracked-domain work above
+matters: the old call was written from an OAuth template, its test stubbed our own URL, and
+it was green for five months while failing every night in production. An adapter that talks
+to a vendor is not working until it has been seen working on live traffic.
 
 ### Layer 2 — single writer in production (the core fix) — **2a and 2b landed, 2c open**
 
