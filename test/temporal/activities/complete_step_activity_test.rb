@@ -190,6 +190,30 @@ module Activities
         assert_nil @run.failed_agent_credential_id
       end
 
+      # A validator that crashes used to answer "valid" on the step's behalf, so a step
+      # whose outputs were never actually judged still reported success. A spec carrying a
+      # non-string pattern is the cheapest way to make it crash for real: matching it
+      # against a collected asset raises TypeError out of Regexp.new, which the
+      # validator's own RegexpError rescue does not catch.
+      test "fails the step when output validation could not run" do
+        @step.update!(output_asset_specs: [ { "name_pattern" => 42 } ])
+        session = create(:terminal_session, :collected,
+          user: @user,
+          agent_type: "claude_code",
+          session_type: :workflow_step)
+        step_run = create(:step_run, :running, workflow_run: @run, step: @step, terminal_session: session)
+        create(:workflow_run_asset, workflow_run: @run, produced_by_step_run: step_run, name: "report.md")
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        refute result["valid"]
+        assert result["failed"]
+
+        step_run.reload
+        assert_equal "failed", step_run.state
+        assert_match(/output validation could not run/, step_run.error_message)
+      end
+
       # --- success path ---
 
       test "completes step with no output specs and no assets" do

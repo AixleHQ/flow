@@ -134,11 +134,14 @@ module Activities
         step_run.produced_workflow_run_assets.reload.to_a
       end
 
+      # A validator that crashed has not judged this step, and answering "valid" on its
+      # behalf is how a step that produced nothing at all still reported success. Fail it
+      # with the crash as the reason: an unjudged step is not a passed one.
       def validate_outputs(step_run, assets)
         OutputValidator.new(step_run.step, assets).validate!
       rescue StandardError => e
-        Rails.logger.error("[CompleteStepActivity] Output validation failed: #{e.message}")
-        OutputValidator::Result.new(valid?: true, errors: [])
+        Rails.logger.error("[CompleteStepActivity] Output validation crashed: #{e.class}: #{e.message}")
+        OutputValidator::Result.new(valid?: false, errors: [ "output validation could not run: #{e.message}" ])
       end
     end
   end
