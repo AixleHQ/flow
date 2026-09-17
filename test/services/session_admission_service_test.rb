@@ -83,6 +83,76 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert admission.reload.released_at
   end
 
+  # Every worker roll that interrupted a create — spot reclaim, OOM, a rolling
+  # deploy — used to kill the session on the retry: the operation was left
+  # in_flight, and begin_operation! refused anything that was not `retryable`.
+  # Nothing repaired it either; the reconciler only looks at closed workflows, and
+  # this one is alive and retrying its own activity.
+  test "an interrupted create is made again instead of killing the session" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    SessionAdmissionService.begin_operation!(admission.id, token, "create_container")
+
+    replayed = SessionAdmissionService.begin_operation!(admission.id, token, "create_container")
+
+    assert_equal "in_flight", replayed.state
+    assert_equal 1, admission.session_runtime_operations.where(phase: "create_container").count
+  end
+
+  test "an interrupted start is made again too" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    SessionAdmissionService.begin_operation!(admission.id, token, "start_container").update!(state: "uncertain")
+
+    assert_equal "in_flight", SessionAdmissionService.begin_operation!(admission.id, token, "start_container").state
+  end
+
+  # The message used to be interpolated blindly, so an unaccountable exec — which
+  # holds no reservation at all — told the operator capacity was being retained
+  # and sent them hunting a leak that does not exist.
+  test "the refusal to replay an exec does not claim a reservation is held" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    SessionAdmissionService.begin_operation!(admission.id, token, "exec").update!(state: "uncertain")
+
+    error = assert_raises(SessionAdmissionService::UncertainOperation) do
+      SessionAdmissionService.begin_operation!(admission.id, token, "exec")
+    end
+
+    assert_match(/no reservation is held/, error.message)
+    assert_no_match(/reservation retained/, error.message)
+  end
+
+  # == permit reasons ==
+
+  test "a permit closed by somebody stopping their own work is an ordinary stop" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    token = admission.reload.permit_token
+    admission.update!(stop_requested_at: Time.current)
+
+    error = assert_raises(SessionAdmissionService::Stopped) { SessionAdmissionService.permit!(admission.id, token) }
+
+    assert_not_kind_of SessionAdmissionService::StalePermit, error
+  end
+
+  # Something else restarted this launch. It is still non-retryable, and it still
+  # reaches every existing `rescue Stopped` — but it is a fault, and it must not
+  # be filed with the cancellations.
+  test "a permit that no longer matches the reservation is reported as stale" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+
+    assert_raises(SessionAdmissionService::StalePermit) do
+      SessionAdmissionService.permit!(admission.id, "a-token-from-another-launch")
+    end
+    assert_kind_of SessionAdmissionService::Stopped,
+      SessionAdmissionService::StalePermit.new("still caught by every existing rescue")
+  end
+
   test "lowering capacity does not evict existing reservations" do
     with_ceiling(2)
     first = enqueue

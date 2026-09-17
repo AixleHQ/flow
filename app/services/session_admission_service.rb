@@ -2,6 +2,14 @@
 
 class SessionAdmissionService
   class Stopped < StandardError; end
+
+  # A permit that does not match the reservation it names. Deliberately a
+  # subclass, so every existing `rescue Stopped` keeps treating it the same way —
+  # what it buys is the ability to tell it apart from the three benign reasons a
+  # permit is closed. Somebody closing a dialog or cancelling a run is expected
+  # control flow; a token that no longer matches means something else restarted
+  # this launch, which is a fault and must keep its report.
+  class StalePermit < Stopped; end
   class UncertainOperation < StandardError; end
 
   # How many pools one drain pass may examine. Project/user mode creates one pool
@@ -159,7 +167,14 @@ class SessionAdmissionService
     # caught by #begin_operation!, which does lock.
     def permit!(admission_id, token)
       admission = SessionAdmission.find(admission_id)
-      raise Stopped, "Session admission is closed" if admission.released_at || admission.stop_requested_at || admission.permit_token != token || admission.admitted_at.nil?
+      # Split by reason rather than raising one error for four conditions: three
+      # of these are somebody stopping their own work, and one is an anomaly.
+      # Reporting them together meant either losing the anomaly in the noise or
+      # paging on ordinary cancellations.
+      raise StalePermit, "Session admission permit is stale" if admission.permit_token != token
+      if admission.released_at || admission.stop_requested_at || admission.admitted_at.nil?
+        raise Stopped, "Session admission is closed"
+      end
       ensure_run_active!(admission.terminal_session)
       admission
     end
@@ -174,7 +189,13 @@ class SessionAdmissionService
         operation = admission.session_runtime_operations.find_by(phase: phase)
         if operation
           return operation if operation.state == "completed"
-          raise UncertainOperation, "Unresolved #{phase}; reservation retained" unless operation.state == "retryable"
+          unless operation.state == "retryable" || operation.replayable?
+            # Only the phases that cannot be repeated get here now, so the message
+            # can stop guessing: `exec` holds no reservation (MATERIALIZING_PHASES
+            # excludes it), and saying otherwise sent operators after a leak that
+            # does not exist.
+            raise UncertainOperation, "Unresolved #{phase}; #{operation.reservation_note}"
+          end
           operation.update!(state: "in_flight", error: nil)
         else
           operation = admission.session_runtime_operations.create!(phase: phase)

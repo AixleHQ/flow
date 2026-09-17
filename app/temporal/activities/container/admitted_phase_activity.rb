@@ -68,13 +68,22 @@ module Activities
         record_failed_operation(operation, e)
         raise TemporalExceptions.non_retryable(e)
       rescue SessionAdmissionService::Stopped, SessionAdmissionService::UncertainOperation => e
-        raise TemporalExceptions.non_retryable(e)
+        # A stop somebody asked for is expected control flow, not a fault: they
+        # closed the dialog or cancelled the run while a phase was in flight, and
+        # the next phase finds a closed permit. Ten of those a day were reaching
+        # Sentry as errors and burying the ones that matter. A stale permit is not
+        # that — something else restarted this launch — so it keeps its report.
+        raise TemporalExceptions.non_retryable(e, benign: deliberate_stop?(e))
       rescue StandardError => e
         record_failed_operation(operation, e)
         raise TemporalExceptions.non_retryable(e)
       end
 
       private
+
+      def deliberate_stop?(error)
+        error.is_a?(SessionAdmissionService::Stopped) && !error.is_a?(SessionAdmissionService::StalePermit)
+      end
 
       # `cleanup_collected` is bookkeeping for this activity's own retries; the
       # strategies take the phase state and would choke on an unknown keyword.

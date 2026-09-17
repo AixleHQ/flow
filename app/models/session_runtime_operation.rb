@@ -18,6 +18,34 @@ class SessionRuntimeOperation < ApplicationRecord
 
   belongs_to :session_admission
 
+  # An attempt whose outcome nobody can prove can simply be MADE AGAIN when the
+  # phase's side effect is idempotent by construction — and the materializing
+  # phases are exactly that:
+  #
+  # * `create_container` goes through ContainerRuntime's create_or_verify, which
+  #   answers a 409 by fetching the existing object and verifying its labels and
+  #   image before returning it.
+  # * `start_container` creates the Service, middlewares and IngressRoute through
+  #   the same path.
+  #
+  # `exec` is the one that cannot: it launches the agent, and doing that twice is
+  # the thing AD-5 refuses replays to prevent.
+  #
+  # This does not weaken "unknown creation retains capacity". The reservation
+  # still belongs to this admission and is never handed to anyone else; what
+  # changes is that an unknown outcome is resolved by redoing a safe operation
+  # rather than by waiting for an operator. Before this, every worker roll that
+  # interrupted a create — spot reclaim, OOM, a rolling deploy — killed the
+  # session on the retry and left the slot pinned.
+  def replayable? = phase.in?(MATERIALIZING_PHASES)
+
+  # What an unresolved operation costs the pool, said accurately. Only a create or
+  # a start holds a reservation; an unaccountable `exec` is worth recording and
+  # worth reading, but it takes no capacity.
+  def reservation_note
+    phase.in?(MATERIALIZING_PHASES) ? "reservation retained" : "no reservation is held for this phase"
+  end
+
   scope :unresolved, -> { where(state: UNRESOLVED_STATES) }
   scope :materializing, -> { where(phase: MATERIALIZING_PHASES) }
 
