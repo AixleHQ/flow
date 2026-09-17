@@ -217,7 +217,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a queued session is never mistaken for one that failed to start" do
-    session = create(:terminal_session, user: @user)
+    session = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(session)
     session.update_column(:created_at, 2.hours.ago)
 
@@ -240,9 +240,9 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "the queue health snapshot separates waiting from wedged" do
-    waiting = create(:terminal_session, user: @user)
+    waiting = create(:terminal_session, user: @user, project: @project)
     admit(waiting)
-    blocked = create(:terminal_session, user: @user)
+    blocked = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(blocked)
     admission = SessionAdmission.find_by(terminal_session: waiting)
     admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")

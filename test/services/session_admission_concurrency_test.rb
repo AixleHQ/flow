@@ -38,6 +38,9 @@ class SessionAdmissionConcurrencyTest < ActiveSupport::TestCase
     SessionAdmission.where(id: admission_ids).delete_all if admission_ids
     TerminalSession.where(id: sessions.map(&:id)).delete_all if sessions
     pool&.destroy! if pool && !pool.session_admissions.exists?
+    # Before the user: projects.owner_id references it, and this test opts out of
+    # transactional cleanup.
+    project&.delete
     user&.company_memberships&.delete_all
     user&.delete
     company&.delete

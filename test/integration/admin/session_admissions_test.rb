@@ -25,7 +25,7 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_match(/Not enabled/, response.body)
     assert_match(/3 each/, response.body)
-    assert_match(/5 each/, response.body)
+    assert_match(/not queued at all/, response.body)
   end
 
   test "enabling reads the cap from the environment rather than the form" do

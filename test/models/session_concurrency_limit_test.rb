@@ -54,7 +54,8 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
   # admin must not learn the names, or the count, of projects they cannot see.
   test "the refusal names nobody" do
     SessionAdmissionPolicy.sync!(installation_limit: 4)
-    elsewhere = create(:project, owner: create(:user, :with_company), company: create(:company, name: "Rival Inc"))
+    rival = create(:user, :with_company)
+    elsewhere = create(:project, owner: rival, company: rival.companies.first, name: "Rival Gateway")
     SessionConcurrencyLimit.set!(scope: elsewhere, max_sessions: 4)
 
     refused = limit_for(@project, 2)
@@ -70,7 +71,8 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
     SessionAdmissionPolicy.sync!(installation_limit: 20)
     mine = create(:project, owner: @user, company: @company, name: "Gateway")
     SessionConcurrencyLimit.set!(scope: mine, max_sessions: 3)
-    theirs = create(:project, owner: create(:user, :with_company), company: create(:company))
+    rival = create(:user, :with_company)
+    theirs = create(:project, owner: rival, company: rival.companies.first)
     SessionConcurrencyLimit.set!(scope: theirs, max_sessions: 5)
 
     breakdown = SessionConcurrencyAllocation.new.breakdown_for(@company.id)
