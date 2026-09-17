@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_17_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -420,6 +420,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
     t.index ["status"], name: "index_connectors_on_status"
   end
 
+  create_table "external_resources", force: :cascade do |t|
+    t.bigint "board_task_id", null: false
+    t.datetime "created_at", null: false
+    t.jsonb "data", default: {}, null: false
+    t.string "external_id", null: false
+    t.string "external_instance", null: false
+    t.string "type", null: false
+    t.datetime "updated_at", null: false
+    t.index ["board_task_id", "type", "external_instance", "external_id"], name: "idx_external_resources_unique", unique: true
+    t.index ["board_task_id"], name: "index_external_resources_on_board_task_id"
+    t.index ["type", "external_instance", "external_id", "board_task_id"], name: "idx_external_resources_lookup"
+  end
+
   create_table "gates", force: :cascade do |t|
     t.bigint "board_task_id", null: false
     t.datetime "created_at", null: false
@@ -675,7 +688,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
     t.index ["scope_type", "scope_id"], name: "index_session_concurrency_limits_on_scope_type_and_scope_id", unique: true
-    t.check_constraint "max_sessions > 0 AND (scope_type::text = ANY (ARRAY['Project'::character varying, 'User'::character varying]::text[]))", name: "valid_session_scope_limit"
+    t.check_constraint "max_sessions > 0 AND (scope_type::text = ANY (ARRAY['Project'::character varying::text, 'User'::character varying::text]))", name: "valid_session_scope_limit"
   end
 
   create_table "session_config_items", id: false, force: :cascade do |t|
@@ -1102,6 +1115,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
     t.boolean "enabled", default: true, null: false
     t.string "event_type", null: false
     t.jsonb "filter_predicate", default: {}, null: false
+    t.bigint "integration_id"
     t.string "name"
     t.boolean "notify_on_failure", default: true, null: false
     t.bigint "project_id", null: false
@@ -1113,6 +1127,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
     t.datetime "updated_at", null: false
     t.bigint "workflow_id", null: false
     t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
+    t.index ["integration_id"], name: "index_trigger_bindings_on_integration_id"
     t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
     t.index ["project_id"], name: "index_trigger_bindings_on_project_id"
     t.index ["subject_column_id"], name: "index_trigger_bindings_on_subject_column_id"
@@ -1323,6 +1338,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
   add_foreign_key "company_memberships", "companies"
   add_foreign_key "company_memberships", "users"
   add_foreign_key "company_memberships", "users", column: "invited_by_id", on_delete: :nullify
+  add_foreign_key "external_resources", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
@@ -1382,6 +1398,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_16_100000) do
   add_foreign_key "tool_results", "terminal_sessions", on_delete: :nullify
   add_foreign_key "tool_results", "tools", on_delete: :cascade
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
+  add_foreign_key "trigger_bindings", "integrations", on_delete: :nullify
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
   add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "workflows", on_delete: :cascade
