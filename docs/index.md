@@ -86,6 +86,7 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/mcp.md](./user-guide/mcp.md)** — MCP transports, the internal `aixle-tools` server, config-item credentials
 - **[user-guide/integrations.md](./user-guide/integrations.md)** — GitHub, GitLab, Linear, Google OAuth, and webhooks
 - **[user-guide/azure-devops.md](./user-guide/azure-devops.md)** — Connecting an Azure DevOps organization end to end: what differs between SaaS and self-hosted, the one Entra step in the customer directory, the three personal-access-token scopes and what each is spent on, choosing Azure projects and widening that set later
+- **[user-guide/session-queues.md](./user-guide/session-queues.md)** — Why a session waits: every combination of project limit and installation ceiling, how a reservation differs from a cap, what is exempt from the queue altogether, and the operator knobs behind it
 - **[user-guide/configuration.md](./user-guide/configuration.md)** — Env vars, OAuth, agent credentials, and other knobs
 - **[operations/azure-devops-app-registration.md](./operations/azure-devops-app-registration.md)** — Operator runbook: register the Entra application, give it a credential, and publish the client ID. Customers bind their own organizations from inside Flow by proving they administer them
 - **[quickstart.md](./quickstart.md)** — Get a local instance running and see one card move

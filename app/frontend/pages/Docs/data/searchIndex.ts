@@ -43,6 +43,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'The four ways a workflow starts — column, schedule, Slack, incoming webhook — and CI gates: waiting, passed, failed, stale.',
   },
   {
+    slug: 'session-queues',
+    title: 'Session queues',
+    section: 'Using Flow',
+    desc: 'Why a session says Queued, every combination of project limit and installation ceiling, how a reservation differs from a cap, and what clearing a limit does.',
+  },
+  {
     slug: 'sessions-and-runs',
     title: 'Sessions & Runs',
     section: 'Using Flow',
