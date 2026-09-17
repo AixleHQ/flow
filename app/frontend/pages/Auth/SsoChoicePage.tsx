@@ -21,7 +21,7 @@ function getCsrfToken(): string {
 
 export default function SsoChoicePage({ companyName, connections }: PageProps) {
   return (
-    <PageShell>
+    <PageShell variant="centered">
       <Head title="Choose a sign-in method" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">

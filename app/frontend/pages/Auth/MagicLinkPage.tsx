@@ -13,7 +13,7 @@ export default function MagicLinkPage({ token }: PageProps) {
   const { post, processing } = useForm({});
 
   return (
-    <PageShell>
+    <PageShell variant="centered">
       <Head title="Sign in" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">

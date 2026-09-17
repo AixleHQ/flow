@@ -18,13 +18,23 @@ class Web::Company::AuthPoliciesControllerTest < ActionDispatch::IntegrationTest
                             password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
   end
 
-  test "a member can see which methods the company accepts" do
-    sign_in_as(@member)
+  test "an admin can see which methods the company accepts" do
+    sign_in_as(@admin)
 
     get company_auth_policies_path
 
     assert_response :success
     assert_match "Google", response.body
+  end
+
+  test "an ordinary member cannot even look" do
+    # The list of accepted methods is a map of the workspace's doors: it tells
+    # whoever can read it which one to go at. Members have no use for it.
+    sign_in_as(@member)
+
+    get company_auth_policies_path
+
+    assert_redirected_to root_path
   end
 
   test "an admin can turn a method off" do

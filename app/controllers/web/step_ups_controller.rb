@@ -86,6 +86,7 @@ class Web::StepUpsController < Web::ApplicationController
     case provider.kind.to_s
     when "oidc" then oidc_start_path(id: provider.id)
     when "google", "microsoft" then "/auth/#{provider.kind}"
+    when "magic_link" then request_magic_link_path
     end
   end
 end

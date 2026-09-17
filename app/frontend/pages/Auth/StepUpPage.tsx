@@ -2,7 +2,8 @@ import { Head, router, useForm } from '@inertiajs/react';
 import { Alert, Button, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useState } from 'react';
 
-import { stepUpPath } from 'shared/routes';
+import { getCredential, isSupported } from 'shared/lib/webauthn';
+import { passkeyLoginOptionsPath, passkeyLoginPath, stepUpPath } from 'shared/routes';
 import { Logo, PageShell } from 'shared/ui';
 
 interface AllowedMethod {
@@ -14,6 +15,15 @@ interface AllowedMethod {
 
 function getCsrfToken(): string {
   return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+}
+
+async function postJson(url: string, body: unknown) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': getCsrfToken() },
+    body: JSON.stringify(body ?? {}),
+  });
+  return { ok: response.ok, data: await response.json().catch(() => ({})) };
 }
 
 // POST, never a GET link — the same CSRF reasoning as the login buttons.
@@ -45,6 +55,25 @@ export default function StepUpPage({ companyName, methods, error }: PageProps) {
   const [processing, setProcessing] = useState(false);
   const passwordAllowed = methods.some((method) => method.kind === 'password');
   const redirectMethods = methods.filter((method) => method.startPath);
+  const passkeyAllowed = methods.some((method) => method.kind === 'passkey') && isSupported();
+
+  // A passkey proves itself in the browser and then posts the assertion, so it
+  // cannot be a plain form like the redirect methods.
+  const confirmWithPasskey = async () => {
+    setProcessing(true);
+    try {
+      const { ok, data } = await postJson(passkeyLoginOptionsPath(), {});
+      if (!ok) throw new Error('options');
+      const credential = await getCredential(data);
+      const result = await postJson(passkeyLoginPath(), { credential });
+      if (!result.ok) throw new Error('rejected');
+      router.visit(result.data.redirect_to ?? '/');
+    } catch {
+      router.visit(stepUpPath({ error: 'invalid_credentials' }));
+    } finally {
+      setProcessing(false);
+    }
+  };
   const totpAllowed = methods.some((method) => method.kind === 'totp');
 
   // The payload is built here rather than via setData-then-post: a React state
@@ -62,7 +91,7 @@ export default function StepUpPage({ companyName, methods, error }: PageProps) {
   };
 
   return (
-    <PageShell>
+    <PageShell variant="centered">
       <Head title="Confirm it's you" />
       <Paper p="xl" radius="md" w="100%" maw={420}>
         <Stack gap="md">
@@ -75,11 +104,16 @@ export default function StepUpPage({ companyName, methods, error }: PageProps) {
 
           {error && <Alert color="red">{ERROR_MESSAGES[error] ?? 'Please try again.'}</Alert>}
 
-          {redirectMethods.length > 0 && (
+          {(redirectMethods.length > 0 || passkeyAllowed) && (
             <Stack gap="xs">
               {redirectMethods.map((method) => (
                 <RedirectMethodButton key={method.kind} method={method} />
               ))}
+              {passkeyAllowed && (
+                <Button variant="default" fullWidth loading={processing} onClick={confirmWithPasskey}>
+                  Continue with a passkey
+                </Button>
+              )}
             </Stack>
           )}
 
