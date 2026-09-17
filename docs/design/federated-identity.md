@@ -156,6 +156,67 @@ A `super_admin` is outside the company model entirely — no memberships, its ow
 
 The exchange is that the operator account holds exactly one key: **password only** (AD-19). An assertion from any other provider is refused before a session is minted, whatever the deployment allowlist or a company policy allows. The highest-privilege account in the installation should not depend on an external identity provider, and certainly not on a company-scoped connection that the customer themselves administers.
 
+## 4.9 What it looks like
+
+Captured from a running build. `super_admin` is omitted deliberately: it bypasses
+every company surface here and authenticates by password only.
+
+**Signing in.** Google and a passkey identify the person on their own. Company SSO
+and an emailed link start from the address, so they stay inactive until one is
+typed — and the screen says so rather than leaving a grey control unexplained.
+
+| Nothing typed | Address typed |
+|---|---|
+| ![Login screen with company SSO and the emailed link inactive](images/federated-identity/01-login.png) | ![The same screen with every method active](images/federated-identity/02-login-with-address.png) |
+
+**Enterprise SSO discovery.** The workspace is resolved from the address's domain.
+One enabled connection starts immediately; several offer a choice rather than a
+guess; none says so instead of failing obscurely.
+
+| A workspace with two connections | A domain no workspace claims |
+|---|---|
+| ![Choice between two OpenID Connect connections](images/federated-identity/03-sso-choice.png) | ![The login screen reporting no SSO connection for that domain](images/federated-identity/04-sso-no-connection.png) |
+
+**The emailed link.** The mail carries the address the browser reaches the app at,
+port included. Opening it lands on a confirmation rather than consuming the token,
+because mail providers pre-fetch links.
+
+| Requested | Delivered | Confirm before it is spent |
+|---|---|---|
+| ![The login screen after a link is requested](images/federated-identity/05-magic-link-requested.png) | ![The delivered sign-in mail](images/federated-identity/06-magic-link-email.png) | ![The confirmation page the link opens](images/federated-identity/07-magic-link-confirm.png) |
+
+**Company auth policy.** What a workspace accepts, and the connections it owns. A
+new connection arrives switched off and carries *Not verified yet* until someone
+has signed in through it once, so a misconfigured connection cannot lock a
+workspace out.
+
+| A workspace that refuses passwords | A connection awaiting its first sign-in |
+|---|---|
+| ![Sign-in methods with password off and SCIM on](images/federated-identity/08-policy-sso-only-workspace.png) | ![An OpenID Connect connection marked not verified yet](images/federated-identity/09-policy-unverified-connection.png) |
+
+**The entry gate.** Enforcement is at company entry, not at the login screen: a
+session proved one way crosses into a workspace that does not accept it and is
+asked to add a proof, not signed out. Every method the workspace accepts gets a
+control.
+
+| Crossing into a workspace that refuses the proved method | Proved, and through |
+|---|---|
+| ![The step-up screen offering a link, a passkey and a code](images/federated-identity/10-step-up.png) | ![The workspace after the step-up is satisfied](images/federated-identity/11-step-up-passed.png) |
+
+**Enrolling codes.** The QR carries the same secret as the text below it; the text
+is the fallback for an authenticator with no camera. Both are redacted in this
+capture.
+
+![Authentication code enrolment showing a QR and the typed secret](images/federated-identity/12-totp-qr.png)
+
+**Who may change any of it.** The policy surface is admin-only in both places it
+is enforced — a member has no navigation entry, and typing the path directly is
+refused rather than merely hidden.
+
+| A member's navigation | A member typing the path |
+|---|---|
+| ![Sidebar without the Sign-in methods entry](images/federated-identity/13-member-nav.png) | ![The request refused](images/federated-identity/14-member-refused.png) |
+
 ## 5. Phasing
 
 | Stage | Scope | Estimate |
