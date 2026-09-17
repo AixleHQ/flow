@@ -32,6 +32,23 @@ module MCP
       end
     end
 
+    # Streamable HTTP servers are free to answer a POST with an SSE stream
+    # instead of a JSON body, and most remote ones do (GitHub's included), so
+    # the same contract is exercised over both encodings.
+    def stub_mcp_sse(tools:)
+      stub_request(:post, MCP_URL).to_return do |request|
+        method = JSON.parse(request.body)["method"]
+        body =
+          case method
+          when "tools/list" then { jsonrpc: "2.0", id: 1, result: { tools: tools } }
+          else { jsonrpc: "2.0", id: 1, result: { protocolVersion: "2025-06-18", capabilities: { tools: {} },
+                                                  serverInfo: { name: "example", version: "1.0.0" } } }
+          end
+        { status: 200, body: "event: message\ndata: #{body.to_json}\n\n",
+          headers: { "Content-Type" => "text/event-stream" } }
+      end
+    end
+
     def tool(name: "search", description: "Search things", schema: { "type" => "object" })
       { name: name, description: description, inputSchema: schema }
     end
@@ -43,6 +60,31 @@ module MCP
 
       assert_predicate result, :ok?
       assert_equal %w[create search], result.tools.map { |t| t["name"] }, "sorted, so reordering is not drift"
+    end
+
+    # The SSE decoder lives behind a lazy `require "event_stream_parser"` inside
+    # the gem, which the gemspec does not declare — a bundle missing it raised
+    # LoadError here and 500ed connector installation for every server that
+    # streams. This test fails the moment the gem leaves the Gemfile again.
+    test "lists tools from a server that answers over an SSE stream" do
+      stub_mcp_sse(tools: [ tool, tool(name: "create") ])
+
+      result = ToolListProbe.call(server: server)
+
+      assert_predicate result, :ok?
+      assert_equal %w[create search], result.tools.map { |t| t["name"] }
+    end
+
+    # LoadError is not a StandardError, so an optional gem the client `require`s
+    # mid-response would escape the rescue and 500 the installer rather than
+    # leaving it on its error path.
+    test "returns an error when the client cannot load a gem it needs" do
+      stub_request(:post, MCP_URL).to_raise(LoadError.new("The 'event_stream_parser' gem is required"))
+
+      result = ToolListProbe.call(server: server)
+
+      assert_equal :error, result.status
+      assert_match(/event_stream_parser/, result.error)
     end
 
     test "fingerprints descriptions and schemas rather than storing them" do
