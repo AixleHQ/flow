@@ -33,10 +33,6 @@ A pain, and an opportunity behind it. Today a person can prove who they are two 
   - **intent:** A person signs in without a password — a passkey, a one-time code, or an emailed link — and can add a second factor.
   - **success:** A user registers a passkey and later signs in with no password entered; an emailed sign-in link works exactly once and expires in minutes, not days; a company that stops accepting passkeys has not deleted anyone's passkey.
 
-- **CAP-5** — enterprise SAML
-  - **intent:** An enterprise customer signs in through their own SAML identity provider.
-  - **success:** Two distinct companies on one deployment each complete SAML sign-in through their own connection, and no SAML or XML parsing occurs in the Rails process.
-
 - **CAP-6** — directory provisioning
   - **intent:** A customer's directory provisions and deprovisions members of their company automatically.
   - **success:** Deprovisioning at the customer's directory revokes the membership through the same audited transitions the UI produces, and the person loses access on their next request.
@@ -57,6 +53,7 @@ A pain, and an opportunity behind it. Today a person can prove who they are two 
 
 - Becoming an OIDC provider for customers' own tools.
 - Replacing `companies` / `company_memberships` with a vendor's organization model — no evaluated product models this domain better.
+- SAML. Enterprise SSO is per-company OIDC, which every identity provider our customers run speaks. Supporting SAML means either `ruby-saml` in the web process (five Critical authentication-bypass advisories in fifteen months) or a second service to deploy — and neither is worth what it buys. CAP-5 was built, measured and removed; a test keeps the gem out of the lockfile.
 - Adopting Keycloak as the primary identity provider. It was evaluated on its merits and declined on fit; the broker-only fallback shape is recorded in the RFC §6.
 - Additive MFA ("SAML *and* TOTP"). The proof test is deliberately OR-only; making it conjunctive later is a one-predicate change.
 - Per-company login-page branding beyond the existing `Company#branding`.
@@ -67,7 +64,6 @@ A customer's IT department connects their own identity provider, restricts their
 
 ## Assumptions
 
-- The Ory Polis OSS build supports enough tenancy for per-company connections. Its README gates "advanced scaling and multi-tenancy" behind the Ory Enterprise License without drawing the line. Unverified; a half-day spike settles it, and it blocks CAP-5 alone.
 - Scale is low thousands of monthly active users, B2B. Nothing depends on this, but it is why no session-store tier or sharding is considered.
 
 ## Open questions

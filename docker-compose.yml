@@ -222,35 +222,6 @@ services:
       - .:/app:cached
       - /var/run/docker.sock:/var/run/docker.sock
 
-  # The SAML bridge (AD-8, AD-9). OPT-IN: `docker compose --profile sso up`.
-  # An installation that does not want SAML gains no service to run, which is
-  # the whole reason SAML lives out here instead of in the Rails process.
-  #
-  # Reachability is split on purpose. Only the ACS/OAuth endpoints are meant to
-  # be publicly routable — a customer's IdP has to POST assertions to them — and
-  # the admin API must stay inside. In this dev profile everything is on the
-  # internal network; in a real deployment, publish ONLY the OAuth paths.
-  sso-bridge:
-    profiles: [sso]
-    image: ghcr.io/ory/polis:latest
-    restart: on-failure
-    environment:
-      DB_ENGINE: sql
-      DB_TYPE: postgres
-      # Its own database, never the app's: a vendor's schema must not be able to
-      # block an app migration.
-      DB_URL: postgres://postgres@db:5432/sso_bridge
-      JACKSON_API_KEYS: ${SSO_BRIDGE_API_KEY:-dev-bridge-key}
-      EXTERNAL_URL: ${SSO_BRIDGE_URL:-http://localhost:5225}
-      NEXTAUTH_URL: ${SSO_BRIDGE_URL:-http://localhost:5225}
-      NEXTAUTH_SECRET: ${SSO_BRIDGE_NEXTAUTH_SECRET:-dev-bridge-secret}
-      CLIENT_SECRET_VERIFIER: ${SSO_BRIDGE_CLIENT_SECRET:-dev-client-secret}
-    ports:
-      - "5225:5225"
-    depends_on:
-      db:
-        condition: service_healthy
-
 volumes:
   bundle_cache:
   app_home:

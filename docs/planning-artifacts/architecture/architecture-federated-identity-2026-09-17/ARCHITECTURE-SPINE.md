@@ -167,7 +167,7 @@ in `Auth::` depends on a controller; nothing outside `Auth::` constructs an adap
   5. Every policy edit, and every `super_admin` override of rules 1-4, is written to the
      `Audited::Audit` trail with the before and after effective sets.
 
-### AD-8 — SAML never enters the Rails process
+### AD-8 — SAML never enters the Rails process [RETIRED by AD-28]
 
 - **Binds:** STAGE-3
 - **Prevents:** inheriting `ruby-saml`'s disclosure history (five Critical authentication-bypass
@@ -176,7 +176,7 @@ in `Auth::` depends on a controller; nothing outside `Auth::` constructs an adap
   Rails completes it through `Methods::Oidc` against the Polis sidecar. No XML signature
   verification, no `ruby-saml`, no `omniauth-saml` in this codebase.
 
-### AD-9 — The sidecar is split by reachability, and owns its own database
+### AD-9 — The sidecar is split by reachability, and owns its own database [RETIRED by AD-28]
 
 - **Binds:** STAGE-3, STAGE-4
 - **Prevents:** exposing an unauthenticated admin API to the internet (the failure class of the
@@ -400,6 +400,32 @@ in `Auth::` depends on a controller; nothing outside `Auth::` constructs an adap
   only inside the company's own verified domain — outside it a SCIM-created membership stays
   `invited` and waits to be accepted, exactly as a hand-written invitation does.
 
+### AD-27 — One IdP entity may serve only one company on the bridge [RETIRED by AD-28]
+
+- **Binds:** STAGE-3
+- **Prevents:** a confusing failure at connection time being discovered by a customer rather than by
+  us. Measured, not assumed: the bridge refuses a second connection carrying an entityID it already
+  holds, with `EntityID already exists for different tenant`.
+- **Rule:** A SAML `entityID` is globally unique across the bridge, so two companies cannot both
+  connect the same corporate identity provider — which is exactly what two subsidiaries of one group
+  would try. The connection form says so before the attempt, and the failure is surfaced as that
+  sentence rather than as a bridge error.
+
+### AD-28 — Enterprise SSO is OIDC; there is no SAML and no sidecar
+
+- **Binds:** all
+- **Prevents:** carrying a second service for a protocol our customers' identity providers do not
+  require, and the only alternative to that service — a SAML parser in the web process with five
+  Critical authentication-bypass advisories in fifteen months.
+- **Rule:** Enterprise SSO is a per-company OIDC connection. Every identity provider that matters
+  speaks it: Entra ID, Okta, Ping, OneLogin, JumpCloud, Google Workspace. No SAML adapter, no bridge,
+  no extra container — a self-hosted installation is one Rails app and a Postgres, and that is the
+  point. `ruby-saml` and its wrappers are barred from `Gemfile.lock` by a test, so adding SAML later
+  is a deliberate decision taken with that advisory history in front of whoever takes it, not a
+  quiet `bundle add`.
+- **Retires:** AD-8, AD-9, AD-27, which described the sidecar this decision removes. Their IDs stay
+  spent; nothing reuses them.
+
 ## Consistency Conventions
 
 | Concern | Convention |
@@ -496,7 +522,7 @@ service.
 | ORG-POLICY ✅ built | `identity_providers` + `company_auth_policies`, deployment ceiling, entry gate, step-up, no-stranding guard | AD-4, AD-5, AD-7, AD-11, AD-16, AD-17 |
 | STAGE-1 oidc ✅ built | Microsoft Entra (multi-tenant), generic per-company OIDC with PKCE | AD-2, AD-3, AD-13, AD-21, AD-25 |
 | STAGE-2 passwordless ✅ built | Passkeys, TOTP (step-up only), magic links | AD-2, AD-6, AD-18, AD-22, AD-23 |
-| STAGE-3 saml ⚠ built, unverified | Sidecar bridge, per-company SAML connections | AD-8, AD-9, AD-13 |
+| ~~STAGE-3 saml~~ dropped | Superseded: enterprise SSO is per-company OIDC (STAGE-1) | AD-28 |
 | STAGE-4 scim ✅ built | Inbound provisioning and deprovisioning | AD-10, AD-24, AD-26 |
 
 ## Deferred
@@ -517,5 +543,5 @@ service.
 
 | # | Question | Resolve by |
 | --- | --- | --- |
-| 1 | **STILL OPEN.** Does the Polis OSS build support enough tenancy for per-company connections? Its README gates "advanced scaling and multi-tenancy" behind the Ory Enterprise License without drawing the line. STAGE-3 is built against the documented admin and OAuth contract, with an app-owned adapter, a WebMock contract test and a compose profile — but **nothing here has run against a live bridge**. | Half-day spike: bring up the `sso` profile, register two tenants, complete both flows. Until then STAGE-3 is code, not a working feature. |
+| 1 | **CLOSED — the question no longer applies.** It was answered by a live spike first (the OSS bridge did take three per-company connections, with no licence gate), and then made moot: the sidecar is gone. Kept for the record because the spike is what proved the image name in the compose profile did not even resolve. Original text: **ANSWERED 2026-09-17 by a live spike.** The OSS build takes per-company connections with no licence gate: three tenants registered through the admin API, each with its own `clientID`, and the authorize endpoint accepts the adapter's exact `client_id=tenant=X&product=Y` shape, redirecting to the IdP with a real `SAMLRequest`. An unknown tenant resolves to the bridge's error page. What the spike did **not** cover: a full round trip needs a real IdP to post a signed assertion, so the token and userinfo halves stay covered by the contract test alone. | Done. Remaining: one end-to-end sign-in against a real IdP before a customer relies on it. |
 | 2 | IdP-initiated SSO. Enterprise buyers expect a tile in their IdP to land them signed in, which inverts AD-5's "authenticate, then enter a company" order. The sidecar supports it; our gate has not been designed for it. | During the Open Question 1 spike, before STAGE-3. |

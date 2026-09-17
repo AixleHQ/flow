@@ -56,17 +56,6 @@ sentry:
   frontend_dsn: <%= ENV['SENTRY_FRONTEND_DSN'] %>
   temporal_dsn: <%= ENV['SENTRY_TEMPORAL_DSN'] %>
 
-# The SAML bridge (AD-8, AD-9). SAML never enters this process: a customer's
-# assertion is posted to the sidecar, which hands us an ordinary OAuth code.
-# Absent settings mean this installation does not offer SAML at all, which is the
-# default — a self-hoster who does not want it gains no service to run.
-sso_bridge:
-  url: <%= ENV['SSO_BRIDGE_URL'] %>
-  # The sidecar's admin API is cluster-internal and must NOT be the public URL.
-  admin_url: <%= ENV['SSO_BRIDGE_ADMIN_URL'] || ENV['SSO_BRIDGE_URL'] %>
-  api_key: <%= ENV['SSO_BRIDGE_API_KEY'] %>
-  client_secret: <%= ENV['SSO_BRIDGE_CLIENT_SECRET'] %>
-
 # Which authentication methods this INSTALLATION offers at all (AD-4). This is
 # the ceiling every company's own policy sits under: a company can only disable
 # what is listed here, never enable something the deployment cannot complete.
