@@ -50,14 +50,27 @@ module Agents
       config["accessToken"].present?
     end
 
-    # No server-side refresh exists for this runtime, and the 404 we were getting was the
-    # evidence rather than an outage: the CLI (2026.09.15) contains exactly three auth
-    # endpoints — `/auth/poll`, `/auth/exchange_user_api_key` and
-    # `/auth/cursor_dev_session_token`, all on api2.cursor.sh — and no token-refresh call
-    # at all. `authenticator.cursor.sh`, which our refresh posted to, appears nowhere in
-    # it. A device login writes both tokens and the CLI never exchanges the refresh one;
-    # the access token simply carries 60 days (measured: issued 2026-09-18, exp
-    # 2026-11-16) and a new login is the only renewal.
+    # Renewable only by signing in again. Established on 2026-09-18 by logging in inside
+    # the freshly built image and probing from there, after the refresh had been answering
+    # 404 since 2026-09-05:
+    #
+    #   * our own call was wrong twice over — `authenticator.cursor.sh` is a real OAuth
+    #     server (its discovery document advertises refresh_token and device_code grants)
+    #     but its token endpoint is `/oauth2/token`, not the `/oauth/token` we posted to,
+    #     which is why the reply was an HTML 404 page;
+    #   * corrected, it answers `invalid_client: Application not found` for our client id,
+    #     and for the WorkOS client id cursor.com's own web login uses;
+    #   * the stored token is not a WorkOS refresh token at all — it is a Cursor session
+    #     JWT (`iss=authentication.cursor.sh`, which does not resolve, `aud=cursor.com`,
+    #     `type=session`), and WorkOS rejects it with `invalid_grant`;
+    #   * the CLI never exchanges it either. Both the July and the September bundles carry
+    #     exactly three auth endpoints — `/auth/poll`, `/auth/exchange_user_api_key`,
+    #     `/auth/cursor_dev_session_token` — and the shared refresh policy they use takes
+    #     an API key, not this token. Eight further route guesses on api2 are all 404.
+    #
+    # What is left is the measured lifetime: 60 days (issued 2026-09-18, exp 2026-11-16),
+    # renewed by a new device login. If Cursor ever registers a public client for the CLI,
+    # the discovery document at authenticator.cursor.sh is where the endpoint to use is.
     def credential_lifecycle
       { expiry: :token, refresh: :reauth_only, rotation: :static, nominal_ttl: 60.days,
         reauth_required_on_expiry: true }.freeze
