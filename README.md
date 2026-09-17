@@ -49,11 +49,10 @@ cp .env.example .env.development   # fill in OAuth secrets if you want SSO
 make setup                          # builds containers, installs deps, seeds DB
 ```
 
-Then in two terminals:
+Then start everything in one terminal:
 
 ```bash
-make up       # terminal 1 — web, db, redis, traefik, temporal
-make worker   # terminal 2 — Temporal worker
+make up       # web, worker, db, redis, traefik, temporal
 ```
 
 Open `http://localhost:4000` and sign in.
