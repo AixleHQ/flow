@@ -44,7 +44,10 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     when "azure_devops"
       return create_azure_devops
     when "youtrack"
-      Youtrack::IntegrationService.new(company: current_company, connected_by: current_user, project: current_project).create(
+      company_scope = params[:scope].to_s == "company" && current_project_membership&.admin?
+      Youtrack::IntegrationService.new(
+        company: current_company, connected_by: current_user, project: company_scope ? nil : current_project
+      ).create(
         base_url: params[:base_url], permanent_token: params[:permanent_token],
         youtrack_project_id: params[:youtrack_project_id], webhook_header: params[:webhook_header],
         webhook_token: params[:webhook_token], name: params[:name])
@@ -90,7 +93,10 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   end
 
   def destroy
-    integration = Integration.for_project(current_project).find(params[:id])
+    integration = Integration.visible_for_project(current_project).find(params[:id])
+    if integration.company_wide? && !current_project_membership&.admin?
+      return head :forbidden
+    end
     Integration.transaction do
       integration.youtrack_webhook_endpoint&.update!(enabled: false) if integration.youtrack?
       integration.trigger_bindings.update_all(enabled: false) if integration.respond_to?(:trigger_bindings)

@@ -10,6 +10,7 @@ import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } fro
 import type { SharedProps } from 'shared/ui';
 
 import type { Trigger } from './types';
+import type { YoutrackIntegrationOption } from './TriggersTab';
 
 interface ColumnOption {
   id: number;
@@ -27,18 +28,19 @@ interface TriggerFormPanelProps {
   workflowId: number;
   columns: ColumnOption[];
   sessions: StepOption[];
+  youtrackIntegrations?: YoutrackIntegrationOption[];
   editing: Trigger | null;
   defaultKind: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-type Kind = 'column' | 'slack' | 'webhook' | 'schedule';
+type Kind = 'column' | 'slack' | 'webhook' | 'schedule' | 'youtrack';
 
 // Off-board triggers fire unattended: the run belongs to whoever added the
 // trigger and uses their credentials. A column trigger's run belongs to the
 // person the card puts on it, so its creator is provenance, not identity.
-const OFF_BOARD_KINDS: Kind[] = ['slack', 'webhook', 'schedule'];
+const OFF_BOARD_KINDS: Kind[] = ['slack', 'webhook', 'schedule', 'youtrack'];
 
 function describeCron(expr: string): { ok: boolean; text: string } {
   const value = expr.trim();
@@ -103,6 +105,7 @@ export function TriggerFormPanel({
   projectId,
   workflowId,
   columns,
+  youtrackIntegrations = [],
   editing,
   defaultKind,
   onClose,
@@ -134,6 +137,16 @@ export function TriggerFormPanel({
   const [notifyOnFailure, setNotifyOnFailure] = useState(editing?.notify_on_failure ?? true);
   const [textContains, setTextContains] = useState(editSlack?.value ?? '');
   const [textOp, setTextOp] = useState(editSlack?.op ?? 'contains');
+  const [youtrackIntegrationId, setYoutrackIntegrationId] = useState<string | null>(
+    editing?.integration_id?.toString() ?? youtrackIntegrations[0]?.id.toString() ?? null,
+  );
+  const [youtrackEventType, setYoutrackEventType] = useState(editing?.event_type ?? 'youtrack.issue.created');
+  const [youtrackText, setYoutrackText] = useState(
+    editing?.kind === 'youtrack' ? slackFilterFromPredicate(editPred).value : '',
+  );
+  const [youtrackTextOp, setYoutrackTextOp] = useState(
+    editing?.kind === 'youtrack' ? slackFilterFromPredicate(editPred).op : 'contains',
+  );
 
   const [verification, setVerification] = useState('none');
   const [secret, setSecret] = useState('');
@@ -160,6 +173,10 @@ export function TriggerFormPanel({
     { value: 'none', label: 'None — project-level run' },
     { value: 'create_task', label: 'Create a task' },
   ];
+  const youtrackSubjectOptions = [
+    ...sessionOptions,
+    { value: 'existing_task', label: 'Use an existing linked task' },
+  ];
   const cronDesc = describeCron(cron);
 
   const submit = useCallback(async () => {
@@ -177,6 +194,10 @@ export function TriggerFormPanel({
         if (channel.trim()) filter.channel = channel.trim();
         if (textContains.trim()) filter.text = { op: textOp, value: textContains.trim() };
         trigger.notify_on_failure = notifyOnFailure;
+      } else if (kind === 'youtrack') {
+        trigger.integration_id = youtrackIntegrationId;
+        trigger.event_type = youtrackEventType;
+        if (youtrackText.trim()) filter.text = { op: youtrackTextOp, value: youtrackText.trim() };
       } else if (kind === 'webhook') {
         if (!isEdit) {
           trigger.verification_strategy = verification;
@@ -250,6 +271,10 @@ export function TriggerFormPanel({
     notifyOnFailure,
     textContains,
     textOp,
+    youtrackIntegrationId,
+    youtrackEventType,
+    youtrackText,
+    youtrackTextOp,
     verification,
     secret,
     condField,
@@ -289,6 +314,7 @@ export function TriggerFormPanel({
     { value: 'schedule', label: 'On schedule' },
     { value: 'slack', label: 'Slack message' },
     { value: 'webhook', label: 'Incoming webhook' },
+    { value: 'youtrack', label: 'YouTrack' },
   ];
 
   return (
@@ -676,6 +702,84 @@ export function TriggerFormPanel({
                           }}
                         />
                       </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* YouTrack fields */}
+              {kind === 'youtrack' && (
+                <>
+                  <Select
+                    label="YouTrack connection"
+                    description="Project connections take precedence over company-wide connections."
+                    data={youtrackIntegrations.map((integration) => ({
+                      value: integration.id.toString(),
+                      label: `${integration.name} (${integration.scope})`,
+                    }))}
+                    value={youtrackIntegrationId}
+                    onChange={setYoutrackIntegrationId}
+                    placeholder="Select a connection"
+                    disabled={isEdit}
+                    nothingFoundMessage="Connect YouTrack from Integrations first"
+                    mb={12}
+                  />
+                  <Select
+                    label="Event"
+                    data={[
+                      { value: 'youtrack.issue.created', label: 'Issue created' },
+                      { value: 'youtrack.comment.mentioned', label: 'Comment mentions connected account' },
+                    ]}
+                    value={youtrackEventType}
+                    onChange={(value) => setYoutrackEventType(value ?? 'youtrack.issue.created')}
+                    allowDeselect={false}
+                    disabled={isEdit}
+                    mb={12}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12, marginBottom: 12 }}>
+                    <Select
+                      label="Text match"
+                      data={[
+                        { value: 'contains', label: 'contains' },
+                        { value: 'eq', label: 'equals' },
+                        { value: 'regex', label: 'regex' },
+                        { value: 'starts_with', label: 'starts with' },
+                      ]}
+                      value={youtrackTextOp}
+                      onChange={(value) => setYoutrackTextOp(value ?? 'contains')}
+                      allowDeselect={false}
+                    />
+                    <TextInput
+                      label="Pattern"
+                      placeholder="optional"
+                      value={youtrackText}
+                      onChange={(event) => setYoutrackText(event.currentTarget.value)}
+                    />
+                  </div>
+                  <Select
+                    label="Subject (what the run is about)"
+                    data={youtrackSubjectOptions}
+                    value={subjectPolicy}
+                    onChange={(value) => setSubjectPolicy(value ?? 'none')}
+                    allowDeselect={false}
+                    mb={12}
+                  />
+                  {subjectPolicy !== 'none' && (
+                    <>
+                      <Select
+                        label="Task column"
+                        data={columnData}
+                        value={subjectColumnId}
+                        onChange={setSubjectColumnId}
+                        mb={12}
+                      />
+                      <TextInput
+                        label="Task title template"
+                        placeholder="{{issue.idReadable}} — {{issue.summary}}"
+                        value={subjectTitleTemplate}
+                        onChange={(event) => setSubjectTitleTemplate(event.currentTarget.value)}
+                        mb={12}
+                      />
                     </>
                   )}
                 </>
@@ -1144,7 +1248,7 @@ export function TriggerFormPanel({
               </button>
               <button
                 onClick={submit}
-                disabled={saving || (kind === 'schedule' && !cronDesc.ok)}
+                disabled={saving || (kind === 'schedule' && !cronDesc.ok) || (kind === 'youtrack' && !youtrackIntegrationId)}
                 style={{
                   background: saving || (kind === 'schedule' && !cronDesc.ok) ? 'var(--accent-dim)' : 'var(--accent)',
                   border: 'none',

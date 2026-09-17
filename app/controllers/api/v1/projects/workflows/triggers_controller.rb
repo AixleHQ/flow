@@ -17,7 +17,7 @@ module Api
           BoardMissingError = Class.new(StandardError)
 
           def index
-            render json: { triggers: serialized_triggers }
+            render json: { triggers: serialized_triggers, youtrack_integrations: serialized_youtrack_integrations }
           end
 
           def create
@@ -150,6 +150,12 @@ module Api
           def serialized_triggers
             column_bindings.includes(:board_column, :created_by).map { |b| serialize_column(b) } +
               current_workflow.trigger_bindings.includes(:created_by).order(:created_at).map { |b| serialize_binding(b) }
+          end
+
+          def serialized_youtrack_integrations
+            Integration.visible_for_project(current_project).active.youtrack.order(project_id: :desc, created_at: :asc).map do |integration|
+              { id: integration.id, name: integration.name, scope: integration.company_wide? ? "company" : "project" }
+            end
           end
 
           def column_bindings

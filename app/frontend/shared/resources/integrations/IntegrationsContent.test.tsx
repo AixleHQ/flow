@@ -22,6 +22,28 @@ const makeIntegration = (overrides: Partial<Integration> = {}): Integration => (
 });
 
 describe('IntegrationsContent', () => {
+  it('lets a company admin choose company scope when connecting YouTrack', async () => {
+    renderPage(
+      <IntegrationsContent title="Integrations" basePath="/company/projects/1/integrations" integrations={[]} />,
+      { props: { ...settingsProps, permissions: { isAdmin: true } } },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /connect integration/i }));
+    await userEvent.click(await screen.findByRole('button', { name: 'YouTrack' }));
+    expect(await screen.findByRole('radiogroup', { name: 'Aixle scope' })).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Entire company'));
+    await userEvent.type(screen.getByLabelText('Base URL'), 'https://example.youtrack.cloud');
+    await userEvent.type(screen.getByLabelText('Permanent token'), 'perm:token');
+    await userEvent.type(screen.getByLabelText('YouTrack project database ID'), '0-1');
+    await userEvent.type(screen.getByLabelText('Existing webhook token'), 'x'.repeat(32));
+    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/1/integrations',
+      expect.objectContaining({ provider: 'youtrack', scope: 'company' }),
+      expect.any(Object),
+    );
+  });
   it('renders the title and a row for each seeded integration', () => {
     renderPage(
       <IntegrationsContent

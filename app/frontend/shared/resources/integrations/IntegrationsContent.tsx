@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
   ActionIcon,
   Badge,
@@ -45,6 +45,7 @@ import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 import { StatusBadge } from 'shared/ui/StatusBadge';
+import type { SharedProps } from 'shared/ui';
 
 import { AzureDevopsConnectModal, type AzureDevopsProps } from './AzureDevopsConnectModal';
 
@@ -121,6 +122,7 @@ const SCOPE_COLORS: Record<string, string> = {
 const DEFAULT_CODER_LOCK_TTL = 120;
 
 export const IntegrationsContent = ({ integrations, basePath, title, azureDevops }: IntegrationsContentProps) => {
+  const { permissions } = usePage<SharedProps>().props;
   const { canExecute } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
   const [search, setSearch] = useState('');
@@ -138,6 +140,7 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
   const [youtrackToken, setYoutrackToken] = useState('');
   const [youtrackProjectId, setYoutrackProjectId] = useState('');
   const [youtrackWebhookToken, setYoutrackWebhookToken] = useState('');
+  const [youtrackScope, setYoutrackScope] = useState<'project' | 'company'>('project');
   const [youtrackLoading, setYoutrackLoading] = useState(false);
 
   const [coderOpen, setCoderOpen] = useState(false);
@@ -277,6 +280,7 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
         youtrackProjectId: youtrackProjectId.trim(),
         webhookHeader: 'X-YouTrack-Token',
         webhookToken: youtrackWebhookToken,
+        scope: youtrackScope,
       },
       {
         preserveScroll: true,
@@ -285,7 +289,7 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
         onFinish: () => setYoutrackLoading(false),
       },
     );
-  }, [basePath, youtrackProjectId, youtrackToken, youtrackUrl, youtrackWebhookToken]);
+  }, [basePath, youtrackProjectId, youtrackScope, youtrackToken, youtrackUrl, youtrackWebhookToken]);
 
   const handleConnectCoder = useCallback(() => {
     const trimmedUrl = coderUrl.trim();
@@ -786,6 +790,18 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
           <Text size="sm" c="dimmed">
             Enter a GitLab Personal Access Token with <b>api</b> scope to connect your GitLab account.
           </Text>
+          {isProjectContext && permissions?.isAdmin && (
+            <SegmentedControl
+              aria-label="Aixle scope"
+              data={[
+                { value: 'project', label: 'Current project' },
+                { value: 'company', label: 'Entire company' },
+              ]}
+              value={youtrackScope}
+              onChange={(value) => setYoutrackScope(value as 'project' | 'company')}
+              fullWidth
+            />
+          )}
           <PasswordInput
             label="Personal Access Token"
             placeholder="glpat-..."

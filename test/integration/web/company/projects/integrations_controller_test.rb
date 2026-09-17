@@ -73,6 +73,32 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_response :redirect
   end
 
+  test "company admin can create a company-wide YouTrack integration from a project page" do
+    integration = create(:integration, :youtrack, :active, company: @company, project: nil, connected_by: @user)
+    service = mock
+    Youtrack::IntegrationService.expects(:new).with(
+      company: @company, connected_by: @user, project: nil
+    ).returns(service)
+    service.expects(:create).returns(integration)
+
+    post company_project_integrations_path(@project), params: {
+      provider: "youtrack", scope: "company", base_url: "https://example.youtrack.cloud",
+      permanent_token: "perm:token", youtrack_project_id: "0-1",
+      webhook_header: "X-YouTrack-Token", webhook_token: "x" * 32
+    }
+
+    assert_redirected_to company_project_integrations_path(@project)
+  end
+
+  test "company admin can disconnect a company-wide integration from a project page" do
+    integration = create(:integration, :youtrack, :active, company: @company, project: nil, connected_by: @user)
+
+    delete company_project_integration_path(@project, integration)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_not Integration.exists?(integration.id)
+  end
+
   test "create coder integration happy path persists project-scoped record" do
     stub_request(:get, "https://coder.example.com/api/v2/users/me").to_return(
       status: 200,
