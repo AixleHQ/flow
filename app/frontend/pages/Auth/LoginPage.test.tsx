@@ -130,6 +130,43 @@ describe('LoginPage', () => {
     });
   });
 
+  describe('methods that need an address', () => {
+    const methodProps = { oauthProviders: ['google'], passwordlessMethods: ['magic_link', 'passkey'] };
+
+    it('holds company SSO and the emailed link inactive until an address is typed, and says why', () => {
+      const form = makeFormStub({ email: '', password: '', rememberMe: false });
+      renderPage(<LoginPage />, { props: methodProps, form });
+
+      expect(screen.getByRole('button', { name: 'Sign in with your company SSO' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Email me a sign-in link' })).toBeDisabled();
+      expect(screen.getByText(/start from your address/)).toBeInTheDocument();
+    });
+
+    it('leaves Google alone — it runs its own account picker', () => {
+      const form = makeFormStub({ email: '', password: '', rememberMe: false });
+      renderPage(<LoginPage />, { props: methodProps, form });
+
+      expect(screen.getByRole('button', { name: /Sign in with Google/ })).toBeEnabled();
+    });
+
+    it('activates them and drops the explanation once an address is present', () => {
+      const form = makeFormStub({ email: 'person@client.test', password: '', rememberMe: false });
+      renderPage(<LoginPage />, { props: methodProps, form });
+
+      expect(screen.getByRole('button', { name: 'Sign in with your company SSO' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Email me a sign-in link' })).toBeEnabled();
+      expect(screen.queryByText(/start from your address/)).not.toBeInTheDocument();
+    });
+
+    it('names only company SSO when this installation offers no emailed link', () => {
+      const form = makeFormStub({ email: '', password: '', rememberMe: false });
+      renderPage(<LoginPage />, { props: { oauthProviders: ['google'], passwordlessMethods: ['passkey'] }, form });
+
+      expect(screen.getByText(/Company SSO starts from your address/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Email me a sign-in link' })).not.toBeInTheDocument();
+    });
+  });
+
   it('pre-fills the email field from the email page prop (invitation flow)', () => {
     renderPage(<LoginPage />, { props: { email: 'invitee@client.test' } });
 

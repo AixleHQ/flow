@@ -140,10 +140,12 @@ class Web::OidcSessionsController < Web::ApplicationController
     raw
   end
 
-  # Built as a string rather than through url_for: the redirect_uri must match
-  # what the customer registered at their IdP byte for byte, and url_for parses
-  # `host` into host+port, which silently drops a port that Settings.domain
-  # carries (visible in development, invisible in production until it is not).
+  # Built as a string rather than through url_for: this value must match what the
+  # customer registered at their IdP byte for byte, and it must not vary with the
+  # request. url_for in a controller derives the host from the incoming request,
+  # so a proxy header or a direct hit on the container would produce a different
+  # redirect_uri than the one the IdP knows — and the token exchange sends it
+  # again, where a mismatch is a hard refusal.
   def callback_url
     "#{Settings.protocol}://#{Settings.domain}#{oidc_callback_path}"
   end

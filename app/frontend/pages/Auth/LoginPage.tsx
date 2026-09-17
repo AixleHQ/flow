@@ -58,6 +58,45 @@ function NoWorkspaceScreen() {
   );
 }
 
+// Google and a passkey identify the person on their own: Google runs its own
+// account picker, and a passkey is discoverable, so the browser already knows
+// who is signing in. Company SSO and an emailed link cannot — one resolves the
+// workspace from the address's domain, the other has to send the mail
+// somewhere — so both stay inactive until an address is typed. Left unexplained
+// that reads as arbitrary, which is why the reason is spelled out rather than
+// hidden behind a hover.
+function SignInMethods({
+  providers,
+  passwordless,
+  email,
+  onSso,
+}: {
+  providers: string[];
+  passwordless: string[];
+  email: string;
+  onSso: () => void;
+}) {
+  const needsEmail = email.trim().length === 0;
+  const magicLinkOffered = passwordless.includes('magic_link');
+
+  return (
+    <Stack gap="sm">
+      {providers.includes('google') && <GoogleLoginButton />}
+      {providers.includes('microsoft') && <MicrosoftLoginButton />}
+      <Button variant="subtle" fullWidth onClick={onSso} disabled={needsEmail}>
+        Sign in with your company SSO
+      </Button>
+      <PasswordlessOptions email={email} methods={passwordless} />
+      {needsEmail && (
+        <Text size="xs" c="dimmed" ta="center">
+          {magicLinkOffered ? 'Company SSO and an emailed link start' : 'Company SSO starts'} from your address — enter
+          it below.
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
 const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email format'),
   password: z.string().min(1, 'Password is required'),
@@ -136,14 +175,7 @@ const LoginPage = () => {
             </span>
           </Center>
 
-          <Stack gap="sm">
-            {providers.includes('google') && <GoogleLoginButton />}
-            {providers.includes('microsoft') && <MicrosoftLoginButton />}
-            <Button variant="subtle" fullWidth onClick={startSso} disabled={!data.email}>
-              Sign in with your company SSO
-            </Button>
-            <PasswordlessOptions email={data.email} methods={passwordless} />
-          </Stack>
+          <SignInMethods providers={providers} passwordless={passwordless} email={data.email} onSso={startSso} />
 
           {providers.length > 0 && (
             <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
@@ -224,14 +256,7 @@ const LoginPage = () => {
             </span>
           </Center>
 
-          <Stack gap="sm">
-            {providers.includes('google') && <GoogleLoginButton />}
-            {providers.includes('microsoft') && <MicrosoftLoginButton />}
-            <Button variant="subtle" fullWidth onClick={startSso} disabled={!data.email}>
-              Sign in with your company SSO
-            </Button>
-            <PasswordlessOptions email={data.email} methods={passwordless} />
-          </Stack>
+          <SignInMethods providers={providers} passwordless={passwordless} email={data.email} onSso={startSso} />
 
           {providers.length > 0 && (
             <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
