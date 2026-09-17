@@ -30,9 +30,27 @@ class AgentCredentialResource < ApplicationResource
     if credential.error? then "error"
     elsif exp.nil? then "active"
     elsif exp <= Time.current then "expired"
-    elsif exp <= 30.minutes.from_now then "expiring"
+    elsif exp <= AgentCredentialResource.expiring_window_for(credential).from_now then "expiring"
     else "active"
     end
+  end
+
+  # How much warning "expiring soon" is worth giving, scaled to how long this runtime's
+  # token lives. A fixed 30 minutes was right for Claude's 8-hour token and useless for
+  # Cursor's 60-day one — by the time the badge changed, the credential was already
+  # beyond saving for anyone not watching that minute. A tenth of the nominal life keeps
+  # the warning proportional (48 minutes at 8 hours, 6 days at 60 days), and the floor
+  # keeps a short-lived or undeclared token behaving as before.
+  MIN_EXPIRING_WINDOW = 30.minutes
+  EXPIRING_WINDOW_FRACTION = 0.1
+
+  def self.expiring_window_for(credential)
+    ttl = credential.adapter.credential_lifecycle[:nominal_ttl]
+    return MIN_EXPIRING_WINDOW if ttl.blank?
+
+    [ ttl * EXPIRING_WINDOW_FRACTION, MIN_EXPIRING_WINDOW ].max
+  rescue StandardError
+    MIN_EXPIRING_WINDOW
   end
 
   # Why the platform gave up, in the vendor's own words (truncated to 500 chars when it
