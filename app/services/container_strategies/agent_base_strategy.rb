@@ -11,16 +11,6 @@ module ContainerStrategies
   class AgentBaseStrategy < BaseStrategy
     VALID_AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok kiro_cli].freeze
 
-    DEFAULT_AGENT_IMAGES = {
-      "claude_code" => "aixle/claude-code:latest",
-      "cursor_cli" => "aixle/cursor-cli:latest",
-      "codex" => "aixle/codex:latest",
-      "gemini_cli" => "aixle/gemini-cli:latest",
-      "antigravity_cli" => "aixle/antigravity-cli:latest",
-      "grok" => "aixle/grok:latest",
-      "kiro_cli" => "aixle/kiro-cli:latest"
-    }.freeze
-
     AUTH_COMMANDS = {
       "claude_code" => "claude",
       "cursor_cli" => "agent login",
@@ -99,9 +89,19 @@ module ContainerStrategies
 
     # == Template methods ==
 
+    # A runtime's image is derived from the registry prefix and the runtime's
+    # own name (`agents.image_prefix` + `claude_code` -> `claude-code` + tag),
+    # so adding a runtime needs no settings entry and an environment that
+    # publishes the set to one registry overrides one value, not seven.
+    # `agents.images.<runtime>` remains a per-runtime escape hatch.
     def resolve_image
-      configured_images = (Settings.agents&.images&.to_h || {}).transform_keys(&:to_s)
-      configured_images.fetch(input[:agent_type], DEFAULT_AGENT_IMAGES.fetch(input[:agent_type]))
+      agent_type = input[:agent_type].to_s
+      override = (Settings.agents&.images&.to_h || {}).transform_keys(&:to_s)[agent_type]
+      return override.to_s if override.present?
+
+      name = "#{Settings.agents&.image_prefix}#{agent_type.tr('_', '-')}"
+      tag = Settings.agents&.image_tag.to_s.strip
+      tag.present? ? "#{name}:#{tag}" : name
     end
 
     def session_type

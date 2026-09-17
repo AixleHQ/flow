@@ -25,7 +25,7 @@ namespace :session_admission do
     # value so a typo cannot wedge the queue. This is the one place that can
     # afford to be strict about them, so it is.
     SessionAdmissionPolicy::SCOPE_DEFAULTS.each_value do |config|
-      raw = ENV[config[:variable]].to_s.strip
+      raw = SessionAdmissionPolicy.deployment_setting(config[:setting]).to_s.strip
       next if raw.empty?
       SessionAdmissionPolicy.positive_integer!(raw)
     end

@@ -28,4 +28,25 @@ governance, community health — carry none.
 - Community health files: Code of Conduct, Security Policy, Governance, issue
   and pull-request templates, CODEOWNERS, and this changelog.
 
+### Changed
+- Configuration: every deployment input is now declared in `config/settings.yml`
+  and documented in `docs/reference/configuration.md`, which the docs portal
+  serves directly instead of a hand-copy. A test fails when a variable gains no
+  row, or a row names a variable nothing reads.
+- The Active Record pool now falls back to the same `RAILS_MAX_THREADS` default
+  Puma does (10). A deployment that never set the variable previously ran 10
+  request threads against an 8-connection pool.
+- Agent runtime images are derived from `AGENT_IMAGE_PREFIX` +
+  `AGENT_IMAGE_TAG`, with the seven per-runtime `AGENT_IMAGE_*` variables kept
+  as overrides. Resolved images are unchanged in every environment.
+
+### Removed
+- Configuration nothing read: `AUTHOR_NAME`, `AUTHOR_EMAIL`, `RAILS_PORT`,
+  `TEMPORAL_UI_URL`, `REDIS_UI_URL`, `TRAEFIK_DASHBOARD_URL`,
+  `TRAEFIK_CORS_ORIGINS`, `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT`,
+  `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`, `CODER_DEFAULT_TEMPLATE`,
+  `CODER_MACHINE_PREFIX`, `MAX_FILE_SIZE`, `ENVIRONMENT`. Setting them now has
+  no effect; they can be dropped from ConfigMaps, compose files and CI build
+  args.
+
 [Unreleased]: https://github.com/AixleHQ/flow/commits/develop

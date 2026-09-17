@@ -1,8 +1,28 @@
 project_name: Aixle
 
-domain: <%= ENV['DOMAIN'] || "localhost:4000" %>
-asset_host: <%= ENV['ASSET_HOST'] || "localhost:4000" %>
-container_asset_host: <%= ENV['CONTAINER_ASSET_HOST'] || "web:4000" %>
+# Inputs several blocks below are built from. Bound once as ERB locals so two
+# keys derived from the same value can never drift apart.
+# The two ports the app itself listens on. config/puma.rb and config/puma_mcp.rb
+# read PORT and MCP_PORT straight from the environment (they boot before this
+# file loads), and the defaults below have to follow them, or overriding a port
+# leaves the derived hosts pointing at the old one — which is what running two
+# stacks side by side on one machine does.
+<% app_port      = (ENV["PORT"] || 4000).to_i %>
+<% mcp_port      = (ENV["MCP_PORT"] || 4002).to_i %>
+<% app_domain    = ENV["DOMAIN"] || "localhost:#{app_port}" %>
+<% app_version   = (ENV["APP_VERSION"].to_s.strip.empty? ? "unknown" : ENV["APP_VERSION"].strip) %>
+<% max_threads   = (ENV["RAILS_MAX_THREADS"] || 10).to_i %>
+<% internal_base = ENV["INTERNAL_BASE_URL"] || "http://web:#{mcp_port}" %>
+<% otel_base     = ENV["OTEL_EXPORTER_OTLP_ENDPOINT"] || "http://otlp-ingest:4318" %>
+<% traefik_http  = ENV["TRAEFIK_HTTP_BASE"] || "http://localhost" %>
+
+domain: <%= app_domain %>
+# Blank unless a deployment serves assets from somewhere else: an empty value
+# means Rails serves them itself. The old default (`localhost:<port>`) was never
+# read by anything in development, and the image bakes ASSET_HOST as an empty
+# ENV, so `|| default` never fired there anyway — an empty string is truthy.
+asset_host: <%= ENV['ASSET_HOST'].to_s.strip %>
+container_asset_host: <%= ENV['CONTAINER_ASSET_HOST'] || "web:#{app_port}" %>
 protocol: <%= ENV['PROTOCOL'] || "https" %>
 
 google_oauth:
@@ -10,14 +30,17 @@ google_oauth:
   client_secret: <%= ENV['GOOGLE_CLIENT_SECRET'] %>
 
 rails:
+  # No `port:` here — the web server reads PORT directly (config/puma.rb), and
+  # RAILS_PORT was a second name for it that nothing ever read.
   secret_key_base: <%= ENV['RAILS_SECRET_KEY_BASE'] %>
-  port: <%= ENV['RAILS_PORT'] || 4000 %>
 
 app:
-  version: <%= ENV['APP_VERSION'] || `git rev-parse HEAD`.strip %>
-  last_commiter:
-    name: <%= ENV['AUTHOR_NAME'] || `git log -1 --pretty=format:'%an'`.strip %>
-    email: <%= ENV['AUTHOR_EMAIL'] || `git log -1 --pretty=format:'%ae'`.strip %>
+  # Set as a build arg by the Dockerfile and by compose. The fallback used to
+  # shell out to `git rev-parse HEAD` on every settings load — including in an
+  # image that ships without a .git directory, where it silently produced "".
+  # Empty counts as unset: the Dockerfile declares APP_VERSION as an ENV, so an
+  # image built without the build arg carries it as "" rather than not at all.
+  version: <%= app_version %>
 
 sentry:
   rails_dsn: <%= ENV['SENTRY_RAILS_DSN'] %>
@@ -33,21 +56,25 @@ database:
   # config/puma_mcp.rb) plus headroom for checkouts that are not request-bound
   # — an equal pool leaves none, and the overflow waits out the 5s checkout
   # timeout and raises ConnectionTimeoutError. DB_POOL overrides outright.
-  pool: <%= ENV['DB_POOL'] || (ENV['RAILS_MAX_THREADS'] || 5).to_i + 3 %>
+  #
+  # The fallback has to match config/puma.rb's own RAILS_MAX_THREADS default.
+  # It did not: 5 here against Puma's 10, so a deployment that never set the
+  # variable ran 10 request threads against an 8-connection pool.
+  # test/config/thread_budget_test.rb keeps the two in step.
+  pool: <%= ENV['DB_POOL'] || max_threads + 3 %>
   username: <%= ENV['DB_USERNAME'] || "postgres" %>
   password: <%= ENV['DB_PASSWORD'] || "" %>
 
 mailer:
   address: <%= ENV["MAILER_ADDRESS"] %>
   port: <%= ENV["MAILER_PORT"] %>
-  domain: <%= ENV['DOMAIN'] || "localhost:4000" %>
+  domain: <%= app_domain %>
   user_name: <%= ENV['MAILER_USERNAME'] %>
   password: <%= ENV['MAILER_PASSWORD'] %>
   authentication: <%= ENV["MAILER_AUTHENTICATION"] || 'plain' %>
 
 redis:
   url: <%= ENV['REDIS_URL'] || 'redis://redis:6379/1'%>
-  ui_url: <%= ENV['REDIS_UI_URL'] || 'http://localhost:8081' %>
 
 docs:
   login: <%= ENV['DOCS_LOGIN'] || 'user' %>
@@ -64,8 +91,10 @@ aws:
   region:            <%= ENV['AWS_DEFAULT_REGION'] || 'fake' %>
 
 mcp:
-  name: flow-mcp-server
-  server_url: <%= ENV['MCP_SERVER_URL'] || 'http://web:4002/action_mcp' %>
+  # The URL agent containers reach over the docker network / cluster DNS.
+  # Derived from `internal_base` (INTERNAL_BASE_URL) so this and
+  # cloud.credentials_url below move together; MCP_SERVER_URL still overrides.
+  server_url: <%= ENV['MCP_SERVER_URL'] || "#{internal_base}/action_mcp" %>
   # Override for the URL users configure their own MCP clients with (personal
   # token) — a public host, unlike server_url which agent containers reach over
   # the docker network. Blank by default: the fallback is built from the app's
@@ -79,12 +108,14 @@ cloud:
   # Where the in-container credential_process helper asks for short-lived cloud
   # credentials. Reached over the docker network, like mcp.server_url — never a public
   # host, since the request carries a per-session vending key.
-  credentials_url: <%= ENV['CLOUD_CREDENTIALS_URL'] || 'http://web:4002/cloud/aws/credentials' %>
+  credentials_url: <%= ENV['CLOUD_CREDENTIALS_URL'] || "#{internal_base}/cloud/aws/credentials" %>
 
+# One base endpoint, handed to agent containers that append their own signal
+# paths. The per-signal endpoints are gone: nothing read `logs_endpoint`, and
+# the one reader of `metrics_endpoint` stripped the `/v1/<signal>` suffix back
+# off to recover exactly this value. No OpenTelemetry SDK runs in this app.
 otel:
-  endpoint: <%= ENV['OTEL_EXPORTER_OTLP_ENDPOINT'] || 'http://otlp-ingest:4318' %>
-  metrics_endpoint: <%= ENV['OTEL_EXPORTER_OTLP_METRICS_ENDPOINT'] || 'http://otlp-ingest:4318/v1/metrics' %>
-  logs_endpoint: <%= ENV['OTEL_EXPORTER_OTLP_LOGS_ENDPOINT'] || 'http://otlp-ingest:4318/v1/logs' %>
+  endpoint: <%= otel_base %>
 
 temporal:
   enabled: <%= ENV['TEMPORAL_ENABLED'] %>
@@ -93,12 +124,16 @@ temporal:
   namespace: <%= ENV['TEMPORAL_NAMESPACE'] || 'default' %>
   task_queue: <%= ENV['TEMPORAL_TASK_QUEUE'] || 'aixle_ruby' %>
   worker_graceful_shutdown_period: <%= ENV['TEMPORAL_WORKER_GRACEFUL_SHUTDOWN_PERIOD'] || 900 %>
-  ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'http://localhost:8080' %>
-  # The worker process' thread budget — same knob as the Puma pool (RAILS_MAX_THREADS),
-  # since a worker container is sized like a web container. Activity slots derive from it
-  # in TemporalService (80%, so activities stay under the DB pool) and bin/temporal_worker
-  # sizes the worker's DB pool from it. Aggregated here so no app code reads ENV directly.
-  worker_max_threads: <%= ENV['RAILS_MAX_THREADS'] || 5 %>
+  # The worker process' thread budget: TemporalService derives activity slots
+  # from it (80%, so in-flight activities stay under the DB pool) and
+  # bin/temporal_worker sizes the worker's own DB pool from it.
+  #
+  # Its fallback is deliberately NOT the web default (10) that `max_threads`
+  # carries: a worker pod is sized on its own, and doubling activity
+  # concurrency on a deployment that sets neither variable is a capacity
+  # decision, not part of fixing the pool arithmetic. RAILS_MAX_THREADS still
+  # feeds it where a deployment sets one value for the whole image.
+  worker_max_threads: <%= (ENV['TEMPORAL_WORKER_MAX_THREADS'] || ENV['RAILS_MAX_THREADS'] || 5).to_i %>
 
 # At-rest encryption keys. Bare ENV in the base file (no fallbacks): production
 # MUST set these — see config/initializers/required_env.rb, which fails the boot
@@ -133,6 +168,11 @@ github:
   app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
   private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
   webhook_secret: <%= ENV['GITHUB_WEBHOOK_SECRET'] %>
+  # Alternative to GITHUB_APP_PRIVATE_KEY for a deployment that mounts the PEM
+  # as a file. Read only when the inline key is blank (Github::TokenService) —
+  # which until now could never resolve to anything, because the service asked
+  # for a setting no settings file defined.
+  private_key_path: <%= ENV['GITHUB_APP_PRIVATE_KEY_PATH'] %>
   # OPTIONAL, and unrelated to the GitHub App above. A read-only token for the two
   # paths that read PUBLIC repositories nobody installed the app on:
   # listing repository trees while describing the skills catalog
@@ -188,7 +228,7 @@ azure_devops:
   # Where the in-container git credential helper asks for a short-lived token.
   # Reached over the docker network like cloud.credentials_url — never a public
   # host, since the request carries a per-session vending key.
-  git_credentials_url: <%= ENV['AZURE_DEVOPS_GIT_CREDENTIALS_URL'] || 'http://web:4002/azure/git/credentials' %>
+  git_credentials_url: <%= ENV['AZURE_DEVOPS_GIT_CREDENTIALS_URL'] || "#{internal_base}/azure/git/credentials" %>
   # Seconds before the recorded expiry at which a cached token is treated as
   # spent. Entra tokens for this resource live about an hour, so renewal is a
   # hot path on any long session, not a rare event.
@@ -246,11 +286,14 @@ slack:
   scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write' %>
 
 coder:
-  # Operator-configurable defaults consumed by the Coder MCP services
-  # (workspace allocation, lock service, ssh runner). Per-integration values
-  # (template, machine prefix, lock TTL) override these defaults.
-  default_template:          <%= ENV['CODER_DEFAULT_TEMPLATE'] || 'aws-ec2-spot-v1' %>
-  machine_prefix:            <%= ENV['CODER_MACHINE_PREFIX'] || 'aixle-prod' %>
+  # Operator-configurable knobs for the Coder MCP services (workspace
+  # allocation, health gating, ssh runner).
+  #
+  # Template and machine prefix are deliberately NOT here: both are columns on
+  # the integration row and are read straight off it (Coder::Allocator,
+  # Coder::DeadWorkspaceReaper), with no fallback to a setting — so the
+  # deployment-wide defaults that used to sit here were read by nobody.
+  #
   # Single total-response budget for `coder_ssh_exec` (DD-15). Picked below
   # the MCP transport inline limit (OQ-7). Full output is still available via
   # the existing ToolResult / read_tool_result path.
@@ -296,23 +339,33 @@ url_safety:
   trusted_hosts: <%= (ENV['URL_SAFETY_TRUSTED_HOSTS'] || '').split(',').map(&:strip).reject(&:empty?) %>
 
 traefik:
-  ws_base: <%= ENV['TRAEFIK_WS_BASE'] || 'ws://localhost' %>
-  http_base: <%= ENV['TRAEFIK_HTTP_BASE'] || 'http://localhost' %>
+  http_base: <%= traefik_http %>
+  # The same origin over websockets: http -> ws, https -> wss. TRAEFIK_WS_BASE
+  # still overrides, but the pair no longer has to be kept in step by hand.
+  ws_base: <%= ENV['TRAEFIK_WS_BASE'] || traefik_http.sub(/\Ahttp/, 'ws') %>
   internal_url: <%= ENV['TRAEFIK_INTERNAL_URL'] || 'http://traefik' %>
-  dashboard_url: <%= ENV['TRAEFIK_DASHBOARD_URL'] || 'http://localhost:8090' %>
-  cors_origins: <%= ENV['TRAEFIK_CORS_ORIGINS'] || 'http://localhost:4000,http://localhost' %>
 
 container_runtime: <%= ENV['CONTAINER_RUNTIME'] || 'docker' %>
 
 agents:
+  # Built-in runtime images are DERIVED, not enumerated: the image for runtime
+  # `a_b` is "<image_prefix>a-b[:image_tag]". A new runtime needs no entry
+  # here, and an environment that publishes the whole set to one registry sets
+  # one variable instead of seven (see config/settings/production.yml).
+  image_prefix: <%= ENV['AGENT_IMAGE_PREFIX'] || 'aixle/' %>
+  # Blank tag means the registry default (`:latest` implicitly), which is what
+  # the deployed environments want; locally the tag is explicit.
+  image_tag: <%= ENV['AGENT_IMAGE_TAG'] || 'latest' %>
+  # Per-runtime escape hatch — pinning one runtime to a digest, or pointing it
+  # at a different registry. A blank entry falls back to the derived name.
   images:
-    claude_code: <%= ENV['AGENT_IMAGE_CLAUDE_CODE'] || 'aixle/claude-code:latest' %>
-    cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'aixle/cursor-cli:latest' %>
-    codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'aixle/codex:latest' %>
-    gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'aixle/gemini-cli:latest' %>
-    antigravity_cli: <%= ENV['AGENT_IMAGE_ANTIGRAVITY_CLI'] || 'aixle/antigravity-cli:latest' %>
-    grok: <%= ENV['AGENT_IMAGE_GROK'] || 'aixle/grok:latest' %>
-    kiro_cli: <%= ENV['AGENT_IMAGE_KIRO_CLI'] || 'aixle/kiro-cli:latest' %>
+    claude_code: <%= ENV['AGENT_IMAGE_CLAUDE_CODE'] %>
+    cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] %>
+    codex: <%= ENV['AGENT_IMAGE_CODEX'] %>
+    gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] %>
+    antigravity_cli: <%= ENV['AGENT_IMAGE_ANTIGRAVITY_CLI'] %>
+    grok: <%= ENV['AGENT_IMAGE_GROK'] %>
+    kiro_cli: <%= ENV['AGENT_IMAGE_KIRO_CLI'] %>
   mcp:
     startup_timeout_ms: <%= ENV['AGENT_MCP_STARTUP_TIMEOUT_MS'] || 90000 %>
 
@@ -325,7 +378,11 @@ kubernetes:
   service_port: <%= ENV['KUBERNETES_SERVICE_PORT'] || '443' %>
   traefik_entrypoint: <%= ENV['TRAEFIK_ENTRYPOINT'] || 'websecure' %>
   traefik_auth_middleware: <%= ENV['TRAEFIK_AUTH_MIDDLEWARE'] || 'terminal-auth' %>
-  traefik_skip_tls_verify: <%= ENV['K8S_TRAEFIK_VERIFY_TLS'] != 'true' %>
+  # Stated positively (it used to be `skip_tls_verify`, i.e. a double negative
+  # over the same variable). Verification stays OFF unless explicitly enabled:
+  # the in-cluster Traefik that terminates agent traffic serves a self-signed
+  # certificate, so flipping the default would break those deployments.
+  traefik_verify_tls: <%= ENV['K8S_TRAEFIK_VERIFY_TLS'] == 'true' %>
   service_ports: <%= (ENV['K8S_SERVICE_PORTS'] || '7681,4040').split(',').map(&:to_i) %>
   workspace_dir: <%= ENV['K8S_WORKSPACE_DIR'] || '/workspace' %>
   image_pull_policy: <%= ENV['K8S_IMAGE_PULL_POLICY'] || 'IfNotPresent' %>
@@ -362,29 +419,47 @@ kubernetes:
   ready_interval: <%= ENV['K8S_READY_INTERVAL'] || 1 %>
 
 # Container Execution Framework (Epic 8)
-# Timeouts and resource limits for container lifecycle execution
+# The resource ceiling for one tool container, read by
+# ContainerStrategies::BaseStrategy#load_container_limits.
+#
+# The `timeouts:` table that used to sit here (ten keys) and `max_timeout`
+# below it were read by nothing: Temporal owns activity timeouts
+# (app/services/container_service.rb), and a tool's own timeout comes from its
+# definition. Removed rather than left to rot as a plausible-looking knob.
 container_execution:
-  timeouts:
-    pull_image: 600        # 10 minutes for large images
-    before_create: 30      # 30 seconds
-    create: 60             # 1 minute
-    before_start: 30       # 30 seconds
-    start: 300              # 1 minute
-    before_exec: 120       # 2 minutes
-    exec_default: 300      # 5 minutes (default for tools)
-    exec_max: 1800         # 30 minutes (absolute max for tools)
-    before_cleanup: 120    # 2 minutes
-    cleanup: 30            # 30 seconds
-
   limits:
     tool_execution:
       memory_mb: 1024      # Max memory per tool container (1GB)
       cpu_percent: 50      # Max CPU (50% of 1 core) - prevents mining
       pids_limit: 100      # Max processes
-      max_timeout: 1800    # Absolute max timeout (30 min)
 
-# Session admission takes its deployment inputs straight from ENV in
-# `session_admission:sync`, which copies them into the database policy that
-# workers actually read. There is deliberately no mirror of them here: a second
-# copy that nothing consults is a copy that goes stale.
+# Session admission's deployment inputs.
+#
+# `installation_limit` is a ceiling over every project queue at once, and an
+# explicit project limit is a reservation drawn from it. It is not applied on
+# read — `bin/rails session_admission:sync` (or the admin button) copies it into
+# the database policy, which is also where it is checked against the
+# reservations already made. Blank means no ceiling, and project limits are then
+# the only bound.
+#
+# `project_default` IS read live, i.e. re-read at every boot, so a ConfigMap edit
+# takes effect on the next pod with nothing to run afterwards. A value that is
+# not a positive integer is logged and ignored in favour of the built-in fallback
+# of 4 rather than raised — a typo must not wedge every queue in the
+# installation; `session_admission:sync` validates the same inputs strictly,
+# which is where an operator sees it.
+#
+# There is no per-user default: sessions launched outside a project are not
+# queued at all.
+session_admission:
+  installation_limit: <%= ENV['SESSION_CONCURRENCY_LIMIT'] %>
+  project_default: <%= ENV['SESSION_PROJECT_CONCURRENCY_DEFAULT'] %>
+
+# How long a tool result's stored payload is kept (ToolResultCleanupJob).
+tool_results:
+  retention_days: <%= ENV['TOOL_RESULTS_RETENTION_DAYS'] || 30 %>
+
+# Prompt-context budget in tokens (ContextRenderer).
+context:
+  token_budget: <%= ENV['CONTEXT_TOKEN_BUDGET'] || 6000 %>
 

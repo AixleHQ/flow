@@ -19,7 +19,7 @@ module Admin
     def show
       @policy = SessionAdmissionPolicy.current
       @scope_defaults = SessionAdmissionPolicy.scope_defaults
-      @configured_limit = ENV["SESSION_CONCURRENCY_LIMIT"].to_s.strip.presence
+      @configured_limit = SessionAdmissionPolicy.deployment_setting(:installation_limit).to_s.strip.presence
       @overrides = SessionConcurrencyLimit.order(:scope_type, :scope_id)
       @health = SessionAdmissionReconciler.snapshot
 

@@ -8,8 +8,16 @@ class SessionAdmissionPolicy < ApplicationRecord
   # which in practice meant agent logins; those are exempt from admission now
   # (SessionAdmissionService#enqueue!), so the scope governed nothing.
   SCOPE_DEFAULTS = {
-    "Project" => { variable: "SESSION_PROJECT_CONCURRENCY_DEFAULT", fallback: 4 }
+    "Project" => { setting: :project_default, variable: "SESSION_PROJECT_CONCURRENCY_DEFAULT", fallback: 4 }
   }.freeze
+
+  # Deployment inputs come from Settings (`session_admission` in
+  # config/settings.yml), which is where every other deployment input in this
+  # app lives; the environment is still the source, read at boot. Messages keep
+  # naming the ENV variable, because that is what an operator actually edits.
+  def self.deployment_setting(key)
+    Settings.session_admission&.public_send(key)
+  end
 
   def self.current = find_by(id: 1) || create_or_find_by!(id: 1)
 
@@ -53,7 +61,7 @@ class SessionAdmissionPolicy < ApplicationRecord
   # and it settles as the rollout finishes.
   def self.scope_default(scope_type)
     config = SCOPE_DEFAULTS.fetch(scope_type)
-    raw = ENV[config[:variable]].to_s.strip
+    raw = deployment_setting(config[:setting]).to_s.strip
     return config[:fallback] if raw.empty?
     return raw.to_i if raw.match?(/\A[1-9]\d*\z/)
 
@@ -71,7 +79,7 @@ class SessionAdmissionPolicy < ApplicationRecord
 
   # Only the operator writes policy, and only in a maintenance window. Workers
   # never interpret their ENV for anything gated here.
-  def self.sync!(installation_limit: ENV["SESSION_CONCURRENCY_LIMIT"], enabled: true, paused: false)
+  def self.sync!(installation_limit: deployment_setting(:installation_limit), enabled: true, paused: false)
     raw = installation_limit.to_s.strip
     cap = raw.empty? ? nil : positive_integer!(raw)
     current

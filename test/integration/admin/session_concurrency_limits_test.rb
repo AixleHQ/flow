@@ -18,8 +18,6 @@ class Admin::SessionConcurrencyLimitsTest < ActionDispatch::IntegrationTest
     SessionAdmissionPolicy.sync!(installation_limit: nil)
   end
 
-  teardown { restore_scope_defaults }
-
   test "index lists the scope overrides" do
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 4)
 

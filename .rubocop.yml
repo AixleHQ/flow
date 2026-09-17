@@ -9,6 +9,16 @@ plugins:
 require:
   - ./.rubocop/cops/testing/no_any_instance.rb
   - ./.rubocop/cops/testing/no_vendor_stubbing.rb
+  - ./.rubocop/cops/configuration/no_env_in_app.rb
+
+# Deployment configuration has one reader: config/settings.yml, reached as
+# `Settings.*` (see docs/reference/configuration.md). App code that reads ENV
+# directly puts a knob outside that surface — undocumented, and invisible to the
+# reference test. Boot files, bin/, rake tasks, seeds and tests are exempt
+# because they run before Settings exists or take task arguments, not config.
+Configuration/NoEnvInApp:
+  Include:
+    - "app/**/*"
 
 # Doctrine R6: no `any_instance` in new tests. The Exclude list below is the
 # pre-doctrine offender set, frozen on 2026-07-02 — it only ever shrinks.

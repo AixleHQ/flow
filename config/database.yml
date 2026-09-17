@@ -16,12 +16,6 @@ test:
   <<: *default
   database:  <%= Settings.project_name.downcase %>_test
 
-qa:
-  <<: *default
-
-uat:
-  <<: *default
-
 staging:
   <<: *default
 

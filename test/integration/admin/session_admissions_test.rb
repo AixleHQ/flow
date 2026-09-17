@@ -15,8 +15,6 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
     SessionAdmissionPolicy.current.update!(enabled: false, paused: true, installation_limit: nil)
   end
 
-  teardown { restore_scope_defaults }
-
   test "the page reports what the environment currently resolves to" do
     with_scope_defaults(project: 3)
 
@@ -28,16 +26,14 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
     assert_match(/not queued at all/, response.body)
   end
 
-  test "enabling reads the cap from the environment rather than the form" do
-    ENV["SESSION_CONCURRENCY_LIMIT"] = "7"
+  test "enabling reads the cap from the deployment configuration, not the form" do
+    with_scope_defaults(installation_limit: 7)
     SessionRuntimeInventory.stubs(:fetch).returns([])
 
     patch admin_session_admission_path, params: { commit_action: "activate" }
 
     assert SessionAdmissionPolicy.current.enabled?
     assert_equal 7, SessionAdmissionPolicy.current.installation_limit
-  ensure
-    ENV.delete("SESSION_CONCURRENCY_LIMIT")
   end
 
   test "enabling is refused while the runtime still holds legacy session resources" do

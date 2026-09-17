@@ -9,8 +9,6 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     SessionAdmissionPolicy.sync!(installation_limit: 1)
   end
 
-  teardown { restore_scope_defaults }
-
   # Every queued session belongs to a project — that is what the queue is for.
   # Pass `project: nil` only to exercise the sessions that are exempt from it.
   def enqueue(user: @user, project: @project)
@@ -243,8 +241,8 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "an unusable scope default falls back instead of wedging every queue" do
-    with_scope_defaults(project: 1)
-    ENV["SESSION_PROJECT_CONCURRENCY_DEFAULT"] = "lots"
+    # A ConfigMap typo, which must fall back rather than wedge every queue.
+    with_scope_defaults(project: "lots")
 
     assert_equal 4, SessionAdmissionPolicy.scope_default("Project")
   end
