@@ -14,6 +14,15 @@ updates:
       interval: weekly
     open-pull-requests-limit: 10
     target-branch: "develop"
+    ignore:
+      # json 3 takes the options of `JSON.parse` as keywords only, and
+      # temporalio's payload converter still passes them positionally — under
+      # json 3 every workflow task fails and the worker retries it forever, so
+      # the suite hangs rather than failing. The Gemfile holds json below 3;
+      # this keeps the weekly run from proposing the pin straight back up.
+      # Drop both once the Temporal SDK switches to keywords.
+      - dependency-name: "json"
+        update-types: ["version-update:semver-major"]
     groups:
       bundler-minor-patch:
         patterns: ["*"]

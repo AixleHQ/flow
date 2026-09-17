@@ -68,6 +68,16 @@ gem "redis"
 # Temporal workflow orchestration (official SDK)
 gem "temporalio"
 
+# Held below json 3.0, which takes the options of `JSON.parse` as keywords only.
+# temporalio's payload converter still passes them positionally
+# (`JSON.parse(payload.data, @parse_options)` in
+# converters/payload_converter/json_plain.rb), so under json 3 every payload
+# decode raises ArgumentError and every workflow task fails — the worker retries
+# them forever rather than erroring out, which reads as a hang, not a failure.
+# Present in temporalio 1.7, 1.8 and 1.9 alike. Drop the pin once the SDK
+# switches to keywords.
+gem "json", "< 3"
+
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 gem "csv" # Required for CSV parsing
@@ -156,18 +166,18 @@ group :test do
 end
 
 gem "shrine", "~> 3.9"
-gem "aws-sdk-s3", "~> 1.229"
+gem "aws-sdk-s3", "~> 1.232"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
 # their permission set cannot actually invoke a model is to try. Claude Code hides
 # Bedrock errors, so without this the failure surfaces as an agent that never answers.
 # (STS, SSO and SSO-OIDC clients already ship inside aws-sdk-core.)
-gem "aws-sdk-bedrockruntime", "~> 1.83"
+gem "aws-sdk-bedrockruntime", "~> 1.85"
 
 # Bedrock control plane, for listing the inference profiles an account can actually invoke.
 # That list is the only truthful model catalogue for a Bedrock connection — it includes the
 # account's own application inference profiles, which is what enterprise deployments pin.
-gem "aws-sdk-bedrock", "~> 1.92"
+gem "aws-sdk-bedrock", "~> 1.94"
 gem "image_processing", "~> 2.1"
 gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.rb requires image_processing/vips
 
