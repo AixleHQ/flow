@@ -94,7 +94,7 @@ class SessionService
       # replace the broken credential, so gating it on that credential would trap
       # the user behind the queue with no way out.
       preflight_agent_credential!(session.user, SessionCompany.company_for(session), session.agent_type,
-        session_type: session.session_type)
+        session_type: session.session_type, excluding_session_id: session.id)
       preflight_url_safety!(session.mcp_server_ids)
       refresh_oauth_tokens_for_session(session) if refresh_tokens
     end
@@ -293,14 +293,22 @@ class SessionService
     # An auth_setup session is exempt: it exists to REPLACE the broken credential,
     # so gating it on that credential locks the user out of the only flow that can
     # clear the error.
-    def preflight_agent_credential!(user, company, agent_type, session_type: nil)
+    # `excluding_session_id:` is the session being launched. It is itself an active row,
+    # so without it the "is another container holding these tokens?" test would find this
+    # session and refuse every launch it was asked to check.
+    def preflight_agent_credential!(user, company, agent_type, session_type: nil, excluding_session_id: nil)
       return if session_type == "auth_setup"
       return unless agent_type.present? && company.present?
 
       credential = AgentCredential.find_by(user_id: user.id, company_id: company.id, agent_type: agent_type)
-      return if credential.nil? || credential.active?
+      return if credential.nil?
 
-      raise AgentCredential::PreflightError, credential
+      raise AgentCredential::PreflightError, credential unless credential.active?
+      # An `active` row is not the same as a usable login: a credential whose token died
+      # while a live session pinned it out of the refresh sweep never records an error,
+      # because no refresh was ever attempted. Launching on it produces a container that
+      # prints "Login expired" and nothing else.
+      raise AgentCredential::PreflightError, credential if credential.unrecoverably_expired?(excluding_session_id: excluding_session_id)
     end
 
     # Re-validate selected custom MCP server URLs right before launch (F34). The

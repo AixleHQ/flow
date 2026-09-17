@@ -12,8 +12,17 @@ module Activities
           return quota_failure_result(step_run, session, detection)
         end
 
-        if session&.state == "failed"
-          step_run.mark_failed!(session.error_message.presence || "Session failed")
+        auth = detect_auth_error(session)
+        return auth_failure_result(step_run, auth) if auth.auth_error?
+
+        # `cancelled`, not only `failed`: every watchdog reaches a session through
+        # SessionService.fail_session, which for an admitted session cancels instead of
+        # failing (the reservation is only released once the runtime is confirmed gone).
+        # Treating cancelled as "not a failure" is what let a killed session fall through
+        # to mark_completed! — 53 step runs in the 14 days to 2026-09-17 completed on a
+        # session that had been cancelled or failed.
+        if session && %w[failed cancelled].include?(session.state)
+          step_run.mark_failed!(session.error_message.presence || "Session #{session.state}")
           return { "step_run_id" => step_run.id, "valid" => false, "failed" => true }
         end
 
@@ -52,6 +61,15 @@ module Activities
         return QuotaErrorDetector.detect(nil) unless session
 
         QuotaErrorDetector.detect(quota_detection_text(session))
+      end
+
+      # An expired login is silent: the CLI prints its banner, renders a prompt nobody
+      # answers, and the step would otherwise be judged only on the absence of output.
+      # Same text as the quota check, which is already read and ANSI-stripped.
+      def detect_auth_error(session)
+        return AuthErrorDetector.detect(nil) unless session
+
+        AuthErrorDetector.detect(quota_detection_text(session))
       end
 
       def quota_detection_text(session)
@@ -94,6 +112,15 @@ module Activities
           "failed" => true,
           "quota_error" => true
         }
+      end
+
+      # No workflow-level side effect (unlike quota, which pauses the run against the
+      # offending credential): the credential the step ran on may already have been
+      # re-authenticated by the time this lands, and the refresh sweep owns that verdict.
+      # What matters here is that the step says why it failed.
+      def auth_failure_result(step_run, detection)
+        step_run.mark_failed!("Agent authentication failed: #{detection.message}", error_category: :auth_expired)
+        { "step_run_id" => step_run.id, "valid" => false, "failed" => true, "auth_error" => true }
       end
 
       def collected_assets(step_run)

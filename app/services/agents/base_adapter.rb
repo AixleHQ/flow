@@ -383,6 +383,18 @@ module Agents
       nil
     end
 
+    # Expiry (epoch ms) of the login the CLI cannot run without, or nil when this agent
+    # has none that expires. Distinct from #token_expires_at, which reports the SOONEST
+    # expiry across every stored block so the refresh sweep fires early: an agent that
+    # layers add-on grants onto a base login (Claude's designOauth) would otherwise read
+    # as unusable whenever an add-on lapses, and refuse launches that would have worked.
+    # Default: the same value, which is correct for every single-block agent.
+    # @param credentials [Hash] decrypted credential data
+    # @return [Integer, nil]
+    def base_token_expires_at(credentials)
+      token_expires_at(credentials)
+    end
+
     # Decode the `exp` claim (seconds since epoch) from a JWT payload WITHOUT
     # verifying the signature, returning epoch milliseconds — or nil when the
     # value is not a three-segment JWT or carries no `exp`. Adapters whose access

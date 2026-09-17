@@ -184,6 +184,14 @@ module Agents
       OAUTH_BLOCKS.filter_map { |b| credentials.dig(b, "expiresAt") }.map(&:to_i).min
     end
 
+    # Only the base login gates a launch. An expired designOauth is an add-on the CLI
+    # runs fine without, and a credential authenticating by primaryApiKey or Bedrock
+    # carries no base expiry at all — both read as nil here, never as "expired".
+    def base_token_expires_at(credentials)
+      exp = credentials.dig(BASE_OAUTH_BLOCK, "expiresAt").to_i
+      exp.positive? ? exp : nil
+    end
+
     # Claude stores two independently-rotating OAuth blocks: claudeAiOauth (base login)
     # and designOauth (/design-login). Merge each block on its own expiry so that
     # (a) adding designOauth isn't skipped just because claudeAiOauth didn't change, and

@@ -230,6 +230,32 @@ class AgentCredential < ApplicationRecord
     end
   end
 
+  # Whether the login the CLI cannot run without is already past its expiry. Reads the
+  # adapter's base expiry rather than the expires_at column, because that column is the
+  # soonest expiry across every block and a lapsed add-on must not read as a dead login.
+  def base_login_expired?
+    ms = adapter.base_token_expires_at(config_data)
+    ms.present? && ms.to_i.positive? && ms.to_i <= (Time.current.to_f * 1000).to_i
+  rescue StandardError => e
+    Rails.logger.warn("[AgentCredential] base_login_expired? failed for #{id}: #{e.message}")
+    false
+  end
+
+  # An expired login that nothing on the launch path will repair, so starting a container
+  # on it only buys 30 minutes of an agent staring at a login prompt before the no-output
+  # watchdog reaps it (measured: 138 such sessions in the 14 days to 2026-09-17).
+  #
+  # Two ways to be unrepairable: the agent has no server-side refresh at all, or another
+  # live container holds these tokens — refreshing then would rotate the grant out from
+  # under it, so #refresh_if_expiring! stands down and the copy we would hand this new
+  # container is the dead one.
+  def unrecoverably_expired?(excluding_session_id: nil)
+    return false unless base_login_expired?
+    return true unless REFRESHABLE_AGENT_TYPES.include?(agent_type)
+
+    held_by_live_session?(excluding_session_id: excluding_session_id)
+  end
+
   def mark_refresh_error!(message, permanent: false)
     self.refresh_failure_count = refresh_failure_count.to_i + 1
     self.refresh_error = message.to_s.truncate(500)

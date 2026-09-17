@@ -43,6 +43,48 @@ module Activities
         assert_equal @credential.id, @run.failed_agent_credential_id
       end
 
+      # --- auth error path ---
+
+      test "fails the step when the session's terminal shows an expired login" do
+        session = create(:terminal_session, :failed,
+          user: @user,
+          agent_type: "claude_code",
+          error_message: "Session terminated: agent authentication failed — Login expired · Please run /login")
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["auth_error"]
+        assert result["failed"]
+        refute result["valid"]
+
+        step_run.reload
+        assert_equal "failed", step_run.state
+        assert_equal "auth_expired", step_run.error_category
+        assert_match(/Login expired/, step_run.error_message)
+
+        # Unlike a quota stop, an expired login does not condemn the run's credential.
+        @run.reload
+        assert_nil @run.failure_reason
+      end
+
+      # --- cancelled session ---
+
+      test "fails the step when its session was cancelled rather than failed" do
+        session = create(:terminal_session, :cancelled,
+          user: @user,
+          agent_type: "claude_code",
+          error_message: "Session terminated: no output for 30 minutes.")
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["failed"]
+        refute result["valid"]
+        assert_equal "failed", step_run.reload.state
+        assert_match(/no output/, step_run.error_message)
+      end
+
       test "does not set quota_error for generic session failure" do
         session = create(:terminal_session, :failed,
           user: @user,

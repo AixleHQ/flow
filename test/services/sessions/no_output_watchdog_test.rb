@@ -18,7 +18,7 @@ class NoOutputWatchdogTest < ActiveSupport::TestCase
       status: :ok, text: "some output", last_output_at: 45.minutes.ago
     )
     reader = mock
-    reader.expects(:tail).with(lines: 1).returns(reader_result)
+    reader.expects(:tail).with(lines: Sessions::NoOutputWatchdog::TAIL_LINES).returns(reader_result)
     Sessions::LiveLogReader.stubs(:new).with(@session, runtime: nil).returns(reader)
 
     watchdog = Sessions::NoOutputWatchdog.new(@session)
@@ -30,7 +30,7 @@ class NoOutputWatchdogTest < ActiveSupport::TestCase
       status: :ok, text: "recent output", last_output_at: 5.minutes.ago
     )
     reader = mock
-    reader.expects(:tail).with(lines: 1).returns(reader_result)
+    reader.expects(:tail).with(lines: Sessions::NoOutputWatchdog::TAIL_LINES).returns(reader_result)
     Sessions::LiveLogReader.stubs(:new).with(@session, runtime: nil).returns(reader)
 
     watchdog = Sessions::NoOutputWatchdog.new(@session)
@@ -42,7 +42,7 @@ class NoOutputWatchdogTest < ActiveSupport::TestCase
       status: :ok, text: "", last_output_at: nil
     )
     reader = mock
-    reader.expects(:tail).with(lines: 1).returns(reader_result)
+    reader.expects(:tail).with(lines: Sessions::NoOutputWatchdog::TAIL_LINES).returns(reader_result)
     Sessions::LiveLogReader.stubs(:new).with(@session, runtime: nil).returns(reader)
 
     watchdog = Sessions::NoOutputWatchdog.new(@session)
@@ -54,11 +54,37 @@ class NoOutputWatchdogTest < ActiveSupport::TestCase
       status: :unreachable, text: "", last_output_at: nil
     )
     reader = mock
-    reader.expects(:tail).with(lines: 1).returns(reader_result)
+    reader.expects(:tail).with(lines: Sessions::NoOutputWatchdog::TAIL_LINES).returns(reader_result)
     Sessions::LiveLogReader.stubs(:new).with(@session, runtime: nil).returns(reader)
 
     watchdog = Sessions::NoOutputWatchdog.new(@session)
     refute_predicate watchdog, :stale?
+  end
+
+  test "message names an expired login when the pane still shows its banner" do
+    reader_result = Sessions::LiveLogReader::Result.new(
+      status: :ok, text: "> /login\nLogin expired · Please run /login\n", last_output_at: 40.minutes.ago
+    )
+    reader = mock
+    reader.stubs(:tail).returns(reader_result)
+    Sessions::LiveLogReader.stubs(:new).returns(reader)
+
+    watchdog = Sessions::NoOutputWatchdog.new(@session)
+    assert_match(/authentication failed/i, watchdog.message)
+    assert_match(/Login expired/, watchdog.message)
+  end
+
+  test "stale? and message share one read of the pane" do
+    reader_result = Sessions::LiveLogReader::Result.new(
+      status: :ok, text: "still working", last_output_at: 40.minutes.ago
+    )
+    reader = mock
+    reader.expects(:tail).once.returns(reader_result)
+    Sessions::LiveLogReader.stubs(:new).returns(reader)
+
+    watchdog = Sessions::NoOutputWatchdog.new(@session)
+    assert watchdog.stale?
+    assert_match(/no output/i, watchdog.message)
   end
 
   test "message returns a human-readable no-output description" do

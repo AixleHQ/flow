@@ -310,6 +310,68 @@ class AgentCredentialTest < ActiveSupport::TestCase
     refute_includes AgentCredential.refresh_due, cred
   end
 
+  # --- base_login_expired? / unrecoverably_expired? (the launch gate) ---
+
+  test "base_login_expired? reads the base block, not the soonest expiry across blocks" do
+    config = claude_config(expires_at: 2.hours.from_now).merge(
+      "designOauth" => { "accessToken" => "design-tok", "expiresAt" => (1.hour.ago.to_f * 1000).to_i }
+    )
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code", config_data: config)
+
+    # expires_at (the column) follows the dead add-on; the base login is still good.
+    assert cred.expires_at.past?
+    assert_equal false, cred.base_login_expired? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "base_login_expired? is true once the base block has expired" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 1.minute.ago))
+
+    assert cred.base_login_expired?
+  end
+
+  test "base_login_expired? is false for a credential with no expiry at all" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: { "primaryApiKey" => "sk-ant-api-key" })
+
+    assert_equal false, cred.base_login_expired? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "unrecoverably_expired? is false while no live session holds the tokens" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 1.minute.ago))
+
+    # Nothing holds it, so the launch-time refresh can still save this session.
+    assert_equal false, cred.unrecoverably_expired? # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "unrecoverably_expired? is true when a live session pins an expired login" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 1.minute.ago))
+    create(:terminal_session, user: @user, company_id: cred.company_id,
+                              agent_type: "claude_code", state: "ready")
+
+    assert cred.unrecoverably_expired?
+  end
+
+  test "unrecoverably_expired? ignores the session being launched" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: claude_config(expires_at: 1.minute.ago))
+    launching = create(:terminal_session, user: @user, company_id: cred.company_id,
+                                          agent_type: "claude_code", state: "queued")
+
+    assert_equal false, cred.unrecoverably_expired?(excluding_session_id: launching.id) # rubocop:disable Minitest/RefuteFalse
+  end
+
+  test "unrecoverably_expired? is true for an expired agent that cannot refresh at all" do
+    cred = create(:agent_credential, user: @user, agent_type: "grok",
+                                     config_data: { "auth" => { "default" => { "key" => "tok",
+                                                                              "expires_at" => 1.minute.ago.iso8601 } } })
+
+    assert cred.base_login_expired?
+    assert cred.unrecoverably_expired?
+  end
+
   # --- without_live_session scope (keeps the sweep off tokens a container holds) ---
 
   test "without_live_session excludes a credential a live session holds" do

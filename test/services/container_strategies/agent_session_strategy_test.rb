@@ -185,6 +185,21 @@ module ContainerStrategies
       assert_equal "old-tok", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
     end
 
+    # Deferring is only tolerable while the token is alive. A dead one cannot be renewed
+    # from inside the container either, so starting would buy 30 minutes of an agent
+    # staring at a login prompt before the no-output watchdog reaps it.
+    test "before_exec refuses to start on an expired login another live session holds" do
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "dead-tok", "refreshToken" => "dead-ref",
+                             "expiresAt" => (1.minute.ago.to_f * 1000).to_i }
+      })
+      create(:terminal_session, user: @user, company_id: @credential.company_id,
+                                agent_type: "claude_code", state: "ready")
+      SessionContextService.expects(:assemble_session_context).never
+
+      assert_raises(AgentCredential::PreflightError) { run_before_exec(build_strategy) }
+    end
+
     test "before_exec rejects a nil credential before assembling context" do
       strategy = AgentSessionStrategy.new(
         user_id: @user.id,
