@@ -17,16 +17,20 @@ module Sessions
       @runtime.fs["/home/claude/.claude/projects/-workspace/9d000c89.jsonl"] = %({"type":"assistant"}\n)
     end
 
-    teardown { cleanup_runtime_overrides }
+    teardown do
+      cleanup_runtime_overrides
+      SessionLogUploader.storages.delete(PRESIGNED_KEY) if @registered_presigned_key
+    end
 
-    def collect(max_bytes: Sessions::LogCollector::DEFAULT_MAX_BYTES)
+    def collect(max_bytes: Sessions::LogCollector::DEFAULT_MAX_BYTES, cache_storage_key: :cache)
       LogCollector.new(
         session: @session,
         container: @container,
         adapter: @adapter,
         runtime: @runtime,
         redactor: SecretRedactor.for_session(@session),
-        max_bytes: max_bytes
+        max_bytes: max_bytes,
+        cache_storage_key: cache_storage_key
       ).call
     end
 
@@ -106,6 +110,88 @@ module Sessions
 
       assert_empty result.failures
       assert_nil @session.session_logs.find_by(name: "context.log")
+    end
+
+    # --- the container uploads its own logs ---
+    #
+    # The cap only ever existed because redaction ran in this process, which forced every
+    # byte through it. Once the container scrubs its own logs the transfer is none of our
+    # business, so these assert on who moves the bytes rather than on how many.
+
+    # A cache storage that can sign a PUT, plus the other end of that PUT: the fake
+    # container runtime records the transfer and this puts the bytes where the signed URL
+    # said they would land, so the attachment that follows is a real one.
+    PRESIGNED_KEY = :log_collector_test_cache
+
+    # A cache storage that can sign a PUT, plus the other end of that PUT: the fake
+    # container runtime records the transfer and this puts the bytes where the signed URL
+    # said they would land, so the attachment that follows is a real one. Registered under
+    # its own key rather than over :cache, because the signed URL and the attachment must
+    # name the same storage and nothing else in the suite should see this one.
+    def presigned_cache
+      storage = Shrine::Storage::Memory.new
+      def storage.presign(id, **) = { url: "https://storage.test/cache/#{id}" }
+
+      # On the uploader's registry, which is the one the attachment resolves against — a
+      # Shrine subclass copies the storages hash when it is defined, so registering on
+      # Shrine alone is invisible here (and passes in isolation only because the subclass
+      # had not been autoloaded yet).
+      SessionLogUploader.storages[PRESIGNED_KEY] = storage
+      @registered_presigned_key = true
+      @runtime.on_upload { |_path, url, content| storage.upload(StringIO.new(content), url.split("/").last) }
+      PRESIGNED_KEY
+    end
+
+    def with_filters
+      @runtime.fs[LogCollector::FILTER_MARKER_PATH] = "# filters\n"
+      yield
+    end
+
+    test "has the container PUT the log straight to storage when it scrubs its own logs" do
+        with_filters { collect(max_bytes: 8, cache_storage_key: presigned_cache) }
+
+      uploaded = @runtime.uploads.map { |u| u[:path] }
+      assert_includes uploaded, "/home/claude/.claude/projects/-workspace/9d000c89.jsonl"
+      assert_empty @runtime.execs.select { |c| c.join(" ").include?("tail -c") },
+                   "a log the container uploaded was also read through this process"
+    end
+
+    test "keeps the whole log — an uploaded one is never truncated" do
+      big = "x" * 5_000
+      @runtime.fs["/var/log/mitm/http.log"] = big
+
+      with_filters { collect(max_bytes: 8, cache_storage_key: presigned_cache) }
+
+      log = @session.session_logs.find_by(name: "http.log")
+      assert_equal big.bytesize, log.file_size
+      assert_equal big, log.file.read
+      assert_empty @session.session_logs.where(name: LogCollector::REPORT_NAME)
+    end
+
+    test "keeps the bounded read for a container built before the filters shipped" do
+      collect(cache_storage_key: presigned_cache)
+
+      assert_empty @runtime.uploads
+      assert_not_nil @session.session_logs.find_by(name: "context.log")
+    end
+
+    test "keeps the bounded read for a log an adapter parses for usage" do
+      @adapter = Agents::CursorCliAdapter.new
+      @runtime.fs["/var/log/mitm/http.log"] = "POST /v1/messages\n"
+
+      with_filters { collect(cache_storage_key: presigned_cache) }
+
+      assert_not_includes @runtime.uploads.map { |u| u[:path] }, "/var/log/mitm/http.log"
+      assert_includes @runtime.execs.map { |c| c.join(" ") }.join, "tail -c"
+    end
+
+    test "falls back to the bounded read when the upload fails, and says so" do
+      @runtime.fail_exec("curl", stderr: "curl: (28) timeout", exit_code: 28)
+
+      result = with_filters { collect(cache_storage_key: presigned_cache) }
+
+      assert_includes result.failures.join, "fell back to a bounded read"
+      assert_not_nil @session.session_logs.find_by(name: "context.log")
     end
   end
 end

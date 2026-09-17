@@ -226,6 +226,12 @@ module Agents
       super + %w[/var/log/mitm/http.log]
     end
 
+    # #collect_usage prices this session by parsing this file, so it must come back
+    # through the application rather than going straight to storage.
+    def usage_log_paths
+      %w[/var/log/mitm/http.log]
+    end
+
     # Grok stores `{key, token_type, expires_at}` per scope and no refresh token at all,
     # so nothing — not the sweep, not the CLI in the container — can renew it. The expiry
     # is still surfaced, and `reauth_required_on_expiry` is what says that surfacing it

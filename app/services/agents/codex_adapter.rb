@@ -383,6 +383,12 @@ module Agents
       super + %w[/var/log/mitm/http.log]
     end
 
+    # #collect_usage prices this session by parsing this file, so it must come back
+    # through the application rather than going straight to storage.
+    def usage_log_paths
+      %w[/var/log/mitm/http.log]
+    end
+
     # OTLP log event names emitted by Codex CLI with token counts.
     LOG_SSE_EVENT = "codex.sse_event"
 
