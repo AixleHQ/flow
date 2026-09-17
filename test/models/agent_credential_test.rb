@@ -3,6 +3,8 @@
 require "test_helper"
 
 class AgentCredentialTest < ActiveSupport::TestCase
+  include ActionMailer::TestHelper
+
   setup do
     @company = create(:company)
     @user = create(:user, company: @company)
@@ -308,6 +310,33 @@ class AgentCredentialTest < ActiveSupport::TestCase
     cred.mark_refresh_error!("invalid_grant", permanent: true)
 
     refute_includes AgentCredential.refresh_due, cred
+  end
+
+  # --- the owner is told when the platform gives up ---
+
+  test "mark_refresh_error! mails the owner when the credential crosses into error" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+
+    assert_enqueued_emails 1 do
+      cred.mark_refresh_error!("claudeAiOauth invalid_grant — reconnection required", permanent: true)
+    end
+  end
+
+  test "a transient refresh failure does not mail anyone" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+
+    assert_no_enqueued_emails do
+      cred.mark_refresh_error!("network timeout")
+    end
+  end
+
+  test "a credential already in error does not mail again on the next failure" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+    cred.mark_refresh_error!("invalid_grant", permanent: true)
+
+    assert_no_enqueued_emails do
+      cred.mark_refresh_error!("invalid_grant", permanent: true)
+    end
   end
 
   # --- base_login_expired? / unrecoverably_expired? (the launch gate) ---

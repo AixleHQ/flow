@@ -280,10 +280,16 @@ class AgentCredential < ApplicationRecord
   end
 
   def mark_refresh_error!(message, permanent: false)
+    was_active = active?
     self.refresh_failure_count = refresh_failure_count.to_i + 1
     self.refresh_error = message.to_s.truncate(500)
     self.status = :error if permanent || refresh_failure_count >= MAX_REFRESH_FAILURES
     save!
+    # Once, on the crossing. A credential that can no longer be renewed needs the person
+    # who owns it to sign in again, and until now nothing told them: the row went to
+    # error, the profile badge kept saying "Connected", and the first sign was a workflow
+    # run that came back empty.
+    notify_refresh_failure if was_active && error?
   end
 
   def clear_refresh_error!
@@ -294,6 +300,16 @@ class AgentCredential < ApplicationRecord
   end
 
   private
+
+  def notify_refresh_failure
+    return if user&.email.blank?
+
+    AgentCredentialMailer.refresh_failed(self).deliver_later
+  rescue StandardError => e
+    # A credential that cannot be renewed is already the problem; failing to post the
+    # letter about it must not also fail the sweep that discovered it.
+    Rails.logger.warn("[AgentCredential] refresh-failure notice not sent for #{id}: #{e.message}")
+  end
 
   # The default is per membership, so a credential can only ever become the
   # default for the company it belongs to.
