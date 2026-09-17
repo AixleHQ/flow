@@ -41,10 +41,11 @@ class IdentityProvider < ApplicationRecord
   # human curates: they exist wherever the app runs. Idempotent provisioning
   # keeps every environment — production, a fresh test database loaded from
   # schema.rb, a self-hoster's first boot — identical without a seeding ritual.
+  # `name` is deliberately left blank for a deployment provider: its label comes
+  # from KIND_LABELS, so changing what we call a method changes it everywhere at
+  # once instead of only for installations provisioned after the change.
   def self.deployment!(kind)
-    find_or_create_by!(kind: kind.to_s, scope: "deployment") do |provider|
-      provider.name = kind.to_s.humanize
-    end
+    find_or_create_by!(kind: kind.to_s, scope: "deployment")
   rescue ActiveRecord::RecordNotUnique
     # Two web processes can reach a lazily-provisioned singleton at the same
     # moment; the partial unique index is what makes that safe, and the loser of
@@ -56,8 +57,21 @@ class IdentityProvider < ApplicationRecord
     deployment!("password")
   end
 
+  # What a person calls this method. `humanize` turns protocol names into
+  # things nobody says out loud ("Totp", "Oidc"), and this string is shown on
+  # the sign-in-methods screen and the step-up page.
+  KIND_LABELS = {
+    "password" => "Password",
+    "google" => "Google",
+    "microsoft" => "Microsoft",
+    "passkey" => "Passkey",
+    "magic_link" => "Email sign-in link",
+    "totp" => "Authentication codes",
+    "oidc" => "Single sign-on"
+  }.freeze
+
   def display_name
-    name.presence || kind.to_s.humanize
+    name.presence || KIND_LABELS.fetch(kind.to_s, kind.to_s.humanize)
   end
 
   # A customer's OIDC client secret. Same storage shape as OauthClient: encrypted

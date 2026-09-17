@@ -64,6 +64,18 @@ module AuthConcern
     end
   end
 
+  # Sign in, or — when the same person is already signed in — append this proof
+  # to the session they already hold (AD-6). Every method that a signed-in person
+  # can complete goes through here, so step-up works the same way whichever one
+  # they use.
+  def sign_in_or_prove(user, provider:)
+    if signed_in? && current_auth_session&.user_id == user.id
+      prove_additional_method(provider)
+    else
+      sign_in(user, provider: provider)
+    end
+  end
+
   def sign_out
     current_user_session&.revoke!
     reset_session

@@ -12,6 +12,13 @@
 # provisioning-before-first-login coherent instead of a second identity
 # authority.
 class Scim::UsersController < Scimitar::ActiveRecordBackedResourcesController
+  # Token-authenticated machine API, exactly like the api/v1 tree: a customer's
+  # directory sends a bearer token and no CSRF token, because it is not a
+  # browser. Without this every SCIM write answers "Can't verify CSRF token
+  # authenticity" — and the test environment disables forgery protection, so a
+  # request test cannot catch it.
+  skip_before_action :verify_authenticity_token, raise: false
+
   protected
 
   def storage_class

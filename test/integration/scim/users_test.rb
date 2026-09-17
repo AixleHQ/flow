@@ -106,6 +106,27 @@ class Scim::UsersTest < ActionDispatch::IntegrationTest
     assert_equal "invited", membership.state
   end
 
+  test "a directory can write with no CSRF token, because it is not a browser" do
+    # The test environment disables forgery protection, so every other test here
+    # would pass against a controller that rejects a real directory's request
+    # with "Can't verify CSRF token authenticity" — which is exactly what
+    # happened until this was caught against a running app. Turn protection ON
+    # for this one test so the guard is real.
+    original = ActionController::Base.allow_forgery_protection
+    ActionController::Base.allow_forgery_protection = true
+
+    assert_difference "CompanyMembership.count", 1 do
+      post "/scim/users", headers: scim_headers, params: {
+        schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+        userName: "csrfless@#{@company.email_domain}", active: true
+      }.to_json
+    end
+
+    assert_response :created
+  ensure
+    ActionController::Base.allow_forgery_protection = original
+  end
+
   test "an unknown token is refused" do
     get "/scim/users", headers: { "Authorization" => "Bearer ascim_not-a-real-token" }
 

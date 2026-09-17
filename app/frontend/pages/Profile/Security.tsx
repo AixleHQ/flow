@@ -11,21 +11,21 @@ import { ProfileTabs } from './ProfileTabs';
 interface Passkey {
   id: number;
   name: string;
-  last_used_at: string | null;
+  lastUsedAt: string | null;
   created_at: string;
 }
 
 interface SessionRow {
   id: number;
   ip: string | null;
-  user_agent: string | null;
-  last_seen_at: string | null;
+  userAgent: string | null;
+  lastSeenAt: string | null;
   current: boolean;
 }
 
 interface PageProps {
   passkeys: Passkey[];
-  totp_enabled: boolean;
+  totpEnabled: boolean;
   sessions: SessionRow[];
   [key: string]: unknown;
 }
@@ -43,7 +43,7 @@ async function postJson(url: string, body: unknown) {
   return { ok: response.ok, data: await response.json().catch(() => ({})) };
 }
 
-export default function Security({ passkeys, totp_enabled, sessions }: PageProps) {
+export default function Security({ passkeys, totpEnabled, sessions }: PageProps) {
   const [busy, setBusy] = useState(false);
   const [totpSecret, setTotpSecret] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -106,7 +106,7 @@ export default function Security({ passkeys, totp_enabled, sessions }: PageProps
         <Stack gap="sm">
           <Group justify="space-between">
             <Title order={4}>Authentication codes</Title>
-            {totp_enabled ? (
+            {totpEnabled ? (
               <Badge color="green">On</Badge>
             ) : (
               <Button size="compact-sm" onClick={startTotp}>
@@ -114,7 +114,7 @@ export default function Security({ passkeys, totp_enabled, sessions }: PageProps
               </Button>
             )}
           </Group>
-          {totpSecret && !totp_enabled && (
+          {totpSecret && !totpEnabled && (
             <Stack gap="xs">
               <Text size="sm">Add this secret to your authenticator app, then enter the code it shows.</Text>
               <Card withBorder padding="xs">
@@ -131,7 +131,7 @@ export default function Security({ passkeys, totp_enabled, sessions }: PageProps
               </Group>
             </Stack>
           )}
-          {totp_enabled && (
+          {totpEnabled && (
             <Button size="compact-sm" variant="subtle" color="red" onClick={() => router.delete(totpPath())}>
               Turn off
             </Button>
@@ -145,7 +145,7 @@ export default function Security({ passkeys, totp_enabled, sessions }: PageProps
           {sessions.map((session) => (
             <Group key={session.id} justify="space-between">
               <Text size="sm">
-                {session.ip ?? 'unknown address'} — {session.user_agent?.slice(0, 60) ?? 'unknown device'}
+                {session.ip ?? 'unknown address'} — {session.userAgent?.slice(0, 60) ?? 'unknown device'}
               </Text>
               {session.current && <Badge size="sm">This device</Badge>}
             </Group>
