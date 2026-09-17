@@ -139,14 +139,17 @@ describe('useBoardTaskPages', () => {
     const fetchSpy = stubTasksResponse({ 100: [task(3, 100, 2)], 200: [task(9, 200, 0)] });
     const { result } = renderPages({ ...NO_FILTERS, search: 'auth' });
 
-    await waitFor(() => expect(result.current.filtered).toBe(true));
-    await waitFor(() => expect(result.current.counts).toEqual({ 100: 1, 200: 1 }));
+    // `tasks` is mirrored state: the answer lands in `queryTasks` — which `counts` reads in the
+    // same commit — and only the effect after that copies it into `tasks`. Waiting on `counts`
+    // and then reading `tasks` therefore races the copy, so wait on the list that settles last.
+    // The props page is replaced by the server's answer rather than filtered in place.
+    await waitFor(() => expect(result.current.tasks.map((t) => t.id)).toEqual([3, 9]));
+    expect(result.current.filtered).toBe(true);
+    expect(result.current.counts).toEqual({ 100: 1, 200: 1 });
 
     const urls = fetchSpy.mock.calls.map(urlOf);
     expect(urls).toHaveLength(2);
     for (const url of urls) expect(url).toContain('q%5Bg%5D%5B0%5D%5Btitle_cont%5D=auth');
-    // The props page is replaced by the server's answer rather than filtered in place.
-    expect(result.current.tasks.map((t) => t.id)).toEqual([3, 9]);
   });
 
   it('falls back to the props payload when the filters are cleared', async () => {
@@ -169,8 +172,9 @@ describe('useBoardTaskPages', () => {
 
     rerender({ filters: NO_FILTERS });
 
-    await waitFor(() => expect(result.current.filtered).toBe(false));
-    expect(result.current.tasks.map((t) => t.id)).toEqual([1, 2, 9]);
+    // Same mirroring as above: `filtered` flips a commit before `tasks` carries the props page.
+    await waitFor(() => expect(result.current.tasks.map((t) => t.id)).toEqual([1, 2, 9]));
+    expect(result.current.filtered).toBe(false);
     expect(result.current.counts).toEqual({ 100: 4, 200: 1 });
   });
 

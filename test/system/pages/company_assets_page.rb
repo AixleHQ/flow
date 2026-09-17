@@ -25,12 +25,22 @@ class CompanyAssetsPage < SitePrism::Page
 
   # Drives the real upload: Uppy presigns through /api/v1/assets/presign and PUTs the bytes,
   # and the modal only offers a Save button once that round trip has completed.
+  #
+  # Saving is a second, asynchronous round trip — one POST to the create endpoint per file — and
+  # it is that POST, not the upload above, which creates the Asset rows. The modal closes only
+  # once at least one of them has come back created, so waiting it out here is what makes `upload`
+  # return with the assets persisted. Without that wait the modal is still on screen listing the
+  # names it is about to save, and those names are what a caller asserting on the file name would
+  # match — passing while the rows it then looks up do not exist yet.
   def upload(path, folder: nil)
     open_upload_modal
     file_input.attach_file(path)
     has_save_button?(wait: 15)
     folder_field.set(folder) if folder
     save_button.click
+    return if has_no_save_button?(wait: 15)
+
+    raise Capybara::ExpectationNotMet, "the upload modal never closed: nothing was saved"
   end
 
   # The default Assets view is folder-first (#564): a file uploaded into a folder sits inside
