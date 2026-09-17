@@ -31,6 +31,12 @@ RUN set -eux; \
     rm -f "$(npm root -g)"/@xai-official/grok-linux-*/bin/grok.br; \
     npm cache clean --force
 
+# The CLI version this image actually shipped with, recorded where anything can read it:
+# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
+# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
+# Dockerfile are not the same image and nothing else says which one a container is running.
+RUN su grok -c "grok --version" > /etc/aixle-cli-version
+
 # Integration boundary: Agents::GrokAdapter#context_file_path writes every session's
 # task/role context to ~/.grok/rules/aixle-session-context.md, which the CLI is
 # documented to scan as a global rules root. If a CLI release ever stops scanning it,

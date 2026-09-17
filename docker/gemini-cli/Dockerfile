@@ -19,6 +19,12 @@ RUN useradd -m -d /home/gemini -s /bin/bash -G ${AGENT_BROWSERS_GROUP} gemini
 ARG GEMINI_CLI_VERSION=0.57.0
 RUN npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && npm cache clean --force
 
+# The CLI version this image actually shipped with, recorded where anything can read it:
+# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
+# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
+# Dockerfile are not the same image and nothing else says which one a container is running.
+RUN gemini --version > /etc/aixle-cli-version
+
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)
 # =============================================================================

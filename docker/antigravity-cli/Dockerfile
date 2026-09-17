@@ -22,6 +22,12 @@ RUN set -eux; \
     chmod +x /usr/local/bin/agy; \
     test "$(su antigravity -c 'agy --version')" = "$ANTIGRAVITY_CLI_VERSION"
 
+# The CLI version this image actually shipped with, recorded where anything can read it:
+# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
+# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
+# Dockerfile are not the same image and nothing else says which one a container is running.
+RUN su antigravity -c 'agy --version' > /etc/aixle-cli-version
+
 COPY base/tmux.conf /etc/tmux.conf
 COPY base/inputrc /etc/inputrc
 COPY base/vscode-settings.json /opt/openvscode-server/default-settings.json

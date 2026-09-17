@@ -14,6 +14,12 @@ FROM ${BASE_IMAGE}
 # watcher layer runs one) leaves ~180 MB of /root/.npm in this layer forever.
 RUN npm install -g @openai/codex && npm cache clean --force
 
+# The CLI version this image actually shipped with, recorded where anything can read it:
+# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
+# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
+# Dockerfile are not the same image and nothing else says which one a container is running.
+RUN codex --version > /etc/aixle-cli-version
+
 # -G AGENT_BROWSERS_GROUP: write access to the shared browser tree (Playwright creates
 # a server dir inside it on first launch) without a 1 GB-duplicating recursive chown.
 RUN useradd -m -d /home/codex -s /bin/bash -G ${AGENT_BROWSERS_GROUP} codex
