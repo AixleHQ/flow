@@ -36,7 +36,7 @@ class RunListEntryResource < ApplicationResource
 
   typelize :string?
   attribute :user_name do |run|
-    run.user&.name
+    run.user&.name || User::DELETED_DISPLAY_NAME
   end
 
   # A run has no runtime of its own — it inherits the one its sessions used.

@@ -5,6 +5,6 @@ class TaskCommentResource < ApplicationResource
 
   typelize :string?
   attribute :author_name do |comment|
-    comment.author&.name
+    comment.author&.name || User::DELETED_DISPLAY_NAME
   end
 end

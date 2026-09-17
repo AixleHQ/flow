@@ -52,9 +52,9 @@ class AssetTest < ActiveSupport::TestCase
     assert { asset.errors[:scope_id].present? }
   end
 
-  test "created_by is required" do
+  test "created_by is optional (nullified when the creator is permanently deleted)" do
     asset = build(:asset, scope: @company, created_by: nil)
-    assert { !asset.valid? }
+    assert { asset.valid? }
   end
 
   # ====== Folder ======

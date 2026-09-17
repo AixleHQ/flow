@@ -2,7 +2,12 @@
 
 module Admin
   class UsersController < Admin::ApplicationController
-    # Override resource_params to handle empty password fields
+    def authorized_action?(resource, action)
+      return false if action.to_sym == :destroy && resource.is_a?(User) && resource.deleted?
+
+      super
+    end
+
     def resource_params
       params_hash = super
       if params_hash[:password].blank? && params_hash[:password_confirmation].blank?
@@ -25,6 +30,42 @@ module Admin
           notice: "User was successfully deleted."
         )
       end
+    end
+
+    # Irreversible hard delete, distinct from the soft-delete #destroy above.
+    # Guarded three ways: super-admin accounts are refused, the admin must type
+    # the exact email to confirm, and the view adds a data-turbo-confirm prompt.
+    def permanent_destroy
+      user = requested_resource
+
+      if user.super_admin?
+        return redirect_to admin_users_path, alert: "Cannot permanently delete a super admin user"
+      end
+
+      if params[:confirm_email].to_s.strip.casecmp?(user.email)
+        Users::PermanentDeletionService.call(user: user, actor: true_user)
+        redirect_to admin_users_path, notice: "User was permanently deleted."
+      else
+        redirect_to admin_user_path(user),
+                    alert: "Confirmation email did not match. User was not deleted."
+      end
+    rescue Users::PermanentDeletionService::Error => e
+      redirect_to admin_user_path(user), alert: e.message
+    rescue ActiveRecord::RecordNotDestroyed => e
+      redirect_to admin_user_path(user), alert: "User could not be deleted: #{e.message}"
+    rescue ActiveRecord::InvalidForeignKey
+      redirect_to admin_user_path(user), alert: "User could not be deleted: a database constraint prevented removal. Please contact engineering."
+    end
+
+    def restore
+      user = requested_resource
+
+      unless user.deleted?
+        return redirect_to admin_user_path(user), alert: "User is not deleted."
+      end
+
+      user.restore!
+      redirect_to admin_user_path(user), notice: "User was restored."
     end
 
     def impersonate

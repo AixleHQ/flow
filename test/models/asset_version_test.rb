@@ -28,9 +28,9 @@ class AssetVersionTest < ActiveSupport::TestCase
     end
   end
 
-  test "uploaded_by is required" do
+  test "uploaded_by is optional (nullified when the uploader is permanently deleted)" do
     version = build(:asset_version, asset: @asset, uploaded_by: nil)
-    assert { !version.valid? }
+    assert { version.valid? }
   end
 
   # ====== Auto-increment ======

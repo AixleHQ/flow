@@ -21,7 +21,7 @@ class AssetResource < ApplicationResource
 
   typelize :string?
   attribute :created_by_name do |asset|
-    asset.created_by&.name
+    asset.created_by&.name || User::DELETED_DISPLAY_NAME
   end
 
   typelize %w[company project]
