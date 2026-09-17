@@ -30,13 +30,14 @@ describe('IntegrationsContent', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: /YouTrack/i }));
-    expect(await screen.findByText('Entire company')).toBeInTheDocument();
-    await userEvent.click(screen.getByText('Entire company'));
-    await userEvent.type(screen.getByLabelText('Base URL'), 'https://example.youtrack.cloud');
-    await userEvent.type(screen.getByLabelText('Permanent token'), 'perm:token');
-    await userEvent.type(screen.getByLabelText('YouTrack project database ID'), '0-1');
-    await userEvent.type(screen.getByLabelText('Existing webhook token'), 'x'.repeat(32));
-    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect YouTrack' });
+    expect(within(dialog).getByText('Entire company')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByText('Entire company'));
+    await userEvent.type(within(dialog).getByLabelText('Base URL'), 'https://example.youtrack.cloud');
+    await userEvent.type(within(dialog).getByLabelText('Permanent token'), 'perm:token');
+    await userEvent.type(within(dialog).getByLabelText('YouTrack project database ID'), '0-1');
+    await userEvent.type(within(dialog).getByLabelText('Existing webhook token'), 'x'.repeat(32));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
 
     expect(router.post).toHaveBeenCalledWith(
       '/company/projects/1/integrations',
