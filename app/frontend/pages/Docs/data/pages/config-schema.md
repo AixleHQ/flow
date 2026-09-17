@@ -124,6 +124,7 @@ user; edit those in the admin, not here.
 | `AGENT_IMAGE_GROK`             | no       | derived           | Per-runtime override.                                            |
 | `AGENT_IMAGE_KIRO_CLI`         | no       | derived           | Per-runtime override.                                            |
 | `AGENT_MCP_STARTUP_TIMEOUT_MS` | no       | `90000`           | How long an agent CLI waits for its MCP servers to hand shake.   |
+| `AGENT_CREDENTIAL_SYNC_URL`    | no       | `http://web:4002/agents/credentials` | Where the in-container watcher reports a token the CLI rotated. Internal host only: the request carries a per-session write-back key. |
 
 ### Kubernetes runtime (when `CONTAINER_RUNTIME=kubernetes`)
 

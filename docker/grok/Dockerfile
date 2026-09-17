@@ -14,28 +14,37 @@ FROM ${BASE_IMAGE}
 # a server dir inside it on first launch) without a 1 GB-duplicating recursive chown.
 RUN useradd -m -d /home/grok -s /bin/bash -G ${AGENT_BROWSERS_GROUP} grok
 
-# `@xai-official/grok` ships a thin node trampoline plus a brotli-compressed native
-# binary in a per-platform sibling package, and materialises the binary into
-# $GROK_HOME/bin on first launch. Doing that here, as the `grok` user, keeps ~160 MB of
-# decompression out of every container start and fails the BUILD (not a live session) if
-# the install is broken. The payload is then redundant — the trampoline returns the
-# canonical path without ever looking at it again — so it goes, rather than shipping the
-# same binary twice.
+# `@xai-official/grok` ships a thin node trampoline plus a native binary, and
+# materialises that binary under `$HOME/.grok/bin` on first launch. Doing it here, as the
+# `grok` user, keeps the decompression out of every container start and fails the BUILD
+# (not a live session) if the install is broken.
+#
+# Three things about that layout changed under us, and 1.0.34 is the version that showed
+# it (the image stopped building on 2026-09-17):
+#   * the payload no longer ships as a `@xai-official/grok-linux-*` sibling package, so
+#     the removal that deduplicated it has nothing to remove;
+#   * it is unpacked by the package's own postinstall — under the user running `npm
+#     install`, i.e. root — rather than by the agent user's first launch;
+#   * the unpacked file is VERSIONED (`grok-1.0.34`), so a fixed-name assertion could only
+#     ever have passed by accident.
+# What is worth asserting is therefore what proves the install: the payload exists after
+# the postinstall, and the CLI runs as the agent user. The old assertion also guaranteed
+# the decompression was paid at build time for the AGENT's home; that is no longer true,
+# so a session may pay it once on first launch.
 #
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~69 MB of /root/.npm in this layer forever.
 RUN set -eux; \
     npm install -g @xai-official/grok; \
-    su grok -c "grok --version"; \
-    test -x /home/grok/.grok/bin/grok; \
-    rm -f "$(npm root -g)"/@xai-official/grok-linux-*/bin/grok.br; \
+    ls /root/.grok/bin/grok-* >/dev/null; \
+    su - grok -c "grok --version"; \
     npm cache clean --force
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
 # `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
 # vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
 # Dockerfile are not the same image and nothing else says which one a container is running.
-RUN su grok -c "grok --version" > /etc/aixle-cli-version
+RUN su - grok -c "grok --version" > /etc/aixle-cli-version
 
 # Integration boundary: Agents::GrokAdapter#context_file_path writes every session's
 # task/role context to ~/.grok/rules/aixle-session-context.md, which the CLI is
