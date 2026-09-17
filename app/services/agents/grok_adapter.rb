@@ -349,24 +349,6 @@ module Agents
         scopes.values.first&.dig(TOKEN_FIELD)
     end
 
-    # Accepts the shapes an expiry can plausibly arrive in and normalises to epoch ms:
-    # an ISO8601 timestamp, epoch seconds, or epoch milliseconds. Anything else is nil.
-    def expiry_ms(value)
-      return nil if value.blank?
-
-      case value
-      when Numeric, /\A\d+\z/
-        seconds_or_ms = value.to_i
-        # An epoch in seconds is ~1.7e9; the same instant in milliseconds is ~1.7e12.
-        seconds_or_ms > 100_000_000_000 ? seconds_or_ms : seconds_or_ms * 1000
-      when String
-        parsed = Time.zone.parse(value)
-        parsed && (parsed.to_f * 1000).round
-      end
-    rescue ArgumentError, TypeError
-      nil
-    end
-
     def model_description(model)
       modalities = Array(model["input_modalities"] || model["inputModalities"]).map(&:to_s).map(&:downcase)
       context = model["max_prompt_length"] || model["maxPromptLength"]

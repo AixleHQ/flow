@@ -90,8 +90,8 @@ module Agents
     # Today's answer, pinned so a change to the matrix is a deliberate edit rather than a
     # side effect. See docs/design/agent-credential-lifecycle.md §2 for why each is where
     # it is, and §Layer 1 for what closes the gaps.
-    test "the current refresh coverage is claude_code, codex and cursor_cli" do
-      assert_equal %w[claude_code codex cursor_cli].sort, AgentCredential.refreshable_agent_types.sort
+    test "the current refresh coverage is claude_code, codex, cursor_cli and kiro_cli" do
+      assert_equal %w[claude_code codex cursor_cli kiro_cli].sort, AgentCredential.refreshable_agent_types.sort
     end
   end
 end

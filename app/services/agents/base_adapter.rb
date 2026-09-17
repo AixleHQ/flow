@@ -393,6 +393,31 @@ module Agents
       self.class::RETIRED_MODEL_REPLACEMENTS.fetch(model_id, model_id)
     end
 
+    # Normalise an expiry to epoch milliseconds, which is what #token_expires_at
+    # returns and what AgentCredential#sync_expires_at divides back down. Vendors
+    # write the same fact three different ways — an ISO8601 string (Antigravity's
+    # `expiry`, Kiro's `expires_at`), epoch seconds, or already-milliseconds — and an
+    # adapter should not have to care which. Anything unparseable is nil, i.e. "no
+    # expiry known", which leaves the credential permanently active rather than
+    # killing it on a formatting surprise.
+    # @param value [String, Numeric, nil]
+    # @return [Integer, nil]
+    def expiry_ms(value)
+      return nil if value.blank?
+
+      case value
+      when Numeric, /\A\d+\z/
+        seconds_or_ms = value.to_i
+        # An epoch in seconds is ~1.7e9; the same instant in milliseconds is ~1.7e12.
+        seconds_or_ms > 100_000_000_000 ? seconds_or_ms : seconds_or_ms * 1000
+      when String
+        parsed = Time.zone.parse(value)
+        parsed && (parsed.to_f * 1000).round
+      end
+    rescue ArgumentError, TypeError
+      nil
+    end
+
     # Comparable expiry of the credential's primary token, or nil if the agent's
     # tokens don't carry one. Used to avoid overwriting a newer stored token with
     # an older one when sessions run concurrently and refresh-token rotation occurs.
@@ -617,9 +642,15 @@ module Agents
 
     protected
 
+    # Unparseable input is {} — including nil, which JSON.parse raises TypeError on
+    # rather than the ParserError this used to catch. Callers reach here with whatever
+    # a container, a vendor file or an absent database row handed over, and "there was
+    # nothing to read" is an ordinary outcome for all three, not an exception.
     def parse_json(content)
+      return {} if content.blank?
+
       JSON.parse(content)
-    rescue JSON::ParserError
+    rescue JSON::ParserError, TypeError
       {}
     end
 
