@@ -153,6 +153,10 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "raising the installation ceiling no longer requires a drain" do
+    # Pinned so the ceiling is the binding constraint: left to the ambient
+    # default, the project's own pool fills first and the test proves nothing
+    # about the ceiling.
+    with_scope_defaults(project: 5)
     SessionAdmissionPolicy.sync!(installation_limit: 1)
     first = enqueue
     second = enqueue
