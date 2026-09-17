@@ -119,6 +119,17 @@ module Agents
       }
     end
 
+    # The files that carry token material, and ONLY those. #config_files renders the whole
+    # container configuration — settings, MCP wiring, model pins — from a workflow_config
+    # that a mid-session token delivery does not have, so re-rendering it would overwrite a
+    # running session's configuration with defaults. This is the narrow counterpart used
+    # when the only thing that changed is the token (Agents::CredentialDelivery).
+    # @param credentials [Hash] decrypted credential data
+    # @return [Hash] path => content
+    def credential_files(credentials)
+      { config_path => generate_config(credentials).to_json }
+    end
+
     # UID of the container user (used for file ownership in tar headers)
     # @return [Integer]
     def container_uid

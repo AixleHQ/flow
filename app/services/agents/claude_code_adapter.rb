@@ -374,17 +374,27 @@ module Agents
       }
       files.merge!(aws_config_file(bedrock)) if bedrock
 
-      # .credentials.json carries the claude.ai OAuth token and, if the user has run
-      # /design-login, the separate designOauth token (user:design:read/write). Both
-      # are written into the same file, mirroring Claude Code's own layout.
+      files.merge!(credential_files(credentials))
+
+      files
+    end
+
+    # Only .credentials.json: it is where the rotating tokens live, and the one file a
+    # mid-session delivery may replace. .claude.json holds the API-key path and the
+    # per-project configuration, which a delivery has no workflow_config to re-render.
+    #
+    # It carries the claude.ai OAuth token and, if the user has run /design-login, the
+    # separate designOauth token (user:design:read/write) — both in one file, mirroring
+    # Claude Code's own layout.
+    def credential_files(credentials)
       creds_file = {}
       oauth = credentials["claudeAiOauth"]
       creds_file["claudeAiOauth"] = oauth if oauth.is_a?(Hash) && oauth["accessToken"].present?
       design = credentials["designOauth"]
       creds_file["designOauth"] = design if design.is_a?(Hash) && design["accessToken"].present?
-      files["#{home_dir}/.claude/.credentials.json"] = creds_file.to_json if creds_file.any?
+      return {} if creds_file.empty?
 
-      files
+      { "#{home_dir}/.claude/.credentials.json" => creds_file.to_json }
     end
 
     # == Amazon Bedrock (bring-your-own cloud account) ==

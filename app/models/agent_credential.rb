@@ -77,6 +77,16 @@ class AgentCredential < ApplicationRecord
   # endpoint answers with invalid_grant and, under OAuth reuse detection, can revoke
   # the whole family. Leave those to the container: session cleanup merges the
   # rotated blocks back (see AgentSessionStrategy#persist_refreshed_credentials).
+  # The other half of without_live_session: credentials a live container does hold. The
+  # sweep treats them separately — it can still refresh them, but only by handing the
+  # result to the holders (Agents::CredentialDelivery).
+  scope :with_live_session, -> {
+    held = TerminalSession.active
+                          .where("terminal_sessions.user_id = agent_credentials.user_id")
+                          .where("terminal_sessions.company_id = agent_credentials.company_id")
+                          .where("terminal_sessions.agent_type = agent_credentials.agent_type")
+    where(held.arel.exists)
+  }
   scope :without_live_session, -> {
     held = TerminalSession.active
                           .where("terminal_sessions.user_id = agent_credentials.user_id")
@@ -205,13 +215,19 @@ class AgentCredential < ApplicationRecord
     expires_at.present? && expires_at <= within.from_now
   end
 
+  # The live sessions currently holding a copy of this credential's tokens. `excluding` is
+  # the session asking (its own container has not been handed anything yet).
+  def live_holder_sessions(excluding_session_id: nil)
+    scope = TerminalSession.active.where(user_id: user_id, company_id: company_id, agent_type: agent_type)
+    scope = scope.where.not(id: excluding_session_id) if excluding_session_id
+    scope
+  end
+
   # Whether a running container currently holds a copy of this credential's tokens.
   # `excluding_session_id` is the session being launched: it is the one asking, and
   # its own container has not been handed anything yet.
   def held_by_live_session?(excluding_session_id: nil)
-    scope = TerminalSession.active.where(user_id: user_id, company_id: company_id, agent_type: agent_type)
-    scope = scope.where.not(id: excluding_session_id) if excluding_session_id
-    scope.exists?
+    live_holder_sessions(excluding_session_id: excluding_session_id).exists?
   end
 
   # Refresh a token that would otherwise die mid-session, at the last point before a

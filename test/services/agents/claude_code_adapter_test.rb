@@ -185,6 +185,38 @@ module Agents
       assert_equal "90000", settings.dig("env", "MCP_TIMEOUT")
     end
 
+    # A mid-session delivery has no workflow_config, so re-rendering settings.json or
+    # .claude.json would replace a running session's configuration with defaults. Only the
+    # token file may be written.
+    test "credential_files is the token file alone" do
+      credentials = {
+        "oauthAccount" => { "emailAddress" => "u@x.com" },
+        "primaryApiKey" => "sk-ant-api-key",
+        "claudeAiOauth" => { "accessToken" => "at", "refreshToken" => "rt", "expiresAt" => 1_777_000_000_000 }
+      }
+
+      files = @adapter.credential_files(credentials)
+
+      assert_equal [ "/home/claude/.claude/.credentials.json" ], files.keys
+      assert_equal "at", JSON.parse(files.values.first).dig("claudeAiOauth", "accessToken")
+    end
+
+    test "credential_files carries the design add-on alongside the base login" do
+      credentials = {
+        "claudeAiOauth" => { "accessToken" => "at", "expiresAt" => 1 },
+        "designOauth" => { "accessToken" => "design-at", "expiresAt" => 2 }
+      }
+
+      creds_file = JSON.parse(@adapter.credential_files(credentials).values.first)
+
+      assert_equal "at", creds_file.dig("claudeAiOauth", "accessToken")
+      assert_equal "design-at", creds_file.dig("designOauth", "accessToken")
+    end
+
+    test "credential_files is empty for an API-key credential — there is no token to deliver" do
+      assert_empty @adapter.credential_files({ "primaryApiKey" => "sk-ant-api-key" })
+    end
+
     test "config_files writes claudeAiOauth to .credentials.json (OAuth path)" do
       credentials = {
         "oauthAccount" => { "emailAddress" => "u@x.com" },

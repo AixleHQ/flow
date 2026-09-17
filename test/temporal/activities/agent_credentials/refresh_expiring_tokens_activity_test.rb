@@ -5,194 +5,175 @@ require "test_helper"
 module Activities
   module AgentCredentials
     # Runs the real activity through the SDK's serverless ActivityEnvironment
-    # (docs/testing.md §2). The DB scope (AgentCredential.refreshable.refresh_due)
-    # and the adapter's refresh! are boundaries owned by other builders, so they
-    # are stubbed here — this test pins the activity's own behavior: count
-    # aggregation, per-record rescue, and the { refreshed:, not_needed:, errors: }
-    # return shape.
+    # (docs/testing.md §2), against real credential rows and the canonical container-runtime
+    # fake. The only stubbed boundary is the vendor's token endpoint (WebMock), so the
+    # adapter's own refresh and the delivery back into the container are exercised rather
+    # than described.
     class RefreshExpiringTokensActivityTest < ActiveSupport::TestCase
-      # A credential stand-in whose adapter.refresh! returns a fixed status Hash.
-      def credential_double(id:, agent_type:, status:, detail: nil)
-        adapter = mock("adapter")
-        adapter.stubs(:refresh!).returns({ status: status, detail: detail })
-        stub(id: id, agent_type: agent_type, adapter: adapter)
+      CREDENTIALS_PATH = "/home/claude/.claude/.credentials.json"
+
+      setup do
+        @company = create(:company)
+        @user = create(:user, company: @company)
+        @runtime = stub_container_runtime
+        Rails.logger.stubs(:info)
+        Rails.logger.stubs(:warn)
       end
 
-      # Point AgentCredential.refreshable.refresh_due(REFRESH_WINDOW) at a fixed
-      # collection that responds to find_each (the activity iterates with it).
-      # `held` stands for credentials a live container holds: they are due, but the
-      # sweep must leave them alone and only report how many it skipped.
-      def stub_due(records, held: 0)
-        records.define_singleton_method(:find_each) { |&blk| each(&blk) }
-        due = mock("due_relation")
-        due.stubs(:count).returns(records.size + held)
-        due.stubs(:without_live_session).returns(records)
-        refreshable = mock("refreshable_relation")
-        refreshable.stubs(:refresh_due)
-          .with(RefreshExpiringTokensActivity::REFRESH_WINDOW)
-          .returns(due)
-        ::AgentCredential.stubs(:refreshable).returns(refreshable)
+      teardown { cleanup_runtime_overrides }
+
+      def claude_credential(expires_in: 5.minutes, refresh_token: "rt-old")
+        AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", {
+          "claudeAiOauth" => { "accessToken" => "at-old", "refreshToken" => refresh_token,
+                               "expiresAt" => (expires_in.from_now.to_f * 1000).to_i }
+        })
       end
 
-      test "aggregates counts across refreshed / not_needed / error statuses" do
-        refreshed_cred = credential_double(id: 1, agent_type: "claude_code", status: :refreshed)
-        refreshed_cred.stubs(:refresh_error).returns(nil)
-        error_cred = credential_double(id: 3, agent_type: "codex", status: :error, detail: "boom")
-        error_cred.stubs(:mark_refresh_error!)
+      def holder_session(container_id: "ctr-1", state: "ready")
+        create(:terminal_session, user: @user, company_id: @company.id, agent_type: "claude_code",
+                                  state: state, container_id: container_id)
+      end
 
-        stub_due([
-          refreshed_cred,
-          credential_double(id: 2, agent_type: "claude_code", status: :not_needed),
-          error_cred
-        ])
+      def stub_token_endpoint(access_token: "at-new", refresh_token: "rt-new")
+        stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL).to_return(
+          status: 200,
+          body: { access_token: access_token, refresh_token: refresh_token,
+                  expires_in: 28_800, scope: "user:inference" }.to_json,
+          headers: { "Content-Type" => "application/json" }
+        )
+      end
+
+      # == The unheld path (unchanged behaviour) ==
+
+      test "refreshes a credential no container holds" do
+        credential = claude_credential
+        stub_token_endpoint
 
         result = run_activity(RefreshExpiringTokensActivity)
 
         assert_equal 1, result[:refreshed]
-        assert_equal 1, result[:not_needed]
-        assert_equal 1, result[:errors]
-      end
-
-      test "per-record rescue keeps the batch going when one credential raises" do
-        raising_adapter = mock("adapter")
-        raising_adapter.stubs(:refresh!).raises(StandardError.new("kaboom"))
-        bad = stub(id: 9, agent_type: "claude_code", adapter: raising_adapter)
-        bad.stubs(:mark_refresh_error!)
-        good = credential_double(id: 10, agent_type: "claude_code", status: :refreshed)
-        good.stubs(:refresh_error).returns(nil)
-
-        stub_due([ bad, good ])
-
-        result = run_activity(RefreshExpiringTokensActivity)
-
-        assert_equal 1, result[:refreshed]
-        assert_equal 1, result[:errors]
-        assert_equal 0, result[:not_needed]
+        assert_equal "at-new", credential.reload.config_data.dig("claudeAiOauth", "accessToken")
       end
 
       test "returns zero counts when nothing is due" do
-        stub_due([])
+        claude_credential(expires_in: 6.hours)
 
         result = run_activity(RefreshExpiringTokensActivity)
 
-        assert_equal({ refreshed: 0, not_needed: 0, errors: 0, held: 0 }, result)
+        assert_equal 0, result[:refreshed]
+        assert_equal 0, result[:errors]
       end
 
-      # Refreshing a token a container also holds replays a grant that container may
-      # already have rotated, so the sweep leaves it alone — and says how many it left.
-      test "leaves credentials a live session holds to that session and counts them" do
-        credential = credential_double(id: 1, agent_type: "claude_code", status: :refreshed)
-        credential.stubs(:refresh_error).returns(nil)
-
-        stub_due([ credential ], held: 2)
-
-        result = run_activity(RefreshExpiringTokensActivity)
-
-        assert_equal 2, result[:held]
-        assert_equal 1, result[:refreshed]
-      end
-
-      test "marks credential with permanent error on invalid_grant" do
-        credential = mock("credential")
-        adapter = mock("adapter")
-        adapter.stubs(:refresh!).returns({ status: :error, detail: "claudeAiOauth invalid_grant — reconnection required" })
-        credential.stubs(:id).returns(1)
-        credential.stubs(:agent_type).returns("claude_code")
-        credential.stubs(:adapter).returns(adapter)
-        credential.expects(:mark_refresh_error!).with("claudeAiOauth invalid_grant — reconnection required", permanent: true)
-
-        stub_due([ credential ])
+      test "condemns the credential when the vendor rejects the grant" do
+        credential = claude_credential
+        stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+          .to_return(status: 400, body: { error: "invalid_grant" }.to_json,
+                     headers: { "Content-Type" => "application/json" })
 
         result = run_activity(RefreshExpiringTokensActivity)
 
         assert_equal 1, result[:errors]
+        assert_equal "error", credential.reload.status
+        assert_match(/invalid_grant/, credential.refresh_error)
       end
 
-      # A dead designOauth add-on must not take the base Claude login down with it:
-      # the adapter says so with permanent: false, and that has to win over the
-      # invalid_grant text in the detail.
-      test "honours the adapter's permanent flag over the invalid_grant text" do
-        credential = mock("credential")
-        adapter = mock("adapter")
-        adapter.stubs(:refresh!).returns({ status: :error, permanent: false,
-                                           detail: "designOauth invalid_grant — reconnection required" })
-        credential.stubs(:id).returns(1)
-        credential.stubs(:agent_type).returns("claude_code")
-        credential.stubs(:adapter).returns(adapter)
-        credential.expects(:mark_refresh_error!)
-                  .with("designOauth invalid_grant — reconnection required", permanent: false)
+      # == The held path: refresh, then hand the result to the holder ==
+      #
+      # The production failure this replaces: a credential pinned by a session parked for
+      # twenty hours was skipped every five minutes until its token expired unattempted.
 
-        stub_due([ credential ])
-
-        result = run_activity(RefreshExpiringTokensActivity)
-
-        assert_equal 1, result[:errors]
-      end
-
-      test "marks credential with transient error on non-invalid_grant failure" do
-        credential = mock("credential")
-        adapter = mock("adapter")
-        adapter.stubs(:refresh!).returns({ status: :error, detail: "network timeout" })
-        credential.stubs(:id).returns(1)
-        credential.stubs(:agent_type).returns("claude_code")
-        credential.stubs(:adapter).returns(adapter)
-        credential.expects(:mark_refresh_error!).with("network timeout", permanent: false)
-
-        stub_due([ credential ])
-
-        result = run_activity(RefreshExpiringTokensActivity)
-
-        assert_equal 1, result[:errors]
-      end
-
-      test "clears refresh error on successful refresh when error was present" do
-        credential = mock("credential")
-        adapter = mock("adapter")
-        adapter.stubs(:refresh!).returns({ status: :refreshed, detail: nil })
-        credential.stubs(:id).returns(1)
-        credential.stubs(:agent_type).returns("claude_code")
-        credential.stubs(:adapter).returns(adapter)
-        credential.stubs(:refresh_error).returns("previous failure")
-        credential.expects(:clear_refresh_error!)
-
-        stub_due([ credential ])
+      test "refreshes a credential a parked session holds and delivers it to the container" do
+        credential = claude_credential
+        session = holder_session
+        @runtime.set_terminal_pane("waiting for input", last_output_at: 2.hours.ago)
+        stub_token_endpoint
 
         result = run_activity(RefreshExpiringTokensActivity)
 
         assert_equal 1, result[:refreshed]
+        assert_equal 1, result[:delivered]
+        assert_equal 0, result[:skipped_busy]
+        assert_equal "at-new", credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+
+        delivered = JSON.parse(@runtime.read_file(session.container_id, CREDENTIALS_PATH))
+        assert_equal "at-new", delivered.dig("claudeAiOauth", "accessToken")
+        assert_equal "rt-new", delivered.dig("claudeAiOauth", "refreshToken")
       end
 
-      test "skips clear_refresh_error! on success when no prior error" do
-        credential = mock("credential")
-        adapter = mock("adapter")
-        adapter.stubs(:refresh!).returns({ status: :refreshed, detail: nil })
-        credential.stubs(:id).returns(1)
-        credential.stubs(:agent_type).returns("claude_code")
-        credential.stubs(:adapter).returns(adapter)
-        credential.stubs(:refresh_error).returns(nil)
-        credential.expects(:clear_refresh_error!).never
+      test "leaves a credential alone while its holder is mid-turn" do
+        credential = claude_credential
+        holder_session
+        @runtime.set_terminal_pane("● Running tests…", last_output_at: 30.seconds.ago)
 
-        stub_due([ credential ])
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 0, result[:refreshed]
+        assert_equal 1, result[:skipped_busy]
+        assert_equal "at-old", credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+      end
+
+      test "treats an unreadable container as busy rather than parked" do
+        credential = claude_credential
+        holder_session
+        # No pane mtime at all: the reader cannot say when the session last spoke.
+        @runtime.set_terminal_pane("", last_output_at: nil)
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:skipped_busy]
+        assert_equal "at-old", credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+      end
+
+      test "refreshes for a queued holder that has no container yet" do
+        credential = claude_credential
+        holder_session(container_id: nil, state: "queued")
+        stub_token_endpoint
 
         result = run_activity(RefreshExpiringTokensActivity)
 
         assert_equal 1, result[:refreshed]
+        assert_equal 0, result[:delivered], "a queued session reads the stored copy at launch"
+        assert_equal "at-new", credential.reload.config_data.dig("claudeAiOauth", "accessToken")
       end
 
-      test "marks credential error when refresh! raises" do
-        credential = mock("credential")
-        adapter = mock("adapter")
-        adapter.stubs(:refresh!).raises(StandardError.new("kaboom"))
-        credential.stubs(:id).returns(1)
-        credential.stubs(:agent_type).returns("claude_code")
-        credential.stubs(:adapter).returns(adapter)
-        credential.expects(:mark_refresh_error!).with("kaboom", permanent: false)
-
-        stub_due([ credential ])
+      test "a delivery failure does not undo the refresh" do
+        credential = claude_credential
+        holder_session
+        @runtime.set_terminal_pane("waiting for input", last_output_at: 2.hours.ago)
+        @runtime.stubs(:write_file).raises(StandardError.new("container gone"))
+        stub_token_endpoint
 
         result = run_activity(RefreshExpiringTokensActivity)
 
+        assert_equal 1, result[:refreshed]
+        assert_equal 0, result[:delivered]
+        assert_equal "at-new", credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+      end
+
+      # == Batch behaviour ==
+
+      test "one failing credential does not stop the batch" do
+        other = create(:user, company: @company)
+        bad = AgentCredential.from_artifacts(other.id, @company.id, "claude_code", {
+          "claudeAiOauth" => { "accessToken" => "at-bad", "refreshToken" => "rt-bad",
+                               "expiresAt" => (5.minutes.from_now.to_f * 1000).to_i }
+        })
+        good = claude_credential
+        stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+          .with(body: hash_including("refresh_token" => "rt-bad"))
+          .to_return(status: 500, body: "boom")
+        stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+          .with(body: hash_including("refresh_token" => "rt-old"))
+          .to_return(status: 200,
+                     body: { access_token: "at-new", refresh_token: "rt-new", expires_in: 28_800 }.to_json,
+                     headers: { "Content-Type" => "application/json" })
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:refreshed]
         assert_equal 1, result[:errors]
+        assert_equal "at-new", good.reload.config_data.dig("claudeAiOauth", "accessToken")
+        assert_equal "at-bad", bad.reload.config_data.dig("claudeAiOauth", "accessToken")
       end
     end
   end

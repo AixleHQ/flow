@@ -20,10 +20,19 @@ module Sessions
     end
 
     def stale?
+      silent_for?(NO_OUTPUT_THRESHOLD)
+    end
+
+    # Whether the pane has been quiet for at least `duration`. Callers other than the
+    # watchdog use a shorter one: the token-refresh sweep asks it to tell a session that
+    # is merely parked at a prompt from one with an agent mid-turn, because rotating a
+    # grant under the first is recoverable and under the second is not.
+    # False when the container cannot be read — "unknown" must never read as "idle".
+    def silent_for?(duration)
       return false unless tail.status == :ok
       return false if tail.last_output_at.nil?
 
-      tail.last_output_at < NO_OUTPUT_THRESHOLD.ago
+      tail.last_output_at < duration.ago
     end
 
     # Why the session is being terminated. "No output" is the symptom; when the pane still
