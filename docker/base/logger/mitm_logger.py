@@ -15,15 +15,25 @@ Credentials are never written. Two rules, both unconditional:
     rather than eight hours of one.
 The endpoint, method, status and timing survive, which is what makes a token
 lifecycle observable in the first place.
+
+A third rule covers the session's own secrets — the values an agent reads through
+get_config_item and then sends to the model. Those are not protocol credentials and
+no header rule catches them, so every entry is passed through aixle_redact, which
+reads the list get_config_item registers before it answers.
 """
 import base64
 import datetime
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
 from mitmproxy import http  # type: ignore
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import aixle_redact  # noqa: E402
 
 LOG_PATH = Path(os.environ.get("MITM_LOG_PATH", "/var/log/mitm/http.log"))
 MAX_BODY = int(os.environ.get("MITM_LOG_MAX_BODY", "0"))  # 0 = unlimited
@@ -209,6 +219,12 @@ def _serialize_response_with_body(
 
 
 def _write_entry(entry: Dict[str, Any]) -> None:
+    # The third redaction rule, and the only one about the session rather than the
+    # protocol: a value the agent read through get_config_item travels to the model in
+    # a request body, so it is in this log verbatim unless it is removed here. The
+    # entry is cleaned before serialization so a value carrying a quote is matched in
+    # its own form rather than in JSON's escaping of it.
+    entry = aixle_redact.redact_obj(entry)
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     with LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=True) + "\n")

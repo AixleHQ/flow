@@ -17,6 +17,7 @@ const http = require('http');
 const https = require('https');
 const http2 = require('http2');
 const path = require('path');
+const aixleRedact = require('./aixle-redact');
 
 const LOG_PATH = process.env.MITM_LOG_PATH || '/var/log/mitm/http.log';
 
@@ -32,7 +33,10 @@ function appendLog(entry) {
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       dirReady = true;
     }
-    fs.appendFileSync(LOG_PATH, JSON.stringify(entry) + '\n');
+    // Session secrets travel to the model in a request body, so they are in this log
+    // verbatim unless they are removed here. Same list and same rule as the mitmproxy
+    // addon, which appends to this very file.
+    fs.appendFileSync(LOG_PATH, JSON.stringify(aixleRedact.redact(entry)) + '\n');
   } catch (_) {}
 }
 
