@@ -2,16 +2,23 @@ project_name: Aixle
 
 # Inputs several blocks below are built from. Bound once as ERB locals so two
 # keys derived from the same value can never drift apart.
-<% app_domain    = ENV["DOMAIN"] || "localhost:4000" %>
+# The two ports the app itself listens on. config/puma.rb and config/puma_mcp.rb
+# read PORT and MCP_PORT straight from the environment (they boot before this
+# file loads), and the defaults below have to follow them, or overriding a port
+# leaves the derived hosts pointing at the old one — which is what running two
+# stacks side by side on one machine does.
+<% app_port      = (ENV["PORT"] || 4000).to_i %>
+<% mcp_port      = (ENV["MCP_PORT"] || 4002).to_i %>
+<% app_domain    = ENV["DOMAIN"] || "localhost:#{app_port}" %>
 <% app_version   = (ENV["APP_VERSION"].to_s.strip.empty? ? "unknown" : ENV["APP_VERSION"].strip) %>
 <% max_threads   = (ENV["RAILS_MAX_THREADS"] || 10).to_i %>
-<% internal_base = ENV["INTERNAL_BASE_URL"] || "http://web:4002" %>
+<% internal_base = ENV["INTERNAL_BASE_URL"] || "http://web:#{mcp_port}" %>
 <% otel_base     = ENV["OTEL_EXPORTER_OTLP_ENDPOINT"] || "http://otlp-ingest:4318" %>
 <% traefik_http  = ENV["TRAEFIK_HTTP_BASE"] || "http://localhost" %>
 
 domain: <%= app_domain %>
-asset_host: <%= ENV['ASSET_HOST'] || "localhost:4000" %>
-container_asset_host: <%= ENV['CONTAINER_ASSET_HOST'] || "web:4000" %>
+asset_host: <%= ENV['ASSET_HOST'] || "localhost:#{app_port}" %>
+container_asset_host: <%= ENV['CONTAINER_ASSET_HOST'] || "web:#{app_port}" %>
 protocol: <%= ENV['PROTOCOL'] || "https" %>
 
 google_oauth:

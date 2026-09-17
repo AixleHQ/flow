@@ -32,11 +32,11 @@ Read straight from the environment, before or outside the settings files.
 
 | Variable                        | Required | Default             | Purpose                                                     |
 | ------------------------------- | -------- | ------------------- | ----------------------------------------------------------- |
-| `PORT`                          | no       | `4000`              | Port the web Puma listens on (`config/puma.rb`).             |
+| `PORT`                          | no       | `4000`              | Port the web Puma listens on (`config/puma.rb`). Also the port `domain`, `asset_host` and `container_asset_host` default to, so overriding it moves the whole stack — which is how a second stack runs beside the first on one machine. |
 | `RAILS_MIN_THREADS`             | no       | `RAILS_MAX_THREADS` | Puma's minimum thread count.                                 |
 | `PIDFILE`                       | no       | `tmp/pids/server.pid` | Web Puma pidfile.                                          |
 | `SOLID_QUEUE_IN_PUMA`           | no       | unset               | `false` stops Puma from supervising Solid Queue in-process — set it wherever the queue runs as its own workload. |
-| `MCP_PORT`                      | no       | `4002`              | Port the MCP Puma listens on (`config/puma_mcp.rb`).         |
+| `MCP_PORT`                      | no       | `4002`              | Port the MCP Puma listens on (`config/puma_mcp.rb`), and the port `INTERNAL_BASE_URL` defaults to. |
 | `MCP_MAX_THREADS`               | no       | `RAILS_MAX_THREADS` | MCP Puma thread budget.                                      |
 | `MCP_MIN_THREADS`               | no       | `MCP_MAX_THREADS`   | MCP Puma minimum thread count.                               |
 | `MCP_PIDFILE`                   | no       | `tmp/pids/mcp.pid`  | MCP Puma pidfile.                                            |
@@ -293,6 +293,7 @@ client id and one credential are present, or PAT mode is on.
 | `PARALLEL_WORKERS`          | no       | number of processors       | `1` forces a serial test run.                               |
 | `CHROMIUM_PATH`             | no       | `/usr/bin/chromium`        | Browser binary for system tests.                            |
 | `ACTION_CABLE_URL`          | no       | `ws://localhost:4000/cable` | Cable URL in development.                                   |
+| `VITE_RUBY_PORT`            | no       | `4001`                     | Port the Vite dev server binds to; Compose publishes the same one. |
 | `SEED_COMPANY_SLUG`         | no       | `demo`                     | Company slug `db/seeds.rb` creates.                         |
 | `SEED_COMPANY_NAME`         | no       | `Demo Company`             | Its display name.                                           |
 | `SEED_COMPANY_EMAIL_DOMAIN` | no       | `example.com`              | Email domain seeded users get.                              |
