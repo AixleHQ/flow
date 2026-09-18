@@ -82,7 +82,7 @@ class Webhooks::IngressControllerTest < ActionDispatch::IntegrationTest
     assert_equal 0, ReceivedWebhook.count
 
     post "/webhooks/in/#{endpoint.slug}", params: " " * (Webhooks::IngressController::YOUTRACK_MAX_BODY + 1), headers: headers
-    assert_response :payload_too_large
+    assert_response :content_too_large
     assert_equal 0, ReceivedWebhook.count
 
     post "/webhooks/in/#{endpoint.slug}", params: invalid, headers: headers.merge("CONTENT_TYPE" => "text/plain")

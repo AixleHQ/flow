@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 module Integrations
-  class VerificationError < StandardError; end
-
   module UrlNormalizer
     def self.call(url) = url.to_s.strip.chomp("/")
   end

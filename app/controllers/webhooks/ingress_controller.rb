@@ -19,7 +19,7 @@ class Webhooks::IngressController < ActionController::API
     if adapter
       return head :unsupported_media_type unless request.media_type == "application/json"
       raw = request.body.read(YOUTRACK_MAX_BODY + 1)
-      return head :payload_too_large if raw.bytesize > YOUTRACK_MAX_BODY
+      return head :content_too_large if raw.bytesize > YOUTRACK_MAX_BODY
     else
       raw = request.raw_post
     end

@@ -48,7 +48,8 @@ class Youtrack::IntegrationResolvableContractTest < ActiveSupport::TestCase
 
   setup do
     company = create(:company)
-    project = create(:project, company: company)
+    owner = create(:user, company: company)
+    project = create(:project, company: company, owner: owner)
     create(:integration, :active, provider: :youtrack, company: company, project: nil)
     @preferred_integration = create(:integration, :active, provider: :youtrack, company: company, project: project)
     klass = Class.new do
