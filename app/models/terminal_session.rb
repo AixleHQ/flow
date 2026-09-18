@@ -24,7 +24,12 @@ class TerminalSession < ApplicationRecord
   # message and the reason it was marked failed — so a person who pressed Finish
   # four seconds into an authentication session was told their session had
   # failed, in the queue's vocabulary.
-  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed" ].freeze
+  # A launch that was cleaned up before it ever reached a container. It is the
+  # queue's own vocabulary, so a real reason already on the session — an expired
+  # connection, a revoked credential — outranks it.
+  LAUNCH_ABANDONED_ERROR = "Launch abandoned before the container started"
+
+  GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR ].freeze
 
   # A specific reason always outranks a generic one, whichever arrives last.
   def self.preferred_error_message(existing, incoming)

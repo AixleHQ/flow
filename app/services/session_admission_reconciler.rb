@@ -13,19 +13,50 @@ class SessionAdmissionReconciler
     # its workload kept running. They are examined like any other now — the
     # operation still holds the reservation, but the runtime gets cleaned up and
     # the operation gets an honest label.
-    SessionAdmission.occupied.where(launch_state: %w[acknowledged claimed]).order(:updated_at).limit(limit).each do |admission|
+    #
+    # A claim within its lease is excluded, and that exclusion is the whole
+    # point of the lease. `claimed` commits before the preflight and the
+    # Temporal start, so a launch that is going perfectly spends seconds as
+    # `claimed` with nothing in Temporal to describe — and this pass, which
+    # reads "no execution" as "closed", reaped it. In production that ended 69
+    # sessions between 2026-09-05 and 2026-09-18: killed within a second or two
+    # of being claimed, `started_at` never set, no runtime operation ever
+    # created, and the owner told "Container workflow ended" about a container
+    # that was never built. Past the lease the dispatcher that held it is gone,
+    # the relay above has already had its turn to take the claim over, and
+    # whatever is left really is abandoned.
+    SessionAdmission.occupied.where(launch_state: %w[acknowledged claimed])
+      .where("launch_state <> 'claimed' OR claimed_at IS NULL OR claimed_at <= ?", SessionLaunchRelay::CLAIM_LEASE.ago)
+      .order(:updated_at).limit(limit).each do |admission|
       next unless TemporalService.enabled?
       admission.touch
       next if execution_open?(admission.terminal_session.workflow_id)
 
       strand_in_flight_operations(admission)
       Activities::Container::AdmittedPhaseActivity.new.run(Hashie::Mash.new(
-        phase: "cleanup", admission_id: admission.id, error: admission.terminal_session.finished? ? nil : "Container workflow ended"
+        phase: "cleanup", admission_id: admission.id, error: cleanup_error(admission)
       ))
     rescue StandardError => e
       admission.update!(last_error: "Reconciliation: #{e.class}: #{e.message}")
     end
     report(snapshot)
+  end
+
+  # What actually happened, in terms of the thing the owner was promised.
+  #
+  # Both halves of this used to be told "Container workflow ended", and the half
+  # it was wrong about is the half people came asking about. A launch abandoned
+  # before it reached the container has no container to have ended: no log, no
+  # `started_at`, no runtime operation, nothing to open. The sentence sent every
+  # one of those investigations hunting a crash that had not happened. A session
+  # that really did get a container keeps the original wording, because for it
+  # the sentence was true.
+  def self.cleanup_error(admission)
+    session = admission.terminal_session
+    return nil if session.finished?
+    return "Container workflow ended" if session.started_at || admission.runtime_id.present?
+
+    TerminalSession::LAUNCH_ABANDONED_ERROR
   end
 
   # Whether Temporal still has a running execution behind this reservation.

@@ -1,10 +1,19 @@
 # frozen_string_literal: true
 
 class SessionLaunchRelay
+  # How long a claim is somebody's to finish. Claiming commits before the
+  # preflight and the Temporal start, so for this long an admission can be
+  # `claimed` with no execution behind it yet and still be perfectly healthy —
+  # a dispatcher is simply mid-launch. Anything reading launch state has to
+  # honour the lease (SessionAdmissionReconciler does), or it reaps live
+  # launches; anything past it is fair to take over, because the process that
+  # held it is gone.
+  CLAIM_LEASE = 2.minutes
+
   def self.drain(limit: 100)
     SessionAdmissionService.drain!(limit: limit)
     SessionAdmission.occupied.where(launch_state: %w[pending claimed], stop_requested_at: nil)
-      .where("claimed_at IS NULL OR claimed_at <= ?", 2.minutes.ago).order(:id).limit(limit).each do |admission|
+      .where("claimed_at IS NULL OR claimed_at <= ?", CLAIM_LEASE.ago).order(:id).limit(limit).each do |admission|
       dispatch(admission)
     end
   end
@@ -17,7 +26,7 @@ class SessionLaunchRelay
       admission.reload.lock!
       return if admission.released_at || admission.stop_requested_at
       return if admission.launch_state == "acknowledged"
-      return if admission.claimed_at && admission.claimed_at > 2.minutes.ago
+      return if admission.claimed_at && admission.claimed_at > CLAIM_LEASE.ago
       session = admission.terminal_session
       SessionAdmissionService.ensure_run_active!(session)
       admission.update!(launch_state: "claimed", claimed_at: Time.current, claim_token: claim)
