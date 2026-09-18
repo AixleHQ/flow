@@ -44,6 +44,19 @@ each other's `aixle_test` and the per-worker databases). `make`-driven runs are
 flock-serialized; direct `bin/rails test` runs are not — check nothing else is
 running first.
 
+### Working in a git worktree
+
+A worktree brings up the *same* stack as the main checkout by default — same
+`app_default` network, same `web` image tag, same host ports — so the two fight,
+and a branch can quietly run against the main checkout's database. Before
+starting Compose from a worktree, give it its own stack: copy the
+"Running a second stack from a git worktree" block out of `.env.example` into a
+`.env` in the worktree root (Compose reads `.env` only, never `.env.development`).
+
+Full procedure and the traps — Google sign-in, the repo-relative test flock, two
+Traefiks on one Docker socket — are in **`docs/project/worktree-stack.md`**. Read
+it before running the stack or the suite from a worktree.
+
 ### Test parallelization
 
 Parallelization is **on** (task #288, `parallelize(workers: :number_of_processors)` in

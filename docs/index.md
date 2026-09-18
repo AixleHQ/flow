@@ -12,6 +12,7 @@ a document is added, removed, or moved here, update this index in the same chang
 
 - **[project/overview.md](./project/overview.md)** — Executive summary, tech stack, architecture overview, data model, API structure
 - **[project/context.md](./project/context.md)** — LLM-optimized rules: tech stack, patterns, anti-patterns, key file locations
+- **[project/worktree-stack.md](./project/worktree-stack.md)** — Running a second, isolated Compose stack from a git worktree: the variables that keep its network, image, ports and database off the default stack's, and what still bites (Google sign-in, the test flock, two Traefiks on one socket)
 
 ## Architecture
 

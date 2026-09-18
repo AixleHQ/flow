@@ -37,7 +37,10 @@
 
 	// Ensure Orbstack hostnames resolve inside the container
 	"runArgs": [
-		"--network=app_default",
+		// Matches docker-compose.yml's network. Set DOCKER_NETWORK in the shell
+		// that launches the editor to attach to a worktree's isolated stack
+		// instead (docs/project/worktree-stack.md).
+		"--network=${localEnv:DOCKER_NETWORK:app_default}",
 		"--add-host=k8s.orb.local:host-gateway",
 		"--add-host=docker.orb.local:host-gateway",
 		"--add-host=orbstack:host-gateway"

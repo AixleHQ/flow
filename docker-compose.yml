@@ -47,6 +47,13 @@ x-web-environment: &web-environment
   MCP_PORT: ${MCP_PORT:-4002}
   VITE_RUBY_PORT: ${VITE_RUBY_PORT:-4001}
   REDIS_URL: redis://redis:6379/1
+  # The network agent containers are attached to
+  # (ContainerStrategies::BaseStrategy -> Settings.docker.network). It has to be
+  # the network this stack runs on, so it reads the same variable the compose
+  # network at the bottom of this file is named from: a second stack sets
+  # DOCKER_NETWORK once and its agents come up beside its own web/db/redis
+  # instead of the default stack's.
+  DOCKER_NETWORK: ${DOCKER_NETWORK:-app_default}
 
 x-toolbox-environment: &toolbox-environment
   - PROJECT=aixle
@@ -67,7 +74,10 @@ services:
     image: temporalio/auto-setup:1.29.7
     restart: on-failure
     ports:
-      - "7233:7233"
+      # Host-side only. Everything inside the network still reaches Temporal at
+      # temporal:7233 (TEMPORAL_HOST/TEMPORAL_PORT in config/settings.yml), which
+      # is why these *_HOST_PORT variables are deliberately not the same names.
+      - "${TEMPORAL_HOST_PORT:-7233}:7233"
     environment:
       - DB=postgres12
       - DB_PORT=5432
@@ -89,7 +99,7 @@ services:
   temporal-ui:
     image: temporalio/ui:2.43.3
     ports:
-      - 8080:8080
+      - "${TEMPORAL_UI_HOST_PORT:-8080}:8080"
     depends_on:
       - temporal
     environment:
@@ -101,7 +111,10 @@ services:
   web:
     build:
       dockerfile: ./Dockerfile
-    image: web
+    # Tagged, not implicit, because `web` is a global name on the daemon: a
+    # second stack building from another checkout would otherwise overwrite the
+    # image the first one runs (and make `--filter ancestor=web` ambiguous).
+    image: ${WEB_IMAGE:-web}
     volumes: *web-volumes
     ports:
       - '${PORT:-4000}:${PORT:-4000}'
@@ -118,8 +131,10 @@ services:
       <<: *web-environment
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.web.rule=PathPrefix(`/api`)"
-      - "traefik.http.services.web.loadbalancer.server.port=${PORT:-4000}"
+      # Router and service names are keyed on the network so two stacks watching
+      # the same Docker socket do not both register a router called `web`.
+      - "traefik.http.routers.${DOCKER_NETWORK:-app_default}-api.rule=PathPrefix(`/api`)"
+      - "traefik.http.services.${DOCKER_NETWORK:-app_default}-api.loadbalancer.server.port=${PORT:-4000}"
     entrypoint: bin/docker-entrypoint
     command: dev
     healthcheck:
@@ -130,7 +145,7 @@ services:
       start_period: 60s
 
   worker:
-    image: web
+    image: ${WEB_IMAGE:-web}
     volumes: *worker-volumes
     environment:
       <<: *web-environment
@@ -174,15 +189,18 @@ services:
   traefik:
     image: traefik:v3.6.6
     ports:
-      - "80:80"
-      - "443:443"
-      - "8090:8080"
+      # Moving these means moving TRAEFIK_HTTP_BASE with them: the terminal /
+      # file-watcher / IDE URLs handed to the browser are built from it
+      # (Settings.traefik.http_base, ws_base).
+      - "${HTTP_HOST_PORT:-80}:80"
+      - "${HTTPS_HOST_PORT:-443}:443"
+      - "${TRAEFIK_DASHBOARD_HOST_PORT:-8090}:8080"
     command:
       - "--api.dashboard=true"
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=app_default"
+      - "--providers.docker.network=${DOCKER_NETWORK:-app_default}"
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
@@ -199,7 +217,7 @@ services:
       dockerfile: Dockerfile
     image: aixle/otlp-ingest:latest
     ports:
-      - '4318:4318'
+      - '${OTLP_HOST_PORT:-4318}:4318'
     attach: false
 
   remote:
@@ -229,5 +247,10 @@ volumes:
   redis_data:
 
 networks:
+  # Pinned rather than left to Compose, which would name it after the checkout
+  # directory: agent containers are created outside Compose and join it by name,
+  # and .devcontainer/devcontainer.json attaches to it too. Override
+  # DOCKER_NETWORK to run a second, fully isolated stack from a worktree — see
+  # docs/project/worktree-stack.md.
   default:
-    name: app_default
+    name: ${DOCKER_NETWORK:-app_default}
