@@ -34,6 +34,7 @@ import { getInitials } from 'shared/lib/getInitials';
 import {
   companyAssetsPath,
   companyMembersPath,
+  companySettingsPath,
   companyProjectAgentsPath,
   companyProjectAixleBuilderPath,
   companyProjectAnalyticsPath,
@@ -180,6 +181,7 @@ const companyNavGroups: NavGroup[] = [
     items: [
       { label: 'Assets', icon: <IconFiles size={18} />, path: companyAssetsPath(), adminOnly: true },
       { label: 'Members', icon: <IconUsers size={18} />, path: companyMembersPath() },
+      { label: 'Settings', icon: <IconSettings size={18} />, path: companySettingsPath() },
     ],
   },
 ];

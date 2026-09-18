@@ -439,6 +439,14 @@ container_execution:
       cpu_percent: 50      # Max CPU (50% of 1 core) - prevents mining
       pids_limit: 100      # Max processes
 
+# Which product this installation is: `self_hosted` when the customer runs it in
+# their own account and buys their own capacity, anything else (including unset)
+# when we host it and invoice for that capacity. It decides who may move a
+# company's session limit — the company's own admin, or only a platform
+# administrator.
+deployment:
+  mode: <%= ENV['DEPLOYMENT_MODE'] %>
+
 # Session admission's deployment inputs.
 #
 # Capacity itself is NOT configured here. A project limit is a reservation drawn

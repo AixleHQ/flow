@@ -77,6 +77,7 @@ non-secret values.
 
 | Variable                              | Required | Default | Purpose                                                        |
 | ------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
+| `DEPLOYMENT_MODE`                     | no       | `hosted` | `self_hosted` when the customer runs this installation in their own account and buys their own capacity — a company admin may then raise their own session limit from the company's settings page. Any other value, including unset, means we host it and only a platform administrator may move that number. |
 | `SESSION_PROJECT_CONCURRENCY_DEFAULT` | no       | `4`     | Queue size for a project that has set no limit of its own. Read live — takes effect on the next boot of each pod. |
 | `SESSION_PINNED_RELEASE_ENABLED` | no | `true` | `false` stops the reconciler from ending a pinned reservation on its own, leaving it for an operator. A reservation is pinned when a create or start never reported its outcome; the slot is held so a late Pod cannot land on someone else's. |
 | `SESSION_PINNED_RELEASE_CONFIRMATION_MINUTES` | no | `5` | How long the reconciler must keep re-proving that no workload exists before it abandons such an operation and releases the slot. A pass that sees the workload again resets the clock. |
