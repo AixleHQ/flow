@@ -15,12 +15,12 @@ module InternalTools
 
       def resolve_integration(provider)
         return if project.nil?
-        scope = Integration.active.where(provider: provider, company_id: project.company_id)
+        scope = Integration.visible_for_project(project).active.where(provider: provider)
         context = workflow_run&.shared_context.to_h[provider.to_s] || {}
         if (id = context["integration_id"]).present? && (found = scope.find_by(id: id))
           return found
         end
-        scope.visible_for_project(project).order(Arel.sql("project_id IS NULL"), :id).first
+        scope.order(Arel.sql("project_id IS NULL"), :id).first
       end
     end
   end
