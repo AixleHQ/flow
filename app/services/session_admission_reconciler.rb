@@ -34,12 +34,29 @@ class SessionAdmissionReconciler
 
       strand_in_flight_operations(admission)
       Activities::Container::AdmittedPhaseActivity.new.run(Hashie::Mash.new(
-        phase: "cleanup", admission_id: admission.id, error: admission.terminal_session.finished? ? nil : "Container workflow ended"
+        phase: "cleanup", admission_id: admission.id, error: cleanup_error(admission)
       ))
     rescue StandardError => e
       admission.update!(last_error: "Reconciliation: #{e.class}: #{e.message}")
     end
     report(snapshot)
+  end
+
+  # What actually happened, in terms of the thing the owner was promised.
+  #
+  # Both halves of this used to be told "Container workflow ended", and the half
+  # it was wrong about is the half people came asking about. A launch abandoned
+  # before it reached the container has no container to have ended: no log, no
+  # `started_at`, no runtime operation, nothing to open. The sentence sent every
+  # one of those investigations hunting a crash that had not happened. A session
+  # that really did get a container keeps the original wording, because for it
+  # the sentence was true.
+  def self.cleanup_error(admission)
+    session = admission.terminal_session
+    return nil if session.finished?
+    return "Container workflow ended" if session.started_at || admission.runtime_id.present?
+
+    TerminalSession::LAUNCH_ABANDONED_ERROR
   end
 
   # Whether Temporal still has a running execution behind this reservation.

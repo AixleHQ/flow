@@ -36,6 +36,8 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     # Reaching reconciliation at all means the workflow's own cleanup never
     # settled the session, so "it just ended" is a failure, not a success.
     assert_equal "failed", session.reload.state
+    assert_equal "Container workflow ended", session.error_message,
+      "this one really did get a container, and it really did end"
   end
 
   test "an unresolved runtime operation keeps its slot through reconciliation" do
@@ -274,9 +276,11 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   # up. The relay gets first refusal on an expired claim; what it will not take
   # back — a launch already stopped — is the reaper's.
   test "a claim nobody finished is reconciled once its lease has run out" do
-    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
+    session = create(:terminal_session, user: @user, project: @project)
     admission = admit(session)
-    session.update!(state: "running", started_at: 1.hour.ago)
+    # Claimed, never acknowledged, never started, and already stopped — so the
+    # relay above will not take the claim back, and the lease is the only thing
+    # that was still holding the slot.
     admission.update!(launch_state: "claimed", claimed_at: 5.minutes.ago,
                       stop_requested_at: Time.current, runtime_id: nil)
 
@@ -287,6 +291,10 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
 
     assert admission.reload.released_at, "an expired lease must not pin the slot forever"
     assert_equal "failed", session.reload.state
+    # "Container workflow ended" sent people looking for a container that was
+    # never built — no log, no `started_at`, nothing to open.
+    assert_nil session.started_at
+    assert_equal TerminalSession::LAUNCH_ABANDONED_ERROR, session.error_message
   end
 
   test "a workflow that is merely unreachable keeps its reservation" do
