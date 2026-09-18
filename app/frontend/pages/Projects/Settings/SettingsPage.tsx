@@ -89,12 +89,12 @@ interface ConcurrencyAllocation {
 }
 
 interface Concurrency {
-  /** This project's own limit, or null when it runs on the installation default. */
+  /** This project's own limit, or null when it runs on the deployment default. */
   maxSessions: number | null;
   default: number;
-  /** The ceiling every project shares, or null when the installation sets none. */
-  installationLimit: number | null;
-  /** The most this project could be set to right now; null when there is no ceiling. */
+  /** The company's own limit, shared by its projects, or null when it has none. */
+  companyLimit: number | null;
+  /** The most this project could be set to right now; null when there is no limit. */
   available: number | null;
   allocations: ConcurrencyAllocation[];
   queueEnabled: boolean;
@@ -309,11 +309,11 @@ const SettingsPage = () => {
                   </>
                 )}
 
-                {concurrency.installationLimit != null && (
+                {concurrency.companyLimit != null && (
                   <Box mt={8}>
                     <Text size="xs" c="dimmed">
-                      {concurrency.available} of {concurrency.installationLimit} is unreserved — shared by every project
-                      that has no limit of its own.
+                      {concurrency.available} of the company&rsquo;s {concurrency.companyLimit} is unreserved — shared by
+                      every project that has no limit of its own.
                     </Text>
                     {concurrency.allocations.length > 0 && (
                       <Text size="xs" c="dimmed">

@@ -135,14 +135,20 @@ gives its place to the next one immediately.
 
 ## For operators
 
-The ceiling is `SESSION_CONCURRENCY_LIMIT`, read live — an edit takes effect as
-each pod restarts, with nothing to run afterwards. Leaving it unset means no
-ceiling.
+Capacity is a company's limit, held in the database and set on the company's own
+page in the admin. A project's limit is a reservation drawn from it; projects
+without one share what the reservations leave. A company with no limit of its own
+is unbounded — which is also how an internal organisation is left unbilled.
 
-Lowering it below the sum of project reservations is possible, and nothing can
-refuse it: the ceiling is honoured and the reservations are not, which the queue
-health line reports as over-commitment. A value that is not a positive integer
-leaves the installation with no ceiling at all, and says so on the admin page.
+There is no deployment-wide ceiling. `SESSION_CONCURRENCY_LIMIT` used to be one
+and nothing reads it any more: a single number for the whole installation could
+not describe a deployment running several organisations, and it was never the
+number a customer was sold.
+
+Lowering a company below the sum of its projects' reservations is possible, and
+nothing refuses it — a downgrade must not be blocked by how the capacity was
+divided. The company limit is then honoured and the reservations are not, which
+the queue health line reports as over-commitment.
 
 Turning admission on for the first time is still a deliberate act, because it
 puts already-running sessions behind a queue they were never admitted to: the

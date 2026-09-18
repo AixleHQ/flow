@@ -441,12 +441,12 @@ container_execution:
 
 # Session admission's deployment inputs.
 #
-# `installation_limit` is a ceiling over every project queue at once, and an
-# explicit project limit is a reservation drawn from it. Read live, like the
-# project default: a ConfigMap edit takes effect as each pod restarts. Blank
-# means no ceiling, and project limits are then the only bound. A value that is
-# not a positive integer leaves the installation with NO ceiling — there is no
-# stored value to fall back to — and is reported in the queue-health line.
+# Capacity itself is NOT configured here. A project limit is a reservation drawn
+# from the limit of the company that owns it, and a company's limit lives in the
+# database (a SessionConcurrencyLimit row, edited on the company's own admin
+# page) because it is the number the installation sells. SESSION_CONCURRENCY_LIMIT
+# used to be a deployment-wide ceiling every reservation came out of; it could not
+# express an installation running several organisations and nothing reads it.
 #
 # `project_default` IS read live, i.e. re-read at every boot, so a ConfigMap edit
 # takes effect on the next pod with nothing to run afterwards. A value that is
@@ -458,7 +458,6 @@ container_execution:
 # There is no per-user default: sessions launched outside a project are not
 # queued at all.
 session_admission:
-  installation_limit: <%= ENV['SESSION_CONCURRENCY_LIMIT'] %>
   project_default: <%= ENV['SESSION_PROJECT_CONCURRENCY_DEFAULT'] %>
   # A reservation pinned by an unprovable create/start keeps its slot so a late
   # Pod can never land on someone else's (AD-5). By the time the pin is honoured

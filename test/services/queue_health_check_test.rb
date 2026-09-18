@@ -71,7 +71,7 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
   # There are no factories for admissions on purpose: a reservation only exists by
   # going through the queue, so the tests build one the way production does.
   def admitted_session_with_operation(phase:, state: "uncertain")
-    with_ceiling(5)
+    with_admission(project: 5)
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = SessionAdmissionService.enqueue!(session)
     SessionAdmissionService.drain!
@@ -95,8 +95,8 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
   # The two cases nothing is going to end.
   test "a pin is reported when the operator has switched automatic release off" do
     admitted_session_with_operation(phase: "create_container")
-    # After the helper, not before: it sets the ceiling through the same settings
-    # block, so an earlier stub would be the one overwritten.
+    # After the helper, not before: it sets the project default through the same
+    # settings block, so an earlier stub would be the one overwritten.
     Settings.stubs(:session_admission).returns(Hashie::Mash.new(project_default: 5, pinned_release_enabled: false))
 
     stats = QueueHealthCheck.snapshot
@@ -122,6 +122,32 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
     admitted_session_with_operation(phase: "exec")
 
     assert_equal 0, QueueHealthCheck.snapshot[:pinned_reservations]
+  end
+
+  # A company may be lowered below what its projects reserved — a downgrade must
+  # not be blocked by how the customer divided their capacity — so the drain
+  # honours the company and the reservations are the promise being broken. The
+  # only thing standing between that and silence is this line.
+  test "a company whose projects reserve more than it has is reported" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 3)
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 3)
+    other = create(:project, owner: @user, company: @company)
+    SessionConcurrencyLimit.set!(scope: other, max_sessions: 2)
+
+    stats = QueueHealthCheck.snapshot
+
+    assert_equal [ { company_id: @company.id, limit: 3, reserved: 5 } ], stats[:overcommitted_companies]
+    assert_match(/above its limit of 3/, QueueHealthCheck.problems(stats).grep(/reservations/).sole)
+  end
+
+  test "a company within its reservations reports nothing" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 10)
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 4)
+
+    stats = QueueHealthCheck.snapshot
+
+    assert_empty stats[:overcommitted_companies]
+    assert_empty QueueHealthCheck.problems(stats).grep(/reservations/)
   end
 
   test "call returns the snapshot it reported" do

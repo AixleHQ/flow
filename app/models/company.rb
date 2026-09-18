@@ -48,10 +48,33 @@ class Company < ApplicationRecord
   validates :email_domain, presence: true, uniqueness: { case_sensitive: false },
                            format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, aixle.com)" }
   validate :email_domain_not_reserved
+  validate :session_concurrency_limit_is_a_positive_integer
 
   # Callbacks
   before_validation :generate_slug, on: :create
   before_validation :downcase_email_domain
+  after_save :apply_session_concurrency_limit
+
+  # How many sessions this company may run at once, and the number it is billed
+  # for. Stored as a SessionConcurrencyLimit row rather than a column because the
+  # project tier is stored that way too, and one table is what lets the drain read
+  # both tiers in one query.
+  #
+  # NIL MEANS UNLIMITED AND UNBILLED. That is how an internal organisation — ours
+  # — is exempted without a special case, and it mirrors what a missing
+  # installation ceiling has always meant. A Marketplace deployment must not allow
+  # it, because "unlimited" has no encoding in a metering record; that rule
+  # arrives with the deployment-mode flag and is not enforced here yet.
+  def session_concurrency_limit
+    return @session_concurrency_limit if defined?(@session_concurrency_limit)
+
+    SessionConcurrencyLimit.for_company(id)
+  end
+
+  def session_concurrency_limit=(value)
+    @session_concurrency_limit = value.to_s.strip.presence
+    @session_concurrency_limit_assigned = true
+  end
 
   # White label / branding helpers
   def branded_name
@@ -78,6 +101,32 @@ class Company < ApplicationRecord
   end
 
   private
+
+  # Only touches the row when the form actually submitted the field, so every
+  # other update of a company leaves its limit alone.
+  def apply_session_concurrency_limit
+    return unless @session_concurrency_limit_assigned
+
+    @session_concurrency_limit_assigned = false
+    row = SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: id)
+
+    if @session_concurrency_limit.blank?
+      row&.destroy
+    else
+      record = row || SessionConcurrencyLimit.new(scope_type: "Company", scope_id: id)
+      record.update!(max_sessions: @session_concurrency_limit)
+    end
+  end
+
+  # Checked here rather than left to the row, so the admin form reports it on the
+  # company instead of raising out of an after_save callback.
+  def session_concurrency_limit_is_a_positive_integer
+    return unless @session_concurrency_limit_assigned
+    return if @session_concurrency_limit.blank?
+    return if @session_concurrency_limit.match?(/\A[1-9]\d*\z/)
+
+    errors.add(:session_concurrency_limit, "must be a positive whole number, or blank for no limit")
+  end
 
   def generate_slug
     return if slug.present?

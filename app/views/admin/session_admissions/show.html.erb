@@ -3,9 +3,10 @@
 
 The queue's on switch and the numbers an operator needs before touching it.
 
-Capacity is not edited here. SESSION_CONCURRENCY_LIMIT and the two scope
-defaults come from the deployment's environment; this page reports what they
-currently resolve to and decides only when a change of state is picked up.
+Capacity is not edited here. A company's limit is set on the company's own page
+and a project's on the project's; the scope default comes from the deployment's
+environment. This page reports what they resolve to and decides only when a
+change of state is picked up.
 %>
 
 <header class="main-content__header">
@@ -31,34 +32,34 @@ currently resolve to and decides only when a change of state is picked up.
         <th>Queues</th>
         <td>
           One queue per project (<%= @scope_defaults["Project"] %> each unless the project sets its own).
-          <% if @policy.installation_limit %>
-            All of them together may not exceed <%= @policy.installation_limit %> concurrent sessions,
-            and explicit project limits are allocated out of that ceiling.
-          <% else %>
-            No installation-wide ceiling is set, so project limits are the only bound.
-          <% end %>
+          Explicit project limits are reservations drawn from the company that owns the project;
+          a company with no limit of its own is unbounded, and unbilled.
           Sessions launched outside a project (agent logins) are not queued at all.
         </td>
       </tr>
       <tr>
-        <th>SESSION_CONCURRENCY_LIMIT</th>
+        <th>Company limits</th>
         <td>
-          <%= @configured_limit || "unset — no installation-wide ceiling" %>
-          <%# Read live, so there is no "active" copy to disagree with it — only a
-              value this app cannot make sense of, which leaves no ceiling at all. %>
-          <% if SessionAdmissionPolicy.installation_limit_misconfigured? %>
-            <strong>— not a positive integer, so the installation has NO ceiling until it is corrected.</strong>
-          <% elsif @policy.installation_limit && @reserved_total > @policy.installation_limit %>
-            <strong>— below the <%= @reserved_total %> already reserved by project limits.</strong>
-            The ceiling is honoured and those reservations are not; raise it, or lower the project limits.
+          <% if @company_limits.any? %>
+            <% @company_limits.each do |limit| %>
+              <%= link_to limit.scope_record&.name || "Company ##{limit.scope_id}",
+                          admin_company_path(limit.scope_id) %>: <%= limit.max_sessions %><br>
+            <% end %>
+          <% else %>
+            none — every company is unbounded and unbilled. Set one on a company's own page.
+          <% end %>
+          <% @overcommitted.each do |row| %>
+            <strong>Company #<%= row[:company_id] %> has <%= row[:reserved] %> reserved by its projects,
+            above its limit of <%= row[:limit] %>.</strong>
+            The company limit is honoured and those reservations are not.<br>
           <% end %>
         </td>
       </tr>
       <tr>
-        <th>Scope overrides</th>
+        <th>Project reservations</th>
         <td>
           <% if @overrides.any? %>
-            <%= @overrides.map { |limit| "#{limit.scope_type} ##{limit.scope_id}: #{limit.max_sessions}" }.join(", ") %>
+            <%= @overrides.map { |limit| "##{limit.scope_id}: #{limit.max_sessions}" }.join(", ") %>
             (<%= link_to "edit", admin_session_concurrency_limits_path %>)
           <% else %>
             none — <%= link_to "add one", admin_session_concurrency_limits_path %>

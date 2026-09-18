@@ -11,17 +11,18 @@ module Admin
   # Until now that act was a rake task, which assumes shell access to a
   # production pod; a self-hosted operator has an admin login and nothing else.
   #
-  # The buttons do not carry configuration. Activation reads the same
-  # SESSION_CONCURRENCY_LIMIT the deployment sets and applies the same drain
-  # gate as the task — the environment stays the source of truth for capacity,
-  # and this only decides when it is picked up.
+  # The buttons do not carry configuration. Activation applies the same drain
+  # gate as the task and reads the same limits — company rows for what was sold,
+  # project rows for how it was divided — so this page only decides when a
+  # change of state is picked up.
   class SessionAdmissionsController < Admin::ApplicationController
     def show
       @policy = SessionAdmissionPolicy.current
       @scope_defaults = SessionAdmissionPolicy.scope_defaults
-      @configured_limit = SessionAdmissionPolicy.deployment_setting(:installation_limit).to_s.strip.presence
-      @reserved_total = SessionConcurrencyLimit.where(scope_type: "Project").sum(:max_sessions)
-      @overrides = SessionConcurrencyLimit.order(:scope_type, :scope_id)
+      @reserved_total = SessionConcurrencyLimit.for_projects.sum(:max_sessions)
+      @company_limits = SessionConcurrencyLimit.for_companies.order(:scope_id)
+      @overcommitted = SessionConcurrencyLimit.overcommitted_companies
+      @overrides = SessionConcurrencyLimit.for_projects.order(:scope_id)
       @health = SessionAdmissionReconciler.snapshot
 
       render layout: "administrate/application"
@@ -57,11 +58,9 @@ module Admin
     end
 
     def activation_notice(policy)
-      notice = "Admission enabled: one queue per project, #{SessionAdmissionPolicy.scope_default('Project')} " \
-               "concurrent sessions each unless the project sets its own."
-      return notice unless policy.installation_limit
-
-      "#{notice} All projects together may not exceed #{policy.installation_limit}."
+      "Admission enabled: one queue per project, #{SessionAdmissionPolicy.scope_default('Project')} " \
+        "concurrent sessions each unless the project sets its own. " \
+        "A project is bounded by its company's limit, set on the company's own page."
     end
   end
 end
