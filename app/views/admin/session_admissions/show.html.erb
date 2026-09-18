@@ -49,8 +49,8 @@ change of state is picked up.
             none — every company is unbounded and unbilled. Set one on a company's own page.
           <% end %>
           <% @overcommitted.each do |row| %>
-            <strong>Company #<%= row[:company_id] %> has <%= row[:reserved] %> reserved by its projects,
-            above its limit of <%= row[:limit] %>.</strong>
+            <strong><%= @company_names[row[:company_id]] || "Company ##{row[:company_id]}" %> has
+            <%= row[:reserved] %> reserved by its projects, above its limit of <%= row[:limit] %>.</strong>
             The company limit is honoured and those reservations are not.<br>
           <% end %>
         </td>

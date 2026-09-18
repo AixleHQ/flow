@@ -22,6 +22,7 @@ module Admin
       @reserved_total = SessionConcurrencyLimit.for_projects.sum(:max_sessions)
       @company_limits = SessionConcurrencyLimit.for_companies.order(:scope_id)
       @overcommitted = SessionConcurrencyLimit.overcommitted_companies
+      @company_names = Company.where(id: @overcommitted.map { |row| row[:company_id] }).pluck(:id, :name).to_h
       @overrides = SessionConcurrencyLimit.for_projects.order(:scope_id)
       @health = SessionAdmissionReconciler.snapshot
 
