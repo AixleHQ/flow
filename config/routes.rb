@@ -318,6 +318,7 @@ Rails.application.routes.draw do
       resources :members, only: %i[index create update destroy] do
         post :resend, on: :member
       end
+      resource :settings, only: %i[show update], controller: "settings"
       # Config items are Project-scoped only — managed under company/projects/:id/config_items.
       # GitHub App setup callback (single global endpoint; project target carried in `state`).
       # Company-level integration management has been removed — integrations are project-scoped.

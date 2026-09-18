@@ -10,7 +10,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     @user = create(:user, :with_company)
     # Only project sessions are queued at all, so recovery is only ever about one.
     @project = create(:project, owner: @user, company: @user.companies.first)
-    with_ceiling(1)
+    with_admission(project: 1)
   end
 
   def admit(session)

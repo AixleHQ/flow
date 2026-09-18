@@ -52,47 +52,20 @@ class SessionAdmissionPolicy < ApplicationRecord
   # ConfigMap edit takes effect on the next pod with nothing to remember to run.
   #
   # What stays in the database is what cannot be read per-process: whether
-  # admission is on at all, whether it is paused, and the installation ceiling —
-  # turning admission on puts already-running sessions behind a queue they were
-  # never admitted to, which a value re-read at boot could never gate on.
+  # admission is on at all, and whether it is paused — turning admission on puts
+  # already-running sessions behind a queue they were never admitted to, which a
+  # value re-read at boot could never gate on.
   #
   # The trade-off of reading live is that a rolling update briefly leaves
   # replicas disagreeing about a scope's size. Bounded by the size of the edit,
   # and it settles as the rollout finishes.
-  # The ceiling, read live from the deployment exactly like the project default.
   #
-  # It used to be copied into this row by a rake task, because it selected which
-  # pool a session belonged to and re-homing live sessions had to happen in a
-  # maintenance window. It selects nothing now — it is a number the drain clamps
-  # against — so the copy bought only a step that a deployed installation, with
-  # no shell, could not perform.
-  #
-  # THE COST OF READING LIVE: there is no stored value to fall back to, so a
-  # ConfigMap typo cannot be "ignored in favour of the last good one" the way the
-  # project default can. Refusing to answer would wedge every launch, and
-  # guessing a number would be worse — so the ceiling reads as absent and says so
-  # loudly, and QueueHealthCheck reports it as a problem rather than leaving it in
-  # a log nobody greps.
-  def self.installation_limit
-    raw = deployment_setting(:installation_limit).to_s.strip
-    return nil if raw.empty?
-    return raw.to_i if raw.match?(/\A[1-9]\d*\z/)
-
-    Rails.logger.error(
-      "[SessionAdmission] SESSION_CONCURRENCY_LIMIT=#{raw.inspect} is not a positive integer; " \
-      "the installation has NO ceiling until this is corrected"
-    )
-    nil
-  end
-
-  def self.installation_limit_misconfigured?
-    raw = deployment_setting(:installation_limit).to_s.strip
-    raw.present? && !raw.match?(/\A[1-9]\d*\z/)
-  end
-
-  # Callers hold a policy record and ask it, which kept reading naturally when the
-  # value lived in a column; it is the deployment's answer either way.
-  def installation_limit = self.class.installation_limit
+  # THERE IS NO INSTALLATION CEILING ANY MORE. SESSION_CONCURRENCY_LIMIT was one
+  # number for a whole deployment, read from the environment, and every project
+  # reservation was drawn from it. That cannot express an installation running
+  # several organisations, and it is not a number anybody is sold: what a
+  # customer buys is capacity for their organisation. The budget is the company's
+  # own limit now (SessionConcurrencyAllocation), and nothing reads the variable.
 
   def self.scope_default(scope_type)
     config = SCOPE_DEFAULTS.fetch(scope_type)

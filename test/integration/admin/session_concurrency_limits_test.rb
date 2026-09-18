@@ -14,7 +14,7 @@ class Admin::SessionConcurrencyLimitsTest < ActionDispatch::IntegrationTest
     sign_in_as(@admin)
     @owner = create(:user, company: @company)
     @project = create(:project, owner: @owner, company: @company)
-    with_ceiling(nil, project: 1)
+    with_admission(project: 1)
   end
 
   test "index lists the scope overrides" do
