@@ -3,17 +3,10 @@
 module InternalTools
   module Concerns
     module YoutrackContext
-      def youtrack_context = workflow_run&.shared_context.to_h["youtrack"] || {}
+      include IntegrationResolvable
+      resolves_integration_for :youtrack
 
-      def youtrack_integration
-        return if project.nil?
-        scope = Integration.active.where(provider: :youtrack, company_id: project.company_id)
-        if (id = youtrack_context["integration_id"]).present?
-          return scope.find_by(id: id)
-        end
-        scope.where("project_id = :pid OR project_id IS NULL", pid: project.id)
-          .order(Arel.sql("project_id IS NULL"), :id).first
-      end
+      def youtrack_context = workflow_run&.shared_context.to_h["youtrack"] || {}
 
       def with_youtrack
         return error("This tool needs a project") if project.nil?

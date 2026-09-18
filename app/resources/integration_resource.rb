@@ -179,4 +179,9 @@ class IntegrationResource < ApplicationResource
   attribute :youtrack_webhook_header do |integration|
     integration.youtrack? ? integration.settings&.dig("webhook_header") : nil
   end
+
+  typelize :string?
+  attribute :youtrack_last_received_at do |integration|
+    integration.youtrack? ? integration.settings&.dig("last_received_at") : nil
+  end
 end

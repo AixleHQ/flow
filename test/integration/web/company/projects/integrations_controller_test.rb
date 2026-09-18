@@ -159,7 +159,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   test "company admin can create a company-wide YouTrack integration from a project page" do
     integration = create(:integration, :active, provider: :youtrack, company: @company, project: nil, connected_by: @user)
     service = mock
-    Youtrack::IntegrationService.expects(:new).with(
+    Youtrack::ConnectService.expects(:new).with(
       company: @company, connected_by: @user, project: nil
     ).returns(service)
     service.expects(:create).returns(integration)
@@ -180,6 +180,20 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
 
     assert_redirected_to company_project_integrations_path(@project)
     assert_not Integration.exists?(integration.id)
+  end
+
+  test "company admin can rotate a company YouTrack webhook without changing its bindings" do
+    integration = create(:integration, :active, provider: :youtrack, company: @company, project: nil, connected_by: @user)
+    endpoint = create(:webhook_endpoint, company: @company, provider: :youtrack,
+      verification_strategy: :shared_token, secret: "o" * 32,
+      config: { "integration_id" => integration.id, "header" => "X-Old" })
+    patch company_project_integration_path(@project, integration), params: {
+      webhook_header: "X-New", webhook_token: "n" * 32
+    }
+    assert_response :redirect
+    assert_equal "n" * 32, endpoint.reload.secret
+    assert_equal "X-New", endpoint.config["header"]
+    assert_equal "X-New", integration.reload.settings["webhook_header"]
   end
 
   test "create coder integration happy path persists project-scoped record" do

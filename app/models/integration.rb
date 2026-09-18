@@ -19,11 +19,11 @@ class Integration < ApplicationRecord
   has_many :azure_devops_subscriptions, dependent: :destroy
   has_many :trigger_bindings, dependent: :nullify
 
-  before_destroy :destroy_youtrack_webhook_endpoint, if: :youtrack?
 
   def youtrack_base_url = settings&.dig("base_url")
   def youtrack_project_id = settings&.dig("youtrack_project_id")&.to_s
   def youtrack_token = credentials_data["permanent_token"]
+  def company_scope? = project_id.nil?
 
   # WebhookEndpoint links back to its integration through `config.integration_id`
   # (JSONB), not a real FK column — see youtrack-integration-tech-design-v6.md §4/§9.3 —
@@ -43,6 +43,10 @@ class Integration < ApplicationRecord
   scope :active, -> { where(status: "active") }
   scope :visible_for_project, ->(project) {
     where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id))
+  }
+  scope :youtrack_for_project, ->(project) {
+    visible_for_project(project).active.where(provider: :youtrack)
+      .order(Arel.sql("project_id IS NULL"), :created_at)
   }
 
   # personal_access_token lives in encrypted credentials — no DB lookup possible.
@@ -290,7 +294,4 @@ class Integration < ApplicationRecord
     Settings.encryption.integrations_key
   end
 
-  def destroy_youtrack_webhook_endpoint
-    youtrack_webhook_endpoint&.destroy
-  end
 end

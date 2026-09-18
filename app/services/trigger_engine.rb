@@ -108,7 +108,12 @@ class TriggerEngine
       return [] if event.project_id.blank? && event.company_id.blank?
 
       bindings = TriggerBinding.for_event(event)
-      bindings = bindings.where(integration_id: event.data["integration_id"]) if event.event_type.start_with?("youtrack.")
+      adapter = Webhooks::AdapterRegistry.for(event.event_type.to_s.split(".").first)
+      if adapter&.requires_integration?
+        integration = Integration.active.find_by(id: event.data["integration_id"], provider: adapter.class.provider)
+        return [] unless integration
+        bindings = bindings.where(integration_id: integration.id)
+      end
       bindings.select { |b| b.matches?(event.data) }.map do |binding|
         fire_for_binding(binding: binding, event: event, task: event.board_task, actor: binding.created_by)
       end
@@ -194,12 +199,20 @@ class TriggerEngine
         elsif dispatch.status == "skipped"
           result = nil                              # a prior attempt decided not to start
         else
+          adapter = Webhooks::AdapterRegistry.for(event.event_type.to_s.split(".").first)
+          if adapter&.requires_integration?
+            integration = Integration.active.lock.find_by(id: event.data["integration_id"], provider: adapter.class.provider)
+            unless integration && trigger_binding&.integration_id == integration.id && trigger_binding.reload.enabled?
+              dispatch.update!(status: "skipped", detail: { "reason" => "integration disconnected" })
+              next
+            end
+          end
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.start(
             workflow: workflow, project: project, user: actor,
             task: subject, mode: :non_interactive,
             input_asset_ids: input_asset_ids_for(event, project),
-            shared_context: slack_run_context(event).merge(youtrack_run_context(event, subject))
+            shared_context: slack_run_context(event).merge(adapter ? adapter.run_context(event, subject) : {})
           )
           started = result.try(:persisted?)
           dispatch.update!(
@@ -343,17 +356,6 @@ class TriggerEngine
       same_workflow = links.select { |link| link.data["workflow_id"].to_s == binding.workflow_id.to_s }
       return same_workflow.first.board_task if same_workflow.any?
       links.one? ? links.first.board_task : nil
-    end
-
-    def youtrack_run_context(event, task)
-      return {} unless event.event_type.start_with?("youtrack.")
-      data = event.data.slice("integration_id", "youtrack_project_id", "issue_id", "issue_readable_id",
-        "comment_id", "actor_id", "actor_login", "summary", "description", "text", "occurred_at")
-      if task
-        data["linked_task"] = { "id" => task.id, "title" => task.title, "column" => task.board_column&.name,
-          "archived" => task.archived?, "description" => task.description.to_s.truncate(500, omission: "… [truncated]") }
-      end
-      { "youtrack" => data.compact }
     end
 
     # Internal events carry no external dedup_key → key on the event id so a

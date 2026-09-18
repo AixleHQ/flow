@@ -32,7 +32,7 @@ class TriggerBinding < ApplicationRecord
   validate :create_task_requires_column
   validate :schedule_requires_cron
   validate :workflow_supports_auto_run
-  validate :youtrack_integration_is_visible
+  validate :required_integration_is_visible
 
   scope :active, -> { where(enabled: true) }
   # Match an event to bindings. Project-scoped events (column/webhook/schedule)
@@ -72,11 +72,13 @@ class TriggerBinding < ApplicationRecord
 
   private
 
-  def youtrack_integration_is_visible
-    return unless event_type.to_s.start_with?("youtrack.")
+  def required_integration_is_visible
+    adapter = Webhooks::AdapterRegistry.for(event_type.to_s.split(".").first)
+    return unless adapter&.requires_integration?
     return errors.add(:integration, "is required") if integration.nil?
-    unless integration.youtrack? && integration.active? && Integration.visible_for_project(project).exists?(id: integration_id)
-      errors.add(:integration, "must be an active visible YouTrack integration")
+    unless integration.provider.to_s == adapter.class.provider.to_s && integration.active? &&
+        Integration.visible_for_project(project).exists?(id: integration_id)
+      errors.add(:integration, "must be an active visible #{adapter.class.provider} integration")
     end
   end
 

@@ -153,9 +153,8 @@ module Api
           end
 
           def serialized_youtrack_integrations
-            Integration.visible_for_project(current_project).active.where(provider: :youtrack)
-                       .order(Arel.sql("project_id IS NULL"), :created_at).map do |integration|
-              { id: integration.id, name: integration.name, scope: integration.project_id.nil? ? "company" : "project" }
+            Integration.youtrack_for_project(current_project).map do |integration|
+              { id: integration.id, name: integration.name, scope: integration.company_scope? ? "company" : "project" }
             end
           end
 

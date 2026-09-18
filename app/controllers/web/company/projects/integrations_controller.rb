@@ -42,7 +42,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       return create_azure_devops
     when "youtrack"
       company_scope = params[:scope].to_s == "company" && current_project_membership&.admin?
-      Youtrack::IntegrationService.new(
+      Youtrack::ConnectService.new(
         company: current_company, connected_by: current_user, project: company_scope ? nil : current_project
       ).create(
         base_url: params[:base_url], permanent_token: params[:permanent_token],
@@ -66,7 +66,17 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # `for_project` like #destroy: a company-wide integration is shared by every
   # project, so it is not editable from one project's page.
   def update
-    integration = Integration.for_project(current_project).find(params[:id])
+    integration = Integration.visible_for_project(current_project).find(params[:id])
+    if integration.company_scope? && !current_project_membership&.admin?
+      return head :forbidden
+    end
+
+    if integration.youtrack?
+      Youtrack::ConnectService.new(company: current_company, connected_by: current_user,
+        project: integration.project).rotate_webhook!(integration: integration,
+          webhook_header: params[:webhook_header], webhook_token: params[:webhook_token])
+      return redirect_to company_project_integrations_path(current_project), notice: "YouTrack webhook updated"
+    end
 
     # Azure has its own editable settings (the operation profile, and a
     # replacement PAT), so it routes away from the Coder path rather than being
@@ -85,20 +95,16 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     )
 
     redirect_to company_project_integrations_path(current_project), notice: "Integration settings saved"
-  rescue Coder::IntegrationService::ConfigurationError => e
+  rescue Coder::IntegrationService::ConfigurationError, Integrations::VerificationError => e
     redirect_to company_project_integrations_path(current_project), alert: e.message
   end
 
   def destroy
     integration = Integration.visible_for_project(current_project).find(params[:id])
-    if integration.project_id.nil? && !current_project_membership&.admin?
+    if integration.company_scope? && !current_project_membership&.admin?
       return head :forbidden
     end
-    Integration.transaction do
-      integration.youtrack_webhook_endpoint&.update!(enabled: false) if integration.youtrack?
-      integration.trigger_bindings.update_all(enabled: false) if integration.respond_to?(:trigger_bindings)
-      integration.destroy
-    end
+    Integrations::DisconnectService.call(integration)
     redirect_to company_project_integrations_path(current_project), notice: "Integration removed"
   end
 

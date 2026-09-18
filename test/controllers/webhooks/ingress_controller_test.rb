@@ -67,4 +67,26 @@ class Webhooks::IngressControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_equal 1, ReceivedWebhook.where(idempotency_key: "Ev-dup").count
   end
+
+  test "YouTrack rejects oversized and incomplete callbacks before persistence" do
+    integration = create(:integration, :active, provider: :youtrack, company: @project.company, project: @project,
+      settings: { "youtrack_project_id" => "0-1", "bot_login" => "bot" })
+    endpoint = create(:webhook_endpoint, slug: "youtrack-test", provider: :youtrack,
+      verification_strategy: :shared_token, secret: "x" * 32, project: @project,
+      config: { "integration_id" => integration.id, "header" => "X-Custom-Token" })
+    headers = { "CONTENT_TYPE" => "application/json", "X-Custom-Token" => "x" * 32 }
+    invalid = { event: "issueCreated", issue: { id: "1", project: { id: "0-1" } } }.to_json
+
+    post "/webhooks/in/#{endpoint.slug}", params: invalid, headers: headers
+    assert_response :ok
+    assert_equal 0, ReceivedWebhook.count
+
+    post "/webhooks/in/#{endpoint.slug}", params: " " * (Webhooks::IngressController::YOUTRACK_MAX_BODY + 1), headers: headers
+    assert_response :payload_too_large
+    assert_equal 0, ReceivedWebhook.count
+
+    post "/webhooks/in/#{endpoint.slug}", params: invalid, headers: headers.merge("CONTENT_TYPE" => "text/plain")
+    assert_response :unsupported_media_type
+    assert_equal 0, ReceivedWebhook.count
+  end
 end

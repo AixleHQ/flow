@@ -22,6 +22,9 @@ module Youtrack
       issue
     end
 
+    def me = get("/api/users/me", fields: "id,login,name")
+    def project(id) = get("/api/admin/projects/#{escape(id)}", fields: "id,name,shortName")
+
     def assert_selected_project!(issue)
       actual = issue.to_h.dig("project", "id").to_s
       raise Error, "YouTrack issue is outside the connected project" unless actual == @integration.youtrack_project_id
@@ -41,6 +44,15 @@ module Youtrack
       http.use_ssl = true
       http.open_timeout = 5
       http.read_timeout = 15
+      # Pin the address checked by UrlSafetyValidator. A second DNS lookup at
+      # connect time could otherwise send the bearer token to an internal host.
+      unless UrlSafetyValidator.ip_or_nil(uri.host)
+        addresses = UrlSafetyValidator.resolved_addresses(uri.host)
+        trusted = UrlSafetyValidator.trusted_host?(uri.host)
+        ip = addresses.find { |address| trusted || !UrlSafetyValidator.blocked_ip?(address) }
+        raise Error, "YouTrack host could not be resolved safely" unless ip
+        http.ipaddr = ip.to_s
+      end
       request = method == :get ? Net::HTTP::Get.new(uri) : Net::HTTP::Post.new(uri)
       request["Authorization"] = "Bearer #{@token}"
       request["Accept"] = "application/json"
@@ -48,13 +60,18 @@ module Youtrack
         request["Content-Type"] = "application/json"
         request.body = JSON.generate(body)
       end
-      response = http.request(request)
+      body_text = +""
+      response = http.request(request) do |incoming|
+        incoming.read_body do |chunk|
+          body_text << chunk
+          raise Error, "YouTrack response is too large" if body_text.bytesize > MAX_BYTES
+        end
+      end
       raise Error, "YouTrack redirects are not allowed" if response.is_a?(Net::HTTPRedirection)
       raise AuthenticationError, "YouTrack authentication or permission denied" if [ 401, 403 ].include?(response.code.to_i)
       raise NotFoundError, "YouTrack resource not found" if response.code.to_i == 404
       raise Error, "YouTrack request failed (HTTP #{response.code})" unless response.is_a?(Net::HTTPSuccess)
-      raise Error, "YouTrack response is too large" if response.body.to_s.bytesize > MAX_BYTES
-      response.body.blank? ? {} : JSON.parse(response.body)
+      body_text.blank? ? {} : JSON.parse(body_text)
     rescue JSON::ParserError, URI::InvalidURIError, SocketError, SystemCallError, Timeout::Error, OpenSSL::SSL::SSLError => e
       raise Error, "YouTrack request failed: #{e.class.name.demodulize}"
     end
