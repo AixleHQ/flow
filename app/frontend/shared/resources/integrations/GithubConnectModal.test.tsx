@@ -112,13 +112,22 @@ describe('GithubConnectModal', () => {
     expect(screen.queryByRole('button', { name: 'Continue to GitHub' })).not.toBeInTheDocument();
   });
 
-  it('names the required token scopes and links to GitHub’s token form', async () => {
+  // The scopes are the thing people get wrong, and a grant left out fails one
+  // capability rather than the connection — so each one the app actually uses
+  // is named, not just the two that cover cloning.
+  it('names every scope the app uses and links to GitHub’s token form', async () => {
     renderModal();
 
     await userEvent.click(screen.getByRole('radio', { name: PAT_MODE }));
 
     expect(screen.getByText('repo')).toBeInTheDocument();
     expect(screen.getByText('public_repo')).toBeInTheDocument();
+    expect(screen.getByText('workflow')).toBeInTheDocument();
+    expect(screen.getByText('Metadata')).toBeInTheDocument();
+    expect(screen.getAllByText('Contents')).toHaveLength(2);
+    expect(screen.getByText('Pull requests')).toBeInTheDocument();
+    expect(screen.getByText('Checks')).toBeInTheDocument();
+    expect(screen.getByText('Actions')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Create a token on GitHub/ })).toHaveAttribute(
       'href',
       'https://github.com/settings/tokens/new?scopes=repo&description=Aixle%20Flow',

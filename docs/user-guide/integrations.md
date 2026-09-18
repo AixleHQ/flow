@@ -45,13 +45,30 @@ token instead; the connection goes active without `GITHUB_APP_ID`, a
 private key or an install callback, and you can then attach any
 repository the token reaches and clone it in an agent session.
 
-Scopes to give the token:
+Scopes to give the token. A personal access token reaches exactly what
+it was granted, so a missing one makes that one capability fail — not
+the connection:
 
-- **Classic token:** `repo` for private repositories, or `public_repo`
-  if you only need public ones. A token with neither is refused at
-  connect time rather than failing later at clone time.
-- **Fine-grained token:** **Contents** read — and write if agents should
-  push — plus **Metadata** read, on the repositories you mean to attach.
+- **Classic token:** `repo` covers everything below on private
+  repositories; `public_repo` covers the same on public ones only. A
+  token with neither is refused at connect time rather than failing
+  later at clone time. Add `workflow` if agents will edit files under
+  `.github/workflows` — GitHub rejects that push without it.
+- **Fine-grained token,** on the repositories you mean to attach:
+
+  | To do this | Grant |
+  | --- | --- |
+  | Clone and fetch | **Metadata** read + **Contents** read |
+  | Push | **Contents** write |
+  | Edit `.github/workflows` | **Workflows** write |
+  | Open and answer pull requests | **Pull requests** write |
+  | Resolve CI gates | **Checks** read + **Actions** read |
+
+Aixle's own board tasks, workflows and sessions are not GitHub objects
+and need no scope at all. There are no server-side GitHub pull-request
+tools either — an agent opens a PR itself, with `gh` or the API, using
+this token, which is why **Pull requests** write matters for a
+fine-grained one.
 
 What the token path does *not* do, on purpose:
 

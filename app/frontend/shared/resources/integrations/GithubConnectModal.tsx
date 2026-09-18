@@ -122,10 +122,18 @@ export const GithubConnectModal = ({ opened, onClose, basePath, github }: Props)
               autoFocus
             />
             <Text size="sm" c="dimmed">
-              Classic token: <Code>repo</Code> for private repositories, or <Code>public_repo</Code> for public ones
-              only. Fine-grained token: <Code>Contents</Code> read (and write if agents should push) plus{' '}
-              <Code>Metadata</Code> read, on the repositories you want to attach. GitHub tokens expire — when one does,
-              connect again with a new token.
+              Classic token: <Code>repo</Code> covers everything on private repositories, <Code>public_repo</Code> the
+              same on public ones only. Add <Code>workflow</Code> if agents will edit files under{' '}
+              <Code>.github/workflows</Code> — GitHub rejects that push without it.
+            </Text>
+            <Text size="sm" c="dimmed">
+              Fine-grained token, on the repositories you attach: <Code>Metadata</Code> read and <Code>Contents</Code>{' '}
+              read to clone, <Code>Contents</Code> write to push, <Code>Pull requests</Code> write to open and answer
+              PRs, and <Code>Checks</Code> + <Code>Actions</Code> read for CI gates. It reaches only what it is granted,
+              so a token missing one of these makes that one thing fail, not the connection.
+            </Text>
+            <Text size="sm" c="dimmed">
+              GitHub tokens expire — when one does, connect again with a new token.
             </Text>
             <Anchor href={PAT_CREATE_URL} target="_blank" rel="noopener noreferrer" size="sm">
               <Group gap={4} component="span">
