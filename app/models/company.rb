@@ -55,16 +55,8 @@ class Company < ApplicationRecord
   before_validation :downcase_email_domain
   after_save :apply_session_concurrency_limit
 
-  # How many sessions this company may run at once, and the number it is billed
-  # for. Stored as a SessionConcurrencyLimit row rather than a column because the
-  # project tier is stored that way too, and one table is what lets the drain read
-  # both tiers in one query.
-  #
-  # NIL MEANS UNLIMITED AND UNBILLED. That is how an internal organisation — ours
-  # — is exempted without a special case, and it mirrors what a missing
-  # installation ceiling has always meant. A Marketplace deployment must not allow
-  # it, because "unlimited" has no encoding in a metering record; that rule
-  # arrives with the deployment-mode flag and is not enforced here yet.
+  # Backed by a SessionConcurrencyLimit row, not a column, so the drain reads
+  # both tiers from one table. Nil means unbounded and unbilled.
   def session_concurrency_limit
     return @session_concurrency_limit if defined?(@session_concurrency_limit)
 
@@ -102,8 +94,8 @@ class Company < ApplicationRecord
 
   private
 
-  # Only touches the row when the form actually submitted the field, so every
-  # other update of a company leaves its limit alone.
+  # Only when the form submitted the field, so saving a logo cannot silently
+  # exempt a customer from billing.
   def apply_session_concurrency_limit
     return unless @session_concurrency_limit_assigned
 
@@ -118,8 +110,8 @@ class Company < ApplicationRecord
     end
   end
 
-  # Checked here rather than left to the row, so the admin form reports it on the
-  # company instead of raising out of an after_save callback.
+  # Here rather than on the row, so the admin form reports it instead of the
+  # after_save callback raising.
   def session_concurrency_limit_is_a_positive_integer
     return unless @session_concurrency_limit_assigned
     return if @session_concurrency_limit.blank?

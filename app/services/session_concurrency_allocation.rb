@@ -1,35 +1,21 @@
 # frozen_string_literal: true
 
-# A company's limit read as a budget that its project limits are drawn from, and
-# the one place that turns a refusal into a sentence somebody can act on.
+# A company's limit read as a budget its project limits are drawn from, and the
+# one place that turns a refusal into a sentence somebody can act on.
 #
-# WHY THE COMPANY AND NOT THE INSTALLATION: the budget used to be the
-# installation ceiling — one number for the whole deployment, read from the
-# environment. That made every company's headroom depend on every other
-# company's spending, which is wrong twice over. It is wrong for the operator,
-# because a customer running several organisations in one installation could not
-# give each of them its own capacity. And it is wrong commercially, because the
-# number a customer is charged for has to be the number they were sold, not a
-# share of a deployment-wide pool they cannot see.
+# The budget used to be a deployment-wide ceiling, which made every company's
+# headroom depend on what other companies had spent — unusable for an
+# installation running several organisations, and not the number a customer is
+# sold. A company with no limit of its own is unbounded, and unbilled.
 #
-# So the budget is the company's own, and nothing survives above it: the
-# deployment-wide variable is gone rather than demoted.
-#
-# NIL MEANS UNLIMITED. A company with no row of its own is not bounded here at
-# all, and neither are its projects. That is what makes an internal organisation
-# free by construction rather than by a special case.
-#
-# ONLY EXPLICIT LIMITS ARE ALLOCATED. A project with no row runs on the default
-# and is bounded at runtime by its company and the cluster like everyone else; it
-# holds no reservation. Counting every project at its default instead would make
-# the arithmetic honest and the feature unusable — sixteen projects at the
-# default of four would need a company limit of sixty-four before the first save
-# was allowed.
+# Only explicit project limits are counted. Charging every project its default
+# instead would be arithmetically honest and leave the feature unusable: sixteen
+# projects on a default of four would need a company limit of sixty-four before
+# the first save was allowed.
 class SessionConcurrencyAllocation
-  # @param company_id [Integer, nil] the company whose budget is being spent.
-  #   Nil — an orphaned project — has no budget and refuses nothing.
-  # @param excluding [Integer, nil] id of the limit row being changed, so its own
-  #   current value is not counted against the change.
+  # @param company_id [Integer, nil] nil — an orphaned project — refuses nothing
+  # @param excluding [Integer, nil] the row being changed, so its own current
+  #   value is not counted against the change
   def initialize(company_id:, excluding: nil)
     @company_id = company_id
     @excluding = excluding
@@ -39,15 +25,13 @@ class SessionConcurrencyAllocation
 
   def company_limit = SessionConcurrencyLimit.for_company(company_id)
 
-  # Every explicit project reservation inside this company except the one under
-  # change.
   def rows
     @rows ||= load_rows
   end
 
   def allocated = rows.sum(&:max_sessions)
 
-  # What this project could be set to. Nil means "no budget to fit inside".
+  # Nil means there is no budget to fit inside.
   def available
     cap = company_limit
     return nil if cap.nil?
@@ -60,17 +44,14 @@ class SessionConcurrencyAllocation
     headroom.nil? || max_sessions.to_i <= headroom
   end
 
-  # Where this company's capacity has gone, by project name. Every row here
-  # belongs to the company doing the asking, so unlike the installation-wide
-  # budget this replaced, there is nothing to anonymise.
+  # Every row belongs to the company doing the asking, so unlike the
+  # deployment-wide budget this replaced, there is nothing to anonymise.
   def breakdown
     rows.map do |row|
       { name: row.scope_record&.name || "Project ##{row.scope_id}", max_sessions: row.max_sessions }
     end
   end
 
-  # The refusal, said the way an admin needs to hear it: what the company has,
-  # how much of it is spoken for, and what is left for this project.
   def refusal_for(max_sessions)
     cap = company_limit
 

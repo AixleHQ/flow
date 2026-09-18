@@ -129,10 +129,11 @@ class QueueHealthCheckTest < ActiveSupport::TestCase
   # honours the company and the reservations are the promise being broken. The
   # only thing standing between that and silence is this line.
   test "a company whose projects reserve more than it has is reported" do
-    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 3)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 10)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 3)
     other = create(:project, owner: @user, company: @company)
     SessionConcurrencyLimit.set!(scope: other, max_sessions: 2)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 3)
 
     stats = QueueHealthCheck.snapshot
 

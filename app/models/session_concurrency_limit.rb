@@ -1,13 +1,8 @@
 # frozen_string_literal: true
 
 class SessionConcurrencyLimit < ApplicationRecord
-  # Two scopes, one above the other. A Company row is what the installation sells
-  # and bills for; a Project row is a reservation drawn from the company that owns
-  # the project.
-  #
-  # A User scope existed for sessions launched outside a project, which in
-  # practice meant agent logins — those are exempt from admission altogether
-  # (SessionAdmissionService#enqueue!), so nothing was left for it to govern.
+  # A Company row is what the installation sells and bills for; a Project row is
+  # a reservation drawn from the company that owns the project.
   SCOPE_TYPES = %w[Project Company].freeze
 
   validates :scope_type, inclusion: { in: SCOPE_TYPES }
@@ -16,10 +11,8 @@ class SessionConcurrencyLimit < ApplicationRecord
   validate :scope_must_exist
   validate :fits_within_company_limit
 
-  # Every write path — admin, console, a project's own settings — has to move the
-  # policy revision so pools recompute their cap, and wake the queue so a raised
-  # cap takes effect now instead of at the next reconciliation. Putting that here
-  # rather than in one caller is what keeps every form honest.
+  # Here rather than in a caller: three places write these rows, and a raised cap
+  # has to reach the pools now rather than at the next reconciliation.
   after_commit :publish_change
 
   scope :for_projects, -> { where(scope_type: "Project") }
@@ -30,23 +23,18 @@ class SessionConcurrencyLimit < ApplicationRecord
       .update!(max_sessions: max_sessions)
   end
 
-  # The company limit, or nil when the company has no row. NIL MEANS UNLIMITED
-  # AND UNBILLED, which is deliberate: it is how an internal organisation is
-  # exempted without a special case, exactly as a missing installation ceiling
-  # has always meant "no ceiling". The hosted product allows it; a Marketplace
-  # deployment must not, because "unlimited" has no encoding in a metering record.
+  # Nil means unbounded AND unbilled — how an internal organisation is exempted
+  # without a special case. A Marketplace deployment must forbid it, because
+  # "unlimited" has no encoding in a metering record.
   def self.for_company(company_id)
     return nil if company_id.blank?
 
     find_by(scope_type: "Company", scope_id: company_id)&.max_sessions
   end
 
-  # Companies whose project reservations promise more than the company itself
-  # has. Lowering a company below its own reservations is allowed on purpose —
-  # a downgrade of what a customer pays for must not be blocked by how they
-  # divided it among projects — so the drain honours the company number and the
-  # reservations compete. That is a promise being broken, and QueueHealthCheck
-  # is what makes sure somebody is told.
+  # Lowering a company below its own reservations is allowed (see
+  # #fits_within_company_limit), so the drain honours the company and the
+  # reservations are the promise being broken. QueueHealthCheck reports these.
   def self.overcommitted_companies
     limits = for_companies.pluck(:scope_id, :max_sessions).to_h
     return [] if limits.empty?
@@ -70,8 +58,6 @@ class SessionConcurrencyLimit < ApplicationRecord
     scope_type&.safe_constantize&.find_by(id: scope_id)
   end
 
-  # The id of the company whose budget this row is drawn from. A company row is
-  # its own budget holder; a project row belongs to the company that owns it.
   def company_id
     case scope_type
     when "Company" then scope_id
@@ -79,27 +65,18 @@ class SessionConcurrencyLimit < ApplicationRecord
     end
   end
 
-  # What this project could be raised to right now, and who else in the company is
-  # holding the rest. The screens need the same arithmetic the validation uses, so
-  # it lives in one object and both ask it.
+  # The screens need the same arithmetic the validation uses, so both ask this.
   def allocation
     SessionConcurrencyAllocation.new(company_id: company_id, excluding: id)
   end
 
   private
 
-  # A project limit is a reservation drawn from its company's limit, so the
-  # reservations inside one company may not add up to more than that company has.
-  # Enforced here rather than in a controller because several places write these
-  # rows — the admin dashboard, the console and a project's own settings — and a
-  # rule that lives in one of them is a rule the other two do not have.
+  # In the model rather than a controller because three places write these rows.
   #
-  # A COMPANY ROW IS NOT VALIDATED UPWARD. Nothing above it is a budget any more:
-  # the installation ceiling is a physical clamp on what the cluster can run, not
-  # capacity anyone bought, and a downgrade of what a customer pays for must not
-  # be blocked by how they happened to divide it among projects. Lowering a
-  # company below its own reservations is allowed, the drain honours the company
-  # number, and QueueHealthCheck reports the over-commitment.
+  # A company row is deliberately not validated upward: nothing above it is a
+  # budget, and a downgrade of what a customer pays for must not be blocked by
+  # how they happened to divide it among projects.
   def fits_within_company_limit
     return unless scope_type == "Project"
     return if max_sessions.blank?

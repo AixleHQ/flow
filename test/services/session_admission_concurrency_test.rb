@@ -13,11 +13,9 @@ class SessionAdmissionConcurrencyTest < ActiveSupport::TestCase
     sessions = []
     admission_ids = []
     pool = nil
-    # Two slots of SHARED pool, whatever else this database happens to hold: the
-    # free pool is the ceiling less every reservation, and this test opts out of
-    # transactional cleanup, so a reservation left by anything else would silently
-    # shrink what these six sessions are competing for.
-    with_admission
+    # Exactly two slots, whatever else this database happens to hold: the limit is
+    # this company's own, and no project inside it reserves any of it.
+    with_company_limit(company, 2)
     6.times do
       session = create(:terminal_session, user: user, project: project)
       sessions << session

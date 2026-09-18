@@ -75,10 +75,8 @@ class SessionAdmissionService
       transaction do |policy|
         next if !policy.enabled? || policy.paused?
 
-        # Two tiers bound a grant and SessionAdmissionBudget owns the arithmetic
-        # for both: the pool's own cap, and the company that owns the project.
-        # The pools are materialised first so the budget can resolve their
-        # companies in one query instead of one per pool.
+        # Materialised first so the budget resolves every pool's company in one
+        # query instead of one per pool.
         pools = pools_with_waiting_head.to_a
         budget = SessionAdmissionBudget.new(pools.map(&:key))
 
@@ -108,8 +106,6 @@ class SessionAdmissionService
             end
             admission.update!(admitted_at: Time.current, permit_token: SecureRandom.uuid, wait_reason: "dispatch_pending")
             granted << admission.id
-            # Charged as we go: two pools in one company drained in the same pass
-            # must not each be told the whole remainder is free.
             budget.spend!(pool.key)
           end
           # No break on an exhausted remainder: a reserved project further down the

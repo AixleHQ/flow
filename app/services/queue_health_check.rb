@@ -78,11 +78,9 @@ class QueueHealthCheck
       if stats[:oldest_admission_wait_seconds] > ADMISSION_WAIT_THRESHOLD.to_i
         problems << "a session has waited #{stats[:oldest_admission_wait_seconds]}s for a slot"
       end
-      # A company whose projects reserve more than the company itself has. The
-      # model allows this on purpose — a downgrade must not be blocked by how the
-      # customer divided their capacity — so the drain keeps the company number
-      # hard and the reservations are the promise being broken. A broken promise
-      # nobody is told about is the worst of the three possible outcomes.
+      # The model allows a company to be lowered below its own reservations, so
+      # the drain keeps the company hard and the reservations are the promise
+      # being broken. Nothing else tells anyone.
       stats[:overcommitted_companies].each do |row|
         problems << "company ##{row[:company_id]} has project reservations totalling #{row[:reserved]}, " \
                     "above its limit of #{row[:limit]} — the company limit is being honoured and the " \

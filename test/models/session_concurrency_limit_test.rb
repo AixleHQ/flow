@@ -121,10 +121,11 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
   end
 
   test "over-commitment is reported rather than refused" do
-    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 3)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 10)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 3)
     other = create(:project, owner: @user, company: @company)
     SessionConcurrencyLimit.set!(scope: other, max_sessions: 2)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 3)
 
     overcommitted = SessionConcurrencyLimit.overcommitted_companies
 
