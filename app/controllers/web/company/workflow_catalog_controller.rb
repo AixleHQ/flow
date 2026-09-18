@@ -6,11 +6,13 @@ class Web::Company::WorkflowCatalogController < Web::Company::ApplicationControl
                         .includes(:steps, :published_by)
                         .order(published_at: :desc)
 
-    projects = Project.for_user(current_user).order(:name)
+    project_options = Project.for_user(current_user).order(:name)
 
     render inertia: "Company/WorkflowCatalog/IndexPage", props: {
       workflows: -> { workflows.map { |w| catalog_workflow_props(w) } },
-      projects: -> { projects.map { |p| { id: p.id, name: p.name } } }
+      # Named distinctly from the shared sidebar `projects` prop so this page
+      # does not overwrite the favorites-first workspace switcher list.
+      project_options: -> { project_options.map { |p| { id: p.id, name: p.name } } }
     }
   end
 
