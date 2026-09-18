@@ -6,6 +6,10 @@ class Web::ApplicationController < ApplicationController
 
   before_action :negotiate_format
   before_action :redirect_super_admin_to_admin_panel
+  # AD-5: a company stays current only while this session satisfies its
+  # effective auth set. Runs before onboarding — entering the company at all is
+  # the more fundamental question.
+  before_action :enforce_company_auth_policy
   before_action :enforce_onboarding
 
   inertia_share do
@@ -57,6 +61,17 @@ class Web::ApplicationController < ApplicationController
   end
 
   private
+
+  # Redirects to step-up rather than signing the user out (AD-5). Super admins
+  # bypass every company policy surface (AD-19), which PolicyResolver already
+  # answers, but the guard short-circuits here too so no query runs for them.
+  def enforce_company_auth_policy
+    return unless signed_in?
+    return if current_user.super_admin?
+    return if company_auth_policy_satisfied?
+
+    redirect_to step_up_path
+  end
 
   def negotiate_format
     return if request.headers["X-Inertia"].present?

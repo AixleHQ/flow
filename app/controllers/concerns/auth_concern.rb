@@ -4,21 +4,79 @@ module AuthConcern
   extend ActiveSupport::Concern
 
   IMPERSONATION_KEY = "true_user_id"
+  AUTH_SESSION_KEY = :auth_session_token
 
-  def sign_in(user)
+  # Authentication now has a server-side record (AD-6). `session[:user_id]`
+  # stays the EFFECTIVE user — impersonation swaps it and nothing else — while
+  # the AuthSession belongs to whoever actually authenticated and carries the
+  # proofs the company-entry gate reads.
+  #
+  # The cookie session is rotated here, so a session fixed before a sign-in or a
+  # step-up cannot inherit the proof it produces.
+  def sign_in(user, provider:)
+    rotate_session!
+    started = Auth::SessionService.start(
+      user: user, provider: provider,
+      ip: request&.remote_ip, user_agent: request&.user_agent
+    )
+    session[AUTH_SESSION_KEY] = started.token
     session[:user_id] = user.id
+    @current_auth_session = started.auth_session
+    @current_user = nil
+    reset_membership_memoization
+    started.auth_session
+  end
+
+  # A second (or third) method proved inside a live session. Appends — proving
+  # one method never invalidates another — and rotates the token with it.
+  def prove_additional_method(provider)
+    return nil unless current_auth_session
+
+    Auth::SessionService.append_proof(current_auth_session, provider)
+    rotate_session_token!
+    current_auth_session
+  end
+
+  # Sign in, or — when the same person is already signed in — append this proof
+  # to the session they already hold (AD-6). Every method that a signed-in person
+  # can complete goes through here, so step-up works the same way whichever one
+  # they use.
+  def sign_in_or_prove(user, provider:)
+    if signed_in? && current_auth_session&.user_id == user.id
+      prove_additional_method(provider)
+    else
+      sign_in(user, provider: provider)
+    end
   end
 
   def sign_out
+    Auth::SessionService.revoke(current_auth_session)
     session[:user_id] = nil
+    session.delete(AUTH_SESSION_KEY)
+    # Ending the session ends the impersonation with it. Leaving the key behind
+    # let a later, unrelated sign-in on the same browser inherit the operator
+    # identity it names.
+    session.delete(IMPERSONATION_KEY)
     session.delete(:current_company_id)
     session.delete(:pending_invitation_token)
     @current_user = nil
+    @current_auth_session = nil
     reset_membership_memoization
   end
 
   def signed_in?
-    session[:user_id].present? && current_user.present?
+    session[:user_id].present? && current_auth_session.present? && current_user.present?
+  end
+
+  # The live server-side session this request is authenticated by. A cookie that
+  # names no live AuthSession is not signed in — which is what makes revocation,
+  # "sign out everywhere", and the AD-14 cutover re-authentication work.
+  def current_auth_session
+    return @current_auth_session if defined?(@current_auth_session) && @current_auth_session
+
+    @current_auth_session = AuthSession.find_live_by_token(session[AUTH_SESSION_KEY])
+    Auth::SessionService.touch(@current_auth_session)
+    @current_auth_session
   end
 
   def authenticate_user!
@@ -56,28 +114,39 @@ module AuthConcern
     current_membership.company
   end
 
+  # Whoever actually authenticated this request. Read off the AuthSession — the
+  # row impersonation never replaces — so a stale cookie key cannot nominate an
+  # operator who never signed in here.
   def true_user
-    @true_user ||= User.find_by(id: session[IMPERSONATION_KEY] || session[:user_id])
+    @true_user ||= current_auth_session&.user || User.find_by(id: session[:user_id])
   end
 
+  # Impersonation swaps the EFFECTIVE user only. It mints no AuthSession and no
+  # proof: the operator's own authentication still backs the request, which is
+  # what keeps "who actually signed in" answerable in the audit trail.
   def impersonate_user(user)
     session[IMPERSONATION_KEY] = true_user.id
+    session[:user_id] = user.id
+    session.delete(:current_company_id)
     @current_user = nil
     reset_membership_memoization
-    sign_in(user)
   end
 
   def stop_impersonating_user
-    true_user_id = session.delete(IMPERSONATION_KEY)
-    true_user = User.find(true_user_id)
+    session.delete(IMPERSONATION_KEY)
+    # Back to whoever this session actually authenticated as — never to an id
+    # read out of the cookie.
+    session[:user_id] = current_auth_session&.user_id
+    session.delete(:current_company_id)
     @current_user = nil
+    @true_user = nil
     reset_membership_memoization
-
-    sign_in(true_user)
   end
 
+  # Anchored to the live session: a leftover key with no AuthSession behind it
+  # is not an impersonation, it is debris.
   def impersonated?
-    session[IMPERSONATION_KEY].present?
+    session[IMPERSONATION_KEY].present? && current_auth_session.present?
   end
 
   # Invitation continuation: an invite token parked before login (see
@@ -105,7 +174,44 @@ module AuthConcern
     membership
   end
 
+  # AD-5: a company stays current only while this session satisfies its
+  # effective set. Callers redirect to step-up on false — never a sign-out, and
+  # never an unscoped page.
+  def company_auth_policy_satisfied?(company = current_company)
+    return true if company.nil?
+
+    @company_auth_policy_satisfied ||= {}
+    key = company.id
+    return @company_auth_policy_satisfied[key] if @company_auth_policy_satisfied.key?(key)
+
+    @company_auth_policy_satisfied[key] = Auth::PolicyResolver.satisfied?(
+      company: company, auth_session: current_auth_session, user: current_user
+    )
+  end
+
   private
+
+  # Carries only the company chosen by an invitation accepted moments earlier.
+  # The impersonation key is deliberately NOT carried: a rotation happens on a
+  # fresh authentication, and re-seeding it there would let a stale key from a
+  # previous browser session attach an operator identity to whoever signs in
+  # next. Impersonation does not rotate (it mints no session), so it never needs
+  # to survive one.
+  def rotate_session!
+    carried_company_id = session[:current_company_id]
+    reset_session
+    session[:current_company_id] = carried_company_id if carried_company_id.present?
+  end
+
+  def rotate_session_token!
+    return unless current_auth_session
+
+    token = "#{AuthSession::TOKEN_PREFIX}#{SecureRandom.urlsafe_base64(32)}"
+    current_auth_session.update!(token_digest: AuthSession.digest(token))
+    rotate_session!
+    session[AUTH_SESSION_KEY] = token
+    session[:user_id] = current_auth_session.user_id
+  end
 
   def resolve_current_membership
     return nil unless current_user

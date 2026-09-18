@@ -156,7 +156,7 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     unknown_domain = "unknowndomain#{SecureRandom.hex(4)}.xyz"
     unknown_email = "test@#{unknown_domain}"
 
-    # No company exists with this domain — GoogleOmniAuthService will raise NoWorkspaceError
+    # No company exists with this domain — Auth::IdentityResolver raises NoWorkspaceError
     assert_nil Company.find_by(email_domain: unknown_domain)
 
     auth_hash = OmniAuth::AuthHash.new(

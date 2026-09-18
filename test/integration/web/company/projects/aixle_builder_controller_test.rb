@@ -78,7 +78,17 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     # 20 -> 21 with the session admission queue: the resource serializes
     # `wait_reason` off `session_admission`, so the scope preloads it. Same
     # shape — one query for the page, not one per session.
-    assert_operator query_count, :<=, 21, "Expected bounded content query count, got #{query_count}"
+    # 21 -> 23 with server-side login sessions and the company-entry auth gate.
+    # Both additions are CONSTANT — one per request, not one per session listed,
+    # which is what this guard protects:
+    #   +1  AuthSession lookup by token digest. Authentication is a row now, not
+    #       a cookie claim, which is what makes revocation and "sign out
+    #       everywhere" possible at all. Memoized per request.
+    #   +1  the company-entry policy check (AD-5), deliberately one EXISTS query
+    #       joining this session's proofs to the company's enabled policies
+    #       rather than plucking both sides and intersecting in Ruby. Memoized
+    #       per (request, company).
+    assert_operator query_count, :<=, 23, "Expected bounded content query count, got #{query_count}"
   end
 
   # ── start ─────────────────────────────────────────
