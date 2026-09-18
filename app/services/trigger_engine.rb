@@ -293,14 +293,15 @@ class TriggerEngine
 
     # Resolve the board task a binding's run should be about, per subject_policy.
     def resolve_subject(binding:, event:, fallback_task:)
+      adapter = Webhooks::AdapterRegistry.for(event.event_type.to_s.split(".").first)
       case binding.subject_policy.to_s
-      when "existing_task" then youtrack_subject(binding, event) || event.board_task || fallback_task
-      when "create_task"   then create_subject_task(binding, event)
+      when "existing_task" then adapter&.find_subject(binding, event) || event.board_task || fallback_task
+      when "create_task"   then create_subject_task(binding, event, adapter)
       else nil # none → task-less, project-level run
       end
     end
 
-    def create_subject_task(binding, event)
+    def create_subject_task(binding, event, adapter)
       column = binding.subject_column
       return nil if column.nil?
 
@@ -308,7 +309,7 @@ class TriggerEngine
       BoardTask.transaction do
         task = column.board.board_tasks.create!(board_column: column,
           title: render_title(binding.subject_title_template, event), description: render_subject_body(event))
-        create_external_resource!(task, binding, event) if event.event_type.start_with?("youtrack.")
+        adapter&.record_subject!(task, binding, event)
         task
       end
     rescue ActiveRecord::RecordInvalid => e
@@ -337,25 +338,6 @@ class TriggerEngine
         key = Regexp.last_match(1)
         key == "date" ? (event.occurred_at || Time.current).to_date.to_s : event.data[key].to_s
       end.strip.presence || event.event_type
-    end
-
-    def create_external_resource!(task, binding, event)
-      integration = binding.integration
-      task.external_resources.create!(type: "youtrack_issue", external_instance: integration.youtrack_base_url,
-        external_id: event.data["issue_id"], data: { "readable_id" => event.data["issue_readable_id"],
-          "youtrack_project_id" => event.data["youtrack_project_id"], "workflow_id" => binding.workflow_id,
-          "binding_id" => binding.id, "created_via_integration_id" => integration.id }.compact)
-    end
-
-    def youtrack_subject(binding, event)
-      return unless event.event_type.start_with?("youtrack.") && binding.integration
-      links = ExternalResource.joins(board_task: :board)
-        .where(type: "youtrack_issue", external_instance: binding.integration.youtrack_base_url,
-          external_id: event.data["issue_id"], boards: { project_id: binding.project_id })
-        .merge(BoardTask.active).order(:created_at)
-      same_workflow = links.select { |link| link.data["workflow_id"].to_s == binding.workflow_id.to_s }
-      return same_workflow.first.board_task if same_workflow.any?
-      links.one? ? links.first.board_task : nil
     end
 
     # Internal events carry no external dedup_key → key on the event id so a

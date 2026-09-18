@@ -65,6 +65,25 @@ module Youtrack
       { "youtrack" => data.compact }
     end
 
+    def record_subject!(task, binding, event)
+      integration = binding.integration
+      task.external_resources.create!(type: "youtrack_issue", external_instance: integration.youtrack_base_url,
+        external_id: event.data["issue_id"], data: { "readable_id" => event.data["issue_readable_id"],
+          "youtrack_project_id" => event.data["youtrack_project_id"], "workflow_id" => binding.workflow_id,
+          "binding_id" => binding.id, "created_via_integration_id" => integration.id }.compact)
+    end
+
+    def find_subject(binding, event)
+      return unless binding.integration
+      links = ExternalResource.joins(board_task: :board)
+        .where(type: "youtrack_issue", external_instance: binding.integration.youtrack_base_url,
+          external_id: event.data["issue_id"], boards: { project_id: binding.project_id })
+        .merge(BoardTask.active).order(:created_at)
+      same_workflow = links.select { |link| link.data["workflow_id"].to_s == binding.workflow_id.to_s }
+      return same_workflow.first.board_task if same_workflow.any?
+      links.one? ? links.first.board_task : nil
+    end
+
     private
 
     def bounded(value) = value.to_s.truncate(TEXT_LIMIT, omission: "… [truncated]")

@@ -13,5 +13,7 @@ module Webhooks
     def normalize(_received) = raise NotImplementedError
     def run_context(_event, _subject) = raise NotImplementedError
     def requires_integration? = true
+    def find_subject(_binding, _event) = nil
+    def record_subject!(_task, _binding, _event); end
   end
 end

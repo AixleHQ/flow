@@ -10,7 +10,9 @@ class Webhooks::IngressController < ActionController::API
   YOUTRACK_MAX_BODY = 512.kilobytes
 
   def receive
-    endpoint = WebhookEndpoint.active.find_by(slug: params[:slug])
+    # Access route parameters directly: `params` parses the JSON body before we
+    # can enforce YouTrack's byte limit or reject malformed JSON.
+    endpoint = WebhookEndpoint.active.find_by(slug: request.path_parameters[:slug])
     return head :not_found unless endpoint
 
     adapter = Webhooks::AdapterRegistry.for(endpoint.provider)

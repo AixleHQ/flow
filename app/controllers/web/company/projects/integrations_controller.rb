@@ -67,6 +67,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # project, so it is not editable from one project's page.
   def update
     integration = Integration.visible_for_project(current_project).find(params[:id])
+    raise ActiveRecord::RecordNotFound if integration.company_scope? && !integration.youtrack?
     if integration.company_scope? && !current_project_membership&.admin?
       return head :forbidden
     end
