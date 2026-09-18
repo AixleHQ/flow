@@ -59,8 +59,16 @@ module Agents
 
     test "uses print mode only for automatic sessions" do
       assert_equal "agy --dangerously-skip-permissions", @adapter.session_command(mode: "interactive")
-      assert_equal "agy --model gemini-3.5-pro --dangerously-skip-permissions --print --output-format stream-json",
+      assert_equal "agy --model gemini-3.5-pro --dangerously-skip-permissions --output-format stream-json --print",
                    @adapter.session_command(mode: "non_interactive", model: "gemini-3.5-pro")
+    end
+
+    # Confirmed against the real 1.1.27 binary: --print immediately followed by
+    # another flag swallows it as literal prompt text instead of parsing it, so
+    # --output-format must come first.
+    test "orders --output-format before --print so agy does not swallow it as the prompt" do
+      command = @adapter.session_command(mode: "non_interactive", model: "gemini-3.5-pro")
+      assert_operator command.index("--output-format"), :<, command.index("--print")
     end
 
     test "fetches agent models from the authenticated Antigravity catalogue in API order" do
@@ -123,6 +131,28 @@ module Agents
       refute_includes model_ids, "gemini-3.1-pro-high"
     end
 
+    test "every observed live catalogue model has fallback metadata and configured pricing" do
+      observed_model_ids = %w[
+        gemini-3.8-flash-high gemini-3.8-flash-medium gemini-3.8-flash-low
+        gemini-3.7-flash-high gemini-3.7-flash-medium gemini-3.7-flash-low
+        gemini-3.6-flash-high gemini-3.6-flash-medium gemini-3.6-flash-low
+        gemini-pro-agent gemini-3.1-pro-low claude-sonnet-4-6 claude-opus-4-6-thinking
+        gpt-oss-120b-medium
+      ]
+
+      assert_empty observed_model_ids - AntigravityCliAdapter::FALLBACK_MODELS.pluck(:model_id)
+      assert_empty observed_model_ids - AntigravityCliAdapter::MODEL_PRICING.keys
+    end
+
+    test "warns when a catalogue model has no configured pricing" do
+      Rails.logger.expects(:warn)
+                  .with('[AntigravityCliAdapter] no configured pricing for model "new-unpriced-model"')
+
+      cost = @adapter.send(:usage_cost_cents, "new-unpriced-model", 100, 20, 0)
+
+      assert_in_delta 0.0, cost
+    end
+
     test "falls back when the Antigravity catalogue request fails" do
       stub_request(:post, Antigravity::Api::MODELS_URL).to_return(status: 401)
 
@@ -133,7 +163,7 @@ module Agents
     end
 
     test "omits the model flag when none is selected so Antigravity uses its default" do
-      assert_equal "agy --dangerously-skip-permissions --print --output-format stream-json",
+      assert_equal "agy --dangerously-skip-permissions --output-format stream-json --print",
                    @adapter.session_command(mode: "non_interactive", model: nil)
     end
 
@@ -161,6 +191,98 @@ module Agents
     # observed.
     test "session_log_paths collects the proxy log" do
       assert_includes @adapter.session_log_paths, "/var/log/mitm/http.log"
+    end
+
+    test "collect_usage parses the cumulative stream-json result and persists priced usage" do
+      @session.update!(agent_type: "antigravity_cli", requested_model: "claude-sonnet-4-6")
+      stream = [
+        { event: "init", conversation_id: "conversation-1", init: { model: "claude-sonnet-4-6" } },
+        { event: "step_update", step_update: { step_type: "agent_response", state: "DONE",
+                                               usage: { input_tokens: 800_000, output_tokens: 50_000 } } },
+        { event: "result", result: { status: "SUCCESS", usage: {
+          input_tokens: 1_000_000, output_tokens: 100_000, thinking_tokens: 25_000,
+          cache_read_tokens: 200_000, total_tokens: 1_100_000
+        } } }
+      ].map(&:to_json).join("\n")
+
+      @adapter.collect_usage(@session, { "logs/terminal_output.log" => stream })
+
+      stat = @session.reload.usage_statistic
+      assert_equal 1_000_000, stat.input_tokens
+      assert_equal 100_000, stat.output_tokens
+      assert_equal 200_000, stat.cache_read_tokens
+      assert_equal 0, stat.cache_write_tokens
+      assert_equal 396, stat.cost_cents
+      assert_equal BigDecimal("396.0"), stat.total_cents_precise
+      assert_equal [ "claude-sonnet-4-6" ], stat.models
+      assert_equal "antigravity_stream_json", stat.source
+      assert_equal 25_000, stat.events_data.first.dig("tokenUsage", "reasoningTokens")
+    end
+
+    test "collect_usage tolerates terminal control sequences and ignores step usage" do
+      @session.update!(agent_type: "antigravity_cli", requested_model: "gemini-3.8-flash-medium")
+      output = "\e[32mprogress\e[0m\r\n" \
+        "{\"event\":\"step_update\",\"step_update\":{\"usage\":{\"input_tokens\":999}}}\r\n" \
+        "\e[0m{\"event\":\"result\",\"result\":{\"usage\":{\"input_tokens\":1000," \
+        "\"output_tokens\":200,\"cache_read_tokens\":100}}}\e[0m\r\n"
+
+      @adapter.collect_usage(@session, { "logs/terminal_output.log" => output })
+
+      stat = @session.reload.usage_statistic
+      assert_equal 1000, stat.input_tokens
+      assert_equal 200, stat.output_tokens
+      assert_equal 100, stat.cache_read_tokens
+      assert_equal 1, stat.events_count
+      assert_operator stat.total_cents_precise, :>, 0
+    end
+
+    test "collect_usage leaves no statistic when the result has no billable usage" do
+      stream = { event: "result", result: { status: "ERROR", usage: {
+        input_tokens: 0, output_tokens: 0, thinking_tokens: 0, cache_read_tokens: 0, total_tokens: 0
+      } } }.to_json
+
+      @adapter.collect_usage(@session, { "logs/terminal_output.log" => stream })
+
+      assert_nil @session.reload.usage_statistic
+    end
+
+    test "collect_usage is idempotent across a cleanup retry" do
+      @session.update!(agent_type: "antigravity_cli", requested_model: "claude-sonnet-4-6")
+      stream = { event: "result", result: { status: "SUCCESS", usage: {
+        input_tokens: 1_000_000, output_tokens: 100_000, cache_read_tokens: 200_000
+      } } }.to_json
+      artifacts = { "logs/terminal_output.log" => stream }
+
+      # Cleanup re-fetches the session on every retry attempt (TerminalSession.find in
+      # AgentSessionStrategy#before_cleanup), so simulate that here rather than reusing
+      # the same in-memory object, whose usage_statistic association would otherwise
+      # stay cached at its pre-first-call value and never see the guard trip.
+      @adapter.collect_usage(@session, artifacts)
+      @adapter.collect_usage(TerminalSession.find(@session.id), artifacts)
+
+      stat = @session.reload.usage_statistic
+      assert_equal 1_000_000, stat.input_tokens
+      assert_equal 100_000, stat.output_tokens
+      assert_equal 200_000, stat.cache_read_tokens
+      assert_equal 396, stat.cost_cents
+    end
+
+    test "collect_usage falls back to the persisted terminal output log when no artifact is passed" do
+      @session.update!(agent_type: "antigravity_cli", requested_model: "claude-sonnet-4-6")
+      stream = { event: "result", result: { status: "SUCCESS", usage: {
+        input_tokens: 1_000_000, output_tokens: 100_000, cache_read_tokens: 200_000
+      } } }.to_json
+      io = StringIO.new(stream)
+      io.define_singleton_method(:original_filename) { "terminal_output.log" }
+      SessionLog.create!(terminal_session: @session, name: "terminal_output.log", file: io,
+                          file_size: stream.bytesize, content_type: "text/plain; charset=utf-8")
+
+      @adapter.collect_usage(@session, {})
+
+      stat = @session.reload.usage_statistic
+      assert_equal 1_000_000, stat.input_tokens
+      assert_equal 100_000, stat.output_tokens
+      assert_equal 200_000, stat.cache_read_tokens
     end
 
     test "credential_preflight accepts a valid OAuth token" do

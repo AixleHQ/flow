@@ -47,11 +47,11 @@ credentials aren't configured for the user who triggered the run.
 ## Cost tracking
 
 The platform records `cost_cents` and token counts per session by
-parsing usage events out of the runtime's logs. This works only on
-runtimes whose adapter overrides `#collect_usage` to parse them —
-`antigravity_cli` currently leaves it as the base no-op, so it never
-reports cost or token counts. If `cost_cents` is `null` on a finished
-session, the runtime didn't emit usage events; check
+parsing usage events out of the runtime's logs. Antigravity automatic
+sessions report cumulative usage in their terminal `result` event; the
+adapter records those counts and calculates an API-equivalent cost from
+the selected model's configured pricing. If `cost_cents` is `null` on a
+finished session, the runtime didn't emit usage events; check
 **Admin → Session Logs**.
 
 ## MCP support
