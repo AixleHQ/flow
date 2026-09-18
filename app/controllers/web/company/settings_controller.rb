@@ -12,6 +12,7 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
     errors = {}
 
     ActiveRecord::Base.transaction do
+      current_company.logo = nil if clear_logo?
       errors.merge!(current_company.errors.to_hash) unless current_company.update(company_params)
       errors.merge!(apply_capacity) if params.key?(:capacity)
       raise ActiveRecord::Rollback if errors.any?
@@ -34,6 +35,12 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
     return {} unless settings_policy.update?
 
     params.fetch(:company, {}).permit(:display_name, :logo, :primary_color, :secondary_color, :auto_accept_users)
+  end
+
+  # Shrine's remove_attachment plugin is not loaded, so clearing is explicit. A
+  # logo that can be set and never unset is a trap: the wrong file is permanent.
+  def clear_logo?
+    settings_policy.update? && params.dig(:company, :remove_logo).to_s == "true"
   end
 
   def capacity_limit_record

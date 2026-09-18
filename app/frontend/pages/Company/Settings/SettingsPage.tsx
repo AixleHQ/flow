@@ -6,7 +6,9 @@ import {
   Card,
   ColorInput,
   Divider,
+  FileInput,
   Group,
+  Image,
   NumberInput,
   Stack,
   Switch,
@@ -15,7 +17,7 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
-import { IconAdjustments, IconLock, IconPalette, IconUsers } from '@tabler/icons-react';
+import { IconAdjustments, IconLock, IconPalette, IconUpload, IconUsers } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useState } from 'react';
 import { z } from 'zod';
@@ -27,6 +29,8 @@ const schema = z.object({
   primaryColor: z.string().max(32).optional(),
   secondaryColor: z.string().max(32).optional(),
   autoAcceptUsers: z.boolean(),
+  logo: z.instanceof(File).nullable(),
+  removeLogo: z.boolean(),
   // Empty means no limit at all, which is also unbilled. The arithmetic behind a
   // number is the server's to judge.
   capacity: z
@@ -79,6 +83,8 @@ const SettingsPage = () => {
       primaryColor: company.primaryColor,
       secondaryColor: company.secondaryColor,
       autoAcceptUsers: company.autoAcceptUsers,
+      logo: null as File | null,
+      removeLogo: false,
       capacity: capacity.maxSessions != null ? String(capacity.maxSessions) : '',
     },
     validate: zodResolver(schema),
@@ -88,32 +94,50 @@ const SettingsPage = () => {
 
   const handleSubmit = (values: typeof form.values) => {
     setIsSubmitting(true);
-    router.patch(
-      '/company/settings',
-      {
-        company: {
-          displayName: values.displayName.trim(),
-          primaryColor: values.primaryColor,
-          secondaryColor: values.secondaryColor,
-          autoAcceptUsers: values.autoAcceptUsers,
-        },
-        // Sent only when this person may set it: the key's presence is what tells
-        // the server a limit was submitted at all, and an empty one clears it.
-        ...(capacity.canManage ? { capacity: values.capacity.trim() } : {}),
-      } as Record<string, FormDataConvertible>,
-      {
-        preserveScroll: true,
-        onSuccess: () => {
-          setIsSubmitting(false);
-          form.resetDirty();
-          notifications.show({ message: 'Company settings saved', color: 'green' });
-        },
-        onError: () => {
-          setIsSubmitting(false);
-          notifications.show({ message: 'Failed to save settings', color: 'red' });
-        },
+
+    const callbacks = {
+      preserveScroll: true,
+      onSuccess: () => {
+        setIsSubmitting(false);
+        form.setFieldValue('logo', null);
+        form.setFieldValue('removeLogo', false);
+        form.resetDirty();
+        notifications.show({ message: 'Company settings saved', color: 'green' });
       },
-    );
+      onError: () => {
+        setIsSubmitting(false);
+        notifications.show({ message: 'Failed to save settings', color: 'red' });
+      },
+    };
+
+    const payload: Record<string, FormDataConvertible> = {
+      company: {
+        displayName: values.displayName.trim(),
+        primaryColor: values.primaryColor,
+        secondaryColor: values.secondaryColor,
+        autoAcceptUsers: values.autoAcceptUsers,
+        removeLogo: values.removeLogo,
+      },
+      // Sent only when this person may set it: the key's presence is what tells
+      // the server a limit was submitted at all, and an empty one clears it.
+      ...(capacity.canManage ? { capacity: values.capacity.trim() } : {}),
+    } as Record<string, FormDataConvertible>;
+
+    // A File cannot travel as JSON, so a chosen logo turns the whole save into a
+    // multipart POST that Rails reads as the PATCH it is.
+    if (values.logo) {
+      const fd = new FormData();
+      fd.append('_method', 'PATCH');
+      fd.append('company[logo]', values.logo);
+      Object.entries(payload.company as Record<string, FormDataConvertible>).forEach(([key, value]) => {
+        fd.append(`company[${key}]`, String(value));
+      });
+      if (capacity.canManage) fd.append('capacity', values.capacity.trim());
+      router.post('/company/settings', fd, { ...callbacks, forceFormData: true });
+      return;
+    }
+
+    router.patch('/company/settings', payload, callbacks);
   };
 
   return (
@@ -146,6 +170,49 @@ const SettingsPage = () => {
                   <ColorInput label="Primary color" disabled={!canManage} {...form.getInputProps('primaryColor')} />
                   <ColorInput label="Secondary color" disabled={!canManage} {...form.getInputProps('secondaryColor')} />
                 </Group>
+                <Box>
+                  <Text fz="sm" fw={500} mb={6}>
+                    Logo
+                  </Text>
+                  <Group align="center" gap="md">
+                    {company.logoUrl && !form.values.removeLogo ? (
+                      <Image src={company.logoUrl} alt={company.name} h={44} w="auto" fit="contain" />
+                    ) : (
+                      <Text fz="sm" c="dimmed">
+                        None
+                      </Text>
+                    )}
+                    {company.logoUrl && canManage && (
+                      <Button
+                        variant="subtle"
+                        size="compact-sm"
+                        color="red"
+                        onClick={() => {
+                          form.setFieldValue('removeLogo', !form.values.removeLogo);
+                          form.setFieldValue('logo', null);
+                        }}
+                      >
+                        {form.values.removeLogo ? 'Keep logo' : 'Remove logo'}
+                      </Button>
+                    )}
+                  </Group>
+                  <FileInput
+                    mt="sm"
+                    label="Replace logo"
+                    description="PNG, JPEG, GIF, WebP or SVG, up to 5 MB."
+                    placeholder="Choose a file"
+                    accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+                    clearable
+                    disabled={!canManage}
+                    leftSection={<IconUpload size={16} />}
+                    error={pageErrors?.logo}
+                    value={form.values.logo}
+                    onChange={(file) => {
+                      form.setFieldValue('logo', file);
+                      if (file) form.setFieldValue('removeLogo', false);
+                    }}
+                  />
+                </Box>
               </Stack>
             </Card>
 

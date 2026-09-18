@@ -43,6 +43,52 @@ class Web::Company::SettingsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "Acme Robotics", @company.reload.display_name
   end
 
+  # == logo ==
+
+  def png_upload
+    Rack::Test::UploadedFile.new(
+      Rails.root.join("test/fixtures/files/logo.png"), "image/png"
+    )
+  end
+
+  test "an admin uploads a logo" do
+    patch company_settings_path, params: { company: { display_name: "Acme", logo: png_upload } }
+
+    assert_response :redirect
+    assert @company.reload.logo.present?, "the attachment must survive the save"
+  end
+
+  # Shrine's remove_attachment plugin is not loaded, so clearing is our own flag.
+  test "an admin removes the logo" do
+    patch company_settings_path, params: { company: { display_name: "Acme", logo: png_upload } }
+    assert @company.reload.logo.present?
+
+    patch company_settings_path, params: { company: { display_name: "Acme", remove_logo: "true" } }
+
+    assert_nil @company.reload.logo
+  end
+
+  test "a save that does not mention the logo leaves it alone" do
+    patch company_settings_path, params: { company: { display_name: "Acme", logo: png_upload } }
+
+    patch company_settings_path, params: { company: { display_name: "Renamed" } }
+
+    assert @company.reload.logo.present?
+  end
+
+  # MIME comes from the bytes, not the client's Content-Type, so a mislabelled
+  # upload is refused rather than stored.
+  test "a file that is not an image is refused" do
+    file = Rack::Test::UploadedFile.new(
+      Rails.root.join("test/fixtures/files/not-an-image.txt"), "image/png"
+    )
+
+    patch company_settings_path, params: { company: { display_name: "Acme", logo: file } }
+
+    assert_nil @company.reload.logo
+    assert_nil @company.display_name, "a refused logo must roll the rest of the save back"
+  end
+
   # == session capacity ==
 
   test "a self-hosted admin sets the company's session limit" do
