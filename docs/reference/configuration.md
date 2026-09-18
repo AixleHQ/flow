@@ -193,6 +193,12 @@ stored on the integration row, not environment variables.
 | `GITHUB_WEBHOOK_SECRET`        | no       | unset                         | HMAC secret verifying `/webhooks/github`.                  |
 | `GITLAB_ENDPOINT`              | no       | `https://gitlab.com/api/v4`   | GitLab API base URL.                                       |
 
+None of the `GITHUB_APP_*` variables is needed to connect GitHub: a project can
+connect with a personal access token instead (stored encrypted per integration,
+not an environment variable), which is the path a local deployment uses. The App
+variables buy the production path — installation tokens scoped per repository,
+and webhooks. Without them the connect dialog offers only the token path.
+
 GitLab access uses a per-integration personal access token (stored encrypted,
 not an environment variable). The GitLab webhook endpoint is verified with a
 per-repository secret, also not an environment variable.

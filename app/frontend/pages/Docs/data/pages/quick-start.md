@@ -36,7 +36,15 @@ fill in the matching provider section:
 | -------------------------------- | ------------------------------------------------------------- |
 | Google sign-in                   | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`                    |
 | GitHub App integration           | `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` |
+| GitHub, without an App           | nothing — paste a personal access token in-app (**Connect → GitHub → I'm a developer and just want to try it**) |
 | GitLab integration               | a personal access token (added in-app) — set `GITLAB_ENDPOINT` only for self-managed |
+
+The GitHub App is the production path: it needs all four variables, plus
+someone who can install the app and a host github.com can reach — which a
+local deployment usually is not. To attach a real repository and clone it
+in an agent session locally, connect GitHub with a personal access token
+instead: nothing to configure, no install, and no webhooks (CI gates fall
+back to polling).
 
 See the Integrations page for the provider setup walkthroughs.
 

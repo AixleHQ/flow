@@ -66,6 +66,89 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_equal "GitHub App is not configured", flash[:alert]
   end
 
+  test "index tells the page whether the GitHub App is configured" do
+    Settings.github.stubs(:app_slug).returns("aixle-app")
+    Settings.github.stubs(:app_id).returns("999")
+
+    get company_project_integrations_path(@project)
+
+    assert_inertia_props { |props| props[:github][:appConfigured] == true }
+  end
+
+  test "index reports the GitHub App as unconfigured when the deployment has none" do
+    Settings.github.stubs(:app_slug).returns(nil)
+
+    get company_project_integrations_path(@project)
+
+    assert_inertia_props { |props| props[:github][:appConfigured] == false }
+  end
+
+  test "create github in PAT mode activates without an App or an installation" do
+    Settings.github.stubs(:app_id).returns(nil)
+    Settings.github.stubs(:app_slug).returns(nil)
+    stub_request(:get, "https://api.github.com/user").to_return(
+      status: 200,
+      headers: { "Content-Type" => "application/json", "X-OAuth-Scopes" => "repo" },
+      body: { id: 4_242, login: "octodev", type: "User" }.to_json
+    )
+
+    assert_difference("Integration.count", 1) do
+      post company_project_integrations_path(@project), params: {
+        provider: "github",
+        authMode: "pat",
+        personalAccessToken: "ghp_developer_token"
+      }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    integration = Integration.order(:created_at).last
+    assert integration.active?
+    assert integration.github_pat?
+    assert_equal @project.id, integration.project_id
+    assert_equal "octodev", integration.name
+  end
+
+  test "create github in PAT mode reports a rejected token as a field error" do
+    stub_request(:get, "https://api.github.com/user").to_return(
+      status: 401,
+      headers: { "Content-Type" => "application/json" },
+      body: { message: "Bad credentials" }.to_json
+    )
+
+    assert_no_difference("Integration.count") do
+      post company_project_integrations_path(@project), params: {
+        provider: "github",
+        authMode: "pat",
+        personalAccessToken: "ghp_revoked"
+      }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_match(/invalid, revoked or expired/, Array(session["inertia_errors"][:personal_access_token]).to_sentence)
+  end
+
+  # The declared mode decides which credential is read. A token posted
+  # alongside an installation id must not be able to walk the App path, or a
+  # mode switch in the dialog could submit the other path's credential.
+  test "create github in PAT mode ignores an installation id posted with it" do
+    stub_request(:get, "https://api.github.com/user").to_return(
+      status: 200,
+      headers: { "Content-Type" => "application/json", "X-OAuth-Scopes" => "repo" },
+      body: { id: 4_242, login: "octodev", type: "User" }.to_json
+    )
+
+    post company_project_integrations_path(@project), params: {
+      provider: "github",
+      authMode: "pat",
+      installationId: "12345",
+      personalAccessToken: "ghp_developer_token"
+    }
+
+    integration = Integration.order(:created_at).last
+    assert integration.github_pat?
+    assert_nil integration.installation_id
+  end
+
   test "destroy removes integration" do
     integration = create(:integration, company: @company, connected_by: @user, project: @project)
 

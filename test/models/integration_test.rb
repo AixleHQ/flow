@@ -136,6 +136,87 @@ class IntegrationTest < ActiveSupport::TestCase
     assert_equal @user, built.connected_by
   end
 
+  test "find_or_build_github_for_pat returns the project's existing PAT row" do
+    project = create(:project, company: @company, owner: @user)
+    existing = create(:integration, :github_pat, company: @company, connected_by: @user, project: project)
+
+    found = Integration.find_or_build_github_for_pat(
+      company: @company, connected_by: @user, project: project
+    )
+
+    assert_equal existing.id, found.id
+  end
+
+  # An App installation is a different kind of connection: re-pasting a token
+  # must not overwrite the credentials of the project's App row.
+  test "find_or_build_github_for_pat ignores an App installation in the same project" do
+    project = create(:project, company: @company, owner: @user)
+    create(:integration, :github, company: @company, connected_by: @user, project: project)
+
+    built = Integration.find_or_build_github_for_pat(
+      company: @company, connected_by: @user, project: project
+    )
+
+    assert built.new_record?
+    assert_equal :github, built.provider.to_sym
+  end
+
+  test "find_or_build_github_for_pat does not reach into another project" do
+    project = create(:project, company: @company, owner: @user)
+    other = create(:project, company: @company, owner: @user)
+    create(:integration, :github_pat, company: @company, connected_by: @user, project: other)
+
+    built = Integration.find_or_build_github_for_pat(
+      company: @company, connected_by: @user, project: project
+    )
+
+    assert built.new_record?
+  end
+
+  # ====== GitHub auth mode ======
+
+  test "github_auth_mode defaults to app for connections made before PAT mode existed" do
+    integration = create(:integration, :github, company: @company, connected_by: @user)
+
+    assert_equal "app", integration.github_auth_mode
+    assert integration.github_app?
+    refute_predicate integration, :github_pat?
+  end
+
+  test "github_auth_mode reads pat from settings" do
+    integration = create(:integration, :github_pat, company: @company, connected_by: @user)
+
+    assert_equal "pat", integration.github_auth_mode
+    assert integration.github_pat?
+    refute_predicate integration, :github_app?
+    assert_equal "octodev", integration.github_account_login
+  end
+
+  # Anything but the one recognised value reads as an App installation rather
+  # than as a third mode: a settings blob is editable, and an unknown value
+  # must not turn into "skip the App checks".
+  test "github_auth_mode falls back to app for an unrecognised value" do
+    integration = create(:integration, :github, company: @company, connected_by: @user,
+                         settings: { "auth_mode" => "something-else" })
+
+    assert_equal "app", integration.github_auth_mode
+  end
+
+  test "github auth mode is nil for other providers" do
+    integration = create(:integration, :gitlab, company: @company, connected_by: @user)
+
+    assert_nil integration.github_auth_mode
+    refute_predicate integration, :github_app?
+    refute_predicate integration, :github_pat?
+  end
+
+  test "github_personal_access_token reads the encrypted credential" do
+    integration = create(:integration, :github, company: @company, connected_by: @user)
+    integration.credentials_data = { "personal_access_token" => "ghp_x" }
+
+    assert_equal "ghp_x", integration.github_personal_access_token
+  end
+
   # ====== Enumerize ======
 
   test "find_or_build_gitlab_for_token builds new integration" do

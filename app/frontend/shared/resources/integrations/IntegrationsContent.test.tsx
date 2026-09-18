@@ -233,15 +233,18 @@ describe('IntegrationsContent', () => {
       });
     });
 
-    // Connecting GitHub navigates to the SERVER endpoint, which mints a signed state
-    // (Oauth::State) and redirects to GitHub — the state is no longer built client-side (§7).
-    it('connecting GitHub from the empty state navigates to the server install endpoint', async () => {
+    // Connecting GitHub opens the mode dialog first — GitHub App or a personal
+    // access token. The App path then navigates to the SERVER endpoint, which
+    // mints a signed state (Oauth::State) and redirects to GitHub; the state is
+    // no longer built client-side (§7).
+    it('connecting GitHub from the empty state opens the dialog and installs the app', async () => {
       renderPage(
         <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,
         { props: settingsProps },
       );
 
       await userEvent.click(screen.getByRole('button', { name: 'GitHub' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Continue to GitHub' }));
 
       expect(window.location.href).toBe('/company/integrations/github_app_install');
     });
@@ -253,11 +256,12 @@ describe('IntegrationsContent', () => {
       );
 
       await userEvent.click(screen.getByRole('button', { name: 'GitHub' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Continue to GitHub' }));
 
       expect(window.location.href).toBe('/projects/42/integrations/github_app_install');
     });
 
-    it('opens the server install endpoint from the Connect menu when integrations already exist', async () => {
+    it('opens the dialog from the Connect menu when integrations already exist', async () => {
       renderPage(
         <IntegrationsContent
           title="Company Integrations"
@@ -269,9 +273,38 @@ describe('IntegrationsContent', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
       await userEvent.click(await screen.findByRole('menuitem', { name: 'GitHub' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Continue to GitHub' }));
 
       expect(window.location.href).toBe('/company/integrations/github_app_install');
     });
+  });
+
+  // A token connection acts as a person and receives no webhooks, so the row
+  // has to say so — the two facts someone debugging a stalled gate needs.
+  it('marks a GitHub connection that runs on a personal access token', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Project Integrations"
+        basePath="/projects/42/integrations"
+        integrations={[makeIntegration({ id: 4, name: 'octodev', githubAuthMode: 'pat', githubTokenScopes: ['repo'] })]}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.getByText('token · as Jane Doe · repo')).toBeInTheDocument();
+  });
+
+  it('does not mark an App-backed GitHub connection as a token one', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Project Integrations"
+        basePath="/projects/42/integrations"
+        integrations={[makeIntegration({ id: 5, name: 'acme', githubAuthMode: 'app' })]}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.queryByText(/^token · /)).not.toBeInTheDocument();
   });
 
   it('renders the status badge text and color for a non-active integration', () => {

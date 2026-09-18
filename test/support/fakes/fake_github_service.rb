@@ -24,6 +24,13 @@ module FakeGithub
       target_type: "Organization",
       permissions: { contents: "read", pull_requests: "write" }
     }.freeze
+    # PAT mode's counterpart: what #verify_token answers.
+    DEFAULT_TOKEN_IDENTITY = {
+      id: 4_242,
+      account_login: "octodev",
+      account_type: "User",
+      scopes: %w[repo]
+    }.freeze
 
     # Every call is appended here as { method:, ... } so tests can read what
     # happened. See #called?, #calls_to, #last_call.
@@ -33,22 +40,32 @@ module FakeGithub
     # @param token [String] what #generate_installation_token returns
     # @param installation [Hash] what #verify_installation returns
     # @param token_error [Exception, nil] raised by #generate_installation_token when set
-    # @param verify_error [Exception, nil] raised by #verify_installation when set
-    #   (use the real Github::TokenService::AuthenticationError to exercise
-    #   caller rescue branches)
+    # @param verify_error [Exception, nil] raised by #verify_installation and
+    #   #verify_token when set (use the real
+    #   Github::TokenService::AuthenticationError to exercise caller rescue
+    #   branches)
+    # @param identity [Hash] what #verify_token returns
+    # @param pat_mode [Boolean] what #pat_mode? answers
     # @param unreachable [Array<String>] repo NAMES the installation cannot reach.
     #   Requesting any of them fails the whole call, which is what GitHub does:
     #   a `repositories:` list containing one repository outside the installation
     #   is rejected wholesale with a 422, not trimmed.
     def initialize(integration = nil, token: DEFAULT_TOKEN, installation: DEFAULT_INSTALLATION,
-                   token_error: nil, verify_error: nil, unreachable: [])
+                   token_error: nil, verify_error: nil, unreachable: [],
+                   identity: DEFAULT_TOKEN_IDENTITY, pat_mode: false)
       @integration = integration
       @token = token
       @installation = installation.dup
       @token_error = token_error
       @verify_error = verify_error
       @unreachable = unreachable.dup
+      @identity = identity.dup
+      @pat_mode = pat_mode
       @calls = []
+    end
+
+    def pat_mode?
+      @pat_mode
     end
 
     def generate_installation_token(repositories: [])
@@ -69,6 +86,13 @@ module FakeGithub
       raise @verify_error if @verify_error
 
       @installation.dup
+    end
+
+    def verify_token
+      @calls << { method: :verify_token }
+      raise @verify_error if @verify_error
+
+      @identity.dup
     end
 
     # ---- call recording readers -------------------------------------------
