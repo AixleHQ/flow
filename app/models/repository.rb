@@ -50,7 +50,7 @@ class Repository < ApplicationRecord
   validates :scope_type, presence: true, inclusion: { in: %w[Project] }
   validate :integration_hosts_code, if: -> { integration.present? }
   validate :public_clone_url_is_anonymous, if: -> { public_source? && clone_url.present? && full_name.present? }
-  validate :owner_matches_installation_account, if: -> { integration.present? && integration.github? }
+  validate :owner_matches_installation_account, if: -> { integration.present? && integration.github_app? }
   validate :azure_identity_is_complete, if: :azure_devops?
 
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
@@ -82,7 +82,7 @@ class Repository < ApplicationRecord
 
   # Meaningless for an Azure row — it would read back "azure_devops:<org>" —
   # which is why the only caller (owner_matches_installation_account) is gated on
-  # `integration.github?`. Kept unchanged so GitHub and GitLab behaviour is
+  # `integration.github_app?`. Kept unchanged so GitHub and GitLab behaviour is
   # byte-identical.
   def owner_name
     full_name&.split("/")&.first
@@ -207,6 +207,14 @@ class Repository < ApplicationRecord
   # takes names, not full names). Without this, attaching "other-org/app" to an
   # installation that owns "acme/app" mints a token for acme/app and then clones
   # a different repository with it.
+  # App mode only. An installation token is scoped by repo NAME within the
+  # account the App was installed on, so a repo owned by anyone else is
+  # unreachable and the row would be dead on arrival.
+  #
+  # A personal access token is not scoped that way: it reaches every repository
+  # its owner can see, across every organization they belong to. Checking the
+  # owner against the token holder's own login would refuse exactly the
+  # organization repositories the token was pasted to reach.
   def owner_matches_installation_account
     account = integration.github_account_login
     return if account.blank? || owner_name.blank?

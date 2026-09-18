@@ -43,6 +43,69 @@ module Activities
         assert_equal @credential.id, @run.failed_agent_credential_id
       end
 
+      # --- auth error path ---
+
+      test "fails the step when the session's terminal shows an expired login" do
+        session = create(:terminal_session, :failed,
+          user: @user,
+          agent_type: "claude_code",
+          error_message: "Session terminated: agent authentication failed — Login expired · Please run /login")
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["auth_error"]
+        assert result["failed"]
+        refute result["valid"]
+
+        step_run.reload
+        assert_equal "failed", step_run.state
+        assert_equal "auth_expired", step_run.error_category
+        assert_match(/Login expired/, step_run.error_message)
+
+        # Unlike a quota stop, an expired login does not condemn the run's credential.
+        @run.reload
+        assert_nil @run.failure_reason
+      end
+
+      # The words appear in plenty of healthy output — an agent editing an auth flow, a CLI's
+      # own help text. Only a session that already ended badly is read for them.
+      test "does not fail a finished step whose output merely mentions a login" do
+        session = create(:terminal_session, user: @user, agent_type: "claude_code",
+                         session_type: :workflow_step, state: "finished")
+        SessionLog.create!(
+          terminal_session: session,
+          name: "terminal_output.log",
+          file: StringIO.new("Documented the flow: run `codex login` to authenticate.\n"),
+          file_size: 60,
+          content_type: "text/plain"
+        )
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert_nil result["auth_error"]
+        assert result["valid"]
+        assert_equal "completed", step_run.reload.state
+      end
+
+      # --- cancelled session ---
+
+      test "fails the step when its session was cancelled rather than failed" do
+        session = create(:terminal_session, :cancelled,
+          user: @user,
+          agent_type: "claude_code",
+          error_message: "Session terminated: no output for 30 minutes.")
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["failed"]
+        refute result["valid"]
+        assert_equal "failed", step_run.reload.state
+        assert_match(/no output/, step_run.error_message)
+      end
+
       test "does not set quota_error for generic session failure" do
         session = create(:terminal_session, :failed,
           user: @user,
@@ -125,6 +188,30 @@ module Activities
         @run.reload
         assert_equal "quota_exceeded", @run.failure_reason
         assert_nil @run.failed_agent_credential_id
+      end
+
+      # A validator that crashes used to answer "valid" on the step's behalf, so a step
+      # whose outputs were never actually judged still reported success. A spec carrying a
+      # non-string pattern is the cheapest way to make it crash for real: matching it
+      # against a collected asset raises TypeError out of Regexp.new, which the
+      # validator's own RegexpError rescue does not catch.
+      test "fails the step when output validation could not run" do
+        @step.update!(output_asset_specs: [ { "name_pattern" => 42 } ])
+        session = create(:terminal_session, :collected,
+          user: @user,
+          agent_type: "claude_code",
+          session_type: :workflow_step)
+        step_run = create(:step_run, :running, workflow_run: @run, step: @step, terminal_session: session)
+        create(:workflow_run_asset, workflow_run: @run, produced_by_step_run: step_run, name: "report.md")
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        refute result["valid"]
+        assert result["failed"]
+
+        step_run.reload
+        assert_equal "failed", step_run.state
+        assert_match(/output validation could not run/, step_run.error_message)
       end
 
       # --- success path ---

@@ -12,6 +12,7 @@ a document is added, removed, or moved here, update this index in the same chang
 
 - **[project/overview.md](./project/overview.md)** — Executive summary, tech stack, architecture overview, data model, API structure
 - **[project/context.md](./project/context.md)** — LLM-optimized rules: tech stack, patterns, anti-patterns, key file locations
+- **[project/worktree-stack.md](./project/worktree-stack.md)** — Running a second, isolated Compose stack from a git worktree: the variables that keep its network, image, ports and database off the default stack's, and what still bites (Google sign-in, the test flock, two Traefiks on one socket)
 
 ## Architecture
 
@@ -35,7 +36,7 @@ a document is added, removed, or moved here, update this index in the same chang
 - **[design/session-admission-queue/](./design/session-admission-queue/)** — Durable session admission queues: PostgreSQL owns the queue, permits and policy; Temporal owns execution; the runtime supplies resource facts
   - **[design/session-admission-queue/ARCHITECTURE-SPINE.md](./design/session-admission-queue/ARCHITECTURE-SPINE.md)** — The invariants (AD-1…AD-10): one applicable pool, atomic FIFO, durable launch intent, "unknown creation retains capacity", confirmed release, separate waiting and execution clocks
   - **[design/session-admission-queue/TECH-DESIGN.md](./design/session-admission-queue/TECH-DESIGN.md)** — The reasoning behind them: inspected baseline behaviour, limit selection, data model, runtime idempotency, capacity waiting, alternatives and open decisions
-  - **[design/session-admission-queue/ROLLOUT.md](./design/session-admission-queue/ROLLOUT.md)** — Operator runbook: deployment settings, the drain-then-`session_admission:sync` cutover, legacy quota removal under a reviewed UID allowlist, pause/resume and recovery
+  - **[design/session-admission-queue/ROLLOUT.md](./design/session-admission-queue/ROLLOUT.md)** — Operator runbook: deployment settings read live, the drain-gated cutover, pause/resume and recovery
   - **[design/session-admission-queue/reviews/](./design/session-admission-queue/reviews/)** — Design-phase review records (invariants, evidence, coverage, editorial) kept alongside the contract they checked
 - **[design/azure-devops-integration.md](./design/azure-devops-integration.md)** — Azure DevOps integration: Entra service-principal auth with approved organization installations, GUID-based repository identity, session Git via a derived-key credential endpoint, PR/Boards agent tools, and a phased CI/webhook parity extension
 - **[design/grok-runtime-integration.md](./design/grok-runtime-integration.md)** — Grok (xAI) runtime decisions: the official `@xai-official/grok` CLI, device-code auth with `~/.grok/auth.json` as the credential, model catalogue + pricing from `/v1/language-models`, and why usage comes from the MITM log rather than OTLP
@@ -44,6 +45,7 @@ a document is added, removed, or moved here, update this index in the same chang
 
 The active workflow: a research report in `research/` feeds a frozen-intent spec in `specs/`, which drives implementation.
 
+- **[design/agent-credential-lifecycle.md](./design/agent-credential-lifecycle.md)** — Strategy for agent-CLI credentials across all seven runtimes: per-runtime refresh coverage, the measured production root cause (idle `ready` sessions pin a credential out of the refresh sweep), a declared lifecycle contract per adapter, container↔server read-through (write-back, push, lease), refresh observability, and the image/CLI freshness programme
 - **[research/](./research/)** — Technical research reports + settled design docs, paired per topic (`<topic>-research-<date>.md` + `<topic>-<date>.md`)
   - **[research/technical-container-token-brokering-research-2026-09-05.md](./research/technical-container-token-brokering-research-2026-09-05.md)** — Can agent containers be given short-lived access tokens instead of the user's OAuth refresh token? Written after the 2026-09-05 credential incident: why the multi-holder rotation race exists, the ToS constraint that decides the question before the technical one does, Claude Code's actual credential precedence and `apiKeyHelper` mechanics, the AWS `credential_process` broker we already run as the precedent, and the four staging probes that must run before anything is built
   - **[research/technical-aws-bedrock-cloud-provider-auth-2026-07-25.md](./research/technical-aws-bedrock-cloud-provider-auth-2026-07-25.md)** — Cloud-provider auth for agent CLIs (Bedrock first): connect paths, server-side credential broker, session provisioning. Supersedes the deferred Bedrock/Vertex section of `design/oauth-implementation.md` §9
@@ -86,6 +88,7 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/mcp.md](./user-guide/mcp.md)** — MCP transports, the internal `aixle-tools` server, config-item credentials
 - **[user-guide/integrations.md](./user-guide/integrations.md)** — GitHub, GitLab, Linear, Google OAuth, and webhooks
 - **[user-guide/azure-devops.md](./user-guide/azure-devops.md)** — Connecting an Azure DevOps organization end to end: what differs between SaaS and self-hosted, the one Entra step in the customer directory, the three personal-access-token scopes and what each is spent on, choosing Azure projects and widening that set later
+- **[user-guide/session-queues.md](./user-guide/session-queues.md)** — Why a session waits: every combination of project limit and installation ceiling, how a reservation differs from a cap, what is exempt from the queue altogether, and the operator knobs behind it
 - **[user-guide/configuration.md](./user-guide/configuration.md)** — Env vars, OAuth, agent credentials, and other knobs
 - **[operations/azure-devops-app-registration.md](./operations/azure-devops-app-registration.md)** — Operator runbook: register the Entra application, give it a credential, and publish the client ID. Customers bind their own organizations from inside Flow by proving they administer them
 - **[quickstart.md](./quickstart.md)** — Get a local instance running and see one card move

@@ -115,8 +115,6 @@ jobs:
           tags: web
           build-args: |
             APP_VERSION=ci
-            AUTHOR_NAME=github-actions
-            AUTHOR_EMAIL=github-actions@users.noreply.github.com
           # No login step: the package is public, so this reads anonymously and
           # a fork's run gets the same cache. Until the package is made public
           # after its first push, or if it is ever unreachable, buildx warns and

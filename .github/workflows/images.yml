@@ -13,6 +13,15 @@ on:
       - main-images
     tags:
       - "v*"
+  # Weekly canary. Three agent CLIs are installed from a vendor script with no version
+  # to pin (claude, cursor, kiro), so an image built today and the same Dockerfile built
+  # last month are different software — including the parts that do authentication. A
+  # scheduled build finds a vendor-side break here, on a Monday morning, rather than in a
+  # user's session. It deliberately does NOT move `latest`: it runs off the default
+  # branch, publishes only its own dated tags, and promoting a canary stays a human act
+  # (push to main-images, or run this workflow by hand from that branch).
+  schedule:
+    - cron: "0 5 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -72,8 +81,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             APP_VERSION=${{ github.sha }}
-            AUTHOR_NAME=github-actions
-            AUTHOR_EMAIL=github-actions@users.noreply.github.com
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -195,6 +202,11 @@ jobs:
           - image_name: Kiro CLI
             image_suffix: kiro-cli
             dockerfile: ./docker/kiro-cli/Dockerfile
+          # Was missing entirely until 2026-09-17: the Makefile built it locally and CI
+          # never published it, so `AGENT_IMAGE_ANTIGRAVITY_CLI` had no image to point at.
+          - image_name: Antigravity CLI
+            image_suffix: antigravity-cli
+            dockerfile: ./docker/antigravity-cli/Dockerfile
 
     steps:
       - uses: actions/checkout@v7
@@ -236,3 +248,18 @@ jobs:
             BASE_IMAGE=${{ env.REGISTRY_PREFIX }}/flow-agent-base-core:${{ needs.agent-base.outputs.short_sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # What this build actually shipped. For the CLIs installed from a vendor script there
+      # is no version to pin and therefore nothing else that records which one a published
+      # tag contains; comparing two canary runs is how a vendor bump gets noticed, because
+      # the image digest changes for a dozen reasons and the CLI version for one.
+      #
+      # Only on the canary: reading the file means pulling the image back (buildx pushes
+      # straight to the registry without keeping it locally), which is a minute per image
+      # and not worth paying on every release build.
+      - name: Report Shipped CLI Version
+        if: github.event_name == 'schedule'
+        run: |
+          image="${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image_suffix }}:${{ steps.meta.outputs.version }}"
+          version="$(docker run --rm --entrypoint cat "$image" /etc/aixle-cli-version)"
+          echo "**${{ matrix.image_name }}** ships CLI version \`${version}\`" >> "$GITHUB_STEP_SUMMARY"

@@ -173,6 +173,30 @@ module Agents
     # was us-west-2 on an account whose profile lives in us-east-1).
     PROFILE_STATE_KEY = "api.codewhisperer.profile"
 
+    # Refreshing the login, per login family. Both endpoints and every field name below
+    # were read out of the CLI's own serializers in `kiro-cli-chat`; neither is
+    # documented. The two families are told apart by the auth_kv row key the CLI wrote
+    # (`kirocli:social:token` vs `kirocli:odic:token`), which is the ONLY thing that key
+    # may ever be used for — gating credential validity on it is what once shipped this
+    # runtime broken.
+    #
+    # Social (Google/GitHub): Kiro's own endpoint, the refresh token is the whole
+    # request. Builder ID / IAM Identity Center: ordinary AWS SSO OIDC CreateToken,
+    # signed with the client registration the CLI stored next to the token.
+    SOCIAL_REFRESH_URL = "https://prod.us-east-1.auth.desktop.kiro.dev/refreshToken"
+    OIDC_HOST_TEMPLATE = "https://oidc.%<region>s.amazonaws.com/token"
+    SOCIAL_KEY_MARKER = ":social:"
+    REGISTRATION_KEY_MARKER = "device-registration"
+
+    # The CLI stores its token snake_case (measured on a live credential) but answers
+    # refreshes camelCase, so a write-back has to translate rather than splice.
+    # Anything the response does not mention is left as it was.
+    REFRESH_RESPONSE_FIELDS = {
+      "accessToken" => "access_token",
+      "refreshToken" => "refresh_token",
+      "profileArn" => "profile_arn"
+    }.freeze
+
     def self.default_config_paths
       [ "~/.kiro/settings/mcp.json", "~/.kiro/steering/" ]
     end
@@ -195,6 +219,14 @@ module Agents
     # The state database is the whole credential — there is nothing else to capture.
     def auth_file_paths
       [ state_path ]
+    end
+
+    # Kiro's access token lasts about an hour, and both renewal paths are implemented
+    # here: a social login (Google/GitHub) against Kiro's own refreshToken endpoint, a
+    # Builder ID / Identity Center login against AWS SSO OIDC CreateToken. Before that it
+    # was the one shipped runtime whose token simply died an hour after login.
+    def credential_lifecycle
+      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: 1.hour }.freeze
     end
 
     def auth_watch_path
@@ -420,6 +452,50 @@ module Agents
     end
 
     # =================================================================
+    # Token refresh
+    # =================================================================
+
+    # When the stored access token dies. Kiro writes it as an ISO8601 `expires_at`
+    # inside the token row, so the platform can show a real expiry and the refresh
+    # sweep can pick this credential up before a session needs it.
+    #
+    # This only became safe to report once #refresh! existed: the access token lasts
+    # about an hour, the CLI renews it inside the container, and a session's cleanup
+    # re-captures the result. Reporting an expiry without renewing it server-side would
+    # paint a perfectly working credential "expired" an hour after login.
+    def token_expires_at(credentials)
+      expiry_ms(auth_record(decoded_state(credentials))["expires_at"])
+    end
+
+    # Renew the login without a container. The credential is the CLI's SQLite database,
+    # so the refreshed token is written back into the row it came from and the whole
+    # database is re-stored — the CLI must find it exactly where it left it.
+    def refresh!(credential, margin_ms: nil)
+      blob = decoded_state(credential.config_data)
+      rows = auth_rows(blob)
+      token = rows[:token]
+      return { status: :not_needed, detail: "no stored login", permanent: false } if token.blank?
+      return { status: :not_needed, detail: nil, permanent: false } unless refresh_due?(token, margin_ms)
+
+      response = if rows[:key].to_s.include?(SOCIAL_KEY_MARKER)
+        refresh_social(token)
+      else
+        refresh_oidc(token, rows[:registration])
+      end
+      return response if response[:status] == :error
+
+      updated = apply_refresh(token, response[:body])
+      blob = blob_with_token(blob, rows[:key], updated)
+      return { status: :error, detail: "could not write the refreshed token back", permanent: false } if blob.blank?
+
+      persist_refreshed!(credential, { "state_b64" => Base64.strict_encode64(blob) })
+      { status: :refreshed, detail: nil, permanent: false }
+    rescue StandardError => e
+      Rails.logger.warn("[KiroCliAdapter] refresh failed: #{e.class}: #{e.message}")
+      { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
+    end
+
+    # =================================================================
     # Usage / cost
     # =================================================================
 
@@ -592,13 +668,135 @@ module Agents
           token = token_row(db)
           return {} if token.blank?
 
-          return token.merge("profile_arn" => profile_arn_from(db)).compact
+          # The `state` table is what the CLI itself reads, so it wins; the token row is
+          # the fallback, because a social refresh hands the profile ARN back with the
+          # new token and that is the only place we can have stored it.
+          return token.merge("profile_arn" => profile_arn_from(db) || token["profile_arn"]).compact
         end
       end
       {}
     rescue SQLite3::Exception => e
       Rails.logger.warn("[KiroCliAdapter] could not read the state database: #{e.class}: #{e.message}")
       {}
+    end
+
+    # One open of the state database for everything a refresh needs: which row holds
+    # the token (its key names the login family), the token itself, and — for a Builder
+    # ID / IdC login — the client registration CreateToken has to be signed with.
+    def auth_rows(blob)
+      return {} if blob.blank?
+
+      with_state_database(blob) do |db|
+        rows = db.execute("SELECT key, value FROM auth_kv")
+        token_key, token = rows.lazy.filter_map { |(k, v)|
+          parsed = parse_json(v)
+          [ k, parsed ] if parsed.is_a?(Hash) && parsed["access_token"].present?
+        }.first
+        registration = rows.lazy.filter_map { |(k, v)|
+          parse_json(v) if k.to_s.include?(REGISTRATION_KEY_MARKER)
+        }.first
+
+        return { key: token_key, token: token, registration: registration || {} }
+      end
+      {}
+    rescue SQLite3::Exception => e
+      Rails.logger.warn("[KiroCliAdapter] could not read the state database: #{e.class}: #{e.message}")
+      {}
+    end
+
+    # Refresh only when the token is close enough to expiry to be worth a round trip.
+    # A token with no readable expiry is always refreshed: not knowing is not a reason
+    # to let it die.
+    def refresh_due?(token, margin_ms)
+      expiry = expiry_ms(token["expires_at"])
+      return true if expiry.blank? || margin_ms.blank?
+
+      expiry <= ((Time.current.to_f * 1000).round + margin_ms.to_i)
+    end
+
+    # Social logins (Google/GitHub) renew against Kiro's own endpoint, where the refresh
+    # token is the entire request.
+    def refresh_social(token)
+      post_json(URI(SOCIAL_REFRESH_URL), { refreshToken: token["refresh_token"] })
+    end
+
+    # Builder ID and IAM Identity Center are ordinary AWS SSO OIDC: CreateToken signed
+    # with the client the CLI registered at login. Without that registration there is
+    # nothing to sign with and the user has to log in again.
+    def refresh_oidc(token, registration)
+      client_id = registration["client_id"] || registration["clientId"]
+      client_secret = registration["client_secret"] || registration["clientSecret"]
+      if client_id.blank? || client_secret.blank?
+        return { status: :error, detail: "no client registration stored for an IdC login", permanent: true }
+      end
+
+      region = registration["region"].presence || region_from(token["profile_arn"])
+      post_json(URI(format(OIDC_HOST_TEMPLATE, region: region)), {
+        clientId: client_id, clientSecret: client_secret,
+        grantType: "refresh_token", refreshToken: token["refresh_token"]
+      })
+    end
+
+    # A refused refresh token is permanent — the sweep should stop retrying and make the
+    # user log in again — while anything else is worth another sweep.
+    PERMANENT_REFRESH_ERRORS = %w[InvalidGrantException UnauthorizedClientException ExpiredTokenException].freeze
+
+    def post_json(uri, payload)
+      request = Net::HTTP::Post.new(uri)
+      request["Content-Type"] = "application/json"
+      request.body = payload.compact.to_json
+
+      response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 15) do |http|
+        http.request(request)
+      end
+      return { status: :ok, body: JSON.parse(response.body) } if response.is_a?(Net::HTTPSuccess)
+
+      body = response.body.to_s
+      permanent = PERMANENT_REFRESH_ERRORS.any? { |marker| body.include?(marker) } || response.code == "400"
+      { status: :error, detail: "#{response.code}: #{body.truncate(200)}", permanent: permanent }
+    end
+
+    # Translate the camelCase response onto the snake_case row the CLI reads, keeping
+    # every field the response did not mention. `expiresIn` is seconds from now; the
+    # row stores an absolute ISO8601 instant.
+    def apply_refresh(token, body)
+      updated = token.merge(REFRESH_RESPONSE_FIELDS.filter_map { |from, to|
+        [ to, body[from] ] if body[from].present?
+      }.to_h)
+
+      seconds = body["expiresIn"]
+      updated["expires_at"] = seconds.present? ? seconds.to_i.seconds.from_now.utc.iso8601 : updated["expires_at"]
+      updated
+    end
+
+    # Write the refreshed token back into the row it came from and hand back the whole
+    # database. SQLite is edited on a temp copy and read back as bytes, because the
+    # credential IS those bytes.
+    def blob_with_token(blob, key, token)
+      with_state_database(blob, readonly: false) do |db, path|
+        db.execute("UPDATE auth_kv SET value = ? WHERE key = ?", [ token.to_json, key ])
+        db.close
+        return File.binread(path)
+      end
+      nil
+    rescue SQLite3::Exception => e
+      Rails.logger.warn("[KiroCliAdapter] could not write the refreshed token: #{e.class}: #{e.message}")
+      nil
+    end
+
+    def with_state_database(blob, readonly: true)
+      Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
+        file.binmode
+        file.write(blob)
+        file.flush
+
+        db = SQLite3::Database.new(file.path, readonly: readonly)
+        begin
+          yield db, file.path
+        ensure
+          db.close unless db.closed?
+        end
+      end
     end
 
     def token_row(db)

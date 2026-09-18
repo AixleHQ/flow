@@ -28,22 +28,29 @@ currently resolve to and decides only when a change of state is picked up.
         </td>
       </tr>
       <tr>
-        <th>Pool mode</th>
+        <th>Queues</th>
         <td>
+          One queue per project (<%= @scope_defaults["Project"] %> each unless the project sets its own).
           <% if @policy.installation_limit %>
-            One installation-wide queue of <%= @policy.installation_limit %> concurrent sessions.
+            All of them together may not exceed <%= @policy.installation_limit %> concurrent sessions,
+            and explicit project limits are allocated out of that ceiling.
           <% else %>
-            One queue per project (<%= @scope_defaults["Project"] %> each), and per user
-            for project-less sessions (<%= @scope_defaults["User"] %> each).
+            No installation-wide ceiling is set, so project limits are the only bound.
           <% end %>
+          Sessions launched outside a project (agent logins) are not queued at all.
         </td>
       </tr>
       <tr>
         <th>SESSION_CONCURRENCY_LIMIT</th>
         <td>
-          <%= @configured_limit || "unset — per-scope queues" %>
-          <% if @policy.enabled? && @configured_limit.to_s.presence != @policy.installation_limit.to_s.presence %>
-            <strong>— differs from the active policy; activate to apply it.</strong>
+          <%= @configured_limit || "unset — no installation-wide ceiling" %>
+          <%# Read live, so there is no "active" copy to disagree with it — only a
+              value this app cannot make sense of, which leaves no ceiling at all. %>
+          <% if SessionAdmissionPolicy.installation_limit_misconfigured? %>
+            <strong>— not a positive integer, so the installation has NO ceiling until it is corrected.</strong>
+          <% elsif @policy.installation_limit && @reserved_total > @policy.installation_limit %>
+            <strong>— below the <%= @reserved_total %> already reserved by project limits.</strong>
+            The ceiling is honoured and those reservations are not; raise it, or lower the project limits.
           <% end %>
         </td>
       </tr>

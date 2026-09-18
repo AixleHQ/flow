@@ -8,7 +8,9 @@ require "test_helper"
 class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
-    SessionAdmissionPolicy.sync!(installation_limit: 1)
+    # Only project sessions are queued at all, so recovery is only ever about one.
+    @project = create(:project, owner: @user, company: @user.companies.first)
+    with_ceiling(1)
   end
 
   def admit(session)
@@ -18,7 +20,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a closed container workflow releases the reservation it left behind" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 1.hour.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
     session.update!(state: "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: nil)
@@ -34,10 +36,12 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     # Reaching reconciliation at all means the workflow's own cleanup never
     # settled the session, so "it just ended" is a failure, not a success.
     assert_equal "failed", session.reload.state
+    assert_equal "Container workflow ended", session.error_message,
+      "this one really did get a container, and it really did end"
   end
 
   test "an unresolved runtime operation keeps its slot through reconciliation" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 1.hour.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
     session.update!(state: "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged")
@@ -50,7 +54,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a closed workflow strands its in-flight operation instead of leaving it silent" do
-    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: nil)
@@ -71,7 +75,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a wedged admission is examined rather than skipped over" do
-    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "cancelled", started_at: 2.hours.ago)
     # Output collection is a separate concern and reaches the real strategy;
@@ -99,7 +103,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   # for one pinned capacity nothing could reclaim without an operator — which is
   # how sessions that timed out mid-exec ate the installation's slots one by one.
   test "an unaccountable exec stops pinning the slot once the container is gone" do
-    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
@@ -122,12 +126,111 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_equal 0, stats[:pinned_reservations]
   end
 
+  # AD-5 holds the slot for a create nobody can account for, so a late Pod never
+  # lands on someone else's. Production showed the other edge of that: on
+  # 2026-09-17 the watchdog — itself only running because its supervisor had
+  # finally been restarted — reported a slot pinned for hours while the workload
+  # behind it was provably gone on every single pass. The pin has to end by
+  # itself, and the evidence it ends on is the absence this very pass proved.
+  test "a pinned reservation is not released by the first pass that proves absence" do
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    runtime.stubs(:session_absent?).returns(true)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert_nil admission.reload.released_at, "one look is not a settled absence"
+    assert op.reload.absent_since, "the pass that proved absence starts the clock"
+    assert_equal "uncertain", op.state
+  end
+
+  test "a pinned reservation is released once proven absence has held the window" do
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
+    # What earlier passes proved, without spending the window in real time.
+    op.update!(absent_since: 10.minutes.ago)
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    runtime.stubs(:session_absent?).returns(true)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert admission.reload.released_at, "an absence that held the window costs the installation nothing to end"
+    assert_equal SessionRuntimeOperation::ABANDONED, op.reload.state,
+      "the outcome was never learned, so it is abandoned rather than completed"
+    assert_match(/No workload existed/, op.error)
+    assert_equal 0, SessionAdmissionReconciler.snapshot[:pinned_reservations]
+  end
+
+  # The window measures uninterrupted absence. A pass that finds the workload
+  # again has to erase what earlier passes proved, or the window could be
+  # assembled out of moments that were never continuous — which is the one way
+  # this could hand a live workload's seat to somebody else.
+  test "a workload that reappears resets the confirmation clock" do
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
+    op.update!(absent_since: 10.minutes.ago)
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    # Present on the first look, and still present after the delete is accepted:
+    # deletion is asynchronous, so this pass proves nothing (AD-6).
+    runtime.stubs(:session_absent?).returns(false, false)
+    runtime.stubs(:cleanup_session)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert_nil admission.reload.released_at
+    assert_nil op.reload.absent_since, "a workload that exists invalidates every earlier proof"
+    assert_equal "uncertain", op.state
+  end
+
+  test "switching the release off leaves the slot pinned for a human" do
+    Settings.stubs(:session_admission).returns(Hashie::Mash.new(project_default: 1, pinned_release_enabled: false))
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
+    admission = admit(session)
+    session.update!(state: "cancelled", started_at: 2.hours.ago)
+    admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
+                      phase_state: { "cleanup_collected" => true })
+    op = admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")
+    op.update!(absent_since: 1.hour.ago)
+
+    runtime = ContainerRuntime::DockerRuntime.new
+    ContainerRuntime.stubs(:build).returns(runtime)
+    runtime.stubs(:session_absent?).returns(true)
+    stub_closed_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert_nil admission.reload.released_at
+    assert_equal "uncertain", op.reload.state
+  end
+
   # Four days of production evidence: twelve reservations recorded
   # "RPCError: workflow not found" once a minute and were never cleaned up,
   # because the reconciler read Temporal's one definitive negative answer as
   # "unknown" and skipped the admission. A cap of twenty ran four sessions.
   test "a workflow Temporal has no record of releases its reservation" do
-    session = create(:terminal_session, user: @user, state: "cancelled", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "cancelled", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "cancelled", started_at: 2.hours.ago)
     admission.update!(launch_state: "acknowledged", runtime_id: "runtime-id",
@@ -145,8 +248,57 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_nil admission.last_error, "the old code recorded this every minute instead of cleaning up"
   end
 
+  # The other edge of reading NOT_FOUND as "closed". A claim commits before the
+  # preflight and before the Temporal start, so a launch that is going perfectly
+  # spends seconds as `claimed` with no execution to describe yet. This pass
+  # reaped those: between 2026-09-05 and 2026-09-18 production failed 69 sessions
+  # as "Container workflow ended" within a second or two of `claimed_at`, every
+  # one of them on the minute boundary this runs on. They had no `started_at`, no
+  # runtime operation and an empty log, because the container they were told had
+  # ended was never built.
+  test "a launch still inside its claim lease is not reaped" do
+    session = create(:terminal_session, user: @user, project: @project)
+    admission = admit(session)
+    # Exactly what SessionLaunchRelay#dispatch commits before it does any work.
+    admission.update!(launch_state: "claimed", claimed_at: Time.current)
+    ContainerRuntime.expects(:build).never
+    stub_missing_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert_nil admission.reload.released_at, "a dispatcher mid-launch still holds this slot honestly"
+    assert_nil admission.stop_requested_at
+    refute_equal "failed", session.reload.state
+    assert_nil session.error_message
+  end
+
+  # And the lease has to end, or `claimed` becomes a state nothing ever cleans
+  # up. The relay gets first refusal on an expired claim; what it will not take
+  # back — a launch already stopped — is the reaper's.
+  test "a claim nobody finished is reconciled once its lease has run out" do
+    session = create(:terminal_session, user: @user, project: @project)
+    admission = admit(session)
+    # Claimed, never acknowledged, never started, and already stopped — so the
+    # relay above will not take the claim back, and the lease is the only thing
+    # that was still holding the slot.
+    admission.update!(launch_state: "claimed", claimed_at: 5.minutes.ago,
+                      stop_requested_at: Time.current, runtime_id: nil)
+
+    ContainerRuntime.stubs(:build).returns(ContainerRuntime::DockerRuntime.new)
+    stub_missing_workflow(session.workflow_id)
+
+    SessionAdmissionReconciler.run
+
+    assert admission.reload.released_at, "an expired lease must not pin the slot forever"
+    assert_equal "failed", session.reload.state
+    # "Container workflow ended" sent people looking for a container that was
+    # never built — no log, no `started_at`, nothing to open.
+    assert_nil session.started_at
+    assert_equal TerminalSession::LAUNCH_ABANDONED_ERROR, session.error_message
+  end
+
   test "a workflow that is merely unreachable keeps its reservation" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 1.hour.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
     session.update!(state: "running", started_at: 1.hour.ago)
     admission.update!(launch_state: "acknowledged")
@@ -174,7 +326,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "the stale reaper leaves a reservation that is waiting for cluster capacity alone" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 2.hours.ago)
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago)
     admission = admit(session)
     session.update!(state: "running", started_at: 2.hours.ago)
     admission.update!(wait_reason: "cluster_capacity")
@@ -187,7 +339,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "the stale reaper tears down an admitted session that stopped making progress" do
-    session = create(:terminal_session, user: @user, state: "running", started_at: 2.hours.ago,
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 2.hours.ago,
       temporal_workflow_id: "agent-session-x")
     admission = admit(session)
     session.update!(state: "running", started_at: 2.hours.ago)
@@ -203,9 +355,9 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a session that never started is reaped instead of orphaned forever" do
-    lost = create(:terminal_session, user: @user, state: "not_started", started_at: nil,
+    lost = create(:terminal_session, user: @user, project: @project, state: "not_started", started_at: nil,
                   created_at: 2.hours.ago, temporal_workflow_id: nil)
-    fresh = create(:terminal_session, user: @user, state: "not_started", started_at: nil)
+    fresh = create(:terminal_session, user: @user, project: @project, state: "not_started", started_at: nil)
 
     Activities::Session::CleanupStaleActivity.new.run
 
@@ -215,7 +367,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "a queued session is never mistaken for one that failed to start" do
-    session = create(:terminal_session, user: @user)
+    session = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(session)
     session.update_column(:created_at, 2.hours.ago)
 
@@ -238,9 +390,9 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
   end
 
   test "the queue health snapshot separates waiting from wedged" do
-    waiting = create(:terminal_session, user: @user)
+    waiting = create(:terminal_session, user: @user, project: @project)
     admit(waiting)
-    blocked = create(:terminal_session, user: @user)
+    blocked = create(:terminal_session, user: @user, project: @project)
     SessionAdmissionService.enqueue!(blocked)
     admission = SessionAdmission.find_by(terminal_session: waiting)
     admission.session_runtime_operations.create!(phase: "create_container", state: "uncertain")

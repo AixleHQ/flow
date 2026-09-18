@@ -7,6 +7,16 @@ OAuth providers (for sign-in), and MCP servers (for tools).
 
 ### GitHub
 
+GitHub connects two ways, and **Connect → GitHub** asks which before it
+does anything:
+
+| Path | Who it is for | What it gives |
+| --- | --- | --- |
+| **GitHub App** (recommended) | Someone who can install an app on the org or account | Short-lived, repository-scoped installation tokens; org-wide repository access; webhooks that close CI gates the moment a check finishes |
+| **Personal access token** | A developer trying Aixle out | A connection with no app to install and no `GITHUB_APP_*` on the deployment. Acts as the token's owner; no webhooks |
+
+#### GitHub App (production)
+
 Aixle Flow installs as a **GitHub App** — this gives it a per-repo
 installation token used to clone, push, and watch checks.
 
@@ -25,6 +35,61 @@ installation token used to clone, push, and watch checks.
 
 When users install the App on their repos, Aixle Flow stores the
 installation and exposes those repos to projects.
+
+#### Personal access token (local try-out)
+
+A local deployment usually has no GitHub App, nobody with rights to
+install one, and no address github.com can call back. Pick **I'm a
+developer and just want to try it** in the connect dialog and paste a
+token instead; the connection goes active without `GITHUB_APP_ID`, a
+private key or an install callback, and you can then attach any
+repository the token reaches and clone it in an agent session.
+
+Scopes to give the token. A personal access token reaches exactly what
+it was granted, so a missing one makes that one capability fail — not
+the connection:
+
+- **Classic token:** `repo` covers everything below on private
+  repositories; `public_repo` covers the same on public ones only. A
+  token with neither is refused at connect time rather than failing
+  later at clone time. Add `workflow` if agents will edit files under
+  `.github/workflows` — GitHub rejects that push without it.
+- **Fine-grained token,** on the repositories you mean to attach:
+
+  | To do this | Grant |
+  | --- | --- |
+  | Clone and fetch | **Metadata** read + **Contents** read |
+  | Push | **Contents** write |
+  | Edit `.github/workflows` | **Workflows** write |
+  | Open and answer pull requests | **Pull requests** write |
+  | Resolve CI gates | **Checks** read + **Actions** read |
+
+Aixle's own board tasks, workflows and sessions are not GitHub objects
+and need no scope at all. There are no server-side GitHub pull-request
+tools either — an agent opens a PR itself, with `gh` or the API, using
+this token, which is why **Pull requests** write matters for a
+fine-grained one.
+
+What the token path does *not* do, on purpose:
+
+- **It acts as you.** Clones, pushes and pull requests carry the token
+  owner's own permissions and authorship, and the token stops working
+  when that person's access does. Use the App in production.
+- **No GitHub webhooks.** GitHub delivers installation webhooks to an
+  App, not to a token, and a local deployment is usually unreachable
+  from github.com anyway. CI gates that wait on `push`, `pull_request`
+  or `check_run` therefore resolve by polling (the gate reconciler's
+  sweep) rather than the moment a check finishes — and not at all if
+  this deployment cannot reach api.github.com.
+- **Tokens expire.** GitHub expires personal access tokens, and an
+  expired one shows up as a 401 on the next clone or fetch. Re-connect
+  with a new token; pasting one replaces the stored token on the same
+  connection, keeping its attached repositories.
+
+The token is stored encrypted, write-only: it is never rendered back,
+and changing it means pasting a new one. An App connection and a token
+connection can both exist in the same project, and existing App
+connections are untouched by any of this.
 
 ### GitLab
 

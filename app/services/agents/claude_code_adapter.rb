@@ -41,8 +41,19 @@ module Agents
       "/home/claude"
     end
 
+    # `~/.claude/projects/<escaped-cwd>/<session-id>.jsonl` is Claude Code's own transcript:
+    # every turn, every tool call and every result, as structured JSON. It is the only
+    # artifact that answers "what did this agent actually do" — terminal_output.log is the
+    # raw ANSI redraw stream, in which a tool call is not legible at all, and the run that
+    # prompted this (session 16880, 2026-09-17: a step that reported COMPLETED after
+    # 85 seconds of doing nothing) left no other evidence to read.
+    #
+    # The glob is how it has to be declared: the basename is the CLI's own session id, and
+    # the directory is the working directory with its slashes escaped. That basename is
+    # also what correlates this row with the vendor's telemetry, so it is kept as the
+    # SessionLog name.
     def session_log_paths
-      super + %w[/var/log/mitm/http.log]
+      super + [ "/var/log/mitm/http.log", "#{home_dir}/.claude/projects/*/*.jsonl" ]
     end
 
     # Built-in Claude Code tools (always allowed). DesignSync is an aixle-provided
@@ -182,6 +193,22 @@ module Agents
     # fire when whichever block expires first is near expiry.
     def token_expires_at(credentials)
       OAUTH_BLOCKS.filter_map { |b| credentials.dig(b, "expiresAt") }.map(&:to_i).min
+    end
+
+    # claude.ai OAuth: 8 hours, measured across production rows (expires_in 28800), and
+    # the refresh rotates — every container we handed the blob to holds the same
+    # single-use grant. A credential authenticating by primaryApiKey or Bedrock carries no
+    # expiry at all, which #token_expires_at reports as nil.
+    def credential_lifecycle
+      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: 8.hours }.freeze
+    end
+
+    # Only the base login gates a launch. An expired designOauth is an add-on the CLI
+    # runs fine without, and a credential authenticating by primaryApiKey or Bedrock
+    # carries no base expiry at all — both read as nil here, never as "expired".
+    def base_token_expires_at(credentials)
+      exp = credentials.dig(BASE_OAUTH_BLOCK, "expiresAt").to_i
+      exp.positive? ? exp : nil
     end
 
     # Claude stores two independently-rotating OAuth blocks: claudeAiOauth (base login)
@@ -358,17 +385,27 @@ module Agents
       }
       files.merge!(aws_config_file(bedrock)) if bedrock
 
-      # .credentials.json carries the claude.ai OAuth token and, if the user has run
-      # /design-login, the separate designOauth token (user:design:read/write). Both
-      # are written into the same file, mirroring Claude Code's own layout.
+      files.merge!(credential_files(credentials))
+
+      files
+    end
+
+    # Only .credentials.json: it is where the rotating tokens live, and the one file a
+    # mid-session delivery may replace. .claude.json holds the API-key path and the
+    # per-project configuration, which a delivery has no workflow_config to re-render.
+    #
+    # It carries the claude.ai OAuth token and, if the user has run /design-login, the
+    # separate designOauth token (user:design:read/write) — both in one file, mirroring
+    # Claude Code's own layout.
+    def credential_files(credentials)
       creds_file = {}
       oauth = credentials["claudeAiOauth"]
       creds_file["claudeAiOauth"] = oauth if oauth.is_a?(Hash) && oauth["accessToken"].present?
       design = credentials["designOauth"]
       creds_file["designOauth"] = design if design.is_a?(Hash) && design["accessToken"].present?
-      files["#{home_dir}/.claude/.credentials.json"] = creds_file.to_json if creds_file.any?
+      return {} if creds_file.empty?
 
-      files
+      { "#{home_dir}/.claude/.credentials.json" => creds_file.to_json }
     end
 
     # == Amazon Bedrock (bring-your-own cloud account) ==
@@ -824,7 +861,12 @@ module Agents
       {
         # MITM proxy — intercept Anthropic API traffic
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
-        "MITM_TRACKED_DOMAINS" => "api.anthropic.com",
+        # platform.claude.com is where the CLI renews its own OAuth grant. Without it the
+        # log showed inference traffic only, and the question the 2026-09-05 incident left
+        # open — whether a container rotated the grant out from under us or it simply aged
+        # out — had no data anywhere. Bodies for that host are dropped by the logger; the
+        # endpoint, status and timing are the whole point.
+        "MITM_TRACKED_DOMAINS" => "api.anthropic.com,platform.claude.com,console.anthropic.com",
         # OTLP telemetry
         "CLAUDE_CODE_ENABLE_TELEMETRY" => "1",
         "OTEL_EXPORTER_OTLP_ENDPOINT" => Settings.otel.endpoint,
@@ -863,10 +905,10 @@ module Agents
 
     private
 
-    # Base-login client id, from Settings when configured, else the known public id.
+    # Base-login client id. Anthropic publishes one public client id for this
+    # flow, so there is nothing per-deployment to configure — the Settings
+    # lookup that used to sit here read a key no settings file defined.
     def base_oauth_client_id
-      Settings.agents.oauth&.base_client_id.presence || BASE_OAUTH_CLIENT_ID
-    rescue StandardError
       BASE_OAUTH_CLIENT_ID
     end
 

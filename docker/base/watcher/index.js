@@ -24,6 +24,7 @@
 
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 const net = require('net');
 const path = require('path');
 
@@ -50,6 +51,26 @@ const AUTH_REQUIRED_KEYS = (process.env.AUTH_REQUIRED_KEYS || '')
   .split(',')
   .map((k) => k.trim())
   .filter(Boolean);
+
+// Credential write-back (agent + workflow-step sessions; never auth_setup).
+// The CLI in this container renews its own tokens. Without this the platform only learns
+// about it at session cleanup, so a container killed by an OOM or an eviction takes the
+// rotation with it and leaves the stored refresh token one the vendor has already rotated
+// out. Reporting each change makes the stored credential the copy every holder shares.
+const CREDENTIAL_SYNC_URL = process.env.CREDENTIAL_SYNC_URL || null;
+const CREDENTIAL_SYNC_KEY = process.env.CREDENTIAL_SYNC_KEY || null;
+const CREDENTIAL_SYNC_PATHS = (process.env.CREDENTIAL_SYNC_PATHS || '')
+  .split(',')
+  .map((p) => p.trim())
+  .filter(Boolean);
+const SESSION_ID = process.env.SESSION_ID || null;
+// A CLI writes its credential file as part of a burst (write, rename, chmod); wait for the
+// burst to settle rather than posting three times.
+const CREDENTIAL_SYNC_DEBOUNCE_MS = 3000;
+// Floor between two posts. A pathological writer cannot turn this into a request loop.
+const CREDENTIAL_SYNC_MIN_INTERVAL_MS = 15000;
+// The file is small (Claude's is well under 4 KB) and the server refuses more.
+const CREDENTIAL_SYNC_MAX_BYTES = 256 * 1024;
 
 /**
  * Format file size to human readable string
@@ -543,6 +564,105 @@ function startMcpForwarder() {
 }
 
 /**
+ * Credential write-back: post the current contents of the agent's auth files to the
+ * platform whenever one of them changes.
+ *
+ * Failures are logged and dropped: this is a best-effort report, session cleanup still
+ * collects the same files, and nothing the agent is doing should stop because the platform
+ * was briefly unreachable.
+ */
+function startCredentialSync() {
+  if (!CREDENTIAL_SYNC_URL || !CREDENTIAL_SYNC_KEY || !SESSION_ID || CREDENTIAL_SYNC_PATHS.length === 0) {
+    return;
+  }
+
+  const endpoint = new URL(CREDENTIAL_SYNC_URL);
+  const transport = endpoint.protocol === 'https:' ? https : http;
+  let timer = null;
+  let lastPostAt = 0;
+  let lastPayload = null;
+
+  function collect() {
+    const files = {};
+    for (const filePath of CREDENTIAL_SYNC_PATHS) {
+      try {
+        const stats = fs.statSync(filePath);
+        if (!stats.isFile() || stats.size === 0 || stats.size > CREDENTIAL_SYNC_MAX_BYTES) continue;
+        files[filePath] = fs.readFileSync(filePath, 'utf8');
+      } catch (e) {
+        // Absent or unreadable: nothing to report for this path.
+      }
+    }
+    return files;
+  }
+
+  function post() {
+    const files = collect();
+    if (Object.keys(files).length === 0) return;
+
+    // Unchanged content is not news. The CLI rewrites these files for reasons other than a
+    // rotation, and every post takes a row lock on the credential.
+    const body = JSON.stringify({ files });
+    if (body === lastPayload) return;
+
+    const request = transport.request(
+      {
+        hostname: endpoint.hostname,
+        port: endpoint.port || (endpoint.protocol === 'https:' ? 443 : 80),
+        path: endpoint.pathname,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'X-Session-Id': SESSION_ID,
+          'X-Agent-Key': CREDENTIAL_SYNC_KEY,
+        },
+        timeout: 10000,
+      },
+      (res) => {
+        res.resume();
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          lastPayload = body;
+          log.info(`Credential sync: reported ${Object.keys(files).length} file(s)`);
+        } else {
+          log.warn(`Credential sync rejected: HTTP ${res.statusCode}`);
+        }
+      },
+    );
+
+    request.on('timeout', () => request.destroy(new Error('timeout')));
+    request.on('error', (e) => log.warn(`Credential sync failed: ${e.message}`));
+    request.write(body);
+    request.end();
+    lastPostAt = Date.now();
+  }
+
+  function schedule() {
+    if (timer) clearTimeout(timer);
+    const sinceLast = Date.now() - lastPostAt;
+    const delay = Math.max(CREDENTIAL_SYNC_DEBOUNCE_MS, CREDENTIAL_SYNC_MIN_INTERVAL_MS - sinceLast);
+    timer = setTimeout(post, delay);
+  }
+
+  // usePolling: the auth file lives outside /workspace, on a layer chokidar's native
+  // watcher does not always deliver events for inside a container.
+  const credentialWatcher = chokidar.watch(CREDENTIAL_SYNC_PATHS, {
+    ignoreInitial: true,
+    usePolling: true,
+    interval: 5000,
+    awaitWriteFinish: { stabilityThreshold: 1000, pollInterval: 200 },
+  });
+
+  credentialWatcher.on('all', (event) => {
+    if (event === 'unlink') return;
+    schedule();
+  });
+  credentialWatcher.on('error', (e) => log.warn(`Credential watcher error: ${e.message}`));
+
+  log.info(`Credential sync watching ${CREDENTIAL_SYNC_PATHS.join(', ')}`);
+}
+
+/**
  * Main server setup
  */
 function startServer() {
@@ -686,3 +806,4 @@ function startServer() {
 
 // Start the server
 startServer();
+startCredentialSync();

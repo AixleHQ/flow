@@ -4,12 +4,18 @@ require "test_helper"
 
 class InternalTools::GetConfigItemTest < ActiveSupport::TestCase
   setup do
+    # Handing out a secret arms the container's log filters first, so every test here
+    # runs against a container that can take the list — which is the production shape:
+    # this tool is only ever called from inside a live session.
+    @runtime = stub_container_runtime
     @company = create(:company)
     @user    = create(:user, :admin, company: @company)
     @project = create(:project, company: @company, owner: @user)
     @session = create(:terminal_session, :agent_session, :running, user: @user, project: @project,
                                                                   agent_type: "claude_code")
   end
+
+  teardown { cleanup_runtime_overrides }
 
   def run_tool(params = {})
     InternalTools::GetConfigItem.new(params: params, session: @session).execute
@@ -160,5 +166,38 @@ class InternalTools::GetConfigItemTest < ActiveSupport::TestCase
 
   test "is not offered in the tool picker" do
     refute Tools::Registry.fetch("get_config_item").user_attachable
+  end
+
+  # --- redaction is armed before the value leaves ---
+
+  test "publishes the secret into the container's redaction list before returning it" do
+    attach(create(:config_item, :secret, scope: @project, name: "STRIPE_KEY", value: "sk_live_abc123"))
+
+    run_tool(name: "STRIPE_KEY")
+
+    written = @runtime.read_file(@session.container_id, Sessions::SecretRegistry::LIST_PATH)
+    assert_not_nil written, "the container was never handed a redaction list"
+    assert_includes written.split("\n").map { |line| Base64.strict_decode64(line) }, "sk_live_abc123"
+  end
+
+  test "refuses a secret when the redaction list could not be armed" do
+    attach(create(:config_item, :secret, scope: @project, name: "STRIPE_KEY", value: "sk_live_abc123"))
+    Sessions::SecretRegistry.stubs(:publish!).returns(false)
+
+    result = run_tool(name: "STRIPE_KEY")
+
+    assert_equal 1, result[:exit_code]
+    assert_not_includes result.to_s, "sk_live_abc123"
+    assert_match(/log redaction could not be armed/, result[:stdout].to_s + result[:stderr].to_s)
+  end
+
+  test "still returns a plain variable when the redaction list could not be armed" do
+    attach(create(:config_item, :variable, scope: @project, name: "API_BASE", value: "https://api.test"))
+    Sessions::SecretRegistry.stubs(:publish!).returns(false)
+
+    result = run_tool(name: "API_BASE")
+
+    assert_equal 0, result[:exit_code]
+    assert_equal "https://api.test", JSON.parse(result[:stdout])["value"]
   end
 end

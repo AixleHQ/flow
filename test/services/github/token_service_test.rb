@@ -117,7 +117,126 @@ module Github
       end
     end
 
+    # ----- PAT mode -----
+    #
+    # A personal access token is the credential, not the seed of one: nothing is
+    # minted, so no App id and no installation are needed — which is the whole
+    # point of the mode.
+
+    test "generate_installation_token hands back the stored token in PAT mode" do
+      service = Github::TokenService.new(pat_integration("ghp_developer_token"))
+
+      assert service.pat_mode?
+      assert_equal "ghp_developer_token", service.generate_installation_token
+    end
+
+    test "PAT mode ignores the repositories argument rather than narrowing the token" do
+      service = Github::TokenService.new(pat_integration("ghp_developer_token"))
+
+      assert_equal "ghp_developer_token", service.generate_installation_token(repositories: %w[my-repo])
+    end
+
+    test "PAT mode needs neither an App id nor an installation id" do
+      Settings.github.stubs(:app_id).returns(nil)
+      integration = pat_integration("ghp_developer_token")
+
+      assert_equal "ghp_developer_token", Github::TokenService.new(integration).generate_installation_token
+    end
+
+    test "verify_token returns the token's identity and classic scopes" do
+      stub_request(:get, "https://api.github.com/user")
+        .with(headers: { "Authorization" => "token ghp_developer_token" })
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json", "X-OAuth-Scopes" => "repo, workflow" },
+          body: { id: 4_242, login: "octodev", type: "User" }.to_json
+        )
+
+      info = Github::TokenService.new(pat_integration("ghp_developer_token")).verify_token
+
+      assert_equal 4_242, info[:id]
+      assert_equal "octodev", info[:account_login]
+      assert_equal "User", info[:account_type]
+      assert_equal %w[repo workflow], info[:scopes]
+    end
+
+    # A fine-grained token's permissions are per repository and GitHub reports
+    # none of them on this endpoint. nil says "not reported" — distinct from the
+    # empty list a scopeless classic token comes back with.
+    test "verify_token reports nil scopes for a fine-grained token" do
+      stub_request(:get, "https://api.github.com/user")
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: { id: 7, login: "octodev", type: "User" }.to_json
+        )
+
+      info = Github::TokenService.new(pat_integration("github_pat_x")).verify_token
+
+      assert_nil info[:scopes]
+      assert_equal "octodev", info[:account_login]
+    end
+
+    test "verify_token refuses a classic token with no repository scope" do
+      stub_request(:get, "https://api.github.com/user")
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json", "X-OAuth-Scopes" => "gist" },
+          body: { id: 7, login: "octodev", type: "User" }.to_json
+        )
+
+      error = assert_raises(Github::TokenService::AuthenticationError) do
+        Github::TokenService.new(pat_integration("ghp_gist_only")).verify_token
+      end
+      assert_match(/no repository access/, error.message)
+    end
+
+    test "verify_token accepts a classic token scoped to public repositories only" do
+      stub_request(:get, "https://api.github.com/user")
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json", "X-OAuth-Scopes" => "public_repo" },
+          body: { id: 7, login: "octodev", type: "User" }.to_json
+        )
+
+      info = Github::TokenService.new(pat_integration("ghp_public_only")).verify_token
+
+      assert_equal %w[public_repo], info[:scopes]
+    end
+
+    test "verify_token raises AuthenticationError when GitHub rejects the token" do
+      stub_request(:get, "https://api.github.com/user")
+        .to_return(
+          status: 401,
+          headers: { "Content-Type" => "application/json" },
+          body: { message: "Bad credentials" }.to_json
+        )
+
+      error = assert_raises(Github::TokenService::AuthenticationError) do
+        Github::TokenService.new(pat_integration("ghp_revoked")).verify_token
+      end
+      assert_match(/invalid, revoked or expired/, error.message)
+    end
+
+    test "raises ConfigurationError when a PAT integration carries no token" do
+      integration = build(:integration, :github, company: @company, connected_by: @user)
+      integration.credentials_data = {}
+      integration.settings = { "auth_mode" => "pat" }
+      integration.save!
+
+      assert_raises(Github::TokenService::ConfigurationError) do
+        Github::TokenService.new(integration)
+      end
+    end
+
     private
+
+    def pat_integration(token)
+      integration = build(:integration, :github_pat, :active, company: @company, connected_by: @user)
+      integration.credentials_data = { personal_access_token: token }
+      integration.save!
+      integration
+    end
 
     def generate_test_pem(path)
       key = OpenSSL::PKey::RSA.generate(2048)

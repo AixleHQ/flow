@@ -14,13 +14,10 @@ services:
       # `docker compose run` only forwards declared env vars, so it must be listed here.
       RUN_COVERAGE: ${RUN_COVERAGE:-}
       APP_VERSION: ci
-      AUTHOR_NAME: github-actions
-      AUTHOR_EMAIL: github-actions@users.noreply.github.com
       DB_HOST: db
       DB_PORT: 5432
       DB_USERNAME: postgres
       DB_NAME: aixle_test
-      ENVIRONMENT: test
       PORT: 4000
       RAILS_ENV: test
       RAILS_LOG_TO_STDOUT: "true"

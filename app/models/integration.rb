@@ -50,6 +50,24 @@ class Integration < ApplicationRecord
     company.integrations.build(provider: :gitlab, connected_by: connected_by, project: project)
   end
 
+  # A GitHub PAT connection has no installation to match on, so the scope alone
+  # identifies it: one PAT connection per project (or per company, for the
+  # company-wide rows that predate project scoping). Reconnecting replaces the
+  # token on that row rather than stacking a second connection to the same
+  # account — a PAT expires and gets re-pasted often, and every re-paste would
+  # otherwise leave the previous, dead connection behind for someone to clean up.
+  def self.find_or_build_github_for_pat(company:, connected_by:, project:)
+    scoped =
+      if project
+        company.integrations.where(project_id: project.id, provider: :github)
+      else
+        company.integrations.company_wide.where(provider: :github)
+      end
+
+    scoped.find(&:github_pat?) ||
+      company.integrations.build(provider: :github, connected_by: connected_by, project: project)
+  end
+
   # installation_id lives in encrypted credentials — match in Ruby after scope filter.
   def self.find_or_build_github_for_installation(company:, connected_by:, project:, installation_id:)
     id_str = installation_id.to_s
@@ -170,11 +188,39 @@ class Integration < ApplicationRecord
     azure_enabled_capabilities.include?(capability.to_s)
   end
 
-  # GitHub account (org or user) the App is installed on. Recorded at connect
-  # time by Github::IntegrationService; blank on integrations connected before
-  # that, and on installations that never verified.
+  # ----- GitHub accessors -----
+
+  # How this connection authenticates: "app" (a GitHub App installation, the
+  # production path) or "pat" (a user's personal access token, for a developer
+  # trying Aixle where no App can be installed).
+  #
+  # Connections made before PAT mode existed carry no `auth_mode` key, and they
+  # are all App installations — hence the default, which is what lets them keep
+  # working with no migration.
+  def github_auth_mode
+    return nil unless github?
+
+    settings&.dig("auth_mode").presence == "pat" ? "pat" : "app"
+  end
+
+  def github_app?
+    github? && github_auth_mode == "app"
+  end
+
+  def github_pat?
+    github? && github_auth_mode == "pat"
+  end
+
+  # GitHub account (org or user) the App is installed on — or, in PAT mode, the
+  # user the token belongs to. Recorded at connect time by
+  # Github::IntegrationService; blank on integrations connected before that, and
+  # on installations that never verified.
   def github_account_login
     settings&.dig("account_login")
+  end
+
+  def github_personal_access_token
+    credentials_data["personal_access_token"]
   end
 
   # ----- Coder accessors -----

@@ -130,14 +130,19 @@ const ROLE_LABELS: Record<UserRole, string> = {
 // Claude's /design-login (layers a designOauth block onto an existing claude.ai login).
 type AuthKind = 'agent' | 'design';
 
-// Agent-credential connection status (derived from token expiry — agents have no
-// error state). Functional labels + colour so it reads without relying on hue.
-// A badge states what IS, never what to do — the action next to it is already a button
-// labelled "Re-authenticate", and having both say the same thing reads as a duplicate.
+// Agent-credential connection status. Functional labels + colour so it reads without
+// relying on hue. A badge states what IS, never what to do — the action next to it is
+// already a button labelled "Re-authenticate", and having both say the same thing reads
+// as a duplicate.
+//
+// `error` is the platform having given up on renewing this login: it used to render as
+// "Connected" whenever the expiry happened to be nil or in the future, which is how a
+// credential could be dead for days without anyone being told.
 const AGENT_STATUS_BADGE: Record<AgentCredential['connectionStatus'], { tone: StatusTone; label: string }> = {
   active: { tone: 'success', label: 'Connected' },
   expiring: { tone: 'warning', label: 'Expiring soon' },
   expired: { tone: 'danger', label: 'Expired' },
+  error: { tone: 'danger', label: 'Sign-in required' },
 };
 
 const getAgentInfo = (type: AgentType) => AVAILABLE_AGENTS.find((a) => a.type === type)!;
@@ -966,6 +971,14 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                       Configured {formatDateMedium(credential.createdAt)}
                       {credential.lastUsedAt && ` · Last used ${formatDateMedium(credential.lastUsedAt)}`}
                       {credential.expiresAt && ` · Expires ${formatDateMedium(credential.expiresAt)}`}
+                    </Text>
+                  )}
+                  {/* Why the platform gave up, in the vendor's words. Spelled out rather than
+                      hidden behind a hover: the badge says a sign-in is needed, and this is the
+                      only place that says why — without it "Sign-in required" is a support ticket. */}
+                  {isConfigured && credential?.refreshError && (
+                    <Text size="xs" c="var(--app-danger-fg)" mt={4}>
+                      {credential.refreshError}
                     </Text>
                   )}
                   {/* Billing target lives in the card body, not among the action buttons: it is

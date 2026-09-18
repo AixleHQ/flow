@@ -5,8 +5,9 @@ require "test_helper"
 class SessionLaunchRelayTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
-    SessionAdmissionPolicy.sync!(installation_limit: 1)
-    @session = create(:terminal_session, user: @user)
+    @project = create(:project, owner: @user, company: @user.companies.first)
+    with_ceiling(1)
+    @session = create(:terminal_session, user: @user, project: @project)
     @admission = SessionAdmissionService.enqueue!(@session)
     SessionAdmissionService.drain!
     SessionService.stubs(:revalidate_admission!)

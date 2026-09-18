@@ -5,8 +5,9 @@ require "test_helper"
 class AdmittedPhaseActivityTest < ActiveSupport::TestCase
   setup do
     user = create(:user, :with_company)
-    SessionAdmissionPolicy.sync!(installation_limit: 1)
-    @session = create(:terminal_session, user: user)
+    project = create(:project, owner: user, company: user.companies.first)
+    with_ceiling(1)
+    @session = create(:terminal_session, user: user, project: project)
     @admission = SessionAdmissionService.enqueue!(@session)
     SessionAdmissionService.drain!
     @admission.reload.update!(runtime_kind: "ContainerRuntime::DockerRuntime", runtime_id: "runtime-id")
@@ -30,6 +31,28 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
     SessionAdmission.stubs(:find).with(@admission.id).returns(@admission)
     @admission.stubs(:terminal_session).returns(@session)
     SessionService.stubs(:revalidate_admission!)
+  end
+
+  # Ten of these a day reached Sentry as errors: somebody closes the dialog or
+  # cancels the run while a phase is in flight, and the next phase finds a closed
+  # permit. Expected control flow, and it was burying the failures that are not.
+  test "a stop somebody asked for is raised as an expected error" do
+    @admission.update!(stop_requested_at: Time.current)
+
+    error = assert_raises(Temporalio::Error::ApplicationError) { exec_phase }
+
+    assert_equal TemporalExceptions::BENIGN, error.category
+  end
+
+  # The same closed permit, for a reason nobody asked for: something else
+  # restarted this launch. Still non-retryable, but it keeps its report.
+  test "a stale permit is not filed with the cancellations" do
+    error = assert_raises(Temporalio::Error::ApplicationError) do
+      @activity.run(Hashie::Mash.new(phase: "exec", admission_id: @admission.id,
+                                     permit_token: "a-token-from-another-launch"))
+    end
+
+    assert_equal TemporalExceptions::UNSPECIFIED, error.category
   end
 
   test "a failure that provably never left the process keeps the phase retryable" do

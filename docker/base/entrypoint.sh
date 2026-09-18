@@ -120,7 +120,22 @@ tmux -u new -d -s agent bash
 # (/proc/1/fd/1) AND capture it (ANSI preserved) to a file the session-cleanup
 # collector uploads as the replayable terminal_output.log. tmux allows only one
 # pipe per pane, so both sinks must share this one `tee`.
-tmux pipe-pane -t agent "tee -a /tmp/terminal_output.log > /proc/1/fd/1"
+#
+# The filter in front of the tee removes the session's own secrets before either
+# sink sees them. /proc/1/fd/1 is the container's stdout and therefore the cluster's
+# log stack, which nothing scrubbed until now — the collector-side pass could only
+# ever clean the copy it pulled out.
+#
+# It degrades to the bare tee rather than risking the pane: a pipeline whose first
+# stage cannot start captures nothing, and a session with no terminal output is one
+# the no-output watchdog reaps half an hour later.
+PANE_SINK="tee -a /tmp/terminal_output.log > /proc/1/fd/1"
+if command -v python3 >/dev/null 2>&1 && python3 -c "import sys; sys.path.insert(0, '/opt/mitm'); import aixle_redact" 2>/dev/null; then
+    PANE_SINK="python3 -u /opt/mitm/redact-stream.py | ${PANE_SINK}"
+else
+    echo -e "${YELLOW}⚠️  Secret redaction filter unavailable — pane output is captured unfiltered${NC}"
+fi
+tmux pipe-pane -t agent "$PANE_SINK"
 if [ -n "$TTYD_CMD" ] && [ "$TTYD_CMD" != "bash" ]; then
     tmux send-keys -t agent "$TTYD_CMD" Enter
 fi

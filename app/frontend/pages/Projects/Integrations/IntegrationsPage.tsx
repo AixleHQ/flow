@@ -1,6 +1,7 @@
 import { Head, usePage } from '@inertiajs/react';
 
 import type { AzureDevopsProps } from 'shared/resources/integrations/AzureDevopsConnectModal';
+import type { GithubProps } from 'shared/resources/integrations/GithubConnectModal';
 import { Integration, IntegrationsContent } from 'shared/resources/integrations/IntegrationsContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -14,10 +15,11 @@ interface Props {
   project: Project;
   integrations: Integration[];
   azureDevops?: AzureDevopsProps;
+  github?: GithubProps;
 }
 
 const IntegrationsPage = () => {
-  const { project, integrations, azureDevops } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, integrations, azureDevops, github } = usePage<{ props: Props }>().props as unknown as Props;
 
   return (
     <>
@@ -27,6 +29,7 @@ const IntegrationsPage = () => {
         basePath={`/company/projects/${project.id}/integrations`}
         title="Integrations"
         azureDevops={azureDevops}
+        github={github}
       />
     </>
   );

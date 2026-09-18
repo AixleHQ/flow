@@ -68,10 +68,26 @@ module InternalTools
       # should leave an over-reported audit trail, never an under-reported one.
       ConfigItemAccess.record!(config_item: item, session: session, user: session.user)
 
+      # Same reasoning, stricter consequence. The container's log filters remove this
+      # value from what they write (docker/base/logger/aixle_redact.py), and they can
+      # only remove what the list already names — a secret that reaches a log ahead of
+      # its entry is one no later pass can take back out of bytes already written. So
+      # the list is armed first, and a secret is not handed out if arming failed.
+      # A non-secret variable is not worth refusing over: nothing is being hidden.
+      if item.secret? && !Sessions::SecretRegistry.publish!(session)
+        return error(unarmed_message(item))
+      end
+
       success(payload(item, value).to_json)
     end
 
     private
+
+    def unarmed_message(item)
+      "#{item.name} was not returned: this session's log redaction could not be armed, and " \
+        "handing out a secret the container's log filters do not yet know about would write it " \
+        "into the session logs verbatim. Retry — if it keeps failing, the container is unreachable."
+    end
 
     # The attached set, resolved through the same cascade the session was
     # configured with. `where(id:)` on top of it so a stale id (item deleted

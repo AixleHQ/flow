@@ -12,8 +12,24 @@ module Activities
           return quota_failure_result(step_run, session, detection)
         end
 
-        if session&.state == "failed"
-          step_run.mark_failed!(session.error_message.presence || "Session failed")
+        # `cancelled`, not only `failed`: every watchdog reaches a session through
+        # SessionService.fail_session, which for an admitted session cancels instead of
+        # failing (the reservation is only released once the runtime is confirmed gone).
+        # Treating cancelled as "not a failure" is what let a killed session fall through
+        # to mark_completed! — 53 step runs in the 14 days to 2026-09-17 completed on a
+        # session that had been cancelled or failed.
+        if session && %w[failed cancelled].include?(session.state)
+          # Why it ended matters as much as that it did: an expired login is a banner in
+          # the terminal and nothing else, so without this the step reports "no output for
+          # 30 minutes" for what is really "this agent needs signing in again".
+          #
+          # Read only on a session that already ended badly. An agent that merely printed
+          # the words — editing auth code, quoting a CLI's help — must never turn a
+          # finished run into a failed one.
+          auth = detect_auth_error(session)
+          return auth_failure_result(step_run, auth) if auth.auth_error?
+
+          step_run.mark_failed!(session.error_message.presence || "Session #{session.state}")
           return { "step_run_id" => step_run.id, "valid" => false, "failed" => true }
         end
 
@@ -52,6 +68,15 @@ module Activities
         return QuotaErrorDetector.detect(nil) unless session
 
         QuotaErrorDetector.detect(quota_detection_text(session))
+      end
+
+      # An expired login is silent: the CLI prints its banner, renders a prompt nobody
+      # answers, and the step would otherwise be judged only on the absence of output.
+      # Same text as the quota check, which is already read and ANSI-stripped.
+      def detect_auth_error(session)
+        return AuthErrorDetector.detect(nil) unless session
+
+        AuthErrorDetector.detect(quota_detection_text(session))
       end
 
       def quota_detection_text(session)
@@ -96,15 +121,27 @@ module Activities
         }
       end
 
+      # No workflow-level side effect (unlike quota, which pauses the run against the
+      # offending credential): the credential the step ran on may already have been
+      # re-authenticated by the time this lands, and the refresh sweep owns that verdict.
+      # What matters here is that the step says why it failed.
+      def auth_failure_result(step_run, detection)
+        step_run.mark_failed!("Agent authentication failed: #{detection.message}", error_category: :auth_expired)
+        { "step_run_id" => step_run.id, "valid" => false, "failed" => true, "auth_error" => true }
+      end
+
       def collected_assets(step_run)
         step_run.produced_workflow_run_assets.reload.to_a
       end
 
+      # A validator that crashed has not judged this step, and answering "valid" on its
+      # behalf is how a step that produced nothing at all still reported success. Fail it
+      # with the crash as the reason: an unjudged step is not a passed one.
       def validate_outputs(step_run, assets)
         OutputValidator.new(step_run.step, assets).validate!
       rescue StandardError => e
-        Rails.logger.error("[CompleteStepActivity] Output validation failed: #{e.message}")
-        OutputValidator::Result.new(valid?: true, errors: [])
+        Rails.logger.error("[CompleteStepActivity] Output validation crashed: #{e.class}: #{e.message}")
+        OutputValidator::Result.new(valid?: false, errors: [ "output validation could not run: #{e.message}" ])
       end
     end
   end

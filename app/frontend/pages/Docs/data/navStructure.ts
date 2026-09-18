@@ -23,6 +23,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'running-workflows', label: 'Building workflows' },
       { slug: 'starting-work', label: 'Triggers & gates' },
       { slug: 'sessions-and-runs', label: 'Sessions & Runs' },
+      { slug: 'session-queues', label: 'Session queues' },
       { slug: 'assets', label: 'Assets' },
       { slug: 'personas', label: 'Agent personas' },
       { slug: 'agent-capabilities', label: 'Wrappers, Skills & Connectors' },

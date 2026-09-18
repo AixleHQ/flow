@@ -83,8 +83,6 @@ jobs:
           outputs: type=cacheonly
           build-args: |
             APP_VERSION=ci
-            AUTHOR_NAME=github-actions
-            AUTHOR_EMAIL=github-actions@users.noreply.github.com
           cache-from: type=registry,ref=${{ env.BUILD_CACHE }}
           # image-manifest + oci-mediatypes: GHCR rejects the default cache
           # manifest shape and only accepts one written as an OCI image manifest.

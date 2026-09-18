@@ -207,6 +207,12 @@ module ContainerStrategies
       # on whatever is stored, which may be little. Say so: the alternative is finding
       # out from a 401 halfway through a session and having nothing to correlate it to.
       if result == :held
+        # Deferring is only tolerable while the token is alive. Once the base login has
+        # expired, the copy we would write into this container is dead and nothing inside
+        # it can renew: the container would print "Login expired" and sit there until the
+        # no-output watchdog reaped it half an hour later. Say it now, with the CTA.
+        raise AgentCredential::PreflightError, credential if credential.base_login_expired?
+
         left = credential.expires_at ? ((credential.expires_at - Time.current) / 60).round : nil
         Rails.logger.warn("[AgentSession] Starting session #{session.id} on credential #{credential.id} " \
                           "with #{left || '?'}m of token life: another live session holds these tokens, " \
@@ -308,36 +314,19 @@ module ContainerStrategies
     def collect_logs(container, session, agent_service)
       return [ 0, {} ] unless agent_service.adapter.respond_to?(:session_log_paths)
 
-      count = 0
-      contents = {}
-      redactor = secret_redactor(session)
-      agent_service.adapter.session_log_paths.each do |path|
-        content = read_file_from_container(container, path)
-        next if content.blank?
+      result = Sessions::LogCollector.new(
+        session: session,
+        container: container,
+        adapter: agent_service.adapter,
+        runtime: runtime,
+        redactor: secret_redactor(session)
+      ).call
 
-        # Covers /var/log/mitm/http.log, which holds the FULL provider request
-        # bodies — so every value the agent read is in there, having travelled to
-        # the model as part of the conversation.
-        content = redactor.call(content)
-
-        filename = File.basename(path)
-        contents["logs/#{filename}"] = content
-
-        io = StringIO.new(content)
-        io.define_singleton_method(:original_filename) { filename }
-
-        SessionLog.create!(
-          terminal_session: session,
-          name: filename,
-          file: io,
-          file_size: content.bytesize,
-          content_type: Marcel::MimeType.for(name: filename, extension: File.extname(filename))
-        )
-        count += 1
-      rescue StandardError => e
-        Rails.logger.warn("[AgentSession] Failed to collect log #{path}: #{e.message}")
+      if result.failures.any?
+        Rails.logger.warn("[AgentSession] session=#{session.id} incomplete log collection: #{result.failures.join('; ')}")
       end
-      [ count, contents ]
+
+      [ result.count, result.contents ]
     end
 
     def collect_outputs(container, session)

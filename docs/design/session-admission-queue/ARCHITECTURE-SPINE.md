@@ -39,11 +39,11 @@ flowchart LR
 
 ## Invariants and rules
 
-### AD-1: One applicable pool
+### AD-1: One applicable pool, one ceiling over all of them
 
 - **Binds:** policy resolver, enqueue and administration.
-- **Prevents:** inconsistent combinations of installation, project and user limits across launch paths.
-- **Rule:** a positive `SESSION_CONCURRENCY_LIMIT` selects `installation:default`; an absent ENV selects project/user fallback pools. A session never needs a second pool. Zero or invalid values prevent activation. Marketplace licensing is a separate integration. DB policy and revision are authoritative; deployment sync writes them, not individual worker boots. The proposed protocol uses policy SHARE for admission and UPDATE for mutations; the implementation conservatively uses UPDATE for all short admission transactions. Refresh derived pool limits before issuing grants.
+- **Prevents:** inconsistent combinations of installation and project limits across launch paths.
+- **Rule:** a session belongs to exactly one pool, its project's. A session with no project is not admitted at all and launches without a reservation — in practice that is an agent login. A positive `SESSION_CONCURRENCY_LIMIT` is a ceiling over every pool at once rather than a pool of its own, and an explicit project limit is a **reservation** drawn from it: the project can always reach that number, because nothing else may occupy it. Every project without one shares the remainder — the ceiling less the sum of all reservations — bounded individually by the scope default. A reservation is validated against the ceiling when it is saved. The ceiling itself is deployment configuration read live, so it can be lowered underneath the reservations and nothing can refuse that — the drain therefore clamps every pool, reserved ones included, to the ceiling. In the validated state that clamp never bites; in an over-committed one the ceiling wins and the reservations compete, which `QueueHealthCheck` reports. **Superseded the original rule**, under which the ENV selected installation-wide pooling *instead of* per-project pools, so a ceiling and per-project fairness could never apply at once. Zero or invalid values prevent activation. Marketplace licensing is a separate integration. DB policy and revision are authoritative; deployment sync writes them, not individual worker boots. The proposed protocol uses policy SHARE for admission and UPDATE for mutations; the implementation conservatively uses UPDATE for all short admission transactions. Refresh derived pool limits before issuing grants.
 
 ### AD-2: Capacity unit and ownership
 
@@ -127,4 +127,4 @@ Versions were checked in source; live cluster versions were not measured.
 - Exact existing-scope overrides until deployment inventory is reviewed; proposed new-installation defaults are 2.
 - Priority, weighted CPU/RAM scheduling, inter-company fairness and standalone-tool limits.
 - Queue TTL and an expanded operational dashboard.
-- Live pool-mode rebalancing; the current implementation requires a full drain.
+- A ceiling for sessions launched outside a project: they are exempt from admission entirely, so the installation ceiling does not bound agent logins.

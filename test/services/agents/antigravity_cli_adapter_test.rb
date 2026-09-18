@@ -145,8 +145,22 @@ module Agents
       assert_equal({ "X-Key" => "x" }, entry["headers"])
     end
 
-    test "default_env_vars only hides the CLI logo, no credential is passed via env" do
-      assert_equal({ "AGY_CLI_HIDE_LOGO" => "1" }, @adapter.default_env_vars(@session))
+    test "default_env_vars hides the CLI logo and points the proxy log at Google's hosts" do
+      env = @adapter.default_env_vars(@session)
+
+      assert_equal "1", env["AGY_CLI_HIDE_LOGO"]
+      assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
+      assert_equal "googleapis.com,google.com", env["MITM_TRACKED_DOMAINS"]
+      # Still no credential in the environment: the token travels in the config file.
+      assert_nil env.values.find { |v| v.to_s.include?("access_token") }
+    end
+
+    # 51 production sessions in the 30 days to 2026-09-17 produced zero HTTP records,
+    # because the proxy wrote the log and nothing ever collected it — which is why the
+    # runtime's refresh protocol is still something read out of the binary rather than
+    # observed.
+    test "session_log_paths collects the proxy log" do
+      assert_includes @adapter.session_log_paths, "/var/log/mitm/http.log"
     end
 
     test "credential_preflight accepts a valid OAuth token" do

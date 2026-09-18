@@ -48,8 +48,10 @@ import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/Resourc
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { AzureDevopsConnectModal, type AzureDevopsProps } from './AzureDevopsConnectModal';
+import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
+export type { GithubProps } from './GithubConnectModal';
 
 export interface Integration {
   id: number;
@@ -58,6 +60,8 @@ export interface Integration {
   status: string;
   scopeIndicator: string;
   githubUrl: string | null;
+  githubAuthMode?: string | null;
+  githubTokenScopes?: string[];
   installationId?: string;
   coderUrl?: string | null;
   coderDefaultTemplate?: string | null;
@@ -88,6 +92,9 @@ interface IntegrationsContentProps {
   // Absent on the company page and whenever the deployment has Azure DevOps
   // switched off, which is what hides the connect entry entirely.
   azureDevops?: AzureDevopsProps;
+  // Absent on the company page. `appConfigured: false` is a deployment with no
+  // GitHub App — the connect dialog then opens on the token path.
+  github?: GithubProps;
 }
 
 const GitlabIcon = () => <img src="/images/gitlab.svg" alt="GitLab" width={20} height={20} />;
@@ -121,7 +128,13 @@ const SCOPE_COLORS: Record<string, string> = {
 // Mirrors the server-side fallback in Coder::LockService#ttl_minutes.
 const DEFAULT_CODER_LOCK_TTL = 120;
 
-export const IntegrationsContent = ({ integrations, basePath, title, azureDevops }: IntegrationsContentProps) => {
+export const IntegrationsContent = ({
+  integrations,
+  basePath,
+  title,
+  azureDevops,
+  github,
+}: IntegrationsContentProps) => {
   const { permissions } = usePage<SharedProps>().props;
   const { canExecute } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
@@ -131,6 +144,8 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
 
   const [azureOpen, setAzureOpen] = useState(false);
   const azureAvailable = !!azureDevops?.enabled;
+
+  const [githubOpen, setGithubOpen] = useState(false);
 
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
@@ -223,11 +238,10 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
     [basePath],
   );
 
-  const handleConnectGithub = useCallback(() => {
-    // Server-side endpoint mints a SIGNED state (Oauth::State) and redirects to GitHub's
-    // app-install URL — the state is never built or forgeable client-side (§7).
-    window.location.href = `${basePath}/github_app_install`;
-  }, [basePath]);
+  // Both GitHub paths live in the dialog: the App install (which redirects to
+  // GitHub) and a pasted personal access token. Opening it used to go straight
+  // to the install, which dead-ended anyone who cannot install an app.
+  const handleConnectGithub = useCallback(() => setGithubOpen(true), []);
 
   const handleLinkToProject = useCallback(
     (integration: Integration) => {
@@ -635,6 +649,17 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
                                 : `as ${integration.azureIdentity ?? 'the Aixle application'}`}
                             </Text>
                           )}
+                          {/* A token connection acts as the person who pasted it,
+                              and receives no GitHub webhooks — both are worth
+                              seeing on the row rather than only in the dialog. */}
+                          {integration.provider === 'github' && integration.githubAuthMode === 'pat' && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {`token · as ${integration.connectedBy.name}`}
+                              {integration.githubTokenScopes?.length
+                                ? ` · ${integration.githubTokenScopes.join(', ')}`
+                                : ''}
+                            </Text>
+                          )}
                           {integration.provider === 'coder' && integration.coderUrl && (
                             <Text fz={11} c="dimmed" truncate maw={200}>
                               {integration.coderUrl}
@@ -775,6 +800,13 @@ export const IntegrationsContent = ({ integrations, basePath, title, azureDevops
           azureDevops={azureDevops}
         />
       )}
+
+      <GithubConnectModal
+        opened={githubOpen}
+        onClose={() => setGithubOpen(false)}
+        basePath={basePath}
+        github={github}
+      />
 
       <Modal
         opened={gitlabOpen}

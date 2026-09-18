@@ -11,16 +11,6 @@ module ContainerStrategies
   class AgentBaseStrategy < BaseStrategy
     VALID_AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok kiro_cli].freeze
 
-    DEFAULT_AGENT_IMAGES = {
-      "claude_code" => "aixle/claude-code:latest",
-      "cursor_cli" => "aixle/cursor-cli:latest",
-      "codex" => "aixle/codex:latest",
-      "gemini_cli" => "aixle/gemini-cli:latest",
-      "antigravity_cli" => "aixle/antigravity-cli:latest",
-      "grok" => "aixle/grok:latest",
-      "kiro_cli" => "aixle/kiro-cli:latest"
-    }.freeze
-
     AUTH_COMMANDS = {
       "claude_code" => "claude",
       "cursor_cli" => "agent login",
@@ -99,9 +89,19 @@ module ContainerStrategies
 
     # == Template methods ==
 
+    # A runtime's image is derived from the registry prefix and the runtime's
+    # own name (`agents.image_prefix` + `claude_code` -> `claude-code` + tag),
+    # so adding a runtime needs no settings entry and an environment that
+    # publishes the set to one registry overrides one value, not seven.
+    # `agents.images.<runtime>` remains a per-runtime escape hatch.
     def resolve_image
-      configured_images = (Settings.agents&.images&.to_h || {}).transform_keys(&:to_s)
-      configured_images.fetch(input[:agent_type], DEFAULT_AGENT_IMAGES.fetch(input[:agent_type]))
+      agent_type = input[:agent_type].to_s
+      override = (Settings.agents&.images&.to_h || {}).transform_keys(&:to_s)[agent_type]
+      return override.to_s if override.present?
+
+      name = "#{Settings.agents&.image_prefix}#{agent_type.tr('_', '-')}"
+      tag = Settings.agents&.image_tag.to_s.strip
+      tag.present? ? "#{name}:#{tag}" : name
     end
 
     def session_type
@@ -135,6 +135,8 @@ module ContainerStrategies
         "TMUX_TMPDIR" => "/dev/shm/tmux"
       }
 
+      env_vars.merge!(credential_sync_env(session, agent_service))
+
       # Azure DevOps git credential vending. Here rather than in one agent's
       # adapter because every agent clones, fetches and pushes; only a session
       # that actually holds Azure repositories gets a key.
@@ -143,6 +145,28 @@ module ContainerStrategies
       env_vars.merge!(agent_service.adapter.default_env_vars(session))
       env_vars.merge!(agent_service.adapter.env_vars_from_metadata(session.metadata)) if session.metadata.present?
       super + env_vars.compact.map { |k, v| "#{k}=#{v}" }
+    end
+
+    # Tell the watcher where to report a token the CLI rotates, and with what key.
+    #
+    # Only for sessions that RUN on a stored credential: an auth_setup session is a login
+    # in progress, and AgentAuthStrategy owns what it captures and how (the endpoint
+    # refuses those posts too — this just saves the round trip).
+    #
+    # Without this the rotation only reaches us at cleanup, so a container killed by an
+    # OOM, an eviction or a lost node takes it with it and leaves the stored refresh token
+    # one the vendor has already rotated out.
+    def credential_sync_env(session, agent_service)
+      # The strategy's own session type, not the row's: the strategy is what decides
+      # whether this container runs on a stored credential or is creating one.
+      return {} if session_type == "auth_setup"
+
+      paths = agent_service.adapter.auth_file_paths
+      {
+        "CREDENTIAL_SYNC_URL" => Settings.agents.credential_sync_url,
+        "CREDENTIAL_SYNC_KEY" => Agents::SessionKey.generate(session),
+        "CREDENTIAL_SYNC_PATHS" => paths.join(",")
+      }
     end
 
     # Send one command into the container's `agent` tmux session once its shell prompt
@@ -240,11 +264,7 @@ module ContainerStrategies
     # Read the agent's auth file(s) from the container.
     # @return [Hash<String, String>] path => content (only present files)
     def extract_auth_files(container, agent_service)
-      paths = if agent_service.adapter.respond_to?(:auth_file_paths)
-                agent_service.adapter.auth_file_paths
-      else
-                [ agent_service.config_path ]
-      end
+      paths = agent_service.adapter.auth_file_paths
 
       paths.each_with_object({}) do |path, files|
         content = read_file_from_container(container, path)
@@ -288,35 +308,12 @@ module ContainerStrategies
     # rather than storing whole config blobs, so credentials stay tidy and a
     # re-auth replaces them with no leftover fields from a previous login.
     def build_credentials_from_files(auth_files, adapter)
-      config_data = {}
-
-      auth_files.each do |path, content|
-        basename = File.basename(path)
-
-        # Gemini: API key lives in an encrypted file — decrypt instead of slicing.
-        if basename == "gemini-credentials.json" && adapter.respond_to?(:decrypt_credentials_file)
-          api_key = adapter.decrypt_credentials_file(content, extract_container_hostname)
-          config_data["api_key"] = api_key if api_key
-          next
-        end
-
-        # settings.json carries no secrets we persist (auth method marker only). An adapter
-        # may still want the non-secret choices recorded there — Claude Code's Bedrock
-        # wizard writes its region and model pins here and nowhere else, and those pins are
-        # what keep the next session off Opus-rate billing.
-        if basename == "settings.json"
-          if adapter.respond_to?(:extract_settings_config)
-            config_data.merge!(adapter.extract_settings_config(content))
-          end
-          next
-        end
-
-        config_data.merge!(adapter.extract_credentials(content))
-      rescue StandardError => e
-        Rails.logger.warn("[#{strategy_name}] Failed to process #{path}: #{e.message}")
-      end
-
-      config_data
+      Agents::CredentialCapture.from_files(
+        auth_files,
+        adapter: adapter,
+        hostname_resolver: -> { extract_container_hostname },
+        log_prefix: strategy_name
+      )
     end
 
     def extract_container_hostname

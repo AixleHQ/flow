@@ -82,9 +82,35 @@ class IntegrationResource < ApplicationResource
     integration.installation_id
   end
 
+  # ----- GitHub -----
+
+  # "app" or "pat" — which credential this connection runs on. Null for every
+  # other provider, so the card can key off it without first checking provider.
+  typelize :string?
+  attribute :github_auth_mode do |integration|
+    integration.github_auth_mode
+  end
+
+  # Classic-token scopes as GitHub reported them at connect time. Not secret,
+  # and the answer to "why can it not see my private repository". Empty for an
+  # App installation and for a fine-grained token, whose permissions GitHub
+  # does not report on the endpoint we verify against.
+  typelize "string[]"
+  attribute :github_token_scopes do |integration|
+    integration.github? ? Array(integration.settings&.dig("token_scopes")) : []
+  end
+
+  # Where "Manage on GitHub" goes. An App installation has a settings page;
+  # a PAT has none, so the link goes to the account the token acts as — which
+  # is the thing someone opening it wants to check.
   typelize :string?
   attribute :github_url do |integration|
     next nil unless integration.github?
+
+    if integration.github_pat?
+      login = integration.github_account_login
+      next login.present? ? "https://github.com/#{login}" : nil
+    end
 
     iid = integration.installation_id
     next nil if iid.blank?

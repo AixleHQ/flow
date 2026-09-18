@@ -49,17 +49,47 @@ class AgentCredential < ApplicationRecord
 
   broadcasts_to :user
 
-  # Agent types whose credentials carry a refreshable OAuth token.
-  REFRESHABLE_AGENT_TYPES = %w[claude_code codex cursor_cli].freeze
+  # Agent types this platform can renew server-side, derived from each adapter's declared
+  # lifecycle (BaseAdapter#credential_lifecycle) rather than maintained by hand — a list
+  # and an implementation kept in sync by editing habits is how a runtime ships with one
+  # and not the other.
+  def self.refreshable_agent_types
+    @refreshable_agent_types ||= AgentCredentialsService::ADAPTERS.filter_map do |agent_type, adapter_class|
+      agent_type if adapter_class.new.credential_lifecycle[:refresh] == :server
+    end.freeze
+  end
+
+  # Agent types whose credentials carry an expiry by construction, so a NULL `expires_at`
+  # is a gap in our own bookkeeping rather than a fact about the token.
+  def self.token_expiry_agent_types
+    @token_expiry_agent_types ||= AgentCredentialsService::ADAPTERS.filter_map do |agent_type, adapter_class|
+      agent_type if adapter_class.new.credential_lifecycle[:expiry] == :token
+    end.freeze
+  end
 
   # Scopes
   scope :for_agent, ->(agent_type) { where(agent_type: agent_type) }
   scope :not_expired, -> { where("expires_at IS NULL OR expires_at > ?", Time.current) }
-  scope :refreshable, -> { where(agent_type: REFRESHABLE_AGENT_TYPES) }
-  # Credentials whose token expires within `within` (drives the refresh sweep).
-  # NULL-expiry credentials (agents whose tokens carry no expiry) are excluded.
+  scope :refreshable, -> { where(agent_type: refreshable_agent_types) }
+  # Credentials whose token expires within `within` (drives the refresh sweep), plus the
+  # ones whose expiry was never derived at all.
+  #
+  # A NULL expiry means one of two different things. For a runtime whose credential
+  # genuinely carries no expiry — an API key — it is the truth, and such a row must never
+  # be swept. For a runtime that declares `expiry: :token` it cannot be the truth: the
+  # token has an expiry by construction, so a NULL says nobody ever wrote the column, and
+  # the row sits outside the sweep however dead it is. That is the population behind the
+  # Cursor credentials that stayed `active` with a token months past its end, running
+  # sessions that finished green having authenticated with nothing.
+  #
+  # Selecting them lets the refresh settle which it is: it either succeeds — and
+  # `sync_expires_at` fills the column in on the way through, so the row is never
+  # undetermined again — or it is rejected, and the credential is condemned on evidence
+  # rather than on suspicion.
   scope :refresh_due, ->(within = 60.minutes) {
-    where(status: :active).where.not(expires_at: nil).where(expires_at: ..within.from_now)
+    undetermined = arel_table[:expires_at].eq(nil)
+                                          .and(arel_table[:agent_type].in(token_expiry_agent_types))
+    where(status: :active).where(arel_table[:expires_at].lteq(within.from_now).or(undetermined))
   }
   # Credentials no live container currently holds.
   #
@@ -70,6 +100,16 @@ class AgentCredential < ApplicationRecord
   # endpoint answers with invalid_grant and, under OAuth reuse detection, can revoke
   # the whole family. Leave those to the container: session cleanup merges the
   # rotated blocks back (see AgentSessionStrategy#persist_refreshed_credentials).
+  # The other half of without_live_session: credentials a live container does hold. The
+  # sweep treats them separately — it can still refresh them, but only by handing the
+  # result to the holders (Agents::CredentialDelivery).
+  scope :with_live_session, -> {
+    held = TerminalSession.active
+                          .where("terminal_sessions.user_id = agent_credentials.user_id")
+                          .where("terminal_sessions.company_id = agent_credentials.company_id")
+                          .where("terminal_sessions.agent_type = agent_credentials.agent_type")
+    where(held.arel.exists)
+  }
   scope :without_live_session, -> {
     held = TerminalSession.active
                           .where("terminal_sessions.user_id = agent_credentials.user_id")
@@ -198,13 +238,19 @@ class AgentCredential < ApplicationRecord
     expires_at.present? && expires_at <= within.from_now
   end
 
+  # The live sessions currently holding a copy of this credential's tokens. `excluding` is
+  # the session asking (its own container has not been handed anything yet).
+  def live_holder_sessions(excluding_session_id: nil)
+    scope = TerminalSession.active.where(user_id: user_id, company_id: company_id, agent_type: agent_type)
+    scope = scope.where.not(id: excluding_session_id) if excluding_session_id
+    scope
+  end
+
   # Whether a running container currently holds a copy of this credential's tokens.
   # `excluding_session_id` is the session being launched: it is the one asking, and
   # its own container has not been handed anything yet.
   def held_by_live_session?(excluding_session_id: nil)
-    scope = TerminalSession.active.where(user_id: user_id, company_id: company_id, agent_type: agent_type)
-    scope = scope.where.not(id: excluding_session_id) if excluding_session_id
-    scope.exists?
+    live_holder_sessions(excluding_session_id: excluding_session_id).exists?
   end
 
   # Refresh a token that would otherwise die mid-session, at the last point before a
@@ -230,11 +276,43 @@ class AgentCredential < ApplicationRecord
     end
   end
 
+  # Whether the login the CLI cannot run without is already past its expiry. Reads the
+  # adapter's base expiry rather than the expires_at column, because that column is the
+  # soonest expiry across every block and a lapsed add-on must not read as a dead login.
+  def base_login_expired?
+    ms = adapter.base_token_expires_at(config_data)
+    ms.present? && ms.to_i.positive? && ms.to_i <= (Time.current.to_f * 1000).to_i
+  rescue StandardError => e
+    Rails.logger.warn("[AgentCredential] base_login_expired? failed for #{id}: #{e.message}")
+    false
+  end
+
+  # An expired login that nothing on the launch path will repair, so starting a container
+  # on it only buys 30 minutes of an agent staring at a login prompt before the no-output
+  # watchdog reaps it (measured: 138 such sessions in the 14 days to 2026-09-17).
+  #
+  # Two ways to be unrepairable: the agent has no server-side refresh at all, or another
+  # live container holds these tokens — refreshing then would rotate the grant out from
+  # under it, so #refresh_if_expiring! stands down and the copy we would hand this new
+  # container is the dead one.
+  def unrecoverably_expired?(excluding_session_id: nil)
+    return false unless base_login_expired?
+    return true unless self.class.refreshable_agent_types.include?(agent_type)
+
+    held_by_live_session?(excluding_session_id: excluding_session_id)
+  end
+
   def mark_refresh_error!(message, permanent: false)
+    was_active = active?
     self.refresh_failure_count = refresh_failure_count.to_i + 1
     self.refresh_error = message.to_s.truncate(500)
     self.status = :error if permanent || refresh_failure_count >= MAX_REFRESH_FAILURES
     save!
+    # Once, on the crossing. A credential that can no longer be renewed needs the person
+    # who owns it to sign in again, and until now nothing told them: the row went to
+    # error, the profile badge kept saying "Connected", and the first sign was a workflow
+    # run that came back empty.
+    notify_refresh_failure if was_active && error?
   end
 
   def clear_refresh_error!
@@ -245,6 +323,16 @@ class AgentCredential < ApplicationRecord
   end
 
   private
+
+  def notify_refresh_failure
+    return if user&.email.blank?
+
+    AgentCredentialMailer.refresh_failed(self).deliver_later
+  rescue StandardError => e
+    # A credential that cannot be renewed is already the problem; failing to post the
+    # letter about it must not also fail the sweep that discovered it.
+    Rails.logger.warn("[AgentCredential] refresh-failure notice not sent for #{id}: #{e.message}")
+  end
 
   # The default is per membership, so a credential can only ever become the
   # default for the company it belongs to.

@@ -16,6 +16,24 @@ FactoryBot.define do
       provider { :github }
     end
 
+    # The developer path: a personal access token instead of an App
+    # installation. `auth_mode` in settings is what every reader branches on —
+    # there is no column for it — so it must be set, or the row reads as an App
+    # installation with no installation id.
+    trait :github_pat do
+      provider { :github }
+
+      after(:build) do |integration|
+        integration.credentials_data = { personal_access_token: "ghp_test_#{SecureRandom.hex(8)}" }
+        integration.settings = {
+          "auth_mode" => "pat",
+          "account_login" => "octodev",
+          "account_type" => "User",
+          "token_scopes" => %w[repo]
+        }
+      end
+    end
+
     trait :gitlab do
       provider { :gitlab }
       after(:build) do |integration|

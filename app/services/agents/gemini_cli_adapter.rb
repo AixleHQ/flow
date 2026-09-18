@@ -36,6 +36,12 @@ module Agents
     # watch settings.json: its `security` block is written at auth-METHOD selection,
     # before the key is entered, so the watcher would report success prematurely and
     # the auth container would close before the user finishes.
+    # An API key: it does not expire, nothing rotates, and there is nothing to refresh.
+    # The OAuth login path is deliberately not offered (see #config_files).
+    def credential_lifecycle
+      { expiry: :none, refresh: :none, rotation: :static, nominal_ttl: nil }.freeze
+    end
+
     def auth_watch_path
       "#{home_dir}/.gemini/#{API_KEY_CREDS_PATH}"
     end
@@ -296,7 +302,7 @@ module Agents
         "telemetry" => {
           "enabled" => true,
           "target" => "local",
-          "otlpEndpoint" => Settings.otel.metrics_endpoint.to_s.sub(%r{/v1/\w+\z}, ""),
+          "otlpEndpoint" => Settings.otel.endpoint.to_s,
           "otlpProtocol" => "http",
           "logPrompts" => false
         },

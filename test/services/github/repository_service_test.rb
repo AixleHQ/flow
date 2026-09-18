@@ -118,7 +118,58 @@ module Github
       assert_equal %w[main develop], Github::RepositoryService.new(@integration).list_branches("org/app")
     end
 
+    # ----- PAT mode -----
+    #
+    # A personal access token cannot read /installation/repositories — GitHub
+    # answers 403 "Resource not accessible by personal access token" — so the
+    # adapter has to ask what the token's owner can reach instead.
+
+    test "list_available reads the user's own repositories in PAT mode" do
+      pat = stub_request(:get, "https://api.github.com/user/repos")
+        .with(query: { affiliation: "owner,collaborator,organization_member", per_page: 100 },
+              headers: { "Authorization" => "token ghp_developer_token" })
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: [
+            { full_name: "octodev/side-project", default_branch: "main",
+              clone_url: "https://github.com/octodev/side-project.git", private: true, description: "Mine" },
+            { full_name: "someorg/service", default_branch: "trunk",
+              clone_url: "https://github.com/someorg/service.git", private: true, description: nil }
+          ].to_json
+        )
+
+      result = Github::RepositoryService.new(pat_integration).list_available
+
+      assert_requested pat
+      assert_equal %w[octodev/side-project someorg/service], result.map { |r| r[:full_name] }
+      assert_equal "trunk", result[1][:default_branch]
+      assert result[0][:is_private]
+    end
+
+    test "list_branches authenticates with the stored token in PAT mode" do
+      stub_request(:get, "https://api.github.com/repos/someorg/service/branches")
+        .with(query: { per_page: 100 }, headers: { "Authorization" => "token ghp_developer_token" })
+        .to_return(
+          status: 200,
+          headers: { "Content-Type" => "application/json" },
+          body: [ { name: "main" }, { name: "trunk" } ].to_json
+        )
+
+      assert_equal %w[main trunk], Github::RepositoryService.new(pat_integration).list_branches("someorg/service")
+    end
+
     private
+
+    # Deliberately built with no App settings in play: the PAT path must not
+    # touch the installation-token endpoint, and a request to it would fail the
+    # WebMock fence rather than pass silently.
+    def pat_integration
+      integration = build(:integration, :github_pat, :active, company: @company, connected_by: @user)
+      integration.credentials_data = { personal_access_token: "ghp_developer_token" }
+      integration.save!
+      integration
+    end
 
     def stub_installation_token(token)
       stub_request(:post, "https://api.github.com/app/installations/12345/access_tokens")

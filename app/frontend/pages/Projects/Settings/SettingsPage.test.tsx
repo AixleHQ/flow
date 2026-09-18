@@ -21,9 +21,19 @@ const project = {
   canDelete: true,
 };
 
+const concurrency = {
+  maxSessions: null,
+  default: 4,
+  installationLimit: null,
+  available: null,
+  allocations: [],
+  queueEnabled: true,
+  canManage: true,
+};
+
 describe('Projects/Settings/SettingsPage', () => {
   it('renders the page title and section headings', () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     expect(screen.getByText('Project Settings')).toBeInTheDocument();
     expect(screen.getByText('General')).toBeInTheDocument();
@@ -32,7 +42,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('renders the Details card with status, slug, owner, and created date', () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('gateway-service')).toBeInTheDocument();
@@ -42,7 +52,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('renders the existing description and selected language in the General form', () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     expect(screen.getByLabelText('Project Name')).toHaveValue('Gateway Service');
     expect(screen.getByLabelText('Description')).toHaveValue('Edge routing layer');
@@ -50,7 +60,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('disables Save until the form is edited, then submits a patch with the trimmed values', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     const save = screen.getByRole('button', { name: 'Save Changes' });
     expect(save).toBeDisabled();
@@ -75,7 +85,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('keeps Save disabled when the name is cleared to whitespace only', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     const nameInput = screen.getByLabelText('Project Name');
     await userEvent.clear(nameInput);
@@ -86,7 +96,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('submits the chosen artifacts language after picking a new option', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     await userEvent.click(screen.getByRole('combobox'));
     await userEvent.click(await screen.findByText('German'));
@@ -105,7 +115,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('trims surrounding whitespace from the description before submitting', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     const description = screen.getByLabelText('Description');
     await userEvent.clear(description);
@@ -126,7 +136,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('shows a success notification and the Saved chip when the settings patch resolves', async () => {
     const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     const nameInput = screen.getByLabelText('Project Name');
     await userEvent.clear(nameInput);
@@ -143,7 +153,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('hides the Saved chip when the form is edited after a successful save', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     const nameInput = screen.getByLabelText('Project Name');
     await userEvent.clear(nameInput);
@@ -164,7 +174,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('shows an error notification when the settings patch fails', async () => {
     const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     const nameInput = screen.getByLabelText('Project Name');
     await userEvent.clear(nameInput);
@@ -178,7 +188,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('opens a confirmation modal when Archive is clicked in the Danger Zone', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
 
@@ -187,7 +197,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('submits a patch that archives the project after confirming the Archive modal', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
     const dialog = await screen.findByRole('dialog');
@@ -202,7 +212,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('notifies and returns to the projects list after the archive patch succeeds', async () => {
     const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
     const dialog = await screen.findByRole('dialog');
@@ -217,7 +227,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('shows an error notification and stays put when the archive patch fails', async () => {
     const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
     const dialog = await screen.findByRole('dialog');
@@ -233,7 +243,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('opens a confirmation modal when Delete is clicked in the Danger Zone', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
@@ -242,7 +252,7 @@ describe('Projects/Settings/SettingsPage', () => {
   });
 
   it('issues a delete request after confirming the Delete modal', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const dialog = await screen.findByRole('dialog');
@@ -257,7 +267,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('notifies and returns to the projects list after the delete succeeds', async () => {
     const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const dialog = await screen.findByRole('dialog');
@@ -273,7 +283,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('shows an error notification and stays put when the delete fails', async () => {
     const showSpy = vi.spyOn(notifications, 'show').mockImplementation(() => '');
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
     const dialog = await screen.findByRole('dialog');
@@ -291,7 +301,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('hides the Delete control when the user cannot delete the project', () => {
     renderAuthedPage(<SettingsPage />, {
-      props: { project: { ...project, canDelete: false } },
+      props: { concurrency, project: { ...project, canDelete: false } },
     });
 
     expect(screen.getByText('Danger Zone')).toBeInTheDocument();
@@ -300,7 +310,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('renders an empty Description field when the project has no description', () => {
     renderAuthedPage(<SettingsPage />, {
-      props: { project: { ...project, description: null } },
+      props: { concurrency, project: { ...project, description: null } },
     });
 
     expect(screen.getByLabelText('Description')).toHaveValue('');
@@ -308,7 +318,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('defaults the Artifacts Language to English when the project has none set', () => {
     renderAuthedPage(<SettingsPage />, {
-      props: { project: { ...project, preferredArtifactsLanguage: '' } },
+      props: { concurrency, project: { ...project, preferredArtifactsLanguage: '' } },
     });
 
     expect(screen.getByDisplayValue('English')).toBeInTheDocument();
@@ -316,7 +326,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('renders the Paused status label for a paused project', () => {
     renderAuthedPage(<SettingsPage />, {
-      props: { project: { ...project, state: 'paused' } },
+      props: { concurrency, project: { ...project, state: 'paused' } },
     });
 
     expect(screen.getByText('Paused')).toBeInTheDocument();
@@ -324,7 +334,7 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('renders the Archived status label for an archived project', () => {
     renderAuthedPage(<SettingsPage />, {
-      props: { project: { ...project, state: 'archived' } },
+      props: { concurrency, project: { ...project, state: 'archived' } },
     });
 
     expect(screen.getByText('Archived')).toBeInTheDocument();
@@ -332,14 +342,14 @@ describe('Projects/Settings/SettingsPage', () => {
 
   it('falls back to the raw state label for an unknown project state', () => {
     renderAuthedPage(<SettingsPage />, {
-      props: { project: { ...project, state: 'mystery' } },
+      props: { concurrency, project: { ...project, state: 'mystery' } },
     });
 
     expect(screen.getByText('mystery')).toBeInTheDocument();
   });
 
   it('renders a copy control next to the slug', async () => {
-    renderAuthedPage(<SettingsPage />, { props: { project } });
+    renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
 
     const slug = screen.getByText('gateway-service');
     const slugRow = slug.parentElement as HTMLElement;
@@ -348,5 +358,83 @@ describe('Projects/Settings/SettingsPage', () => {
     await userEvent.click(copyBtn);
 
     expect(screen.getByText('gateway-service')).toBeInTheDocument();
+  });
+
+  describe('concurrent sessions', () => {
+    it('submits the limit alongside the rest of the settings', async () => {
+      renderAuthedPage(<SettingsPage />, { props: { project, concurrency } });
+
+      const limit = screen.getByLabelText('Concurrent Sessions');
+      await userEvent.clear(limit);
+      await userEvent.type(limit, '6');
+
+      const save = screen.getByRole('button', { name: 'Save Changes' });
+      await waitFor(() => expect(save).toBeEnabled());
+      await userEvent.click(save);
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/company/projects/7/settings',
+        expect.objectContaining({ concurrency: '6' }),
+        expect.objectContaining({ preserveScroll: true }),
+      );
+    });
+
+    it('sends an empty limit when the field is cleared, which drops the reservation', async () => {
+      renderAuthedPage(<SettingsPage />, { props: { project, concurrency: { ...concurrency, maxSessions: 6 } } });
+
+      const limit = screen.getByLabelText('Concurrent Sessions');
+      await userEvent.clear(limit);
+
+      const save = screen.getByRole('button', { name: 'Save Changes' });
+      await waitFor(() => expect(save).toBeEnabled());
+      await userEvent.click(save);
+
+      expect(router.patch).toHaveBeenCalledWith(
+        '/company/projects/7/settings',
+        expect.objectContaining({ concurrency: '' }),
+        expect.anything(),
+      );
+    });
+
+    it('shows the server refusal against the field', () => {
+      renderAuthedPage(<SettingsPage />, {
+        props: {
+          project,
+          concurrency,
+          errors: { concurrency: '9 exceeds the installation limit of 10 concurrent sessions.' },
+        },
+      });
+
+      expect(screen.getByText(/exceeds the installation limit of 10/)).toBeInTheDocument();
+    });
+
+    it('reports how much of the installation ceiling is left, and to whom', () => {
+      renderAuthedPage(<SettingsPage />, {
+        props: {
+          project,
+          concurrency: {
+            ...concurrency,
+            installationLimit: 20,
+            available: 12,
+            allocations: [
+              { name: 'Gateway', maxSessions: 3 },
+              { name: 'Other projects', maxSessions: 5 },
+            ],
+          },
+        },
+      });
+
+      expect(screen.getByText(/12 of 20 is unreserved/)).toBeInTheDocument();
+      expect(screen.getByText(/Reserved: Gateway 3, Other projects 5/)).toBeInTheDocument();
+    });
+
+    it('shows the limit read-only to someone who may not change it', () => {
+      renderAuthedPage(<SettingsPage />, {
+        props: { project, concurrency: { ...concurrency, canManage: false, maxSessions: 6 } },
+      });
+
+      expect(screen.queryByLabelText('Concurrent Sessions')).not.toBeInTheDocument();
+      expect(screen.getByText(/only a company admin can change this/)).toBeInTheDocument();
+    });
   });
 });

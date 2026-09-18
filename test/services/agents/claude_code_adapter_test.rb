@@ -26,8 +26,9 @@ module Agents
       assert_equal "/home/claude/.claude/CLAUDE.md", @adapter.context_file_path
     end
 
-    test "session_log_paths returns context and mitm log paths" do
-      assert_equal %w[/var/log/context.log /var/log/mitm/http.log], @adapter.session_log_paths
+    test "session_log_paths returns the context, mitm and transcript declarations" do
+      assert_equal [ "/var/log/context.log", "/var/log/mitm/http.log",
+                     "/home/claude/.claude/projects/*/*.jsonl" ], @adapter.session_log_paths
     end
 
     # == Auth ==
@@ -183,6 +184,38 @@ module Agents
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
       assert_equal "bypassPermissions", settings.dig("permissions", "defaultMode")
       assert_equal "90000", settings.dig("env", "MCP_TIMEOUT")
+    end
+
+    # A mid-session delivery has no workflow_config, so re-rendering settings.json or
+    # .claude.json would replace a running session's configuration with defaults. Only the
+    # token file may be written.
+    test "credential_files is the token file alone" do
+      credentials = {
+        "oauthAccount" => { "emailAddress" => "u@x.com" },
+        "primaryApiKey" => "sk-ant-api-key",
+        "claudeAiOauth" => { "accessToken" => "at", "refreshToken" => "rt", "expiresAt" => 1_777_000_000_000 }
+      }
+
+      files = @adapter.credential_files(credentials)
+
+      assert_equal [ "/home/claude/.claude/.credentials.json" ], files.keys
+      assert_equal "at", JSON.parse(files.values.first).dig("claudeAiOauth", "accessToken")
+    end
+
+    test "credential_files carries the design add-on alongside the base login" do
+      credentials = {
+        "claudeAiOauth" => { "accessToken" => "at", "expiresAt" => 1 },
+        "designOauth" => { "accessToken" => "design-at", "expiresAt" => 2 }
+      }
+
+      creds_file = JSON.parse(@adapter.credential_files(credentials).values.first)
+
+      assert_equal "at", creds_file.dig("claudeAiOauth", "accessToken")
+      assert_equal "design-at", creds_file.dig("designOauth", "accessToken")
+    end
+
+    test "credential_files is empty for an API-key credential — there is no token to deliver" do
+      assert_empty @adapter.credential_files({ "primaryApiKey" => "sk-ant-api-key" })
     end
 
     test "config_files writes claudeAiOauth to .credentials.json (OAuth path)" do
@@ -407,7 +440,10 @@ module Agents
       env = @adapter.default_env_vars(@session)
 
       assert_equal "/var/log/mitm/http.log", env["MITM_LOG_PATH"]
-      assert_equal "api.anthropic.com", env["MITM_TRACKED_DOMAINS"]
+      # The OAuth host is tracked alongside the inference host: without it the log says
+      # nothing about when this credential was renewed or by whom.
+      assert_equal "api.anthropic.com,platform.claude.com,console.anthropic.com",
+                   env["MITM_TRACKED_DOMAINS"]
       assert_includes env["OTEL_RESOURCE_ATTRIBUTES"], @session.route_token
       assert_equal "90000", env["MCP_TIMEOUT"]
     end

@@ -44,6 +44,19 @@ each other's `aixle_test` and the per-worker databases). `make`-driven runs are
 flock-serialized; direct `bin/rails test` runs are not — check nothing else is
 running first.
 
+### Working in a git worktree
+
+A worktree brings up the *same* stack as the main checkout by default — same
+`app_default` network, same `web` image tag, same host ports — so the two fight,
+and a branch can quietly run against the main checkout's database. Before
+starting Compose from a worktree, give it its own stack: copy the
+"Running a second stack from a git worktree" block out of `.env.example` into a
+`.env` in the worktree root (Compose reads `.env` only, never `.env.development`).
+
+Full procedure and the traps — Google sign-in, the repo-relative test flock, two
+Traefiks on one Docker socket — are in **`docs/project/worktree-stack.md`**. Read
+it before running the stack or the suite from a worktree.
+
 ### Test parallelization
 
 Parallelization is **on** (task #288, `parallelize(workers: :number_of_processors)` in
@@ -67,6 +80,26 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope
 
 Examples: `fix(onboarding): guard complete event without configured agent`,
 `refactor(state-machine): collapse onboarding to two steps`.
+
+## Writing comments
+
+Default to no comment. Code, names and tests carry the *what*; a comment is for
+what they cannot carry.
+
+Write one only when it survives this test: **a competent reader of this code
+would get it wrong without it.** That is usually a constraint from outside the
+file — a protocol quirk, a vendor bug, an ordering requirement, a measured
+number, why the obvious approach was rejected. Link the issue, PR or doc when
+one exists.
+
+Do not write a comment that restates the line, labels a section, narrates the
+diff ("changed to…", "new:"), or explains code that a clearer name or a smaller
+method would have explained. Do not leave commented-out code. Do not add a
+comment to a file just because the surrounding lines have them.
+
+When a comment is warranted, keep it to what a reader needs: the constraint and
+its consequence, not the history of how it was found. Delete it with the code it
+describes.
 
 ## Writing tests
 

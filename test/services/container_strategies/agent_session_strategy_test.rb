@@ -74,6 +74,19 @@ module ContainerStrategies
       refute env_vars.any? { |v| v.start_with?("MCP_SESSION_KEY=") }
     end
 
+    # Without these the container has no way to report a token the CLI rotated, and the
+    # rotation is lost whenever the pod dies before cleanup.
+    test "builds env vars telling the watcher where to report a rotated token" do
+      strategy = build_strategy
+
+      env_vars = strategy.build_env_vars
+
+      assert_includes env_vars, "CREDENTIAL_SYNC_URL=#{Settings.agents.credential_sync_url}"
+      assert_includes env_vars, "CREDENTIAL_SYNC_KEY=#{Agents::SessionKey.generate(@session)}"
+      paths = env_vars.find { |v| v.start_with?("CREDENTIAL_SYNC_PATHS=") }
+      assert_includes paths.to_s, "/home/claude/.claude/.credentials.json"
+    end
+
     test "TTYD_CMD is bash for agent sessions" do
       strategy = build_strategy(agent_type: "claude_code")
 
@@ -183,6 +196,21 @@ module ContainerStrategies
       run_before_exec(build_strategy)
 
       assert_equal "old-tok", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+    end
+
+    # Deferring is only tolerable while the token is alive. A dead one cannot be renewed
+    # from inside the container either, so starting would buy 30 minutes of an agent
+    # staring at a login prompt before the no-output watchdog reaps it.
+    test "before_exec refuses to start on an expired login another live session holds" do
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "dead-tok", "refreshToken" => "dead-ref",
+                             "expiresAt" => (1.minute.ago.to_f * 1000).to_i }
+      })
+      create(:terminal_session, user: @user, company_id: @credential.company_id,
+                                agent_type: "claude_code", state: "ready")
+      SessionContextService.expects(:assemble_session_context).never
+
+      assert_raises(AgentCredential::PreflightError) { run_before_exec(build_strategy) }
     end
 
     test "before_exec rejects a nil credential before assembling context" do
@@ -461,89 +489,55 @@ module ContainerStrategies
 
     # == before_cleanup Tests ==
 
-    test "before_cleanup creates SessionLog records when adapter supports session_log_paths" do
-      strategy = build_strategy
-      container_mock = mock("container")
-      strategy.stubs(:resolve_container).returns(container_mock)
+    # These three drive the real collector against the blessed runtime fake rather than
+    # stubbing the read: the bug they now guard (a log dropped without a word) lived
+    # exactly in the seam a stubbed reader hides.
+    test "before_cleanup collects every declared log, including the one behind a glob" do
+      runtime = stub_container_runtime
+      runtime.fs["/var/log/context.log"] = "injected context\n"
+      runtime.fs["/var/log/mitm/http.log"] = "POST /v1/messages\n"
+      runtime.fs["/home/claude/.claude/projects/-workspace/session.jsonl"] = %({"type":"assistant"}\n)
+      strategy = cleanup_strategy
 
-      mock_adapter = mock("adapter")
-      mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
-      mock_adapter.stubs(:respond_to?).with(:collect_usage).returns(false)
-      mock_adapter.stubs(:session_log_paths).returns([ "/tmp/session.log" ])
-
-      mock_service = mock("service")
-      mock_service.stubs(:adapter).returns(mock_adapter)
-      AgentCredentialsService.stubs(:for).returns(mock_service)
-
-      strategy.stubs(:read_file_from_container).with(container_mock, "/tmp/session.log").returns("log content here")
-      strategy.stubs(:collect_outputs).returns(0)
-      strategy.stubs(:collect_terminal_output).returns(0)
-      strategy.stubs(:persist_refreshed_credentials)
-      strategy.stubs(:persist_credential_metadata)
-      strategy.stubs(:collect_usage)
-
-      assert_difference "SessionLog.count", 1 do
+      assert_difference "SessionLog.count", 3 do
         result = strategy.before_cleanup(container_id: "abc123")
-        assert_equal 1, result[:logs_count]
-        assert_equal 0, result[:outputs_count]
+        assert_equal 3, result[:logs_count]
       end
 
-      log = @session.session_logs.last
-      assert_equal "session.log", log.name
-      assert_equal "log content here".bytesize, log.file_size
+      assert_not_nil @session.session_logs.find_by(name: "session.jsonl")
+      assert_not_nil @session.session_logs.find_by(name: "context.log")
+    ensure
+      cleanup_runtime_overrides
     end
 
-    test "before_cleanup handles log collection errors gracefully" do
-      strategy = build_strategy
-      container_mock = mock("container")
-      strategy.stubs(:resolve_container).returns(container_mock)
+    test "before_cleanup records a log it could not read instead of dropping it" do
+      runtime = stub_container_runtime
+      runtime.fs["/var/log/context.log"] = "injected context\n"
+      runtime.fs["/var/log/mitm/http.log"] = "POST /v1/messages\n"
+      runtime.fail_read("/var/log/context.log")
+      strategy = cleanup_strategy
 
-      mock_adapter = mock("adapter")
-      mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
-      mock_adapter.stubs(:respond_to?).with(:collect_usage).returns(false)
-      mock_adapter.stubs(:session_log_paths).returns([ "/tmp/error.log" ])
+      strategy.before_cleanup(container_id: "abc123")
 
-      mock_service = mock("service")
-      mock_service.stubs(:adapter).returns(mock_adapter)
-      AgentCredentialsService.stubs(:for).returns(mock_service)
-
-      strategy.stubs(:read_file_from_container).raises(StandardError.new("Read error"))
-      strategy.stubs(:collect_outputs).returns(0)
-      strategy.stubs(:collect_terminal_output).returns(0)
-      strategy.stubs(:persist_refreshed_credentials)
-      strategy.stubs(:persist_credential_metadata)
-      strategy.stubs(:collect_usage)
-
-      result = strategy.before_cleanup(container_id: "abc123")
-
-      assert_equal 0, result[:logs_count]
+      report = @session.session_logs.find_by(name: Sessions::LogCollector::REPORT_NAME)
+      assert_not_nil report, "an unreadable log left no trace of having been attempted"
+      assert_includes report.file.read, "/var/log/context.log"
+      assert_nil @session.session_logs.find_by(name: "context.log")
+    ensure
+      cleanup_runtime_overrides
     end
 
-    test "before_cleanup skips blank log content" do
-      strategy = build_strategy
-      container_mock = mock("container")
-      strategy.stubs(:resolve_container).returns(container_mock)
+    test "before_cleanup persists nothing for a declared log that is empty" do
+      runtime = stub_container_runtime
+      runtime.fs["/var/log/context.log"] = ""
+      runtime.fs["/var/log/mitm/http.log"] = "POST /v1/messages\n"
+      strategy = cleanup_strategy
 
-      mock_adapter = mock("adapter")
-      mock_adapter.stubs(:respond_to?).with(:session_log_paths).returns(true)
-      mock_adapter.stubs(:respond_to?).with(:collect_usage).returns(false)
-      mock_adapter.stubs(:session_log_paths).returns([ "/tmp/empty.log" ])
+      strategy.before_cleanup(container_id: "abc123")
 
-      mock_service = mock("service")
-      mock_service.stubs(:adapter).returns(mock_adapter)
-      AgentCredentialsService.stubs(:for).returns(mock_service)
-
-      strategy.stubs(:read_file_from_container).returns(nil)
-      strategy.stubs(:collect_outputs).returns(0)
-      strategy.stubs(:collect_terminal_output).returns(0)
-      strategy.stubs(:persist_refreshed_credentials)
-      strategy.stubs(:persist_credential_metadata)
-      strategy.stubs(:collect_usage)
-
-      assert_no_difference "SessionLog.count" do
-        result = strategy.before_cleanup(container_id: "abc123")
-        assert_equal 0, result[:logs_count]
-      end
+      assert_nil @session.session_logs.find_by(name: "context.log")
+    ensure
+      cleanup_runtime_overrides
     end
 
     test "before_cleanup collects usage when adapter supports it" do
@@ -853,6 +847,18 @@ module ContainerStrategies
       create(:company_membership, user: @user, company: other_company)
       create(:agent_credential, user: @user, company: other_company, agent_type: "claude_code",
                                 metadata: { "default_model" => model })
+    end
+
+    # before_cleanup does five things; these tests are about one of them, so the other
+    # four are stubbed and the collector is left real.
+    def cleanup_strategy
+      strategy = build_strategy
+      strategy.stubs(:collect_outputs).returns(0)
+      strategy.stubs(:collect_terminal_output).returns(0)
+      strategy.stubs(:persist_refreshed_credentials)
+      strategy.stubs(:persist_credential_metadata)
+      strategy.stubs(:collect_usage)
+      strategy
     end
 
     def build_strategy(agent_type: "claude_code", credential: nil)

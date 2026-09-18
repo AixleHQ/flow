@@ -1,19 +1,9 @@
-authorization:
-  otp_enabled: true
-
 temporal:
   enabled: true
-  ui_url: <%= ENV['TEMPORAL_UI_URL'] || 'https://temporal.aixle.com' %>
-
-redis:
-  ui_url: <%= ENV['REDIS_UI_URL'] || 'https://redis.aixle.com' %>
 
 agents:
-  images:
-    claude_code: <%= ENV['AGENT_IMAGE_CLAUDE_CODE'] || 'ghcr.io/aixle/aixle-app-claude-code' %>
-    cursor_cli: <%= ENV['AGENT_IMAGE_CURSOR_CLI'] || 'ghcr.io/aixle/aixle-app-cursor-cli' %>
-    codex: <%= ENV['AGENT_IMAGE_CODEX'] || 'ghcr.io/aixle/aixle-app-codex' %>
-    gemini_cli: <%= ENV['AGENT_IMAGE_GEMINI_CLI'] || 'ghcr.io/aixle/aixle-app-gemini-cli' %>
-    antigravity_cli: <%= ENV['AGENT_IMAGE_ANTIGRAVITY_CLI'] || 'ghcr.io/aixle/aixle-app-antigravity-cli' %>
-    grok: <%= ENV['AGENT_IMAGE_GROK'] || 'ghcr.io/aixle/aixle-app-grok' %>
-    kiro_cli: <%= ENV['AGENT_IMAGE_KIRO_CLI'] || 'ghcr.io/aixle/aixle-app-kiro-cli' %>
+  # The whole built-in set lives in one registry, so one prefix replaces the
+  # seven per-runtime image entries this file used to carry. Tag stays blank:
+  # these are published as moving tags, which is the registry default.
+  image_prefix: <%= ENV['AGENT_IMAGE_PREFIX'] || 'ghcr.io/aixle/aixle-app-' %>
+  image_tag: <%= ENV['AGENT_IMAGE_TAG'] || '' %>
