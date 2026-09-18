@@ -22,6 +22,37 @@ const makeIntegration = (overrides: Partial<Integration> = {}): Integration => (
 });
 
 describe('IntegrationsContent', () => {
+  it('lets a company admin remove a company-wide YouTrack connection from a project', async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/3/integrations"
+        integrations={[makeIntegration({ id: 8, name: 'YouTrack', provider: 'youtrack' })]}
+      />,
+      { props: { ...settingsProps, permissions: { isAdmin: true } } },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    const dialog = await screen.findByRole('dialog', { name: /Remove Integration/i });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() =>
+      expect(router.delete).toHaveBeenCalledWith('/company/projects/3/integrations/8', expect.anything()),
+    );
+  });
+
+  it('keeps company-wide YouTrack removal hidden for a non-admin', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/3/integrations"
+        integrations={[makeIntegration({ provider: 'youtrack' })]}
+      />,
+      { props: { ...settingsProps, permissions: { isAdmin: false } } },
+    );
+
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  });
   it('lets a company admin choose company scope when connecting YouTrack', async () => {
     renderPage(
       <IntegrationsContent title="Integrations" basePath="/company/projects/1/integrations" integrations={[]} />,

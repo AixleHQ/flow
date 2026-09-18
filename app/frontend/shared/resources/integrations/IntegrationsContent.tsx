@@ -769,7 +769,7 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {canExecute && !readOnly && (
+                        {canExecute && (!readOnly || (integration.provider === 'youtrack' && permissions?.isAdmin)) && (
                           <Tooltip label="Remove">
                             <ActionIcon
                               aria-label="Remove"
