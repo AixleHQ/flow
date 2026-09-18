@@ -81,6 +81,26 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope
 Examples: `fix(onboarding): guard complete event without configured agent`,
 `refactor(state-machine): collapse onboarding to two steps`.
 
+## Writing comments
+
+Default to no comment. Code, names and tests carry the *what*; a comment is for
+what they cannot carry.
+
+Write one only when it survives this test: **a competent reader of this code
+would get it wrong without it.** That is usually a constraint from outside the
+file — a protocol quirk, a vendor bug, an ordering requirement, a measured
+number, why the obvious approach was rejected. Link the issue, PR or doc when
+one exists.
+
+Do not write a comment that restates the line, labels a section, narrates the
+diff ("changed to…", "new:"), or explains code that a clearer name or a smaller
+method would have explained. Do not leave commented-out code. Do not add a
+comment to a file just because the surrounding lines have them.
+
+When a comment is warranted, keep it to what a reader needs: the constraint and
+its consequence, not the history of how it was found. Delete it with the code it
+describes.
+
 ## Writing tests
 
 **Read `docs/testing.md` before writing or changing any test.** It defines what to test at
