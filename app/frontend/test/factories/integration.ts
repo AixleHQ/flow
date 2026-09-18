@@ -19,5 +19,8 @@ export const buildIntegration = (overrides: Partial<Integration> = {}): Integrat
   azureCapabilities: [],
   azureProjectIds: [],
   azureProjectDisplayNames: [],
+  // Always present, empty unless this is a GitHub connection on a classic
+  // personal access token — the only case GitHub reports scopes for.
+  githubTokenScopes: [],
   ...overrides,
 });

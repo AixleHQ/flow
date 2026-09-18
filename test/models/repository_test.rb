@@ -96,6 +96,19 @@ class RepositoryTest < ActiveSupport::TestCase
     assert { repo.valid? }
   end
 
+  # A personal access token reaches every repository its owner can see, across
+  # every organization they belong to — so the owner of an attached repository
+  # has nothing to do with the token holder's own login. Checking it would
+  # refuse exactly the organization repositories the token was pasted for.
+  test "owner is not checked against the account a personal access token acts as" do
+    pat_integration = create(:integration, :github_pat, :active, company: @company, connected_by: @user)
+
+    repo = build(:repository, full_name: "some-org/service", scope: @project, integration: pat_integration)
+
+    assert repo.valid?, repo.errors.full_messages.to_sentence
+    assert_equal "pat", pat_integration.github_auth_mode
+  end
+
   # ====== Public sources ======
 
   test "public repository is valid without an integration" do

@@ -21,6 +21,8 @@ type Integration = {
   azureUrl?: string;
   scopeIndicator: 'company' | 'project';
   installationId?: string;
+  githubAuthMode?: string;
+  githubTokenScopes: Array<string>;
   githubUrl?: string;
   connectedBy: { id: number; name: string };
   coderUrl?: string;

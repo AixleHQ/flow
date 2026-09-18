@@ -55,6 +55,10 @@ class Web::Company::Integrations::GithubSetupController < Web::Company::Applicat
       info = Github::TokenService.new(integration).verify_installation
       integration.name = info[:account_login]
       integration.settings = {
+        # Explicit even though it is the default: PAT connections carry
+        # auth_mode: "pat", and a reader should not have to know that a missing
+        # key means an App installation.
+        auth_mode: "app",
         account_type: info[:account_type],
         target_type: info[:target_type]
       }

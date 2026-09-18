@@ -9,7 +9,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     render inertia: "Projects/Integrations/IntegrationsPage", props: {
       project: project_props,
       integrations: integrations.map { |i| IntegrationResource.new(i).to_h },
-      azure_devops: azure_devops_props
+      azure_devops: azure_devops_props,
+      github: github_props
     }
   end
 
@@ -18,11 +19,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
 
     integration = case provider
     when "github"
-      Github::IntegrationService.new(
-        company: current_company,
-        connected_by: current_user,
-        project: current_project
-      ).create(installation_id: params[:installation_id].to_s)
+      return create_github
     when "gitlab"
       Gitlab::IntegrationService.new(
         company: current_company,
@@ -189,6 +186,54 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   end
 
   private
+
+  # GitHub connects two ways. The App path posts an installation id GitHub
+  # handed back after the install; the PAT path posts a token pasted into the
+  # dialog. Which credential is read is decided by the declared mode, never by
+  # which parameter happens to be present — switching mode in the dialog must
+  # not be able to submit the other path's credential.
+  #
+  # A rejected token answers with an Inertia validation error rather than a
+  # flash alert, so the dialog can keep itself open and show why against the
+  # field: a redirect-with-alert would close it and lose what was typed.
+  def create_github
+    service = Github::IntegrationService.new(
+      company: current_company, connected_by: current_user, project: current_project
+    )
+
+    if params[:auth_mode].to_s == "pat"
+      integration = service.create_with_pat(personal_access_token: params[:personal_access_token].to_s)
+
+      if integration.persisted? && integration.active?
+        return redirect_to company_project_integrations_path(current_project),
+                           notice: "GitHub connected as #{integration.name}"
+      end
+
+      return redirect_to company_project_integrations_path(current_project),
+                         inertia: { errors: {
+                           personal_access_token: integration.settings&.dig("error") || "Failed to connect GitHub"
+                         } }
+    end
+
+    integration = service.create(installation_id: params[:installation_id].to_s)
+
+    if integration.persisted? && integration.active?
+      redirect_to company_project_integrations_path(current_project), notice: "Github integration connected"
+    else
+      redirect_to company_project_integrations_path(current_project),
+                  alert: integration.settings&.dig("error") || "Failed to connect Github"
+    end
+  end
+
+  # Whether the GitHub App path can be walked on this deployment at all.
+  #
+  # The dialog offers both modes regardless — the point of PAT mode is that it
+  # works where no App exists — but an App button that can only ever redirect to
+  # "GitHub App is not configured" is worse than one that says so up front, and
+  # on such a deployment the dialog opens on the path that works.
+  def github_props
+    { app_configured: Settings.github.app_slug.present? && Settings.github.app_id.present? }
+  end
 
   # Whether the page may offer Azure DevOps at all, and nothing else.
   #
