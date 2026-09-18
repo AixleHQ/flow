@@ -38,7 +38,7 @@ const schema = z.object({
 interface CompanyProps {
   name: string;
   displayName: string | null;
-  emailDomain: string;
+  emailDomain: string | null;
   logoUrl: string | null;
   primaryColor: string;
   secondaryColor: string;
@@ -155,17 +155,22 @@ const SettingsPage = () => {
                 <Text fw={600}>Joining</Text>
               </Group>
               <Stack gap="md">
-                <TextInput
-                  label="Email domain"
-                  description="Set when the company was created, and not editable here."
-                  value={company.emailDomain}
-                  readOnly
-                  disabled
-                />
+                <Box>
+                  <Text fz="sm" fw={500}>
+                    Email domain
+                  </Text>
+                  <Text fz="sm" c={company.emailDomain ? undefined : 'dimmed'} mt={4}>
+                    {company.emailDomain ?? 'Not set'}
+                  </Text>
+                </Box>
                 <Switch
                   label="Accept new people automatically"
-                  description={`Anyone signing in with an @${company.emailDomain} address joins without an invitation.`}
-                  disabled={!canManage}
+                  description={
+                    company.emailDomain
+                      ? `Anyone signing in with an @${company.emailDomain} address joins without an invitation.`
+                      : 'Needs an email domain — without one there is nothing to match a new person against, so everyone joins by invitation.'
+                  }
+                  disabled={!canManage || !company.emailDomain}
                   checked={form.values.autoAcceptUsers}
                   onChange={(event) => form.setFieldValue('autoAcceptUsers', event.currentTarget.checked)}
                 />

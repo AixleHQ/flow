@@ -72,6 +72,23 @@ describe('Company settings page', () => {
     expect(patch.mock.calls[0][1]).not.toHaveProperty('capacity');
   });
 
+  it('shows the email domain when the company has one', () => {
+    renderAuthedPage(<SettingsPage />, { props: { company, capacity, canManage: true } });
+
+    expect(screen.getByText('acme-robotics.example')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /Accept new people automatically/ })).toBeEnabled();
+  });
+
+  // Auto-accept matches on the domain, so without one there is nothing to offer.
+  it('says the domain is not set, and cannot auto-accept without it', () => {
+    renderAuthedPage(<SettingsPage />, {
+      props: { company: { ...company, emailDomain: null }, capacity, canManage: true },
+    });
+
+    expect(screen.getByText('Not set')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: /Accept new people automatically/ })).toBeDisabled();
+  });
+
   it('says nothing is held back while the queue is off', () => {
     renderAuthedPage(<SettingsPage />, {
       props: { company, capacity: { ...capacity, queueEnabled: false }, canManage: true },
