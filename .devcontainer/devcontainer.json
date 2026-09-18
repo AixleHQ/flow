@@ -37,7 +37,7 @@
 
 	// Ensure Orbstack hostnames resolve inside the container
 	"runArgs": [
-		"--network=app_default",
+		"--network=${localEnv:DOCKER_NETWORK:app_default}",
 		"--add-host=k8s.orb.local:host-gateway",
 		"--add-host=docker.orb.local:host-gateway",
 		"--add-host=orbstack:host-gateway"
