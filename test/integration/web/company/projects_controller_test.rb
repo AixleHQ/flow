@@ -59,6 +59,7 @@ class Web::Company::ProjectsControllerTest < ActionDispatch::IntegrationTest
     get company_members_path
 
     assert_equal [ "Zeta", "Alpha" ], inertia.props[:projects].pluck(:name)
+    assert_equal [ true, false ], inertia.props[:projects].pluck(:favorite)
   end
 
   test "create redirects on success" do

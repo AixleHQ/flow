@@ -25,11 +25,11 @@ interface ProjectOption {
 
 interface Props {
   workflows: CatalogWorkflow[];
-  projects: ProjectOption[];
+  projectOptions: ProjectOption[];
 }
 
 const IndexPage = () => {
-  const { workflows, projects } = usePage<{ props: Props }>().props as unknown as Props;
+  const { workflows, projectOptions: projects } = usePage<{ props: Props }>().props as unknown as Props;
 
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
@@ -45,7 +45,7 @@ const IndexPage = () => {
     );
   }, [workflows, debouncedSearch]);
 
-  const projectOptions = useMemo(() => projects.map((p) => ({ value: String(p.id), label: p.name })), [projects]);
+  const selectOptions = useMemo(() => projects.map((p) => ({ value: String(p.id), label: p.name })), [projects]);
 
   const handleDuplicate = () => {
     if (!duplicateWorkflow || !selectedProjectId) return;
@@ -144,7 +144,7 @@ const IndexPage = () => {
             <Select
               label="Project"
               placeholder="Select project"
-              data={projectOptions}
+              data={selectOptions}
               value={selectedProjectId}
               onChange={(value) => setSelectedProjectId(value ?? '')}
               searchable
