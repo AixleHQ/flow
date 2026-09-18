@@ -13,7 +13,21 @@ class SessionAdmissionReconciler
     # its workload kept running. They are examined like any other now — the
     # operation still holds the reservation, but the runtime gets cleaned up and
     # the operation gets an honest label.
-    SessionAdmission.occupied.where(launch_state: %w[acknowledged claimed]).order(:updated_at).limit(limit).each do |admission|
+    #
+    # A claim within its lease is excluded, and that exclusion is the whole
+    # point of the lease. `claimed` commits before the preflight and the
+    # Temporal start, so a launch that is going perfectly spends seconds as
+    # `claimed` with nothing in Temporal to describe — and this pass, which
+    # reads "no execution" as "closed", reaped it. In production that ended 69
+    # sessions between 2026-09-05 and 2026-09-18: killed within a second or two
+    # of being claimed, `started_at` never set, no runtime operation ever
+    # created, and the owner told "Container workflow ended" about a container
+    # that was never built. Past the lease the dispatcher that held it is gone,
+    # the relay above has already had its turn to take the claim over, and
+    # whatever is left really is abandoned.
+    SessionAdmission.occupied.where(launch_state: %w[acknowledged claimed])
+      .where("launch_state <> 'claimed' OR claimed_at IS NULL OR claimed_at <= ?", SessionLaunchRelay::CLAIM_LEASE.ago)
+      .order(:updated_at).limit(limit).each do |admission|
       next unless TemporalService.enabled?
       admission.touch
       next if execution_open?(admission.terminal_session.workflow_id)
