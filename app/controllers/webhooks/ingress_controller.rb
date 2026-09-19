@@ -7,11 +7,22 @@
 # signature on the raw body → dedup on a stable idempotency key → 2xx fast →
 # hand off to Webhooks::ProcessEventJob (normalize → TriggerEngine.publish).
 class Webhooks::IngressController < ActionController::API
+  MAX_ADAPTER_BODY = 512.kilobytes
+
   def receive
-    endpoint = WebhookEndpoint.active.find_by(slug: params[:slug])
+    # Access route parameters directly: `params` parses the JSON body before we
+    # can enforce YouTrack's byte limit or reject malformed JSON.
+    endpoint = WebhookEndpoint.active.find_by(slug: request.path_parameters[:slug])
     return head :not_found unless endpoint
 
-    raw = request.raw_post
+    adapter = Webhooks::AdapterRegistry.for(endpoint.provider)
+    if adapter
+      return head :unsupported_media_type unless request.media_type == "application/json"
+      raw = request.body.read(MAX_ADAPTER_BODY + 1)
+      return head :content_too_large if raw.bytesize > MAX_ADAPTER_BODY
+    else
+      raw = request.raw_post
+    end
 
     # Slack registration handshake — echo the challenge back.
     if endpoint.slack?
@@ -25,14 +36,29 @@ class Webhooks::IngressController < ActionController::API
       strategy: endpoint.verification_strategy,
       secret: endpoint.secret,
       request: request,
-      raw_body: raw
+      raw_body: raw,
+      config: endpoint.config
     )
     return head :unauthorized unless verification.ok?
 
-    payload = safe_json(raw) || {}
+    payload = safe_json(raw)
+    return head :bad_request unless payload.is_a?(Hash)
+    if adapter
+      integration = Integration.active.find_by(id: endpoint.config["integration_id"], provider: endpoint.provider)
+      return head :ok unless integration
+      event_type = adapter.classify(payload)
+      return head :ok if event_type == :unsupported
+      payload = adapter.redact(payload, event_type, integration)
+      return head :ok if payload.nil?
+      integration.update_column(:settings, integration.settings.merge("last_received_at" => Time.current.iso8601))
+      candidate = ReceivedWebhook.new(webhook_endpoint: endpoint, raw_payload: payload)
+      data = adapter.normalize(candidate)[:data]
+      bindings = TriggerBinding.active.where(integration_id: integration.id, event_type: event_type)
+      return head :ok unless bindings.any? { |binding| binding.matches?(data) }
+    end
     received = ReceivedWebhook.create!(
       webhook_endpoint: endpoint,
-      idempotency_key: idempotency_key_for(endpoint, payload, raw),
+      idempotency_key: adapter ? adapter.dedup_key(endpoint, event_type, payload) : idempotency_key_for(endpoint, payload, raw),
       event_type: endpoint.provider,
       status: "received",
       raw_payload: payload

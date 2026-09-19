@@ -91,6 +91,34 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
   });
 
+  it('creates a YouTrack trigger with its connection, event, text match, and subject settings', async () => {
+    const fetchSpy = installFetch();
+    renderPage(
+      <TriggerFormPanel
+        {...baseProps({
+          defaultKind: 'youtrack',
+          youtrackIntegrations: [{ id: 41, name: 'Support YouTrack', scope: 'company' }],
+        })}
+      />,
+    );
+
+    expect(screen.getByDisplayValue('Support YouTrack (company)')).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Pattern'), 'urgent');
+    await pickOption('None — project-level run', 'Create a task');
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(bodyOf(fetchSpy, 'POST').trigger).toEqual(
+      expect.objectContaining({
+        kind: 'youtrack',
+        integration_id: '41',
+        event_type: 'youtrack.issue.created',
+        filter_predicate: { text: { op: 'contains', value: 'urgent' } },
+        subject_policy: 'create_task',
+      }),
+    );
+  });
+
   it('names the signed-in user as who a new off-board trigger will run as', async () => {
     renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'schedule' })} />, {
       props: buildSharedProps({ currentUser: buildSharedUser({ name: 'Nils Aker' }) }),

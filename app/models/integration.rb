@@ -4,7 +4,7 @@ class Integration < ApplicationRecord
   include Encryptable
   extend Enumerize
 
-  enumerize :provider, in: %i[github gitlab linear coder slack azure_devops], predicates: true
+  enumerize :provider, in: %i[github gitlab linear coder slack azure_devops youtrack], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
@@ -17,6 +17,20 @@ class Integration < ApplicationRecord
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
   has_many :azure_devops_operations, dependent: :delete_all
   has_many :azure_devops_subscriptions, dependent: :destroy
+  has_many :trigger_bindings, dependent: :nullify
+
+
+  def youtrack_base_url = settings&.dig("base_url")
+  def youtrack_project_id = settings&.dig("youtrack_project_id")&.to_s
+  def youtrack_token = credentials_data["permanent_token"]
+  def company_scope? = project_id.nil?
+
+  # WebhookEndpoint links back to its integration through `config.integration_id`
+  # (JSONB), not a real FK column — see youtrack-integration-tech-design-v6.md §4/§9.3 —
+  # so this can't be a normal `has_one`.
+  def youtrack_webhook_endpoint
+    WebhookEndpoint.where(provider: "youtrack").find_by("config->>'integration_id' = ?", id.to_s)
+  end
 
   validates :name, presence: true
   validates :provider, presence: true
@@ -29,6 +43,10 @@ class Integration < ApplicationRecord
   scope :active, -> { where(status: "active") }
   scope :visible_for_project, ->(project) {
     where(company_id: project.company_id, project_id: nil).or(where(project_id: project.id))
+  }
+  scope :youtrack_for_project, ->(project) {
+    visible_for_project(project).active.where(provider: :youtrack)
+      .order(Arel.sql("project_id IS NULL"), :created_at)
   }
 
   # personal_access_token lives in encrypted credentials — no DB lookup possible.

@@ -2,6 +2,7 @@ export interface Trigger {
   id: number;
   kind: string;
   event_type: string;
+  integration_id?: number | null;
   name?: string | null;
   trigger_mode?: string;
   cooldown_seconds?: number;

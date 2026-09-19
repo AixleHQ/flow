@@ -9,6 +9,7 @@ import {
   IconTrash,
   IconUser,
   IconWebhook,
+  IconLink,
 } from '@tabler/icons-react';
 import cronstrue from 'cronstrue';
 import { useCallback, useEffect, useState } from 'react';
@@ -32,6 +33,12 @@ interface StepOption {
   name: string;
 }
 
+export interface YoutrackIntegrationOption {
+  id: number;
+  name: string;
+  scope: 'company' | 'project';
+}
+
 interface TriggersTabProps {
   projectId: number;
   workflowId: number;
@@ -45,6 +52,7 @@ const TG_ICONS: Record<string, typeof IconBolt> = {
   schedule: IconClock,
   slack: IconBrandSlack,
   webhook: IconWebhook,
+  youtrack: IconLink,
 };
 
 const TG_EVENTS: Record<string, string> = {
@@ -52,6 +60,7 @@ const TG_EVENTS: Record<string, string> = {
   schedule: 'SCHEDULE.CRON',
   slack: 'SLACK.MESSAGE',
   webhook: 'WEBHOOK.RECEIVED',
+  youtrack: 'YOUTRACK.EVENT',
 };
 
 function describeCronShort(expr: string): string {
@@ -78,13 +87,16 @@ function triggerTitle(t: Trigger): string {
     }
     return 'Any Slack message';
   }
+  if (t.kind === 'youtrack') {
+    return t.event_type === 'youtrack.comment.mentioned' ? 'YouTrack comment mentions bot' : 'YouTrack issue created';
+  }
   return 'Incoming webhook';
 }
 
 // Off-board triggers fire unattended, so the run belongs to — and uses the
 // credentials of — whoever added the trigger. A column trigger's run belongs to
 // the person the card puts on it, so its creator is shown as provenance only.
-const OFF_BOARD_KINDS = new Set(['slack', 'schedule', 'webhook', 'event']);
+const OFF_BOARD_KINDS = new Set(['slack', 'schedule', 'webhook', 'event', 'youtrack']);
 
 function creatorLabel(t: Trigger): string {
   const name = t.created_by?.name;
@@ -111,6 +123,7 @@ function triggerMeta(t: Trigger): string {
     const channel = pred.channel;
     return typeof channel === 'string' && channel ? `channel ${channel}` : 'any channel';
   }
+  if (t.kind === 'youtrack') return t.event_type.replace('youtrack.', '').replace('.', ' · ');
   const pred = t.filter_predicate ?? {};
   const keys = Object.keys(pred);
   const base = `verification: ${(t as unknown as Record<string, unknown>).verification_strategy ?? 'none'}`;
@@ -128,6 +141,7 @@ function triggerMeta(t: Trigger): string {
 
 export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly }: TriggersTabProps) {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
+  const [youtrackIntegrations, setYoutrackIntegrations] = useState<YoutrackIntegrationOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [editingTrigger, setEditingTrigger] = useState<Trigger | null>(null);
@@ -140,6 +154,7 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
       if (res.ok) {
         const data = await res.json();
         setTriggers(data.triggers ?? []);
+        setYoutrackIntegrations(data.youtrack_integrations ?? []);
       }
     } finally {
       setLoading(false);
@@ -583,6 +598,7 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
           workflowId={workflowId}
           columns={columns}
           sessions={sessions}
+          youtrackIntegrations={youtrackIntegrations}
           editing={editingTrigger}
           defaultKind={defaultKind}
           onClose={closePanel}

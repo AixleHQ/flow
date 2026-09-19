@@ -89,7 +89,7 @@ module InternalTools
     # `board_column_id`, never the column record.
     def page(scope, limit, offset)
       scope.select(Arel.sql(COUNTS_SQL))
-           .preload(:assignee, :workflow_runs, :gates)
+           .preload(:assignee, :workflow_runs, :gates, :external_resources)
            .in_flat_board_order
            .limit(limit)
            .offset(offset)

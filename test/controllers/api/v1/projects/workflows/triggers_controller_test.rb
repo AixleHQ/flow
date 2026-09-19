@@ -32,6 +32,19 @@ module Api
             assert_equal %w[column slack], kinds
           end
 
+          test "index lists active visible YouTrack integrations for the trigger form" do
+            project_connection = create(:integration, :active, provider: :youtrack, company: @company, project: @project,
+                                                                          connected_by: @user, name: "Project YT")
+            company_connection = create(:integration, :active, provider: :youtrack, company: @company, project: nil,
+                                                                          connected_by: @user, name: "Company YT")
+            create(:integration, provider: :youtrack, company: @company, project: @project, connected_by: @user, status: :error)
+
+            get :index, params: { project_id: @project.id, workflow_id: @workflow.id }
+
+            assert_response :success
+            assert_equal [ project_connection.id, company_connection.id ], json["youtrack_integrations"].pluck("id")
+          end
+
           test "create slack trigger persists a TriggerBinding" do
             assert_difference -> { TriggerBinding.count }, 1 do
               post :create, params: {

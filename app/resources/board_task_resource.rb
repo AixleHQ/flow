@@ -97,4 +97,11 @@ class BoardTaskResource < ApplicationResource
         .first(CI_GATE_LIMIT)
         .map { |gate| BoardTaskResource.gate_payload(gate) }
   end
+
+  typelize "Array<{ type: string; readableId: string; url: string }>"
+  attribute :external_resources do |task|
+    task.external_resources.map do |resource|
+      { type: resource.type, readable_id: resource.data["readable_id"], url: resource.url }
+    end
+  end
 end

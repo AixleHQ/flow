@@ -12,6 +12,7 @@ class TriggerBinding < ApplicationRecord
   belongs_to :created_by, class_name: "User", optional: true
   # subject_policy = create_task → the new card is created in this column.
   belongs_to :subject_column, class_name: "BoardColumn", optional: true
+  belongs_to :integration, optional: true
 
   enumerize :trigger_mode, in: %i[auto manual], default: :auto, predicates: true
   # What board task (if any) a run from this trigger is about. See TriggerEngine.
@@ -31,6 +32,7 @@ class TriggerBinding < ApplicationRecord
   validate :create_task_requires_column
   validate :schedule_requires_cron
   validate :workflow_supports_auto_run
+  validate :required_integration_is_visible
 
   scope :active, -> { where(enabled: true) }
   # Match an event to bindings. Project-scoped events (column/webhook/schedule)
@@ -69,6 +71,16 @@ class TriggerBinding < ApplicationRecord
   end
 
   private
+
+  def required_integration_is_visible
+    adapter = Webhooks::AdapterRegistry.for(event_type.to_s.split(".").first)
+    return unless adapter&.requires_integration?
+    return errors.add(:integration, "is required") if integration.nil?
+    unless integration.provider.to_s == adapter.class.provider.to_s && integration.active? &&
+        Integration.visible_for_project(project).exists?(id: integration_id)
+      errors.add(:integration, "must be an active visible #{adapter.class.provider} integration")
+    end
+  end
 
   def workflow_accessible_from_project
     return unless workflow && project

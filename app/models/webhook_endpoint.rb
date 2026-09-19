@@ -12,7 +12,7 @@ class WebhookEndpoint < ApplicationRecord
   belongs_to :created_by, class_name: "User", optional: true
   has_many :received_webhooks, dependent: :destroy
 
-  enumerize :provider, in: %i[slack github gitlab generic], default: :generic, predicates: true
+  enumerize :provider, in: %i[slack github gitlab generic youtrack], default: :generic, predicates: true
   # No predicates here: the `none` value would define a clashing `none?` method.
   enumerize :verification_strategy, in: %i[slack_v0 hmac_sha256 shared_token none], default: :none
 
