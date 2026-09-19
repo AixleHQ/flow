@@ -34,6 +34,9 @@ module Youtrack
     private
 
     def request(method, path, params: {}, body: nil)
+      if @integration.id && !Integration.active.exists?(id: @integration.id)
+        raise Error, "YouTrack is not connected for this project"
+      end
       url = "#{@base_url}#{path}"
       uri = URI.parse(url)
       uri.query = URI.encode_www_form(params.compact) if params.present?

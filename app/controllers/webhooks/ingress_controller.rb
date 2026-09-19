@@ -7,7 +7,7 @@
 # signature on the raw body → dedup on a stable idempotency key → 2xx fast →
 # hand off to Webhooks::ProcessEventJob (normalize → TriggerEngine.publish).
 class Webhooks::IngressController < ActionController::API
-  YOUTRACK_MAX_BODY = 512.kilobytes
+  MAX_ADAPTER_BODY = 512.kilobytes
 
   def receive
     # Access route parameters directly: `params` parses the JSON body before we
@@ -18,8 +18,8 @@ class Webhooks::IngressController < ActionController::API
     adapter = Webhooks::AdapterRegistry.for(endpoint.provider)
     if adapter
       return head :unsupported_media_type unless request.media_type == "application/json"
-      raw = request.body.read(YOUTRACK_MAX_BODY + 1)
-      return head :content_too_large if raw.bytesize > YOUTRACK_MAX_BODY
+      raw = request.body.read(MAX_ADAPTER_BODY + 1)
+      return head :content_too_large if raw.bytesize > MAX_ADAPTER_BODY
     else
       raw = request.raw_post
     end
@@ -51,7 +51,10 @@ class Webhooks::IngressController < ActionController::API
       payload = adapter.redact(payload, event_type, integration)
       return head :ok if payload.nil?
       integration.update_column(:settings, integration.settings.merge("last_received_at" => Time.current.iso8601))
-      return head :ok unless TriggerBinding.active.where(integration_id: integration.id, event_type: event_type).exists?
+      candidate = ReceivedWebhook.new(webhook_endpoint: endpoint, raw_payload: payload)
+      data = adapter.normalize(candidate)[:data]
+      bindings = TriggerBinding.active.where(integration_id: integration.id, event_type: event_type)
+      return head :ok unless bindings.any? { |binding| binding.matches?(data) }
     end
     received = ReceivedWebhook.create!(
       webhook_endpoint: endpoint,

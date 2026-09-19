@@ -81,12 +81,40 @@ class Webhooks::IngressControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_equal 0, ReceivedWebhook.count
 
-    post "/webhooks/in/#{endpoint.slug}", params: " " * (Webhooks::IngressController::YOUTRACK_MAX_BODY + 1), headers: headers
+    post "/webhooks/in/#{endpoint.slug}", params: " " * (Webhooks::IngressController::MAX_ADAPTER_BODY + 1), headers: headers
     assert_response :content_too_large
     assert_equal 0, ReceivedWebhook.count
 
     post "/webhooks/in/#{endpoint.slug}", params: invalid, headers: headers.merge("CONTENT_TYPE" => "text/plain")
     assert_response :unsupported_media_type
     assert_equal 0, ReceivedWebhook.count
+  end
+
+  test "YouTrack drops text that matches no binding and deduplicates matching callbacks" do
+    integration = create(:integration, :active, provider: :youtrack, company: @project.company, project: @project,
+      settings: { "youtrack_project_id" => "0-1" })
+    endpoint = create(:webhook_endpoint, provider: :youtrack, verification_strategy: :shared_token,
+      secret: "x" * 32, project: @project,
+      config: { "integration_id" => integration.id, "header" => "X-Custom-Token" })
+    workflow = create(:workflow, scope: @project)
+    create(:trigger_binding, project: @project, workflow: workflow, integration: integration,
+      event_type: "youtrack.issue.created", filter_predicate: { "text" => { "op" => "contains", "value" => "ship" } })
+    headers = { "CONTENT_TYPE" => "application/json", "X-Custom-Token" => "x" * 32 }
+    payload = { event: "issueCreated", issue: { id: "2-1", idReadable: "APP-1",
+      summary: "private unmatched text", project: { id: "0-1" } } }
+
+    assert_no_difference -> { ReceivedWebhook.count } do
+      post "/webhooks/in/#{endpoint.slug}", params: payload.to_json, headers: headers
+    end
+    assert_response :ok
+    assert integration.reload.settings["last_received_at"].present?
+
+    payload[:issue][:summary] = "ship this"
+    assert_difference -> { ReceivedWebhook.count }, 1 do
+      post "/webhooks/in/#{endpoint.slug}", params: payload.to_json, headers: headers
+      payload[:timestamp] = "later"
+      post "/webhooks/in/#{endpoint.slug}", params: payload.to_json, headers: headers
+    end
+    assert_response :ok
   end
 end

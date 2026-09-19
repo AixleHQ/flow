@@ -293,5 +293,4 @@ class Integration < ApplicationRecord
   def encryption_key_setting
     Settings.encryption.integrations_key
   end
-
 end

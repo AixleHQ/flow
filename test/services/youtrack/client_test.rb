@@ -26,4 +26,21 @@ class Youtrack::ClientTest < ActiveSupport::TestCase
     error = assert_raises(Youtrack::Client::Error) { Youtrack::Client.new(@integration).me }
     assert_equal "YouTrack response is too large", error.message
   end
+
+  test "a client obtained before disconnect cannot send another request" do
+    client = Youtrack::Client.new(@integration)
+    Integration.find(@integration.id).destroy!
+
+    error = assert_raises(Youtrack::Client::Error) { client.me }
+    assert_equal "YouTrack is not connected for this project", error.message
+  end
+
+  test "does not follow redirects or expose their destination" do
+    UrlSafetyValidator.stubs(:resolved_addresses).returns([ IPAddr.new("93.184.216.34") ])
+    stub_request(:get, %r{https://youtrack.example.com/api/users/me})
+      .to_return(status: 302, headers: { "Location" => "https://127.0.0.1/private" })
+
+    error = assert_raises(Youtrack::Client::Error) { Youtrack::Client.new(@integration).me }
+    assert_equal "YouTrack redirects are not allowed", error.message
+  end
 end

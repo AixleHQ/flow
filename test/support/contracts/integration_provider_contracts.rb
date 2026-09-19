@@ -19,9 +19,9 @@ module IntegrationProviderContracts
       assert adapter.verification_strategy.present?
       assert_equal :unsupported, adapter.classify({ "event" => "unknown" })
       event_type = adapter.classify(valid_payload)
-      assert event_type.is_a?(String)
+      assert_kind_of String, event_type
       redacted = adapter.redact(valid_payload, event_type, integration)
-      assert redacted.is_a?(Hash)
+      assert_kind_of Hash, redacted
       assert adapter.dedup_key(endpoint, event_type, redacted).present?
       changed_timestamp = redacted.deep_dup.merge("timestamp" => "later")
       assert_equal adapter.dedup_key(endpoint, event_type, redacted),
@@ -29,7 +29,7 @@ module IntegrationProviderContracts
       received = Struct.new(:webhook_endpoint, :raw_payload).new(endpoint, redacted)
       normalized = adapter.normalize(received)
       assert_equal event_type, normalized[:event_type]
-      assert normalized[:data].is_a?(Hash)
+      assert_kind_of Hash, normalized[:data]
     end
   end
 

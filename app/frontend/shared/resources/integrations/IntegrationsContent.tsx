@@ -309,19 +309,35 @@ export const IntegrationsContent = ({
         onFinish: () => setYoutrackLoading(false),
       },
     );
-  }, [basePath, youtrackProjectId, youtrackScope, youtrackToken, youtrackUrl, youtrackWebhookHeader, youtrackWebhookToken]);
+  }, [
+    basePath,
+    youtrackProjectId,
+    youtrackScope,
+    youtrackToken,
+    youtrackUrl,
+    youtrackWebhookHeader,
+    youtrackWebhookToken,
+  ]);
 
   const handleRotateYoutrack = useCallback(() => {
     if (!youtrackEditTarget) return;
     setYoutrackEditLoading(true);
-    router.patch(`${basePath}/${youtrackEditTarget.id}`, {
-      webhookHeader: youtrackEditHeader.trim(), webhookToken: youtrackEditToken,
-    }, {
-      preserveScroll: true,
-      onSuccess: () => { setYoutrackEditTarget(null); setYoutrackEditToken(''); },
-      onError: () => notifications.show({ message: 'Failed to update YouTrack webhook', color: 'red' }),
-      onFinish: () => setYoutrackEditLoading(false),
-    });
+    router.patch(
+      `${basePath}/${youtrackEditTarget.id}`,
+      {
+        webhookHeader: youtrackEditHeader.trim(),
+        webhookToken: youtrackEditToken,
+      },
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          setYoutrackEditTarget(null);
+          setYoutrackEditToken('');
+        },
+        onError: () => notifications.show({ message: 'Failed to update YouTrack webhook', color: 'red' }),
+        onFinish: () => setYoutrackEditLoading(false),
+      },
+    );
   }, [basePath, youtrackEditHeader, youtrackEditTarget, youtrackEditToken]);
 
   const handleConnectCoder = useCallback(() => {
@@ -649,7 +665,12 @@ export const IntegrationsContent = ({
                                   </CopyButton>
                                 </Group>
                               )}
-                              <Text fz={11} c="dimmed">Last callback: {integration.youtrackLastReceivedAt ? formatDateMedium(integration.youtrackLastReceivedAt) : 'Never'}</Text>
+                              <Text fz={11} c="dimmed">
+                                Last callback:{' '}
+                                {integration.youtrackLastReceivedAt
+                                  ? formatDateMedium(integration.youtrackLastReceivedAt)
+                                  : 'Never'}
+                              </Text>
                             </Stack>
                           )}
                           {/* Which Azure project this connection is pinned to, and
@@ -791,8 +812,16 @@ export const IntegrationsContent = ({
                         )}
                         {integration.provider === 'youtrack' && canExecute && (!readOnly || permissions?.isAdmin) && (
                           <Tooltip label="Rotate webhook token">
-                            <ActionIcon aria-label={`Rotate webhook token for ${integration.name}`} variant="subtle" size="sm"
-                              onClick={() => { setYoutrackEditTarget(integration); setYoutrackEditHeader(integration.youtrackWebhookHeader ?? 'X-YouTrack-Token'); setYoutrackEditToken(''); }}>
+                            <ActionIcon
+                              aria-label={`Rotate webhook token for ${integration.name}`}
+                              variant="subtle"
+                              size="sm"
+                              onClick={() => {
+                                setYoutrackEditTarget(integration);
+                                setYoutrackEditHeader(integration.youtrackWebhookHeader ?? 'X-YouTrack-Token');
+                                setYoutrackEditToken('');
+                              }}
+                            >
                               <IconPencil size={16} />
                             </ActionIcon>
                           </Tooltip>
@@ -917,8 +946,11 @@ export const IntegrationsContent = ({
             value={youtrackWebhookToken}
             onChange={(e) => setYoutrackWebhookToken(e.currentTarget.value)}
           />
-          <TextInput label="Webhook header" value={youtrackWebhookHeader}
-            onChange={(e) => setYoutrackWebhookHeader(e.currentTarget.value)} />
+          <TextInput
+            label="Webhook header"
+            value={youtrackWebhookHeader}
+            onChange={(e) => setYoutrackWebhookHeader(e.currentTarget.value)}
+          />
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setYoutrackOpen(false)}>
               Cancel
@@ -940,15 +972,37 @@ export const IntegrationsContent = ({
         </Stack>
       </Modal>
 
-      <Modal opened={!!youtrackEditTarget} onClose={() => setYoutrackEditTarget(null)} title="Update YouTrack webhook" centered size="sm">
+      <Modal
+        opened={!!youtrackEditTarget}
+        onClose={() => setYoutrackEditTarget(null)}
+        title="Update YouTrack webhook"
+        centered
+        size="sm"
+      >
         <Stack gap="md">
-          <TextInput label="Webhook header" value={youtrackEditHeader}
-            onChange={(e) => setYoutrackEditHeader(e.currentTarget.value)} />
-          <PasswordInput label="New webhook token" description="Update the Webhook Triggers app with this token too (minimum 32 characters)."
-            value={youtrackEditToken} onChange={(e) => setYoutrackEditToken(e.currentTarget.value)} />
-          <Group justify="flex-end"><Button variant="default" onClick={() => setYoutrackEditTarget(null)}>Cancel</Button>
-            <Button onClick={handleRotateYoutrack} loading={youtrackEditLoading}
-              disabled={!youtrackEditHeader.trim() || youtrackEditToken.length < 32}>Save</Button></Group>
+          <TextInput
+            label="Webhook header"
+            value={youtrackEditHeader}
+            onChange={(e) => setYoutrackEditHeader(e.currentTarget.value)}
+          />
+          <PasswordInput
+            label="New webhook token"
+            description="Update the Webhook Triggers app with this token too (minimum 32 characters)."
+            value={youtrackEditToken}
+            onChange={(e) => setYoutrackEditToken(e.currentTarget.value)}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setYoutrackEditTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRotateYoutrack}
+              loading={youtrackEditLoading}
+              disabled={!youtrackEditHeader.trim() || youtrackEditToken.length < 32}
+            >
+              Save
+            </Button>
+          </Group>
         </Stack>
       </Modal>
 

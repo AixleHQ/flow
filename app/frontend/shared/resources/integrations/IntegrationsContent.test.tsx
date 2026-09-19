@@ -79,15 +79,25 @@ describe('IntegrationsContent', () => {
     );
   });
   it('lets an admin rotate a company YouTrack webhook token', async () => {
-    renderPage(<IntegrationsContent title="Integrations" basePath="/company/projects/3/integrations"
-      integrations={[makeIntegration({ id: 8, name: 'YouTrack', provider: 'youtrack', youtrackWebhookHeader: 'X-Old' })]} />,
-      { props: { ...settingsProps, permissions: { isAdmin: true } } });
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/3/integrations"
+        integrations={[
+          makeIntegration({ id: 8, name: 'YouTrack', provider: 'youtrack', youtrackWebhookHeader: 'X-Old' }),
+        ]}
+      />,
+      { props: { ...settingsProps, permissions: { isAdmin: true } } },
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Rotate webhook token for YouTrack' }));
     const dialog = await screen.findByRole('dialog', { name: 'Update YouTrack webhook' });
     await userEvent.type(within(dialog).getByLabelText('New webhook token'), 'n'.repeat(32));
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-    expect(router.patch).toHaveBeenCalledWith('/company/projects/3/integrations/8',
-      expect.objectContaining({ webhookHeader: 'X-Old', webhookToken: 'n'.repeat(32) }), expect.any(Object));
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/3/integrations/8',
+      expect.objectContaining({ webhookHeader: 'X-Old', webhookToken: 'n'.repeat(32) }),
+      expect.any(Object),
+    );
   });
   it('renders the title and a row for each seeded integration', () => {
     renderPage(
