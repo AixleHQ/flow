@@ -16,7 +16,7 @@ module Api
             response.set_header("X-Total-Count", scope.count.to_s)
 
             tasks = scope
-              .includes(:assignee, :child_tasks, :task_comments, :task_assets, { workflow_runs: :workflow }, :pending_gates, :gates)
+              .includes(:assignee, :child_tasks, :task_comments, :task_assets, :external_resources, { workflow_runs: :workflow }, :pending_gates, :gates)
               .then { |s| exact_id_search? ? s.reorder(Arel.sql("(board_tasks.id = #{exact_search_id})::int DESC"), :position, :id) : s.in_board_order }
             tasks = tasks.limit(params[:limit]) if params[:limit].present?
             tasks = tasks.offset(params[:offset]) if params[:offset].present?

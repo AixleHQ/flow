@@ -156,6 +156,46 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_response :redirect
   end
 
+  test "company admin can create a company-wide YouTrack integration from a project page" do
+    integration = create(:integration, :active, provider: :youtrack, company: @company, project: nil, connected_by: @user)
+    service = mock
+    Youtrack::ConnectService.expects(:new).with(
+      company: @company, connected_by: @user, project: nil
+    ).returns(service)
+    service.expects(:create).returns(integration)
+
+    post company_project_integrations_path(@project), params: {
+      provider: "youtrack", scope: "company", base_url: "https://example.youtrack.cloud",
+      permanent_token: "perm:token", youtrack_project_id: "0-1",
+      webhook_header: "X-YouTrack-Token", webhook_token: "x" * 32
+    }
+
+    assert_redirected_to company_project_integrations_path(@project)
+  end
+
+  test "company admin can disconnect a company-wide integration from a project page" do
+    integration = create(:integration, :active, provider: :youtrack, company: @company, project: nil, connected_by: @user)
+
+    delete company_project_integration_path(@project, integration)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_not Integration.exists?(integration.id)
+  end
+
+  test "company admin can rotate a company YouTrack webhook without changing its bindings" do
+    integration = create(:integration, :active, provider: :youtrack, company: @company, project: nil, connected_by: @user)
+    endpoint = create(:webhook_endpoint, company: @company, provider: :youtrack,
+      verification_strategy: :shared_token, secret: "o" * 32,
+      config: { "integration_id" => integration.id, "header" => "X-Old" })
+    patch company_project_integration_path(@project, integration), params: {
+      webhook_header: "X-New", webhook_token: "n" * 32
+    }
+    assert_response :redirect
+    assert_equal "n" * 32, endpoint.reload.secret
+    assert_equal "X-New", endpoint.config["header"]
+    assert_equal "X-New", integration.reload.settings["webhook_header"]
+  end
+
   test "create coder integration happy path persists project-scoped record" do
     stub_request(:get, "https://coder.example.com/api/v2/users/me").to_return(
       status: 200,

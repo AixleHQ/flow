@@ -107,7 +107,14 @@ class TriggerEngine
     def dispatch(event)
       return [] if event.project_id.blank? && event.company_id.blank?
 
-      TriggerBinding.for_event(event).select { |b| b.matches?(event.data) }.map do |binding|
+      bindings = TriggerBinding.for_event(event)
+      adapter = Webhooks::AdapterRegistry.for(event.event_type.to_s.split(".").first)
+      if adapter&.requires_integration?
+        integration = Integration.active.find_by(id: event.data["integration_id"], provider: adapter.class.provider)
+        return [] unless integration
+        bindings = bindings.where(integration_id: integration.id)
+      end
+      bindings.select { |b| b.matches?(event.data) }.map do |binding|
         fire_for_binding(binding: binding, event: event, task: event.board_task, actor: binding.created_by)
       end
     end
@@ -192,12 +199,20 @@ class TriggerEngine
         elsif dispatch.status == "skipped"
           result = nil                              # a prior attempt decided not to start
         else
+          adapter = Webhooks::AdapterRegistry.for(event.event_type.to_s.split(".").first)
+          if adapter&.requires_integration?
+            integration = Integration.active.lock.find_by(id: event.data["integration_id"], provider: adapter.class.provider)
+            unless integration && trigger_binding&.integration_id == integration.id && trigger_binding.reload.enabled?
+              dispatch.update!(status: "skipped", detail: { "reason" => "integration disconnected" })
+              next
+            end
+          end
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
           result = WorkflowService.start(
             workflow: workflow, project: project, user: actor,
             task: subject, mode: :non_interactive,
             input_asset_ids: input_asset_ids_for(event, project),
-            shared_context: slack_run_context(event)
+            shared_context: slack_run_context(event).merge(adapter ? adapter.run_context(event, subject) : {})
           )
           started = result.try(:persisted?)
           dispatch.update!(
@@ -278,23 +293,25 @@ class TriggerEngine
 
     # Resolve the board task a binding's run should be about, per subject_policy.
     def resolve_subject(binding:, event:, fallback_task:)
+      adapter = Webhooks::AdapterRegistry.for(event.event_type.to_s.split(".").first)
       case binding.subject_policy.to_s
-      when "existing_task" then event.board_task || fallback_task
-      when "create_task"   then create_subject_task(binding, event)
+      when "existing_task" then adapter&.find_subject(binding, event) || event.board_task || fallback_task
+      when "create_task"   then create_subject_task(binding, event, adapter)
       else nil # none → task-less, project-level run
       end
     end
 
-    def create_subject_task(binding, event)
+    def create_subject_task(binding, event, adapter)
       column = binding.subject_column
       return nil if column.nil?
 
       # Create directly (not via TaskService) so we don't re-enter check_auto_trigger.
-      column.board.board_tasks.create!(
-        board_column: column,
-        title: render_title(binding.subject_title_template, event),
-        description: render_subject_body(event)
-      )
+      BoardTask.transaction do
+        task = column.board.board_tasks.create!(board_column: column,
+          title: render_title(binding.subject_title_template, event), description: render_subject_body(event))
+        adapter&.record_subject!(task, binding, event)
+        task
+      end
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("[TriggerEngine] create_task failed for binding ##{binding.id}: #{e.message}")
       nil

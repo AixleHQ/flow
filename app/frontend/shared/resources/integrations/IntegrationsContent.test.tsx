@@ -22,6 +22,83 @@ const makeIntegration = (overrides: Partial<Integration> = {}): Integration => (
 });
 
 describe('IntegrationsContent', () => {
+  it('lets a company admin remove a company-wide YouTrack connection from a project', async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/3/integrations"
+        integrations={[makeIntegration({ id: 8, name: 'YouTrack', provider: 'youtrack' })]}
+      />,
+      { props: { ...settingsProps, permissions: { isAdmin: true } } },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    const dialog = await screen.findByRole('dialog', { name: /Remove Integration/i });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() =>
+      expect(router.delete).toHaveBeenCalledWith('/company/projects/3/integrations/8', expect.anything()),
+    );
+  });
+
+  it('keeps company-wide YouTrack removal hidden for a non-admin', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/3/integrations"
+        integrations={[makeIntegration({ provider: 'youtrack' })]}
+      />,
+      { props: { ...settingsProps, permissions: { isAdmin: false } } },
+    );
+
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  });
+  it('lets a company admin choose company scope when connecting YouTrack', async () => {
+    renderPage(
+      <IntegrationsContent title="Integrations" basePath="/company/projects/1/integrations" integrations={[]} />,
+      { props: { ...settingsProps, permissions: { isAdmin: true } } },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /YouTrack/i }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect YouTrack' });
+    expect(within(dialog).getByText('Entire company')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByText('Entire company'));
+    await userEvent.type(within(dialog).getByLabelText('Base URL'), 'https://example.youtrack.cloud');
+    await userEvent.type(within(dialog).getByLabelText('Permanent token'), 'perm:token');
+    await userEvent.type(within(dialog).getByLabelText('YouTrack project database ID'), '0-1');
+    await userEvent.type(within(dialog).getByLabelText('Existing webhook token'), 'x'.repeat(32));
+    await userEvent.clear(within(dialog).getByLabelText('Webhook header'));
+    await userEvent.type(within(dialog).getByLabelText('Webhook header'), 'X-Custom-Token');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/1/integrations',
+      expect.objectContaining({ provider: 'youtrack', scope: 'company', webhookHeader: 'X-Custom-Token' }),
+      expect.any(Object),
+    );
+  });
+  it('lets an admin rotate a company YouTrack webhook token', async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/3/integrations"
+        integrations={[
+          makeIntegration({ id: 8, name: 'YouTrack', provider: 'youtrack', youtrackWebhookHeader: 'X-Old' }),
+        ]}
+      />,
+      { props: { ...settingsProps, permissions: { isAdmin: true } } },
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Rotate webhook token for YouTrack' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Update YouTrack webhook' });
+    await userEvent.type(within(dialog).getByLabelText('New webhook token'), 'n'.repeat(32));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/3/integrations/8',
+      expect.objectContaining({ webhookHeader: 'X-Old', webhookToken: 'n'.repeat(32) }),
+      expect.any(Object),
+    );
+  });
   it('renders the title and a row for each seeded integration', () => {
     renderPage(
       <IntegrationsContent

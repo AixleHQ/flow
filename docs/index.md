@@ -25,6 +25,8 @@ a document is added, removed, or moved here, update this index in the same chang
 
 ## System Design
 
+- **[design/youtrack-integration-tech-design-v6.md](./design/youtrack-integration-tech-design-v6.md)** — Approved YouTrack integration design and implementation contract
+- **[design/integration-abstractions-tech-design-v1.md](./design/integration-abstractions-tech-design-v1.md)** — Integration connection, webhook adapter, and tool resolution proposal
 - **[design/tool-execution.md](./design/tool-execution.md)** — Tool execution strategy framework
 - **[design/meta-workflow.md](./design/meta-workflow.md)** — Meta-workflow / Aixle Builder design
 - **[design/session-config-and-context.md](./design/session-config-and-context.md)** — Session config cascade + context constructor pipeline

@@ -108,6 +108,9 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
   # read as `queued` on the card, and the runs that are waiting are resolved in
   # ONE query for the whole page. Asking per task is the shape this test exists
   # to forbid.
+  #
+  # 9 -> 10 with external resources: a task's linked external issues are preloaded
+  # in ONE query for the whole page, same shape as the session queue above.
   test "board_list_tasks does not produce N+1 queries" do
     create_list(:board_task, 10, board: @board, board_column: @col1)
 
@@ -121,7 +124,7 @@ class InternalTools::BoardReadToolsTest < ActiveSupport::TestCase
       InternalTools::BoardListTasks.new(params: {}, session: @session).execute
     end
 
-    assert_operator query_count, :<=, 9
+    assert_operator query_count, :<=, 10
   end
 
   # === board_get_task ===
