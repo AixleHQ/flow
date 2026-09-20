@@ -44,11 +44,15 @@ module Youtrack
       payload = received.raw_payload
       issue = payload["issue"].to_h
       comment = payload["comment"].to_h
+      integration = Integration.find_by(id: endpoint.config["integration_id"])
+      resource = ExternalResource.new(type: "youtrack_issue", external_instance: integration&.youtrack_base_url,
+        data: { "readable_id" => issue["idReadable"] })
       created = payload["event"] == "issueCreated"
       text = created ? [ issue["summary"], issue["description"] ].compact.join("\n\n") : comment["text"]
       { event_type: classify(payload), subject: issue["id"], data: {
         "integration_id" => endpoint.config["integration_id"], "youtrack_project_id" => issue.dig("project", "id"),
-        "issue_id" => issue["id"], "issue_readable_id" => issue["idReadable"],
+        "issue_id" => issue["id"], "issue_readable_id" => issue["idReadable"], "issue_url" => integration && resource.url,
+        "source_event" => payload["event"],
         "summary" => issue["summary"], "description" => issue["description"], "text" => bounded(text),
         "comment_id" => comment["id"], "actor_id" => (comment["author"] || issue["reporter"]).to_h["id"],
         "actor_login" => (comment["author"] || issue["reporter"]).to_h["login"], "occurred_at" => payload["timestamp"]
@@ -57,10 +61,12 @@ module Youtrack
 
     def run_context(event, task)
       data = event.data.slice("integration_id", "youtrack_project_id", "issue_id", "issue_readable_id",
-        "comment_id", "actor_id", "actor_login", "summary", "description", "text", "occurred_at")
+        "issue_url", "source_event", "comment_id", "actor_id", "actor_login", "summary", "description", "text", "occurred_at")
       if task
         data["linked_task"] = { "id" => task.id, "title" => task.title, "column" => task.board_column&.name,
-          "archived" => task.archived?, "description" => bounded(task.description) }
+          "archived" => task.archived?, "description" => bounded(task.description),
+          "url" => Rails.application.routes.url_helpers.company_project_board_url(
+            task.board.project_id, task: task.id, host: Settings.domain, protocol: Settings.protocol) }
       end
       { "youtrack" => data.compact }
     end
@@ -78,10 +84,14 @@ module Youtrack
       links = ExternalResource.joins(board_task: :board)
         .where(type: "youtrack_issue", external_instance: binding.integration.youtrack_base_url,
           external_id: event.data["issue_id"], boards: { project_id: binding.project_id })
-        .merge(BoardTask.active).order(:created_at)
+        .merge(BoardTask.active).order(:created_at, :id)
       same_workflow = links.select { |link| link.data["workflow_id"].to_s == binding.workflow_id.to_s }
       return same_workflow.first.board_task if same_workflow.any?
-      links.one? ? links.first.board_task : nil
+      return links.first.board_task if links.one?
+      if links.many?
+        Rails.logger.info("[YouTrack] ambiguous_external_subject binding_id=#{binding.id} event_id=#{event.id}")
+      end
+      nil
     end
 
     private
