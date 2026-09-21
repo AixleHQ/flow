@@ -434,6 +434,37 @@
   background: var(--app-action-hover);
 }
 
+/* Project rows in the switcher: tighter than Admin rows; star sits outside the link. */
+.dpProjectRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  margin-bottom: 2px;
+  width: 100%;
+  transition: background 0.12s;
+}
+
+.dpProjectRow:hover {
+  background: var(--app-action-hover);
+}
+
+.dpProjectRow:hover .dpName {
+  color: var(--app-text-primary);
+}
+
+.dpItemLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+}
+
 .dpIco {
   width: 24px;
   height: 24px;
@@ -443,6 +474,12 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.dpProjectRow .dpIco {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
 }
 
 .dpIcoCompany {
@@ -459,13 +496,61 @@
   font-size: 13px;
   color: var(--app-text-secondary);
   flex: 1;
+  min-width: 0;
   text-align: left;
   margin: 0;
   line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.dpFavorite {
-  color: var(--mantine-color-yellow-6);
+.dpStar {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: color 0.12s, background 0.12s, opacity 0.12s;
+  font-family: inherit;
+}
+
+.dpProjectRow:hover .dpStar,
+.dpStarOn,
+.dpStar:focus-visible {
+  opacity: 1;
+}
+
+.dpStar:hover {
+  background: var(--app-action-hover);
+  color: var(--app-accent);
+}
+
+.dpStar:active {
+  transform: scale(0.92);
+}
+
+.dpStarOn {
+  color: var(--app-accent);
+}
+
+.dpStar:focus-visible {
+  outline: 2px solid var(--app-accent);
+  outline-offset: 1px;
+}
+
+.dpSplit {
+  height: 1px;
+  background: var(--app-border-default);
+  margin: 7px 8px;
   flex-shrink: 0;
 }
 

@@ -21,6 +21,7 @@ import {
   IconRobot,
   IconSettings,
   IconSparkles,
+  IconStar,
   IconStarFilled,
   IconTerminal2,
   IconTool,
@@ -41,6 +42,7 @@ import {
   companyProjectAssetsPath,
   companyProjectBoardPath,
   companyProjectConfigItemsPath,
+  companyProjectFavoritePath,
   companyProjectIntegrationsPath,
   companyProjectMCPServersPath,
   companyProjectMembersPath,
@@ -460,6 +462,17 @@ function SidebarWorkspaceSwitcher({
     router.visit(companyProjectsPath());
   };
 
+  const handleToggleFavorite = (project: SharedProject) => {
+    const path = companyProjectFavoritePath(project.id);
+    const options = { preserveScroll: true, preserveState: true };
+
+    if (project.favorite) {
+      router.delete(path, options);
+    } else {
+      router.post(path, {}, options);
+    }
+  };
+
   const handleNewProject = () => {
     setPopoverOpen(false);
     setCreateModalOpened(true);
@@ -526,24 +539,46 @@ function SidebarWorkspaceSwitcher({
           <div className={classes.swProjectsSection}>
             <span className={classes.dpLabel}>PROJECTS</span>
             <div className={classes.swProjectsList}>
-              {filteredProjects.map((project) => {
+              {filteredProjects.map((project, index) => {
                 const isActive = String(project.id) === currentProjectId;
+                const prev = filteredProjects[index - 1];
+                const showDivider = Boolean(prev?.favorite && !project.favorite);
+                const favoriteLabel = project.favorite
+                  ? `Remove ${project.name} from favorites`
+                  : `Add ${project.name} to favorites`;
+
                 return (
-                  <UnstyledButton
-                    key={project.id}
-                    component={Link}
-                    href={companyProjectPath(String(project.id))}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`${classes.dpItem} ${isActive ? classes.dpItemActive : ''}`}
-                    onClick={handleProjectClick}
-                  >
-                    <div className={classes.dpIco}>
-                      <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
+                  <Fragment key={project.id}>
+                    {showDivider && <div className={classes.dpSplit} role="separator" />}
+                    <div className={`${classes.dpProjectRow} ${isActive ? classes.dpItemActive : ''}`}>
+                      <Link
+                        href={companyProjectPath(String(project.id))}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={classes.dpItemLink}
+                        onClick={handleProjectClick}
+                      >
+                        <div className={classes.dpIco}>
+                          <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
+                        </div>
+                        <span className={classes.dpName}>{project.name}</span>
+                        {isActive && <IconCheck size={12} className={classes.dpCheck} />}
+                      </Link>
+                      <button
+                        type="button"
+                        className={`${classes.dpStar} ${project.favorite ? classes.dpStarOn : ''}`}
+                        aria-label={favoriteLabel}
+                        aria-pressed={project.favorite}
+                        title={favoriteLabel}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleToggleFavorite(project);
+                        }}
+                      >
+                        {project.favorite ? <IconStarFilled size={13} /> : <IconStar size={13} />}
+                      </button>
                     </div>
-                    <span className={classes.dpName}>{project.name}</span>
-                    {project.favorite && <IconStarFilled size={12} className={classes.dpFavorite} aria-hidden />}
-                    {isActive && <IconCheck size={12} className={classes.dpCheck} />}
-                  </UnstyledButton>
+                  </Fragment>
                 );
               })}
             </div>

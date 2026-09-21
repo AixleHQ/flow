@@ -345,7 +345,7 @@ describe('AppSidebar', () => {
     expect(projectLinks.map((el) => el.getAttribute('href'))).toEqual(['/company/projects/2', '/company/projects/1']);
   });
 
-  it('shows a star mark only on favorited projects', async () => {
+  it('offers a favorite control on every project in the workspace switcher', async () => {
     const user = userEvent.setup();
     renderAuthedPage(
       <AppSidebar
@@ -359,11 +359,50 @@ describe('AppSidebar', () => {
 
     await user.click(screen.getByRole('button', { name: /All Projects/ }));
 
-    const zeta = await screen.findByRole('link', { name: /Zeta/ });
-    const alpha = screen.getByRole('link', { name: /Alpha/ });
-    // Favorited rows get IconStarFilled; non-favorites have no svg in the row.
-    expect(zeta.querySelector('svg')).not.toBeNull();
-    expect(alpha.querySelector('svg')).toBeNull();
+    expect(await screen.findByRole('button', { name: 'Add Alpha to favorites' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Remove Zeta from favorites' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('favorites a project from the workspace switcher without closing the popover', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[{ id: 5, name: 'Acme', slug: 'acme', state: 'active', favorite: false }]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+    await user.click(await screen.findByRole('button', { name: 'Add Acme to favorites' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/5/favorite',
+      {},
+      { preserveScroll: true, preserveState: true },
+    );
+    // Popover stays open so the user can keep starring.
+    expect(screen.getByRole('button', { name: 'Add Acme to favorites' })).toBeInTheDocument();
+  });
+
+  it('unfavorites a project from the workspace switcher', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[{ id: 5, name: 'Acme', slug: 'acme', state: 'active', favorite: true }]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+    await user.click(await screen.findByRole('button', { name: 'Remove Acme from favorites' }));
+
+    expect(router.delete).toHaveBeenCalledWith('/company/projects/5/favorite', {
+      preserveScroll: true,
+      preserveState: true,
+    });
   });
 
   it('hides archived projects from the workspace switcher', async () => {
