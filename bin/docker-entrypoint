@@ -20,8 +20,17 @@ set -e
 # there must not hand its target to the app user. BusyBox already behaves this
 # way under -R; the flag states it, so swapping the base image for one with GNU
 # coreutils — where dereferencing is the default — can't silently reintroduce it.
+#
+# The /app/tmp, /app/log and /app/storage dirs are created here, while we are
+# still root, because the bind-mounted checkout may not carry them (only
+# tmp/pids and tmp/storage are tracked via .keep) and after the su-exec drop
+# the app user cannot mkdir at the mount root. Without tmp/pids Puma dies on
+# `No such file or directory @ rb_sysopen - tmp/pids/mcp.pid` before it logs
+# anything (config/puma_mcp.rb).
 if [ "$(id -u)" = "0" ]; then
-  mkdir -p /bundle_cache /home/app
+  mkdir -p /bundle_cache /home/app \
+           /app/tmp/pids /app/tmp/cache /app/tmp/sockets \
+           /app/log /app/storage
   # Linux bind-mounts keep the host uid. The image `app` user is uid 100, so
   # yarn cannot mkdir /app/node_modules on a uid-1000 checkout (EACCES on
   # `make setup`). Align app with /app's owner when that owner is not root
@@ -35,7 +44,7 @@ if [ "$(id -u)" = "0" ]; then
     sed -i "s/^app:x:${app_uid}:${app_gid}/app:x:${mnt_uid}:${mnt_gid}/" /etc/passwd
     sed -i "s/^app:x:${app_gid}/app:x:${mnt_gid}/" /etc/group
   fi
-  chown -Rh app:app /bundle_cache /home/app 2>/dev/null || true
+  chown -Rh app:app /bundle_cache /home/app /app/tmp /app/log /app/storage 2>/dev/null || true
   # See bin/run-as-app: grant the app user access to the host Docker socket
   # when it's mounted (root:root 660 on the host side). No-op otherwise.
   if [ -S /var/run/docker.sock ]; then

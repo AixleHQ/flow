@@ -7,7 +7,6 @@
 # `$XDG_CONFIG_HOME/git/ignore` or `~/.config/git/ignore`
 
 # web-specific
-/tmp/
 /log/
 .bundle
 
@@ -15,7 +14,9 @@
 .env*
 !.env.example
 
-# Ignore all logfiles and tempfiles.
+# Ignore all logfiles and tempfiles. Keep these as `tmp/*`, never `/tmp/`: a
+# whole-directory pattern stops git descending into tmp/, which silently voids
+# every `!/tmp/...` negation below and drops the tracked .keep placeholders.
 log/*
 tmp/*
 !/log/.keep
