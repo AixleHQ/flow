@@ -75,36 +75,12 @@ class SessionAdmissionService
       transaction do |policy|
         next if !policy.enabled? || policy.paused?
 
-        # An explicit project limit is a RESERVATION: the project can always reach
-        # it, because nothing else is ever allowed to occupy it. That is what the
-        # budget rule buys — the reservations are validated to fit inside the
-        # ceiling, so honouring each one in full can never exceed it.
-        #
-        # Everyone else shares what is left over. Counting that pool against total
-        # occupancy instead would hand a reserved project's idle slots to whoever
-        # asked first, and the reservation would be a number on a screen rather
-        # than capacity anybody can count on.
-        reserved_keys = SessionConcurrencyLimit.where(scope_type: "Project")
-                                               .pluck(:scope_id).map { |id| "project:#{id}" }
-        ceiling = policy.installation_limit
-        if ceiling
-          unreserved_occupied = SessionAdmission.occupied.joins(:session_admission_pool)
-                                                .where.not(session_admission_pools: { key: reserved_keys }).count
-          free_headroom = [ ceiling - SessionConcurrencyLimit.sum(:max_sessions) - unreserved_occupied, 0 ].max
-          # The ceiling itself, over every pool including the reserved ones.
-          #
-          # In the state the budget rule describes — reservations summing to no
-          # more than the ceiling — this can never bite: the unreserved are held
-          # to the remainder, so the reserved aggregate is always there for the
-          # projects that reserved it. It exists for the state the rule cannot
-          # prevent now that the ceiling is deployment configuration read live: an
-          # operator lowering it below the sum of reservations. Then the ceiling
-          # wins and the reservations compete, rather than the ceiling quietly
-          # becoming advisory. QueueHealthCheck reports that as over-commitment.
-          ceiling_headroom = [ ceiling - SessionAdmission.occupied.count, 0 ].max
-        end
+        # Materialised first so the budget resolves every pool's company in one
+        # query instead of one per pool.
+        pools = pools_with_waiting_head.to_a
+        budget = SessionAdmissionBudget.new(pools.map(&:key))
 
-        pools_with_waiting_head.each do |pool|
+        pools.each do |pool|
           pool.lock!
           candidates = pool.session_admissions.unreleased.where(admitted_at: nil, stop_requested_at: nil).order(:id)
           head = candidates.first
@@ -112,20 +88,15 @@ class SessionAdmissionService
 
           key, cap = pool_configuration(policy, head.terminal_session)
           # A head whose scope no longer maps to this pool is an installation pool
-          # left over from when the installation limit selected a mode instead of
-          # being a ceiling. Nothing is ever added to one again, so it is drained
-          # against the cap it was created with rather than re-scoped or stranded.
+          # left over from when the installation limit selected which pool a
+          # session belonged to. Nothing is ever added to one again, so it is
+          # drained against the cap it was created with rather than re-scoped.
           cap = pool.limit unless key == pool.key
 
           pool.update!(limit: cap, policy_revision: policy.revision) if key == pool.key
-          available = cap - pool.session_admissions.occupied.count
-          # A reserved project draws only on its own reservation and is bounded by
-          # nothing else; an unreserved one draws on the shared remainder.
-          reserved = pool.key.in?(reserved_keys)
-          available = [ available, free_headroom ].min if free_headroom && !reserved
-          available = [ available, ceiling_headroom ].min if ceiling_headroom
-          budget = [ available, limit - granted.size ].min.clamp(0, limit)
-          candidates.limit(budget).each do |admission|
+          available = budget.clamp(cap - pool.session_admissions.occupied.count, pool.key)
+          take = [ available, limit - granted.size ].min.clamp(0, limit)
+          candidates.limit(take).each do |admission|
             session = admission.terminal_session
             begin
               ensure_run_active!(session)
@@ -135,10 +106,7 @@ class SessionAdmissionService
             end
             admission.update!(admitted_at: Time.current, permit_token: SecureRandom.uuid, wait_reason: "dispatch_pending")
             granted << admission.id
-            # Spend both as we go: two pools drained in one pass must not each be
-            # told the whole remainder, or the whole ceiling, is free.
-            free_headroom -= 1 if free_headroom && !reserved
-            ceiling_headroom -= 1 if ceiling_headroom
+            budget.spend!(pool.key)
           end
           # No break on an exhausted remainder: a reserved project further down the
           # scan is still owed its own slots, and they are not drawn from it.

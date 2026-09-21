@@ -13,26 +13,29 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
     SessionConcurrencyLimit.new(scope_type: "Project", scope_id: project.id, max_sessions: max_sessions)
   end
 
-  test "Project is the only scope there is" do
+  def allocation(excluding: nil)
+    SessionConcurrencyAllocation.new(company_id: @company.id, excluding: excluding)
+  end
+
+  test "only Project and Company are scopes" do
     limit = SessionConcurrencyLimit.new(scope_type: "User", scope_id: @user.id, max_sessions: 2)
 
     assert_not limit.valid?
     assert_includes limit.errors[:scope_type].to_sentence, "is not included"
   end
 
-  test "with no installation ceiling a project may be given any positive limit" do
-    with_ceiling(nil)
-
+  test "with no company limit a project may be given any positive limit" do
     limit = limit_for(@project, 500)
+
     assert limit.valid?, limit.errors.full_messages.to_sentence
   end
 
-  test "explicit project limits are allocated out of the installation ceiling" do
-    with_ceiling(10)
+  test "explicit project limits are allocated out of their company's limit" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 10)
     other = create(:project, owner: @user, company: @company)
     SessionConcurrencyLimit.set!(scope: other, max_sessions: 7)
 
-    assert limit_for(@project, 3).valid?, "the ceiling is a budget, and 3 is what is left of it"
+    assert limit_for(@project, 3).valid?, "the company limit is a budget, and 3 is what is left of it"
 
     refused = limit_for(@project, 4)
     assert_not refused.valid?
@@ -41,7 +44,7 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
 
   # Otherwise raising a project from 4 to 5 would be refused by its own 4.
   test "a project's own current allocation is not counted against changing it" do
-    with_ceiling(10)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 10)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 10)
 
     existing = SessionConcurrencyLimit.find_by(scope_type: "Project", scope_id: @project.id)
@@ -50,48 +53,89 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
     assert existing.valid?, existing.errors.full_messages.to_sentence
   end
 
-  # The budget is installation-wide, but the person spending it is not: a company
-  # admin must not learn the names, or the count, of projects they cannot see.
-  test "the refusal names nobody" do
-    with_ceiling(4)
+  # The whole point of moving the budget down a tier: what another customer has
+  # reserved is not spent out of this one's capacity, and never was theirs to see.
+  test "another company's reservations do not touch this company's budget" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 4)
     rival = create(:user, :with_company)
-    elsewhere = create(:project, owner: rival, company: rival.companies.first, name: "Rival Gateway")
+    rival_company = rival.companies.first
+    SessionConcurrencyLimit.set!(scope: rival_company, max_sessions: 4)
+    elsewhere = create(:project, owner: rival, company: rival_company, name: "Rival Gateway")
     SessionConcurrencyLimit.set!(scope: elsewhere, max_sessions: 4)
+
+    allowed = limit_for(@project, 4)
+
+    assert allowed.valid?, allowed.errors.full_messages.to_sentence
+  end
+
+  test "the refusal says what the company has and what is left" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 4)
+    mine = create(:project, owner: @user, company: @company)
+    SessionConcurrencyLimit.set!(scope: mine, max_sessions: 4)
 
     refused = limit_for(@project, 2)
 
     assert_not refused.valid?
     message = refused.errors[:max_sessions].to_sentence
-    assert_no_match(/Rival/, message)
-    assert_no_match(/#{elsewhere.name}/, message)
+    assert_match(/company limit of 4/, message)
     assert_match(/4 of 4/, message)
   end
 
-  test "a breakdown names this company's own projects and sums the rest" do
-    with_ceiling(20)
+  test "a breakdown names the company's own projects" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 20)
     mine = create(:project, owner: @user, company: @company, name: "Gateway")
     SessionConcurrencyLimit.set!(scope: mine, max_sessions: 3)
     rival = create(:user, :with_company)
     theirs = create(:project, owner: rival, company: rival.companies.first)
     SessionConcurrencyLimit.set!(scope: theirs, max_sessions: 5)
 
-    breakdown = SessionConcurrencyAllocation.new.breakdown_for(@company.id)
+    breakdown = allocation.breakdown
 
-    assert_equal [ "Gateway", SessionConcurrencyAllocation::ELSEWHERE ], breakdown.map { |a| a[:name] }
-    assert_equal [ 3, 5 ], breakdown.map { |a| a[:max_sessions] }
+    assert_equal [ "Gateway" ], breakdown.map { |a| a[:name] }
+    assert_equal [ 3 ], breakdown.map { |a| a[:max_sessions] }
   end
 
-  test "a fully allocated ceiling leaves nothing rather than a negative number" do
-    with_ceiling(5)
+  test "a fully allocated company leaves nothing rather than a negative number" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 5)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 5)
 
-    assert_equal 0, SessionConcurrencyAllocation.new.available
+    assert_equal 0, allocation.available
   end
 
-  test "no ceiling means no budget to be left of" do
-    with_ceiling(nil)
+  test "no company limit means no budget to be left of" do
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 5)
 
-    assert_nil SessionConcurrencyAllocation.new.available
+    assert_nil allocation.available
+  end
+
+  # A downgrade of what a customer pays for must not be blocked by how they
+  # divided it among projects.
+  test "a company may be lowered below its own projects' reservations" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 10)
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 8)
+
+    row = SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: @company.id)
+    row.max_sessions = 3
+
+    assert row.valid?, row.errors.full_messages.to_sentence
+  end
+
+  test "over-commitment is reported rather than refused" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 10)
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 3)
+    other = create(:project, owner: @user, company: @company)
+    SessionConcurrencyLimit.set!(scope: other, max_sessions: 2)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 3)
+
+    overcommitted = SessionConcurrencyLimit.overcommitted_companies
+
+    assert_equal [ { company_id: @company.id, limit: 3, reserved: 5 } ], overcommitted
+  end
+
+  test "a company within its reservations is not reported" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 10)
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 4)
+
+    assert_empty SessionConcurrencyLimit.overcommitted_companies
   end
 end

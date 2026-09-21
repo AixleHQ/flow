@@ -28,6 +28,9 @@ class CompanyDashboard < Administrate::BaseDashboard
       collection: ->(field) { available_events_collection(field, :state) }
     ),
     settings: Field::JSONB,
+    # Virtual, so never searchable: Administrate would build a LIKE against a
+    # column that is not there.
+    session_concurrency_limit: Field::Number.with_options(searchable: false),
     initial_admin_email: Field::String,
     initial_admin_password: Field::Password,
     users: Field::HasMany,
@@ -59,6 +62,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     secondary_color
     state
     settings
+    session_concurrency_limit
     users
     projects
     created_at
@@ -75,6 +79,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     secondary_color
     state_event
     settings
+    session_concurrency_limit
   ].freeze
 
   FORM_ATTRIBUTES_NEW = %i[

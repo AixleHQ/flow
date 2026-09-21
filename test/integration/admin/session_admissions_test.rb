@@ -26,14 +26,16 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
     assert_match(/not queued at all/, response.body)
   end
 
-  test "enabling reads the cap from the deployment configuration, not the form" do
-    with_scope_defaults(installation_limit: 7)
+  # The buttons carry no capacity: enabling only performs the cutover, and every
+  # limit keeps coming from where it already lived.
+  test "enabling carries no capacity of its own" do
+    with_scope_defaults(project: 7)
     SessionRuntimeInventory.stubs(:fetch).returns([])
 
     patch admin_session_admission_path, params: { commit_action: "activate" }
 
     assert SessionAdmissionPolicy.current.enabled?
-    assert_equal 7, SessionAdmissionPolicy.current.installation_limit
+    assert_equal 7, SessionAdmissionPolicy.scope_default("Project")
   end
 
   test "enabling is refused while the runtime still holds legacy session resources" do
@@ -67,7 +69,7 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
 
   test "pausing keeps occupied slots and resuming admits what waited" do
     SessionRuntimeInventory.stubs(:fetch).returns([])
-    with_ceiling(1)
+    with_admission(project: 1)
     project = create(:project, owner: @owner, company: @owner.companies.first)
     first = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))
     second = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))
