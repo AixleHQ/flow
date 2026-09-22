@@ -24,7 +24,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      workflow = Workflow.find(params[:workflow_id])
+      workflow = project_workflows.find(params[:workflow_id])
 
       if workflow.system?
         return error("Cannot delete system workflow '#{workflow.name}'")

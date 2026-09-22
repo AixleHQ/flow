@@ -19,10 +19,6 @@ module InternalTools
             type: "object",
             description: "Optional workflow config (base_tool_ids, etc.)"
           },
-          project_id: {
-            type: "integer",
-            description: "Target project ID. Defaults to current project."
-          },
           description: {
             type: "string",
             description: "Workflow description"

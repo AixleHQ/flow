@@ -10,12 +10,7 @@ module InternalTools
       input_schema({
         type: "object",
         required: [],
-        properties: {
-          project_id: {
-            type: "integer",
-            description: "Project ID. Defaults to current project."
-          }
-        }
+        properties: {}
       })
     end
 

@@ -11,8 +11,10 @@ class InternalTools::MetaCreateToolTest < ActiveSupport::TestCase
     # Standalone (non-workflow) builder session: exposes #project and a nil
     # #step_run, matching what require_project_context!/target_project read.
     project = @project
+    user = @user
     @session = Object.new
     @session.define_singleton_method(:project) { project }
+    @session.define_singleton_method(:user) { user }
     @session.define_singleton_method(:step_run) { nil }
   end
 

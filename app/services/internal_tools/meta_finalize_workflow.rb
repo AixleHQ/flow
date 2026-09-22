@@ -76,8 +76,8 @@ module InternalTools
 
         if step.agent_id.blank?
           warnings << "Step '#{step.name}' has no agent assigned — will use project default"
-        elsif !Agent.exists?(step.agent_id)
-          errors << "Step '#{step.name}' references non-existent agent_id #{step.agent_id}"
+        elsif !Agent.visible_for_project(project).exists?(step.agent_id)
+          errors << "Step '#{step.name}' references agent_id #{step.agent_id}, which is not an agent of this project"
         end
 
         if bound_to_column && !step.allow_non_interactive
@@ -111,24 +111,21 @@ module InternalTools
     end
 
     def validate_linked_resources(step, errors)
-      if step.tool_ids.present?
-        missing = step.tool_ids - Tool.not_deleted.where(id: step.tool_ids).pluck(:id)
-        missing.each { |id| errors << "Step '#{step.name}' links non-existent tool_id #{id}" }
-      end
+      {
+        tool_ids: Tool.visible_for_project(project),
+        skill_ids: Skill.visible_for_project(project),
+        mcp_server_ids: MCPServer.visible_for_project(project),
+        asset_ids: Asset.visible_for_project(project),
+        repository_ids: Repository.visible_for_project(project),
+        config_item_ids: ConfigItem.visible_for_project(project)
+      }.each do |field, visible|
+        ids = step.public_send(field)
+        next if ids.blank?
 
-      if step.skill_ids.present?
-        missing = step.skill_ids - Skill.where(id: step.skill_ids).pluck(:id)
-        missing.each { |id| errors << "Step '#{step.name}' links non-existent skill_id #{id}" }
-      end
-
-      if step.mcp_server_ids.present?
-        missing = step.mcp_server_ids - MCPServer.where(id: step.mcp_server_ids).pluck(:id)
-        missing.each { |id| errors << "Step '#{step.name}' links non-existent mcp_server_id #{id}" }
-      end
-
-      if step.asset_ids.present?
-        missing = step.asset_ids - Asset.where(deleted_at: nil, id: step.asset_ids).pluck(:id)
-        missing.each { |id| errors << "Step '#{step.name}' links non-existent asset_id #{id}" }
+        missing = ids.map(&:to_i) - visible.where(id: ids).pluck(:id)
+        missing.each do |id|
+          errors << "Step '#{step.name}' links #{field.to_s.singularize} #{id}, which is missing, disabled or not in this project"
+        end
       end
     end
 

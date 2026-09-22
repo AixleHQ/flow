@@ -32,7 +32,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      column = BoardColumn.find(params[:column_id])
+      column = project_board_columns.find(params[:column_id])
 
       attrs = {}
       attrs[:name] = params[:name] if params.key?(:name)

@@ -120,4 +120,33 @@ class StepTest < ActiveSupport::TestCase
       step_a.destroy
     end
   end
+
+  test "rejects agents, tools, MCP servers and repositories of another project" do
+    other = create(:project, :standalone)
+    step = build(:step, workflow: @workflow,
+                        agent: create(:agent, scope: other),
+                        tool_ids: [ create(:tool, scope: other).id ],
+                        mcp_server_ids: [ create(:mcp_server, scope: other).id ],
+                        repository_ids: [ create(:repository, scope: other).id ])
+
+    assert_not step.valid?
+    assert_equal %i[agent_id mcp_server_ids repository_ids tool_ids], step.errors.attribute_names.sort
+  end
+
+  test "accepts own resources and platform tools" do
+    platform_tool = create(:tool, :system)
+    step = build(:step, workflow: @workflow,
+                        agent: create(:agent, scope: @project),
+                        tool_ids: [ create(:tool, scope: @project).id, platform_tool.id ],
+                        asset_ids: [ create(:asset, scope: @company).id ])
+
+    assert step.valid?, step.errors.full_messages.to_sentence
+  end
+
+  test "a stale foreign id already on the step does not block unrelated edits" do
+    step = create(:step, workflow: @workflow)
+    step.update_column(:mcp_server_ids, [ create(:mcp_server, scope: create(:project, :standalone)).id ])
+
+    assert step.reload.update(name: "Renamed"), step.errors.full_messages.to_sentence
+  end
 end

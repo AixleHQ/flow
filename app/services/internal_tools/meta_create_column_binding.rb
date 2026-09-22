@@ -35,8 +35,8 @@ module InternalTools
     def execute
       require_project_context!
 
-      column = BoardColumn.find(params[:column_id])
-      workflow = Workflow.find(params[:workflow_id])
+      column = project_board_columns.find(params[:column_id])
+      workflow = project_workflows.find(params[:workflow_id])
 
       if column.column_workflow_binding.present?
         existing = column.column_workflow_binding
@@ -50,7 +50,7 @@ module InternalTools
         # The builder agent acts for whoever launched it, so that user owns the
         # trigger it creates. `try` because a standalone (non-workflow) session
         # need not expose a user.
-        created_by: workflow_run&.user || session.try(:user),
+        created_by: acting_user,
         trigger_mode: params[:trigger_mode] || "manual",
         cooldown_seconds: params[:cooldown_seconds] || 5
       )

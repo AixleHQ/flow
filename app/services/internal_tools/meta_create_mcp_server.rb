@@ -28,9 +28,6 @@ module InternalTools
           headers: {
             type: "object"
           },
-          scope_id: {
-            type: "integer"
-          },
           transport: {
             enum: %w[http sse stdio],
             type: "string",
@@ -52,8 +49,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      scope_id = params[:scope_id] || target_project&.id
-      scope_record = Project.find(scope_id)
+      scope_record = project
 
       mcp = MCPServer.create!(
         scope: scope_record,

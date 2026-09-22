@@ -4,16 +4,52 @@ module InternalTools
   module MetaToolHelpers
     private
 
+    # A builder session acts for the user who launched it, inside that
+    # session's project and nowhere else — ids in params are never trusted to
+    # pick another project.
     def require_project_context!
       raise WorkflowContextError, "This tool requires a project context" unless project
+
+      unless Web::Company::Projects::AixleBuilderPolicy.new(ProjectContext.new(acting_user, {}, project: project), nil).start?
+        raise WorkflowContextError, "The session owner can no longer edit this project"
+      end
+
+      pin_to_session_project!(:project_id)
+      pin_to_session_project!(:scope_id)
+    end
+
+    def acting_user
+      workflow_run&.user || session.try(:user)
     end
 
     def target_project
-      if params[:project_id].present?
-        Project.find(params[:project_id])
-      else
-        project
-      end
+      project
+    end
+
+    def pin_to_session_project!(key)
+      return if params[key].blank? || params[key].to_i == project.id
+
+      raise WorkflowContextError, "Builder tools act only on this session's project (#{project.id}); #{key} #{params[key]} is not allowed"
+    end
+
+    def project_workflows
+      Workflow.visible_for_project(project)
+    end
+
+    def find_project_step!(id)
+      Step.not_deleted.where(workflow_id: project_workflows.select(:id)).find(id)
+    end
+
+    def find_project_sub_step!(id)
+      SubStep.where(step_id: Step.where(workflow_id: project_workflows.select(:id)).select(:id)).find(id)
+    end
+
+    def project_board_columns
+      BoardColumn.where(board_id: Board.where(project_id: project.id).select(:id))
+    end
+
+    def find_project_column_binding!(id)
+      ColumnWorkflowBinding.where(board_column_id: project_board_columns.select(:id)).find(id)
     end
 
     # Store/read state via session metadata (works for both standalone and workflow sessions)
@@ -46,7 +82,7 @@ module InternalTools
       wf_id = target_workflow_id
       raise "No target workflow. Create one first with meta_create_workflow or pass workflow_id." unless wf_id
 
-      Workflow.find(wf_id)
+      project_workflows.find(wf_id)
     end
 
     def broadcast_meta_activity(action:, entity_type:, entity_name:, entity_id:, details: {})

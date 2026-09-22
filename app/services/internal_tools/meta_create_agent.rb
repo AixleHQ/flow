@@ -23,10 +23,6 @@ module InternalTools
             type: "string",
             description: "Core system prompt — defines who the agent IS"
           },
-          scope_id: {
-            type: "integer",
-            description: "Scope ID. Default: current project"
-          },
           principles: {
             type: "string",
             description: "Guiding principles and constraints"
@@ -49,8 +45,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      scope_id = params[:scope_id] || target_project&.id
-      scope_record = Project.find(scope_id)
+      scope_record = project
 
       agent = Agent.create!(
         scope: scope_record,

@@ -39,7 +39,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      sub_step = SubStep.find(params[:sub_step_id])
+      sub_step = find_project_sub_step!(params[:sub_step_id])
       attrs = %i[name instructions position required].each_with_object({}) do |key, acc|
         acc[key] = params[key] if params.key?(key)
       end

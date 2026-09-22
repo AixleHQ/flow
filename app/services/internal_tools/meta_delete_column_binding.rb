@@ -23,7 +23,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      binding = ColumnWorkflowBinding.find(params[:binding_id])
+      binding = find_project_column_binding!(params[:binding_id])
       desc = "#{binding.board_column.name} → #{binding.workflow.name}"
 
       binding.destroy!

@@ -40,7 +40,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      step = Step.find(params[:step_id])
+      step = find_project_step!(params[:step_id])
       position = params[:position] || (step.sub_steps.maximum(:position).to_i + 1)
 
       sub_step = step.sub_steps.create!(

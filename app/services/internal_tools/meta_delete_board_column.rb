@@ -23,7 +23,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      column = BoardColumn.find(params[:column_id])
+      column = project_board_columns.find(params[:column_id])
 
       if column.board_tasks.any?
         return error("Cannot delete column '#{column.name}' — it has #{column.board_tasks.count} tasks. Move them first.")

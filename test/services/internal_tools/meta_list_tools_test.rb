@@ -60,28 +60,13 @@ class InternalTools::MetaListToolsTest < ActiveSupport::TestCase
     assert_not_includes listed_names, "meta_tool"
   end
 
-  test "targets an explicit project via project_id param instead of the session project" do
-    # Session project has its own project-scoped tool...
-    create(:tool, scope: @project, name: "session_project_tool")
-    # ...but we ask about a different project in the same company.
+  test "refuses a project_id other than the session's project" do
     other_project = create(:project, company: @company, owner: @user)
-    target_tool = create(:tool, scope: other_project, name: "target_project_tool")
-    shared_company_tool = create(:tool, scope: other_project, name: "shared_company_tool")
 
-    result = InternalTools::MetaListTools.new(
-      params: { project_id: other_project.id },
-      session: @session
-    ).execute
-
-    assert_equal 0, result[:exit_code]
-    data = JSON.parse(result[:stdout])
-
-    listed_ids = data["tools"].map { |t| t["id"] }
-    assert_includes listed_ids, target_tool.id
-    assert_includes listed_ids, shared_company_tool.id
-    # The session project's own tool is not part of the targeted project's view.
-    assert_not_includes data["tools"].map { |t| t["name"] }, "session_project_tool"
-    assert_equal 2, data["tools_count"]
+    error = assert_raises(InternalTools::WorkflowContextError) do
+      InternalTools::MetaListTools.new(params: { project_id: other_project.id }, session: @session).execute
+    end
+    assert_match(/act only on this session's project/, error.message)
   end
 
   test "returns success with an empty list when no tools are visible" do
