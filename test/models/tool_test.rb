@@ -43,8 +43,8 @@ class ToolTest < ActiveSupport::TestCase
     assert_includes Tool.visible_for_project(@project).pluck(:id), tool.id
   end
 
-  test "visible_for_project hides meta tools even though they are persisted" do
-    tool = Tool.create!(name: "meta_create_workflow", display_name: "Meta Create Workflow",
+  test "visible_for_project hides non-attachable platform tools even though they are persisted" do
+    tool = Tool.create!(name: "finish_session", display_name: "Finish Session",
       source: "code", user_attachable: false, execution_mode: "app", enabled: true, input_schema: {})
 
     assert tool.persisted?
@@ -68,7 +68,7 @@ class ToolTest < ActiveSupport::TestCase
   end
 
   test "reconciler-owned code rows are exempt from the namespace validation" do
-    row = build(:tool, :meta, name: "meta_create_tool", source: "code")
+    row = build(:tool, :internal, name: "finish_session", user_attachable: false)
 
     assert row.valid?, row.errors.full_messages.to_sentence
   end
@@ -84,7 +84,7 @@ class ToolTest < ActiveSupport::TestCase
     assert_includes visible, "my_linter"
     refute_includes visible, "coder_ssh_exec"
     refute_includes visible, "board_list_tasks"
-    refute_includes visible, "meta_create_tool"
+    refute_includes visible, "finish_session"
     refute_includes visible, "read_tool_result"
     assert custom.persisted?
   end

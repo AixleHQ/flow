@@ -24,9 +24,6 @@ end
 puts "Reconciling platform tools..."
 Tools::Reconciler.run!
 
-require_relative "seeds/aixle_builder"
-Seeds::AixleBuilder.seed!
-
 seed_company_slug = ENV.fetch("SEED_COMPANY_SLUG", "demo")
 seed_company_name = ENV.fetch("SEED_COMPANY_NAME", "Demo Company")
 seed_company_email_domain = ENV.fetch("SEED_COMPANY_EMAIL_DOMAIN", "example.com")

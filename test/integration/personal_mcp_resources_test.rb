@@ -53,8 +53,7 @@ class PersonalMCPResourcesTest < ActionDispatch::IntegrationTest
     assert_not_empty platform
     assert_includes names, "board_create_task"
     assert_equal data["tools"].size, data["tools_count"]
-    # Builder meta_* tools are not attachable and stay out of the picker set.
-    assert_not_includes names, "meta_list_tools"
+    assert_not_includes names, "finish_session"
 
     row = platform.find { |t| t["name"] == "board_create_task" }
     assert_equal "Board Create Task", row["display_name"]

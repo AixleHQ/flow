@@ -71,32 +71,31 @@ interface MetaActivity {
   timestamp: string;
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  created_workflow: 'Created workflow',
-  deleted_workflow: 'Deleted workflow',
-  created_step: 'Created step',
-  created_sub_step: 'Created sub-step',
-  updated_sub_step: 'Updated sub-step',
-  deleted_sub_step: 'Deleted sub-step',
-  updated_step: 'Updated step',
-  deleted_step: 'Deleted step',
-  reordered_steps: 'Reordered steps',
-  created_agent: 'Created agent',
-  created_tool: 'Created tool',
-  created_skill: 'Created skill',
-  created_mcp_server: 'Created MCP server',
-  linked_tool: 'Linked tool',
-  linked_skill: 'Linked skill',
-  linked_mcp_server: 'Linked MCP server',
-  finalized_workflow: 'Finalized workflow',
-  created_board_column: 'Created column',
-  updated_board_column: 'Updated column',
-  deleted_board_column: 'Deleted column',
-  reordered_board_columns: 'Reordered columns',
-  created_column_binding: 'Created binding',
-  updated_column_binding: 'Updated binding',
-  deleted_column_binding: 'Deleted binding',
-  setup_board_from_preset: 'Board from preset',
+// Activities record the builder tool that made the change (`create_workflow_step`);
+// sessions from before that recorded past-tense names (`created_step`).
+const PAST_TENSE: Record<string, string> = {
+  add: 'Added',
+  approve: 'Approved',
+  archive: 'Archived',
+  cancel: 'Cancelled',
+  create: 'Created',
+  delete: 'Deleted',
+  duplicate: 'Duplicated',
+  install: 'Installed',
+  move: 'Moved',
+  reorder: 'Reordered',
+  retry: 'Retried',
+  setup: 'Set up',
+  skip: 'Skipped',
+  trigger: 'Triggered',
+  uninstall: 'Uninstalled',
+  update: 'Updated',
+};
+
+const formatActivityAction = (action: string): string => {
+  const [verb, ...rest] = action.split('_');
+  const label = [PAST_TENSE[verb] ?? verb.charAt(0).toUpperCase() + verb.slice(1), ...rest].join(' ');
+  return label.replace(/\bmcp\b/g, 'MCP');
 };
 
 const ENTITY_ICONS: Record<string, typeof IconGitBranch> = {
@@ -110,6 +109,8 @@ const ENTITY_ICONS: Record<string, typeof IconGitBranch> = {
   BoardColumn: IconColumns,
   Board: IconColumns,
   ColumnWorkflowBinding: IconColumns,
+  Trigger: IconColumns,
+  BoardTask: IconColumns,
 };
 
 // ── Workflow / Board preview types ─────────────────
@@ -261,7 +262,7 @@ const SessionPage = () => {
                   {entityName}
                 </Text>
                 <Text size="xs" c="dimmed">
-                  {ACTION_LABELS[activity.action] || activity.action}
+                  {formatActivityAction(activity.action)}
                 </Text>
                 <Text size="10px" c="dimmed">
                   {formatTime(activity.timestamp)}

@@ -44,15 +44,6 @@ FactoryBot.define do
       docker_image { nil }
     end
 
-    trait :meta do
-      source { "code" }
-      tags { %w[builder] }
-      user_attachable { false }
-      execution_mode { :app }
-      scope { nil }
-      docker_image { nil }
-    end
-
     # == State Traits ==
 
     trait :disabled do
