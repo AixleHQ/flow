@@ -77,6 +77,16 @@ export function cloudAwsCredentialsPath(options?: object): string {
   return "/" + "cloud" + "/" + "aws" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /azure/git/credentials(.:format) */
+export function azureGitCredentialsPath(options?: object): string {
+  return "/" + "azure" + "/" + "git" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /agents/credentials(.:format) */
+export function agentsCredentialsPath(options?: object): string {
+  return "/" + "agents" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /csp-violation-report-endpoint(.:format) */
 export function cspViolationReportEndpointPath(options?: object): string {
   return "/" + "csp-violation-report-endpoint" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -90,6 +100,11 @@ export function webhooksGithubPath(options?: object): string {
 /** /webhooks/gitlab(.:format) */
 export function webhooksGitlabPath(options?: object): string {
   return "/" + "webhooks" + "/" + "gitlab" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /webhooks/azure_devops/:endpoint_id(.:format) */
+export function azureDevopsWebhookPath(endpoint_id: ScalarType, options?: object): string {
+  return "/" + "webhooks" + "/" + "azure_devops" + "/" + endpoint_id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["endpoint_id","format"]);
 }
 
 /** /webhooks/in/:slug(.:format) */
@@ -440,6 +455,16 @@ export function impersonateAdminUserPath(id: ScalarType, options?: object): stri
 /** /admin/users/:id/stop_impersonate(.:format) */
 export function stopImpersonateAdminUserPath(id: ScalarType, options?: object): string {
   return "/" + "admin" + "/" + "users" + "/" + id + "/" + "stop_impersonate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /admin/users/:id/restore(.:format) */
+export function restoreAdminUserPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "users" + "/" + id + "/" + "restore" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /admin/users/:id/permanent_destroy(.:format) */
+export function permanentDestroyAdminUserPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "users" + "/" + id + "/" + "permanent_destroy" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/users(.:format) */
@@ -1077,6 +1102,11 @@ export function companyMemberPath(id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "members" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /company/settings(.:format) */
+export function companySettingsPath(options?: object): string {
+  return "/" + "company" + "/" + "settings" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /company/integrations/github_setup(.:format) */
 export function companyIntegrationsGithubSetupPath(options?: object): string {
   return "/" + "company" + "/" + "integrations" + "/" + "github_setup" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1230,6 +1260,21 @@ export function slackOauthStartCompanyProjectIntegrationsPath(project_id: Scalar
 /** /company/projects/:project_id/integrations/github_app_install(.:format) */
 export function githubAppInstallCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "github_app_install" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/azure_devops_inspect(.:format) */
+export function azureDevopsInspectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "azure_devops_inspect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/azure_devops_connect(.:format) */
+export function azureDevopsConnectCompanyProjectIntegrationsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + "azure_devops_connect" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/integrations/:id/test_connection(.:format) */
+export function testConnectionCompanyProjectIntegrationPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "integrations" + "/" + id + "/" + "test_connection" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/integrations(.:format) */

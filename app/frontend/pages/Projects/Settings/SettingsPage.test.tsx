@@ -24,7 +24,7 @@ const project = {
 const concurrency = {
   maxSessions: null,
   default: 4,
-  installationLimit: null,
+  companyLimit: null,
   available: null,
   allocations: [],
   queueEnabled: true,
@@ -401,31 +401,31 @@ describe('Projects/Settings/SettingsPage', () => {
         props: {
           project,
           concurrency,
-          errors: { concurrency: '9 exceeds the installation limit of 10 concurrent sessions.' },
+          errors: { concurrency: '9 exceeds the company limit of 10 concurrent sessions.' },
         },
       });
 
-      expect(screen.getByText(/exceeds the installation limit of 10/)).toBeInTheDocument();
+      expect(screen.getByText(/exceeds the company limit of 10/)).toBeInTheDocument();
     });
 
-    it('reports how much of the installation ceiling is left, and to whom', () => {
+    it("reports how much of the company's limit is left, and to whom", () => {
       renderAuthedPage(<SettingsPage />, {
         props: {
           project,
           concurrency: {
             ...concurrency,
-            installationLimit: 20,
+            companyLimit: 20,
             available: 12,
             allocations: [
               { name: 'Gateway', maxSessions: 3 },
-              { name: 'Other projects', maxSessions: 5 },
+              { name: 'Billing', maxSessions: 5 },
             ],
           },
         },
       });
 
-      expect(screen.getByText(/12 of 20 is unreserved/)).toBeInTheDocument();
-      expect(screen.getByText(/Reserved: Gateway 3, Other projects 5/)).toBeInTheDocument();
+      expect(screen.getByText(/12 of the company.s 20 is unreserved/)).toBeInTheDocument();
+      expect(screen.getByText(/Reserved: Gateway 3, Billing 5/)).toBeInTheDocument();
     });
 
     it('shows the limit read-only to someone who may not change it', () => {

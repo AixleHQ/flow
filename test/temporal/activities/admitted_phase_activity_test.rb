@@ -6,7 +6,7 @@ class AdmittedPhaseActivityTest < ActiveSupport::TestCase
   setup do
     user = create(:user, :with_company)
     project = create(:project, owner: user, company: user.companies.first)
-    with_ceiling(1)
+    with_admission(project: 1)
     @session = create(:terminal_session, user: user, project: project)
     @admission = SessionAdmissionService.enqueue!(@session)
     SessionAdmissionService.drain!

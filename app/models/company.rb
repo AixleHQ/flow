@@ -48,10 +48,25 @@ class Company < ApplicationRecord
   validates :email_domain, presence: true, uniqueness: { case_sensitive: false },
                            format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, aixle.com)" }
   validate :email_domain_not_reserved
+  validate :session_concurrency_limit_is_a_positive_integer
 
   # Callbacks
   before_validation :generate_slug, on: :create
   before_validation :downcase_email_domain
+  after_save :apply_session_concurrency_limit
+
+  # Backed by a SessionConcurrencyLimit row, not a column, so the drain reads
+  # both tiers from one table. Nil means unbounded and unbilled.
+  def session_concurrency_limit
+    return @session_concurrency_limit if defined?(@session_concurrency_limit)
+
+    SessionConcurrencyLimit.for_company(id)
+  end
+
+  def session_concurrency_limit=(value)
+    @session_concurrency_limit = value.to_s.strip.presence
+    @session_concurrency_limit_assigned = true
+  end
 
   # White label / branding helpers
   def branded_name
@@ -78,6 +93,32 @@ class Company < ApplicationRecord
   end
 
   private
+
+  # Only when the form submitted the field, so saving a logo cannot silently
+  # exempt a customer from billing.
+  def apply_session_concurrency_limit
+    return unless @session_concurrency_limit_assigned
+
+    @session_concurrency_limit_assigned = false
+    row = SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: id)
+
+    if @session_concurrency_limit.blank?
+      row&.destroy
+    else
+      record = row || SessionConcurrencyLimit.new(scope_type: "Company", scope_id: id)
+      record.update!(max_sessions: @session_concurrency_limit)
+    end
+  end
+
+  # Here rather than on the row, so the admin form reports it instead of the
+  # after_save callback raising.
+  def session_concurrency_limit_is_a_positive_integer
+    return unless @session_concurrency_limit_assigned
+    return if @session_concurrency_limit.blank?
+    return if @session_concurrency_limit.match?(/\A[1-9]\d*\z/)
+
+    errors.add(:session_concurrency_limit, "must be a positive whole number, or blank for no limit")
+  end
 
   def generate_slug
     return if slug.present?

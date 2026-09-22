@@ -45,8 +45,8 @@ class Web::Company::Projects::SettingsControllerTest < ActionDispatch::Integrati
     assert_nil limit_for(@project), "an empty limit is no reservation, not a reservation of nothing"
   end
 
-  test "a limit past what the installation has left is refused and says what is left" do
-    with_ceiling(10)
+  test "a limit past what the company has left is refused and says what is left" do
+    with_company_limit(@company, 10)
     other = create(:project, company: @company, owner: @user)
     SessionConcurrencyLimit.set!(scope: other, max_sessions: 7)
 
@@ -56,7 +56,7 @@ class Web::Company::Projects::SettingsControllerTest < ActionDispatch::Integrati
 
     assert_nil limit_for(@project)
     error = Array(session["inertia_errors"][:concurrency]).to_sentence
-    assert_match(/installation limit of 10/, error)
+    assert_match(/company limit of 10/, error)
     assert_match(/7 of 10/, error)
     assert_match(/at most 3/, error)
   end
@@ -64,7 +64,7 @@ class Web::Company::Projects::SettingsControllerTest < ActionDispatch::Integrati
   # "Settings were not saved" has to be true of all of them, or the person is
   # left guessing which half landed.
   test "a refused limit rolls back the rest of the save" do
-    with_ceiling(2)
+    with_company_limit(@company, 2)
     other = create(:project, company: @company, owner: @user)
     SessionConcurrencyLimit.set!(scope: other, max_sessions: 2)
 
