@@ -13,12 +13,9 @@
 .env*
 !.env.example
 
-# Ignore all logfiles and tempfiles. Keep these as `log/*` and `tmp/*`, never
-# `/log/` or `/tmp/`: a whole-directory pattern stops git descending into the
-# directory, which silently voids every `!/log/...` and `!/tmp/...` negation
-# below. Already-tracked .keep placeholders survive either way — .gitignore
-# does not apply to tracked files — but with a blanket pattern no new one can
-# be added, and `git check-ignore` only reveals it under `--no-index`.
+# Ignore all logfiles and tempfiles. Keep `log/*` and `tmp/*`, never `/log/` or
+# `/tmp/`: a whole-directory pattern stops git descending into it and silently
+# voids every negation below (`git check-ignore` shows this only under --no-index).
 log/*
 tmp/*
 !/log/.keep
