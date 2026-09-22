@@ -27,10 +27,30 @@ set -e
 # the app user cannot mkdir at the mount root. Without tmp/pids Puma dies on
 # `No such file or directory @ rb_sysopen - tmp/pids/mcp.pid` before it logs
 # anything (config/puma_mcp.rb).
+#
+# Those /app paths are handled separately from the two volumes above, in both
+# the mkdir and the chown, and the difference is deliberate:
+#
+#   * /bundle_cache and /home/app are Docker volumes, so root can always
+#     create and walk them. /app is the host bind-mount (.:/app:cached), where
+#     root may legitimately be unable to write — userns-remap, an SELinux
+#     label, a read-only mount for a one-off `docker compose run`. An
+#     unguarded mkdir there aborts under `set -e` and kills the entrypoint of
+#     every service, which is worse than the missing-tmp/pids bug it fixes, so
+#     the /app mkdir is tolerant. Nothing is masked: Puma still fails loudly
+#     if the directory really could not be created.
+#   * The chown of /app is NOT recursive, and the ~0.15s measurement above
+#     does not apply to it. tmp/cache (bootsnap) and storage/ (ActiveStorage
+#     blobs, SQLite databases) are unbounded host trees and cost far more to
+#     walk over a bind-mount. Recursion is also unnecessary here: everything
+#     under /app is created by the app user after the su-exec drop, so it is
+#     app-owned by construction — only the directories root just created need
+#     fixing, and a recursive walk would additionally rewrite the ownership of
+#     the developer's own files whenever the uid-alignment below is skipped.
 if [ "$(id -u)" = "0" ]; then
-  mkdir -p /bundle_cache /home/app \
-           /app/tmp/pids /app/tmp/cache /app/tmp/sockets \
-           /app/log /app/storage
+  mkdir -p /bundle_cache /home/app
+  mkdir -p /app/tmp/pids /app/tmp/cache /app/tmp/sockets \
+           /app/log /app/storage 2>/dev/null || true
   # Linux bind-mounts keep the host uid. The image `app` user is uid 100, so
   # yarn cannot mkdir /app/node_modules on a uid-1000 checkout (EACCES on
   # `make setup`). Align app with /app's owner when that owner is not root
@@ -44,7 +64,9 @@ if [ "$(id -u)" = "0" ]; then
     sed -i "s/^app:x:${app_uid}:${app_gid}/app:x:${mnt_uid}:${mnt_gid}/" /etc/passwd
     sed -i "s/^app:x:${app_gid}/app:x:${mnt_gid}/" /etc/group
   fi
-  chown -Rh app:app /bundle_cache /home/app /app/tmp /app/log /app/storage 2>/dev/null || true
+  chown -Rh app:app /bundle_cache /home/app 2>/dev/null || true
+  chown -h app:app /app/tmp /app/tmp/pids /app/tmp/cache /app/tmp/sockets \
+                   /app/log /app/storage 2>/dev/null || true
   # See bin/run-as-app: grant the app user access to the host Docker socket
   # when it's mounted (root:root 660 on the host side). No-op otherwise.
   if [ -S /var/run/docker.sock ]; then
