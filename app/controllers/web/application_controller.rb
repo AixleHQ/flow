@@ -38,17 +38,17 @@ class Web::ApplicationController < ApplicationController
         # dual-membership user sees the other company's projects after a switch.
         projects: InertiaRails.always {
           scope = current_company ? Project.for_user(current_user).for_company(current_company) : Project.none
-          # `members` (owner/collaborator avatars) is opt-in via params — the
-          # sidebar only needs name/counts, and loading owner+collaborators for
-          # every project on every page load would be a flat but pointless cost.
-          # The user's own favorites lead the list (same order as
-          # /company/projects); the star itself only lives on the project tiles,
-          # so `favorite_project_ids` stays unset here and no extra query runs.
+          # `members` (owner/collaborator avatars) stays opt-in — the sidebar
+          # only needs name/counts/favorite, and loading owner+collaborators for
+          # every project on every page would be a flat but pointless cost.
+          # Favorites lead the list (same order as /company/projects); the
+          # favorite flag drives the read-only star mark in the switcher.
+          favorite_project_ids = current_user.project_favorites.pluck(:project_id).to_set
           scope.with_state(:active)
                .with_computed_counts
                .favorites_first_for(current_user)
                .order(:name)
-               .map { |p| ProjectResource.new(p).to_h }
+               .map { |p| ProjectResource.new(p, params: { favorite_project_ids: favorite_project_ids }).to_h }
         }
       )
     else

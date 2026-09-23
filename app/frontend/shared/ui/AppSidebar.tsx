@@ -21,6 +21,8 @@ import {
   IconRobot,
   IconSettings,
   IconSparkles,
+  IconStar,
+  IconStarFilled,
   IconTerminal2,
   IconTool,
   IconUser,
@@ -41,6 +43,7 @@ import {
   companyProjectAssetsPath,
   companyProjectBoardPath,
   companyProjectConfigItemsPath,
+  companyProjectFavoritePath,
   companyProjectIntegrationsPath,
   companyProjectMCPServersPath,
   companyProjectMembersPath,
@@ -423,13 +426,22 @@ function SidebarWorkspaceSwitcher({
 
   const currentProject = currentProjectId ? (projects.find((p) => String(p.id) === currentProjectId) ?? null) : null;
 
-  const filteredProjects = useMemo(
-    () =>
-      search.trim()
-        ? projects.filter((p) => p.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
-        : projects,
-    [search, projects],
-  );
+  // Active-only + favorites first: IndexPage overwrites shared `projects` with
+  // every state, and the switcher's contract is the everyday active set. Client
+  // sort matches the projects grid so a star toggle reorders even when the
+  // incoming array order is stale relative to `favorite` flags.
+  const filteredProjects = useMemo(() => {
+    const ordered = projects
+      .filter((p) => p.state === 'active')
+      .sort(
+        (a, b) =>
+          Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+      );
+
+    if (!search.trim()) return ordered;
+    const query = search.toLocaleLowerCase();
+    return ordered.filter((p) => p.name.toLocaleLowerCase().includes(query));
+  }, [search, projects]);
 
   const handleSwitcherClick = () => {
     if (collapsed) {
@@ -450,6 +462,17 @@ function SidebarWorkspaceSwitcher({
   const handleAllProjectsClick = () => {
     setPopoverOpen(false);
     router.visit(companyProjectsPath());
+  };
+
+  const handleToggleFavorite = (project: SharedProject) => {
+    const path = companyProjectFavoritePath(project.id);
+    const options = { preserveScroll: true, preserveState: true };
+
+    if (project.favorite) {
+      router.delete(path, options);
+    } else {
+      router.post(path, {}, options);
+    }
   };
 
   const handleNewProject = () => {
@@ -518,23 +541,46 @@ function SidebarWorkspaceSwitcher({
           <div className={classes.swProjectsSection}>
             <span className={classes.dpLabel}>PROJECTS</span>
             <div className={classes.swProjectsList}>
-              {filteredProjects.map((project) => {
+              {filteredProjects.map((project, index) => {
                 const isActive = String(project.id) === currentProjectId;
+                const prev = filteredProjects[index - 1];
+                const showDivider = Boolean(prev?.favorite && !project.favorite);
+                const favoriteLabel = project.favorite
+                  ? `Remove ${project.name} from favorites`
+                  : `Add ${project.name} to favorites`;
+
                 return (
-                  <UnstyledButton
-                    key={project.id}
-                    component={Link}
-                    href={companyProjectPath(String(project.id))}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`${classes.dpItem} ${isActive ? classes.dpItemActive : ''}`}
-                    onClick={handleProjectClick}
-                  >
-                    <div className={classes.dpIco}>
-                      <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
+                  <Fragment key={project.id}>
+                    {showDivider && <div className={classes.dpSplit} role="separator" />}
+                    <div className={`${classes.dpProjectRow} ${isActive ? classes.dpItemActive : ''}`}>
+                      <Link
+                        href={companyProjectPath(String(project.id))}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={classes.dpItemLink}
+                        onClick={handleProjectClick}
+                      >
+                        <div className={classes.dpIco}>
+                          <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
+                        </div>
+                        <span className={classes.dpName}>{project.name}</span>
+                        {isActive && <IconCheck size={12} className={classes.dpCheck} />}
+                      </Link>
+                      <button
+                        type="button"
+                        className={`${classes.dpStar} ${project.favorite ? classes.dpStarOn : ''}`}
+                        aria-label={favoriteLabel}
+                        aria-pressed={project.favorite}
+                        title={favoriteLabel}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleToggleFavorite(project);
+                        }}
+                      >
+                        {project.favorite ? <IconStarFilled size={13} /> : <IconStar size={13} />}
+                      </button>
                     </div>
-                    <span className={classes.dpName}>{project.name}</span>
-                    {isActive && <IconCheck size={12} className={classes.dpCheck} />}
-                  </UnstyledButton>
+                  </Fragment>
                 );
               })}
             </div>

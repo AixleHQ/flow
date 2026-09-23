@@ -19,7 +19,7 @@ const workflow = (overrides: Record<string, unknown> = {}) => ({
 
 describe('Company/WorkflowCatalog/IndexPage', () => {
   it('renders the heading and the published-by-empty state when there are no workflows', () => {
-    renderAuthedPage(<IndexPage />, { props: { workflows: [], projects: [] } });
+    renderAuthedPage(<IndexPage />, { props: { workflows: [], projectOptions: [] } });
 
     // 'Workflow Catalog' also appears as a sidebar nav label, so scope to the page heading.
     expect(screen.getByRole('heading', { level: 1, name: 'Workflow Catalog' })).toBeInTheDocument();
@@ -33,7 +33,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
           workflow({ id: 1, name: 'Onboarding Flow' }),
           workflow({ id: 2, name: 'Release Pipeline', description: 'Ships builds' }),
         ],
-        projects: [],
+        projectOptions: [],
       },
     });
 
@@ -49,7 +49,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
 
   it('shows the no-match state when the search matches nothing', async () => {
     renderAuthedPage(<IndexPage />, {
-      props: { workflows: [workflow({ name: 'Onboarding Flow' })], projects: [] },
+      props: { workflows: [workflow({ name: 'Onboarding Flow' })], projectOptions: [] },
     });
 
     await userEvent.type(screen.getByPlaceholderText('Search workflows...'), 'zzz');
@@ -62,7 +62,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     renderAuthedPage(<IndexPage />, {
       props: {
         workflows: [workflow({ id: 5, name: 'Onboarding Flow' })],
-        projects: [{ id: 9, name: 'Mercury' }],
+        projectOptions: [{ id: 9, name: 'Mercury' }],
       },
     });
 
@@ -78,7 +78,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     renderAuthedPage(<IndexPage />, {
       props: {
         workflows: [workflow({ id: 5, name: 'Onboarding Flow' })],
-        projects: [{ id: 9, name: 'Mercury' }],
+        projectOptions: [{ id: 9, name: 'Mercury' }],
       },
     });
 
@@ -98,7 +98,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
           workflow({ id: 1, name: 'Onboarding Flow', description: 'Welcomes new teammates' }),
           workflow({ id: 2, name: 'Release Pipeline', description: 'Ships builds' }),
         ],
-        projects: [],
+        projectOptions: [],
       },
     });
 
@@ -116,7 +116,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
           workflow({ id: 1, name: 'Onboarding Flow', publishedByName: 'Dana Ops' }),
           workflow({ id: 2, name: 'Release Pipeline', publishedByName: null }),
         ],
-        projects: [],
+        projectOptions: [],
       },
     });
 
@@ -130,7 +130,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     renderAuthedPage(<IndexPage />, {
       props: {
         workflows: [workflow({ id: 5, name: 'Onboarding Flow' })],
-        projects: [{ id: 9, name: 'Mercury' }],
+        projectOptions: [{ id: 9, name: 'Mercury' }],
       },
     });
 
@@ -158,7 +158,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     renderAuthedPage(<IndexPage />, {
       props: {
         workflows: [workflow({ id: 5, name: 'Onboarding Flow' })],
-        projects: [{ id: 9, name: 'Mercury' }],
+        projectOptions: [{ id: 9, name: 'Mercury' }],
       },
     });
 
@@ -175,7 +175,7 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     renderAuthedPage(<IndexPage />, {
       props: {
         workflows: [workflow({ id: 5, name: 'Onboarding Flow' })],
-        projects: [],
+        projectOptions: [],
       },
     });
 
