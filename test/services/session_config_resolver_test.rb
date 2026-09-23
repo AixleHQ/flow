@@ -754,11 +754,14 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     # Scoped to @project, the same project the run and the session belong to —
     # config item attachments are validated against the workflow's own project,
     # so a workflow in some other project could not name them.
-    workflow = create(:workflow, scope: @project, config: workflow_config)
-    step = create(:step, workflow: workflow, tool_ids: step_tool_ids, skill_ids: step_skill_ids,
-      mcp_server_ids: step_mcp_server_ids, asset_ids: step_asset_ids, agent: step_agent,
-      repository_ids: step_repository_ids, config_item_ids: step_config_item_ids,
+    # The resolver merges whatever ids are stored; ownership is the models' job, so
+    # the id lists are planted past validation.
+    workflow = create(:workflow, scope: @project)
+    workflow.update_column(:config, workflow_config)
+    step = create(:step, workflow: workflow, agent: step_agent, config_item_ids: step_config_item_ids,
       required_agent_runtime: step_required_agent_runtime, bmad_enabled: step_bmad_enabled)
+    step.update_columns(tool_ids: step_tool_ids, skill_ids: step_skill_ids, mcp_server_ids: step_mcp_server_ids,
+      asset_ids: step_asset_ids, repository_ids: step_repository_ids)
     workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user,
       agent_runtime: agent_runtime, mode: run_mode, repository_ids: run_repository_ids,
       input_asset_ids: run_input_asset_ids, board_task: board_task)

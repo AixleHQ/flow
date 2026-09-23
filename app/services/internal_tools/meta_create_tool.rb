@@ -51,7 +51,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      scope_record = resolve_scope
+      scope_record = project
 
       tool = Tool.create!(
         scope: scope_record,
@@ -75,13 +75,6 @@ module InternalTools
       success({ id: tool.id, name: tool.name, display_name: tool.display_name }.to_json)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create tool: #{e.message}")
-    end
-
-    private
-
-    def resolve_scope
-      # Custom tools are Project-scoped only.
-      params[:scope_id] ? Project.find(params[:scope_id]) : target_project
     end
   end
 end

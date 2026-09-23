@@ -44,7 +44,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      step = Step.find(params[:step_id])
+      step = find_project_step!(params[:step_id])
       resource_type = params[:resource_type]
       resource_id = params[:resource_id]
 

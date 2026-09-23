@@ -45,28 +45,13 @@ class InternalTools::MetaListAgentsTest < ActiveSupport::TestCase
     assert_not_includes listed_names, "sibling_project_agent"
   end
 
-  test "targets an explicit project via project_id param instead of the session project" do
-    # Session project has its own project-scoped agent...
-    create(:agent, scope: @project, name: "session_project_agent")
-    # ...but we ask about a different project in the same company.
+  test "refuses a project_id other than the session's project" do
     other_project = create(:project, company: @company, owner: @user)
-    target_agent = create(:agent, scope: other_project, name: "target_project_agent")
-    second_target_agent = create(:agent, scope: other_project, name: "second_target_agent")
 
-    result = InternalTools::MetaListAgents.new(
-      params: { project_id: other_project.id },
-      session: @session
-    ).execute
-
-    assert_equal 0, result[:exit_code]
-    data = JSON.parse(result[:stdout])
-
-    listed_ids = data["agents"].map { |a| a["id"] }
-    assert_includes listed_ids, target_agent.id
-    assert_includes listed_ids, second_target_agent.id
-    # The session project's own agent is not part of the targeted project's view.
-    assert_not_includes data["agents"].map { |a| a["name"] }, "session_project_agent"
-    assert_equal 2, data["agents_count"]
+    error = assert_raises(InternalTools::WorkflowContextError) do
+      InternalTools::MetaListAgents.new(params: { project_id: other_project.id }, session: @session).execute
+    end
+    assert_match(/act only on this session's project/, error.message)
   end
 
   test "returns success with an empty list when no agents are visible" do

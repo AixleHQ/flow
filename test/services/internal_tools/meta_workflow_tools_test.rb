@@ -300,15 +300,15 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
   test "meta_finalize_workflow flags a non-existent linked asset_id" do
     wf = create(:workflow, scope: @project)
     agent = Agent.create!(scope: @project, name: "a1", title: "T", persona: "p")
-    create(:step, workflow: wf, name: "S1", position: 1, instructions: "Do it", agent: agent,
-                  asset_ids: [ 999_999 ])
+    step = create(:step, workflow: wf, name: "S1", position: 1, instructions: "Do it", agent: agent)
+    step.update_column(:asset_ids, [ 999_999 ])
     @workflow_run.update!(shared_context: { "target_workflow_id" => wf.id })
 
     result = InternalTools::MetaFinalizeWorkflow.new(params: {}, session: @session).execute
 
     data = JSON.parse(result[:stdout])
     refute data["valid"]
-    assert data["errors"].any? { |e| e.include?("non-existent asset_id 999999") }
+    assert data["errors"].any? { |e| e.include?("asset_id 999999") }
   end
 
   # ── meta_link_resource_to_step ──
@@ -432,6 +432,8 @@ class InternalTools::MetaWorkflowToolsTest < ActiveSupport::TestCase
     standalone_session = Object.new
     standalone_session.define_singleton_method(:project) { @project }
     standalone_session.define_singleton_method(:step_run) { nil }
+    standalone_session.define_singleton_method(:user) { @user }
+    standalone_session.instance_variable_set(:@user, @user)
     standalone_session.define_singleton_method(:metadata) { {} }
     standalone_session.define_singleton_method(:update!) { |_| true }
     standalone_session.instance_variable_set(:@project, @project)

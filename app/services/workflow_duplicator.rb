@@ -66,7 +66,7 @@ class WorkflowDuplicator
     if config["base_config_item_ids"]
       config["base_config_item_ids"] = @dep_copier.map_config_item_ids(config["base_config_item_ids"])
     end
-    # base_asset_ids intentionally NOT remapped — assets are out of scope (D5).
+    config["base_asset_ids"]      = carried_asset_ids(config["base_asset_ids"])                   if config["base_asset_ids"]
     config
   end
 
@@ -78,6 +78,15 @@ class WorkflowDuplicator
     return [] if ids.blank?
 
     duplicating_within_source_project? ? ids : []
+  end
+
+  # Assets are not copied (D5). Company assets are shared, so they carry over;
+  # another project's assets cannot be reached from the copy and are dropped.
+  def carried_asset_ids(ids)
+    return ids if ids.blank? || target_project.nil?
+
+    foreign = ProjectOwnedReferences.foreign_ids(target_project, :assets, ids)
+    ids.reject { |id| foreign.include?(id.to_i) }
   end
 
   def duplicating_within_source_project?
@@ -114,7 +123,7 @@ class WorkflowDuplicator
       tool_ids: @dep_copier.map_tool_ids(step.tool_ids),
       mcp_server_ids: @dep_copier.map_mcp_server_ids(step.mcp_server_ids),
       skill_ids: @dep_copier.map_skill_ids(step.skill_ids),
-      asset_ids: step.asset_ids, # unchanged — assets are out of scope (D5)
+      asset_ids: carried_asset_ids(step.asset_ids),
       repository_ids: carried_repository_ids(step.repository_ids),
       # Resolved by name in the target project; ids are never carried across a
       # secrets boundary. Anything missing is reported by DependencyCopier#summary.

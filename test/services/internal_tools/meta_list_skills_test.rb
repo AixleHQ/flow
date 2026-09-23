@@ -69,24 +69,13 @@ class InternalTools::MetaListSkillsTest < ActiveSupport::TestCase
     assert_equal [ visible.id ], returned_ids
   end
 
-  test "targets an explicit project_id over the session's project" do
-    create(:skill, scope: @project, name: "session-project-skill")
-
+  test "refuses a project_id other than the session's project" do
     other_project = create(:project, company: @company, owner: @user)
-    other_skill = create(:skill, scope: other_project, name: "explicit-project-skill")
 
-    result = InternalTools::MetaListSkills.new(
-      params: { project_id: other_project.id },
-      session: @session
-    ).execute
-
-    assert_equal 0, result[:exit_code]
-    data = JSON.parse(result[:stdout])
-
-    returned_names = data["skills"].map { |s| s["name"] }
-    assert_includes returned_names, "explicit-project-skill"
-    assert_not_includes returned_names, "session-project-skill"
-    assert_equal other_skill.id, data["skills"].detect { |s| s["name"] == "explicit-project-skill" }["id"]
+    error = assert_raises(InternalTools::WorkflowContextError) do
+      InternalTools::MetaListSkills.new(params: { project_id: other_project.id }, session: @session).execute
+    end
+    assert_match(/act only on this session's project/, error.message)
   end
 
   test "returns an empty list when no skills are visible for the project" do

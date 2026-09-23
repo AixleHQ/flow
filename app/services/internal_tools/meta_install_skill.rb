@@ -11,10 +11,6 @@ module InternalTools
         type: "object",
         required: %w[skill_id],
         properties: {
-          scope_id: {
-            type: "integer",
-            description: "Project ID. Default: current project"
-          },
           skill_id: {
             type: "string",
             description: "Registry skill ID (e.g. mantinedev/skills/mantine-form)"
@@ -36,8 +32,7 @@ module InternalTools
       skill_id = params[:skill_id]
       return error("skill_id is required") if skill_id.blank?
 
-      scope_id = params[:scope_id] || target_project&.id
-      scope_record = Project.find(scope_id)
+      scope_record = project
 
       # Same install count the UI records, so the number does not depend on which
       # path installed the skill.

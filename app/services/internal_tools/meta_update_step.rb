@@ -91,7 +91,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      step = Step.find(params[:step_id])
+      step = find_project_step!(params[:step_id])
 
       updatable = %i[name instructions agent_id allow_non_interactive
                      skip_policy on_failure max_retries tool_ids skill_ids mcp_server_ids asset_ids

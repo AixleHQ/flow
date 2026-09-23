@@ -30,7 +30,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      binding = ColumnWorkflowBinding.find(params[:binding_id])
+      binding = find_project_column_binding!(params[:binding_id])
 
       attrs = {}
       attrs[:trigger_mode] = params[:trigger_mode] if params.key?(:trigger_mode)

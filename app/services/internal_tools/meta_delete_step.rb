@@ -24,7 +24,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      step = Step.find(params[:step_id])
+      step = find_project_step!(params[:step_id])
 
       # Check no other steps depend on this one
       dependents = step.workflow.steps.not_deleted.select { |s| s.depends_on_step_ids.include?(step.id) }

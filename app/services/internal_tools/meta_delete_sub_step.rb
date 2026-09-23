@@ -25,7 +25,7 @@ module InternalTools
     def execute
       require_project_context!
 
-      sub_step = SubStep.find(params[:sub_step_id])
+      sub_step = find_project_sub_step!(params[:sub_step_id])
       name = sub_step.name
       step_id = sub_step.step_id
       sub_step.destroy
