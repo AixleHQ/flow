@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Web::Company::SettingsController < Web::Company::ApplicationController
+  UNBOUNDED_REFUSAL = "This installation meters its capacity to AWS Marketplace, so the limit cannot be left empty"
+
   def show
     render inertia: "Company/Settings/SettingsPage", props: props
   end
@@ -55,6 +57,8 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
     requested = params[:capacity].to_s.strip
 
     if requested.empty?
+      return { capacity: UNBOUNDED_REFUSAL } if Deployment.requires_bounded_companies?
+
       capacity_limit_record&.destroy
       return {}
     end

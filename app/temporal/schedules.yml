@@ -193,3 +193,14 @@ schedules:
     cron: "* * * * *"
     overlap: skip
     enabled: true
+
+  # Capacity metering. Runs at five past so the hour it measures has closed.
+  #
+  # SKIP overlap and a single activity attempt: AWS Marketplace counts one record
+  # per hour PER POD, so two passes — or one retried onto another replica — bill
+  # the same hour twice. A failed send is replayed by the next run from the
+  # ledger, inside the six hours AWS still accepts records for.
+  - workflow: capacity_metering_workflow
+    cron: "5 * * * *"
+    overlap: skip
+    enabled: true

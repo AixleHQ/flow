@@ -30,7 +30,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     settings: Field::JSONB,
     # Virtual, so never searchable: Administrate would build a LIKE against a
     # column that is not there.
-    session_concurrency_limit: Field::Number.with_options(searchable: false),
+    session_concurrency_limit: CompanyCapacityField.with_options(searchable: false),
     initial_admin_email: Field::String,
     initial_admin_password: Field::Password,
     users: Field::HasMany,
@@ -43,8 +43,8 @@ class CompanyDashboard < Administrate::BaseDashboard
     id
     name
     email_domain
-    auto_accept_users
     state
+    session_concurrency_limit
     users
     created_at
   ].freeze

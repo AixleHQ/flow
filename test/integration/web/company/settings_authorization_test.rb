@@ -7,7 +7,7 @@ require "test_helper"
 # Policy (Web::Company::SettingsPolicy < Web::Company::ApplicationPolicy):
 #   show?            => true      (every signed-in member reads their own company)
 #   update?          => admin?    (unscoped, so a foreign admin writes in THEIR company)
-#   manage_capacity? => admin? && Deployment.self_hosted?
+#   manage_capacity? => admin? && Deployment.customer_owns_capacity?
 class Web::Company::SettingsAuthorizationTest < ActionDispatch::IntegrationTest
   include AuthorizationMatrix
 

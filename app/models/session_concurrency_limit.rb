@@ -14,6 +14,8 @@ class SessionConcurrencyLimit < ApplicationRecord
   # Here rather than in a caller: three places write these rows, and a raised cap
   # has to reach the pools now rather than at the next reconciliation.
   after_commit :publish_change
+  after_commit :record_capacity_change, if: :company_scope?
+  before_destroy :refuse_to_unbound_a_metered_company, if: :company_scope?
 
   scope :for_projects, -> { where(scope_type: "Project") }
   scope :for_companies, -> { where(scope_type: "Company") }
@@ -97,5 +99,28 @@ class SessionConcurrencyLimit < ApplicationRecord
   def publish_change
     SessionAdmissionService.transaction { |policy| policy.update!(revision: policy.revision + 1) }
     SessionAdmissionService.drain!
+  end
+
+  def company_scope? = scope_type == "Company"
+
+  # Every path that clears a limit lands here — the company's own settings page,
+  # the admin form, the console — so the rule lives here rather than in each.
+  def refuse_to_unbound_a_metered_company
+    return unless Deployment.requires_bounded_companies?
+
+    errors.add(:base, "This installation meters its capacity to AWS Marketplace, so a company cannot be left unlimited")
+    throw :abort
+  end
+
+  # The metered quantity is the peak the installation offered during the hour,
+  # which an hourly sample of the live rows cannot see. Recording the change
+  # itself is what makes a limit raised for ten minutes billable.
+  #
+  # Skipped when the company is already gone: the row is an orphan of a destroyed
+  # company (nothing cascades these), and the log's foreign key would refuse it.
+  def record_capacity_change
+    return unless Company.exists?(id: scope_id)
+
+    CompanyCapacityChange.record!(company_id: scope_id, max_sessions: destroyed? ? nil : max_sessions)
   end
 end
