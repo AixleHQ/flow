@@ -17,7 +17,12 @@ RUN useradd -m -d /home/cursor -s /bin/bash -G ${AGENT_BROWSERS_GROUP} cursor \
 
 USER cursor
 WORKDIR /home/cursor
-RUN curl https://cursor.com/install -fsS | bash \
+# The registry build cache keys this layer on the Dockerfile text alone, so without the
+# ADD it would keep shipping whichever CLI release first filled the cache. BuildKit
+# checksums an ADD'd URL on every build, so the installer, which embeds the release it downloads, changes — and busts the install
+# below — exactly when a new release ships.
+ADD --chmod=755 https://cursor.com/install /tmp/cursor-install.sh
+RUN bash /tmp/cursor-install.sh \
     && test -x /home/cursor/.local/bin/agent
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 

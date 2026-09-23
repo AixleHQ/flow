@@ -12,7 +12,12 @@ FROM ${BASE_IMAGE}
 # =============================================================================
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~180 MB of /root/.npm in this layer forever.
-RUN npm install -g @openai/codex && npm cache clean --force
+# The registry build cache keys this layer on the Dockerfile text alone, so without the
+# ADD it would keep shipping whichever CLI release first filled the cache. BuildKit
+# checksums an ADD'd URL on every build, so the registry's latest-version document changes — and busts the install
+# below — exactly when a new release ships.
+ADD https://registry.npmjs.org/@openai/codex/latest /tmp/codex-latest.json
+RUN npm install -g "@openai/codex@$(jq -r .version /tmp/codex-latest.json)" && npm cache clean --force
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
 # `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a

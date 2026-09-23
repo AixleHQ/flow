@@ -32,6 +32,11 @@ RUN useradd -m -d /home/kiro -s /bin/bash -G ${AGENT_BROWSERS_GROUP} kiro
 #
 # The install is verified here rather than in a live session: a broken download or a
 # musl/glibc mismatch fails the BUILD instead of every user's first Kiro terminal.
+# The registry build cache keys this layer on the Dockerfile text alone, so without the
+# ADD it would keep shipping whichever CLI release first filled the cache. BuildKit
+# checksums an ADD'd URL on every build, so the stable channel's manifest, which the installer reads, changes — and busts the install
+# below — exactly when a new release ships.
+ADD https://prod.download.cli.kiro.dev/stable/latest/manifest.json /tmp/kiro-latest-manifest.json
 RUN set -eux; \
     su kiro -c 'set -eux; \
         export HOME=/home/kiro PATH=/home/kiro/.local/bin:$PATH; \

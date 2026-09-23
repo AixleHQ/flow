@@ -23,11 +23,16 @@ WORKDIR /home/claude
 # Download THEN run, and verify the binary — never `curl … | bash`. In a pipe, a failed
 # curl still leaves bash reading empty stdin and exiting 0, so a network blip produced an
 # image with no Claude CLI at all and the build reported success (seen 2026-08-05).
+# The registry build cache keys this layer on the Dockerfile text alone, so without the
+# ADD it would keep shipping whichever CLI release first filled the cache. BuildKit
+# checksums an ADD'd URL on every build, so the release channel's latest-version file changes — and busts the install
+# below — exactly when a new release ships.
+ADD --chown=claude:claude https://downloads.claude.ai/claude-code-releases/latest /tmp/claude-latest-version
 RUN curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh \
-    && bash /tmp/claude-install.sh \
+    && bash /tmp/claude-install.sh "$(cat /tmp/claude-latest-version)" \
     && rm -f /tmp/claude-install.sh \
     && test -x /home/claude/.local/bin/claude \
-    && /home/claude/.local/bin/claude --version
+    && /home/claude/.local/bin/claude --version | grep -q "^$(cat /tmp/claude-latest-version) "
 
 ENV PATH="/home/claude/.local/bin:${PATH}"
 
