@@ -11,12 +11,21 @@ module Auth
   module DomainAutoJoin
     module_function
 
-    def call(user, email = user.email)
+    # `provider:` is the method the person actually authenticated with. A
+    # company that does not accept it must not gain a member through it: the
+    # membership would be one the person can never enter (the entry gate refuses
+    # it on every request), and — once active — it strands them permanently,
+    # which makes Auth::PolicyUpdater refuse EVERY later policy edit by that
+    # company's admins. A membership nobody can use is worse than no membership:
+    # it reads as access, counts as a member, and quietly freezes the policy
+    # screen.
+    def call(user, email = user.email, provider:)
       return nil if user.super_admin?
       return nil if user.company_memberships.exists?
 
       company = Company.find_by_email_domain(email.to_s)
       return nil unless company
+      return nil unless Auth::PolicyResolver.accepts?(company: company, provider: provider)
 
       if company.auto_accept_users
         user.company_memberships.create!(

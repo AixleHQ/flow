@@ -38,6 +38,14 @@ module Auth
       allowed_providers(company).pluck(:id)
     end
 
+    # Does this company currently accept entry by this provider? One EXISTS
+    # query rather than plucking the whole set to test a single id.
+    def accepts?(company:, provider:)
+      return false if company.nil? || provider.nil?
+
+      allowed_providers(company).exists?(id: provider.id)
+    end
+
     # AD-5/AD-6: a company is satisfied when the intersection of the session's
     # appended proofs with that company's CURRENTLY enabled providers is
     # non-empty. Computed on read against live rows — never a cache, never a

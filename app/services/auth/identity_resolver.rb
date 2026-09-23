@@ -37,7 +37,7 @@ module Auth
       return user if user.deleted?
 
       link_identity(user)
-      Auth::DomainAutoJoin.call(user, assertion.email) if @auto_join && assertion.email.present?
+      Auth::DomainAutoJoin.call(user, assertion.email, provider: provider) if @auto_join && assertion.email.present?
       user
     end
 

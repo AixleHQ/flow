@@ -306,11 +306,12 @@ These are requirements, not improvements, and several fix weaknesses that exist 
 
 1. **Email is currently the cross-IdP join key with no `email_verified` check** (`google_omni_auth_service.rb:28`, since deleted). §4.4 replaces it.
 2. **Nothing can revoke a session.** §4.2's server-side records are what make deprovisioning, "sign out everywhere", and device lists possible at all.
-3. **`companies.email_domain` is an unverified trust anchor** — a company claiming a public mail domain would auto-join every user of that provider. It is safe today only because company creation is admin-only. Before self-serve creation is ever introduced, the domain must become a verified claim (DNS TXT with a `verified_at`) and public mail providers must be blocklisted (AD-17).
-4. **Copy `Oauth::State`, do not reuse it.** Its signed, 10-minute, single-use, user-pinned, server-side-PKCE shape is verified to be exactly what a login flow needs — but `OauthCredential` deliberately refuses to persist `id_token`, which is the artifact login requires.
-5. **Rate-limit every credential-accepting endpoint** with explicit `rack-attack` rules.
-6. **Magic links are not invitations.** Invitation tokens are 7-day and reusable-until-consumed; a login magic link needs 5-15 minutes, hard single-use, and session-fixation-safe redemption.
-7. **The single-writer rules are enforced mechanically** (AD-15) — a custom `Auth/` rubocop cop, database unique indexes, a Pundit policy — because this repo already enforces doctrine with cops rather than documentation.
+3. **`companies.email_domain` is an unverified trust anchor** — a company claiming a public mail domain would auto-join every user of that provider. It is safe today only because company creation is admin-only. Before self-serve creation is ever introduced, the domain must become a verified claim (DNS TXT with a `verified_at`) and public mail providers must be blocklisted (AD-17). `RESERVED_DOMAINS` on `Company` is not that blocklist: it holds fourteen implausible `.com` names and no public mail provider at all.
+4. **Auto-join answers *which* company; the method answers *whether*.** The domain picks the company, but `Auth::DomainAutoJoin` now declines one that does not accept the provider the person authenticated with. Such a membership could never be entered — the entry gate refuses it on every request — and once active it strands its holder, which makes `Auth::PolicyUpdater` refuse **every** later policy edit by that company's admins. A membership nobody can use is worse than no membership: it reads as access, counts as a member, and freezes the policy screen.
+5. **Copy `Oauth::State`, do not reuse it.** Its signed, 10-minute, single-use, user-pinned, server-side-PKCE shape is verified to be exactly what a login flow needs — but `OauthCredential` deliberately refuses to persist `id_token`, which is the artifact login requires.
+6. **Rate-limit every credential-accepting endpoint** with explicit `rack-attack` rules.
+7. **Magic links are not invitations.** Invitation tokens are 7-day and reusable-until-consumed; a login magic link needs 5-15 minutes, hard single-use, and session-fixation-safe redemption.
+8. **The single-writer rules are enforced mechanically** (AD-15) — a custom `Auth/` rubocop cop, database unique indexes, a Pundit policy — because this repo already enforces doctrine with cops rather than documentation.
 
 ## 8. Open questions
 
