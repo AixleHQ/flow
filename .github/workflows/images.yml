@@ -13,11 +13,10 @@ on:
       - main-images
     tags:
       - "v*"
-  # Weekly canary. Three agent CLIs are installed from a vendor script with no version
-  # to pin (claude, cursor, kiro), so an image built today and the same Dockerfile built
-  # last month are different software — including the parts that do authentication. A
-  # scheduled build finds a vendor-side break here, on a Monday morning, rather than in a
-  # user's session. It deliberately does NOT move `latest`: it runs off the default
+  # Weekly canary. It builds the vendors' newest CLI releases — Cursor and Kiro always
+  # install their latest, and for the pinned CLIs the canary passes the newest version
+  # instead of the pin — so a vendor-side break is found here, on a Monday morning,
+  # rather than in a user's session, and a green run says a pin can be raised. It deliberately does NOT move `latest`: it runs off the default
   # branch, publishes only its own dated tags, and promoting a canary stays a human act
   # (push to main-images, or run this workflow by hand from that branch).
   schedule:
@@ -236,6 +235,23 @@ jobs:
             type=sha,format=short,prefix=
             type=semver,pattern={{version}}
 
+      # The canary replaces a pinned CLI's version with the newest release; a release
+      # build installs exactly the pin.
+      - name: Resolve Newest CLI Release
+        id: newest
+        if: github.event_name == 'schedule'
+        run: |
+          set -euo pipefail
+          npm_latest() { curl -fsSL "https://registry.npmjs.org/$1/latest" | jq -r .version; }
+          case "${{ matrix.image_suffix }}" in
+            claude-code) arg="CLAUDE_CODE_VERSION=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest)" ;;
+            codex)       arg="CODEX_VERSION=$(npm_latest @openai/codex)" ;;
+            grok)        arg="GROK_VERSION=$(npm_latest @xai-official/grok)" ;;
+            gemini-cli)  arg="GEMINI_CLI_VERSION=$(npm_latest @google/gemini-cli)" ;;
+            *)           arg="" ;;
+          esac
+          echo "arg=${arg}" >> "$GITHUB_OUTPUT"
+
       - name: Build And Push Image
         uses: docker/build-push-action@v7
         with:
@@ -246,13 +262,13 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BASE_IMAGE=${{ env.REGISTRY_PREFIX }}/flow-agent-base-core:${{ needs.agent-base.outputs.short_sha }}
+            ${{ steps.newest.outputs.arg }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # What this build actually shipped. For the CLIs installed from a vendor script there
-      # is no version to pin and therefore nothing else that records which one a published
-      # tag contains; comparing two canary runs is how a vendor bump gets noticed, because
-      # the image digest changes for a dozen reasons and the CLI version for one.
+      # What this build actually shipped. The canary installs the newest releases, so this
+      # line — not the Dockerfile — says which one a published canary tag contains, and
+      # comparing it with the pin is how a vendor bump gets noticed.
       #
       # Only on the canary: reading the file means pulling the image back (buildx pushes
       # straight to the registry without keeping it locally), which is a minute per image

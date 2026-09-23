@@ -34,21 +34,20 @@ RUN useradd -m -d /home/grok -s /bin/bash -G ${AGENT_BROWSERS_GROUP} grok
 #
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~69 MB of /root/.npm in this layer forever.
-# The registry build cache keys this layer on the Dockerfile text alone, so without the
-# ADD it would keep shipping whichever CLI release first filled the cache. BuildKit
-# checksums an ADD'd URL on every build, so the registry's latest-version document changes — and busts the install
-# below — exactly when a new release ships.
-ADD https://registry.npmjs.org/@xai-official/grok/latest /tmp/grok-latest.json
+# Pinned: the registry build cache keys this layer on the Dockerfile text, so an unpinned
+# install kept shipping whichever release first filled the cache. The weekly canary
+# builds the newest release instead.
+ARG GROK_VERSION=1.0.41
 RUN set -eux; \
-    npm install -g "@xai-official/grok@$(jq -r .version /tmp/grok-latest.json)"; \
+    npm install -g "@xai-official/grok@${GROK_VERSION}"; \
     ls /root/.grok/bin/grok-* >/dev/null; \
     su - grok -c "grok --version"; \
     npm cache clean --force
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
-# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
-# Dockerfile are not the same image and nothing else says which one a container is running.
+# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
+# installers that install only the latest release, and the canary builds the newest
+# release of the pinned ones, so the version is not always the one this file names.
 RUN su - grok -c "grok --version" > /etc/aixle-cli-version
 
 # Integration boundary: Agents::GrokAdapter#context_file_path writes every session's

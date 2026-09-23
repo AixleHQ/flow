@@ -12,17 +12,16 @@ FROM ${BASE_IMAGE}
 # =============================================================================
 # The cache clean has to be in THIS instruction: a later `npm cache clean` (the
 # watcher layer runs one) leaves ~180 MB of /root/.npm in this layer forever.
-# The registry build cache keys this layer on the Dockerfile text alone, so without the
-# ADD it would keep shipping whichever CLI release first filled the cache. BuildKit
-# checksums an ADD'd URL on every build, so the registry's latest-version document changes — and busts the install
-# below — exactly when a new release ships.
-ADD https://registry.npmjs.org/@openai/codex/latest /tmp/codex-latest.json
-RUN npm install -g "@openai/codex@$(jq -r .version /tmp/codex-latest.json)" && npm cache clean --force
+# Pinned: the registry build cache keys this layer on the Dockerfile text, so an unpinned
+# install kept shipping whichever release first filled the cache. The weekly canary
+# builds the newest release instead.
+ARG CODEX_VERSION=0.156.1
+RUN npm install -g "@openai/codex@${CODEX_VERSION}" && npm cache clean --force
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
-# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
-# Dockerfile are not the same image and nothing else says which one a container is running.
+# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
+# installers that install only the latest release, and the canary builds the newest
+# release of the pinned ones, so the version is not always the one this file names.
 RUN codex --version > /etc/aixle-cli-version
 
 # -G AGENT_BROWSERS_GROUP: write access to the shared browser tree (Playwright creates
