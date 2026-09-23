@@ -19,6 +19,42 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
     SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: @company.id)
   end
 
+  def with_mode(mode)
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))
+  end
+
+  # Absence means unbounded AND unbilled, and the index is where both are
+  # readable at a glance — so a company nobody is invoiced for stops being
+  # visible only by not appearing somewhere else.
+  test "the index marks a company with no limit as unbilled in the hosted product" do
+    with_mode(Deployment::SAAS)
+
+    get admin_companies_path
+
+    assert_response :success
+    assert_match(/No limit — unbilled/, response.body)
+  end
+
+  # A self-hosted installation invoices nobody, so an unbounded company there is
+  # ordinary rather than a number going uncharged.
+  test "the index does not call it unbilled when nothing is invoiced" do
+    with_mode(Deployment::SELF_HOSTED)
+
+    get admin_companies_path
+
+    assert_response :success
+    assert_no_match(/unbilled/, response.body)
+  end
+
+  test "the index shows the limit a company does have" do
+    with_mode(Deployment::SAAS)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 42)
+
+    get admin_companies_path
+
+    assert_match(/42/, response.body)
+  end
+
   test "the show page reports the company's limit" do
     SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
 

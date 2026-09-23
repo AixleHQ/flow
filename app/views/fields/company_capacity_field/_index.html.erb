@@ -1,0 +1,11 @@
+<% if field.unbilled? %>
+  <span title="No limit: this company is unbounded and nothing is invoiced for it"
+        style="display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:600;
+               color:#7d5400;background:rgba(154,103,0,0.12);border:1px solid rgba(154,103,0,0.35);">
+    No limit — unbilled
+  </span>
+<% elsif field.unlimited? %>
+  <span style="opacity:.6">No limit</span>
+<% else %>
+  <%= field.limit %>
+<% end %>
