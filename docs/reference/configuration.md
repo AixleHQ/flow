@@ -126,6 +126,8 @@ user; edit those in the admin, not here.
 | `AGENT_IMAGE_KIRO_CLI`         | no       | derived           | Per-runtime override.                                            |
 | `AGENT_MCP_STARTUP_TIMEOUT_MS` | no       | `90000`           | How long an agent CLI waits for its MCP servers to hand shake.   |
 | `AGENT_CREDENTIAL_SYNC_URL`    | no       | derived from `INTERNAL_BASE_URL` | Where the in-container watcher reports a token the CLI rotated. Internal host only: the request carries a per-session write-back key. |
+| `ANTIGRAVITY_OAUTH_CLIENT_ID`  | no       | —                 | Google OAuth client `agy` signs a consumer login in with. With the secret, Antigravity tokens are refreshed server-side; unset, only the CLI in the container renews them. |
+| `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | no    | —                 | The matching secret. Never commit it: secret scanning reports it to Google, which revokes the client for every `agy` user. |
 
 ### Kubernetes runtime (when `CONTAINER_RUNTIME=kubernetes`)
 
