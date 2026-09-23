@@ -227,15 +227,42 @@ module Agents
     end
 
 
-    # Grok stores `{key, token_type, expires_at}` per scope and no refresh token at all,
-    # so nothing — not the sweep, not the CLI in the container — can renew it. The expiry
-    # is still surfaced, and `reauth_required_on_expiry` is what says that surfacing it
-    # means "sign in again" rather than "wait for the sweep": the launch gate refuses an
-    # expired one (AgentCredential#unrecoverably_expired?) instead of starting a session
-    # that cannot authenticate.
+    # An OIDC login against auth.x.ai: the entry's `key` is the access token (an ES256 JWT
+    # whose `aud` is the CLI's client id), 6h long, with a `refresh_token` beside it —
+    # read off production credentials 2026-09-24. An API-key login carries no expiry.
+    # Rotation is not measured, so it is declared :rotating, which is the safe reading.
     def credential_lifecycle
-      { expiry: :token, refresh: :reauth_only, rotation: :static, nominal_ttl: nil,
-        reauth_required_on_expiry: true }.freeze
+      { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: 6.hours }.freeze
+    end
+
+    XAI_ISSUER = "https://auth.x.ai"
+    XAI_TOKEN_URL = "#{XAI_ISSUER}/oauth2/token".freeze
+    # The CLI keys an OIDC entry "<issuer>::<client id>"; the client is public (no secret).
+    OIDC_SCOPE_PATTERN = /\A#{Regexp.escape(XAI_ISSUER)}::(?<client_id>[0-9a-f-]{36})\z/
+
+    # Only entries issued by auth.x.ai are refreshed: the blob comes back from a container
+    # the user controls, and a refresh token must never be posted to an issuer it names.
+    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
+      credentials = credential.config_data
+      scopes = auth_scopes(credentials["auth"])
+      renewable = scopes.select { |scope, entry| oidc_client_id(scope) && entry["refresh_token"].present? }
+
+      if renewable.empty?
+        return { status: :not_needed, detail: nil, permanent: false } if token_expires_at(credentials).nil?
+
+        return { status: :error, detail: "grok login has no refresh token auth.x.ai can renew — sign in again", permanent: true }
+      end
+
+      refreshed = scopes.dup
+      renewable.each do |scope, entry|
+        result = refresh_entry(oidc_client_id(scope), entry)
+        return result if result[:status] == :error
+
+        refreshed[scope] = result[:entry]
+      end
+
+      persist_refreshed!(credential, credentials.merge("auth" => refreshed))
+      { status: :refreshed, detail: nil }
     end
 
     # Soonest expiry across the scope entries that carry one, in epoch ms, so
@@ -335,6 +362,27 @@ module Agents
 
         scopes[scope.to_s] = entry
       end
+    end
+
+    def oidc_client_id(scope)
+      scope.to_s.match(OIDC_SCOPE_PATTERN)&.[](:client_id)
+    end
+
+    def refresh_entry(client_id, entry)
+      response = Net::HTTP.post_form(URI(XAI_TOKEN_URL), {
+        grant_type: "refresh_token", client_id: client_id, refresh_token: entry["refresh_token"]
+      })
+      body = parse_json(response.body)
+      unless response.is_a?(Net::HTTPSuccess) && body["access_token"].present?
+        return { status: :error, detail: "#{response.code}: #{response.body.to_s.truncate(200)}",
+                 permanent: body["error"] == "invalid_grant" }
+      end
+
+      { status: :ok, entry: entry.merge(
+        TOKEN_FIELD => body["access_token"],
+        "refresh_token" => body["refresh_token"].presence || entry["refresh_token"],
+        "expires_at" => body["expires_in"].to_i.seconds.from_now.utc.iso8601(9)
+      ) }
     end
 
     # The bearer token to authenticate an xAI API call with: an API key when the user

@@ -70,15 +70,14 @@ module Agents
     end
 
     test "an expiry nothing can renew must say that re-authentication is the remedy" do
-      adapters.each do |agent_type, adapter|
+      silent = adapters.select do |_agent_type, adapter|
         lifecycle = adapter.credential_lifecycle
-        next unless lifecycle[:expiry] == :token
-        next if lifecycle[:refresh] == :server
-
-        assert lifecycle[:reauth_required_on_expiry],
-               "#{agent_type} surfaces an expiry it cannot refresh (#{lifecycle[:refresh]}) without declaring " \
-               "reauth_required_on_expiry: the user must be told to sign in again, not left waiting for a sweep"
+        lifecycle[:expiry] == :token && lifecycle[:refresh] != :server && !lifecycle[:reauth_required_on_expiry]
       end
+
+      assert_empty silent.keys,
+                   "these surface an expiry they cannot refresh without declaring reauth_required_on_expiry: " \
+                   "the user must be told to sign in again, not left waiting for a sweep"
     end
 
     test "AgentCredential.refreshable_agent_types is derived from the declarations" do
@@ -90,8 +89,10 @@ module Agents
     # Today's answer, pinned so a change to the matrix is a deliberate edit rather than a
     # side effect. See docs/design/agent-credential-lifecycle.md §2 for why each is where
     # it is, and §Layer 1 for what closes the gaps.
-    test "the current refresh coverage is claude_code, codex, cursor_cli and kiro_cli" do
-      assert_equal %w[claude_code codex cursor_cli kiro_cli].sort, AgentCredential.refreshable_agent_types.sort
+    # gemini_cli is the one runtime left out, and deliberately: its credential is an API key.
+    test "every runtime whose login can expire is refreshed server-side" do
+      assert_equal %w[antigravity_cli claude_code codex cursor_cli grok kiro_cli].sort,
+                   AgentCredential.refreshable_agent_types.sort
     end
   end
 end

@@ -42,13 +42,14 @@ module Activities
 
       private
 
-      # A credential a live container holds. Refreshing it rotates the grant that container
-      # is running on, so it is only done when every holder is parked rather than working,
-      # and the rotated token is handed to those holders immediately afterwards. Doing
-      # nothing — the previous behaviour — is what let a pinned token expire unattempted.
+      # A credential a live container holds. A rotating refresh invalidates the grant that
+      # container is running on, so it is only done when every holder is parked rather than
+      # working; a static one leaves the holder's copy valid. Either way the new token is
+      # handed to the holders immediately afterwards. Doing nothing — the previous
+      # behaviour — is what let a pinned token expire unattempted.
       def refresh_held(credential)
         holders = credential.live_holder_sessions.to_a
-        unless holders.all? { |session| parked?(session) }
+        if credential.rotating_refresh? && !holders.all? { |session| parked?(session) }
           @skipped_busy += 1
           log(:info, "credential #{credential.id} (#{credential.agent_type}) left to its container: " \
                      "a holder is mid-turn")
@@ -59,25 +60,17 @@ module Activities
       end
 
       def refresh(credential)
-        result = credential.adapter.refresh!(credential)
+        result = credential.renew!(source: :sweep)
         case result[:status]
         when :refreshed
-          credential.clear_refresh_error! if credential.refresh_error.present?
           @refreshed += 1
         when :error
-          permanent = ::AgentCredential.permanent_failure?(result)
-          credential.mark_refresh_error!(result[:detail], permanent: permanent)
           @errors += 1
           log(:warn, "credential #{credential.id} (#{credential.agent_type}) refresh error: #{result[:detail]}")
         else
           @not_needed += 1
         end
         result[:status]
-      rescue StandardError => e
-        @errors += 1
-        credential.mark_refresh_error!(e.message, permanent: false)
-        log(:warn, "credential #{credential.id} refresh raised: #{e.class}: #{e.message}")
-        :error
       end
 
       def deliver_to(credential, holders)

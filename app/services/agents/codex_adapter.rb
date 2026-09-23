@@ -83,7 +83,7 @@ module Agents
     end
 
     # ChatGPT OAuth: the access token is a JWT whose `exp` we read, and the token endpoint
-    # returns a rotated refresh token when it issues one (#refresh_access_token! keeps the
+    # returns a rotated refresh token when it issues one (#refresh! keeps the
     # previous one when it does not).
     def credential_lifecycle
       { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: nil }.freeze
@@ -295,36 +295,6 @@ module Agents
       { status: "unavailable" }
     end
 
-    # Refresh an expired access token using the stored refresh_token.
-    # Persists new tokens back to the AgentCredential record.
-    # Returns the new access_token on success, nil on failure.
-    def refresh_access_token!(credential)
-      refresh_token = credential.config_data.dig("tokens", "refresh_token")
-      return nil if refresh_token.blank?
-
-      tokens = Codex::Api.refresh_tokens(refresh_token: refresh_token)
-
-      current_tokens = credential.config_data["tokens"] || {}
-      # Never discard the prior refresh_token/id_token when the server omits a
-      # rotated one (RFC: keep the old until a new pair is committed).
-      new_tokens = current_tokens.merge(
-        "access_token" => tokens.access_token,
-        "refresh_token" => tokens.refresh_token || current_tokens["refresh_token"],
-        "id_token" => tokens.id_token || current_tokens["id_token"]
-      ).compact
-
-      new_config = credential.config_data.merge("tokens" => new_tokens, "last_refresh" => Time.current.iso8601)
-      # Persist under a row lock with the rotation guard so a concurrent session
-      # cleanup or sweep can't clobber a newer token.
-      persisted = persist_refreshed!(credential, new_config)
-      Rails.logger.info("[CodexAdapter] Access token refreshed for credential #{credential.id}")
-
-      persisted.dig("tokens", "access_token")
-    rescue StandardError => e
-      Rails.logger.warn("[CodexAdapter] Token refresh error: #{e.class}: #{e.message}")
-      nil
-    end
-
     def numeric_value(value)
       return nil if value.nil?
 
@@ -354,16 +324,31 @@ module Agents
       details.merge(valid: true, error_code: nil)
     end
 
-    # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
-    # refresh_access_token! which persists under a row lock via persist_refreshed!.
-    # @param credential [AgentCredential]
-    # @return [Hash] { status: :refreshed | :error, detail: String | nil }
-    # margin_ms is ignored: this agent stores no per-block expiry to compare it
-    # against, so a call is already the decision to refresh.
+    # Refresh the access token with the stored refresh_token, persisting under the row
+    # lock. The server does not always rotate the refresh token or reissue the id_token,
+    # and dropping either when it is omitted would kill the login at its next refresh.
+    #
+    # margin_ms is ignored: this agent stores no per-block expiry to compare it against,
+    # so a call is already the decision to refresh.
     def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
-      new_token = refresh_access_token!(credential)
-      new_token ? { status: :refreshed, detail: nil }
-                : { status: :error, detail: "codex token refresh failed" }
+      current_tokens = credential.config_data["tokens"] || {}
+      refresh_token = current_tokens["refresh_token"]
+      return { status: :error, detail: "no refresh token stored — sign in again", permanent: true } if refresh_token.blank?
+
+      tokens = Codex::Api.refresh_tokens(refresh_token: refresh_token)
+      new_tokens = current_tokens.merge(
+        "access_token" => tokens.access_token,
+        "refresh_token" => tokens.refresh_token || refresh_token,
+        "id_token" => tokens.id_token || current_tokens["id_token"]
+      ).compact
+
+      persist_refreshed!(credential, credential.config_data.merge("tokens" => new_tokens, "last_refresh" => Time.current.iso8601))
+      { status: :refreshed, detail: nil }
+    rescue Codex::Api::HTTPError => e
+      rejected = e.status == 401 || e.body.to_s.match?(/invalid_grant|refresh_token_(expired|reused|invalidated)/)
+      { status: :error, detail: "#{e.class}: #{e.message}", permanent: rejected }
+    rescue Codex::Api::ApiError => e
+      { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
     end
 
     # Default environment variables for Codex CLI runtime.
@@ -470,11 +455,9 @@ module Agents
       Codex::Api.models(access_token: access_token)
     rescue Codex::Api::UnauthorizedError
       raise unless credential
+      raise unless credential.renew!(source: :unauthorized)[:status] == :refreshed
 
-      new_token = refresh_access_token!(credential)
-      raise unless new_token
-
-      Codex::Api.models(access_token: new_token)
+      Codex::Api.models(access_token: credential.reload.config_data.dig("tokens", "access_token"))
     end
 
     CODEX_RESPONSES_PATH = "/backend-api/codex/responses"

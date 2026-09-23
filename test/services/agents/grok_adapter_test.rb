@@ -219,6 +219,79 @@ module Agents
       assert_nil @adapter.token_expires_at(nil)
     end
 
+    # == Server-side refresh ==
+    #
+    # Shape read off production credentials: an OIDC entry keyed "<issuer>::<client id>",
+    # its `key` the auth.x.ai access token, with the refresh token beside it.
+
+    XAI_CLIENT_ID = "b1a00492-073a-47ea-816f-4c329264a828"
+    XAI_SCOPE = "https://auth.x.ai::#{XAI_CLIENT_ID}".freeze
+
+    def oidc_credential(refresh_token: "rt-1", scope: XAI_SCOPE, expires_at: 5.minutes.from_now)
+      create(:agent_credential, :grok, user: @user, config_data: { "auth" => { scope => {
+        "key" => "at-old", "auth_mode" => "oidc", "oidc_issuer" => "https://auth.x.ai",
+        "refresh_token" => refresh_token, "expires_at" => expires_at.utc.iso8601(9)
+      }.compact } })
+    end
+
+    test "refresh! renews an OIDC login against auth.x.ai as the CLI's public client" do
+      credential = oidc_credential
+      request = stub_request(:post, GrokAdapter::XAI_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", client_id: XAI_CLIENT_ID, refresh_token: "rt-1" })
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { access_token: "at-new", refresh_token: "rt-2", expires_in: 21_600, token_type: "Bearer" }.to_json)
+
+      assert_equal :refreshed, @adapter.refresh!(credential)[:status]
+
+      assert_requested request
+      entry = credential.reload.config_data.dig("auth", XAI_SCOPE)
+      assert_equal "at-new", entry["key"]
+      assert_equal "rt-2", entry["refresh_token"]
+      assert_in_delta 6.hours.from_now.to_i, Time.zone.parse(entry["expires_at"]).to_i, 5
+      assert_equal "oidc", entry["auth_mode"]
+    end
+
+    test "refresh! keeps the stored refresh token when the server does not rotate it" do
+      credential = oidc_credential
+      stub_request(:post, GrokAdapter::XAI_TOKEN_URL)
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { access_token: "at-new", expires_in: 21_600 }.to_json)
+
+      @adapter.refresh!(credential)
+
+      assert_equal "rt-1", credential.reload.config_data.dig("auth", XAI_SCOPE, "refresh_token")
+    end
+
+    test "refresh! treats a rejected refresh token as permanent" do
+      credential = oidc_credential
+      stub_request(:post, GrokAdapter::XAI_TOKEN_URL)
+        .to_return(status: 400, headers: { "Content-Type" => "application/json" },
+                   body: { error: "invalid_grant", error_description: "Invalid or unknown refresh token" }.to_json)
+
+      result = @adapter.refresh!(credential)
+
+      assert_equal :error, result[:status]
+      assert result[:permanent]
+      assert_equal "at-old", credential.reload.config_data.dig("auth", XAI_SCOPE, "key")
+    end
+
+    test "refresh! never posts a refresh token to an issuer other than auth.x.ai" do
+      credential = oidc_credential(scope: "https://evil.example::#{XAI_CLIENT_ID}")
+
+      result = @adapter.refresh!(credential)
+
+      assert_equal :error, result[:status]
+      assert result[:permanent]
+      assert_not_requested :post, /evil\.example/
+    end
+
+    test "refresh! has nothing to do for an API-key login" do
+      credential = create(:agent_credential, :grok, user: @user,
+                                                   config_data: @adapter.extract_credentials(api_key_auth_json))
+
+      assert_equal :not_needed, @adapter.refresh!(credential)[:status]
+    end
+
     # == MCP ==
 
     test "mcp_config emits a TOML table per server, keyed by transport" do

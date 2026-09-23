@@ -15,9 +15,9 @@ Related: `docs/design/oauth-implementation.md` (as-built OAuth guide),
 
 ## 1. The three questions this answers
 
-1. **Does every harness actually refresh?** Today three of seven do, and the reason a given
-   runtime does or does not is spread across a hardcoded list, an optional adapter method and
-   two unmerged branches.
+1. **Does every harness actually refresh?** Six of seven do since 2026-09-24; `gemini_cli`
+   stores an API key, which has nothing to refresh. Each runtime declares why in
+   `BaseAdapter#credential_lifecycle`, pinned by the contract test.
 2. **Why do sessions that end in the middle lose their credential, and why can the sweep not
    fix it?** Because the grant has more than one holder and only the *container* writes back —
    once, at the end, on the happy path.
@@ -44,9 +44,9 @@ Four mechanisms, each independently correct, none aware of the others:
 | `claude_code` | `claudeAiOauth` + `designOauth` + optional `primaryApiKey` | yes, soonest block | **yes** (`platform.claude.com/v1/oauth/token`, rotates) | us + the CLI in every container | multi-holder rotation |
 | `codex` | `tokens.{access,refresh,id}` | yes (JWT `exp`) | **yes** | us + container | — |
 | `cursor_cli` | `accessToken` + `refreshToken` | yes (JWT `exp`, 60 days) | **yes** — `api2.cursor.sh/oauth/token`, the endpoint the desktop IDE itself uses | us | fixed 2026-09-18; see §Cursor below |
-| `kiro_cli` | SQLite `auth_kv` rows | no | no | container only | implemented on `feat/agent-token-refresh-coverage`, unmerged |
-| `antigravity_cli` | `token.{access_token,refresh_token,expiry}` | no | no | container only | protocol recovered from the binary, client pair unverified |
-| `grok` | `{key, token_type, expires_at}` per scope | yes | no — **no refresh token is stored at all** | nobody; only re-login | expiry shown with no way to act on it |
+| `kiro_cli` | SQLite `auth_kv` rows | yes | **yes** — Kiro social endpoint, or AWS SSO OIDC `CreateToken` for Builder ID / IdC | us + container | an IdC login dies at the directory's session cap (8h measured) whatever we do — see §3.2 |
+| `antigravity_cli` | `token.{access_token,refresh_token,expiry}` | yes, consumer login only | **yes** — `oauth2.googleapis.com/token` with agy's consumer client (measured 2026-09-24: 3599s, refresh token not rotated), when `Settings.agents.antigravity` holds the client | us + container | Cloud-project login's client unverified: no expiry published, CLI renews it |
+| `grok` | per-scope `{key, refresh_token, expires_at, oidc_issuer}` | yes | **yes** — `auth.x.ai/oauth2/token`, public client = the scope key's client id (`key` is the access token, 6h) | us + container | rotation not measured, declared `:rotating`; pre-OIDC logins without a refresh token are condemned at their expiry |
 | `gemini_cli` | API key (encrypted blob) | no | n/a | n/a | none — static by design |
 
 Sources: `app/services/agents/*_adapter.rb`, `AgentCredential::REFRESHABLE_AGENT_TYPES`
@@ -85,6 +85,37 @@ Sources: `app/services/agents/*_adapter.rb`, `AgentCredential::REFRESHABLE_AGENT
 ---
 
 ## 3. Why it works locally and not in production
+
+### 3.2 Refresh audit (investigated 2026-09-24, palad-prod)
+
+Every credential row, the sweep's log in Sentry, and live containers, per runtime:
+
+- **Every renewal now goes through `AgentCredential#renew!`** — sweep, launch top-up, and the
+  web-side 401 retry in `fetch_available_models` (Cursor, Codex). It records the outcome
+  (`clear_refresh_error!` / `mark_refresh_error!`) and reports each failure to Sentry as
+  `AgentCredential::RefreshFailed` via `Rails.error` (source `agent_credential.refresh`,
+  forwarded by `config/initializers/sentry.rb`, one issue per runtime × caller × permanent).
+  Before, every failure was a `Rails.logger.warn` that reached Sentry only as an INFO log line,
+  and the 401 path recorded nothing: 43 Cursor `Token refresh failed: 404` lines in 14 days,
+  every Cursor row at `refresh_failure_count = 0`.
+- **The `:held` guard applies only to rotating refresh tokens.** Cursor and Antigravity renew
+  with a static refresh token, so a holder's copy stays valid and waiting for it to go quiet
+  only lets the token expire.
+- **Production lags develop.** The deployed image had neither the Cursor endpoint fix (#287)
+  nor the `refresh_due` clause that selects rows whose `expires_at` was never derived, so 10
+  Cursor, 3 Claude and 1 Kiro credential with long-expired tokens sat `active` with a NULL
+  `expires_at`, never swept and never flagged.
+- **Kiro IdC hits a hard cap.** Credential 121 (start URL `*.awsapps.com`, OIDC in us-west-2)
+  was refreshed at 19:00, 19:05 and 19:10 and each time came back with the same expiry,
+  19:13:51 — eight hours after the first token — and at 19:15 `CreateToken` answered
+  `invalid_grant "Invalid refresh token provided"`. The refresh is correct; the directory's
+  session duration ended the login, and only a new sign-in renews it.
+- **Antigravity and Grok already renewed in the container** (a session on a four-day-stale
+  Antigravity token ran and wrote back a fresh one; the Grok binary documents silent OIDC
+  refresh), so server-side refresh closes the sweep gap rather than a runtime failure.
+- Unrelated, found on the way: Antigravity sessions on the deployed image die on
+  `--print took "--output-format" as its prompt` (fixed on develop, #260/#261), and two
+  `gemini_cli` rows hold an empty blob.
 
 ### 3.1 What production actually does (investigated 2026-09-17, palad-prod)
 
@@ -178,14 +209,14 @@ What it buys, immediately:
 
 This is what makes the answer to "does every harness refresh?" mechanical instead of a survey.
 
-### Layer 1 — fill the matrix — **kiro landed; cursor and antigravity open**
+### Layer 1 — fill the matrix — **landed**
 
 | Runtime | Action | Where it stands |
 |---|---|---|
 | `kiro_cli` | land server-side refresh (social `refreshToken` + IdC `CreateToken`) | **done** — it now declares `refresh: :server` and the sweep selects it |
 | `cursor_cli` | **done 2026-09-18** — the endpoint was found by reading the desktop IDE's own refresh code and confirmed against the live service; PR #222's `NULL`-expiry gate remains the complement | see §Cursor |
-| `antigravity_cli` | implement Google `oauth2.googleapis.com/token` refresh; verify which embedded client pair the consumer login uses | needs one live credential to test |
-| `grok` | declare `reauth_only`, surface "re-login required" instead of a silent expiry, refuse the launch | **done** — the declaration, the badge and the launch gate are in |
+| `antigravity_cli` | Google `oauth2.googleapis.com/token` refresh with the consumer client | **done 2026-09-24** — pair verified against a live credential; needs `ANTIGRAVITY_OAUTH_CLIENT_ID`/`_SECRET` in the environment, never in the repo (secret scanning would get Google to revoke it for every agy user) |
+| `grok` | `auth.x.ai/oauth2/token` refresh as the CLI's public client | **done 2026-09-24** — superseded the `reauth_only` declaration once production blobs showed the OIDC login stores a refresh token |
 | `gemini_cli` | declare `expiry: :none` / static; keep the OAuth picker disallowed | done by design |
 | `claude_code`, `codex` | nothing new | already both halves |
 

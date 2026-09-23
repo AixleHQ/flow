@@ -11,3 +11,8 @@ encryption:
 # and nothing is metered to a billing provider.
 deployment:
   mode: <%= ENV['DEPLOYMENT_MODE'] || 'self_hosted' %>
+
+agents:
+  antigravity:
+    oauth_client_id: test-antigravity-client.apps.googleusercontent.com
+    oauth_client_secret: test-antigravity-secret

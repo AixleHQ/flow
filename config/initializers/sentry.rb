@@ -64,3 +64,29 @@ Sentry.init do |config|
     breadcrumb
   end
 end
+
+# sentry-rails leaves `register_error_subscriber` off, so a `Rails.error.report` reaches
+# Sentry only from a source listed here. Turning the global subscriber on instead would
+# also forward everything Rails itself reports through the executor.
+forwarded_error_sources = {
+  # One issue per runtime and failure mode, not one per credential.
+  "agent_credential.refresh" => ->(context) {
+    [ "agent_credential.refresh", context[:agent_type], context[:refresh_source],
+      context[:permanent] ? "permanent" : "transient" ]
+  }
+}.freeze
+
+Rails.error.subscribe(Class.new do
+  define_method(:report) do |error, handled:, severity:, context:, source: nil| # rubocop:disable Lint/UnusedBlockArgument
+    fingerprint = forwarded_error_sources[source]
+    next if fingerprint.nil? || !Sentry.initialized?
+
+    Sentry.with_scope do |scope|
+      scope.set_tags(context.except(:credential_id, :failure_count).transform_values(&:to_s))
+      scope.set_context("report", context)
+      scope.set_fingerprint(fingerprint.call(context))
+      scope.set_level(severity)
+      Sentry.capture_exception(error)
+    end
+  end
+end.new)
