@@ -11,6 +11,12 @@ workflows:
       - name: workflow_fire_schedule_trigger_activity
         task_queue: aixle_ruby
 
+  - name: capacity_metering_workflow
+    owner: aixle_ruby
+    activities:
+      - name: billing_report_capacity_activity
+        task_queue: aixle_ruby
+
   - name: outbox_relay_workflow
     owner: aixle_ruby
     activities:
