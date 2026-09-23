@@ -12,9 +12,13 @@ class Web::Company::SettingsControllerTest < ActionDispatch::IntegrationTest
 
   def limit_for(company) = SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: company.id)
 
-  def self_hosted!
-    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: "self_hosted"))
+  def with_mode(mode)
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))
   end
+
+  def self_hosted! = with_mode(Deployment::SELF_HOSTED)
+  def saas! = with_mode(Deployment::SAAS)
+  def marketplace! = with_mode(Deployment::AWS_MARKETPLACE)
 
   test "show renders the settings page" do
     get company_settings_path
@@ -91,6 +95,39 @@ class Web::Company::SettingsControllerTest < ActionDispatch::IntegrationTest
 
   # == session capacity ==
 
+  # "Unlimited" has no encoding in a metering record, so where the installation
+  # meters itself to AWS a company cannot be left without a number.
+  test "a marketplace admin may not clear the limit" do
+    marketplace!
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
+
+    patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "" }
+
+    assert_equal 12, limit_for(@company)&.max_sessions
+    assert_match(/AWS Marketplace/, Array(session["inertia_errors"][:capacity]).to_sentence)
+  end
+
+  test "a marketplace admin may still change the limit" do
+    marketplace!
+
+    patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "30" }
+
+    assert_equal 30, limit_for(@company)&.max_sessions
+  end
+
+  # Every other path that clears a limit is stopped in the model, so the console
+  # and the admin form are covered by the same rule as the form above.
+  test "the row itself refuses to be destroyed in marketplace mode" do
+    marketplace!
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
+    row = SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: @company.id)
+
+    assert_not row.destroy
+
+    assert_equal 12, limit_for(@company)&.max_sessions
+  end
+
+
   test "a self-hosted admin sets the company's session limit" do
     self_hosted!
 
@@ -110,14 +147,18 @@ class Web::Company::SettingsControllerTest < ActionDispatch::IntegrationTest
 
   # The number the hosted product invoices for is not self-serve, whatever the
   # membership role: only a platform administrator moves it.
-  test "a hosted admin may not set the company's session limit" do
+  test "a saas admin may not set the company's session limit" do
+    saas!
+
     patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "12" }
 
     assert_nil limit_for(@company)
     assert_match(/installation's administrator/, Array(session["inertia_errors"][:capacity]).to_sentence)
   end
 
-  test "a hosted admin is told the limit is not theirs to move" do
+  test "a saas admin is told the limit is not theirs to move" do
+    saas!
+
     get company_settings_path
 
     assert_inertia_props do |props|

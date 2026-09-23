@@ -7,11 +7,11 @@ module Web
       def update? = admin?
 
       # Branding and who joins the company are ordinary company administration.
-      # How many sessions the company may run at once is not: in the hosted
-      # product it is the number we invoice for, so it moves from the platform
-      # admin and nowhere else. A self-hosted customer buys their own capacity
-      # and may set it themselves.
-      def manage_capacity? = admin? && Deployment.self_hosted?
+      # How many sessions the company may run at once is not: where we invoice
+      # for that number it moves from the platform admin and nowhere else. A
+      # customer who buys their own capacity — self-hosted, or through AWS
+      # Marketplace — sets it themselves.
+      def manage_capacity? = admin? && Deployment.customer_owns_capacity?
     end
   end
 end
