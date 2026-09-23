@@ -16,9 +16,10 @@ on:
   # Weekly canary. It builds the vendors' newest CLI releases — Cursor and Kiro always
   # install their latest, and for the pinned CLIs the canary passes the newest version
   # instead of the pin — so a vendor-side break is found here, on a Monday morning,
-  # rather than in a user's session, and a green run says a pin can be raised. It deliberately does NOT move `latest`: it runs off the default
-  # branch, publishes only its own dated tags, and promoting a canary stays a human act
-  # (push to main-images, or run this workflow by hand from that branch).
+  # rather than in a user's session, and a green run says a pin can be raised. It
+  # publishes only `canary-YYYYMMDD` — not `latest`, and not the `develop` or commit
+  # tags a deployment could pick up — so promoting a canary stays a human act (push to
+  # main-images, or run this workflow by hand from that branch).
   schedule:
     - cron: "0 5 * * 1"
   workflow_dispatch:
@@ -67,9 +68,10 @@ jobs:
           images: ${{ env.REGISTRY_PREFIX }}/flow-web
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
-            type=ref,event=branch
-            type=sha,format=short,prefix=
+            type=ref,event=branch,enable=${{ github.event_name != 'schedule' }}
+            type=sha,format=short,prefix=,enable=${{ github.event_name != 'schedule' }}
             type=semver,pattern={{version}}
+            type=schedule,pattern=canary-{{date 'YYYYMMDD'}}
 
       - name: Build And Push Web Image
         uses: docker/build-push-action@v7
@@ -111,9 +113,10 @@ jobs:
           images: ${{ env.REGISTRY_PREFIX }}/flow-otlp-ingest
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
-            type=ref,event=branch
-            type=sha,format=short,prefix=
+            type=ref,event=branch,enable=${{ github.event_name != 'schedule' }}
+            type=sha,format=short,prefix=,enable=${{ github.event_name != 'schedule' }}
             type=semver,pattern={{version}}
+            type=schedule,pattern=canary-{{date 'YYYYMMDD'}}
 
       - name: Build And Push OTLP Ingest Image
         uses: docker/build-push-action@v7
@@ -160,9 +163,10 @@ jobs:
           images: ${{ env.REGISTRY_PREFIX }}/flow-agent-base-core
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
-            type=ref,event=branch
-            type=sha,format=short,prefix=
+            type=ref,event=branch,enable=${{ github.event_name != 'schedule' }}
+            type=sha,format=short,prefix=,enable=${{ github.event_name != 'schedule' }}
             type=semver,pattern={{version}}
+            type=schedule,pattern=canary-{{date 'YYYYMMDD'}}
 
       - name: Build And Push Agent Base Core Image
         uses: docker/build-push-action@v7
@@ -231,9 +235,10 @@ jobs:
           images: ${{ env.REGISTRY_PREFIX }}/flow-${{ matrix.image_suffix }}
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main-images' }}
-            type=ref,event=branch
-            type=sha,format=short,prefix=
+            type=ref,event=branch,enable=${{ github.event_name != 'schedule' }}
+            type=sha,format=short,prefix=,enable=${{ github.event_name != 'schedule' }}
             type=semver,pattern={{version}}
+            type=schedule,pattern=canary-{{date 'YYYYMMDD'}}
 
       # The canary replaces a pinned CLI's version with the newest release; a release
       # build installs exactly the pin.
