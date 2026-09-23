@@ -253,7 +253,7 @@ describe('Projects/AixleBuilder/SessionPage', () => {
     expect(screen.getByText('Created workflow')).toBeInTheDocument();
   });
 
-  it('falls back to the raw action string for an unmapped activity action', () => {
+  it('labels an activity by the builder tool that made it', () => {
     renderAuthedPage(<SessionPage />, {
       props: {
         project,
@@ -261,9 +261,9 @@ describe('Projects/AixleBuilder/SessionPage', () => {
         cableStream: 'signed-stream',
         builderActivities: [
           {
-            action: 'some_unmapped_action',
-            entityType: 'Tool',
-            entityName: 'Mailer',
+            action: 'install_connector',
+            entityType: 'MCPServer',
+            entityName: 'Linear',
             timestamp: '2026-06-26 10:06:00 UTC',
           },
         ],
@@ -272,8 +272,8 @@ describe('Projects/AixleBuilder/SessionPage', () => {
       },
     });
 
-    expect(screen.getByText('some_unmapped_action')).toBeInTheDocument();
-    expect(screen.getByText('Mailer')).toBeInTheDocument();
+    expect(screen.getByText('Installed connector')).toBeInTheDocument();
+    expect(screen.getByText('Linear')).toBeInTheDocument();
   });
 
   it('shows the activity count in the Activity tab label when activities are present', () => {

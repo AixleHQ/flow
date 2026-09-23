@@ -93,7 +93,7 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     assert_match %r{/aixle_builder/\d+/session}, response.location
   end
 
-  test "start attaches every builder meta tool to the session" do
+  test "start ships the reference files and leaves tool selection to the builder toolset" do
     captured = nil
     SessionService.stubs(:create_and_start).with do |**kwargs|
       captured = kwargs
@@ -103,13 +103,13 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     post company_project_aixle_builder_start_path(@project), params: { agent_runtime: "claude_code" }
 
     assert_response :redirect
-    # Regression: Builder sessions were once created with zero tools (the
-    # controller queried a stale kind after migration 20260627000002). Meta
-    # tools now come from the code registry, materialized as shadow rows on
-    # demand — no pre-seeded rows required.
-    attached = Tool.where(id: captured[:params][:tool_ids])
-    assert_equal Tools::Registry.tagged(:builder).map(&:name).sort, attached.pluck(:name).sort
-    assert_equal 30, attached.count
+    params = captured[:params]
+    assert_equal({ aixle_builder: true }, params[:metadata])
+    assert_nil params[:tool_ids]
+    assert_equal %w[/workspace/references/aixle-system-reference.md /workspace/references/bmad-guide.md
+                    /workspace/references/workflow-guides.md],
+                 params[:session_config]["config_files"].keys.sort
+    assert_nil params[:session_config]["bmad_enabled"]
   end
 
   test "start redirects back with flash alert when session save fails" do

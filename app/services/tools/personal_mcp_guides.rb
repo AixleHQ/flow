@@ -30,9 +30,9 @@ module Tools
 
         Company -> Projects. A project owns a board (columns + tasks), its
         workflows (steps -> sub-steps), and the resources steps draw on: agents,
-        tools, skills, MCP servers, repositories, config items, assets. Those
-        resources can be company-scoped (shared by every project in the company)
-        or project-scoped; a project sees both.
+        tools, skills, MCP servers, repositories, config items, assets. All of
+        them belong to one project — only assets can also be company-wide — so
+        an id from one project never works in another.
 
       How to work here:
 
@@ -110,11 +110,7 @@ module Tools
       # is actually serving — a user who has switched tools off must not be
       # handed a catalog advertising them.
       def tool_catalog(defs = Registry.for_audience(:user))
-        known = CATALOG_GROUPS.map { |g| g[:tag] }
-        sections = CATALOG_GROUPS.filter_map do |group|
-          section(group[:title], group[:blurb], defs.select { |d| d.tags.include?(group[:tag]) })
-        end
-        sections << section("Other", nil, defs.reject { |d| d.tags.intersect?(known) })
+        sections = catalog_sections(defs)
 
         <<~TEXT
           # Aixle tools on this server
@@ -124,12 +120,21 @@ module Tools
           `tools/list`; the flows these tools serve are in the `setup_project`,
           `build_workflow` and `author_step` prompts.
 
-          #{sections.compact.join("\n").rstrip}
+          #{sections.join("\n").rstrip}
 
           Two rules worth repeating, because they are what usually goes wrong:
           read a workflow step before editing it, and remember that an id list
           on an update replaces the current one wholesale.
         TEXT
+      end
+
+      def catalog_sections(defs)
+        known = CATALOG_GROUPS.map { |g| g[:tag] }
+        sections = CATALOG_GROUPS.filter_map do |group|
+          section(group[:title], group[:blurb], defs.select { |d| d.tags.include?(group[:tag]) })
+        end
+        sections << section("Other", nil, defs.reject { |d| d.tags.intersect?(known) })
+        sections.compact
       end
 
       def setup_project
@@ -189,7 +194,7 @@ module Tools
             text your agents will follow.
 
           ## 6. Agents
-          - `list_agents` — company-scoped agents are already visible here.
+          - `list_agents` — the project's agents.
           - `create_agent` — the persona a step runs as. `get_agent` reads one
             in full before you reuse it.
 
@@ -335,9 +340,9 @@ module Tools
           Wiring:
           - `agent_id` (from `list_agents`) picks who runs the step. `get_agent`
             returns that agent's full persona when the title isn't enough.
-          - `required_agent_runtime` pins the step to `claude_code`, `cursor_cli`,
-            `codex`, or `gemini_cli`. Pass null in `update_workflow_step` to return
-            to normal runtime resolution.
+          - `required_agent_runtime` pins the step to one of
+            #{Step::SUPPORTED_AGENT_RUNTIMES.map { |r| "`#{r}`" }.join(', ')}. Pass null
+            in `update_workflow_step` to return to normal runtime resolution.
           - `tool_ids` / `skill_ids` / `mcp_server_ids` grant capabilities — attach
             only what the step needs (list them with list_project_tools / list_skills /
             list_mcp_servers, and read a skill's content with `get_skill` before

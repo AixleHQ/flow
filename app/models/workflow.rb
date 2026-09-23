@@ -90,10 +90,6 @@ class Workflow < ApplicationRecord
     scope_type == "System"
   end
 
-  def self.aixle_builder
-    system.active.find_by!(name: "Aixle Builder")
-  end
-
   def base_tool_ids
     config&.dig("base_tool_ids") || []
   end
