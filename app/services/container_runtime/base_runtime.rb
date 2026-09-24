@@ -28,7 +28,8 @@ module ContainerRuntime
   #   container_identifier(container)            → String
   #   container_status(id)                       → Symbol (see #container_status)
   #   wait_container(id, timeout=nil)            → Hash { "StatusCode" => int }, or raises
-  #                                                WaitTimeout while it is still running
+  #                                                WaitTimeout while it is still running and
+  #                                                ImagePullError when it can never start
   #   container_logs(id, opts={})                → Hash { stdout:, stderr: }
   #
   # == Garbage collection

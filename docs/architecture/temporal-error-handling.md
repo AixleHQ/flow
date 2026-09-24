@@ -150,6 +150,7 @@ reservation for reconciliation instead (AD-5 in the session-admission design).
 | Container NotFound (during cleanup) | no | **yes** | yes | Container already deleted — expected |
 | Container NotFound (during exec) | no | no | yes | Real problem — the container disappeared |
 | Image pull failed (registry down) | yes | no | no | Transient, retry helps |
+| Kubernetes tool pod still cannot pull its image after 60 s, or its image name can never resolve | no | no | yes | The kubelet has been retrying on its own; report its reason instead of waiting out the tool's timeout |
 | Invalid input / ArgumentError | no | no | yes | Pointless to retry |
 | RecordNotFound (race condition) | no | **yes** | yes | Session deleted by another process |
 | RecordNotFound (real bug) | no | no | yes | Data does not exist, needs investigation |

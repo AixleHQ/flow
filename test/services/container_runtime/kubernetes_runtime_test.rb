@@ -464,6 +464,29 @@ module ContainerRuntime
       assert_equal({ "StatusCode" => -1 }, @runtime.wait_container(pod_handle, 5))
     end
 
+    test "wait_container gives up on an image the kubelet has failed to pull for a minute" do
+      freeze_time
+      stub_pod(waiting_pod(reason: "ImagePullBackOff", message: 'Back-off pulling image "alpine:nope"',
+                           started: 61.seconds.ago))
+
+      error = assert_raises(ContainerRuntime::ImagePullError) { @runtime.wait_container(pod_handle, 0) }
+      assert_equal 'ImagePullBackOff: Back-off pulling image "alpine:nope"', error.message
+    end
+
+    test "wait_container leaves a fresh pull failure to the kubelet's own retries" do
+      freeze_time
+      stub_pod(waiting_pod(reason: "ErrImagePull", started: 5.seconds.ago))
+
+      assert_raises(ContainerRuntime::WaitTimeout) { @runtime.wait_container(pod_handle, 0) }
+    end
+
+    test "wait_container gives up at once on an image name that can never resolve" do
+      freeze_time
+      stub_pod(waiting_pod(reason: "InvalidImageName", started: Time.current))
+
+      assert_raises(ContainerRuntime::ImagePullError) { @runtime.wait_container(pod_handle, 0) }
+    end
+
     test "container_logs reads the main container's log" do
       core_mock = mock("core_client")
       core_mock.expects(:get_pod_log).with("my-pod", "default", container: "main").returns("hello\n")
@@ -1042,6 +1065,18 @@ module ContainerRuntime
       )
       @runtime.stubs(:core_client).returns(core_mock)
       core_mock
+    end
+
+    def stub_pod(pod)
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).with("my-pod", "default").returns(pod)
+      @runtime.stubs(:core_client).returns(core_mock)
+    end
+
+    def waiting_pod(reason:, started:, message: nil)
+      Kubeclient::Resource.new(status: { phase: "Pending", startTime: started.utc.iso8601, containerStatuses: [
+        { name: "main", state: { waiting: { reason: reason, message: message }.compact } }
+      ] })
     end
 
     POD_NOT_FOUND_BODY = {

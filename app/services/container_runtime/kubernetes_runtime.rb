@@ -267,6 +267,15 @@ module ContainerRuntime
     # pull has simply not run yet.
     WAIT_POLL = 1
 
+    # The kubelet retries a failed pull with backoff and keeps the pod Pending
+    # meanwhile, so a tool whose image does not exist or cannot be read would
+    # wait out its whole timeout and then report a timeout. A registry blip
+    # still gets IMAGE_PULL_GRACE seconds of the kubelet's own retries; a name
+    # that can never resolve fails at once, as Docker fails it at pull_image.
+    IMAGE_PULL_RETRYING = %w[ErrImagePull ImagePullBackOff].freeze
+    IMAGE_PULL_HOPELESS = %w[InvalidImageName ErrImageNeverPull].freeze
+    IMAGE_PULL_GRACE = 60
+
     # The main container's exit code once it has terminated. A pod that is gone
     # (stopped and deleted mid-wait) answers -1, the way a killed Docker
     # container reports no clean exit.
@@ -275,8 +284,11 @@ module ContainerRuntime
       deadline = Time.current + (timeout || 1800)
 
       loop do
-        code = terminated_exit_code(core_client.get_pod(handle.pod_name, handle.namespace), handle)
+        pod = core_client.get_pod(handle.pod_name, handle.namespace)
+        code = terminated_exit_code(pod, handle)
         return { "StatusCode" => code } unless code.nil?
+
+        raise_if_image_unpullable(pod, handle)
         raise WaitTimeout, "still running after #{timeout}s" if Time.current >= deadline
 
         sleep(WAIT_POLL)
@@ -1174,17 +1186,34 @@ module ContainerRuntime
       { requests: sized, limits: sized }
     end
 
-    def terminated_exit_code(pod, handle)
+    def main_container_status(pod, handle)
       statuses = Array(pod&.status&.containerStatuses)
       name = handle.container_name || DEFAULT_CONTAINER_NAME
-      main = statuses.find { |status| status.name == name } || statuses.first
-      terminated = main&.state&.terminated
+      statuses.find { |status| status.name == name } || statuses.first
+    end
+
+    def terminated_exit_code(pod, handle)
+      terminated = main_container_status(pod, handle)&.state&.terminated
       return terminated.exitCode.to_i if terminated
 
       case pod&.status&.phase.to_s
       when "Succeeded" then 0
       when "Failed" then -1
       end
+    end
+
+    def raise_if_image_unpullable(pod, handle)
+      waiting = main_container_status(pod, handle)&.state&.waiting
+      reason = waiting&.reason.to_s
+      return unless IMAGE_PULL_HOPELESS.include?(reason) ||
+                    (IMAGE_PULL_RETRYING.include?(reason) && pod_age(pod) > IMAGE_PULL_GRACE)
+
+      raise ImagePullError, [ reason, waiting.message.presence ].compact.join(": ")
+    end
+
+    def pod_age(pod)
+      started = Time.zone.parse((pod.status&.startTime || pod.metadata&.creationTimestamp).to_s)
+      started ? Time.current - started : 0
     end
 
     def runtime_container_resources
