@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_23_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_25_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1078,10 +1078,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_200000) do
     t.datetime "created_at", null: false
     t.text "file_data"
     t.string "name", null: false
+    t.string "public_token"
+    t.datetime "shared_at"
+    t.bigint "shared_by_id"
+    t.bigint "shared_in_session_id"
     t.string "tags", default: [], array: true
     t.datetime "updated_at", null: false
     t.index ["author_id"], name: "index_task_assets_on_author_id"
     t.index ["board_task_id"], name: "index_task_assets_on_board_task_id"
+    t.index ["public_token"], name: "index_task_assets_on_public_token", unique: true, where: "(public_token IS NOT NULL)"
+    t.index ["shared_by_id"], name: "index_task_assets_on_shared_by_id", where: "(shared_by_id IS NOT NULL)"
+    t.index ["shared_in_session_id"], name: "index_task_assets_on_shared_in_session_id", where: "(shared_in_session_id IS NOT NULL)"
   end
 
   create_table "task_comments", force: :cascade do |t|
@@ -1361,10 +1368,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_200000) do
     t.integer "file_size"
     t.string "name", null: false
     t.bigint "produced_by_step_run_id"
+    t.string "public_token"
     t.string "s3_key"
+    t.datetime "shared_at"
+    t.bigint "shared_by_id"
+    t.bigint "shared_in_session_id"
     t.datetime "updated_at", null: false
     t.bigint "workflow_run_id", null: false
     t.index ["produced_by_step_run_id"], name: "index_workflow_run_assets_on_produced_by_step_run_id"
+    t.index ["public_token"], name: "index_workflow_run_assets_on_public_token", unique: true, where: "(public_token IS NOT NULL)"
+    t.index ["shared_by_id"], name: "index_workflow_run_assets_on_shared_by_id", where: "(shared_by_id IS NOT NULL)"
+    t.index ["shared_in_session_id"], name: "index_workflow_run_assets_on_shared_in_session_id", where: "(shared_in_session_id IS NOT NULL)"
     t.index ["workflow_run_id"], name: "index_workflow_run_assets_on_workflow_run_id"
   end
 
@@ -1540,7 +1554,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_200000) do
   add_foreign_key "sub_step_runs", "sub_steps"
   add_foreign_key "sub_steps", "steps"
   add_foreign_key "task_assets", "board_tasks", on_delete: :cascade
+  add_foreign_key "task_assets", "terminal_sessions", column: "shared_in_session_id", on_delete: :nullify
   add_foreign_key "task_assets", "users", column: "author_id", on_delete: :nullify
+  add_foreign_key "task_assets", "users", column: "shared_by_id", on_delete: :nullify
   add_foreign_key "task_comments", "board_tasks", on_delete: :cascade
   add_foreign_key "task_comments", "users", column: "author_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
@@ -1573,6 +1589,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_23_200000) do
   add_foreign_key "webhook_endpoints", "projects", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id", on_delete: :nullify
+  add_foreign_key "workflow_run_assets", "terminal_sessions", column: "shared_in_session_id", on_delete: :nullify
+  add_foreign_key "workflow_run_assets", "users", column: "shared_by_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "workflow_runs", on_delete: :cascade
   add_foreign_key "workflow_runs", "agent_credentials", column: "failed_agent_credential_id", on_delete: :nullify
   add_foreign_key "workflow_runs", "board_tasks", on_delete: :nullify

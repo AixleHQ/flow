@@ -7,6 +7,7 @@ import { buildBoard } from 'test/factories/board';
 import { buildBoardColumn } from 'test/factories/boardColumn';
 import { buildBoardPreset } from 'test/factories/boardPreset';
 import { buildBoardTask } from 'test/factories/boardTask';
+import { buildTaskAsset } from 'test/factories/taskAsset';
 import { buildTaskComment } from 'test/factories/taskComment';
 import { buildTaskStatistics } from 'test/factories/taskStatistics';
 import { buildTaskWorkflowRun } from 'test/factories/taskWorkflowRun';
@@ -453,6 +454,37 @@ describe('Projects/Board/BoardPage', () => {
     // Details tab is selected by default and shows the section labels.
     expect(drawer.getByText(/properties/i)).toBeInTheDocument();
     expect(drawer.getByText('Created')).toBeInTheDocument();
+  });
+
+  it('links a shared task file to its public page and stops sharing it', async () => {
+    const fetchSpy = answerFetch({ 'DELETE /api/v1/projects/7/tasks/1/assets/31/share': {} });
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+        taskComments: [],
+        taskAssets: [buildTaskAsset({ id: 31, name: 'mockup.png', shareUrl: 'https://flow.test/share/xyz' })],
+        taskActivities: [],
+        taskWorkflowRuns: [],
+      },
+    });
+
+    const drawer = within(screen.getByRole('dialog'));
+    await userEvent.click(drawer.getByRole('tab', { name: /Assets/ }));
+
+    expect(drawer.getByRole('link', { name: 'Public link to mockup.png' })).toHaveAttribute(
+      'href',
+      'https://flow.test/share/xyz',
+    );
+    await userEvent.click(drawer.getByRole('button', { name: 'Stop sharing mockup.png' }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/tasks/1/assets/31/share',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+    fetchSpy.mockRestore();
   });
 
   it('opens description links safely without activating description edit mode', async () => {

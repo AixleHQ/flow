@@ -33,6 +33,14 @@ module Api
           redirect_to asset.file.url, allow_other_host: true
         end
 
+        # @summary Stop sharing a workflow run asset publicly
+        def unshare
+          workflow_run = current_project.workflow_runs.find(params[:workflow_run_id])
+          asset = workflow_run.workflow_run_assets.find(params[:id])
+          asset.unshare!
+          render json: WorkflowRunAssetResource.new(asset).to_h
+        end
+
         # @summary Export all workflow run assets to project assets
         def export_all
           workflow_run = current_project.workflow_runs.find(params[:workflow_run_id])

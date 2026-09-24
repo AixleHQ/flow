@@ -5,15 +5,14 @@ class Asset < ApplicationRecord
   # segment may contain, and `Folder` for why paths (not a `parent_id`) are the source of truth
   # for nesting.
   FOLDER_MAX_LENGTH = 100
-  UNSHARED = { public: false, public_token: nil, shared_at: nil, shared_by_id: nil, shared_in_session_id: nil }.freeze
+  UNSHARED = PubliclyShareable::UNSHARED.merge(public: false).freeze
 
   belongs_to :scope, polymorphic: true
   include TenantColumns
+  include PubliclyShareable
   belongs_to :created_by, class_name: "User", optional: true
   belongs_to :step_run, optional: true
   belongs_to :terminal_session, optional: true
-  belongs_to :shared_by, class_name: "User", optional: true
-  belongs_to :shared_in_session, class_name: "TerminalSession", optional: true
 
   has_many :versions, class_name: "AssetVersion", dependent: :destroy, inverse_of: :asset
 
@@ -98,45 +97,14 @@ class Asset < ApplicationRecord
     end
   end
 
-  # Makes the asset publicly reachable via a stable share link. The token lives
-  # on the asset (not a version), so the link never changes as new versions are
-  # added. Idempotent: an already-shared asset keeps its existing token.
-  #
-  # `by` and `session` record who published it; an agent-made share names both.
-  def share!(by: nil, session: nil)
-    return public_token if shared?
-
-    update!(public: true, public_token: self.class.generate_public_token,
-            shared_at: Time.current, shared_by: by || session&.user, shared_in_session: session)
-    public_token
-  end
-
-  # The token goes with it: a later share is a new link, and the old one, wherever
-  # it was pasted, stays dead.
-  def unshare!
-    update!(UNSHARED)
-  end
-
   def shared?
     public? && public_token.present?
   end
 
-  # Stable public share link for a shared asset (nil unless shared). The token
-  # lives on the asset, so this URL is stable across versions.
-  def share_url
-    return nil unless shared?
-
-    Rails.application.routes.url_helpers.public_asset_url(
-      token: public_token, host: Settings.domain, protocol: Settings.protocol
-    )
-  end
-
-  def self.generate_public_token
-    loop do
-      token = SecureRandom.urlsafe_base64(24)
-      break token unless exists?(public_token: token)
-    end
-  end
+  # The token lives on the asset, not on a version, so a shared link keeps
+  # serving whichever version is newest.
+  def shared_file = latest_version&.file
+  def shared_content_type = latest_version&.content_type
 
   def soft_delete!
     update!(UNSHARED.merge(deleted_at: Time.current))
@@ -161,6 +129,9 @@ class Asset < ApplicationRecord
   end
 
   private
+
+  def share_attributes = { public: true }
+  def unshare_attributes = UNSHARED
 
   def normalize_folder
     self.folder = self.class.normalize_folder(folder)

@@ -43,6 +43,8 @@ import {
   IconSend,
   IconTag,
   IconTrash,
+  IconWorld,
+  IconWorldOff,
   IconX,
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -73,6 +75,7 @@ import {
   apiV1ProjectTaskCommentsPath,
   apiV1ProjectTaskAssetsPath,
   apiV1ProjectTaskAssetPath,
+  shareApiV1ProjectTaskAssetPath,
   apiV1ProjectTaskGatePath,
   moveApiV1ProjectTaskPath,
   archiveApiV1ProjectTaskPath,
@@ -140,6 +143,13 @@ async function deleteTaskAsset(projectId: number, taskId: number, assetId: numbe
     method: 'DELETE',
   });
   if (deleted) router.reload({ only: ['task_assets', 'task_activities'] });
+}
+
+async function unshareTaskAsset(projectId: number, taskId: number, assetId: number) {
+  const unshared = await apiMutate(shareApiV1ProjectTaskAssetPath(projectId, taskId, assetId), {
+    method: 'DELETE',
+  });
+  if (unshared) router.reload({ only: ['task_assets'] });
 }
 
 function deleteTaskGate(projectId: number, taskId: number, gateId: number): Promise<boolean> {
@@ -397,6 +407,14 @@ export function TaskDetailSidebar({
     async (assetId: number) => {
       if (!task) return;
       await deleteTaskAsset(projectId, task.id, assetId);
+    },
+    [projectId, task],
+  );
+
+  const handleUnshareAsset = useCallback(
+    async (assetId: number) => {
+      if (!task) return;
+      await unshareTaskAsset(projectId, task.id, assetId);
     },
     [projectId, task],
   );
@@ -1456,6 +1474,35 @@ export function TaskDetailSidebar({
 
                     {/* Actions */}
                     <Box style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {a.shareUrl && (
+                        <Tooltip label="Shared publicly">
+                          <ActionIcon
+                            component="a"
+                            href={a.shareUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            variant="subtle"
+                            size="sm"
+                            aria-label={`Public link to ${a.name}`}
+                            style={{ color: 'var(--app-warning-fg)' }}
+                          >
+                            <IconWorld size={15} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                      {a.shareUrl && canExecute && (
+                        <Tooltip label="Stop sharing">
+                          <ActionIcon
+                            variant="subtle"
+                            size="sm"
+                            onClick={() => handleUnshareAsset(a.id)}
+                            aria-label={`Stop sharing ${a.name}`}
+                            style={{ color: 'var(--mantine-color-placeholder)' }}
+                          >
+                            <IconWorldOff size={15} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
                       {a.fileUrl && (
                         <ActionIcon component="a" href={a.fileUrl} target="_blank" variant="subtle" size="sm">
                           <IconDownload size={15} />

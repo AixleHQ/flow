@@ -17,4 +17,9 @@ class TaskAssetResource < ApplicationResource
   attribute :content_type do |asset|
     asset.file&.metadata&.dig("mime_type")
   end
+
+  typelize "string | null", optional: true
+  attribute :share_url do |asset|
+    asset.share_url
+  end
 end

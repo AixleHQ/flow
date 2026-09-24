@@ -157,6 +157,7 @@ Rails.application.routes.draw do
               member do
                 post :export
                 get :download
+                delete :share, action: :unshare
               end
               collection do
                 post :export_all
@@ -189,7 +190,9 @@ Rails.application.routes.draw do
               end
               scope module: :task do
                 resources :comments, only: %i[index create]
-                resources :assets, only: %i[index create destroy]
+                resources :assets, only: %i[index create destroy] do
+                  member { delete :share, action: :unshare }
+                end
                 resources :gates, only: %i[destroy]
                 resources :transitions, only: %i[index]
                 resources :activities, only: %i[index]

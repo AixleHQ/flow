@@ -56,4 +56,40 @@ class Web::PublicAssetsControllerTest < ActionDispatch::IntegrationTest
     get public_asset_path(token: @token)
     assert_response :not_found
   end
+
+  test "serves a shared run output the same sandboxed way" do
+    run = create(:workflow_run, workflow: create(:workflow, scope: @project), project: @project, user: @user)
+    output = create(:workflow_run_asset, workflow_run: run, name: "summary.md", content_type: "text/markdown",
+                                         file: WorkflowRunAssetUploader.upload(StringIO.new("# summary"), :store))
+    token = output.share!
+
+    get public_asset_path(token: token)
+    assert_response :success
+    assert_includes response.body, "summary.md"
+
+    get public_asset_raw_path(token: token)
+    assert_response :success
+    assert_equal "# summary", response.body
+    assert_equal "sandbox", response.headers["Content-Security-Policy"]
+    assert_includes response.headers["Content-Type"], "text/markdown"
+  end
+
+  test "serves a shared task attachment until it is unshared" do
+    board = create(:board, project: @project)
+    task = create(:board_task, board: board, board_column: create(:board_column, board: board))
+    attachment = create(:task_asset, board_task: task, author: @user, name: "notes.txt",
+                                     file: TaskAssetUploader.upload(StringIO.new("task notes"), :store))
+    token = attachment.share!
+
+    get public_asset_raw_path(token: token)
+    assert_response :success
+    assert_equal "task notes", response.body
+    assert_equal "sandbox", response.headers["Content-Security-Policy"]
+    assert_equal "nosniff", response.headers["X-Content-Type-Options"]
+
+    attachment.unshare!
+
+    get public_asset_raw_path(token: token)
+    assert_response :not_found
+  end
 end

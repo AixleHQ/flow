@@ -312,6 +312,11 @@ export function downloadApiV1ProjectWorkflowRunWorkflowRunAssetPath(project_id: 
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflow_runs" + "/" + workflow_run_id + "/" + "workflow_run_assets" + "/" + id + "/" + "download" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_run_id","id","format"]);
 }
 
+/** /api/v1/projects/:project_id/workflow_runs/:workflow_run_id/workflow_run_assets/:id/share(.:format) */
+export function shareApiV1ProjectWorkflowRunWorkflowRunAssetPath(project_id: ScalarType, workflow_run_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflow_runs" + "/" + workflow_run_id + "/" + "workflow_run_assets" + "/" + id + "/" + "share" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_run_id","id","format"]);
+}
+
 /** /api/v1/projects/:project_id/workflow_runs/:workflow_run_id/workflow_run_assets/export_all(.:format) */
 export function exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath(project_id: ScalarType, workflow_run_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflow_runs" + "/" + workflow_run_id + "/" + "workflow_run_assets" + "/" + "export_all" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_run_id","format"]);
@@ -405,6 +410,11 @@ export function workflowRunsApiV1ProjectTaskPath(project_id: ScalarType, id: Sca
 /** /api/v1/projects/:project_id/tasks/:task_id/comments(.:format) */
 export function apiV1ProjectTaskCommentsPath(project_id: ScalarType, task_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "comments" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","format"]);
+}
+
+/** /api/v1/projects/:project_id/tasks/:task_id/assets/:id/share(.:format) */
+export function shareApiV1ProjectTaskAssetPath(project_id: ScalarType, task_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "tasks" + "/" + task_id + "/" + "assets" + "/" + id + "/" + "share" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","task_id","id","format"]);
 }
 
 /** /api/v1/projects/:project_id/tasks/:task_id/assets(.:format) */

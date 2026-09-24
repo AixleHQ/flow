@@ -9,7 +9,7 @@ require "test_helper"
 #          < Web::Company::Projects::WorkflowRunAssetsPolicy
 #          < Web::Company::ApplicationPolicy):
 #   reads  (index, download)     => project_accessible?
-#   writes (export, export_all)  => project_writable?
+#   writes (export, export_all, unshare) => project_writable?
 #     (project_writable? == project_accessible? && !current_user.read_only?)
 #
 # current_project is resolved via Project.for_user(current_user).find(:project_id),
@@ -60,6 +60,14 @@ class Api::V1::Projects::WorkflowRunAssetsAuthorizationTest < ActionDispatch::In
   test "export is a project write" do
     assert_project_write(transport: :api) do
       post export_api_v1_project_workflow_run_workflow_run_asset_path(@project, @run, @wra), as: :json
+    end
+  end
+
+  test "unshare is a project write" do
+    @wra.share!
+
+    assert_project_write(transport: :api) do
+      delete share_api_v1_project_workflow_run_workflow_run_asset_path(@project, @run, @wra), as: :json
     end
   end
 
