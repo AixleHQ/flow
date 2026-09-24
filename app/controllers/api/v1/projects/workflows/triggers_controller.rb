@@ -11,27 +11,22 @@ module Api
         # A webhook trigger additionally provisions a generic WebhookEndpoint and
         # returns its URL + secret.
         class TriggersController < Workflows::ApplicationController
-          # Raised when a column trigger is requested for a project that has no
-          # board — column triggers bind to a board column, which can't exist
-          # without a board. Rescued in #create as a 422 (not a 500).
-          BoardMissingError = Class.new(StandardError)
-
           def index
             render json: { triggers: serialized_triggers }
           end
 
           def create
             kind = params.dig(:trigger, :kind).to_s
-            result =
-              case kind
-              when "column" then create_column_trigger
-              when "webhook" then create_webhook_trigger
-              when "slack", "schedule", "event" then create_event_trigger(kind)
-              else return render json: { errors: [ "Unsupported trigger kind: #{kind}" ] }, status: :unprocessable_entity
-              end
+            unless WorkflowTriggers::Creator::KINDS.include?(kind)
+              return render json: { errors: [ "Unsupported trigger kind: #{kind}" ] }, status: :unprocessable_entity
+            end
 
-            render json: result, status: :created
-          rescue BoardMissingError
+            result = WorkflowTriggers::Creator.call(
+              project: current_project, workflow: current_workflow, user: current_user,
+              kind: kind, attributes: creator_attributes(kind)
+            )
+            render json: serialize_result(result), status: :created
+          rescue WorkflowTriggers::Creator::BoardMissingError
             render json: { errors: [ "This project has no board. Create a board before adding a column trigger." ] }, status: :unprocessable_entity
           rescue ActiveRecord::RecordInvalid => e
             render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
@@ -76,50 +71,25 @@ module Api
 
           private
 
-          # ---- creators ----
+          # ---- creation ----
 
-          def create_column_trigger
-            board = current_project.board
-            raise BoardMissingError unless board
+          def creator_attributes(kind)
+            trigger = params.require(:trigger)
+            return trigger.permit(:board_column_id, :trigger_mode, :cooldown_seconds).to_h if kind == "column"
 
-            column = board.board_columns.find(params.dig(:trigger, :board_column_id))
-            binding = ColumnWorkflowBinding.create!(
-              board_column: column,
-              workflow: current_workflow,
-              created_by: current_user,
-              trigger_mode: params.dig(:trigger, :trigger_mode).presence || "auto",
-              cooldown_seconds: params.dig(:trigger, :cooldown_seconds).presence || 5
-            )
-            serialize_column(binding)
+            trigger_binding_params.to_h.merge(trigger.permit(:event_type, :verification_strategy, :secret).to_h)
           end
 
-          def create_event_trigger(kind)
-            event_type =
-              case kind
-              when "slack"    then "slack.message"
-              when "schedule" then "schedule.fired"
-              else params.dig(:trigger, :event_type).to_s.presence || "webhook.received"
-              end
-            binding = current_workflow.trigger_bindings.create!(
-              trigger_binding_params.merge(project: current_project, created_by: current_user, event_type: event_type)
-            )
-            serialize_binding(binding)
-          end
+          def serialize_result(result)
+            return serialize_column(result.trigger) if result.kind == "column"
 
-          def create_webhook_trigger
-            endpoint = WebhookEndpoint.create_for_trigger!(
-              project: current_project, created_by: current_user,
-              verification_strategy: params.dig(:trigger, :verification_strategy),
-              secret: params.dig(:trigger, :secret)
-            )
-            binding = current_workflow.trigger_bindings.create!(
-              trigger_binding_params.merge(project: current_project, created_by: current_user,
-                                           event_type: endpoint.config["event_type"])
-            )
-            serialize_binding(binding).merge(
-              webhook_url: webhook_url(endpoint.slug),
-              webhook_secret: endpoint.secret,
-              verification_strategy: endpoint.verification_strategy
+            payload = serialize_binding(result.trigger)
+            return payload unless result.webhook_endpoint
+
+            payload.merge(
+              webhook_url: webhook_url(result.webhook_endpoint.slug),
+              webhook_secret: result.webhook_endpoint.secret,
+              verification_strategy: result.webhook_endpoint.verification_strategy
             )
           end
 
