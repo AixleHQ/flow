@@ -29,9 +29,12 @@ module Templates
       def resolved? = conflicts.empty?
       def item(section, key) = items.find { |i| i.section == section && i.key == key }
 
-      # What the user confirmed: every decision that changes what gets written.
+      # What the user confirmed: which package, where, and every create / reuse /
+      # copy decision. Input values and the new project's name are left out —
+      # they are typed on the same page, and inputs only matter here through the
+      # decisions they change, which are in.
       def digest
-        decisions = [ catalog_template.package_digest, target_kind, project&.id, project_name, inputs.sort,
+        decisions = [ catalog_template.package_digest, target_kind, project&.id,
                       items.map(&:to_h), board_action, column_map.sort ]
         Digest::SHA256.hexdigest(decisions.to_json)
       end

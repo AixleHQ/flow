@@ -37,6 +37,8 @@ module Templates
       @idempotency_key = idempotency_key.to_s
     end
 
+    attr_reader :idempotency_key
+
     def plan
       Planner.new(catalog_template: @catalog_template, user: @user, target: @target, inputs: @inputs,
                   resolutions: @resolutions, expected: @expected, provided_secrets: @secrets.keys).call

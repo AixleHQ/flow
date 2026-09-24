@@ -75,7 +75,22 @@ module Templates
     end
 
     def setup_item(item)
-      { id: item.id, kind: item.kind, ref: item.ref, status: item.status, detail: item.detail.except("attach_to") }
+      { id: item.id, kind: item.kind, ref: item.ref, status: item.status, detail: item.detail.except("attach_to"),
+        label: setup_label(item) }
+    end
+
+    def setup_label(item)
+      detail = item.detail
+      case item.kind
+      when "secret" then "Add the secret #{detail['name']}"
+      when "integration" then "Connect #{detail['provider'].to_s.titleize}"
+      when "repository" then "Attach a repository (#{detail['key']})"
+      when "oauth" then "Sign in to #{detail['name']}"
+      when "probe" then "Could not reach #{detail['name']}"
+      when "trigger" then "Activate the #{detail['kind']} trigger of #{detail['workflow']}"
+      when "board" then "Board changes were skipped"
+      else item.ref
+      end
     end
   end
 end

@@ -6,7 +6,24 @@ module AuthConcern
   IMPERSONATION_KEY = "true_user_id"
   # Carried across the session reset at sign-in: what the flow signing the person
   # in has just set up for them (the company of an invitation it accepted).
-  CARRIED_ACROSS_SIGN_IN = %w[current_company_id pending_invitation_token].freeze
+  CARRIED_ACROSS_SIGN_IN = %w[current_company_id pending_invitation_token pending_template_install].freeze
+
+  # Login continuation for a template install started as a guest (design §7.1).
+  # Only the template and the version the guest saw are kept; the route back is
+  # built here, so there is no return_to parameter to point somewhere else.
+  PENDING_TEMPLATE_INSTALL_KEY = :pending_template_install
+
+  def remember_pending_template_install(slug:, version:)
+    session[PENDING_TEMPLATE_INSTALL_KEY] = { "slug" => slug.to_s, "version" => version.to_i }
+  end
+
+  def take_pending_template_install_path
+    pending = session.delete(PENDING_TEMPLATE_INSTALL_KEY)
+    slug = pending.is_a?(Hash) ? pending["slug"].to_s : ""
+    return nil unless slug.match?(/\A[a-z0-9]+(-[a-z0-9]+)*\z/)
+
+    new_company_template_install_path(slug: slug, version: pending["version"].to_i)
+  end
 
   # A new session for every sign-in: the old one (and its CSRF token) is reset,
   # and the sign-in is a UserSession row the server can end.
