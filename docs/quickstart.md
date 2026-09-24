@@ -91,15 +91,19 @@ If the run fails, see [user-guide/agents.md](user-guide/agents.md#troubleshootin
 
 ## Troubleshooting
 
-### `EACCES: permission denied, mkdir '/app/node_modules'`
+### `EACCES: permission denied` under `tmp/`, `log/` or `node_modules/`
 
-On Linux, Docker bind-mounts keep the host file owner. `make setup` runs
-Yarn as the container `app` user; that user used to be uid 100, which
-cannot create `node_modules` in a typical uid-1000 checkout. The Compose
-entrypoint remaps `app` to whoever owns `/app`. Re-run `make setup`.
+On Linux, Docker bind-mounts keep the host file owner. The Compose stack runs
+`web` and `worker` as your user — `make` exports `UID` and `GID` — so everything
+they write stays yours. Running `docker compose` directly, without `make`,
+falls back to uid 1000; if yours differs, put `UID=` and `GID=` in `.env`.
 
-If it still fails, `/app` is root-owned on the host — `chown` the repo
-back to your user and re-run.
+A checkout that a root-run container once wrote to can hold root-owned files.
+Hand them back once, with nothing deleted:
+
+```bash
+sudo chown -R "$(id -u):$(id -g)" .
+```
 
 The Yarn `YN0060` / `YN0086` peer-dependency warnings (e.g. `react`
 vs `@emoji-mart/react`) and the `websocket-client-simple` gem notice are

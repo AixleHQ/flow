@@ -1,21 +1,19 @@
+# Dev containers run as the host user (UID/GID, exported by the Makefile), so
+# everything they write into these bind-mounts is owned by that user on a Linux
+# host — no root, no chown. The caches are bind-mounts rather than named volumes
+# for the same reason: a named volume is created root-owned.
 x-web-volumes: &web-volumes
   - .:/app:cached
-  - ~/.bash_history:/home/app/.bash_history
-  - bundle_cache:/bundle_cache
-  # Non-root app user's $HOME (L-22). Without this, corepack/yarn's global
-  # cache lives in the container's writable layer, which `docker compose run`
-  # throws away every invocation — yarn re-fetches every package each time
-  # a one-off container starts (e.g. `dcr web bash`).
-  - app_home:/home/app
+  - ./.docker-cache/bundle:/bundle_cache
+  - ./.docker-cache/home:/home/app
   - ./docker/remote/db_dumps:/db_dumps:cached
 
 # Worker needs Docker socket access for container lifecycle management (docker-api gem).
 # Web does not — it uses kubeclient for k8s in production.
 x-worker-volumes: &worker-volumes
   - .:/app:cached
-  - ~/.bash_history:/home/app/.bash_history
-  - bundle_cache:/bundle_cache
-  - app_home:/home/app
+  - ./.docker-cache/bundle:/bundle_cache
+  - ./.docker-cache/home:/home/app
   - ./docker/remote/db_dumps:/db_dumps:cached
   - /var/run/docker.sock:/var/run/docker.sock
 
@@ -28,6 +26,7 @@ x-db-environment: &db-environment
 x-web-environment: &web-environment
   <<: *db-environment
   APP_VERSION: dev
+  HOME: /home/app
   BUNDLE_PATH: /bundle_cache
   GEM_HOME: /bundle_cache
   GEM_PATH: /bundle_cache
@@ -103,6 +102,7 @@ services:
     build:
       dockerfile: ./Dockerfile
     image: ${WEB_IMAGE:-web}
+    user: "${UID:-1000}:${GID:-1000}"
     volumes: *web-volumes
     ports:
       - '${PORT:-4000}:${PORT:-4000}'
@@ -132,6 +132,9 @@ services:
 
   worker:
     image: ${WEB_IMAGE:-web}
+    user: "${UID:-1000}:${GID:-1000}"
+    group_add:
+      - "${DOCKER_GID:-0}"
     volumes: *worker-volumes
     environment:
       <<: *web-environment
@@ -224,8 +227,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
-  bundle_cache:
-  app_home:
   pg_data:
   redis_data:
 

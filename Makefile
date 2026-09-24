@@ -3,6 +3,15 @@
 
 DOCKER_COMPOSE ?= docker compose
 
+# docker-compose.yml runs web and worker as this user, so files they write into
+# the checkout stay owned by it on a Linux host. Docker Desktop and OrbStack do
+# not map ownership, and hand containers the socket as root's group.
+export UID := $(shell id -u)
+export GID := $(shell id -g)
+ifeq ($(shell uname -s),Linux)
+export DOCKER_GID ?= $(shell stat -c %g /var/run/docker.sock 2>/dev/null || echo 0)
+endif
+
 TODAY = $$(date +"%d.%m.%Y")
 LICENSE_REPORTS_DIR := tmp/license-reports
 
