@@ -299,6 +299,11 @@ const InstallPage = () => {
                                   { value: 'use_existing', label: 'Use existing' },
                                 ]}
                               />
+                              {item.action === 'copy' && item.installName && (
+                                <Text size="xs" c="var(--app-text-tertiary)">
+                                  Installs as {item.installName}
+                                </Text>
+                              )}
                             </Stack>
                           ) : (
                             <Badge variant="light" color={item.action === 'create' ? 'green' : 'gray'} tt="none">

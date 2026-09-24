@@ -88,9 +88,7 @@ module Templates
       create_setup_items(install, triggers)
       @catalog_template.increment!(:install_count)
 
-      created_servers = @package.section("mcp_servers").reject { |e| e["internal"] || planned("mcp_servers", e["key"]).action == "reuse" }
-      Result.new(install: install, project: @project, plan: plan, created: true,
-                 server_ids: created_servers.map { |e| @ids["mcp_servers"][e["key"]] })
+      Result.new(install: install, project: @project, plan: plan, created: true, server_ids: created_server_ids)
     end
 
     def create_project!
@@ -355,10 +353,25 @@ module Templates
         detail = item[:detail].merge(checklist_detail(item, triggers))
         install.setup_items.create!(kind: item[:kind], ref: item[:ref], position: position, detail: detail)
       end
+      # A server the template declares as OAuth needs a sign-in whatever the probe
+      # says; the probe job upserts the same ref, so this never doubles up.
+      created_server_ids.each do |id|
+        server = MCPServer.find(id)
+        next unless server.auth_type_oauth?
+
+        install.setup_items.create!(kind: "oauth", ref: "oauth:#{server.id}", position: @plan.checklist.size,
+                                    detail: { "server_id" => server.id, "name" => server.name })
+      end
       if @plan.board_action == "skip"
         install.setup_items.create!(kind: "board", ref: "board", position: @plan.checklist.size,
                                     detail: { "reason" => "Only the project owner can apply the template's board." })
       end
+    end
+
+    def created_server_ids
+      @package.section("mcp_servers")
+              .reject { |entry| entry["internal"] || planned("mcp_servers", entry["key"]).action == "reuse" }
+              .map { |entry| @ids["mcp_servers"][entry["key"]] }
     end
 
     # Where the item's value has to be attached once the user provides it.

@@ -87,7 +87,9 @@ class Templates::InstallerTest < ActiveSupport::TestCase
     items = project.template_installs.sole.setup_items.index_by(&:ref)
     assert_equal "auto", items["trigger:0"].detail["activate_mode"]
     assert_equal column_trigger.id, items["trigger:0"].detail["trigger_id"]
-    assert_equal %w[integration:github repository:app_repo secret:SENTRY_TOKEN trigger:0 trigger:1], items.keys.sort
+    sentry = project.mcp_servers.find_by!(name: "Sentry")
+    assert_equal %W[integration:github oauth:#{sentry.id} repository:app_repo secret:SENTRY_TOKEN trigger:0 trigger:1],
+                 items.keys.sort, "the declared-OAuth server gets its sign-in item at install, before any probe"
     assert_equal [ project.workflows.sole.id ], items["secret:SENTRY_TOKEN"].detail.dig("attach_to", "workflow_ids")
   end
 
