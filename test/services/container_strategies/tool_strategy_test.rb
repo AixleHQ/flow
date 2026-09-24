@@ -73,6 +73,17 @@ class ContainerStrategies::ToolStrategyTest < ActiveSupport::TestCase
     assert_equal "Timed out after 60s", @tool_result.error
   end
 
+  test "a run whose container workflow failed leaves its tool result failed, not processing" do
+    strategy = ContainerStrategies::ToolStrategy.new(tool_result_id: @tool_result.id, timeout: 30)
+
+    ContainerService.new(strategy: strategy, state: { error: "Phase exec failed: pods/log forbidden" })
+                    .run_phase(:on_failure)
+
+    @tool_result.reload
+    assert_equal "failed", @tool_result.state
+    assert_equal "Phase exec failed: pods/log forbidden", @tool_result.error
+  end
+
   test "persist_result skips when no tool_result_id" do
     strategy = ContainerStrategies::ToolStrategy.new(timeout: 30)
 

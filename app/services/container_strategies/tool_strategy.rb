@@ -63,6 +63,21 @@ module ContainerStrategies
       raise
     end
 
+    # A phase hook: ContainerService calls only public ones, so a private one is
+    # skipped without a word and the tool result stays "processing" forever.
+    def on_failure(error: nil, **)
+      return {} if input[:tool_result_id].blank? || error.blank?
+
+      tr = ToolResult.find(input[:tool_result_id])
+      return {} unless tr.state == "processing"
+
+      tr.update!(state: "failed", error: error.to_s.truncate(1000))
+      {}
+    rescue StandardError => e
+      Rails.logger.error("[ToolStrategy] Failed to mark tool_result failed: #{e.message}")
+      {}
+    end
+
     private
 
     def exec_timeout
@@ -116,19 +131,6 @@ module ContainerStrategies
       tr = ToolResult.find(input[:tool_result_id])
       tr.complete!(exit_code: exit_code, stdout: stdout, stderr: stderr,
                    duration_ms: duration_ms, error: error_msg)
-    end
-
-    def on_failure(error: nil, **)
-      return {} if input[:tool_result_id].blank? || error.blank?
-
-      tr = ToolResult.find(input[:tool_result_id])
-      return {} unless tr.state == "processing"
-
-      tr.update!(state: "failed", error: error.to_s.truncate(1000))
-      {}
-    rescue StandardError => e
-      Rails.logger.error("[ToolStrategy] Failed to mark tool_result failed: #{e.message}")
-      {}
     end
 
     def handle_timeout(container, start_time)
