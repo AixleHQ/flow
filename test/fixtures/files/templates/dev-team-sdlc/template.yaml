@@ -85,7 +85,7 @@ tools:
     files:
       - { path: /workspace/run.sh, from: tools/run-tests/run.sh }
   - key: board_comment
-    platform: add_board_comment
+    platform: board_add_comment
 
 assets:
   - { key: standards, name: Coding standards, folder: docs, path: assets/coding-standards.md }

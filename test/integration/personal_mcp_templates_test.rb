@@ -7,7 +7,7 @@ class PersonalMCPTemplatesTest < ActionDispatch::IntegrationTest
     @user = create(:user, :employee, :onboarding_completed)
     @company = @user.companies.first
     @token = @user.regenerate_mcp_token!
-    create(:tool, :system, name: "add_board_comment")
+    create(:tool, :system, name: "board_add_comment")
     package = Templates::Package.from_directory(Rails.root.join("test/fixtures/files/templates/dev-team-sdlc"))
     @template = CatalogTemplate.new.assign_package(package, commit_sha: "c" * 40).tap(&:save!)
   end

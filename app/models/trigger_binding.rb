@@ -62,7 +62,11 @@ class TriggerBinding < ApplicationRecord
   # silently lost by a dropped background job. The worker-boot sync
   # (ScheduleReconciler.reconcile_all) is the durable backstop. Skipped when
   # Temporal is off (e.g. test) so a save never spins up a Temporal client.
-  after_commit :reconcile_schedule, on: %i[create update], if: :reconcile_schedule?
+  #
+  # A binding created disabled has no Temporal schedule to reconcile, so its
+  # create is skipped: template installs create every trigger disabled, and
+  # must not depend on Temporal being reachable.
+  after_commit :reconcile_schedule, on: %i[create update], if: :schedule_needs_reconcile?
   after_commit :remove_schedule, on: :destroy, if: :reconcile_schedule?
 
   def schedule?
@@ -138,6 +142,10 @@ class TriggerBinding < ApplicationRecord
 
   def reconcile_schedule?
     schedule? && TemporalService.enabled?
+  end
+
+  def schedule_needs_reconcile?
+    reconcile_schedule? && !(previously_new_record? && !enabled?)
   end
 
   def reconcile_schedule

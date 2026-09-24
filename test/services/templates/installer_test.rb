@@ -10,7 +10,7 @@ class Templates::InstallerTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :employee, :onboarding_completed)
     @company = @user.companies.first
-    create(:tool, :system, name: "add_board_comment")
+    create(:tool, :system, name: "board_add_comment")
     @template = catalog_template(Templates::Package.from_directory(FIXTURE))
   end
 
@@ -65,7 +65,7 @@ class Templates::InstallerTest < ActiveSupport::TestCase
     design, implement = workflow.steps.order(:position).to_a
     assert_equal agent.id, design.agent_id
     assert_equal [ registry_skill.id ], design.skill_ids
-    assert_equal [ Tool.find_by!(name: "add_board_comment").id ], design.tool_ids
+    assert_equal [ Tool.find_by!(name: "board_add_comment").id ], design.tool_ids
     assert_equal [ design.id ], implement.depends_on_step_ids
     assert_equal [ linear.id ], implement.mcp_server_ids
     assert_equal "Write the design note in German.", design.instructions
@@ -123,10 +123,15 @@ class Templates::InstallerTest < ActiveSupport::TestCase
   end
 
   test "a plan that changed since it was confirmed is refused" do
-    confirmed = installer.plan.digest
-    create(:project, company: @company, owner: @user, name: "Dev team SDLC")
+    project = create(:project, company: @company, owner: @user)
+    template = catalog_template(workflow_package)
+    confirmed = installer(template: template, target: { project: project }).plan.digest
+    create(:agent, scope: project, name: "reviewer", title: "Reviewer", persona: "Reviews diffs.",
+                   principles: nil, communication_style: nil)
 
-    assert_raises(Templates::Installer::PlanChanged) { installer(confirmed_digest: confirmed).apply }
+    assert_raises(Templates::Installer::PlanChanged) do
+      installer(template: template, target: { project: project }, confirmed_digest: confirmed).apply
+    end
   end
 
   test "a page opened on an older version is refused" do

@@ -6,7 +6,7 @@ class Templates::ExporterTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :employee, :onboarding_completed)
     @company = @user.companies.first
-    create(:tool, :system, name: "add_board_comment")
+    create(:tool, :system, name: "board_add_comment")
     package = Templates::Package.from_directory(Rails.root.join("test/fixtures/files/templates/dev-team-sdlc"))
     @source = install(package, secrets: { "SENTRY_TOKEN" => "tok-1" }).project
   end

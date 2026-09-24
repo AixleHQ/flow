@@ -87,7 +87,7 @@ module Templates
       when "repository" then "Attach a repository (#{detail['key']})"
       when "oauth" then "Sign in to #{detail['name']}"
       when "probe" then "Could not reach #{detail['name']}"
-      when "trigger" then "Activate the #{detail['kind']} trigger of #{detail['workflow']}"
+      when "trigger" then "Activate the #{detail['kind']} trigger of #{detail['workflow_name'] || detail['workflow']}"
       when "board" then "Board changes were skipped"
       else item.ref
       end

@@ -229,7 +229,7 @@ const InstallPage = () => {
                 <PasswordInput
                   key={secret.name}
                   label={secret.name}
-                  description={`${secret.description ?? 'Secret'} — optional now, you can add it from the checklist.`}
+                  description={`${(secret.description ?? 'Secret').replace(/\.$/, '')} — optional now, you can add it from the checklist.`}
                   value={secrets[secret.name] ?? ''}
                   onChange={(e) => {
                     const value = e.currentTarget.value;

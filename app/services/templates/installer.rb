@@ -378,6 +378,7 @@ module Templates
       return { "missing" => "No board column to bind to" } unless result
 
       { "record" => result.kind == "column" ? "column" : "binding", "trigger_id" => result.trigger.id,
+        "workflow_name" => result.trigger.workflow.name,
         "activate_mode" => entry["trigger_mode"].presence || "auto",
         "webhook_endpoint_id" => result.webhook_endpoint&.id }.compact
     end

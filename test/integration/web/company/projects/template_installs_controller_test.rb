@@ -6,7 +6,7 @@ class Web::Company::Projects::TemplateInstallsControllerTest < ActionDispatch::I
   setup do
     @company = create(:company)
     @user = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
-    create(:tool, :system, name: "add_board_comment")
+    create(:tool, :system, name: "board_add_comment")
     result = Templates::Installer.new(catalog_template: create_catalog_template, user: @user,
                                       target: { company: @company }, idempotency_key: "k").apply
     @project = result.project

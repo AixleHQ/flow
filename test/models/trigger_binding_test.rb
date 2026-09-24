@@ -161,4 +161,24 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert helpful.valid?
     assert webhook.valid?
   end
+
+  def schedule_binding(enabled:)
+    TriggerBinding.create!(project: @project, workflow: @workflow, created_by: @user, event_type: "schedule.fired",
+                           enabled: enabled, schedule_config: { "cron" => "0 9 * * *", "timezone" => "UTC" })
+  end
+
+  test "a schedule created disabled never reaches Temporal, since it has no schedule yet" do
+    TemporalService.stubs(:enabled?).returns(true)
+    ScheduleReconciler.expects(:reconcile).never
+
+    schedule_binding(enabled: false)
+  end
+
+  test "a schedule is reconciled when created enabled and again when switched on" do
+    TemporalService.stubs(:enabled?).returns(true)
+    ScheduleReconciler.expects(:reconcile).twice
+
+    schedule_binding(enabled: true)
+    schedule_binding(enabled: false).update!(name: "renamed")
+  end
 end
