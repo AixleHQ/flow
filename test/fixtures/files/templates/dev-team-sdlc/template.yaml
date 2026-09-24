@@ -1,0 +1,123 @@
+format_version: 1
+slug: dev-team-sdlc
+version: 3
+name: Dev team SDLC
+summary: Board, agents and a delivery workflow for a code repository.
+categories: [engineering]
+authors: [{ github: acme-platform }]
+
+inputs:
+  - key: default_branch
+    label: Default branch
+    type: string
+    default: main
+  - key: review_language
+    label: Review comment language
+    type: select
+    options: [English, German]
+    default: English
+
+requires:
+  integrations: [github]
+  repositories:
+    - key: app_repo
+      purpose: The application repository the workflow works on.
+  secrets:
+    - name: SENTRY_TOKEN
+      description: Sentry auth token.
+      prompt_at_install: true
+
+variables:
+  - name: SENTRY_ORG
+    value: acme
+  - name: TARGET_BRANCH
+    value: "{{inputs.default_branch}}"
+
+project:
+  description: "Delivery pipeline for {{inputs.default_branch}}-based repositories."
+
+board:
+  name: Dev Team
+  columns:
+    - { key: backlog, name: Backlog, purpose: Tasks ready for development. }
+    - { key: design, name: Tech Design, purpose: Write a design note. }
+    - { key: review, name: Code Review, purpose: Review the change. }
+    - { key: done, name: Done }
+
+agents:
+  - key: architect
+    name: architect
+    title: Architect
+    persona: Designs systems and writes clear notes.
+    principles: "Answer in {{inputs.review_language}}."
+
+skills:
+  - key: house_style
+    path: skills/house-style/SKILL.md
+  - key: code_review
+    registry: "acme/skills@code-review"
+    snapshot: { path: snapshots/skills/code-review.md, sha256: 4bcd2375a9001ca7149b21ba7f615016b7f321418b4d5abcc24819fd32579995 }
+
+mcp_servers:
+  - key: linear
+    connector:
+      name: app.linear/linear
+      version: 1.0.0
+      target: "remote:http:https://mcp.linear.app/mcp"
+      manifest: { path: snapshots/connectors/remote.json, sha256: 353377b9f2e9c451d29bbac39c41a485da63edfa10f1a8980b05cf8d283ec5f7 }
+  - key: sentry
+    custom:
+      name: Sentry
+      transport: http
+      url: https://mcp.sentry.dev/mcp
+      auth_type: oauth
+      headers:
+        X-Org: "config_item:SENTRY_ORG"
+
+tools:
+  - key: run_tests
+    name: run_tests
+    display_name: Run tests
+    execution_mode: container
+    docker_image: "ghcr.io/acme/runner@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    command: "bash /workspace/run.sh {{target}}"
+    required_config_items: [SENTRY_TOKEN]
+    files:
+      - { path: /workspace/run.sh, from: tools/run-tests/run.sh }
+  - key: board_comment
+    platform: add_board_comment
+
+assets:
+  - { key: standards, name: Coding standards, folder: docs, path: assets/coding-standards.md }
+
+workflows:
+  - key: delivery
+    name: Delivery
+    description: From tech design to an open pull request.
+    base:
+      skills: [house_style]
+      mcp_servers: [sentry]
+      config_items: [SENTRY_TOKEN]
+      repositories: [app_repo]
+    steps:
+      - key: design
+        name: Tech design
+        agent: architect
+        instructions: "Write the design note in {{inputs.review_language}}."
+        tools: [board_comment]
+        skills: [code_review]
+        assets: [standards]
+        max_retries: 1
+        sub_steps:
+          - { name: Read the task, instructions: Read the card and its comments., required: true }
+      - key: implement
+        name: Implement
+        agent: architect
+        depends_on: [design]
+        tools: [run_tests]
+        mcp_servers: [linear]
+        instructions: Implement the design and open a pull request.
+
+triggers:
+  - { kind: column, workflow: delivery, column: design, trigger_mode: auto, cooldown_seconds: 5 }
+  - { kind: schedule, workflow: delivery, cron: "0 9 * * 1-5", timezone: UTC, subject_policy: create_task, subject_column: backlog, subject_title_template: "Daily — {{date}}" }
