@@ -247,6 +247,25 @@ module Github
       assert_includes integration.errors.full_messages, "This GitHub installation is already connected to another workspace"
     end
 
+    test "with the installer confirmed by GitHub, one installation can serve two companies" do
+      stub_token_service
+      other_company = create(:company)
+      Github::IntegrationService.new(company: other_company, connected_by: create(:user, :admin, company: other_company))
+        .create(installation_id: "77777", via_setup: true)
+      Github::InstallationOwnership.stubs(:enforced?).returns(true)
+      ownership = mock("ownership")
+      ownership.stubs(:includes?).with("77777").returns(true)
+      Github::InstallationOwnership.stubs(:new).with(code: "oauth-code").returns(ownership)
+
+      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
+        .create(installation_id: "77777", via_setup: true, oauth_code: "oauth-code")
+
+      assert integration.persisted?
+      assert integration.active?
+      assert_equal [ other_company.id, @company.id ].sort,
+                   Integration.where(provider: :github, github_installation_id: 77_777, status: "active").pluck(:company_id).sort
+    end
+
     test "with the App's OAuth client configured, a new installation needs the installer's confirmation" do
       stub_token_service
       Github::InstallationOwnership.stubs(:enforced?).returns(true)

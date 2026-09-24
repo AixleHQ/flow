@@ -263,10 +263,15 @@ class Integration < ApplicationRecord
 
   private
 
-  # One installation belongs to one company. Every customer installs the same
-  # deployment-wide App, and the App's own JWT can read every installation, so
-  # "the installation exists" proves nothing about who installed it.
+  # One installation belongs to one company unless the deployment proves who
+  # connects it. Every customer installs the same deployment-wide App, and the
+  # App's own JWT can read every installation, so "the installation exists"
+  # proves nothing about who installed it. With the App's user authorization
+  # (Github::InstallationOwnership) every new connection is made by someone
+  # GitHub lists as able to see the installation, so one GitHub organization
+  # may serve several companies.
   def github_installation_held_by_this_company
+    return if Github::InstallationOwnership.enforced?
     return unless new_record? || will_save_change_to_github_installation_id? || will_save_change_to_status?
 
     # Only a verified (active) connection claims the installation, so a row left
