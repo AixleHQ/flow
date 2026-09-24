@@ -40,8 +40,8 @@ class AgentActivityService
         AgentBreakdown.new(
           agent_type: agent_type,
           sessions: count,
-          cost_cents: cost,
-          tokens: tokens
+          cost_cents: cost.to_i,
+          tokens: tokens.to_i
         )
       end
       .sort_by { |a| -a.sessions }

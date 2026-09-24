@@ -36,6 +36,22 @@ class AgentActivityServiceTest < ActiveSupport::TestCase
     assert_equal totals.total_cost_cents, breakdown.sum(&:cost_cents)
   end
 
+  # A SUM over a bigint column comes back as a BigDecimal, which the page receives
+  # as the string "71.0" where its types promise a number.
+  test "the breakdowns report cost and tokens as integers" do
+    seed_session(agent_type: "claude_code", session_cost: 64, usage_cost: 71)
+    company_filters = { company: @company, user: @user, scope: "company", period: "30d" }
+
+    rows = AgentActivityService.new(**filters).call.sessions_by_agent +
+           CompanyAgentActivityService.new(**company_filters).call.sessions_by_agent
+
+    assert_equal 2, rows.size
+    rows.each do |row|
+      assert_kind_of Integer, row.cost_cents
+      assert_kind_of Integer, row.tokens
+    end
+  end
+
   private
 
   def filters = { project: @project, user: @user, scope: "project", period: "30d" }
