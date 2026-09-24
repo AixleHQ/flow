@@ -1,17 +1,14 @@
 import { Text } from '@mantine/core';
 import { type FC } from 'react';
 
-import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
+import type { MCPServer } from '@/types/generated';
 
-interface McpServer {
-  id: number;
-  name: string;
-}
+import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
 
 interface DeleteMcpServerModalProps {
   opened: boolean;
   onClose: () => void;
-  server: McpServer | null;
+  server: Pick<MCPServer, 'id' | 'name'> | null;
   basePath: string;
 }
 

@@ -14,6 +14,9 @@ module ContainerRuntime
   # Implements BaseRuntime using Kubernetes Pods + Services + IngressRoutes.
   class KubernetesRuntime < BaseRuntime
     DEFAULT_SERVICE_PORTS = [ 7681, 4040 ].freeze
+    # The read-only terminal (a second ttyd, `-R`, on a read-only tmux client)
+    # that everyone but the session's owner is routed to.
+    VIEW_PORT = 7682
     DEFAULT_CONTAINER_NAME = "main"
     DEFAULT_WORKSPACE_DIR = "/workspace"
     DEFAULT_TRAEFIK_PORTS = [ 7681, 4040, 8443 ].freeze
@@ -45,6 +48,15 @@ module ContainerRuntime
     # shared object does.
     SESSION_RESOURCE_SELECTOR = "app=#{RUNTIME_APP_LABEL},#{CONTAINER_LABEL}"
 
+    # Headers Traefik takes from the ws_auth answer instead of the browser's
+    # request. Cookie and Authorization are listed so the pod never receives the
+    # viewer's Rails session: Traefik deletes every matching request header and
+    # re-adds only what ws_auth returned (Api::V1::Internal::WsAuthController).
+    TERMINAL_AUTH_RESPONSE_HEADERS_REGEX = "^(X-.*|Cookie|Authorization)$"
+    # The one cookie the gate may hand the browser: the sandbox host's pass
+    # (ContainerTicket), traded for the one-time ticket in a container URL.
+    TERMINAL_AUTH_RESPONSE_COOKIES = [ ContainerTicket::COOKIE ].freeze
+
     # -- Lifecycle ------------------------------------------------------------
 
     def pull_image(image)
@@ -60,7 +72,7 @@ module ContainerRuntime
 
     def cleanup_session(id)
       handle = session_locator(id)
-      session_objects(handle).each do |kind, plural, client_key, object|
+      session_objects(handle).each do |_kind, plural, client_key, object|
         metadata = object.metadata
         # UID precondition prevents deleting a replacement after the GET.
         kube_client(client_key).delete_entity(plural, metadata.name, handle.namespace,
@@ -253,6 +265,37 @@ module ContainerRuntime
     #
     # Pending is deliberately :starting — a pod waiting on scheduling or an image
     # pull has simply not run yet.
+    WAIT_POLL = 1
+
+    # The main container's exit code once it has terminated. A pod that is gone
+    # (stopped and deleted mid-wait) answers -1, the way a killed Docker
+    # container reports no clean exit.
+    def wait_container(id, timeout = nil)
+      handle = resolve_handle(id)
+      deadline = Time.current + (timeout || 1800)
+
+      loop do
+        code = terminated_exit_code(core_client.get_pod(handle.pod_name, handle.namespace), handle)
+        return { "StatusCode" => code } unless code.nil?
+        raise WaitTimeout, "still running after #{timeout}s" if Time.current >= deadline
+
+        sleep(WAIT_POLL)
+      end
+    rescue Kubeclient::ResourceNotFoundError
+      { "StatusCode" => -1 }
+    end
+
+    # Kubernetes keeps one stream per container; it cannot separate stderr, so
+    # everything is reported as stdout.
+    def container_logs(id, _opts = {})
+      handle = resolve_handle(id)
+      log = core_client.get_pod_log(handle.pod_name, handle.namespace,
+                                    container: handle.container_name || DEFAULT_CONTAINER_NAME)
+      { stdout: log.to_s, stderr: "" }
+    rescue Kubeclient::ResourceNotFoundError
+      { stdout: "", stderr: "" }
+    end
+
     def container_status(id)
       handle = resolve_handle(id)
       pod = core_client.get_pod(handle.pod_name, handle.namespace)
@@ -462,7 +505,7 @@ module ContainerRuntime
         container_name: DEFAULT_CONTAINER_NAME,
         service_name: pod_name,
         ingress_name: "#{pod_name}-ingress",
-        middleware_names: [ "#{pod_name}-tty-strip", "#{pod_name}-fs-strip" ],
+        middleware_names: [ "#{pod_name}-tty-strip", "#{pod_name}-fs-strip", "#{pod_name}-view-strip" ],
         route_token: route_token,
         service_ports: service_ports
       )
@@ -474,11 +517,12 @@ module ContainerRuntime
       container = {
         name: handle.container_name,
         image: spec[:image],
-        imagePullPolicy: image_pull_policy,
+        imagePullPolicy: image_pull_policy_for(spec[:image]),
         env: env_vars,
         command: spec[:cmd],
         workingDir: spec[:working_dir],
-        resources: runtime_container_resources
+        resources: container_resources(spec),
+        securityContext: agent_security_context
       }
 
       ports = handle.service_ports
@@ -561,11 +605,10 @@ module ContainerRuntime
     def create_middlewares(handle)
       return if handle.route_token.blank?
 
-      tty_strip = build_strip_middleware(handle, "tty", "/t/#{handle.route_token}/tty")
-      fs_strip = build_strip_middleware(handle, "fs", "/t/#{handle.route_token}/fs")
-
-      create_or_verify(traefik_client, "Middleware", "middlewares", tty_strip)
-      create_or_verify(traefik_client, "Middleware", "middlewares", fs_strip)
+      %w[tty fs view].each do |surface|
+        strip = build_strip_middleware(handle, surface, "/t/#{handle.route_token}/#{surface}")
+        create_or_verify(traefik_client, "Middleware", "middlewares", strip)
+      end
     end
 
     def create_ingressroute(handle)
@@ -583,7 +626,8 @@ module ContainerRuntime
           routes: [
             build_route(handle, "tty", 7681, [ traefik_auth_middleware, "#{handle.pod_name}-tty-strip" ]),
             build_route(handle, "fs", 4040, [ traefik_auth_middleware, "#{handle.pod_name}-fs-strip" ]),
-            build_route(handle, "ide", 8443, [ traefik_auth_middleware ])
+            build_route(handle, "ide", 8443, [ traefik_auth_middleware ]),
+            build_route(handle, "view", VIEW_PORT, [ traefik_auth_middleware, "#{handle.pod_name}-view-strip" ])
           ]
         }
       )
@@ -596,9 +640,12 @@ module ContainerRuntime
       traefik_client.delete_entity("ingressroutes", handle.ingress_name, handle.namespace)
     end
 
+    # A session created before one of these existed simply does not have it.
     def delete_middlewares(handle)
       handle.middleware_names.each do |name|
         traefik_client.delete_entity("middlewares", name, handle.namespace)
+      rescue Kubeclient::ResourceNotFoundError
+        next
       end
     end
 
@@ -983,7 +1030,8 @@ module ContainerRuntime
           forwardAuth: {
             address: "#{internal_service_url('web', 4000)}/api/v1/internal/ws_auth",
             trustForwardHeader: true,
-            authResponseHeadersRegex: "^X-"
+            authResponseHeadersRegex: TERMINAL_AUTH_RESPONSE_HEADERS_REGEX,
+            addAuthCookiesToResponse: TERMINAL_AUTH_RESPONSE_COOKIES
           }
         }
       )
@@ -1012,8 +1060,10 @@ module ContainerRuntime
       "Host(`#{host}`) && #{path_match}"
     end
 
+    # The host containers are served from — TRAEFIK_HTTP_BASE's, which is the
+    # app's own unless a sandbox host of their own is configured (ContainerTicket).
     def route_domain_host
-      Settings.domain.to_s.strip.presence
+      ContainerTicket.sandbox_host.presence || Settings.domain.to_s.strip.presence
     end
 
     def traefik_entrypoint
@@ -1079,6 +1129,59 @@ module ContainerRuntime
 
     def image_pull_policy
       kube_setting(:image_pull_policy)
+    end
+
+    # A moving tag (none, or `latest`) under IfNotPresent runs whichever copy a
+    # node happened to cache — a fleet of mixed CLI versions. Such an image is
+    # pulled every time; a pinned tag or a digest keeps the configured policy.
+    def image_pull_policy_for(image)
+      reference = image.to_s
+      return image_pull_policy if reference.include?("@sha256:")
+
+      tag = reference.split("/").last.to_s.split(":", 2)[1]
+      tag.blank? || tag == "latest" ? "Always" : image_pull_policy
+    end
+
+    # Always: no privilege escalation (setuid, sudo) and no raw sockets. The full
+    # restricted profile additionally needs every agent image to run as a non-root
+    # user, so it is switched on per deployment once those images are rolled out.
+    def agent_security_context
+      if kube_setting(:restricted_agent_pods).to_s == "true"
+        { runAsNonRoot: true, allowPrivilegeEscalation: false,
+          capabilities: { drop: [ "ALL" ] }, seccompProfile: { type: "RuntimeDefault" } }
+      else
+        { allowPrivilegeEscalation: false, capabilities: { drop: [ "NET_RAW" ] } }
+      end
+    end
+
+    # A tool run is sized by its host_config limits, as it is on Docker — requests
+    # equal to the limits, since a short sandboxed run should get what it asks
+    # for and nothing more. Agent pods keep the deployment's runtime sizing.
+    # (Docker's PidsLimit has no per-container counterpart in a pod spec.)
+    def container_resources(spec)
+      host = spec[:host_config] || {}
+      return runtime_container_resources unless (spec[:labels] || {})["aixle.type"] == "tool_execution"
+
+      memory = host["Memory"].to_i
+      quota = host["CpuQuota"].to_i
+      return runtime_container_resources unless memory.positive? && quota.positive?
+
+      millicores = (quota.to_f / (host["CpuPeriod"] || 100_000).to_f * 1000).ceil
+      sized = { cpu: "#{millicores}m", memory: memory.to_s }
+      { requests: sized, limits: sized }
+    end
+
+    def terminated_exit_code(pod, handle)
+      statuses = Array(pod&.status&.containerStatuses)
+      name = handle.container_name || DEFAULT_CONTAINER_NAME
+      main = statuses.find { |status| status.name == name } || statuses.first
+      terminated = main&.state&.terminated
+      return terminated.exitCode.to_i if terminated
+
+      case pod&.status&.phase.to_s
+      when "Succeeded" then 0
+      when "Failed" then -1
+      end
     end
 
     def runtime_container_resources
@@ -1339,9 +1442,39 @@ module ContainerRuntime
       labels
     end
 
+    # Creates the namespace's terminal-auth middleware, and repairs one created
+    # by an older build: those forwarded the browser's Cookie header to the pod.
     def ensure_terminal_auth_middleware(namespace = traefik_namespace)
-      traefik_client.get_entity("middlewares", traefik_auth_middleware, namespace)
-    rescue StandardError
+      existing = begin
+        traefik_client.get_entity("middlewares", traefik_auth_middleware, namespace)
+      rescue StandardError
+        nil
+      end
+      return traefik_client.create_entity("Middleware", "middlewares", build_terminal_auth_middleware(namespace)) if existing.nil?
+
+      forward_auth = existing.spec&.forwardAuth
+      return existing if forward_auth&.authResponseHeadersRegex == TERMINAL_AUTH_RESPONSE_HEADERS_REGEX &&
+                         Array(forward_auth&.addAuthCookiesToResponse) == TERMINAL_AUTH_RESPONSE_COOKIES
+
+      repair_terminal_auth_middleware(namespace)
+    end
+
+    # The deployed runtime role may create and delete middlewares but not patch
+    # them (aixle-infra kube/helmfile/values/aixle-app/common.yaml), so a refused
+    # patch falls back to replacing the object. Routes that name it recover as
+    # soon as the new one exists.
+    def repair_terminal_auth_middleware(namespace)
+      traefik_client.patch_entity(
+        "middlewares", traefik_auth_middleware,
+        { spec: { forwardAuth: { authResponseHeadersRegex: TERMINAL_AUTH_RESPONSE_HEADERS_REGEX,
+                                  addAuthCookiesToResponse: TERMINAL_AUTH_RESPONSE_COOKIES } } },
+        "merge-patch", namespace
+      )
+    rescue Kubeclient::HttpError => e
+      raise unless [ 403, 405 ].include?(e.error_code.to_i)
+
+      Rails.logger.warn("[KubernetesRuntime] Replacing #{traefik_auth_middleware} in #{namespace}: patch refused (#{e.error_code})")
+      traefik_client.delete_entity("middlewares", traefik_auth_middleware, namespace)
       traefik_client.create_entity("Middleware", "middlewares", build_terminal_auth_middleware(namespace))
     end
 
@@ -1361,6 +1494,7 @@ module ContainerRuntime
       [
         build_default_deny_network_policy(namespace),
         build_traefik_ingress_network_policy(namespace),
+        build_traefik_ingress_network_policy(namespace, name: "runtime-allow-traefik-view-ingress", ports: [ VIEW_PORT ]),
         build_dns_egress_network_policy(namespace),
         build_aixle_service_egress_network_policy(namespace),
         build_public_internet_egress_network_policy(namespace)
@@ -1382,12 +1516,15 @@ module ContainerRuntime
       )
     end
 
-    def build_traefik_ingress_network_policy(namespace)
+    # The read-only terminal's port gets a policy of its own rather than an entry
+    # in the first: policies only ever add up, and the runtime may create them but
+    # not update one that already exists in a project's namespace.
+    def build_traefik_ingress_network_policy(namespace, name: "runtime-allow-traefik-ingress", ports: DEFAULT_TRAEFIK_PORTS)
       Kubeclient::Resource.new(
         apiVersion: "networking.k8s.io/v1",
         kind: "NetworkPolicy",
         metadata: {
-          name: "runtime-allow-traefik-ingress",
+          name: name,
           namespace: namespace
         },
         spec: {
@@ -1421,7 +1558,7 @@ module ContainerRuntime
                   }
                 }
               ],
-              ports: DEFAULT_TRAEFIK_PORTS.map do |port|
+              ports: ports.map do |port|
                 { protocol: "TCP", port: port }
               end
             }
@@ -1629,29 +1766,8 @@ module ContainerRuntime
       timeout = ready_timeout
 
       loop do
-        request = Net::HTTP::Head.new(uri.request_uri)
-        request["Host"] = expected_host if expected_host.present?
+        return true if traefik_route_ready?(uri, expected_host, handle)
 
-        verify_mode = kube_setting(:traefik_verify_tls) ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
-        response = Net::HTTP.start(
-          uri.host, uri.port,
-          use_ssl: uri.scheme == "https",
-          verify_mode: verify_mode,
-          open_timeout: 2, read_timeout: 2
-        ) { |http| http.request(request) }
-
-        code = response.code.to_i
-        # 200/401/403 = route exists and backend is up (auth middleware responded)
-        # 404 = route not registered yet; 502/503 = backend not ready yet
-        if [ 200, 401, 403 ].include?(code)
-          Rails.logger.info("[KubernetesRuntime] Traefik route ready for #{handle.route_token} (#{code})")
-          return true
-        end
-
-        Rails.logger.debug("[KubernetesRuntime] Traefik route not ready for #{handle.route_token}: #{code}")
-      rescue StandardError => e
-        Rails.logger.debug("[KubernetesRuntime] Traefik route not ready: #{e.class} #{e.message}")
-      ensure
         elapsed = Time.current - start_time
         if elapsed > timeout
           Rails.logger.warn("[KubernetesRuntime] Traefik route timeout after #{elapsed.round(1)}s for #{handle.route_token}")
@@ -1659,6 +1775,33 @@ module ContainerRuntime
         end
         sleep ready_interval
       end
+    end
+
+    def traefik_route_ready?(uri, expected_host, handle)
+      request = Net::HTTP::Head.new(uri.request_uri)
+      request["Host"] = expected_host if expected_host.present?
+
+      verify_mode = kube_setting(:traefik_verify_tls) ? OpenSSL::SSL::VERIFY_PEER : OpenSSL::SSL::VERIFY_NONE
+      response = Net::HTTP.start(
+        uri.host, uri.port,
+        use_ssl: uri.scheme == "https",
+        verify_mode: verify_mode,
+        open_timeout: 2, read_timeout: 2
+      ) { |http| http.request(request) }
+
+      code = response.code.to_i
+      # 200/401/403 = route exists and backend is up (auth middleware responded)
+      # 404 = route not registered yet; 502/503 = backend not ready yet
+      if [ 200, 401, 403 ].include?(code)
+        Rails.logger.info("[KubernetesRuntime] Traefik route ready for #{handle.route_token} (#{code})")
+        return true
+      end
+
+      Rails.logger.debug("[KubernetesRuntime] Traefik route not ready for #{handle.route_token}: #{code}")
+      false
+    rescue StandardError => e
+      Rails.logger.debug("[KubernetesRuntime] Traefik route not ready: #{e.class} #{e.message}")
+      false
     end
 
     def traefik_probe_base_url

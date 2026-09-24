@@ -5,11 +5,15 @@ class Asset < ApplicationRecord
   # segment may contain, and `Folder` for why paths (not a `parent_id`) are the source of truth
   # for nesting.
   FOLDER_MAX_LENGTH = 100
+  UNSHARED = { public: false, public_token: nil, shared_at: nil, shared_by_id: nil, shared_in_session_id: nil }.freeze
 
   belongs_to :scope, polymorphic: true
+  include TenantColumns
   belongs_to :created_by, class_name: "User", optional: true
   belongs_to :step_run, optional: true
   belongs_to :terminal_session, optional: true
+  belongs_to :shared_by, class_name: "User", optional: true
+  belongs_to :shared_in_session, class_name: "TerminalSession", optional: true
 
   has_many :versions, class_name: "AssetVersion", dependent: :destroy, inverse_of: :asset
 
@@ -25,7 +29,8 @@ class Asset < ApplicationRecord
   validate :folder_shape
 
   scope :active, -> { where(deleted_at: nil, status: "active") }
-  scope :publicly_shared, -> { where(public: true).where.not(public_token: nil) }
+  # A deleted asset's link is dead even if something left its token behind.
+  scope :publicly_shared, -> { where(public: true, deleted_at: nil).where.not(public_token: nil) }
   scope :deleted, -> { where.not(deleted_at: nil) }
   scope :pending_review, -> { where(status: "pending_review") }
   scope :dismissed, -> { where(status: "dismissed") }
@@ -96,13 +101,20 @@ class Asset < ApplicationRecord
   # Makes the asset publicly reachable via a stable share link. The token lives
   # on the asset (not a version), so the link never changes as new versions are
   # added. Idempotent: an already-shared asset keeps its existing token.
-  def share!
-    update!(public: true, public_token: public_token.presence || self.class.generate_public_token)
+  #
+  # `by` and `session` record who published it; an agent-made share names both.
+  def share!(by: nil, session: nil)
+    return public_token if shared?
+
+    update!(public: true, public_token: self.class.generate_public_token,
+            shared_at: Time.current, shared_by: by || session&.user, shared_in_session: session)
     public_token
   end
 
+  # The token goes with it: a later share is a new link, and the old one, wherever
+  # it was pasted, stays dead.
   def unshare!
-    update!(public: false)
+    update!(UNSHARED)
   end
 
   def shared?
@@ -127,7 +139,7 @@ class Asset < ApplicationRecord
   end
 
   def soft_delete!
-    update!(deleted_at: Time.current)
+    update!(UNSHARED.merge(deleted_at: Time.current))
   end
 
   def restore!

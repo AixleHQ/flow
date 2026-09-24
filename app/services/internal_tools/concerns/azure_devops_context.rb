@@ -52,7 +52,7 @@ module InternalTools
                 "integration_id is required — call azure_devops_list_connections to see the eligible connections"
         end
 
-        integration = Integration.find_by(id: id)
+        integration = TenantScope.owned(Integration, project: session&.project).find_by(id: id)
         raise AzureDevops::NotAuthorized, "No such Azure DevOps connection" if integration.nil? || !integration.azure_devops?
 
         verify_project_ownership!(integration)

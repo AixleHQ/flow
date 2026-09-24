@@ -103,8 +103,8 @@ class WorkflowDuplicator
     # ---- Agent -------------------------------------------------------------
 
     def copy_agent(id)
-      agent = Agent.find_by(id: id)
-      return id unless agent                                  # unknown → leave as-is (defensive)
+      agent = source_owned(Agent).find_by(id: id)
+      return nil unless agent                                 # unknown or another tenant's → dropped
       return id if project_local?(agent)                      # already target-local
 
       existing = @project.agents.find_by(name: agent.name)    # name unique per scope → reuse
@@ -120,26 +120,26 @@ class WorkflowDuplicator
     # ---- Skill -------------------------------------------------------------
 
     def copy_skill(id)
-      skill = Skill.find_by(id: id)
-      return id unless skill
+      skill = source_owned(Skill).find_by(id: id)
+      return nil unless skill
       return id if project_local?(skill)
 
       existing = Skill.for_project(@project).find_by(name: skill.name)
       return existing.id if existing
 
       Skill.create!(
-        scope: @project,
+        scope: @project, origin: skill.origin,
         name: skill.name, title: skill.title, description: skill.description,
         package: skill.package, source: skill.source, source_url: skill.source_url,
-        content: skill.content, install_count: 0
+        content: skill.content, content_hash: skill.content_hash, files: skill.files, install_count: 0
       ).id
     end
 
     # ---- MCPServer ---------------------------------------------------------
 
     def copy_mcp_server(id)
-      server = MCPServer.find_by(id: id)
-      return id unless server
+      server = source_owned(MCPServer).find_by(id: id)
+      return nil unless server
       return id if server.internal?                           # internal → shared, pass through
       return id if project_local?(server)
 
@@ -161,8 +161,8 @@ class WorkflowDuplicator
     # ---- Tool --------------------------------------------------------------
 
     def copy_tool(id)
-      tool = Tool.find_by(id: id)
-      return id unless tool
+      tool = source_owned(Tool).find_by(id: id)
+      return nil unless tool
       return id if tool.platform_tool?                        # system/internal/workflow/meta → shared
       return id if tool.deleted?                              # skip soft-deleted source tools
       return id if project_local?(tool)
@@ -186,15 +186,16 @@ class WorkflowDuplicator
       new_tool.id
     end
 
-    # Replicates tool_files, including binary Shrine attachments (file_data),
-    # not just the legacy text `content` column (§4 Tool / D6).
+    # Replicates tool_files, including binary Shrine attachments, not just the
+    # legacy text `content` column (§4 Tool / D6). A binary file is copied to an
+    # object of its own: sharing the source's stored file would let deleting either
+    # tool delete the other's bytes — across projects, since the catalog copies
+    # between them.
     def copy_tool_files(source_tool, new_tool)
       source_tool.tool_files.each do |tf|
-        attrs = { path: tf.path, content: tf.content }
-        # Copy the Shrine file attachment verbatim for binary tool files by
-        # reusing the stored file_data — otherwise binary bytes are lost.
-        attrs[:file_data] = tf.file_data if tf.file_data.present?
-        new_tool.tool_files.create!(attrs)
+        copy = new_tool.tool_files.build(path: tf.path, content: tf.content)
+        copy.file_attacher.attach(tf.file) if tf.file.present?
+        copy.save!
       end
     end
 
@@ -203,7 +204,7 @@ class WorkflowDuplicator
     # Never creates anything: an id that has no same-named item in the target
     # project is dropped from the copy and named in the summary.
     def resolve_config_item_by_name(id)
-      source_item = ConfigItem.find_by(id: id)
+      source_item = source_owned(ConfigItem).find_by(id: id)
       return nil if source_item.nil?
       return source_item.id if project_local?(source_item)
 
@@ -230,6 +231,14 @@ class WorkflowDuplicator
       return if names.blank?
 
       Array(names).each { |name| @not_copied[:config_items] << name.to_s.upcase }
+    end
+
+    # Only what the SOURCE workflow's tenant owns is copied: a step's id lists
+    # are written by users and agents, so an id there can name another
+    # company's row — which a copy would otherwise clone, headers and all.
+    def source_owned(klass)
+      source_project = @source.scope if @source.respond_to?(:scope_type) && @source.scope_type == "Project"
+      TenantScope.owned(klass, project: source_project)
     end
 
     def project_local?(resource)

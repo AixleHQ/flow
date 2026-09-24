@@ -3,10 +3,11 @@ import { router } from '@inertiajs/react';
 import { notifications } from '@mantine/notifications';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Asset, Folder } from '@/types/generated';
+import { answerFetch } from 'test/fetchStub';
 import { act, renderPage, screen, userEvent, within } from 'test/renderPage';
 import { emitUppy } from 'test/uppyMock';
 
-import type { Asset, Folder } from './AssetsContent';
 import { AssetsContent, resolveAssetDrop } from './AssetsContent';
 
 function makeAsset(over: Partial<Asset> = {}): Asset {
@@ -21,6 +22,7 @@ function makeAsset(over: Partial<Asset> = {}): Asset {
     scopeIndicator: 'company',
     status: 'active',
     createdById: 5,
+    stepRunId: null,
     createdByName: 'Ada Lovelace',
     versionsCount: 1,
     latestVersion: {
@@ -29,6 +31,7 @@ function makeAsset(over: Partial<Asset> = {}): Asset {
       contentType: 'application/pdf',
       fileSize: 2048,
       source: 'upload',
+      uploadedById: 5,
       fileUrl: 'https://files.example/design-spec.pdf',
       createdAt: '2026-01-10T00:00:00Z',
     },
@@ -95,6 +98,15 @@ describe('AssetsContent', () => {
     } catch {
       /* not available in this environment */
     }
+    // What the page may call; each answers with an empty success unless a test says otherwise.
+    answerFetch({
+      'POST /api/v1/company/assets': {},
+      'PATCH /api/v1/company/assets/:id': {},
+      'DELETE /api/v1/company/assets/:id': {},
+      'POST /api/v1/company/folders': {},
+      'PATCH /api/v1/company/folders/relocate': {},
+      'DELETE /api/v1/company/folders': {},
+    });
   });
 
   it('renders the header and a row for each seeded root asset', () => {
@@ -458,6 +470,7 @@ describe('AssetsContent', () => {
             contentType: 'application/pdf',
             fileSize: 4096,
             source: 'upload',
+            uploadedById: 5,
             fileUrl: 'https://files.example/v2.pdf',
             createdAt: '2026-02-01T00:00:00Z',
           },
@@ -467,6 +480,7 @@ describe('AssetsContent', () => {
             contentType: 'application/pdf',
             fileSize: 2048,
             source: 'import',
+            uploadedById: 5,
             fileUrl: null,
             createdAt: '2026-01-01T00:00:00Z',
           },
@@ -520,6 +534,7 @@ describe('AssetsContent', () => {
             contentType: 'application/pdf',
             fileSize: 4096,
             source: 'upload',
+            uploadedById: 5,
             fileUrl: 'https://files.example/v2.pdf',
             createdAt: '2026-03-01T00:00:00Z',
           },
@@ -529,6 +544,7 @@ describe('AssetsContent', () => {
             contentType: 'application/pdf',
             fileSize: 2048,
             source: 'import',
+            uploadedById: 5,
             fileUrl: null,
             createdAt: '2026-02-01T00:00:00Z',
           },

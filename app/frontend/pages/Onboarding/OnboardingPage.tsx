@@ -39,11 +39,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type TerminalSession from 'types/generated/TerminalSession';
 
-import { apiFetch } from 'shared/lib/apiFetch';
+import { apiFetch, apiRequest } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
 import { apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'shared/routes';
 import { AGENT_BRAND_COLORS, TERMINAL_BG } from 'shared/theme/vendorColors';
 import { PageShell, type AgentType, type SharedProps } from 'shared/ui';
+import { AGENT_RUNTIMES, AGENT_TYPES } from 'shared/ui/agentRuntimes';
 
 import classes from './OnboardingPage.module.css';
 
@@ -69,50 +71,22 @@ const LANGUAGE_OPTIONS = [
   { value: 'pl', label: 'Polish' },
 ];
 
-const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; icon: typeof IconSparkles }[] = [
-  {
-    type: 'claude_code',
-    name: 'Claude Code',
-    description: "Anthropic's AI coding assistant with deep reasoning capabilities",
-    icon: IconSparkles,
-  },
-  {
-    type: 'cursor_cli',
-    name: 'Cursor CLI',
-    description: 'AI-powered code editor with context-aware suggestions',
-    icon: IconCursorText,
-  },
-  {
-    type: 'codex',
-    name: 'OpenAI Codex',
-    description: "OpenAI's code generation model optimized for multiple languages",
-    icon: IconBrandOpenai,
-  },
-  {
-    type: 'gemini_cli',
-    name: 'Gemini CLI',
-    description: "Google's multimodal AI assistant for code generation and analysis",
-    icon: IconBrandGoogleFilled,
-  },
-  {
-    type: 'antigravity_cli',
-    name: 'Antigravity CLI',
-    description: "Google's agent-first terminal runtime, signed in with your Google account",
-    icon: IconBrandGoogleFilled,
-  },
-  {
-    type: 'grok',
-    name: 'Grok',
-    description: "xAI's Grok CLI for agentic coding in the terminal",
-    icon: IconBrandX,
-  },
-  {
-    type: 'kiro_cli',
-    name: 'Kiro CLI',
-    description: "AWS's Kiro CLI for spec-driven agentic coding in the terminal",
-    icon: IconBrandAws,
-  },
-];
+const AGENT_ICONS: Record<AgentType, typeof IconSparkles> = {
+  claude_code: IconSparkles,
+  cursor_cli: IconCursorText,
+  codex: IconBrandOpenai,
+  gemini_cli: IconBrandGoogleFilled,
+  antigravity_cli: IconBrandGoogleFilled,
+  grok: IconBrandX,
+  kiro_cli: IconBrandAws,
+};
+
+const AVAILABLE_AGENTS = AGENT_TYPES.map((type) => ({
+  type,
+  name: AGENT_RUNTIMES[type].productName,
+  description: AGENT_RUNTIMES[type].description,
+  icon: AGENT_ICONS[type],
+}));
 
 const AGENT_COLORS = AGENT_BRAND_COLORS;
 
@@ -132,10 +106,6 @@ const STEP_MAP: Record<string, number> = {
 };
 
 // ── Agent Auth Terminal ────────────────────────────
-
-function ttydUrlFromWs(websocketUrl: string) {
-  return websocketUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace('/ws', '');
-}
 
 function AgentAuthTerminal({
   agentType,
@@ -157,7 +127,7 @@ function AgentAuthTerminal({
   if (session) creatingRef.current = false;
   const sessionState = session?.state ?? (creatingRef.current ? 'starting' : 'idle');
   const isTerminal = ['finished', 'failed', 'cancelled'].includes(sessionState);
-  const ttydUrl = session?.state === 'ready' && session.websocketUrl ? ttydUrlFromWs(session.websocketUrl) : null;
+  const ttydUrl = session?.state === 'ready' ? terminalPageUrl(session) : null;
 
   useInertiaCableStream(session?.cableStream, {
     only: ['auth_sessions'],
@@ -218,7 +188,7 @@ function AgentAuthTerminal({
     finishedRef.current = true;
     setFinishError(false);
     try {
-      await apiFetch(finishApiV1TerminalSessionPath(session.id), { method: 'POST' });
+      await apiRequest(finishApiV1TerminalSessionPath(session.id), { method: 'POST' });
 
       onAuthenticated();
     } catch {

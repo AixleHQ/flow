@@ -15,10 +15,12 @@ class ScheduleReconcilerTest < ActiveSupport::TestCase
       schedule_config: { "cron" => cron, "timezone" => "UTC" })
   end
 
-  test "reconcile deletes the old schedule then creates one from the config" do
+  # Never delete-then-create: a failure in between would leave the trigger with
+  # no schedule at all until somebody edited it again.
+  test "reconcile puts the schedule in the binding's shape without deleting it first" do
     binding = schedule_binding
-    TemporalService.expects(:delete_binding_schedule).with("schedule-trigger-#{binding.id}").once
-    TemporalService.expects(:create_binding_schedule).with(
+    TemporalService.expects(:delete_binding_schedule).never
+    TemporalService.expects(:upsert_binding_schedule).with(
       has_entries(schedule_id: "schedule-trigger-#{binding.id}", cron: "0 9 * * 1-5", timezone: "UTC")
     ).once
 
@@ -28,7 +30,7 @@ class ScheduleReconcilerTest < ActiveSupport::TestCase
   test "reconcile only deletes when the binding is disabled" do
     binding = schedule_binding(enabled: false)
     TemporalService.expects(:delete_binding_schedule).once
-    TemporalService.expects(:create_binding_schedule).never
+    TemporalService.expects(:upsert_binding_schedule).never
 
     ScheduleReconciler.reconcile(binding)
   end
@@ -40,8 +42,7 @@ class ScheduleReconcilerTest < ActiveSupport::TestCase
 
   test "saving a schedule binding reconciles inline when Temporal is enabled" do
     TemporalService.stubs(:enabled?).returns(true)
-    TemporalService.stubs(:delete_binding_schedule)
-    TemporalService.expects(:create_binding_schedule).once
+    TemporalService.expects(:upsert_binding_schedule).once
 
     schedule_binding
   end
@@ -58,11 +59,42 @@ class ScheduleReconcilerTest < ActiveSupport::TestCase
     enabled = schedule_binding(enabled: true)
     schedule_binding(enabled: false) # disabled → skipped
 
+    TemporalService.stubs(:binding_schedule_ids).returns([])
     TemporalService.stubs(:delete_binding_schedule)
-    TemporalService.expects(:create_binding_schedule).with(
+    TemporalService.expects(:upsert_binding_schedule).with(
       has_entry(schedule_id: "schedule-trigger-#{enabled.id}")
     ).once
 
     ScheduleReconciler.reconcile_all
+  end
+
+  # A delete that failed while Temporal was down must not leave a schedule that
+  # fires forever: the sweep converges on the wanted set in both directions.
+  test "reconcile_all removes schedules no live binding wants" do
+    kept = schedule_binding(enabled: true)
+    off = schedule_binding(enabled: false)
+    deleted_workflow = create(:workflow, scope: @project)
+    orphaned = create(:trigger_binding, project: @project, workflow: deleted_workflow, created_by: @user,
+                                        event_type: "schedule.fired", schedule_config: { "cron" => "0 9 * * *" })
+    deleted_workflow.update_column(:deleted_at, Time.current)
+    TemporalService.stubs(:upsert_binding_schedule)
+    TemporalService.stubs(:binding_schedule_ids).returns(
+      [ kept, off, orphaned ].map { |b| "schedule-trigger-#{b.id}" } + [ "schedule-trigger-999999" ]
+    )
+    removed = []
+    TemporalService.stubs(:delete_binding_schedule).with { |sid| removed << sid }
+
+    ScheduleReconciler.reconcile_all
+
+    assert_equal [ off, orphaned ].map { |b| "schedule-trigger-#{b.id}" }.push("schedule-trigger-999999").sort, removed.sort
+  end
+
+  test "reconcile removes the schedule of a binding whose workflow was deleted" do
+    binding = schedule_binding
+    @workflow.update_column(:deleted_at, Time.current)
+    TemporalService.expects(:delete_binding_schedule).with("schedule-trigger-#{binding.id}").once
+    TemporalService.expects(:upsert_binding_schedule).never
+
+    ScheduleReconciler.reconcile(binding.reload)
   end
 end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Web::PagesController < Web::ApplicationController
   skip_before_action :enforce_onboarding
 

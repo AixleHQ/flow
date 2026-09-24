@@ -10,6 +10,7 @@ import { buildBoardTask } from 'test/factories/boardTask';
 import { buildTaskComment } from 'test/factories/taskComment';
 import { buildTaskStatistics } from 'test/factories/taskStatistics';
 import { buildTaskWorkflowRun } from 'test/factories/taskWorkflowRun';
+import { answerFetch } from 'test/fetchStub';
 import { act, cleanup, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type BoardTask from 'types/generated/BoardTask';
 import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
@@ -34,12 +35,9 @@ const columns = [
 // buildBoardTask (typed factory) is the drift contract. This thin wrapper re-applies the
 // page-local defaults these tests were written against where they differ from the factory's:
 //   taskType 'story' (factory: 'feature'), commentsCount 0 (factory: 3), title 'Untitled'
-//   (factory: 'Task'; always overridden below anyway).
-// assigneeName: the page-local literal used `null`, but BoardTask spells assigneeName as
-// optional-not-nullable (`assigneeName?: string`), so `null` is not assignable — `undefined`
-// reproduces the same falsy "no assignee avatar" render the tests rely on.
+//   (factory: 'Task'; always overridden below anyway), and no assignee (factory: 'Ada').
 const makeTask = (overrides: Partial<BoardTask> = {}): BoardTask =>
-  buildBoardTask({ title: 'Untitled', taskType: 'story', commentsCount: 0, assigneeName: undefined, ...overrides });
+  buildBoardTask({ title: 'Untitled', taskType: 'story', commentsCount: 0, assigneeName: null, ...overrides });
 
 // A run and a gate as a task payload carries them: narrower than the standalone TaskWorkflowRun
 // resource, and with a gate's optional fields left to the call site. These two keep the shaping in
@@ -518,7 +516,7 @@ describe('Projects/Board/BoardPage', () => {
             name: 'Backlog',
             position: 0,
             purpose: null,
-            workflowBinding: { id: 1, workflowId: 5, workflowName: 'Implement Feature', triggerMode: 'on_entry' },
+            workflowBinding: { id: 1, workflowId: 5, workflowName: 'Implement Feature', triggerMode: 'auto' },
           },
           buildBoardColumn({ id: 200, name: 'In Progress', position: 1 }),
         ],
@@ -553,7 +551,7 @@ describe('Projects/Board/BoardPage', () => {
       name: 'Backlog',
       position: 0,
       purpose: null,
-      workflowBinding: { id: 1, workflowId: 5, workflowName: 'Implement Feature', triggerMode: 'on_entry' },
+      workflowBinding: { id: 1, workflowId: 5, workflowName: 'Implement Feature', triggerMode: 'auto' },
     },
     buildBoardColumn({ id: 200, name: 'In Progress', position: 1 }),
   ];
@@ -892,17 +890,18 @@ describe('Projects/Board/BoardPage', () => {
       props: {
         ...populatedProps,
         columns: [
-          // Kept bespoke: the component's Column.workflowBinding is camelCase (workflowId /
-          // workflowName / triggerMode), but Typelizer spells BoardColumn.workflowBinding's nested
-          // keys snake_case (workflow_id / trigger_mode / cooldown_seconds), so buildBoardColumn
-          // can't express this shape. Only the null-binding column goes through the factory.
-          {
+          buildBoardColumn({
             id: 100,
             name: 'Backlog',
             position: 0,
-            purpose: null,
-            workflowBinding: { id: 1, workflowId: 5, workflowName: 'Implement', triggerMode: 'manual' },
-          },
+            workflowBinding: {
+              id: 1,
+              workflowId: 5,
+              workflowName: 'Implement',
+              triggerMode: 'manual',
+              cooldownSeconds: 0,
+            },
+          }),
           buildBoardColumn({ id: 200, name: 'In Progress', position: 1 }),
         ],
         selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
@@ -2032,7 +2031,8 @@ describe('Projects/Board/BoardPage', () => {
           {
             id: 1,
             name: 'Only Bugs',
-            filters: { task_type: 'bug' },
+            // As the server sends it: saved snake_case, camelized on the way out.
+            filters: { taskType: 'bug' },
             shared: true,
             userId: 1,
             createdAt: '2026-01-01T00:00:00Z',
@@ -2056,7 +2056,7 @@ describe('Projects/Board/BoardPage', () => {
   });
 
   it('deletes a saved view preset the current user owns', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = answerFetch({ 'DELETE /api/v1/projects/7/view_presets/1': {} });
 
     renderAuthedPage(<BoardPage />, {
       props: {
@@ -2091,7 +2091,7 @@ describe('Projects/Board/BoardPage', () => {
   });
 
   it('saves the current filters as a new view preset', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = answerFetch({ 'POST /api/v1/projects/7/view_presets': {}, 'GET /api/v1/projects/7/tasks': [] });
 
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
@@ -2119,7 +2119,7 @@ describe('Projects/Board/BoardPage', () => {
   // --- task detail sidebar interactions ---
 
   it('moves a task to another column via the sidebar Column select', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = answerFetch({ 'PATCH /api/v1/projects/7/tasks/1/move': {} });
 
     renderAuthedPage(<BoardPage />, {
       props: {
@@ -2148,7 +2148,7 @@ describe('Projects/Board/BoardPage', () => {
   });
 
   it('triggers a workflow from the sidebar Run workflow button', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = answerFetch({ 'POST /api/v1/projects/7/tasks/1/trigger_workflow': {} });
 
     renderAuthedPage(<BoardPage />, {
       props: {
@@ -2189,7 +2189,7 @@ describe('Projects/Board/BoardPage', () => {
   });
 
   it('submits a comment from the Comments tab, POSTing the body and selected tag', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = answerFetch({ 'POST /api/v1/projects/7/tasks/1/comments': {} });
 
     renderAuthedPage(<BoardPage />, {
       props: {
@@ -2280,7 +2280,7 @@ describe('Projects/Board/BoardPage', () => {
             name: 'Automated',
             position: 0,
             purpose: null,
-            workflowBinding: { id: 1, workflowId: 5, workflowName: 'GA4 Report', triggerMode: 'on_entry' },
+            workflowBinding: { id: 1, workflowId: 5, workflowName: 'GA4 Report', triggerMode: 'auto' },
           },
           buildBoardColumn({ id: 200, name: 'Manual', position: 1 }),
         ],
@@ -2336,7 +2336,7 @@ describe('Projects/Board/BoardPage', () => {
             name: 'Auto Col',
             position: 0,
             purpose: null,
-            workflowBinding: { id: 1, workflowId: 5, workflowName: 'GA4 Report', triggerMode: 'on_entry' },
+            workflowBinding: { id: 1, workflowId: 5, workflowName: 'GA4 Report', triggerMode: 'auto' },
           },
           buildBoardColumn({ id: 200, name: 'Manual Col', position: 1 }),
         ],

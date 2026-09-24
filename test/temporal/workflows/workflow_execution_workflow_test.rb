@@ -274,6 +274,24 @@ module Workflows
       assert_equal "completed", RecordingUpdateStatusActivity.statuses.last
     end
 
+    test "a run whose steps wait on each other fails instead of completing with nothing run" do
+      RecordingUpdateStatusActivity.statuses = []
+      FakePrepareStepListActivity.steps = [
+        { "step_id" => 1, "depends_on_step_ids" => [ 2 ], "on_failure" => "fail" },
+        { "step_id" => 2, "depends_on_step_ids" => [ 1 ], "on_failure" => "fail" }
+      ]
+      FakeFetchModeActivity.mode = "non_interactive"
+      FakeCheckSkipActivity.should_skip = false
+      stub_activities_proxy!
+
+      run_workflow(
+        WorkflowExecutionWorkflow, { workflow_run_id: 123 },
+        activities: e2e_activities, task_queue: E2E_TASK_QUEUE
+      )
+
+      assert_equal %w[running failed], RecordingUpdateStatusActivity.statuses
+    end
+
     test "run honors step dependencies across loop iterations when all steps skip" do
       # step 2 depends on step 1: it must only become ready after step 1 completes,
       # forcing a second process_steps iteration. Both skip, so no signals are needed.

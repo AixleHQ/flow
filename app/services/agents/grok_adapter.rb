@@ -94,7 +94,7 @@ module Agents
     end
 
     # auth.json content for a new container: the stored scope map, unchanged.
-    def generate_config(credentials, workflow_config = {})
+    def generate_config(credentials, _workflow_config = {})
       credentials["auth"] || {}
     end
 
@@ -114,8 +114,8 @@ module Agents
 
     # Session command: `grok --yolo` (documented alias of `--always-approve`, i.e.
     # permission mode `bypassPermissions`) — the container is the sandbox.
-    # A prompt is appended by AgentSessionStrategy from the AGENT_PROMPT env var.
-    def session_command(mode:, prompt: nil, model: nil)
+    # A prompt is appended by AgentSessionStrategy, read from its prompt file.
+    def session_command(mode:, model: nil)
       model ? "grok --yolo --model #{Shellwords.shellescape(model)}" : "grok --yolo"
     end
 
@@ -242,7 +242,7 @@ module Agents
 
     # Only entries issued by auth.x.ai are refreshed: the blob comes back from a container
     # the user controls, and a refresh token must never be posted to an issuer it names.
-    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
+    def perform_refresh!(credential, margin_ms: nil)
       credentials = credential.config_data
       scopes = auth_scopes(credentials["auth"])
       renewable = scopes.select { |scope, entry| oidc_client_id(scope) && entry["refresh_token"].present? }
@@ -527,7 +527,7 @@ module Agents
         usage = event["tokenUsage"]
         cached = usage["cacheReadTokens"].to_i
         uncached_input = [ usage["inputTokens"].to_i - cached, 0 ].max
-        cents = (uncached_input * price[:prompt] + cached * price[:cached] + usage["outputTokens"].to_i * price[:completion]) / PRICE_SCALE
+        cents = ((uncached_input * price[:prompt]) + (cached * price[:cached]) + (usage["outputTokens"].to_i * price[:completion])) / PRICE_SCALE
         usage["totalCents"] = cents.round(6)
       end
     end

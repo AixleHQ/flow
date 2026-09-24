@@ -15,7 +15,7 @@ import {
   UnstyledButton,
 } from '@mantine/core';
 import { IconCheck, IconChevronRight, IconCopy, IconExternalLink } from '@tabler/icons-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
@@ -358,7 +358,15 @@ function ToolsSection({ mcp }: { mcp: McpProps }) {
   );
 }
 
-function ProfileMcpPage({ mcp }: Props) {
+function ProfileMcpPage({ mcp: props }: Props) {
+  // The token is shown from this component's own state and taken out of the page
+  // props at once, so the history entry Back returns to no longer carries it.
+  const [token] = useState(props.token);
+  useEffect(() => {
+    if (props.token) router.replaceProp('mcp.token', null);
+  }, [props.token]);
+  const mcp = { ...props, token };
+
   return (
     <AuthLayout>
       <Head title="Personal MCP" />

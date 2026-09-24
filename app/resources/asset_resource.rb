@@ -19,9 +19,19 @@ class AssetResource < ApplicationResource
     AssetVersionResource.new(version).to_h
   end
 
-  typelize :string?
+  typelize :string
   attribute :created_by_name do |asset|
     asset.created_by&.name || User::DELETED_DISPLAY_NAME
+  end
+
+  typelize "string | null", optional: true
+  attribute :share_url do |asset|
+    asset.share_url
+  end
+
+  typelize "string | null", optional: true
+  attribute :shared_at do |asset|
+    asset.shared_at&.iso8601
   end
 
   typelize %w[company project]

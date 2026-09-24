@@ -13,6 +13,27 @@ class AgentCredentialTest < ActiveSupport::TestCase
     @membership = @user.company_memberships.sole
   end
 
+  # --- Login blocks, without decrypting ---
+
+  # The current user (credentials included) is serialized on every page.
+  test "the names of the login blocks are known without decrypting the credential" do
+    credential = create(:agent_credential, user: @user, agent_type: "claude_code")
+    credential.update!(config_data: { "claudeAiOauth" => { "accessToken" => "t" }, "designOauth" => {} })
+
+    # Unreadable ciphertext: an answer here cannot have come from decrypting it.
+    credential.update_column(:encrypted_config_data, "not-a-ciphertext")
+
+    assert_equal %w[claudeAiOauth designOauth], AgentCredential.find(credential.id).config_keys
+  end
+
+  test "a credential written before the names were recorded still answers them" do
+    credential = create(:agent_credential, user: @user, agent_type: "claude_code")
+    credential.update!(config_data: { "primaryApiKey" => "k" })
+    credential.update_column(:metadata, credential.metadata.except("config_keys"))
+
+    assert_equal %w[primaryApiKey], AgentCredential.find(credential.id).config_keys
+  end
+
   # --- Auto-set default on creation ---
 
   test "first credential sets the membership default_agent_credential" do
@@ -577,6 +598,46 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal "active", cred.status
     assert_equal 1, cred.refresh_failure_count
     assert_match(/ECONNRESET/, cred.refresh_error)
+  end
+
+  # The provider call runs outside any transaction: rolling back the write of a
+  # refresh token the provider has already rotated would lose the only valid one.
+  test "refresh_if_expiring! calls the provider with no transaction open" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: refreshable_claude_config(expires_at: 20.minutes.from_now))
+    open_transactions = nil
+    stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL).to_return do
+      open_transactions = ActiveRecord::Base.connection.open_transactions
+      { status: 200, body: { access_token: "new-tok", refresh_token: "new-ref", expires_in: 3_600 }.to_json,
+        headers: { "Content-Type" => "application/json" } }
+    end
+    baseline = ActiveRecord::Base.connection.open_transactions
+
+    cred.refresh_if_expiring!
+
+    assert_equal baseline, open_transactions
+  end
+
+  test "a launch that finds another refresh under way does not refresh again" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: refreshable_claude_config(expires_at: 20.minutes.from_now))
+    AgentCredential.where(id: cred.id).update_all(refresh_lease_until: 0.5.seconds.from_now, refresh_lease_token: "other")
+
+    result = cred.refresh_if_expiring!
+
+    # That refresher never renewed it, so the launch says so instead of replaying the grant.
+    assert_equal :error, result[:status]
+    assert_not_requested :post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL
+  end
+
+  test "the refresh lease is given back, and a lapsed one can be taken" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+
+    assert_equal :done, cred.with_refresh_lease { :done }
+    assert_nil cred.reload.refresh_lease_until
+
+    AgentCredential.where(id: cred.id).update_all(refresh_lease_until: 1.minute.ago, refresh_lease_token: "crashed")
+    assert_equal :done, cred.with_refresh_lease { cred.with_refresh_lease { :done } }
   end
 
   # --- status / refresh error lifecycle ---

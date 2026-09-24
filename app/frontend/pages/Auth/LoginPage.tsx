@@ -4,10 +4,10 @@ import { notifications } from '@mantine/notifications';
 import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
+import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
 import { loginPath } from 'shared/routes';
 import { Logo, PageShell } from 'shared/ui';
 
-import { GoogleLoginButton } from './GoogleLoginButton';
 import classes from './LoginPage.module.css';
 
 interface PageProps {

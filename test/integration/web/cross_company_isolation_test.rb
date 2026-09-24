@@ -113,9 +113,9 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
   test "company sessions index shows only the current company's project sessions and flips after a switch" do
     # The sessions screen is admin-gated; promote the user in B for this test.
     @membership_b.update!(role: "admin")
-    # A project-less session follows company_sessions_scope's documented rule:
-    # it belongs to EVERY company the user is an active member of.
-    projectless = build(:terminal_session, user: @user, project: nil,
+    # A project-less session belongs to the company it acts for — here A — and
+    # to no other company the user happens to belong to.
+    projectless = build(:terminal_session, user: @user, project: nil, company: @company_a,
                                            session_type: "agent_session", agent_type: "claude_code")
     projectless.save!(validate: false)
 
@@ -131,7 +131,7 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
     names = inertia.props[:sessions].map { |s| s[:projectName] }
     assert_includes names, "Beta Project"
     assert_not_includes names, "Alpha Project"
-    assert_includes names, nil, "project-less session missing in B"
+    assert_not_includes names, nil, "A's project-less session leaked into B"
   end
 
   # === projects ===

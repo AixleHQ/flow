@@ -22,6 +22,9 @@ class Web::Company::Sessions::ArtifactsController < Web::Company::ApplicationCon
     session = company_sessions_scope
                 .find(params[:session_id])
     authorize_session_visibility!(session)
+    # Saving files a project session produced writes into that project's library:
+    # the company feed shows the session to every member, not only the project's.
+    raise Pundit::NotAuthorizedError if session.project && !session.project.accessible_by?(current_user)
 
     asset_ids = session.output_assets.pluck(:id).map(&:to_s)
     decisions = params.require(:decisions).permit(*asset_ids).to_h.select { |_, v| %w[save dismiss].include?(v) }

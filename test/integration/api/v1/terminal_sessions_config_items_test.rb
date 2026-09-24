@@ -59,7 +59,7 @@ module Api
         end
 
         assert_response :unprocessable_entity
-        assert_match(/must belong to this session's project/, response.parsed_body["errors"].join)
+        assert_match(/must belong to this project/, response.parsed_body["errors"].join)
       end
 
       test "never serializes a config item value" do

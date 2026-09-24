@@ -8,7 +8,8 @@
 # schedule, the Temporal worker crashlooped, and so they all stopped together
 # with nothing left to notice. The Solid Queue supervisor (`jobs`) stayed up.
 #
-# Anything else recurring still goes in app/temporal/schedules.yml.
+# Anything else recurring still goes in app/temporal/schedules.yml — except the
+# queue's own housekeeping, which must not stop with the worker either.
 #
 # Every minute: the check is a handful of indexed COUNT/MIN queries, and
 # detection latency is the product being sold.
@@ -16,6 +17,10 @@ default: &default
   queue_health_check:
     class: QueueHealthCheckJob
     schedule: every minute
+  # Deletes jobs finished more than SolidQueue.clear_finished_jobs_after (a day) ago.
+  solid_queue_cleanup:
+    class: SolidQueueCleanupJob
+    schedule: every hour at minute 12
 
 development:
   <<: *default

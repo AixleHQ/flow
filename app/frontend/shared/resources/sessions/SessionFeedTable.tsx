@@ -4,9 +4,10 @@ import { IconExternalLink, IconLock } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
+import { apiFetch } from 'shared/lib/apiFetch';
+import { useCableRowUpdates } from 'shared/lib/hooks/useCableRowUpdates';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
-import { companySessionPath, userPath } from 'shared/routes';
+import { companySessionPath, rowsCompanySessionsPath, userPath } from 'shared/routes';
 import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
 
 import classes from './SessionFeedTable.module.css';
@@ -92,15 +93,18 @@ interface Props {
    * company session page, which is what the (admin-only) company feed uses.
    */
   sessionHref?: (session: SessionFeedRow) => string | null;
+  /** Signed stream the page hands out; the table refreshes the rows it names. */
+  cableStream?: string;
 }
 
 /**
  * The session-level Sessions & Runs list: the company-wide feed and one
  * member's slice of it on `/user/:id` are the same table with the same ruler.
  *
- * Live updates are the component's own business — it subscribes to
- * SessionListChannel and patches rows in place, so a state change shows up
- * across every page InfiniteScroll has loaded without a refetch.
+ * Live updates are the component's own business — the page's stream names the
+ * sessions that changed, and the table fetches just those rows back and patches
+ * them in place, so a state change shows up across every page InfiniteScroll
+ * has loaded.
  */
 export function SessionFeedTable({
   sessions,
@@ -108,6 +112,7 @@ export function SessionFeedTable({
   showUser = true,
   emptyLabel = 'No sessions yet',
   sessionHref = (session) => companySessionPath(session.id),
+  cableStream,
 }: Props) {
   // Local map mirrors the InfiniteScroll-accumulated sessions prop. Cable
   // updates patch individual entries in-place without touching the rest, so
@@ -137,19 +142,27 @@ export function SessionFeedTable({
     });
   }, [sessions, resetKey]);
 
-  useSessionListCableUpdates({
-    onUpdate: useCallback((updated) => {
+  const sessionMapRef = useRef(sessionMap);
+  sessionMapRef.current = sessionMap;
+
+  useCableRowUpdates(
+    cableStream,
+    useCallback(async ({ sessionIds }) => {
+      const ids = sessionIds.filter((id) => sessionMapRef.current.has(id));
+      if (ids.length === 0) return;
+
+      const response = await apiFetch(rowsCompanySessionsPath({ ids }));
+      if (!response.ok) return;
+      const { sessions: rows } = (await response.json()) as { sessions: SessionFeedRow[] };
+
       setSessionMap((prev) => {
-        if (!prev.has(updated.id as number)) return prev;
         const map = new Map(prev);
-        map.set(updated.id as number, {
-          ...prev.get(updated.id as number)!,
-          ...(updated as unknown as SessionFeedRow),
-        });
+        for (const row of rows) if (map.has(row.id)) map.set(row.id, { ...map.get(row.id)!, ...row });
         return map;
       });
     }, []),
-  });
+    { resyncIds: () => ({ sessionIds: [...sessionMapRef.current.keys()], runIds: [] }) },
+  );
 
   const displaySessions = useMemo(() => [...sessionMap.values()], [sessionMap]);
 

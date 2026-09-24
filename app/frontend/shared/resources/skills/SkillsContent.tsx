@@ -14,35 +14,13 @@ import {
 import { IconExternalLink, IconPencil, IconPencilPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import type { CatalogSkill, Skill } from '@/types/generated';
+
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 
 import { DeleteSkillModal } from './DeleteSkillModal';
 import { ManualSkillModal } from './ManualSkillModal';
-import { SkillsCatalogModal, type CatalogSkill } from './SkillsCatalogModal';
-
-export type { CatalogSkill };
-
-export interface Skill {
-  id: number;
-  name: string;
-  title: string | null;
-  description: string | null;
-  /** Null for a hand-written skill — there is no registry package behind it. */
-  package: string | null;
-  source: string | null;
-  sourceUrl: string | null;
-  installCount: number;
-  origin: 'registry' | 'manual';
-  /** Present only for hand-written skills — the file the edit form loads. */
-  content: string | null;
-  scopeType: string | null;
-  scopeId: number | null;
-  scopeIndicator: string;
-  /** Null for a hand-written skill. */
-  registryUrl: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+import { SkillsCatalogModal } from './SkillsCatalogModal';
 
 interface SkillsContentProps {
   skills: Skill[];
@@ -250,7 +228,7 @@ export function SkillsContent({
                     </ActionIcon>
                   )}
                 </Group>
-                {skill.installCount > 0 && (
+                {skill.installCount != null && skill.installCount > 0 && (
                   <Text fz={11} c="dimmed">
                     {formatInstalls(skill.installCount)} installs
                   </Text>

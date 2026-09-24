@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { driftedServers, serverHealthSignals } from './serverHealth';
-import type { McpServer } from './types';
+import type { MCPServer } from '@/types/generated';
 
-const server = (overrides: Partial<McpServer> = {}): McpServer => ({
+import { driftedServers, serverHealthSignals } from './serverHealth';
+
+const server = (overrides: Partial<MCPServer> = {}): MCPServer => ({
   id: 1,
   name: 'Linear',
   url: 'https://mcp.linear.app/mcp',
   transport: 'http',
-  headers: null,
+  headers: {},
   description: null,
   kind: 'custom',
   scopeType: 'Project',
@@ -17,7 +18,7 @@ const server = (overrides: Partial<McpServer> = {}): McpServer => ({
   enabled: true,
   internal: false,
   command: null,
-  env: null,
+  env: {},
   connectorName: 'app.linear/linear',
   connectorStatus: 'active',
   connectorVersion: '1.0.0',
@@ -25,6 +26,11 @@ const server = (overrides: Partial<McpServer> = {}): McpServer => ({
   connectorUpdateVersion: null,
   toolBaseline: true,
   toolDrift: null,
+  authType: 'none',
+  credentialScope: 'shared',
+  oauthClientId: null,
+  oauthClientSecretPresent: false,
+  oauthStatus: null,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
   ...overrides,

@@ -24,7 +24,6 @@ class ContainerStrategies::InternalToolStrategyTest < ActiveSupport::TestCase
 
     ContainerStrategies::InternalToolStrategy.define :docker_tool do
       image "docker-tool:1.0"
-      docker_socket!
       output_files [ "/output/report.json" ]
     end
   end
@@ -81,15 +80,9 @@ class ContainerStrategies::InternalToolStrategyTest < ActiveSupport::TestCase
     assert_equal "test_tool", labels["aixle.tool"]
   end
 
-  test "build_host_config with docker_socket mounts docker.sock" do
-    strategy = ContainerStrategies::InternalToolStrategy.build_for(
-      :docker_tool, params: {}, session: nil, tool_result_id: 1
-    )
-    hc = strategy.build_host_config
-    assert hc["Binds"].any? { |b| b.include?("docker.sock") }
-  end
-
-  test "build_host_config without docker_socket has no socket bind" do
+  # A tool container holding the host's Docker socket is root on the host;
+  # the definition DSL no longer offers it.
+  test "build_host_config never binds the docker socket" do
     strategy = build_test_strategy
     hc = strategy.build_host_config
     binds = hc["Binds"] || []

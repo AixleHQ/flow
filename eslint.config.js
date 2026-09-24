@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs';
+
 import eslintJs from '@eslint/js';
 import eslintParserTypescript from '@typescript-eslint/parser';
 import eslintConfigPrettier from 'eslint-config-prettier';
@@ -10,6 +12,28 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh';
 import eslintPluginTestingLibrary from 'eslint-plugin-testing-library';
 import globals from 'globals';
 import typescriptEslint from 'typescript-eslint';
+
+const HARDCODED_COLOR = [
+  {
+    selector: 'Literal[value=/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/]',
+    message:
+      'Hardcoded color. Use an --app-* token from shared/theme/mantineTheme.ts (or CHART_SERIES from shared/theme/chartPalette.ts for series colors).',
+  },
+  {
+    selector: 'TemplateElement[value.raw=/#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b/]',
+    message: 'Hardcoded color in a template literal. Use an --app-* token from shared/theme/mantineTheme.ts.',
+  },
+];
+
+const PAGE_SLICES = readdirSync(new URL('./app/frontend/pages', import.meta.url), { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map((entry) => entry.name);
+
+const DOUBLE_CAST = {
+  selector: "TSAsExpression[expression.type='TSAsExpression'][expression.typeAnnotation.type='TSUnknownKeyword']",
+  message:
+    '`as unknown as` turns type checking off. Type the value where it comes from (usePage<Props>(), a generated type, a guard).',
+};
 
 export default typescriptEslint.config(
   eslintJs.configs.recommended,
@@ -93,19 +117,101 @@ export default typescriptEslint.config(
   // them in a named constant with an eslint-disable-next-line and a reason.
   {
     files: ['app/frontend/**/*.{ts,tsx}'],
-    ignores: ['app/frontend/shared/theme/**', 'app/frontend/**/*.{test,spec}.{ts,tsx}'],
+    ignores: ['app/frontend/shared/theme/**', 'app/frontend/test/**', 'app/frontend/**/*.{test,spec}.{ts,tsx}'],
     rules: {
-      'no-restricted-syntax': [
+      'no-restricted-syntax': ['error', ...HARDCODED_COLOR, DOUBLE_CAST],
+    },
+  },
+  {
+    // `x as unknown as T` switches the type checker off for that value. Files that
+    // did it before this rule, frozen 2026-09-23 — the list only ever shrinks.
+    files: [
+      'app/frontend/layouts/AuthLayout.tsx',
+      'app/frontend/pages/Company/Analytics/AnalyticsPage.tsx',
+      'app/frontend/pages/Company/Assets/Index.tsx',
+      'app/frontend/pages/Company/Sessions/Artifacts.tsx',
+      'app/frontend/pages/Company/Sessions/Show.tsx',
+      'app/frontend/pages/Company/Settings/SettingsPage.tsx',
+      'app/frontend/pages/Company/WorkflowCatalog/IndexPage.tsx',
+      'app/frontend/pages/Profile/Show.tsx',
+      'app/frontend/pages/Profile/Usage.tsx',
+      'app/frontend/pages/Projects/Agents/AgentsPage.tsx',
+      'app/frontend/pages/Projects/AixleBuilder/LandingPage.tsx',
+      'app/frontend/pages/Projects/AixleBuilder/SessionPage.tsx',
+      'app/frontend/pages/Projects/Analytics/AnalyticsPage.tsx',
+      'app/frontend/pages/Projects/Assets/AssetsPage.tsx',
+      'app/frontend/pages/Projects/Config/ConfigPage.tsx',
+      'app/frontend/pages/Projects/Integrations/IntegrationsPage.tsx',
+      'app/frontend/pages/Projects/McpServers/McpServersPage.tsx',
+      'app/frontend/pages/Projects/Members/MembersPage.tsx',
+      'app/frontend/pages/Projects/Overview/OverviewPage.tsx',
+      'app/frontend/pages/Projects/Repositories/RepositoriesPage.tsx',
+      'app/frontend/pages/Projects/Sessions/ArtifactsPage.tsx',
+      'app/frontend/pages/Projects/Sessions/NewPage.tsx',
+      'app/frontend/pages/Projects/Sessions/ShowPage.tsx',
+      'app/frontend/pages/Projects/Sessions/useCreateOptions.ts',
+      'app/frontend/pages/Projects/Settings/SettingsPage.tsx',
+      'app/frontend/pages/Projects/Skills/SkillsPage.tsx',
+      'app/frontend/pages/Projects/Tools/ToolsPage.tsx',
+      'app/frontend/pages/Projects/WorkflowRuns/ShowPage.tsx',
+      'app/frontend/pages/Projects/Workflows/BuilderPage.tsx',
+      'app/frontend/pages/Projects/Workflows/TriggersTab.tsx',
+      'app/frontend/pages/Projects/Workflows/WorkflowsPage.tsx',
+      'app/frontend/shared/components/SessionNewForm.tsx',
+      'app/frontend/shared/lib/hooks/useInertiaCableStream.ts',
+      'app/frontend/shared/lib/hooks/useProjectPermissions.ts',
+      'app/frontend/shared/resources/usage/UsageAnalytics.tsx',
+    ],
+    rules: {
+      'no-restricted-syntax': ['error', ...HARDCODED_COLOR],
+    },
+  },
+  // Feature-Sliced layers point one way: shared is imported by pages and layouts,
+  // never the reverse. Steiger does not resolve the baseUrl-style `pages/...`
+  // specifiers, so it missed shared/ui/AppSidebar importing a page component.
+  {
+    files: ['app/frontend/shared/**/*.{ts,tsx}'],
+    // A test may render a whole page around the shared piece it exercises.
+    ignores: ['app/frontend/**/*.{test,spec}.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
         'error',
         {
-          selector: "Literal[value=/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/]",
-          message:
-            'Hardcoded color. Use an --app-* token from shared/theme/mantineTheme.ts (or CHART_SERIES from shared/theme/chartPalette.ts for series colors).',
+          patterns: [
+            {
+              group: [
+                'pages',
+                'pages/*',
+                'layouts',
+                'layouts/*',
+                '@/pages/*',
+                '@/layouts/*',
+                '**/pages/*',
+                '**/layouts/*',
+              ],
+              message: 'shared/ must not import from pages/ or layouts/ — move what both need into shared/.',
+            },
+          ],
         },
+      ],
+    },
+  },
+  // Each top-level folder under pages/ is a slice: it imports its own files and
+  // shared/, never another page's. Steiger did not flag pages/Invitations
+  // importing pages/Auth either.
+  {
+    files: ['app/frontend/pages/**/*.{ts,tsx}'],
+    ignores: ['app/frontend/**/*.{test,spec}.{ts,tsx}'],
+    rules: {
+      'import/no-restricted-paths': [
+        'error',
         {
-          selector: "TemplateElement[value.raw=/#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\\b/]",
-          message:
-            'Hardcoded color in a template literal. Use an --app-* token from shared/theme/mantineTheme.ts.',
+          zones: PAGE_SLICES.map((slice) => ({
+            target: `./app/frontend/pages/${slice}`,
+            from: './app/frontend/pages',
+            except: [`./${slice}`],
+            message: 'A page imports its own slice and shared/, not another page — move what both need into shared/.',
+          })),
         },
       ],
     },
@@ -139,7 +245,6 @@ export default typescriptEslint.config(
     // Pre-doctrine offenders, frozen 2026-07-02 (64 querySelector sites) —
     // this list only ever shrinks. New tests must satisfy the full rule set.
     files: [
-      'app/frontend/pages/Auth/GoogleLoginButton.test.tsx',
       'app/frontend/pages/Docs/components/DocsCallout.test.tsx',
       'app/frontend/pages/Projects/Board/BoardPage.test.tsx',
       'app/frontend/pages/Projects/Sessions/SessionsPage.test.tsx',

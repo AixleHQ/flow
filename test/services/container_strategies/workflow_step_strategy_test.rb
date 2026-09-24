@@ -56,28 +56,23 @@ module ContainerStrategies
 
     # == build_env_vars ==
 
-    test "build_env_vars sets AGENT_PROMPT from step instructions and agent persona/principles" do
+    test "build_env_vars carries neither the step's instructions nor its agent's persona" do
       agent = create(:agent, scope: @project, persona: "You are a QA reviewer.", principles: "Verify everything.")
       session, = create_workflow_step_session(instructions: "Review the pull request", agent: agent)
-      strategy = build_strategy(session: session)
 
-      env_vars = strategy.build_env_vars
+      env_vars = build_strategy(session: session).build_env_vars
 
-      assert_includes env_vars, "AGENT_PROMPT=Review the pull request"
-      assert_includes env_vars, "CONFIGURED_AGENT_PERSONA=You are a QA reviewer."
-      assert_includes env_vars, "CONFIGURED_AGENT_PRINCIPLES=Verify everything."
       assert_includes env_vars, "SESSION_TYPE=workflow_step"
+      [ "Review the pull request", "You are a QA reviewer.", "Verify everything." ].each do |text|
+        assert_not env_vars.any? { |v| v.include?(text) }, "#{text} must not be in the environment"
+      end
     end
 
-    test "build_env_vars omits agent persona vars when the step has no agent" do
-      session, = create_workflow_step_session(instructions: "Just run it", agent: nil)
-      strategy = build_strategy(session: session)
+    test "the step's instructions are the prompt the CLI is launched with" do
+      session, = create_workflow_step_session(instructions: "Review the pull request")
+      session.update!(mode: "non_interactive", initial_prompt: "session summary")
 
-      env_vars = strategy.build_env_vars
-
-      assert_includes env_vars, "AGENT_PROMPT=Just run it"
-      assert_not env_vars.any? { |v| v.start_with?("CONFIGURED_AGENT_PERSONA=") }
-      assert_not env_vars.any? { |v| v.start_with?("CONFIGURED_AGENT_PRINCIPLES=") }
+      assert_equal "Review the pull request", build_strategy(session: session).send(:agent_prompt, session)
     end
 
     # == before_cleanup ==
@@ -136,7 +131,7 @@ module ContainerStrategies
       )
 
       # Run-level input asset.
-      input_asset = create(:asset, :with_company_scope, name: "brief.md", created_by: @user)
+      input_asset = create(:asset, scope: @project.company, name: "brief.md", created_by: @user)
       create(:asset_version, :with_file, asset: input_asset, version: 1, uploaded_by: @user)
       workflow_run.update!(input_asset_ids: [ input_asset.id ])
 

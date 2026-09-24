@@ -8,7 +8,7 @@ import type StepRun from 'types/generated/StepRun';
 import type WorkflowRun from 'types/generated/WorkflowRun';
 import type WorkflowRunAsset from 'types/generated/WorkflowRunAsset';
 
-import { apiFetch } from 'shared/lib/apiFetch';
+import { apiMutate } from 'shared/lib/apiFetch';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
@@ -155,8 +155,8 @@ const WorkflowRunShowPage = () => {
   const handleFinishSession = useCallback(async (sessionId: number) => {
     setActionLoading(true);
     try {
-      await apiFetch(finishApiV1TerminalSessionPath(sessionId), { method: 'POST' });
-      router.reload({ only: ['run'] });
+      if (await apiMutate(finishApiV1TerminalSessionPath(sessionId), { method: 'POST' }))
+        router.reload({ only: ['run'] });
     } finally {
       setActionLoading(false);
     }
@@ -169,12 +169,12 @@ const WorkflowRunShowPage = () => {
       const url = promoteOpen.assetId
         ? exportApiV1ProjectWorkflowRunWorkflowRunAssetPath(project.id, run.id, promoteOpen.assetId)
         : exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath(project.id, run.id);
-      await apiFetch(url, {
+      const exported = await apiMutate(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder: promoteFolder || null }),
       });
-      router.reload({ only: ['assets'] });
+      if (exported) router.reload({ only: ['assets'] });
     } finally {
       setPromoteLoading(false);
       setPromoteOpen(null);

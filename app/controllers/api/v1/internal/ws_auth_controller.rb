@@ -28,8 +28,20 @@ module Api
       #   404 Not Found - session doesn't exist
       #
       class WsAuthController < Api::V1::Internal::ApplicationController
+        # Cookies the container's own processes need (OpenVSCode keeps its
+        # connection token in `vscode-tkn`). Nothing else the browser holds for
+        # this host may reach the pod: whatever listens there is controlled by
+        # the agent, and the browser's cookies include the Rails session.
+        CONTAINER_COOKIE = /\Avscode-[\w-]+\z/
+
+        # What only the session's owner may open: the writable terminal and the
+        # IDE are both a shell in a container that holds the owner's agent login,
+        # git token and vending keys. Everyone else the session is shared with
+        # gets the read-only terminal (`view`) and the read-only file server.
+        OWNER_ONLY_SURFACES = %w[tty ide].freeze
+
         def show
-          route_token = extract_route_token
+          route_token, surface = extract_route
           unless route_token
             Rails.logger.debug("[WsAuth] No route_token found in request")
             return head :bad_request
@@ -41,13 +53,19 @@ module Api
             return head :not_found
           end
 
-          unless current_user
+          viewer = requesting_user(terminal_session)
+          unless viewer
             Rails.logger.debug("[WsAuth] No authenticated user for route_token #{route_token}")
             return head :unauthorized
           end
 
-          unless terminal_session.container_accessible_by?(current_user)
-            Rails.logger.warn("[WsAuth] User #{current_user.id} tried to access session #{terminal_session.id} owned by #{terminal_session.user_id}")
+          unless terminal_session.container_accessible_by?(viewer)
+            Rails.logger.warn("[WsAuth] User #{viewer.id} tried to access session #{terminal_session.id} owned by #{terminal_session.user_id}")
+            return head :forbidden
+          end
+
+          if OWNER_ONLY_SURFACES.include?(surface) && terminal_session.user_id != viewer.id
+            Rails.logger.warn("[WsAuth] User #{viewer.id} refused the #{surface} of session #{terminal_session.id}, owned by #{terminal_session.user_id}")
             return head :forbidden
           end
 
@@ -57,23 +75,73 @@ module Api
           end
 
           # Pass user info to downstream (optional)
-          response.set_header("X-User-Id", current_user.id.to_s)
+          response.set_header("X-User-Id", viewer.id.to_s)
           response.set_header("X-Session-Id", terminal_session.id.to_s)
+          forward_container_cookies
+          issue_sandbox_cookie(viewer, terminal_session) if @ticket_from_url
 
           head :ok
         end
 
         private
 
-        # Extract route_token from X-Forwarded-Uri header (set by Traefik ForwardAuth)
-        # Example: /t/abc123def456/tty/ws → abc123def456
-        def extract_route_token
-          forwarded_uri = request.headers["X-Forwarded-Uri"]
-          return nil unless forwarded_uri
+        # Containers served from a host of their own receive none of the app's
+        # cookies, so the viewer is named by a ContainerTicket — in the URL the app
+        # handed out, or in the cookie this gate traded it for. On the app's own
+        # host the session cookie still works.
+        def requesting_user(terminal_session)
+          ticket = forwarded_query[ContainerTicket::PARAM]
+          if ticket.present?
+            @ticket_from_url = true
+            @url_ticket = ContainerTicket.verify(ticket, session: terminal_session)
+            return @url_ticket && User.authenticatable.find_by(id: @url_ticket["u"])
+          end
 
-          # Match /t/{route_token}/tty or /t/{route_token}/fs
-          match = forwarded_uri.match(%r{/t/([a-f0-9]+)/})
-          match&.[](1)
+          cookie = request.cookies[ContainerTicket::COOKIE]
+          return ContainerTicket.user_for(cookie, session: terminal_session) if cookie.present?
+
+          current_user
+        end
+
+        # Handed to the browser by Traefik (`addAuthCookiesToResponse` on the
+        # terminal-auth middleware), on the sandbox host only and scoped to this
+        # session's routes. Partitioned, because the sandbox is framed by the app.
+        def issue_sandbox_cookie(viewer, terminal_session)
+          value = ContainerTicket.issue(user: viewer, session: terminal_session, ttl: ContainerTicket::COOKIE_TTL,
+                                        user_session_id: @url_ticket&.dig("us"))
+          response.set_header("Set-Cookie",
+            "#{ContainerTicket::COOKIE}=#{value}; Path=/t/#{terminal_session.route_token}/; " \
+            "Max-Age=#{ContainerTicket::COOKIE_TTL.to_i}; HttpOnly; Secure; SameSite=None; Partitioned")
+        end
+
+        def forwarded_query
+          query = URI.parse(request.headers["X-Forwarded-Uri"].to_s).query
+          query.present? ? Rack::Utils.parse_query(query) : {}
+        rescue URI::InvalidURIError
+          {}
+        end
+
+        # The terminal-auth middleware lists Cookie and Authorization in
+        # authResponseHeadersRegex, so Traefik deletes both from the proxied
+        # request and substitutes whatever this response carries. Answering with
+        # only the container's own cookies is what keeps the session cookie out
+        # of the pod; answering with no Cookie header forwards none.
+        def forward_container_cookies
+          pairs = request.headers["Cookie"].to_s.split(";").map(&:strip).select do |pair|
+            pair.split("=", 2).first.to_s.match?(CONTAINER_COOKIE)
+          end
+          response.set_header("Cookie", pairs.join("; ")) if pairs.any?
+        end
+
+        # The route token and the surface it is for, from the X-Forwarded-Uri
+        # Traefik sets: /t/abc123def456/tty/ws → ["abc123def456", "tty"]. An
+        # unrecognised surface is treated as owner-only.
+        def extract_route
+          match = request.headers["X-Forwarded-Uri"].to_s.match(%r{\A/t/([a-f0-9]+)/([a-z]+)})
+          return [ nil, nil ] unless match
+
+          surface = match[2]
+          [ match[1], surface.in?(%w[tty ide fs view]) ? surface : "tty" ]
         end
       end
     end

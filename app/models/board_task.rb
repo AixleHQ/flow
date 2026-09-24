@@ -83,7 +83,7 @@ class BoardTask < ApplicationRecord
   private
 
   def touch_board
-    board.touch if board&.persisted?
+    BoardRefresh.request(board)
   end
 
   def broadcast_task_updates

@@ -12,6 +12,9 @@
 # verification here would accept every unsigned request.
 class AzureDevopsSubscription < ApplicationRecord
   include Encryptable
+
+  encryption_key :integrations_key
+  encrypted_column :encrypted_password
   extend Enumerize
 
   # `probation` is Azure's own state for a subscription that has failed often
@@ -49,16 +52,11 @@ class AzureDevopsSubscription < ApplicationRecord
   before_validation :assign_endpoint_id, on: :create
 
   def password
-    return nil if encrypted_password.blank?
-
-    encryptor.decrypt_and_verify(encrypted_password)
-  rescue ActiveSupport::MessageVerifier::InvalidSignature,
-         ActiveSupport::MessageEncryptor::InvalidMessage
-    nil
+    decrypt_secret(encrypted_password, column: "encrypted_password")
   end
 
   def password=(value)
-    self.encrypted_password = encryptor.encrypt_and_sign(value.to_s)
+    self.encrypted_password = encrypt_secret(value.to_s, column: "encrypted_password")
   end
 
   # Constant-time, and false for a blank candidate rather than "no password
@@ -89,9 +87,5 @@ class AzureDevopsSubscription < ApplicationRecord
     return if integration.blank? || integration.azure_devops?
 
     errors.add(:integration, "must be an Azure DevOps connection")
-  end
-
-  def encryption_key_setting
-    Settings.encryption.integrations_key
   end
 end

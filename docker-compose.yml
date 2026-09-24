@@ -47,27 +47,14 @@ x-web-environment: &web-environment
   VITE_RUBY_PORT: ${VITE_RUBY_PORT:-4001}
   REDIS_URL: redis://redis:6379/1
   DOCKER_NETWORK: ${DOCKER_NETWORK:-app_default}
-
-x-toolbox-environment: &toolbox-environment
-  - PROJECT=aixle
-  - APPLICATION=app-web
-  - AWS_REGION
-  - AWS_DEFAULT_REGION
-  - AWS_ACCESS_KEY_ID
-  - AWS_SECRET_ACCESS_KEY
-  - AWS_SESSION_TOKEN
-  - AWS_SECURITY_TOKEN
-  - AWS_SESSION_EXPIRATION
-  - AWS_SESSION_TOKEN_TTL=24h
-  - AWS_CHAINED_SESSION_TOKEN_TTL=24h
-  - AWS_ASSUME_ROLE_TTL=24h
+  DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-app_agents}
 
 services:
   temporal:
     image: temporalio/auto-setup:1.29.7
     restart: on-failure
     ports:
-      - "${TEMPORAL_HOST_PORT:-7233}:7233"
+      - "${BIND_ADDRESS:-127.0.0.1}:${TEMPORAL_HOST_PORT:-7233}:7233"
     environment:
       - DB=postgres12
       - DB_PORT=5432
@@ -89,7 +76,7 @@ services:
   temporal-ui:
     image: temporalio/ui:2.43.3
     ports:
-      - "${TEMPORAL_UI_HOST_PORT:-8080}:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:${TEMPORAL_UI_HOST_PORT:-8080}:8080"
     depends_on:
       - temporal
     environment:
@@ -105,9 +92,9 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
     volumes: *web-volumes
     ports:
-      - '${PORT:-4000}:${PORT:-4000}'
-      - '${VITE_RUBY_PORT:-4001}:${VITE_RUBY_PORT:-4001}'
-      - '${MCP_PORT:-4002}:${MCP_PORT:-4002}'  # MCP server (separate Puma via Procfile.dev)
+      - '${BIND_ADDRESS:-127.0.0.1}:${PORT:-4000}:${PORT:-4000}'
+      - '${BIND_ADDRESS:-127.0.0.1}:${VITE_RUBY_PORT:-4001}:${VITE_RUBY_PORT:-4001}'
+      - '${BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-4002}:${MCP_PORT:-4002}'  # MCP server (separate Puma via Procfile.dev)
     depends_on:
       db:
         condition: service_healthy
@@ -123,6 +110,9 @@ services:
       - "traefik.http.services.${DOCKER_NETWORK:-app_default}-api.loadbalancer.server.port=${PORT:-4000}"
     entrypoint: bin/docker-entrypoint
     command: dev
+    # On the agent network so containers reach MCP, credential vending and the
+    # usage ingest; db, redis and temporal are deliberately not.
+    networks: [ default, agents ]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${PORT:-4000}/up || exit 1"]
       interval: 10s
@@ -178,15 +168,15 @@ services:
   traefik:
     image: traefik:v3.6.6
     ports:
-      - "${HTTP_HOST_PORT:-80}:80"
-      - "${HTTPS_HOST_PORT:-443}:443"
-      - "${TRAEFIK_DASHBOARD_HOST_PORT:-8090}:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_HOST_PORT:-80}:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTPS_HOST_PORT:-443}:443"
+      - "${BIND_ADDRESS:-127.0.0.1}:${TRAEFIK_DASHBOARD_HOST_PORT:-8090}:8080"
     command:
       - "--api.dashboard=true"
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=${DOCKER_NETWORK:-app_default}"
+      - "--providers.docker.network=${DOCKER_AGENT_NETWORK:-app_agents}"
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
@@ -195,6 +185,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./docker/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    networks: [ default, agents ]
     attach: false
 
   otlp-ingest:
@@ -203,35 +194,21 @@ services:
       dockerfile: Dockerfile
     image: aixle/otlp-ingest:latest
     ports:
-      - '${OTLP_HOST_PORT:-4318}:4318'
+      - '${BIND_ADDRESS:-127.0.0.1}:${OTLP_HOST_PORT:-4318}:4318'
+    networks: [ default, agents ]
     attach: false
-
-  remote:
-    profiles: [infra]
-    build:
-      context: ./docker/remote
-      args:
-        platform: '${PLATFORM:-linux_arm64}'
-    entrypoint: ''
-    environment: *toolbox-environment
-    volumes:
-      - ./docker/remote:/app:cached
-      - .aws:/root/.aws
-
-  toolbox:
-    profiles: [infra]
-    image: ghcr.io/artempartos/ecs_toolbox:latest
-    environment: *toolbox-environment
-    volumes:
-      - .:/app:cached
-      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   pg_data:
   redis_data:
 
 networks:
-  # Fixed, not Compose-derived: agent containers join it by name
-  # (docs/project/worktree-stack.md).
+  # Fixed, not Compose-derived (docs/project/worktree-stack.md).
   default:
     name: ${DOCKER_NETWORK:-app_default}
+  # The only network agent containers join (Settings.docker.agent_network). It
+  # holds web, otlp-ingest and traefik — what an agent has to reach — and not
+  # db (trust auth), redis or temporal (no auth at all), which an agent on the
+  # platform's own network could read and write outright.
+  agents:
+    name: ${DOCKER_AGENT_NETWORK:-app_agents}

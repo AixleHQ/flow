@@ -5,7 +5,7 @@ import { defineConfig } from 'steiger';
 //
 // This codebase uses a deliberately loose FSD interpretation (see
 // docs/project/context.md "Frontend: Component Structure"): only the `pages`
-// and `shared` layers, per-component `index.ts` barrels rather than
+// and `shared` layers, barrels only where shared/ui exports a group, rather than
 // per-segment ones, and pages kept flat instead of split into ui/model/api
 // segments. The rules below are turned off where the vanilla FSD default
 // fights that documented convention; the structural rules that guard the
@@ -25,7 +25,7 @@ export default defineConfig([
     rules: {
       // Pages are intentionally flat — components co-located, no ui/model/api split.
       'fsd/no-segmentless-slices': 'off',
-      // The project's barrel convention is per-component folders, not per-segment.
+      // Components live one per file beside their CSS module and test; there are no per-segment barrels.
       'fsd/public-api': 'off',
       // `shared/components` and `shared/analytics` are the documented segment names.
       'fsd/segments-by-purpose': 'off',

@@ -2,9 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { CatalogSkill, Skill } from '@/types/generated';
 import { renderPage, screen, userEvent } from 'test/renderPage';
 
-import { SkillsContent, type CatalogSkill, type Skill } from './SkillsContent';
+import { SkillsContent } from './SkillsContent';
 
 function makeSkill(overrides: Partial<Skill> = {}): Skill {
   return {
@@ -43,6 +44,8 @@ function makeCatalogSkill(overrides: Partial<CatalogSkill> = {}): CatalogSkill {
     registryUrl: 'https://skills.sh/anthropics/skills/pdf',
     auditRisk: null,
     auditProviders: [],
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }

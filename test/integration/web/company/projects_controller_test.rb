@@ -67,6 +67,21 @@ class Web::Company::ProjectsControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
+  test "a viewer cannot create a project" do
+    viewer = create(:user, :viewer, :onboarding_completed, company: @company, email: "client-#{SecureRandom.hex(3)}@external.com",
+                                                             password: AuthHelper::TEST_PASSWORD)
+    sign_in_as(viewer)
+
+    assert_no_difference -> { Project.count } do
+      post company_projects_path, params: { project: { name: "Client Project" } }
+    end
+    assert_equal "You are not authorized to perform this action.", flash[:alert]
+
+    get company_projects_path
+    assert inertia.props[:permissions].key?(:canWrite)
+    refute inertia.props.dig(:permissions, :canWrite)
+  end
+
   test "destroy redirects on success" do
     project = create(:project, company: @company, owner: @user)
     delete company_project_path(project)

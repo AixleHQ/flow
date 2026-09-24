@@ -1,26 +1,39 @@
 import '@testing-library/jest-dom/vitest';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { MCPServer } from '@/types/generated';
 import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
-import { McpServersContent, type McpServer } from './McpServersContent';
+import { McpServersContent } from './McpServersContent';
 
-function makeServer(overrides: Partial<McpServer> = {}): McpServer {
+function makeServer(overrides: Partial<MCPServer> = {}): MCPServer {
   return {
     id: 1,
     name: 'playwright',
     url: 'https://mcp.example.com/pw',
     transport: 'http',
-    headers: null,
+    headers: {},
     description: null,
     kind: 'custom',
     scopeType: null,
     scopeId: null,
-    scopeIndicator: 'company',
+    scopeIndicator: 'project',
     enabled: true,
     internal: false,
     command: null,
-    env: null,
+    env: {},
+    connectorName: null,
+    connectorVersion: null,
+    connectorStatus: null,
+    connectorVersionPinned: true,
+    connectorUpdateVersion: null,
+    toolBaseline: false,
+    toolDrift: null,
+    authType: 'none',
+    credentialScope: 'shared',
+    oauthClientId: null,
+    oauthClientSecretPresent: false,
+    oauthStatus: null,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
@@ -101,7 +114,7 @@ describe('McpServersContent', () => {
     const { container } = renderPage(
       <McpServersContent
         {...baseProps}
-        mcpServers={[makeServer({ id: 7, name: 'Doomed Server', kind: 'custom', scopeIndicator: 'company' })]}
+        mcpServers={[makeServer({ id: 7, name: 'Doomed Server', kind: 'custom', scopeIndicator: 'project' })]}
       />,
     );
 
@@ -134,7 +147,7 @@ describe('McpServersContent', () => {
       <McpServersContent
         {...baseProps}
         mcpServers={[
-          makeServer({ id: 1, name: 'Custom One', kind: 'custom', scopeIndicator: 'company' }),
+          makeServer({ id: 1, name: 'Custom One', kind: 'custom', scopeIndicator: 'project' }),
           makeServer({
             id: 2,
             name: 'System One',
@@ -333,7 +346,9 @@ describe('McpServersContent', () => {
       expect(other).toBeDisabled();
     });
 
-    it('navigates top-level to the connect entry rather than making an Inertia visit', async () => {
+    it('posts a top-level form to the connect entry rather than making an Inertia visit', async () => {
+      // jsdom does not navigate on form submission; the submitted form is what matters.
+      const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
       renderPage(
         <McpServersContent
           {...baseProps}
@@ -343,7 +358,12 @@ describe('McpServersContent', () => {
 
       await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
 
-      expect(window.location.href).toBe(`/oauth/mcp/12/connect?return_to=${encodeURIComponent(baseProps.basePath)}`);
+      expect(submit).toHaveBeenCalledTimes(1);
+      const form = submit.mock.contexts[0] as HTMLFormElement;
+      expect(form.method).toBe('post');
+      expect(form.getAttribute('action')).toBe('/oauth/mcp/12/connect');
+      expect(new FormData(form).get('return_to')).toBe(baseProps.basePath);
+      submit.mockRestore();
     });
   });
 
@@ -407,13 +427,12 @@ describe('McpServersContent', () => {
         title="MCP Servers"
         subtitle="Connect external tools"
         mcpServers={[
-          makeServer({ id: 1, name: 'Server A', kind: 'custom', scopeIndicator: 'company' }),
+          makeServer({ id: 1, name: 'Server A', kind: 'custom', scopeIndicator: 'project' }),
           makeServer({ id: 2, name: 'Server B', kind: 'custom', scopeIndicator: 'project' }),
         ]}
       />,
     );
 
-    // With no editableScope, all custom servers are editable regardless of scope.
     expect(container.querySelectorAll('.tabler-icon-edit')).toHaveLength(2);
     expect(container.querySelectorAll('.tabler-icon-trash')).toHaveLength(2);
   });

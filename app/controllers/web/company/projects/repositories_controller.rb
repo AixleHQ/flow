@@ -35,34 +35,36 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
       end
     end
 
+    # The edit dialog's branch picker asks for these with `only: [editBranches]`;
+    # nothing ever answered it, so the picker stayed empty.
+    if params[:edit_repo_id].present?
+      repo = repositories.find { |r| r.id == params[:edit_repo_id].to_i }
+      props[:edit_branches] = repo ? branches_of(repo) : []
+    end
+
     render inertia: "Projects/Repositories/RepositoriesPage", props: props
   end
 
   def create
     repo =
       if public_params[:public_url].present?
-        begin
-          build_public_repository
-        rescue PublicRepositoryService::Error => e
-          return redirect_to company_project_repositories_path(current_project),
-                             inertia: { errors: { public_url: e.message } }
-        end
+        build_public_repository
       elsif azure_integration
-        begin
-          build_azure_repository(azure_integration)
-        rescue AzureDevops::Error => e
-          return redirect_to company_project_repositories_path(current_project),
-                             inertia: { errors: { external_id: e.message } }
-        end
+        build_azure_repository(azure_integration)
       else
         Repository.new(create_params.merge(scope: current_project))
       end
 
     if repo.save
+      Repositories::CiWebhook.register(repo)
       redirect_to company_project_repositories_path(current_project), notice: "Repository added"
     else
       redirect_to company_project_repositories_path(current_project), inertia: { errors: repo.errors }
     end
+  rescue PublicRepositoryService::Error => e
+    redirect_to company_project_repositories_path(current_project), inertia: { errors: { public_url: e.message } }
+  rescue AzureDevops::Error => e
+    redirect_to company_project_repositories_path(current_project), inertia: { errors: { external_id: e.message } }
   end
 
   def update
@@ -77,11 +79,25 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
 
   def destroy
     repo = Repository.visible_for_project(current_project).find(params[:id])
+    Repositories::CiWebhook.unregister(repo)
     repo.destroy
     redirect_to company_project_repositories_path(current_project), notice: "Repository removed"
   end
 
   private
+
+  # A public repository has no connection to ask; its branch stays a free-text field.
+  def branches_of(repo)
+    integration = repo.integration
+    return [] unless integration&.active?
+
+    service = RepositoryService.for(integration)
+    if integration.azure_devops?
+      service.list_branches(repo.external_id, project_id: repo.external_project_id)
+    else
+      service.list_branches(repo.full_name)
+    end
+  end
 
   # A public repository is verified against the host's public API before it is
   # attached: it must exist and be public, or an anonymous clone would fail

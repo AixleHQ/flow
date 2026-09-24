@@ -1,16 +1,17 @@
 # frozen_string_literal: true
 
 class AgentCredentialResource < ApplicationResource
+  typelize agent_type: CompanyMembership::AVAILABLE_AGENTS
   attributes :id, :agent_type, :default_model, :last_used_at, :expires_at, :created_at, :updated_at
 
   typelize "string[]"
   attribute :config_keys do |credential|
-    credential.config_data.keys
+    credential.config_keys
   rescue StandardError
     []
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :default_model do |credential|
     credential.default_model
   end

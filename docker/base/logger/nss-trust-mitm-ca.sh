@@ -3,12 +3,12 @@
 # Chromium / Playwright on Linux consult this store for user-added trust anchors
 # (NODE_EXTRA_CA_CERTS alone is not enough for the browser).
 #
-# Idempotent. Expects PEM at /opt/mitm/ca/mitmproxy-ca-cert.pem (image build).
+# Idempotent. Takes the PEM of this container's CA (start-mitm.sh passes it).
 # Run as the same user/uid that launches Playwright (container entrypoint user).
 
 set -u
 
-MITM_PEM="${1:-/opt/mitm/ca/mitmproxy-ca-cert.pem}"
+MITM_PEM="${1:-${HOME:-/root}/.mitmproxy/mitmproxy-ca-cert.pem}"
 if [ ! -r "$MITM_PEM" ]; then
   echo "nss-trust-mitm-ca: CA file not readable: $MITM_PEM" >&2
   exit 1

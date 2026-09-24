@@ -21,14 +21,14 @@ env:
   BUILD_CACHE: ghcr.io/aixlehq/flow-buildcache:web
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
   # Superseding a pull request's run is free — only the tip of a branch under
   # review is worth a verdict. Superseding a develop push is not: that run is
-  # the record of whether an integrated commit was green, and it publishes the
-  # coverage badges. Three merges inside fifteen minutes cancelled all three
-  # runs and left the README claiming a failing build with no badges behind it.
-  # Pushes therefore queue on this group instead, which also serialises the
-  # badge job's writes to the `badges` branch.
+  # the record of whether an integrated commit was green. Three merges inside
+  # fifteen minutes cancelled all three runs and left the README claiming a
+  # failing build with no badges behind it. Queueing pushes on one group does
+  # not fix that — a group holds one pending run, and a third push cancels the
+  # second — so every push gets a group of its own.
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
@@ -58,24 +58,24 @@ jobs:
     permissions:
       packages: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Log in to GHCR
-        uses: docker/login-action@v4
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           buildkitd-config-inline: |
             [registry."docker.io"]
               mirrors = ["mirror.gcr.io"]
 
       - name: Publish the layer cache
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           # cacheonly: this job exists for its cache write, so skip materialising
@@ -95,10 +95,10 @@ jobs:
       # rails-test + rubocop + brakeman (Ruby). Needs the DB for the Rails test suite.
       command: be_check_all
       needs-db: true
-      # Coverage instrumentation is a large runtime multiplier, so it runs on the
-      # integration branches and is skipped on ordinary pull requests.
-      run-coverage: ${{ github.event_name == 'push' && '1' || '0' }}
-      timeout: 35
+      # Coverage floors gate the pull request, not the merge: measured only on
+      # develop pushes, a drop was found after it had landed.
+      run-coverage: '1'
+      timeout: 45
 
   fe-checks:
     name: Frontend Checks
@@ -107,22 +107,25 @@ jobs:
       # eslint + tsc, then Vitest on its own (backendless, no DB needed).
       command: fe_check_all
       needs-db: false
-      run-coverage: ${{ github.event_name == 'push' && '1' || '0' }}
-      timeout: 30
+      run-coverage: '1'
+      timeout: 40
 
   coverage-badges:
     name: Coverage Badges
     needs: [ be-checks, fe-checks ]
-    # Only develop pushes measure coverage (see run-coverage above), and develop
-    # is the branch the README advertises.
+    # Every run measures coverage; develop is the branch the README advertises.
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
+    # Pushes run side by side, so their writes to the `badges` branch take turns.
+    concurrency:
+      group: coverage-badges
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       # Writes the rendered endpoints to the orphan `badges` branch.
       contents: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Publish shields.io endpoints
         env:
@@ -133,6 +136,14 @@ jobs:
 
           if [ -z "$BACKEND" ] && [ -z "$FRONTEND" ]; then
             echo "::warning::no coverage numbers were produced, nothing to publish"
+            exit 0
+          fi
+
+          # Runs finish in any order; an older commit's numbers must not replace
+          # a newer one's.
+          tip=$(git ls-remote origin refs/heads/develop | cut -f1)
+          if [ "$tip" != "$GITHUB_SHA" ]; then
+            echo "develop has moved on to ${tip:0:7}; its run publishes the badges"
             exit 0
           fi
 
@@ -194,7 +205,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # gitleaks scans commit history, which needs more than the default
           # single-commit checkout.

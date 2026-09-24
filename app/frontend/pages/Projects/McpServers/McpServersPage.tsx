@@ -1,18 +1,14 @@
 import { Head, usePage } from '@inertiajs/react';
 
-import type { Connector } from 'shared/resources/connectors/types';
-import { McpServersContent, type McpServer } from 'shared/resources/mcp-servers/McpServersContent';
+import type { Connector, MCPServer, Project } from '@/types/generated';
+
+import { McpServersContent } from 'shared/resources/mcp-servers/McpServersContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
-interface Project {
-  id: number;
-  name: string;
-}
-
 interface Props {
   project: Project;
-  mcpServers: McpServer[];
+  mcpServers: MCPServer[];
   configItemNames: string[];
   connectors: Connector[];
   connectorQuery: string;

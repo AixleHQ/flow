@@ -3,7 +3,7 @@
 # TriggerEngine is the single "brain" of the event-driven trigger layer.
 #
 # Every trigger source converges here instead of each one hard-coding its own
-# call into WorkflowService.start:
+# call into WorkflowService.enqueue:
 #
 #   • column auto-binding   → TaskService.check_auto_trigger → record_column_trigger → dispatch_pending
 #   • task gate resolution  → TaskService.resolve_gate/remove_gate → record_column_trigger → dispatch_pending
@@ -24,7 +24,7 @@
 #                         dispatched; the single entry point shared by the inline
 #                         path and the relay.
 #   3. fire_*         — start a workflow once, idempotently (TriggerDispatch ledger),
-#                       always through the existing WorkflowService.start.
+#                       always through WorkflowService.enqueue.
 class TriggerEngine
   # event_type → how dispatch_pending routes it.
   COLUMN_EVENT_TYPE = "board.column.auto_triggered"
@@ -131,6 +131,8 @@ class TriggerEngine
     # about: none → task-less project run; existing_task → the event's task;
     # create_task → a fresh card in the binding's subject_column.
     def fire_for_binding(binding:, event:, task: nil, actor: nil)
+      return nil unless binding.live?
+
       actor ||= binding.created_by
       return nil if actor.nil? # a run requires a user
 
@@ -183,15 +185,17 @@ class TriggerEngine
     # The launch runs under dispatch.with_lock so two concurrent callers for the
     # same (event, target) serialize: the loser re-reads the row and sees the run.
     # It also RESUMES a dispatch left in "matched" with no run — the state a crash
-    # between the ledger insert and WorkflowService.start leaves behind — so the
+    # between the ledger insert and WorkflowService.enqueue leaves behind — so the
     # relay finishes the launch instead of suppressing it forever. The subject is
     # resolved inside the lock (via the block) so a re-dispatch never creates a
     # second card. Returns the WorkflowRun (or nil if suppressed / skipped).
     #
-    # NOTE: delivery is still at-least-once — a crash after WorkflowService.start
-    # succeeds at Temporal but before the row commits can re-execute the workflow
-    # (the Temporal id is per-WorkflowRun, not per dedup_key). Consumers must be
-    # idempotent.
+    # The run is created and recorded on the dispatch inside the lock; its
+    # Temporal execution starts only after that commits
+    # (WorkflowService.dispatch_or_leave_to_relay). A failed start leaves a
+    # committed, relay-enrolled run rather than rolling the run back while the
+    # event is replayed later, which would report a failure and then fire anyway,
+    # or fire twice.
     def fire_workflow(workflow:, project:, actor:, event:, source:, trigger_binding: nil, task: nil)
       dedup_key = dispatch_dedup_key(event, trigger_binding, source)
 
@@ -205,9 +209,11 @@ class TriggerEngine
           result = dispatch.workflow_run            # already started → idempotent no-op
         elsif dispatch.status == "skipped"
           result = nil                              # a prior attempt decided not to start
+        elsif cooling_down?(trigger_binding, dispatch)
+          dispatch.update!(status: "skipped", detail: { "reason" => "cooldown" })
         else
           subject = block_given? ? yield : task     # resolve (and maybe create) inside the lock
-          result = WorkflowService.start(
+          result = WorkflowService.enqueue(
             workflow: workflow, project: project, user: actor,
             task: subject, mode: :non_interactive,
             input_asset_ids: input_asset_ids_for(event, project),
@@ -219,6 +225,7 @@ class TriggerEngine
             status: started ? "started" : "skipped",
             detail: started ? {} : { "reason" => skip_reason(result) }
           )
+          WorkflowService.dispatch_or_leave_to_relay(result) if started
         end
       end
       result
@@ -253,6 +260,16 @@ class TriggerEngine
       ) ].compact
     end
 
+    # cooldown_seconds: at most one run per window per binding. The binding's row
+    # lock makes two events arriving together agree on which one was first.
+    def cooling_down?(binding, dispatch)
+      return false unless binding&.cooldown_seconds.to_i.positive?
+
+      binding.lock!
+      TriggerDispatch.where(trigger_binding_id: binding.id, status: "started").where.not(id: dispatch.id)
+                     .exists?(created_at: binding.cooldown_seconds.seconds.ago..)
+    end
+
     def find_or_create_dispatch(event:, trigger_binding:, source:, dedup_key:)
       TriggerDispatch.create!(
         trigger_event: event,
@@ -269,17 +286,30 @@ class TriggerEngine
     # ingested) because a company-scoped workspace event can fan out to several
     # projects — so each fired run downloads the attachments into ITS OWN project
     # here, at fire time. Non-Slack sources pass through any pre-resolved ids.
+    # A generic webhook's `data` IS the sender's request body, so nothing in it is
+    # trusted as a reference: asset ids are kept only when they are this
+    # project's, and Slack files are fetched only for events our own Slack
+    # gateway produced, through an integration of this project's company.
     def input_asset_ids_for(event, project)
       files = event.data["files"]
-      return Array(event.data["input_asset_ids"]) if files.blank? || project.nil?
+      if files.present? && project && event.source.to_s.start_with?("slack:")
+        integration = TenantScope.owned(Integration, project: project).find_by(id: event.data["integration_id"])
+        return Array(Slack::FileIngestor.new(integration: integration, project: project).ingest(files)) if integration
+      end
 
-      integration = Integration.find_by(id: event.data["integration_id"])
-      return Array(event.data["input_asset_ids"]) if integration.nil?
-
-      Array(Slack::FileIngestor.new(integration: integration, project: project).ingest(files))
+      owned_asset_ids(event.data["input_asset_ids"], project)
     rescue StandardError => e
       Rails.logger.error("[TriggerEngine] Slack file ingest failed for project ##{project&.id}: #{e.message}")
-      Array(event.data["input_asset_ids"])
+      owned_asset_ids(event.data["input_asset_ids"], project)
+    end
+
+    def owned_asset_ids(ids, project)
+      return [] if project.nil?
+
+      wanted = Array(ids).compact_blank.map(&:to_i)
+      return [] if wanted.empty?
+
+      TenantScope.owned(Asset, project: project).where(id: wanted).pluck(:id)
     end
 
     # Human-readable reason a launch didn't start, recorded on the dispatch so a

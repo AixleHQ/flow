@@ -1,9 +1,10 @@
 import { Box, Button, Text } from '@mantine/core';
 import { IconArrowRight, IconBolt } from '@tabler/icons-react';
 
+import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
+
 import { formatCostCents, formatDuration } from './boardFormat';
 import { RunTileRow } from './RunTileRow';
-import type { TaskWorkflowRun } from './taskRuns';
 
 // The Details tab's "Latest run" block (AC-19): the same row a Runs tab entry renders,
 // with a "View runs" button where that tab shows the run's timestamp, and the run's

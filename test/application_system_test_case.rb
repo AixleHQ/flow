@@ -1,9 +1,11 @@
+# frozen_string_literal: true
+
 require "test_helper"
 require "capybara/cuprite"
 require "site_prism"
 
 # Load SitePrism page objects.
-Dir[File.expand_path("system/pages/**/*.rb", __dir__)].sort.each { |f| require f }
+Dir[File.expand_path("system/pages/**/*.rb", __dir__)].each { |f| require f }
 
 # System (end-to-end) tests drive the real Rails + Inertia + React stack through a
 # headless Chromium via Cuprite (Ferrum/CDP — no chromedriver). Page objects live

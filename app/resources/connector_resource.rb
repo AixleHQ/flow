@@ -28,7 +28,7 @@ class ConnectorResource < ApplicationResource
 
   # Derived from the registry namespace, never curated. Null when the namespace
   # yields nothing usable; the UI then draws a monogram.
-  typelize :string?
+  typelize "string | null"
   attribute :icon_url do |connector|
     connector.icon_url
   end
@@ -44,10 +44,10 @@ class ConnectorResource < ApplicationResource
   # so the UI can explain why a connector cannot be installed rather than
   # silently showing an entry with no install button.
   typelize targets: "Array<{ id: string; kind: string; transport: string; supported: boolean; " \
-                    "unsupported_reason: string | null; url: string | null; registry_type: string | null; " \
+                    "unsupportedReason: string | null; url: string | null; registryType: string | null; " \
                     "identifier: string | null; command: string | null; " \
-                    "version: string | null; version_pinned: boolean; runtime: string | null; " \
-                    "runtime_prefix_args: string[]; " \
+                    "version: string | null; versionPinned: boolean; runtime: string | null; " \
+                    "runtimePrefixArgs: string[]; " \
                     "inputs: Array<{ key: string; kind: string; description: string | null; format: string; " \
                     "required: boolean; secret: boolean; default: string | null; choices: string[] | null; " \
                     "placeholder: string | null; repeated: boolean }> }>"

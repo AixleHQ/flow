@@ -1,81 +1,23 @@
+import type { CurrentUser, Project } from '@/types/generated';
+
 export type AgentType = 'codex' | 'cursor_cli' | 'gemini_cli' | 'antigravity_cli' | 'claude_code' | 'grok' | 'kiro_cli';
 export type UserRole = 'employee' | 'admin' | 'super_admin' | 'viewer';
+
+// Both lists are kept here by hand (agentRuntimes.ts and the role labels are keyed by them), while
+// the server's own lists — CompanyMembership::AVAILABLE_AGENTS and the membership roles — reach the
+// generated types. These stop tsc the moment the two differ, e.g. a runtime added on the server only.
+type SameUnion<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+type Expect<T extends true> = T;
+export type AgentTypeMatchesServer = Expect<SameUnion<AgentType, NonNullable<CurrentUser['defaultAgentRuntime']>>>;
+export type UserRoleMatchesServer = Expect<SameUnion<UserRole, NonNullable<CurrentUser['currentRole']>>>;
 
 export interface ProjectPermissions {
   canExecute: boolean;
   canManage: boolean;
+  canManageCompany?: boolean;
 }
 
-export interface AgentCredential {
-  id: number;
-  agentType: AgentType;
-  configKeys: string[];
-  defaultModel: string | null;
-  lastUsedAt: string | null;
-  expiresAt: string | null;
-  connectionStatus: 'active' | 'expiring' | 'expired' | 'error';
-  refreshError: string | null;
-  reauthRequired: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// A membership role is always company-scoped — super_admin is platform-level
-// and only ever appears in SharedUser.currentRole.
-type MembershipRole = Exclude<UserRole, 'super_admin'>;
-
-export interface SharedMembership {
-  id: number;
-  role: MembershipRole;
-  state: string;
-  company: SharedCompany;
-}
-
-export interface SharedUser {
-  id: number;
-  email: string;
-  name: string;
-  state: string;
-  position: string | null;
-  preferredAgentLanguage: string;
-  selectedAgents: AgentType[];
-  onboardingState: string;
-  onboardingCompletedAt: string | null;
-  defaultAgentCredentialId: number | null;
-  defaultAgentRuntime: AgentType | null;
-  configuredAgents: AgentType[];
-  agentCredentials: AgentCredential[];
-  // Who may open this person's sessions besides themselves: while a session runs
-  // (live terminal + editor) and once it is over (replayed log). Global, not
-  // per-company — see TerminalSession#visible_to?.
-  shareActiveSessions: boolean;
-  shareCompletedSessions: boolean;
-  // True when onboarding skipped the agent step (viewer everywhere) but the user
-  // has since gained a role that can run things — drives the sidebar nudge.
-  needsAgentSetup: boolean;
-  // Request-scoped: the company/role of the session's current membership.
-  currentCompany: SharedCompany | null;
-  currentRole: UserRole | null;
-  // Active memberships only (drives the sidebar switcher + profile Companies card).
-  memberships: SharedMembership[];
-}
-
-export interface SharedCompany {
-  id: number;
-  name: string;
-  emailDomain: string;
-  logoUrl: string | null;
-  primaryColor: string | null;
-  secondaryColor: string | null;
-}
-
-export interface SharedProject {
-  id: number;
-  name: string;
-  slug: string;
-  state: string;
-  favorite: boolean;
-}
+export type SharedProject = Pick<Project, 'id' | 'name' | 'slug' | 'state' | 'favorite'>;
 
 export interface SharedSettings {
   env: string;
@@ -83,16 +25,19 @@ export interface SharedSettings {
   githubAppSlug: string | null;
   appVersion: string | null;
   sentryFrontendDsn: string | null;
+  sentryTracesSampleRate?: number;
 }
 
 export interface SharedPermissions {
   isAdmin: boolean;
   canManageMembers: boolean;
   canManageProjects: boolean;
+  /** False for a viewer. Optional: a page served by an older pod does not send it. */
+  canWrite?: boolean;
 }
 
 export interface SharedProps {
-  currentUser: SharedUser | null;
+  currentUser: CurrentUser | null;
   // Most flash entries are strings (notice/alert). `needs_setup` is a list of
   // "what was not copied / needs setup" messages surfaced after a catalog copy.
   flash: Record<string, string | string[] | undefined>;

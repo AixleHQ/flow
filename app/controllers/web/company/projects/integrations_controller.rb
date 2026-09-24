@@ -81,8 +81,15 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     redirect_to company_project_integrations_path(current_project), alert: e.message
   end
 
+  # A company-wide install (Slack) serves every project and has no page of its
+  # own, so a company admin removes it from any of them.
   def destroy
-    integration = Integration.for_project(current_project).find(params[:id])
+    integration = Integration.visible_for_project(current_project).find(params[:id])
+    if integration.project_id.nil? && !current_project_membership&.admin?
+      return redirect_to company_project_integrations_path(current_project),
+                         alert: "Only a company admin can remove a company-wide integration"
+    end
+
     integration.destroy
     redirect_to company_project_integrations_path(current_project), notice: "Integration removed"
   end
@@ -215,13 +222,16 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
                          } }
     end
 
+    # "Link to project": the installation must already be one of the company's.
+    # New installations only arrive through GithubSetupController.
     integration = service.create(installation_id: params[:installation_id].to_s)
 
     if integration.persisted? && integration.active?
       redirect_to company_project_integrations_path(current_project), notice: "Github integration connected"
     else
       redirect_to company_project_integrations_path(current_project),
-                  alert: integration.settings&.dig("error") || "Failed to connect Github"
+                  alert: integration.errors.full_messages.to_sentence.presence ||
+                         integration.settings&.dig("error") || "Failed to connect Github"
     end
   end
 

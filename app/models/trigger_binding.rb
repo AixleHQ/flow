@@ -34,6 +34,8 @@ class TriggerBinding < ApplicationRecord
   validates :cooldown_seconds, numericality: { greater_than_or_equal_to: 0 }
   validate :workflow_accessible_from_project
   validate :create_task_requires_column
+  validates :subject_column_id, tenant_ids: { model: BoardColumn, error_on: :subject_column },
+                                if: -> { subject_column_id.present? && project }
   validate :schedule_requires_cron
   validate :workflow_supports_auto_run
   validate :slack_command_not_reserved
@@ -44,7 +46,7 @@ class TriggerBinding < ApplicationRecord
   # serves every project of the company) fan out to bindings across all the
   # company's projects.
   scope :for_event, ->(event) {
-    rel = active.where(event_type: event.event_type)
+    rel = active.where(event_type: event.event_type).joins(:workflow).merge(Workflow.active)
     if event.project_id
       rel.where(project_id: event.project_id)
     elsif event.company_id
@@ -65,6 +67,12 @@ class TriggerBinding < ApplicationRecord
 
   def schedule?
     event_type == SCHEDULE_EVENT_TYPE
+  end
+
+  # May this binding start its workflow right now? Off, or bound to a deleted
+  # workflow, it may not — whatever still calls it (a stale schedule, a queued event).
+  def live?
+    enabled && workflow.present? && !workflow.deleted?
   end
 
   # Does the event data satisfy every condition in the predicate? Supports

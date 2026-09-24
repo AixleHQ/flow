@@ -16,13 +16,13 @@ class StepResource < ApplicationResource
     step.depends_on_step_ids || []
   end
 
-  typelize "Array<{ name: string; asset_type: string; required: boolean }>"
+  typelize "Array<{ name: string; assetType: string; required: boolean }>"
   attribute :input_asset_specs do |step|
     val = step.input_asset_specs
     val.is_a?(String) ? JSON.parse(val) : (val || [])
   end
 
-  typelize "Array<{ name: string; asset_type: string; required: boolean; name_pattern?: string | null }>"
+  typelize "Array<{ name: string; assetType: string; required: boolean; namePattern?: string | null }>"
   attribute :output_asset_specs do |step|
     val = step.output_asset_specs
     val.is_a?(String) ? JSON.parse(val) : (val || [])

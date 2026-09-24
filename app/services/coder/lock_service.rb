@@ -44,9 +44,15 @@ module Coder
 
     # Atomic acquire. Returns the `IntegrationData` row on success, raises
     # `LockNotAcquired` if another live lock already holds the workspace.
+    #
+    # The workspace id is unique across every integration's live locks (see
+    # MakeCoderWorkspaceLocksExclusive): a pool reached through two integrations
+    # is still one set of machines. Another integration's EXPIRED lock on the same
+    # box is cleared first, since the reclaim below only sees this integration's.
     def acquire(workspace_name:, workspace_id:, terminal_session_id:,
                 note: nil, acquired_by: nil)
       now        = Time.current
+      clear_expired_locks_elsewhere(workspace_id, now)
       expires_at = now + ttl_minutes.minutes
       payload    = {
         kind:                "workspace_lock",
@@ -76,7 +82,11 @@ module Coder
         now,
         now
       ])
-      ActiveRecord::Base.connection.execute(sql)
+      begin
+        ActiveRecord::Base.connection.execute(sql)
+      rescue ActiveRecord::RecordNotUnique
+        raise LockNotAcquired, "workspace #{workspace_name} is held through another integration"
+      end
 
       row = lock_row(workspace_name)
       raise LockNotAcquired, "workspace #{workspace_name} is held by another session" \
@@ -148,6 +158,16 @@ module Coder
     end
 
     private
+
+    def clear_expired_locks_elsewhere(workspace_id, now)
+      return if workspace_id.blank?
+
+      IntegrationData.with_key_prefix(LOCK_KEY_PREFIX)
+                     .where.not(integration_id: @integration.id)
+                     .where("value ->> 'workspace_id' = ?", workspace_id.to_s)
+                     .where("expires_at IS NOT NULL AND expires_at <= ?", now)
+                     .delete_all
+    end
 
     def lock_row(workspace_name)
       @integration.integration_data

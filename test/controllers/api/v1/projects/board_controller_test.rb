@@ -20,7 +20,7 @@ module Api
         end
 
         test "update returns board json" do
-          board = create(:board, project: @project)
+          create(:board, project: @project)
 
           patch :update, params: { project_id: @project.id, board: { name: "Renamed" } }
 

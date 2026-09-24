@@ -28,6 +28,8 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import type { Member } from '@/types/generated';
+
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
 import { userPath } from 'shared/routes';
@@ -39,23 +41,8 @@ import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { InviteMemberDrawer } from './InviteMemberDrawer';
 
-// A company-membership row: `id` is the user id (member routes are keyed by
-// user id), while `role`/`state` are the PER-COMPANY membership role and state
-// (invited | active | suspended).
-export interface MemberUser {
-  id: number;
-  email: string;
-  name: string;
-  role: UserRole;
-  state: string;
-  position: string | null;
-  invitedAt: string | null;
-  createdAt: string;
-  invitedBy: { id: number; name: string } | null;
-}
-
 interface MembersContentProps {
-  users: MemberUser[];
+  users: Member[];
   basePath: string;
   title: string;
   subtitle?: string;
@@ -137,12 +124,11 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const activeAdminCount = useMemo(
-    () => users.filter((u) => (u.role === 'admin' || u.role === 'super_admin') && u.state === 'active').length,
+    () => users.filter((u) => u.role === 'admin' && u.state === 'active').length,
     [users],
   );
 
-  const isLastAdmin = (user: MemberUser) =>
-    (user.role === 'admin' || user.role === 'super_admin') && user.state === 'active' && activeAdminCount <= 1;
+  const isLastAdmin = (user: Member) => user.role === 'admin' && user.state === 'active' && activeAdminCount <= 1;
 
   const filtered = useMemo(() => {
     let result = users;

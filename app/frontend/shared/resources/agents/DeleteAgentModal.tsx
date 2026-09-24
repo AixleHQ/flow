@@ -1,19 +1,14 @@
 import { Box, Text } from '@mantine/core';
 import { type FC } from 'react';
 
-import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
+import type { Agent } from '@/types/generated';
 
-interface Agent {
-  id: number;
-  name: string;
-  title: string;
-  icon: string | null;
-}
+import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
 
 interface DeleteAgentModalProps {
   opened: boolean;
   onClose: () => void;
-  agent: Agent | null;
+  agent: Pick<Agent, 'id' | 'name' | 'title' | 'icon'> | null;
   basePath: string;
 }
 

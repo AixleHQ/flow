@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Web::ApplicationController < ApplicationController
   include AuthConcern
   include PaginationConcern
@@ -5,6 +7,7 @@ class Web::ApplicationController < ApplicationController
   wrap_parameters false
 
   before_action :negotiate_format
+  before_action :match_partial_keys_in_either_case
   before_action :redirect_super_admin_to_admin_panel
   before_action :enforce_onboarding
 
@@ -23,7 +26,8 @@ class Web::ApplicationController < ApplicationController
         # project and must ship to the client anyway). Kept in props — not baked
         # at build — so it stays runtime-configurable via ENV. Real abuse defense
         # is Sentry-side allowed-domains + spike protection, not hiding the DSN.
-        sentry_frontend_dsn: Settings.sentry.frontend_dsn
+        sentry_frontend_dsn: Settings.sentry.frontend_dsn,
+        sentry_traces_sample_rate: Settings.sentry.traces_sample_rate.to_f
       }
     }
 
@@ -38,17 +42,19 @@ class Web::ApplicationController < ApplicationController
         # dual-membership user sees the other company's projects after a switch.
         projects: InertiaRails.always {
           scope = current_company ? Project.for_user(current_user).for_company(current_company) : Project.none
-          # `members` (owner/collaborator avatars) stays opt-in — the sidebar
-          # only needs name/counts/favorite, and loading owner+collaborators for
-          # every project on every page would be a flat but pointless cost.
+          # Only what the switcher shows (SharedProject in shared/ui/types.ts). The
+          # full ProjectResource ran five counting subqueries per project on every
+          # page — cable-triggered reloads included — for fields nothing here read.
           # Favorites lead the list (same order as /company/projects); the
           # favorite flag drives the read-only star mark in the switcher.
           favorite_project_ids = current_user.project_favorites.pluck(:project_id).to_set
           scope.with_state(:active)
-               .with_computed_counts
                .favorites_first_for(current_user)
                .order(:name)
-               .map { |p| ProjectResource.new(p, params: { favorite_project_ids: favorite_project_ids }).to_h }
+               .pluck(:id, :name, :slug, :state)
+               .map do |id, name, slug, state|
+                 { id: id, name: name, slug: slug, state: state, favorite: favorite_project_ids.include?(id) }
+               end
         }
       )
     else
@@ -57,6 +63,27 @@ class Web::ApplicationController < ApplicationController
   end
 
   private
+
+  # Inertia picks a partial reload's props by the server's own key names, before
+  # config/initializers/inertia.rb camelizes them on the way out. Most server
+  # keys are snake_case and every client-side name is camelCase, so a page that
+  # reloaded `only: ['editBranches']` received nothing. Each requested key is
+  # offered in both spellings.
+  PARTIAL_KEY_HEADERS = %w[X-Inertia-Partial-Data X-Inertia-Partial-Except X-Inertia-Reset].freeze
+
+  def match_partial_keys_in_either_case
+    PARTIAL_KEY_HEADERS.each do |name|
+      keys = request.headers[name].to_s.split(",").compact_blank
+      next if keys.empty?
+
+      request.headers[name] = keys.flat_map { |key| key_spellings(key) }.uniq.join(",")
+    end
+  end
+
+  def key_spellings(key)
+    segments = key.split(".")
+    [ key, segments.map(&:underscore).join("."), segments.map { |s| s.camelize(:lower) }.join(".") ]
+  end
 
   def negotiate_format
     return if request.headers["X-Inertia"].present?

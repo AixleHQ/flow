@@ -641,23 +641,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@emoji-mart/data@npm:^1.2.1":
-  version: 1.2.1
-  resolution: "@emoji-mart/data@npm:1.2.1"
-  checksum: 10c0/6784b97bf49a0d3ff110d8447bbd3b0449fcbc497294be3d1c3a6cb1609308776895c7520200be604cbecaa5e172c76927e47f34419c72ba8a76fd4e5a53674b
-  languageName: node
-  linkType: hard
-
-"@emoji-mart/react@npm:^1.1.1":
-  version: 1.1.1
-  resolution: "@emoji-mart/react@npm:1.1.1"
-  peerDependencies:
-    emoji-mart: ^5.2
-    react: ^16.8 || ^17 || ^18
-  checksum: 10c0/88a9c8c24bbc5695f0ed2458734c9982c965a16db1999bc731c7cce77f9bf228f1871e899744f9a3f9fdd36a11db7ad6c0e049d710cb91c66c69a2cd4d2ee40a
-  languageName: node
-  linkType: hard
-
 "@eslint-community/eslint-utils@npm:^4.8.0, @eslint-community/eslint-utils@npm:^4.9.1":
   version: 4.9.1
   resolution: "@eslint-community/eslint-utils@npm:4.9.1"
@@ -3929,13 +3912,6 @@ __metadata:
   version: 1.5.422
   resolution: "electron-to-chromium@npm:1.5.422"
   checksum: 10c0/bd388e0d3ab94e6fe792e27eab886071050f8f7575f1ec20e30e530733d1f8270eeff7a0e75e42c9405de54addd8df3d1f9d58b40e53f0a44fbe4fb8f1e7b930
-  languageName: node
-  linkType: hard
-
-"emoji-mart@npm:^5.6.0":
-  version: 5.6.0
-  resolution: "emoji-mart@npm:5.6.0"
-  checksum: 10c0/23e68ab10984f101b696d8f8e103e553ffa8e4d644e9a315190a9657903f71b833db09aac51b05de20f33bb9eef5bc1425eecdb2437042b25aff2dad0231f029
   languageName: node
   linkType: hard
 
@@ -8071,8 +8047,6 @@ __metadata:
     "@dnd-kit/core": "npm:^6.3.1"
     "@dnd-kit/sortable": "npm:^10.0.0"
     "@dnd-kit/utilities": "npm:^3.2.2"
-    "@emoji-mart/data": "npm:^1.2.1"
-    "@emoji-mart/react": "npm:^1.1.1"
     "@eslint/js": "npm:^9.39.4"
     "@inertiajs/react": "npm:^3.7.1"
     "@inertiajs/vite": "npm:^3.7.1"
@@ -8104,7 +8078,6 @@ __metadata:
     cronstrue: "npm:^3.27.0"
     date-fns: "npm:^4.4.0"
     dayjs: "npm:^1.11.22"
-    emoji-mart: "npm:^5.6.0"
     eslint: "npm:^9.39.2"
     eslint-config-prettier: "npm:^10.1.8"
     eslint-import-resolver-typescript: "npm:4.4.5"
@@ -8134,7 +8107,6 @@ __metadata:
     steiger: "npm:^0.6.0"
     typescript: "npm:^5.9.3"
     typescript-eslint: "npm:^8.70.0"
-    use-debounce: "npm:^10.1.0"
     vite: "npm:^8.3.0"
     vite-plugin-ruby: "npm:^5.2.4"
     vite-tsconfig-paths: "npm:^6.1.1"
@@ -9496,15 +9468,6 @@ __metadata:
     "@types/react":
       optional: true
   checksum: 10c0/f887488c6e6075cdad4962979da1714b217bcb1ee009a9e57ce9a844bcfc4c3a99e93983dfc2e5af9e0913824d24e730090ff255e902c516dcb58d2d3837e01c
-  languageName: node
-  linkType: hard
-
-"use-debounce@npm:^10.1.0":
-  version: 10.1.1
-  resolution: "use-debounce@npm:10.1.1"
-  peerDependencies:
-    react: "*"
-  checksum: 10c0/0d1b2ff16447651c92ef444be3b7e29608e229c169a90e7cbd1ef13775475734b0910eaf01f2f64dc9f2b1d5dd8cf03042c5a09e230c9bb2ee148a18b5bba074
   languageName: node
   linkType: hard
 

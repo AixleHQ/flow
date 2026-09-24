@@ -5,6 +5,8 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState, type FC } from 'react';
 import { z } from 'zod';
 
+import type { ConfigItem } from '@/types/generated';
+
 const createSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   value: z.string().min(1, 'Value is required'),
@@ -21,18 +23,10 @@ const editSchema = z.object({
 
 type FormData = z.infer<typeof createSchema>;
 
-interface ConfigItem {
-  id: number;
-  name: string;
-  value: string;
-  description: string | null;
-  itemType: string;
-}
-
 interface Props {
   opened: boolean;
   onClose: () => void;
-  item?: ConfigItem | null;
+  item?: Pick<ConfigItem, 'id' | 'name' | 'value' | 'description' | 'itemType'> | null;
   basePath: string;
 }
 
@@ -60,7 +54,9 @@ export const ConfigItemFormModal: FC<Props> = ({ opened, onClose, item, basePath
       if (item) {
         form.setValues({
           name: item.name,
-          value: '',
+          // A variable's value is shown and editable in place; a secret's never
+          // reaches the browser, so its field starts empty and empty keeps it.
+          value: item.itemType === 'secret' ? '' : item.value,
           description: item.description ?? '',
           itemType: item.itemType,
         });
@@ -113,7 +109,7 @@ export const ConfigItemFormModal: FC<Props> = ({ opened, onClose, item, basePath
             />
           ) : (
             <TextInput
-              label="Value"
+              label={isEditing ? 'Value (leave empty to keep current)' : 'Value'}
               placeholder="Enter value..."
               {...form.getInputProps('value')}
               required={!isEditing}

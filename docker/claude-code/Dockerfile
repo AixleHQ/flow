@@ -100,17 +100,16 @@ RUN chmod +x /opt/mitm/*.sh
 COPY base/entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
 
-RUN printf '%s\n' \
-        '# Full passwordless sudo for the agent user (trusted environments only).' \
-        'claude ALL=(root) NOPASSWD: ALL' \
-        > /etc/sudoers.d/claude-agent \
-    && chmod 440 /etc/sudoers.d/claude-agent \
-    && visudo -cf /etc/sudoers.d/claude-agent
+# No sudo for the agent user: the container holds its owner's credentials, and
+# root in it reaches every platform process sharing it.
+#
+# The system CA bundle stays appendable by the agent user: logger/start-mitm.sh
+# adds this container's own interception CA to it at start (see docker/base).
+RUN chmod 0666 /etc/ssl/certs/ca-certificates.crt
 
 # =============================================================================
 # Final setup
 # =============================================================================
-RUN chown -R claude:claude /opt/watcher
 
 WORKDIR /workspace
 ENV HOME=/home/claude \

@@ -3,7 +3,7 @@
 class AssetVersionResource < ApplicationResource
   attributes :id, :version, :content_type, :file_size, :source, :uploaded_by_id
 
-  typelize :string?
+  typelize "string | null"
   attribute :file_url do |version|
     version.file&.url
   end

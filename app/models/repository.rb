@@ -30,6 +30,7 @@ class Repository < ApplicationRecord
   AZURE_FULL_NAME_FORMAT = %r{\A#{AZURE_FULL_NAME_PREFIX}[^/\x00-\x1f]+/[^/\x00-\x1f]+/[^/\x00-\x1f]+\z}
 
   belongs_to :scope, polymorphic: true
+  include TenantColumns
   # Public repositories have no integration: nothing is authenticated, so there
   # is no installation, token or membership to point at.
   belongs_to :integration, optional: true
@@ -49,6 +50,10 @@ class Repository < ApplicationRecord
   validates :clone_url, presence: true
   validates :scope_type, presence: true, inclusion: { in: %w[Project] }
   validate :integration_hosts_code, if: -> { integration.present? }
+  # The integration mints this repository's clone token, so it has to be one this
+  # project may use: connected to the project itself or company-wide in its company.
+  validates :integration_id, tenant_ids: { model: Integration, project: :scope_project, error_on: :integration },
+                             if: -> { integration_id.present? && (new_record? || will_save_change_to_integration_id?) }
   validate :public_clone_url_is_anonymous, if: -> { public_source? && clone_url.present? && full_name.present? }
   validate :owner_matches_installation_account, if: -> { integration.present? && integration.github_app? }
   validate :azure_identity_is_complete, if: :azure_devops?
@@ -128,7 +133,7 @@ class Repository < ApplicationRecord
   def set_clone_url
     case integration.provider.to_s
     when "github" then self.clone_url = "https://github.com/#{full_name}.git"
-    when "gitlab" then self.clone_url = "https://gitlab.com/#{full_name}.git"
+    when "gitlab" then self.clone_url = "#{Gitlab::Host.web_base}/#{full_name}.git"
     when "azure_devops" then self.clone_url = azure_clone_url
     end
   end
@@ -202,20 +207,15 @@ class Repository < ApplicationRecord
     errors.add(:clone_url, "must be the public https url of #{full_name} on #{PUBLIC_HOSTS.keys.to_sentence}")
   end
 
-  # A GitHub installation only ever covers repositories of the account it was
-  # installed on, and the clone token is scoped by repo NAME (`repositories:`
-  # takes names, not full names). Without this, attaching "other-org/app" to an
-  # installation that owns "acme/app" mints a token for acme/app and then clones
-  # a different repository with it.
-  # App mode only. An installation token is scoped by repo NAME within the
-  # account the App was installed on, so a repo owned by anyone else is
-  # unreachable and the row would be dead on arrival.
-  #
-  # A personal access token is not scoped that way: it reaches every repository
-  # its owner can see, across every organization they belong to. Checking the
-  # owner against the token holder's own login would refuse exactly the
-  # organization repositories the token was pasted to reach.
+  def scope_project
+    scope if scope.is_a?(Project)
+  end
+
   def owner_matches_installation_account
+    # A foreign integration is already refused above; checking it here would
+    # only echo that tenant's GitHub account name back in the error.
+    return if errors.key?(:integration)
+
     account = integration.github_account_login
     return if account.blank? || owner_name.blank?
     return if owner_name.casecmp?(account)

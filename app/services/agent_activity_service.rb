@@ -3,13 +3,6 @@
 class AgentActivityService
   include TaskFilterable
 
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
-
   AgentBreakdown = Struct.new(:agent_type, :sessions, :cost_cents, :tokens, keyword_init: true)
   ActivityPoint = Struct.new(:date, :agent_type, :sessions, keyword_init: true)
 
@@ -19,7 +12,7 @@ class AgentActivityService
     @project = project
     @user = user
     @scope = scope.to_s
-    @since = PERIOD_DAYS.fetch(period.to_s, 30).days.ago
+    @since = AnalyticsPeriod.since(period.to_s)
     @period = period.to_s
     @tags = Array(tags).presence
     @task_type = task_type.presence

@@ -138,6 +138,37 @@ describe('SessionNewForm', () => {
     fetchSpy.mockRestore();
   });
 
+  it('connects an MCP server with a top-level POST, since connecting starts a flow', async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: () =>
+        Promise.resolve({
+          error: 'Connect required before launching: Sentry',
+          reauth_required: [
+            { mcp_server_id: 5, name: 'Sentry', connect_url: '/oauth/mcp/5/connect', connect_method: 'post' },
+          ],
+        }),
+    } as Response);
+    // jsdom does not navigate on form submission; the submitted form is what matters.
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+
+    renderAuthedPage(<SessionNewForm {...makeProps({ projectId: 1 })} />, { props: authProps(['claude_code']) });
+
+    await user.click(screen.getByText('Claude Code'));
+    await user.click(screen.getByRole('button', { name: /start session/i }));
+    await user.click(await screen.findByRole('button', { name: 'Connect Sentry' }));
+
+    expect(submit).toHaveBeenCalledTimes(1);
+    const form = submit.mock.contexts[0] as HTMLFormElement;
+    expect(form.method).toBe('post');
+    expect(form.getAttribute('action')).toBe('/oauth/mcp/5/connect');
+
+    submit.mockRestore();
+    fetchSpy.mockRestore();
+  });
+
   it('requires a prompt in automatic mode: Start stays disabled until text is entered', async () => {
     const user = userEvent.setup();
     renderAuthedPage(<SessionNewForm {...makeProps()} />, { props: authProps(['claude_code']) });

@@ -6,7 +6,7 @@
 # PickerResource, which also serializes Tool/Skill/Repository/Agent/MCPServer —
 # none of which have a `folder`.
 class AssetPickerResource < PickerResource
-  typelize :string?
+  typelize "string | null"
   attribute :folder do |asset|
     asset.folder
   end

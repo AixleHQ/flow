@@ -27,7 +27,7 @@ module Agents
         { api_key: config["api_key"], user_id: config["user_id"] }
       end
 
-      def generate_config(credentials, workflow_config = {})
+      def generate_config(credentials, _workflow_config = {})
         {
           "api_key" => credentials[:api_key],
           "user_id" => credentials[:user_id]
@@ -40,6 +40,12 @@ module Agents
     end
 
     # == Required Methods Tests ==
+
+    test "an adapter that reads no OTLP usage accepts a payload without printing it" do
+      payload = { "resourceLogs" => [ { "scopeLogs" => [ { "logRecords" => [ { "body" => { "stringValue" => "prompt" } } ] } ] } ] }
+
+      assert_silent { assert_equal :accepted, @adapter.ingest_usage(payload, nil) }
+    end
 
     test "config_path must be implemented" do
       base = BaseAdapter.new

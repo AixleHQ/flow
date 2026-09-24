@@ -22,15 +22,16 @@ a document is added, removed, or moved here, update this index in the same chang
 - **[architecture/workflows.md](./architecture/workflows.md)** — Workflow engine: concepts, data models, execution flow, internal tools
 - **[architecture/container-runtime.md](./architecture/container-runtime.md)** — Pluggable Docker/K8s runtime + ContainerService refactoring (historical)
 - **[architecture/temporal-error-handling.md](./architecture/temporal-error-handling.md)** — Temporal error classification and retry strategy
+- **[architecture/temporal-versioning.md](./architecture/temporal-versioning.md)** — Changing workflow code safely: what needs `patched`, the patches in use, the recorded-history replay test, workflow task failure reporting
 
 ## System Design
 
 - **[design/tool-execution.md](./design/tool-execution.md)** — Tool execution strategy framework
-- **[design/meta-workflow.md](./design/meta-workflow.md)** — Meta-workflow / Aixle Builder design
+- **[design/meta-workflow.md](./design/meta-workflow.md)** — Aixle Builder: the original meta-workflow design, with a note on what ships (an interactive session served the personal MCP tools pinned to its project) and how its tools are authorized
 - **[design/session-config-and-context.md](./design/session-config-and-context.md)** — Session config cascade + context constructor pipeline
 - **[design/bmad.md](./design/bmad.md)** — BMAD integration: implemented toggle, system-workflow RFC, and framework reference
 - **[design/oauth-unification.md](./design/oauth-unification.md)** — RFC: unified OAuth lifecycle (token broker, MCP OAuth 2.1 discovery/DCR, Temporal refresh sweep, 1MCP evaluation)
-- **[design/cloud-connection-security.md](./design/cloud-connection-security.md)** — Customer-facing security notes for connecting an organisation's own Amazon Bedrock account: what the grant allows, where prompts go, the three connect paths and the trust each creates (including the device-code phishing posture), attribution, and what is stored where
+- **[design/cloud-connection-security.md](./design/cloud-connection-security.md)** — Customer-facing security notes for connecting an organisation's own Amazon Bedrock account: what a connection can do, where prompts go, the two connect paths (Identity Center device sign-in, keys entered in Claude Code's own setup) and the trust each creates (including the device-code phishing posture), attribution, and what is stored where
 - **[design/coder-pool-hardening.md](./design/coder-pool-hardening.md)** — Coder workspace pool + template hardening: why allocation kept handing out one dead box (health never checked, no escape from a bad box, locks aging from acquisition not activity), detached execution for 15–25 min gates, and the template/AMI corrections plus a Collectively-specific template
 - **[design/oauth-implementation.md](./design/oauth-implementation.md)** — As-built OAuth guide: runtime flows, flow engine + `Oauth::State`, MCP discovery (DCR/CIMD) + SSRF doctrine, delivery/refresh/preflight, context.log redaction, agent-CLI auth methods + `/design-login`
 - **[design/session-admission-queue/](./design/session-admission-queue/)** — Durable session admission queues: PostgreSQL owns the queue, permits and policy; Temporal owns execution; the runtime supplies resource facts
@@ -83,7 +84,7 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/board.md](./user-guide/board.md)** — Projects, columns, cards, and column → workflow bindings
 - **[user-guide/workflows.md](./user-guide/workflows.md)** — DAG steps, retries, approval gates, parallel runs
 - **[user-guide/agents.md](./user-guide/agents.md)** — Personas, the container, and how session context is built
-- **[user-guide/runtimes.md](./user-guide/runtimes.md)** — The five agent CLIs, their images, credentials, and cost tracking
+- **[user-guide/runtimes.md](./user-guide/runtimes.md)** — The seven agent CLIs, their images, credentials, and where each one's usage and cost come from
 - **[user-guide/tools.md](./user-guide/tools.md)** — Tool kinds, execution modes, built-in board tools, resource resolution
 - **[user-guide/mcp.md](./user-guide/mcp.md)** — MCP transports, the internal `aixle-tools` server, config-item credentials
 - **[user-guide/integrations.md](./user-guide/integrations.md)** — GitHub, GitLab, Linear, Google OAuth, and webhooks

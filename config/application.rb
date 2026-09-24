@@ -1,19 +1,31 @@
+# frozen_string_literal: true
+
 require_relative "boot"
 
-require "rails/all"
+require "rails"
+# The frameworks the app uses. rails/all also loaded Active Storage, Action
+# Mailbox and Action Text — nothing uses them (uploads are Shrine) — and mounted
+# their routes all the same.
+require "active_model/railtie"
+require "active_job/railtie"
+require "active_record/railtie"
+require "action_controller/railtie"
+require "action_mailer/railtie"
+require "action_view/railtie"
+require "action_cable/engine"
+require "rails/test_unit/railtie"
 
 # Require the gems listed in Gemfile, including any gems
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
-def default_options
-  { host: Settings.domain, protocol: Settings.protocol }
-end
-
 module Aixle
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
-    config.load_defaults 8.0
+    config.load_defaults 8.1
+    # 8.1 turns YJIT on outside development and test. It trades memory for speed,
+    # and no pod has been sized for it yet: switch it on with that measured.
+    config.yjit = false
 
     config.require_master_key = false
     config.secret_key_base = Settings.rails.secret_key_base
@@ -25,12 +37,6 @@ module Aixle
     # (a timing side-channel / fingerprinting aid) for no operational benefit (F4).
     config.middleware.delete Rack::Runtime
 
-    # Set Sidekiq as the job processor
-    # config.active_job.queue_adapter = :sidekiq
-
-    config.autoload_paths += [ Rails.root.join("config", "routes") ]
-    config.eager_load_paths += [ Rails.root.join("config", "routes") ]
-
     config.lograge.enabled = true
     config.lograge.ignore_actions = [
       "Rails::HealthController#show"
@@ -38,7 +44,9 @@ module Aixle
     ]
     config.lograge.custom_options = lambda do |event|
       return if event.name.include?("action_cable")
-      return if event.payload[:path]&.start_with?("/mcp")
+      # MCP tool calls and the three credential endpoints post secrets in bodies
+      # whose keys no parameter filter can predict; their params are never logged.
+      return if event.payload[:path].to_s.match?(%r{\A/(mcp|action_mcp|agents/credentials|agents/git/credentials|cloud/aws/credentials|azure/git/credentials)(/|\?|\z)})
 
       {
         host: event.payload[:host],
@@ -63,9 +71,8 @@ module Aixle
       g.factory_bot true
     end
 
-    # config.action_controller.default_url_options = default_options
-    config.action_mailer.default_url_options = default_options
-    config.default_url_options = default_options
+    config.action_mailer.default_url_options = { host: Settings.domain, protocol: Settings.protocol }
+    config.default_url_options = { host: Settings.domain, protocol: Settings.protocol }
 
     config.action_mailer.smtp_settings = {
       address: Settings.mailer.address,

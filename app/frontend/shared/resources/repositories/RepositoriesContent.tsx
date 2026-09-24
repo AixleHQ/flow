@@ -25,6 +25,8 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import type { Repository } from '@/types/generated';
+
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -32,20 +34,6 @@ import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/Resourc
 
 import { AddRepositoryModal } from './AddRepositoryModal';
 import { EditRepositoryModal } from './EditRepositoryModal';
-
-export interface Repository {
-  id: number;
-  fullName: string;
-  cloneUrl: string;
-  sourceBranch: string;
-  isPrivate: boolean;
-  description: string | null;
-  purpose: string | null;
-  scopeIndicator: string;
-  integration: { id: number; name: string; provider: string } | null;
-  publicSource?: boolean;
-  createdAt: string;
-}
 
 interface RepositoriesContentProps {
   repositories: Repository[];

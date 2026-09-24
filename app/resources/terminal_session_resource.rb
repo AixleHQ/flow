@@ -57,17 +57,13 @@ class TerminalSessionResource < ApplicationResource
   end
 
   # Whether the REQUESTING user is the person whose session this is. Drives the
-  # look-don't-touch presentation: a shared session renders the terminal behind
-  # a click-blocking overlay, drops the editor, and hides the Finish button.
-  #
-  # A UI guardrail, not an access control — ttyd runs writable and the viewer
-  # holds the route token, so opening it directly still gives a live shell.
-  # Making that impossible needs a second, non-writable ttyd (or a restriction
-  # at the proxy), not a frontend change.
+  # look-don't-touch presentation: a shared session renders the read-only
+  # terminal, drops the editor, and hides the Finish button. The proxy enforces
+  # the same line (Api::V1::Internal::WsAuth refuses the writable terminal and
+  # the IDE to anyone but the owner).
   typelize :boolean
   attribute :owned_by_viewer do |session|
-    viewer = params[:viewer]
-    params.key?(:viewer) ? (viewer.present? && session.user_id == viewer.id) : true
+    owned_by_viewer?(session)
   end
 
   typelize "string | null"
@@ -82,17 +78,33 @@ class TerminalSessionResource < ApplicationResource
     viewable_for?(session) ? session.context_metadata : nil
   end
 
+  # The IDE's connection token stays with the owner: the IDE is theirs alone.
   typelize "Record<string, unknown> | null"
   attribute :metadata do |session|
-    viewable_for?(session) ? session.metadata : nil
+    next nil unless viewable_for?(session)
+
+    owned_by_viewer?(session) ? session.metadata : session.metadata&.except("vscode_token")
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :websocket_url do |session|
     next nil if session.queued? || session.cancelled?
     next nil unless session.route_token.present?
 
-    "#{Settings.traefik.ws_base}/t/#{session.route_token}/tty/ws"
+    surface = owned_by_viewer?(session) ? "tty" : "view"
+    with_ticket("#{Settings.traefik.ws_base}/t/#{session.route_token}/#{surface}/ws", session)
+  end
+
+  # The page a terminal iframe loads, on the origin the CSP's frame-src allows;
+  # its ttyd client opens the websocket above from there. Optional in the type:
+  # a pod still on the previous release does not send it (see terminalPageUrl).
+  typelize "string | null", optional: true
+  attribute :terminal_url do |session|
+    next nil if session.queued? || session.cancelled?
+    next nil unless session.route_token.present?
+
+    surface = owned_by_viewer?(session) ? "tty" : "view"
+    with_ticket("#{Settings.traefik.http_base}/t/#{session.route_token}/#{surface}", session)
   end
 
   # Endpoint that streams the captured terminal log so a finished session can be
@@ -100,20 +112,20 @@ class TerminalSessionResource < ApplicationResource
   # per-session query / N+1 when lists are serialized); the endpoint returns 404
   # for the rare finished session that captured no log, which the frontend treats
   # as an empty state.
-  typelize :string?
+  typelize "string | null"
   attribute :terminal_log_url do |session|
     next nil unless session.state.in?(%w[finished failed])
 
     "/api/v1/terminal_sessions/#{session.id}/terminal_log"
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :watcher_url do |session|
     next nil if session.queued? || session.cancelled?
     next nil unless session.route_token.present?
     next nil unless session.session_type == "auth_setup"
 
-    "#{Settings.traefik.http_base}/t/#{session.route_token}/fs"
+    with_ticket("#{Settings.traefik.http_base}/t/#{session.route_token}/fs", session)
   end
 
   # True once the in-container credential helper reported that this user has no cloud
@@ -128,11 +140,12 @@ class TerminalSessionResource < ApplicationResource
     session.metadata&.dig("cloud_connect_requested_at").present?
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :ide_url do |session|
     next nil if session.queued? || session.cancelled?
     next nil unless session.route_token.present?
     next nil if session.mode == "non_interactive"
+    next nil unless owned_by_viewer?(session)
 
     vscode_params = { folder: "/workspace", skipWelcome: "true" }
     token = session.metadata&.dig("vscode_token")
@@ -140,18 +153,21 @@ class TerminalSessionResource < ApplicationResource
     vscode_url = "#{Settings.traefik.http_base}/t/#{session.route_token}/ide/?#{vscode_params.to_query}"
 
     preload_base = "#{Settings.traefik.http_base}/t/#{session.route_token}/fs/preload"
-    "#{preload_base}?#{{ to: vscode_url }.to_query}"
+    with_ticket("#{preload_base}?#{{ to: vscode_url }.to_query}", session)
   end
 
-  typelize :string?
+  typelize :string
   attribute :cable_stream do |session|
     InertiaCable::Streams::StreamName.signed_stream_name(session)
   end
 
-  typelize "{ config_files?: Record<string, unknown>; bmad_enabled?: boolean; bmad_modules?: string[] }"
+  # File paths are data, not field names: as hash keys every camelizing pass (this
+  # resource, then Inertia's prop transformer) would rewrite them —
+  # "references/a.md" into "References::A.md" — so they travel as values.
+  typelize "{ configFiles: Array<{ path: string; content: string }>; bmadEnabled?: boolean; bmadModules?: string[] }"
   attribute :session_config do |session|
     {
-      "config_files" => session.config_files,
+      "config_files" => session.config_files.map { |path, content| { "path" => path, "content" => content } },
       "bmad_enabled" => session.bmad_enabled?,
       "bmad_modules" => session.bmad_enabled? ? session.bmad_modules : nil
     }.compact
@@ -182,17 +198,17 @@ class TerminalSessionResource < ApplicationResource
     session.repositories.map(&:id)
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :user_name do |session|
     session.user&.name
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :user_email do |session|
     session.user&.email
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :project_name do |session|
     session.project&.name
   end
@@ -216,6 +232,19 @@ class TerminalSessionResource < ApplicationResource
   end
 
   private
+
+  # Served from a host of their own, container URLs carry the viewer's pass
+  # (ContainerTicket); on the app's host they are unchanged.
+  def with_ticket(url, session)
+    ContainerTicket.append(url, user: params.key?(:viewer) ? params[:viewer] : session.user, session: session)
+  end
+
+  def owned_by_viewer?(session)
+    return true unless params.key?(:viewer)
+
+    viewer = params[:viewer]
+    viewer.present? && session.user_id == viewer.id
+  end
 
   # No `viewer` param at all means "not a shared surface" — the caller already
   # scoped the query to the acting user (or to a screen that has no other

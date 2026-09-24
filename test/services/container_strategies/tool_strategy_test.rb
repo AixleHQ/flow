@@ -99,7 +99,7 @@ class ContainerStrategies::ToolStrategyTest < ActiveSupport::TestCase
     strategy = ContainerStrategies::ToolStrategy.new(timeout: 60)
     runtime = mock
     runtime.expects(:wait_container).twice
-           .raises(Docker::Error::TimeoutError).then
+           .raises(ContainerRuntime::WaitTimeout).then
            .returns({ "StatusCode" => 0 })
     strategy.stubs(:runtime).returns(runtime)
     strategy.stubs(:activity_context).returns(nil)
@@ -110,7 +110,7 @@ class ContainerStrategies::ToolStrategyTest < ActiveSupport::TestCase
   test "wait_with_heartbeat returns nil once the overall timeout elapses" do
     strategy = ContainerStrategies::ToolStrategy.new(timeout: 60)
     runtime = mock
-    runtime.stubs(:wait_container).raises(Docker::Error::TimeoutError)
+    runtime.stubs(:wait_container).raises(ContainerRuntime::WaitTimeout)
     strategy.stubs(:runtime).returns(runtime)
     strategy.stubs(:activity_context).returns(nil)
 

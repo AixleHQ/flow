@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class CreateWorkflowRuns < ActiveRecord::Migration[8.1]
   def change
     create_table :workflow_runs do |t|

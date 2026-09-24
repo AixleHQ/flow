@@ -25,12 +25,12 @@ class RepositoryResource < ApplicationResource
 
   # Azure identity. The GUIDs are what every API call routes on — `full_name`
   # is a display value for these rows and a rename changes it.
-  typelize :string?
+  typelize "string | null"
   attribute :external_id do |repo|
     repo.external_id
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :provider do |repo|
     repo.provider
   end

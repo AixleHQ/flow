@@ -91,6 +91,29 @@ class WorkflowTest < ActiveSupport::TestCase
     assert_equal "project", build(:workflow, scope: @project).scope_indicator
   end
 
+  # Deleting a workflow must stop everything that could start it again.
+  test "soft_delete switches its triggers off and they no longer match events" do
+    wf = create(:workflow, scope: @project)
+    user = create(:user, company: @project.company)
+    binding = create(:trigger_binding, project: @project, workflow: wf, created_by: user, event_type: "webhook.received")
+    event = create(:trigger_event, event_type: "webhook.received", project: @project)
+    assert_includes TriggerBinding.for_event(event), binding
+
+    wf.soft_delete!
+
+    assert_not binding.reload.enabled
+    assert_not binding.live?
+    assert_not_includes TriggerBinding.for_event(event), binding
+  end
+
+  test "soft_delete is refused while a run is live" do
+    wf = create(:workflow, scope: @project)
+    create(:workflow_run, :running, workflow: wf, project: @project, user: create(:user, company: @project.company))
+
+    assert_raises(ActiveRecord::RecordNotDestroyed) { wf.soft_delete! }
+    assert_nil wf.reload.deleted_at
+  end
+
   test "soft_delete sets deleted_at" do
     wf = create(:workflow, scope: @project)
     assert_nil wf.deleted_at

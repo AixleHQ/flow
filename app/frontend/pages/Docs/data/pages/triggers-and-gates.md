@@ -208,9 +208,12 @@ body. Slack endpoints also answer the `url_verification` handshake automatically
   with `2xx` but processed once (`received_webhooks` unique index).
 - **Dispatch dedup** — the `trigger_dispatches` ledger suppresses a duplicate
   launch for the same `(event, trigger)`.
-- **Cooldown** — a per-trigger minimum gap (throttling, *not* dedup).
+- **Cooldown** — `cooldown_seconds` is a minimum gap between two runs of one
+  trigger (throttling, *not* dedup). An event inside the window is recorded as a
+  skipped dispatch with reason `cooldown`. For a column trigger the gap is per
+  card, so moving several cards at once still starts each of them.
 - **Auto-trigger guards** — the column auto-trigger is additionally skipped
-  while the task has pending **gates**, or after a `quota_exceeded` failure.
+  while the task has pending **gates**.
 
 > **warning** The cooldown is rate-limiting, not correctness. Idempotency comes from the delivery-id dedup and the dispatch ledger.
 

@@ -117,6 +117,7 @@ module CloudAuth
       unless permitted?(state, account_id, role_name)
         raise DeniedError, "account #{account_id} / role #{role_name} was not granted by this authorization"
       end
+      verify_approver!(state, token, account_id, role_name, region)
 
       credential = persist!(state, token, account_id: account_id, role_name: role_name,
                                           region: region, profile: profile)
@@ -165,6 +166,22 @@ module CloudAuth
         client_secret: r["client_secret"],
         expires_at: r["expires_at"]
       )
+    end
+
+    # A device authorization proves that someone approved it, not who. A link one
+    # person opens and another approves puts the approver's AWS access in the first
+    # person's account — with a genuine AWS page, which is what makes it a phishing
+    # tool against other organisations' developers. The session name of an Identity
+    # Center role is the user name the approver signed in with, and it has to be
+    # this user's email.
+    def verify_approver!(state, token, account_id, role_name, region)
+      sso = client(state["sso_region"])
+      credentials = sso.role_credentials(access_token: token["access_token"], account_id: account_id, role_name: role_name)
+      approver = sso.caller_arn(role_credentials: credentials, region: region).to_s[%r{:assumed-role/[^/]+/(.+)\z}, 1].to_s
+      return if approver.present? && approver.casecmp?(@user.email.to_s)
+
+      raise DeniedError, "This authorization was approved in AWS as #{approver.presence || 'an unknown identity'}, " \
+                         "not as #{@user.email}. Connect with your own Identity Center sign-in; it has to use your email."
     end
 
     def persist!(state, token, account_id:, role_name:, region:, profile:)

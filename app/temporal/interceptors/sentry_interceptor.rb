@@ -5,9 +5,14 @@ require "temporalio/worker/interceptor"
 module Interceptors
   class SentryInterceptor
     include Temporalio::Worker::Interceptor::Activity
+    include Temporalio::Worker::Interceptor::Workflow
 
     def intercept_activity(next_interceptor)
       SentryActivityInbound.new(next_interceptor)
+    end
+
+    def intercept_workflow(next_interceptor)
+      SentryWorkflowInbound.new(next_interceptor)
     end
 
     class SentryActivityInbound < Temporalio::Worker::Interceptor::Activity::Inbound
@@ -58,6 +63,73 @@ module Interceptors
         error.is_a?(Temporalio::Error::ApplicationError) &&
           error.respond_to?(:category) &&
           error.category == TemporalExceptions::BENIGN
+      end
+    end
+
+    # An exception out of workflow code that is not a Temporal failure fails the
+    # workflow *task*, not the workflow: the server retries the task forever and
+    # the execution sits suspended until a deploy fixes it. The SDK reports it
+    # only as a WARN log line, so a broken deploy wedges every execution it
+    # touches and nothing alerts.
+    class SentryWorkflowInbound < Temporalio::Worker::Interceptor::Workflow::Inbound
+      def execute(input)
+        super
+      rescue StandardError => e
+        WorkflowTaskFailures.report(e)
+        raise
+      end
+
+      def handle_signal(input)
+        super
+      rescue StandardError => e
+        WorkflowTaskFailures.report(e, signal: input.signal)
+        raise
+      end
+    end
+
+    module WorkflowTaskFailures
+      # Each retry of the task raises again, on whichever worker picks it up.
+      REPORT_EVERY = 3600
+
+      @reported = {}
+      @mutex = Mutex.new
+
+      class << self
+        def report(error, signal: nil)
+          return unless task_failure?(error)
+
+          info = Temporalio::Workflow.info
+          # Outside the deterministic scheduler: reporting is I/O, and it must
+          # not become part of the workflow's history.
+          Temporalio::Workflow::Unsafe.durable_scheduler_disabled do
+            next unless first_report?([ info.run_id, error.class.name, error.message ])
+
+            Sentry.capture_exception(error,
+              tags: { "temporal.workflow" => info.workflow_type, "temporal.workflow_id" => info.workflow_id,
+                      "temporal.run_id" => info.run_id, "temporal.task_queue" => info.task_queue,
+                      "temporal.failure" => "workflow_task" },
+              contexts: { "temporal" => { workflow_type: info.workflow_type, workflow_id: info.workflow_id,
+                                          run_id: info.run_id, task_queue: info.task_queue,
+                                          namespace: info.namespace, signal: signal&.to_s }.compact })
+          end
+        rescue StandardError => e
+          Rails.logger.error("[Temporal] Could not report a workflow task failure: #{e.class}: #{e.message}")
+        end
+
+        def task_failure?(error)
+          !(error.is_a?(Temporalio::Error::Failure) || error.is_a?(Timeout::Error) ||
+            error.is_a?(Temporalio::Workflow::ContinueAsNewError) || Temporalio::Error.canceled?(error))
+        end
+
+        def first_report?(key, now: Process.clock_gettime(Process::CLOCK_MONOTONIC))
+          @mutex.synchronize do
+            @reported.delete_if { |_, at| now - at >= REPORT_EVERY }
+            next false if @reported.key?(key)
+
+            @reported[key] = now
+            true
+          end
+        end
       end
     end
   end

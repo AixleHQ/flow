@@ -37,7 +37,10 @@ module MCP
       target = ConnectorManifest.find_target(manifest, @target_id)
       raise Error, "That install option is no longer offered by this connector" if target.nil?
 
+      target = PackageVersionResolver.pin(target)
       attributes = ConnectorAttributes.build(manifest: manifest, target: target, values: @values)
+      raise Error, ConnectorAttributes.unpinned_message(target) if ConnectorAttributes.unpinned?(target)
+
       server = @project.mcp_servers.create!(attributes.merge(name: unique_name(attributes[:name])))
 
       # Record what the server declares, so a later change is detectable. Best
@@ -74,7 +77,7 @@ module MCP
     # "Linear" → "Linear (2)" on the second install into the same project.
     def unique_name(name)
       base = name.presence || @connector.name
-      taken = @project.mcp_servers.where("name = ? OR name LIKE ?", base, "#{base} (%)").pluck(:name)
+      taken = @project.mcp_servers.where("name = ? OR name LIKE ?", base, "#{MCPServer.sanitize_sql_like(base)} (%)").pluck(:name)
       return base if taken.exclude?(base)
 
       suffix = 2

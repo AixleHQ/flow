@@ -44,6 +44,65 @@ module Interceptors
       end
     end
 
+    class BrokenWorkflowProbe < Temporalio::Workflow::Definition
+      workflow_name "sentry_interceptor_broken_probe"
+
+      def execute
+        nil.step_list_that_is_not_there
+      end
+    end
+
+    class RefusingWorkflowProbe < Temporalio::Workflow::Definition
+      workflow_name "sentry_interceptor_refusing_probe"
+
+      def execute
+        raise Temporalio::Error::ApplicationError.new("refused on purpose", non_retryable: true)
+      end
+    end
+
+    def reported_workflow_failures
+      reported = []
+      Sentry.stubs(:capture_exception).with do |error, options|
+        reported << [ error, options ]
+        true
+      end
+      reported
+    end
+
+    test "an exception that would fail the workflow task is reported with the execution it wedges" do
+      reported = reported_workflow_failures
+
+      assert_raises(Temporalio::Error::WorkflowFailedError) do
+        run_workflow(BrokenWorkflowProbe, interceptors: [ SentryInterceptor.new ], task_queue: "sentry-broken-probe")
+      end
+
+      error, options = reported.sole
+      assert_kind_of NoMethodError, error
+      assert_equal "sentry_interceptor_broken_probe", options[:tags]["temporal.workflow"]
+      assert_equal "workflow_task", options[:tags]["temporal.failure"]
+      assert_match(/\Atest-wf-/, options[:tags]["temporal.workflow_id"])
+      assert_equal "sentry-broken-probe", options[:contexts]["temporal"][:task_queue]
+    end
+
+    test "a failure the workflow raises on purpose is its outcome, not a task failure" do
+      reported = reported_workflow_failures
+
+      assert_raises(Temporalio::Error::WorkflowFailedError) do
+        run_workflow(RefusingWorkflowProbe, interceptors: [ SentryInterceptor.new ], task_queue: "sentry-refusing-probe")
+      end
+
+      assert_empty reported
+    end
+
+    test "a retried task failure is reported once per window, not once per retry" do
+      failures = SentryInterceptor::WorkflowTaskFailures
+      key = [ "run-#{SecureRandom.hex(4)}", "NoMethodError", "undefined method" ]
+
+      assert failures.first_report?(key, now: 1_000)
+      assert_not failures.first_report?(key, now: 1_000 + failures::REPORT_EVERY - 1)
+      assert failures.first_report?(key, now: 1_000 + failures::REPORT_EVERY)
+    end
+
     test "intercept_activity wraps the next interceptor in a SentryActivityInbound" do
       nxt = RecordingInbound.new(result: :anything)
       inbound = Interceptors::SentryInterceptor.new.intercept_activity(nxt)

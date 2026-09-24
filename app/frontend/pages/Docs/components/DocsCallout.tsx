@@ -10,18 +10,18 @@ interface Props {
   variant?: CalloutVariant;
 }
 
-const CALLOUT_CONFIG: Record<CalloutVariant, { icon: typeof IconInfoCircle; className: string }> = {
-  info: { icon: IconInfoCircle, className: classes.calloutInfo },
-  warning: { icon: IconAlertTriangle, className: classes.calloutWarning },
-  danger: { icon: IconAlertCircle, className: classes.calloutDanger },
-  tip: { icon: IconBulb, className: classes.calloutTip },
+const CALLOUT_CONFIG: Record<CalloutVariant, { icon: typeof IconInfoCircle; className: string; label: string }> = {
+  info: { icon: IconInfoCircle, className: classes.calloutInfo, label: 'Info' },
+  warning: { icon: IconAlertTriangle, className: classes.calloutWarning, label: 'Warning' },
+  danger: { icon: IconAlertCircle, className: classes.calloutDanger, label: 'Danger' },
+  tip: { icon: IconBulb, className: classes.calloutTip, label: 'Tip' },
 };
 
 export function DocsCallout({ children, variant = 'info' }: Props) {
-  const { icon: Icon, className } = CALLOUT_CONFIG[variant];
+  const { icon: Icon, className, label } = CALLOUT_CONFIG[variant];
 
   return (
-    <div className={`${classes.callout} ${className}`}>
+    <div role="note" aria-label={label} className={`${classes.callout} ${className}`}>
       <span className={classes.calloutIcon}>
         <Icon size={16} />
       </span>

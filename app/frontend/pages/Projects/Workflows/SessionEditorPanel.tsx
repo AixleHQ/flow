@@ -13,11 +13,12 @@ import {
 } from '@tabler/icons-react';
 import { useState } from 'react';
 
-import type { ConfigItemPicker } from '@/types/generated';
+import type { ConfigItemPicker, Step } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { type ToolGroup } from 'shared/lib/toolPicker';
+import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
 
 import classes from './BuilderPage.module.css';
 
@@ -26,35 +27,31 @@ interface NamedItem {
   name: string;
 }
 
-interface AssetSpec {
-  name: string;
-  assetType: string;
-  required: boolean;
-  namePattern?: string | null;
-}
+type AssetSpec = Step['outputAssetSpecs'][number];
 
-interface Step {
-  id: number;
-  name: string;
-  instructions: string | null;
-  position: number;
-  agentId: number | null;
-  requiredAgentRuntime: string | null;
-  preferredModel: string | null;
-  allowNonInteractive: boolean;
-  skipPolicy: string;
-  onFailure: string;
-  bmadEnabled: boolean;
-  dependsOnStepIds: number[];
-  toolIds: number[];
-  mcpServerIds: number[];
-  skillIds: number[];
-  assetIds: number[];
-  repositoryIds: number[];
-  configItemIds: number[];
-  inputAssetSpecs: AssetSpec[];
-  outputAssetSpecs: AssetSpec[];
-}
+type SessionStep = Pick<
+  Step,
+  | 'id'
+  | 'name'
+  | 'instructions'
+  | 'position'
+  | 'agentId'
+  | 'requiredAgentRuntime'
+  | 'preferredModel'
+  | 'allowNonInteractive'
+  | 'skipPolicy'
+  | 'onFailure'
+  | 'bmadEnabled'
+  | 'dependsOnStepIds'
+  | 'toolIds'
+  | 'mcpServerIds'
+  | 'skillIds'
+  | 'assetIds'
+  | 'repositoryIds'
+  | 'configItemIds'
+  | 'inputAssetSpecs'
+  | 'outputAssetSpecs'
+>;
 
 const SKIP_POLICY_TEXTS: Record<string, string> = {
   never: 'This session always runs when the workflow is triggered.',
@@ -165,8 +162,8 @@ interface AgentModelsEntry {
 }
 
 interface SessionEditorPanelProps {
-  step: Step;
-  allSteps: Step[];
+  step: SessionStep;
+  allSteps: SessionStep[];
   agents: NamedItem[];
   tools: NamedItem[];
   toolGroups: ToolGroup[];
@@ -330,16 +327,7 @@ export function SessionEditorPanel({
               </span>
             </label>
             <Select
-              data={[
-                { value: '', label: 'None (default)' },
-                { value: 'claude_code', label: 'Claude Code' },
-                { value: 'cursor_cli', label: 'Cursor CLI' },
-                { value: 'codex', label: 'Codex' },
-                { value: 'gemini_cli', label: 'Gemini CLI' },
-                { value: 'antigravity_cli', label: 'Antigravity CLI' },
-                { value: 'grok', label: 'Grok' },
-                { value: 'kiro_cli', label: 'Kiro CLI' },
-              ]}
+              data={[{ value: '', label: 'None (default)' }, ...AGENT_SELECT_OPTIONS]}
               value={step.requiredAgentRuntime ?? ''}
               onChange={(v) => {
                 const runtime = v || null;
@@ -464,7 +452,7 @@ export function SessionEditorPanel({
 
         <div className={classes.resGroup}>
           <div className={classes.resType}>
-            Assets <span className={classes.resTypeSub}>— files loaded into /workspace/input</span>
+            Assets <span className={classes.resTypeSub}>— files loaded into /workspace/assets</span>
           </div>
           <AssetPicker
             assets={assets}

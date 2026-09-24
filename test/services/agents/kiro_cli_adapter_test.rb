@@ -247,7 +247,7 @@ module Agents
     # leave the CLI unlaunched.
     test "session_command contains no single quotes" do
       refute_includes @adapter.session_command(mode: "interactive"), "'"
-      refute_includes @adapter.session_command(mode: "non_interactive", prompt: "go"), "'"
+      refute_includes @adapter.session_command(mode: "non_interactive"), "'"
     end
 
     # The V3 TUI ignores the positional prompt AgentSessionStrategy appends, measured on
@@ -256,7 +256,7 @@ module Agents
     # `--no-interactive` is the only mode that consumes the argument.
     test "session_command goes headless for an automatic session, so the prompt lands" do
       assert_equal "kiro-cli --v3 chat --trust-all-tools --no-interactive",
-                   @adapter.session_command(mode: "non_interactive", prompt: "ship it")
+                   @adapter.session_command(mode: "non_interactive")
     end
 
     # An interactive session carries no prompt, so it keeps the TUI.
@@ -366,7 +366,8 @@ module Agents
 
       assert_equal "1", env["KIRO_TELEMETRY_OTEL"]
       assert_equal Settings.otel.endpoint, env["KIRO_TELEMETRY_OTLP_ENDPOINT"]
-      assert_equal "terminal_session_token=tok-123", env["OTEL_RESOURCE_ATTRIBUTES"]
+      assert_equal "terminal_session_token=tok-123,terminal_session_key=#{UsageStatistics::SessionKey.generate('tok-123')}",
+                   env["OTEL_RESOURCE_ATTRIBUTES"]
       # Measured: this one stops the export altogether, cost figures included.
       refute_includes env.keys, "KIRO_DISABLE_TELEMETRY"
     end
@@ -639,6 +640,38 @@ module Agents
       ms = @adapter.token_expires_at(refreshable_credentials(expires_at: expiry))
 
       assert_in_delta Time.zone.parse(expiry).to_f * 1000, ms, 1000
+    end
+
+    # The database comes back from the container, so it is not opened on trust.
+    test "a stored state that is not a SQLite database is not opened" do
+      assert_nil @adapter.token_expires_at({ "state_b64" => Base64.strict_encode64("not a database") })
+    end
+
+    test "a corrupt state database is refused rather than read" do
+      blob = Base64.strict_decode64(refreshable_credentials["state_b64"])
+      corrupt = blob.byteslice(0, 100) + ("\xFF".b * (blob.bytesize - 100))
+
+      assert_nil @adapter.token_expires_at({ "state_b64" => Base64.strict_encode64(corrupt) })
+    end
+
+    test "a refresh will not write into a database whose token table carries triggers" do
+      blob = Base64.strict_decode64(refreshable_credentials(key: "kirocli:social:token")["state_b64"])
+      rigged = Tempfile.create([ "kiro-rigged", ".sqlite3" ]) do |file|
+        File.binwrite(file.path, blob)
+        db = SQLite3::Database.new(file.path)
+        db.execute("CREATE TABLE loot (value TEXT)")
+        db.execute("CREATE TRIGGER copy AFTER UPDATE ON auth_kv BEGIN INSERT INTO loot VALUES (new.value); END")
+        db.close
+        File.binread(file.path)
+      end
+      credential = credential_for({ "state_b64" => Base64.strict_encode64(rigged) })
+      stub_request(:post, Agents::KiroCliAdapter::SOCIAL_REFRESH_URL)
+        .to_return(status: 200, body: { accessToken: "new-access", refreshToken: "new-refresh", expiresIn: 3600 }.to_json)
+
+      result = @adapter.refresh!(credential)
+
+      assert_equal :error, result[:status]
+      assert_equal Base64.strict_encode64(rigged), credential.reload.config_data["state_b64"]
     end
 
     test "token_expires_at is nil when there is no login to expire" do

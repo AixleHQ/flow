@@ -262,7 +262,7 @@ module ContainerStrategies
 
       host_config = strategy.build_host_config
 
-      assert_equal Settings.docker.network, host_config["NetworkMode"]
+      assert_equal Settings.docker.agent_network, host_config["NetworkMode"]
     end
 
     # == Exposed Ports Tests ==

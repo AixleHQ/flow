@@ -8,7 +8,7 @@ module Coder
     # the constructor seam). Its own HTTP contract is covered in
     # workspace_service_test; here it only has to record deletions.
     class FakeWorkspaceService
-      attr_reader :deleted_ids, :delete_calls
+      attr_reader :deleted_ids, :delete_calls, :list_calls
 
       def initialize(workspaces: [], failing_delete_ids: [], permanently_failing_delete_ids: [])
         @workspaces                     = workspaces
@@ -16,9 +16,11 @@ module Coder
         @permanently_failing_delete_ids = permanently_failing_delete_ids
         @deleted_ids                    = []
         @delete_calls                   = []
+        @list_calls                     = []
       end
 
-      def list(prefix: nil)
+      def list(prefix: nil, own: false)
+        @list_calls << { prefix: prefix, own: own }
         return @workspaces if prefix.blank?
 
         @workspaces.select { |w| w["name"].to_s.start_with?(prefix) }
@@ -123,42 +125,80 @@ module Coder
       end
     end
 
-    test "a workspace whose latest build failed is deleted" do
+    # A provider outage fails every build at once; one sweep must not take the
+    # pool with it.
+    test "a workspace whose latest build failed is deleted once confirmed, never on first sight" do
       service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1", status: "failed") ])
 
-      result = build_reaper(workspace_service: service).reap
+      first = build_reaper(workspace_service: service).reap
+      assert_equal [ 1, 0 ], [ first[:marked], first[:deleted] ]
+      assert_empty service.delete_calls
 
-      assert_equal 1, result[:deleted]
-      assert_equal [ [ "u1", false ] ], service.delete_calls
+      travel 11.minutes do
+        second = build_reaper(workspace_service: service).reap
+        assert_equal 1, second[:deleted]
+        assert_equal [ [ "u1", false ] ], service.delete_calls
+      end
     end
 
-    test "a failed workspace falls back to orphan delete when normal delete is refused" do
+    test "failed builds are capped per sweep like dead ones" do
+      service = FakeWorkspaceService.new(workspaces: (1..6).map { |i| running("aixle-prod-#{i}", "u#{i}", status: "failed") })
+      build_reaper(workspace_service: service).reap
+
+      travel 11.minutes do
+        result = build_reaper(workspace_service: service).reap
+        assert_equal Coder::DeadWorkspaceReaper::DEFAULT_MAX_DELETIONS, result[:deleted]
+      end
+    end
+
+    test "a failed workspace is never orphaned: a refused delete is reported and retried next sweep" do
       service = FakeWorkspaceService.new(
         workspaces: [ running("aixle-prod-1", "u1", status: "failed") ],
-        failing_delete_ids: [ "u1" ]
-      )
-
-      result = build_reaper(workspace_service: service).reap
-
-      assert_equal 1, result[:deleted]
-      assert_empty result[:failures]
-      assert_equal [ [ "u1", false ], [ "u1", true ] ], service.delete_calls
-    end
-
-    test "a failed workspace delete error does not stop the remaining workspaces" do
-      service = FakeWorkspaceService.new(
-        workspaces: [
-          running("aixle-prod-1", "u1", status: "failed"),
-          running("aixle-prod-2", "u2", status: "failed")
-        ],
         permanently_failing_delete_ids: [ "u1" ]
       )
+      build_reaper(workspace_service: service).reap
+
+      travel 11.minutes do
+        result = build_reaper(workspace_service: service).reap
+        assert_equal 0, result[:deleted]
+        assert_equal 1, result[:failures].size
+        assert_equal [ [ "u1", false ] ], service.delete_calls
+        assert marker_for("aixle-prod-1"), "the marker stays so the next sweep retries at once"
+      end
+    end
+
+    test "a workspace whose delete build failed is left for an operator" do
+      service = FakeWorkspaceService.new(workspaces: [
+        running("aixle-prod-1", "u1", transition: "delete", status: "failed")
+      ])
 
       result = build_reaper(workspace_service: service).reap
 
-      assert_equal 1, result[:deleted]
-      assert_equal 1, result[:failures].size
-      assert_includes service.deleted_ids, "u2"
+      assert_empty service.delete_calls
+      assert_equal 1, result[:skipped]
+    end
+
+    test "a failed workspace held by a live session is not deleted" do
+      service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1", status: "failed") ])
+      locks   = Coder::LockService.new(@integration)
+      locks.acquire(workspace_name: "aixle-prod-1", workspace_id: "u1", terminal_session_id: "sess-1")
+
+      build_reaper(workspace_service: service, lock_service: locks).reap
+      travel(11.minutes) { build_reaper(workspace_service: service, lock_service: locks).reap }
+
+      assert_empty service.deleted_ids
+    end
+
+    test "with no machine prefix the reaper does nothing, and it only ever lists its own workspaces" do
+      service = FakeWorkspaceService.new(workspaces: [ running("aixle-prod-1", "u1", status: "failed") ])
+
+      @integration.update!(settings: @integration.settings.merge("machine_prefix" => ""))
+      assert_not build_reaper(workspace_service: service).reap[:enabled]
+      assert_empty service.list_calls
+
+      @integration.update!(settings: @integration.settings.merge("machine_prefix" => "aixle-prod"))
+      build_reaper(workspace_service: service).reap
+      assert_equal [ { prefix: "aixle-prod", own: true } ], service.list_calls
     end
 
     test "a workspace with a delete build in progress is untouched" do

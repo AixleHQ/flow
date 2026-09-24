@@ -4,7 +4,9 @@ import { useState } from 'react';
 
 import { formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
 
-import { AgentLogo, agentLabel } from './AgentLogo';
+import { agentLabel } from '../agentRuntimes';
+
+import { AgentLogo } from './AgentLogo';
 import classes from './SessionCard.module.css';
 import { StatusTag } from './StatusTag';
 

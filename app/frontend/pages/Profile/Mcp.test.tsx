@@ -104,6 +104,13 @@ describe('Profile MCP tab', () => {
   // Cursor installs from a deeplink whose `config` is the base64 of the server
   // entry alone — decoded here so a wrong shape fails loudly rather than
   // silently producing a link Cursor rejects.
+  it('keeps showing the one-time token while taking it out of the history entry Back returns to', () => {
+    renderPageWith(buildMcp({ enabled: true, token: 'amcp_tok_abc123' }));
+
+    expect(router.replaceProp).toHaveBeenCalledWith('mcp.token', null);
+    expect(screen.getByTestId('mcp-token')).toHaveTextContent('amcp_tok_abc123');
+  });
+
   it('offers a Cursor install deeplink carrying the URL and bearer token', () => {
     renderPageWith(buildMcp({ enabled: true, token: 'amcp_tok_abc123' }));
 

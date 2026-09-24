@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 FactoryBot.define do
   sequence :name do |n|
     "Company #{n}"
@@ -11,7 +13,7 @@ FactoryBot.define do
     "company-#{n}-#{SecureRandom.hex(4)}.partners"
   end
 
-  sequence :password do |n|
+  sequence :password do |_n|
     Faker::Internet.password(min_length: 8, max_length: 16, mix_case: true, special_characters: true)
   end
 
@@ -35,7 +37,7 @@ FactoryBot.define do
     "access_key_#{n}"
   end
 
-  sequence :invitation_token do |n|
+  sequence :invitation_token do |_n|
     SecureRandom.hex(16)
   end
 

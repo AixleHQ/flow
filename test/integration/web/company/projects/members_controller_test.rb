@@ -29,6 +29,29 @@ class Web::Company::Projects::MembersControllerTest < ActionDispatch::Integratio
     assert_not_includes ids, revoked.id
   end
 
+  # A project from another of the user's companies lists its own company's members,
+  # not the session company's, and collaborators are looked up there too.
+  test "a project from the user's other company lists and adds that company's members" do
+    other = create(:company)
+    create(:company_membership, user: @user, company: other, role: "admin", accepted_at: Time.current,
+                                onboarding_state: "completed", onboarding_completed_at: Time.current)
+    other_project = create(:project, company: other, owner: @user)
+    colleague = create(:user, :employee, company: other)
+    session_company_member = create(:user, :employee, company: @company)
+
+    get company_project_members_path(other_project)
+
+    ids = inertia.props[:companyUsers].map { |u| u[:id] }
+    assert_includes ids, colleague.id
+    assert_not_includes ids, session_company_member.id
+
+    post company_project_members_path(other_project), params: { collaborator: { user_id: session_company_member.id } }
+    assert_response :not_found
+
+    get company_projects_path
+    assert_equal other.id, session[:current_company_id]
+  end
+
   test "a non-active member cannot be added as collaborator" do
     invited = create(:user, :employee, company: @company, membership_state: "invited")
 

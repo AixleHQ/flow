@@ -39,7 +39,7 @@ COPY base/auth-check/index.js /opt/auth-check/index.js
 COPY base/logger/ /opt/mitm/
 COPY base/entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh /opt/mitm/*.sh && \
-    chown -R antigravity:antigravity /workspace /opt/watcher /home/antigravity
+    chown -R antigravity:antigravity /workspace /home/antigravity
 
 WORKDIR /workspace
 ENV HOME=/home/antigravity AGENT_NAME="Antigravity CLI" LANG=C.UTF-8 PATH="/home/antigravity/.local/bin:${PATH}"

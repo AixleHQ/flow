@@ -23,6 +23,10 @@ updates:
       # Drop both once the Temporal SDK switches to keywords.
       - dependency-name: "json"
         update-types: ["version-update:semver-major"]
+      # Held below 6 by the Gemfile for Action Cable's Redis adapter; drop with
+      # the pin once Rails 8.2 moves the adapter onto redis-client.
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
     groups:
       bundler-minor-patch:
         patterns: ["*"]
@@ -56,8 +60,21 @@ updates:
         exclude-patterns: ["@mantine/*"]
         update-types: ["minor", "patch"]
 
+  # The agent images, their shared base and the OTLP ingest carry their own
+  # Dockerfiles; watching only the root one left every agent base image unpatched.
   - package-ecosystem: docker
-    directory: "/"
+    directories:
+      - "/"
+      - "/docker/base"
+      - "/docker/antigravity-cli"
+      - "/docker/claude-code"
+      - "/docker/codex"
+      - "/docker/cursor-cli"
+      - "/docker/gemini-cli"
+      - "/docker/grok"
+      - "/docker/kiro-cli"
+      - "/docker/otlp-ingest"
+      - "/docker/remote"
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
@@ -66,6 +83,16 @@ updates:
       docker-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+
+  - package-ecosystem: gomod
+    directory: "/docker/otlp-ingest"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    target-branch: "develop"
+    groups:
+      gomod:
+        patterns: ["*"]
 
   - package-ecosystem: github-actions
     directory: "/"

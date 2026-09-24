@@ -43,6 +43,13 @@ class Web::PublicAssetsControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test "404s once the asset is deleted" do
+    @asset.soft_delete!
+
+    get public_asset_raw_path(token: @token)
+    assert_response :not_found
+  end
+
   test "404s once the asset is unshared" do
     @asset.unshare!
 

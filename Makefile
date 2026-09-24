@@ -1,5 +1,5 @@
 # Application Management
-.PHONY: deps db-prepare db-reset check check_all be_check_all fe_check_all be_check fe_check lint typescript test rails-test fe-test worker-boot rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_dump db_restore db_restore_remote brakeman license-report license-report-ruby license-report-js default setup git-hooks up down reset worker shell build-web build-otlp-ingest build-agents restore-dump help
+.PHONY: deps db-prepare db-reset check check_all be_check_all fe_check_all be_check fe_check lint fix secret-scan typescript test rails-test fe-test worker-boot rubocop rubocop-fix eslint eslint-fix fsd fsd-fix db_restore brakeman license-report license-report-ruby license-report-js default setup git-hooks up down reset worker shell build-web build-otlp-ingest build-agents restore-dump help
 
 DOCKER_COMPOSE ?= docker compose
 
@@ -12,7 +12,6 @@ ifeq ($(shell uname -s),Linux)
 export DOCKER_GID ?= $(shell stat -c %g /var/run/docker.sock 2>/dev/null || echo 0)
 endif
 
-TODAY = $$(date +"%d.%m.%Y")
 LICENSE_REPORTS_DIR := tmp/license-reports
 
 # Setup dependencies
@@ -29,11 +28,12 @@ db-reset:
 	bundle exec rails db:drop db:create db:migrate db:seed
 
 # Run all linters and tests
-check: be_check fe_check
+# The gate: what CI runs, and it changes nothing. `make fix` is the autocorrecting pass.
+check: check_all
 
 # CI checks. Each check writes tmp/check_results/<name>.log + <name>.status so a batch never
 # short-circuits and every failure is surfaced together. CI runs frontend and backend as SEPARATE
-# jobs (see .github/workflows/deploy.yml) so Vitest never competes with the Ruby suite for CPU;
+# jobs (see .github/workflows/ci.yml) so Vitest never competes with the Ruby suite for CPU;
 # `check_all` keeps the combined one-command run for local use.
 CHECK_RESULTS := tmp/check_results
 
@@ -41,15 +41,12 @@ CHECK_RESULTS := tmp/check_results
 # Ratchet upward as coverage grows — never lower it. Measured 88.3% on 2026-07-06.
 COVERAGE_MIN := 85
 
-# Coverage gating (task #288). SimpleCov (backend) and v8 all:true (frontend)
-# instrumentation are a large multiplier on suite runtime, so CI only runs coverage
-# on the develop branch — the integration gate — and skips it on ordinary feature-branch
-# pushes to keep the Checks/Run stage fast. The branch→coverage decision is made in the
-# workflow config (deploy.yml "Prepare Config" job), which sets the run_coverage output
-# and forwards it into the container as RUN_COVERAGE (see code-check.yml /
-# docker-compose.ci.yml). This Makefile just honors that flag. When RUN_COVERAGE is
-# unset/empty (local `make check_all`/`rails-test`) it defaults to 1 so the pre-push gate
-# keeps enforcing the floor.
+# Coverage gating (task #288). CI measures coverage on every run, pull requests
+# included, so a drop below a floor fails the review rather than the merged commit;
+# it forwards the flag into the container as RUN_COVERAGE (see code-check.yml /
+# docker-compose.ci.yml). RUN_COVERAGE=0 skips the instrumentation (SimpleCov and
+# v8 over the whole frontend are a large runtime multiplier) for a quick local run. Unset/empty
+# (local `make check_all`/`rails-test`) means 1, the same gate CI applies.
 RUN_COVERAGE ?= 1
 ifeq ($(strip $(RUN_COVERAGE)),)
   RUN_COVERAGE := 1
@@ -93,6 +90,8 @@ define run_be_checks
 	@# database and the tools registry reconciles on boot, so racing it against the suite
 	@# writing the same database buys a few seconds and a class of flake.
 	@( bin/worker_boot_check > $(CHECK_RESULTS)/worker-boot.log 2>&1; echo $$? > $(CHECK_RESULTS)/worker-boot.status )
+	@echo "Checking that every file eager-loads (CI's test env eager-loads, a local one does not)..."
+	@( bin/rails zeitwerk:check > $(CHECK_RESULTS)/zeitwerk.log 2>&1; echo $$? > $(CHECK_RESULTS)/zeitwerk.status )
 	@echo "Running rails-test, rubocop, brakeman, system-test in parallel (DB-touching runs serialized by flock)..."
 	@# VITE_RUBY_PORT on the system-test run: those tests must use the assets built
 	@# above, and vite_ruby picks between built and dev by probing the dev-server port.
@@ -108,7 +107,7 @@ define run_be_checks
 endef
 
 # Frontend (JS/TS) checks. eslint + tsc run in parallel; Vitest then runs ON ITS OWN. Vitest spawns a
-# worker per core and (with coverage's all:true) instruments the whole frontend, so racing it against
+# worker per core and (with coverage on) instruments the whole frontend, so racing it against
 # tsc/eslint — let alone the Ruby suite in the old all-in-one check_all — CPU-starved the heaviest
 # jsdom+userEvent form tests past their timeout: green in isolation, flaky only under the full load.
 define run_fe_checks
@@ -116,6 +115,7 @@ define run_fe_checks
 	@( yarn lint                                                    > $(CHECK_RESULTS)/eslint.log     2>&1; echo $$? > $(CHECK_RESULTS)/eslint.status )     & \
 	 ( yarn tsc                                                     > $(CHECK_RESULTS)/typescript.log 2>&1; echo $$? > $(CHECK_RESULTS)/typescript.status ) & \
 	 ( yarn fsd                                                     > $(CHECK_RESULTS)/fsd.log        2>&1; echo $$? > $(CHECK_RESULTS)/fsd.status )        & \
+	 ( node --test docker/base/watcher/test/*.test.js               > $(CHECK_RESULTS)/watcher-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/watcher-test.status ) & \
 	 wait
 	@echo "Running fe-test (Vitest$(if $(filter 1,$(RUN_COVERAGE)), + coverage,)) on its own..."
 	@( $(FE_TEST_CMD)                                               > $(CHECK_RESULTS)/fe-test.log    2>&1; echo $$? > $(CHECK_RESULTS)/fe-test.status )
@@ -190,13 +190,21 @@ check_all:
 	$(summarize_checks)
 
 # Run backend checks
-be_check: rails-test rubocop-fix brakeman
+be_check: rails-test rubocop brakeman
 
 # Run frontend checks
-fe_check: eslint-fix typescript fsd
+fe_check: eslint typescript fsd fe-test
 
 # Run all linters
-lint: eslint-fix rubocop-fix brakeman typescript
+lint: eslint rubocop brakeman typescript
+
+# Autocorrect what the linters can fix themselves
+fix: rubocop-fix eslint-fix fsd-fix
+
+# The secret scan CI runs (.github/workflows/ci.yml). Runs on the host: it needs Docker.
+secret-scan:
+	docker run --rm -v "$$PWD:/repo" -w /repo ghcr.io/gitleaks/gitleaks:v8.30.1 \
+	  git /repo --config /repo/.gitleaks.toml --redact --no-banner
 
 # Run TypeScript compiler check
 typescript:
@@ -242,20 +250,16 @@ fsd:
 fsd-fix:
 	yarn fsd:fix
 
-db_dump:
-	pg_dump --no-owner --no-privileges -c "postgresql://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}/${DB_NAME}" | gzip > ${TODAY}.sql.gz
-	FILE=${TODAY}.sql.gz BUCKET_KEY=db_dumps/${TODAY}.sql.gz bundle exec rake s3:upload
-	FILE=${TODAY}.sql.gz BUCKET_KEY=db_dumps/latest.sql.gz bundle exec rake s3:upload
-
+# Replaces the LOCAL development database with /db_dumps/latest.sql.gz. It drops the
+# database first — and marks it development to get past Rails' guard — so it refuses
+# any target but the Compose `db` service.
 db_restore:
+	@[ "$${RAILS_ENV:-development}" = "development" ] && [ "$(DB_HOST)" = "db" ] || \
+	  { echo "db_restore only restores into the local development database (DB_HOST=db)"; exit 1; }
 	bundle exec rails db:environment:set RAILS_ENV=development
 	bundle exec rails db:drop db:create
 	gunzip < /db_dumps/latest.sql.gz | psql -h ${DB_HOST} -U ${DB_USERNAME} ${DB_NAME}
 	bundle exec rails db:migrate
-
-db_restore_remote:
-	BUCKET_KEY=db_dumps/latest.sql.gz bundle exec rake s3:download
-	export PGPASSWORD=${DATABASE_PASSWORD}; gunzip < latest.sql.gz | psql -h ${DATABASE_HOST} -U ${DATABASE_USER} ${DATABASE_NAME}
 
 # Run Brakeman security analysis
 brakeman:
@@ -277,9 +281,13 @@ license-report: license-report-ruby license-report-js
 # Default target
 default: check
 
+# The seeded super admin's password is generated here rather than copied: the
+# example's placeholder would otherwise be every checkout's admin password.
 ensure-env:
-	@test -f .env.development || (cp .env.example .env.development && echo "Created .env.development from .env.example")
-	@test -f test/playwright/helpers/.env || (cp test/playwright/helpers/.env.example test/playwright/helpers/.env && echo "Created test/playwright/helpers/.env")
+	@test -f .env.development || ( \
+	  pw=$$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 32); \
+	  sed "s/^ADMIN_PASSWORD=replace_with_strong_password$$/ADMIN_PASSWORD=$$pw/" .env.example > .env.development && \
+	  echo "Created .env.development from .env.example (ADMIN_PASSWORD generated)")
 
 # Point git at the repo's hooks, so commits get their DCO sign-off automatically
 git-hooks:
@@ -349,9 +357,10 @@ help:
 	@echo "  make deps                   - Setup dependencies"
 	@echo "  make db-prepare             - Prepare database (create, migrate, seed)"
 	@echo "  make db-reset               - Reset database (drop, create, migrate, seed)"
-	@echo "  make check                  - Run all linters and tests (sequential, stops on first failure)"
+	@echo "  make check                  - The gate: every check CI runs, nothing autocorrected (= check_all)"
 	@echo "  make check_all              - Run all checks in parallel, summarize failures at the end"
-	@echo "  make lint                   - Run all linters (rubocop, eslint, brakeman)"
+	@echo "  make lint                   - Run all linters (rubocop, eslint, brakeman, tsc), no autocorrect"
+	@echo "  make fix                    - Autocorrect: rubocop -a, eslint --fix, steiger --fix"
 	@echo "  make test                   - Run all tests"
 	@echo "  make rails-test             - Run Rails tests"
 	@echo "  make fe-test                - Run frontend tests"
@@ -367,12 +376,11 @@ help:
 	@echo "  make license-report-ruby    - Generate Ruby gem license report"
 	@echo "  make license-report-js      - Generate npm production license report"
 	@echo "  make git-hooks              - Enable the repo's git hooks (auto DCO sign-off)"
-	@echo "  make db_restore_remote      - Restore database remotely"
 	@echo "  make restore-dump           - Restore a locally available database dump"
 	@echo "  make default                - Same as 'check'"
 	@echo "  make help                   - Show this help message"
 	@echo "  make shell                  - Open shell in web container"
 	@echo ""
 	@echo "Agent Docker Images:"
-	@echo "  make build-agents           - Build all agent images (core + 5 agents in parallel)"
+	@echo "  make build-agents           - Build all agent images (core + 7 agents in parallel)"
 	@echo "  make build-otlp-ingest      - Build the OTLP ingest image"

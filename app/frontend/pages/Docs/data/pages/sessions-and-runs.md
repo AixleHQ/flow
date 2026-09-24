@@ -37,6 +37,10 @@ id, and totals in the header.
   terminal…*, then you are watching the agent work.
 - A **parallel run shows every active step at once**, each with its own console
   and its own action bar.
+- **Only the person who started a session can type into it.** Everyone else it
+  is shared with — colleagues on the project, and every step of a run someone
+  else started — watches a read-only terminal, and the editor is not offered to
+  them: the container holds its owner's agent login and repository access.
 - Expand a step card for its prompt, its sub-steps, and the note it left
   behind. A failed step shows its error there, and the header names *where* the
   run stopped rather than when it started.

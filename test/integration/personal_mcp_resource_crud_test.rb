@@ -70,6 +70,19 @@ class PersonalMCPResourceCrudTest < ActionDispatch::IntegrationTest
     assert_not MCPServer.exists?(id)
   end
 
+  # The tool is also the Builder's, driven by an agent that reads untrusted text:
+  # re-pointing a server through it must leave its credentials behind.
+  test "update_mcp_server pointed at a new host drops the stored credentials" do
+    server = create(:mcp_server, scope: @project, name: "ctx7", url: "https://mcp.example.com/mcp", transport: :http,
+                                 headers: { "Authorization" => "Bearer super-secret" })
+
+    body = payload(call_tool("update_mcp_server", { project_id: @project.id, mcp_server_id: server.id,
+                                                    url: "https://collector.example.net/mcp" }))
+
+    assert body["secrets_cleared"]
+    assert_equal({}, server.reload.headers)
+  end
+
   test "get_mcp_server returns the wiring but never a header or env VALUE" do
     server = create(:mcp_server, scope: @project, name: "ctx7", url: "https://x/mcp", transport: :http,
                                  headers: { "Authorization" => "Bearer super-secret" },

@@ -54,7 +54,6 @@ under weak-copyleft licenses
 | administrate-field-jsonb | 0.4.7 | MIT |
 | administrate-field-shrine | 0.0.5 | MIT |
 | alba | 3.10.0 | MIT |
-| audited | 5.8.0 | MIT |
 | aws-sdk-s3 | 1.186.0 | Apache-2.0 |
 | bcrypt | 3.1.20 | MIT |
 | bootsnap | 1.18.4 | MIT |
@@ -70,14 +69,10 @@ under weak-copyleft licenses
 | inertia_cable | 0.2.2 | MIT |
 | inertia_rails | 3.19.0 | MIT |
 | jwt | 2.10.1 | MIT |
-| kramdown | 2.5.1 | MIT |
-| kramdown-parser-gfm | 1.1.0 | MIT |
 | kubeclient | 4.13.0 | MIT |
 | lograge | 0.14.0 | MIT |
-| minitar | 0.12.1 | Ruby / BSD-2-Clause |
 | oas_rails | 0.14.0 | MIT |
 | octokit | 10.0.0 | MIT |
-| oj | 3.16.10 | MIT |
 | omniauth | 2.1.3 | MIT |
 | omniauth-google-oauth2 | 1.2.1 | MIT |
 | omniauth-oauth2 | 1.8.0 | MIT |
@@ -91,10 +86,7 @@ under weak-copyleft licenses
 | rails-i18n | 8.0.1 | MIT |
 | ransack | 4.3.0 | MIT |
 | redis | 5.4.0 | MIT |
-| responders | 3.1.1 | MIT |
-| rolify | 6.0.1 | MIT |
 | rotp | 6.3.0 | MIT |
-| ruby-filemagic | 0.7.3 | Ruby License |
 | rubyzip | 2.4.1 | BSD-2-Clause |
 | sentry-rails | 6.4.1 | MIT |
 | sentry-ruby | 6.4.1 | MIT |
@@ -133,8 +125,6 @@ Ruby-licensed.
 | @dnd-kit/core | 6.3.1 | MIT |
 | @dnd-kit/sortable | 10.0.0 | MIT |
 | @dnd-kit/utilities | 3.2.2 | MIT |
-| @emoji-mart/data | 1.2.1 | MIT |
-| @emoji-mart/react | 1.1.1 | MIT |
 | @inertia-cable/react | 0.2.2 | MIT |
 | @inertiajs/react | 3.0.2 | MIT |
 | @inertiajs/vite | 3.0.2 | MIT |
@@ -150,7 +140,6 @@ Ruby-licensed.
 | @xterm/xterm (+ addon-fit, addon-web-links) | 6.0.0 | MIT |
 | date-fns | 4.1.0 | MIT |
 | dayjs | 1.11.20 | MIT |
-| emoji-mart | 5.6.0 | MIT |
 | lodash | 4.17.21 | MIT |
 | mantine-form-zod-resolver | 1.3.0 | MIT |
 | nanoid | 5.1.5 | MIT |
@@ -164,7 +153,6 @@ Ruby-licensed.
 | recharts | 3.8.1 | MIT |
 | remark-extract-toc | 1.1.0 | MIT |
 | remark-gfm | 4.0.1 | MIT |
-| use-debounce | 10.1.1 | MIT |
 | zod | 3.25.76 | MIT |
 | zustand | 5.0.12 | MIT |
 

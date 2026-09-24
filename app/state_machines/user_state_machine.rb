@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module UserStateMachine
   extend ActiveSupport::Concern
 
@@ -16,11 +18,11 @@ module UserStateMachine
         transitions from: %i[pending suspended archived], to: :active
       end
 
-      event :suspend do
+      event :suspend, after_commit: :revoke_live_access! do
         transitions from: :active, to: :suspended
       end
 
-      event :archive do
+      event :archive, after_commit: :revoke_live_access! do
         transitions from: %i[active suspended pending], to: :archived
       end
 

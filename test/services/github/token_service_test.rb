@@ -28,7 +28,7 @@ module Github
     end
 
     teardown do
-      File.delete(@pem_path) if File.exist?(@pem_path)
+      FileUtils.rm_f(@pem_path)
     end
 
     test "generate_installation_token returns the token from the access-tokens endpoint" do
@@ -47,6 +47,34 @@ module Github
       token = Github::TokenService.new(@integration).generate_installation_token
 
       assert_equal "ghs_test_token_abc123", token
+    end
+
+    test "a minted installation token is reused until shortly before it expires" do
+      minted = stub_request(:post, "https://api.github.com/app/installations/12345/access_tokens")
+        .to_return(status: 201, headers: { "Content-Type" => "application/json" },
+                   body: { token: "ghs_cached", expires_at: 1.hour.from_now.iso8601 }.to_json)
+      service = Github::TokenService.new(@integration)
+
+      2.times { assert_equal "ghs_cached", service.generate_installation_token }
+      assert_requested minted, times: 1
+
+      travel 56.minutes do
+        service.generate_installation_token
+      end
+      assert_requested minted, times: 2
+    end
+
+    test "tokens scoped to different repositories are minted and kept apart" do
+      stub_request(:post, "https://api.github.com/app/installations/12345/access_tokens")
+        .to_return({ status: 201, headers: { "Content-Type" => "application/json" },
+                     body: { token: "ghs_all", expires_at: 1.hour.from_now.iso8601 }.to_json },
+                   { status: 201, headers: { "Content-Type" => "application/json" },
+                     body: { token: "ghs_one", expires_at: 1.hour.from_now.iso8601 }.to_json })
+      service = Github::TokenService.new(@integration)
+
+      assert_equal "ghs_all", service.generate_installation_token
+      assert_equal "ghs_one", service.generate_installation_token(repositories: %w[my-repo])
+      assert_equal "ghs_all", service.generate_installation_token
     end
 
     test "generate_installation_token scopes the request body to specific repositories" do

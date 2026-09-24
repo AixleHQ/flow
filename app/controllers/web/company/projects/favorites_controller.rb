@@ -9,6 +9,8 @@
 # filters (`preserveState`), so the answer is "re-render where you are with
 # fresh props" — the shared sidebar list re-orders from the same response.
 class Web::Company::Projects::FavoritesController < Web::Company::Projects::ApplicationController
+  allow_viewer_writes
+
   def create
     current_user.project_favorites.find_or_create_by!(project: current_project)
 

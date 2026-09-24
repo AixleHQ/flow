@@ -1,8 +1,9 @@
 import { usePage } from '@inertiajs/react';
 
+import type { Asset, AssetVersion, Folder } from '@/types/generated';
 import { AuthLayout } from 'layouts/AuthLayout';
 
-import { AssetsContent, type Asset, type AssetVersion, type Folder } from 'shared/resources/assets/AssetsContent';
+import { AssetsContent } from 'shared/resources/assets/AssetsContent';
 import { apiV1CompanyAssetsPath, apiV1CompanyFoldersPath } from 'shared/routes';
 
 interface Props {

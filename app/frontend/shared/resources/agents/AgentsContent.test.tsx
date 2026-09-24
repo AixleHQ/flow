@@ -2,9 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Agent } from '@/types/generated';
 import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
-import { AgentsContent, type Agent } from './AgentsContent';
+import { AgentsContent } from './AgentsContent';
 
 const makeAgent = (overrides: Partial<Agent> = {}): Agent => ({
   id: 1,

@@ -33,6 +33,19 @@ export function useInertiaCableStream(signedStreamName: string | undefined, opti
     if (!signedStreamName || !enabled) return;
 
     let cancelled = false;
+    let connectedBefore = false;
+
+    const scheduleReload = () => {
+      if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
+      reloadTimerRef.current = setTimeout(() => {
+        reloadTimerRef.current = null;
+        const opts = optionsRef.current;
+        router.reload({
+          ...(opts.only ? { only: opts.only } : {}),
+          ...(opts.except ? { except: opts.except } : {}),
+        });
+      }, debounceMs);
+    };
 
     const timer = setTimeout(() => {
       if (cancelled) return;
@@ -41,29 +54,17 @@ export function useInertiaCableStream(signedStreamName: string | undefined, opti
       subRef.current = consumer.subscriptions.create(
         { channel: 'InertiaCable::StreamChannel', signed_stream_name: signedStreamName },
         {
+          // A refresh broadcast while the socket was down never arrives, so a
+          // reconnect reloads as if one had.
           connected() {
-            console.log('[InertiaCableStream] connected', { signedStreamName });
-          },
-          disconnected() {
-            console.log('[InertiaCableStream] disconnected', { signedStreamName });
+            if (connectedBefore) scheduleReload();
+            connectedBefore = true;
           },
           rejected() {
             console.warn('[InertiaCableStream] rejected', { signedStreamName });
           },
           received(data: Record<string, unknown>) {
-            console.log('[InertiaCableStream] received', data);
-            if (data.type === 'refresh') {
-              if (reloadTimerRef.current) clearTimeout(reloadTimerRef.current);
-              reloadTimerRef.current = setTimeout(() => {
-                reloadTimerRef.current = null;
-                const opts = optionsRef.current;
-                console.log('[InertiaCableStream] reloading', { only: opts.only, except: opts.except });
-                router.reload({
-                  ...(opts.only ? { only: opts.only } : {}),
-                  ...(opts.except ? { except: opts.except } : {}),
-                });
-              }, debounceMs);
-            }
+            if (data.type === 'refresh') scheduleReload();
           },
         } as unknown as Subscription,
       );

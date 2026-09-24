@@ -23,7 +23,7 @@ class MemberResource < ApplicationResource
     membership.user.name
   end
 
-  typelize :string
+  typelize CompanyMembership.role.values
   attribute :role do |membership|
     membership.role.to_s
   end
@@ -33,7 +33,7 @@ class MemberResource < ApplicationResource
     membership.state.to_s
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :position do |membership|
     # Per company: the same person can hold a different position in each.
     membership.position&.to_s

@@ -18,35 +18,7 @@ import { useDebouncedCallback } from '@mantine/hooks';
 import { IconAlertTriangle, IconSearch, IconSparkles } from '@tabler/icons-react';
 import { useState, type FC } from 'react';
 
-interface AuditProvider {
-  provider: string;
-  risk: string | null;
-  score: number | null;
-  alerts: number | null;
-  analyzed_at: string | null;
-}
-
-// Shapes served by CatalogSkillResource. Camel-cased on the wire by the app's
-// Inertia prop transform; nested keys stay snake_case (see `analyzed_at`).
-//
-// Identity is `registryId`, not a database id: an entry can be a live upstream hit
-// with no mirror row behind it.
-export interface CatalogSkill {
-  registryId: string;
-  source: string;
-  slug: string;
-  title: string | null;
-  description: string | null;
-  installs: number;
-  featured: boolean;
-  pickerName: string;
-  package: string;
-  iconUrl: string | null;
-  registryUrl: string;
-  /** Worst verdict across providers. Null means nobody audited it — not "safe". */
-  auditRisk: string | null;
-  auditProviders: AuditProvider[];
-}
+import type { CatalogSkill } from '@/types/generated';
 
 const RISK_COLORS: Record<string, string> = {
   safe: 'teal',
@@ -166,12 +138,13 @@ export const SkillsCatalogModal: FC<SkillsCatalogModalProps> = ({
     }
   };
 
-  const install = (skill: CatalogSkill) => {
+  // The server refuses a flagged skill unless the install says its audit was seen.
+  const install = (skill: CatalogSkill, acknowledgeRisk = false) => {
     setConfirming(null);
     setInstalling(skill.registryId);
     router.post(
       installPath,
-      { skillId: skill.registryId },
+      acknowledgeRisk ? { skillId: skill.registryId, acknowledgeRisk: true } : { skillId: skill.registryId },
       {
         preserveScroll: true,
         onFinish: () => setInstalling(null),
@@ -215,7 +188,7 @@ export const SkillsCatalogModal: FC<SkillsCatalogModalProps> = ({
             <Button size="xs" variant="default" onClick={() => setConfirming(null)}>
               Cancel
             </Button>
-            <Button size="xs" color="red" onClick={() => install(confirming)}>
+            <Button size="xs" color="red" onClick={() => install(confirming, true)}>
               Install anyway
             </Button>
           </Group>

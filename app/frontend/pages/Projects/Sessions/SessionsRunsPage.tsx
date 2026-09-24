@@ -15,11 +15,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type RunListEntry from 'types/generated/RunListEntry';
 import type SessionListEntry from 'types/generated/SessionListEntry';
 
+import { apiFetch } from 'shared/lib/apiFetch';
+import { type RowChanges, useCableRowUpdates } from 'shared/lib/hooks/useCableRowUpdates';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
-import { useSessionListCableUpdates } from 'shared/lib/hooks/useSessionListCableUpdates';
-import { useWorkflowRunListCableUpdates } from 'shared/lib/hooks/useWorkflowRunListCableUpdates';
 import { costColor, formatCost, formatDuration, formatTokens } from 'shared/lib/sessionFormat';
-import { userPath } from 'shared/routes';
+import { rowsCompanyProjectSessionsPath, userPath } from 'shared/routes';
+import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
 import { AgentLogo, agentLabel, ModeTag, StatusTag } from 'shared/ui/sessions';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -58,22 +59,14 @@ export interface SessionsRunsPageProps {
   filters: Filters;
   total: number;
   userOptions: { id: number; name: string }[];
+  /** Signed stream the page hands out; it names the sessions and runs that changed. */
+  cableStream?: string;
 }
 
 const TYPE_TABS: { value: ListType; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'run', label: 'Workflow runs' },
   { value: 'solo', label: 'Standalone' },
-];
-
-const AGENT_OPTIONS = [
-  { value: 'claude_code', label: 'Claude Code' },
-  { value: 'cursor_cli', label: 'Cursor CLI' },
-  { value: 'codex', label: 'Codex' },
-  { value: 'gemini_cli', label: 'Gemini CLI' },
-  { value: 'antigravity_cli', label: 'Antigravity CLI' },
-  { value: 'grok', label: 'Grok' },
-  { value: 'kiro_cli', label: 'Kiro CLI' },
 ];
 
 // One vocabulary over two state machines — see SessionsRunsFeed::STATUS_FILTERS.
@@ -115,7 +108,7 @@ function stateLabel(entry: ListEntry): string {
   );
 }
 
-const SessionsRunsPage = ({ project, entries, filters, total, userOptions }: SessionsRunsPageProps) => {
+const SessionsRunsPage = ({ project, entries, filters, total, userOptions, cableStream }: SessionsRunsPageProps) => {
   const { canExecute } = useProjectPermissions();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [newSessionOpen, setNewSessionOpen] = useState(false);
@@ -152,44 +145,48 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions }: Ses
     });
   }, [entries, filters]);
 
-  const onSessionUpdate = useCallback((session: Record<string, unknown>) => {
-    setEntryMap((prev) => {
-      const key = `session-${session.id}`;
-      let map = prev;
+  const entryMapRef = useRef(entryMap);
+  entryMapRef.current = entryMap;
 
-      if (prev.has(key)) {
-        map = new Map(prev).set(key, { ...prev.get(key)!, ...(session as unknown as ListEntry) });
+  // A step session lives nested under its run's `sessions`, not as an entry of
+  // its own, so its update refreshes the run that carries it.
+  const onRowChanges = useCallback(
+    async ({ sessionIds, runIds }: RowChanges) => {
+      const current = entryMapRef.current;
+      const sessionsToFetch = sessionIds.filter((id) => current.has(`session-${id}`));
+      const runsToFetch = new Set(runIds.filter((id) => current.has(`run-${id}`)));
+      for (const entry of current.values()) {
+        if (entry.kind === 'run' && entry.sessions?.some((s) => sessionIds.includes(s.id))) runsToFetch.add(entry.id);
       }
+      if (sessionsToFetch.length === 0 && runsToFetch.size === 0) return;
 
-      // A step session lives nested under its run's `sessions` array, not as
-      // its own top-level entry — patch it there too, or an expanded run's
-      // child rows never see live updates.
-      for (const [runKey, entry] of map) {
-        if (entry.kind !== 'run' || !entry.sessions) continue;
-        const index = entry.sessions.findIndex((s) => s.id === session.id);
-        if (index === -1) continue;
+      const response = await apiFetch(
+        rowsCompanyProjectSessionsPath(project.id, { session_ids: sessionsToFetch, run_ids: [...runsToFetch] }),
+      );
+      if (!response.ok) return;
+      const { entries: rows } = (await response.json()) as { entries: ListEntry[] };
 
-        if (map === prev) map = new Map(prev);
-        const sessions = [...entry.sessions];
-        sessions[index] = { ...sessions[index], ...(session as unknown as SessionListEntry) };
-        map.set(runKey, { ...entry, sessions });
-      }
+      setEntryMap((prev) => {
+        const map = new Map(prev);
+        for (const row of rows) {
+          const key = entryKey(row);
+          if (map.has(key)) map.set(key, { ...map.get(key)!, ...row });
+        }
+        return map;
+      });
+    },
+    [project.id],
+  );
 
-      return map;
-    });
+  const shownIds = useCallback((): RowChanges => {
+    const entries = [...entryMapRef.current.values()];
+    return {
+      sessionIds: entries.filter((e) => e.kind === 'session').map((e) => e.id),
+      runIds: entries.filter((e) => e.kind === 'run').map((e) => e.id),
+    };
   }, []);
 
-  const onRunUpdate = useCallback((run: Record<string, unknown>) => {
-    setEntryMap((prev) => {
-      const key = `run-${run.id}`;
-      const existing = prev.get(key);
-      if (!existing) return prev;
-      return new Map(prev).set(key, { ...existing, ...(run as unknown as ListEntry) });
-    });
-  }, []);
-
-  useSessionListCableUpdates({ projectId: project.id, onUpdate: onSessionUpdate });
-  useWorkflowRunListCableUpdates({ projectId: project.id, onUpdate: onRunUpdate });
+  useCableRowUpdates(cableStream, onRowChanges, { resyncIds: shownIds });
 
   const orderedEntries = useMemo(() => Array.from(entryMap.values()), [entryMap]);
 
@@ -290,7 +287,7 @@ const SessionsRunsPage = ({ project, entries, filters, total, userOptions }: Ses
         <Select
           placeholder="Agent"
           aria-label="Filter by agent"
-          data={AGENT_OPTIONS}
+          data={AGENT_SELECT_OPTIONS}
           value={filters.agentType ?? null}
           onChange={(v) => navigate({ agentType: v ?? undefined })}
           clearable

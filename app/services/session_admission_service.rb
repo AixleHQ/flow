@@ -65,7 +65,7 @@ class SessionAdmissionService
           p.policy_revision = policy.revision
         end
         pool.lock!
-        session.update!(state: "queued", queued_at: Time.current)
+        session.enqueue!
         SessionAdmission.create!(terminal_session: session, session_admission_pool: pool)
       end
     end
@@ -116,15 +116,20 @@ class SessionAdmissionService
       granted
     end
 
-    def cancel!(session)
+    # `outcome` is the verdict written on a session that has not ended yet:
+    # "cancelled" for a stop a person or the run asked for, "failed" for a
+    # watchdog's. A session that already ended keeps its own: cancelling a run
+    # does not relabel its finished steps.
+    def cancel!(session, outcome: "cancelled")
       transaction do
         admission = session.session_admission&.lock!
         next unless admission
         admission.update!(stop_requested_at: admission.stop_requested_at || Time.current)
+        verdict = session.reload.state.in?(TerminalSession::TERMINAL_STATES) ? nil : outcome
         if admission.admitted_at.nil? || (admission.launch_state == "pending" && admission.claimed_at.nil?)
-          close_queued!(admission)
-        else
-          session.update!(state: "cancelled", finished_at: Time.current)
+          close_queued!(admission, verdict)
+        elsif verdict
+          conclude!(session, verdict)
         end
       end
       session.reload
@@ -202,9 +207,15 @@ class SessionAdmissionService
         .limit(POOL_SCAN_LIMIT)
     end
 
-    def close_queued!(admission)
+    def close_queued!(admission, verdict = "cancelled")
       admission.update!(released_at: Time.current, launch_state: "closed", wait_reason: nil)
-      admission.terminal_session.update!(state: "cancelled", finished_at: Time.current)
+      conclude!(admission.terminal_session, verdict) if verdict
+    end
+
+    # Through the state machine, so the ending is recorded like any other. A
+    # failure's wake-up of the parent run waits for the commit (on_failed).
+    def conclude!(session, verdict)
+      verdict == "failed" ? session.fail! : session.cancel!
     end
 
     # Every admitted session belongs to exactly one pool: its project's. The

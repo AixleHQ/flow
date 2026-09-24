@@ -87,6 +87,28 @@ module ContainerStrategies
       assert_includes paths.to_s, "/home/claude/.claude/.credentials.json"
     end
 
+    # The ingest refuses unkeyed batches only for sessions whose launch handed a key
+    # out; the marker is how it knows, and the key must be what the ingest recomputes.
+    test "hands the container its usage key and marks the session as keyed" do
+      env_vars = build_strategy.build_env_vars
+
+      attrs = env_vars.find { |v| v.start_with?("OTEL_RESOURCE_ATTRIBUTES=") }
+      key = UsageStatistics::SessionKey.generate(@session.route_token)
+      assert_equal "OTEL_RESOURCE_ATTRIBUTES=terminal_session_token=#{@session.route_token},terminal_session_key=#{key}", attrs
+      assert UsageStatistics::SessionKey.required_for?(@session.reload)
+    end
+
+    # On the Docker runtime an agent container must be bounded and kept off the
+    # platform's own network, where trust-auth Postgres and unauthenticated Redis live.
+    test "an agent container is bounded and joins the agent network only" do
+      host_config = build_strategy.build_host_config
+
+      assert_equal Settings.docker.agent_network, host_config["NetworkMode"]
+      assert_equal Settings.container_execution.limits.agent_session.memory_mb * 1024 * 1024, host_config["Memory"]
+      assert_equal Settings.container_execution.limits.agent_session.pids_limit, host_config["PidsLimit"]
+      assert_operator host_config["CpuQuota"], :>, 0
+    end
+
     test "TTYD_CMD is bash for agent sessions" do
       strategy = build_strategy(agent_type: "claude_code")
 
@@ -163,6 +185,17 @@ module ContainerStrategies
 
       assert_includes error.message, "expired"
       assert_equal "error", @credential.reload.status
+    end
+
+    # A login this server cannot decrypt must not start a session with no
+    # credentials in it; signing in again stores a readable one.
+    test "before_exec refuses to launch on a login it cannot decrypt, and says to sign in again" do
+      @credential.update_column(:encrypted_config_data, "not-a-ciphertext")
+      SessionContextService.expects(:assemble_session_context).never
+
+      error = assert_raises(AgentCredential::PreflightError) { run_before_exec(build_strategy(credential: @credential.reload)) }
+
+      assert_includes error.message, "can't be read"
     end
 
     # The token in hand is still valid for a while — a token endpoint having a bad
@@ -649,32 +682,42 @@ module ContainerStrategies
       refute env_vars.any? { |v| v.start_with?("empty_key=") }
     end
 
-    test "launch_agent_in_tmux uses codex with AGENT_PROMPT for non_interactive codex sessions" do
+    # The prompt is the whole task: in an environment variable it would sit in the
+    # pod spec and in every process the agent starts.
+    test "a non_interactive prompt reaches the CLI from a file only the agent can read" do
       @session.update!(agent_type: "codex", mode: "non_interactive", initial_prompt: "Run tests")
       strategy = build_strategy(agent_type: "codex")
       container_mock = mock("container")
 
       mock_adapter = mock("adapter")
-      mock_adapter.expects(:session_command).with(mode: "non_interactive", prompt: "Run tests", model: nil)
-                  .returns("codex --yolo")
-
+      mock_adapter.expects(:session_command).with(mode: "non_interactive", model: nil).returns("codex --yolo")
+      mock_adapter.stubs(:container_uid).returns(1001)
       mock_service = mock("service")
       mock_service.stubs(:adapter).returns(mock_adapter)
       AgentCredentialsService.expects(:for).with("codex").returns(mock_service)
 
       runtime_mock = mock("runtime")
       strategy.stubs(:runtime).returns(runtime_mock)
+      runtime_mock.expects(:write_file)
+                  .with(container_mock, "/tmp/.aixle-prompt", "Run tests", mode: 0o600, uid: 1001, gid: 1001)
+                  .returns(true)
       runtime_mock.expects(:exec).with do |container, command|
         send_keys = command[2].match(/tmux send-keys -t agent (.+?) Enter;/)&.[](0)
         delivered_command = Shellwords.split(send_keys).fetch(4)
 
-        container == container_mock &&
-          command[0] == "sh" &&
-          command[1] == "-c" &&
-          delivered_command == 'codex --yolo "$AGENT_PROMPT"'
+        container == container_mock && command[0] == "sh" && command[1] == "-c" &&
+          delivered_command == 'codex --yolo "$(cat /tmp/.aixle-prompt)"'
       end
 
       strategy.send(:launch_agent_in_tmux, container_mock)
+    end
+
+    test "build_env_vars carries no prompt" do
+      @session.update!(mode: "non_interactive", initial_prompt: "Refactor the billing module")
+
+      env_vars = build_strategy.build_env_vars
+
+      assert_not env_vars.any? { |v| v.include?("Refactor the billing module") }
     end
 
     # == collect_terminal_output (raw pipe-pane log → single SessionLog) ==

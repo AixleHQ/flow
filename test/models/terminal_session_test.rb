@@ -62,8 +62,9 @@ class TerminalSessionTest < ActiveSupport::TestCase
     foreign = create(:config_item, scope: other_project, name: "OTHER_KEY")
     session = build(:terminal_session, user: @user, project: @project, config_items: [ foreign ])
 
+    # By id, not by name: naming another project's config item would leak it.
     refute_predicate session, :valid?
-    assert_match(/OTHER_KEY/, session.errors.full_messages.to_sentence)
+    assert_includes session.errors[:config_items], "must belong to this project (not found: #{foreign.id})"
   end
 
   test "rejects config items on a project-less session" do
@@ -72,7 +73,7 @@ class TerminalSessionTest < ActiveSupport::TestCase
                                        config_items: [ item ])
 
     refute_predicate session, :valid?
-    assert_match(/without a project/, session.errors.full_messages.to_sentence)
+    assert_includes session.errors[:config_items], "must belong to this project (not found: #{item.id})"
   end
 
   # == BMAD config helpers ==
@@ -445,54 +446,55 @@ class TerminalSessionTest < ActiveSupport::TestCase
 
   # == session-list broadcasts ==
 
-  test "project session updates broadcast only to the project's company" do
-    session = create(:terminal_session, user: @user, project: @project)
-
-    ActionCable.server.expects(:broadcast).with("session_list:company:#{@company.id}", anything)
-    ActionCable.server.expects(:broadcast).with("session_list:project:#{@project.id}", anything)
-
-    session.send(:broadcast_session_list_update)
+  def broadcasts_during
+    sent = []
+    recorder = ->(stream, payload) { sent << [ stream, payload ] }
+    InertiaCable.on_broadcast(&recorder)
+    yield
+    sent
+  ensure
+    InertiaCable.off_broadcast(&recorder)
   end
 
-  test "session-list broadcasts carry no prompt or metadata" do
-    session = create(:terminal_session, :agent_session, :running, user: @user, project: @project,
-                                                                  initial_prompt: "refactor the billing module")
-    payloads = []
-    ActionCable.server.stubs(:broadcast).with { |_stream, payload| payloads << payload }
+  def stream_name(*streamables) = InertiaCable::Streams::StreamName.stream_name_from(streamables)
 
-    session.send(:broadcast_session_list_update)
+  # One message reaches every subscriber and cannot be redacted per viewer, so
+  # it names the session and nothing else: no route token, no URLs, no ticket.
+  test "an update tells the company feed, the owner's page and the project list the id, and nothing more" do
+    session = create(:terminal_session, :agent_session, :running, user: @user, project: @project)
 
-    assert payloads.any?
-    payloads.each do |payload|
-      # One payload reaches every subscriber on the company/project channel and
-      # cannot be redacted per viewer, so what the person is working on does not
-      # travel on it at all. The route token does — it is gated at the proxy.
-      assert_equal session.id, payload[:session]["id"]
-      %w[initialPrompt metadata contextMetadata].each do |key|
-        assert_not payload[:session].key?(key), "#{key} must not be broadcast"
-      end
-      assert_equal session.route_token, payload[:session]["routeToken"]
-    end
+    sent = broadcasts_during { session.send(:broadcast_session_list_update) }
+
+    assert_equal [ stream_name(@company, :sessions), stream_name(@company, @user, :sessions),
+                   stream_name(@project, :sessions_runs) ], sent.map(&:first)
+    sent.each { |_, payload| assert_equal({ type: "session_update", id: session.id }, payload) }
   end
 
-  test "project-less session updates broadcast to EVERY company with an active membership" do
+  test "a project-less session announces itself to the company it acts for, and no other" do
     company_b = create(:company)
     create(:company_membership, user: @user, company: company_b)
-    revoked_company = create(:company)
-    create(:company_membership, :revoked, user: @user, company: revoked_company)
+    session = create(:terminal_session, :agent_session, user: @user, project: nil, company: company_b)
 
-    # company_id nil on purpose: the "every active membership" fan-out is the
-    # LEGACY path for rows that never recorded a tenant. New sessions carry
-    # company_id and broadcast to that one company only.
-    session = build(:terminal_session, :auth_setup, user: @user, project: nil)
-    session.company_id = nil
-    session.save!(validate: false)
+    sent = broadcasts_during { session.send(:broadcast_session_list_update) }
 
-    ActionCable.server.expects(:broadcast).with("session_list:company:#{@company.id}", anything)
-    ActionCable.server.expects(:broadcast).with("session_list:company:#{company_b.id}", anything)
-    ActionCable.server.expects(:broadcast).with("session_list:company:#{revoked_company.id}", anything).never
+    assert_equal [ stream_name(company_b, :sessions), stream_name(company_b, @user, :sessions) ], sent.map(&:first)
+  end
 
-    session.send(:broadcast_session_list_update)
+  test "a session no list shows announces nothing" do
+    session = create(:terminal_session, :auth_setup, user: @user, project: nil, company: @company)
+
+    assert_empty broadcasts_during { session.send(:broadcast_session_list_update) }
+  end
+
+  test "a session always records a company, and a project-bound one records the project's" do
+    other = create(:company)
+
+    assert_equal @company.id, create(:terminal_session, user: @user, project: @project, company_id: nil).company_id
+    mismatched = build(:terminal_session, user: @user, project: @project, company: other)
+    assert_not mismatched.valid?
+    assert_includes mismatched.errors[:company_id], "must be the project's company"
+    orphan = build(:terminal_session, user: @user, project: nil, company_id: nil)
+    assert_not orphan.valid?
   end
 
   # == backwards compatibility ==

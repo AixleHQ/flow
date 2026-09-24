@@ -3,16 +3,13 @@ import { Box, Button, RingProgress, Switch, Text } from '@mantine/core';
 import { IconArrowRight, IconChecklist, IconCoin, IconGitBranch, IconPlayerPlay } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import type { Project } from '@/types/generated';
+
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
 import classes from './OverviewPage.module.css';
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface Summary {
   sessionsLaunched: number;
@@ -30,13 +27,13 @@ interface WorkflowRunStats {
   total: number;
 }
 
-interface BoardColumn {
+interface ColumnCount {
   name: string;
   count: number;
 }
 
 interface BoardTaskDistribution {
-  columns: BoardColumn[];
+  columns: ColumnCount[];
   total: number;
 }
 

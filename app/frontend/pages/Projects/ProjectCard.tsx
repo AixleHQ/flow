@@ -2,26 +2,11 @@ import { router } from '@inertiajs/react';
 import { ActionIcon, Avatar, Box, Button, Group, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { IconArrowRight, IconClock, IconSettings, IconStar, IconStarFilled } from '@tabler/icons-react';
 
+import type { Project } from '@/types/generated';
+
 import { Identicon, StatusBadge } from 'shared/ui';
 
 import classes from './ProjectCard.module.css';
-
-interface Project {
-  id: number;
-  name: string;
-  description?: string | null;
-  slug: string;
-  state: string;
-  collaboratorsCount: number;
-  membersCount: number;
-  sessionsCount: number;
-  workflowsCount: number;
-  boardTasksCount: number;
-  lastActivityAt?: string | null;
-  createdAt: string;
-  members: { id: number; initials: string }[];
-  favorite: boolean;
-}
 
 interface ProjectCardProps {
   project: Project;

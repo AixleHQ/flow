@@ -106,7 +106,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
 
     content = ContextBuilders::BoardContext.new(session).build.first.content
-    assert_includes content, "A" * 497 + "..."
+    assert_includes content, ("A" * 497) + "..."
     assert_not_includes content, "A" * 600
   end
 
@@ -135,7 +135,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
   end
 
   test "content includes board columns with current marker" do
-    other_column = create(:board_column, name: "Done", board: @board, position: 2)
+    create(:board_column, name: "Done", board: @board, position: 2)
     task = create(:board_task, board: @board, board_column: @column, title: "Columns task")
     workflow_run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @user, board_task: task)
     step_run = create(:step_run, :running, workflow_run: workflow_run, step: @step)
@@ -203,7 +203,7 @@ class ContextBuilders::BoardContextTest < ActiveSupport::TestCase
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
 
     content = ContextBuilders::BoardContext.new(session).build.first.content
-    assert_includes content, "B" * 197 + "..."
+    assert_includes content, ("B" * 197) + "..."
     assert_not_includes content, "B" * 300
   end
 

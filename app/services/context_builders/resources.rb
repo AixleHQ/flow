@@ -51,6 +51,12 @@ module ContextBuilders
       end
       lines << ""
       lines << "Use the repository **ID** when calling tools that require a `repository_id` parameter."
+      if cloned.any? { |repo| repo.integration&.github? || repo.integration&.gitlab? }
+        lines << ""
+        lines << "GitHub and GitLab repositories authenticate through a credential helper configured in " \
+                 "each checkout, which fetches a fresh token for every `git fetch` and `git push`. Do not " \
+                 "add credentials to the remote URL."
+      end
       if cloned.any?(&:azure_devops?)
         lines << ""
         lines << "Azure DevOps repositories authenticate through a credential helper configured in each " \

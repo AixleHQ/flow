@@ -119,6 +119,22 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_equal "Keeps its name", wf.reload.name
   end
 
+  # The UI deletes the one way the API does: softly, keeping the run history, and
+  # reporting a refusal instead of success.
+  test "destroy keeps the run history and refuses while a run is live" do
+    wf = create(:workflow, scope: @project)
+    run = create(:workflow_run, :running, workflow: wf, project: @project, user: @user)
+
+    delete company_project_workflow_path(@project, wf)
+    assert_match(/active runs/, flash[:alert])
+    assert_nil wf.reload.deleted_at
+
+    run.update_column(:state, "completed")
+    delete company_project_workflow_path(@project, wf)
+    assert wf.reload.deleted_at
+    assert WorkflowRun.exists?(run.id)
+  end
+
   test "destroy redirects on success" do
     wf = create(:workflow, scope: @project)
 

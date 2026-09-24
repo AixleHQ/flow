@@ -15,6 +15,28 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_inertia_page "Projects/Integrations/IntegrationsPage"
   end
 
+  # A company-wide install serves every project and has no page of its own.
+  test "a company admin removes a company-wide integration from a project page" do
+    slack = create(:integration, provider: :slack, company: @company, project: nil, connected_by: @user)
+
+    delete company_project_integration_path(@project, slack)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_not Integration.exists?(slack.id)
+  end
+
+  test "a project owner who is not a company admin cannot remove a company-wide integration" do
+    owner = create(:user, :employee, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    project = create(:project, company: @company, owner: owner)
+    slack = create(:integration, provider: :slack, company: @company, project: nil, connected_by: @user)
+    sign_in_as(owner)
+
+    delete company_project_integration_path(project, slack)
+
+    assert_equal "Only a company admin can remove a company-wide integration", flash[:alert]
+    assert Integration.exists?(slack.id)
+  end
+
   test "slack_oauth_start authorizes an admin and redirects to Slack consent" do
     get slack_oauth_start_company_project_integrations_path(@project)
 

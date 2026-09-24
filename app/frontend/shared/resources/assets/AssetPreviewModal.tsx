@@ -1,16 +1,18 @@
-import { Badge, Box, Button, Center, Code, Group, Loader, Modal, Stack, Text } from '@mantine/core';
-import { IconDownload, IconFile } from '@tabler/icons-react';
+import { Alert, Anchor, Badge, Box, Button, Center, Code, Group, Loader, Modal, Stack, Text } from '@mantine/core';
+import { IconDownload, IconFile, IconWorld } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
+
+import type { Asset } from '@/types/generated';
 
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { formatFileSize } from 'shared/lib/formatFileSize';
-
-import type { Asset } from './types';
 
 interface AssetPreviewModalProps {
   asset: Asset | null;
   onClose: () => void;
   downloadUrl: string;
+  /** Offered only to someone who may change the asset. */
+  onUnshare?: (asset: Asset) => Promise<boolean>;
 }
 
 type PreviewType = 'image' | 'video' | 'audio' | 'pdf' | 'text' | 'markdown' | 'svg' | 'unsupported';
@@ -129,7 +131,7 @@ function getPreviewType(contentType: string | null | undefined, name: string): P
 
 const MAX_TEXT_SIZE = 2 * 1024 * 1024;
 
-export function AssetPreviewModal({ asset, onClose, downloadUrl }: AssetPreviewModalProps) {
+export function AssetPreviewModal({ asset, onClose, downloadUrl, onUnshare }: AssetPreviewModalProps) {
   const [textContent, setTextContent] = useState<string | null>(null);
   const [textLoading, setTextLoading] = useState(false);
 
@@ -282,6 +284,21 @@ export function AssetPreviewModal({ asset, onClose, downloadUrl }: AssetPreviewM
   return (
     <Modal opened={!!asset} onClose={onClose} title={asset.name} centered size="xl">
       <Stack gap="md">
+        {asset.shareUrl && (
+          <Alert icon={<IconWorld size={16} />} color="yellow" variant="light" title="Shared publicly">
+            <Group justify="space-between" wrap="nowrap" gap="sm">
+              <Anchor href={asset.shareUrl} target="_blank" rel="noreferrer" fz={13} truncate>
+                {asset.shareUrl}
+              </Anchor>
+              {onUnshare && (
+                <Button size="xs" variant="default" onClick={() => void onUnshare(asset).then((ok) => ok && onClose())}>
+                  Stop sharing
+                </Button>
+              )}
+            </Group>
+          </Alert>
+        )}
+
         {renderPreview()}
 
         <Group justify="space-between">
@@ -308,7 +325,7 @@ export function AssetPreviewModal({ asset, onClose, downloadUrl }: AssetPreviewM
               {formatFileSize(asset.latestVersion?.fileSize ?? null)}
             </Text>
           </Group>
-          {asset.tags?.length > 0 && (
+          {asset.tags && asset.tags.length > 0 && (
             <Group gap={4}>
               {asset.tags.map((tag) => (
                 <Badge key={tag} size="xs" variant="outline">

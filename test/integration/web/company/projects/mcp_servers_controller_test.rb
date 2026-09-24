@@ -44,12 +44,21 @@ class Web::Company::Projects::MCPServersControllerTest < ActionDispatch::Integra
   # arrives in. (MCPServerResource joins it back for the field; see its own test.)
   test "a stdio server posted as one line is stored split" do
     post company_project_mcp_servers_path(@project), params: {
-      mcp_server: { name: "local-mcp", transport: "stdio", command: "uvx local-mcp-server --verbose" }
+      mcp_server: { name: "local-mcp", transport: "stdio", command: "uvx local-mcp-server==1.4.0 --verbose" }
     }
 
     server = MCPServer.find_by(name: "local-mcp")
     assert_equal "uvx", server.command
-    assert_equal [ "local-mcp-server", "--verbose" ], server.args
+    assert_equal [ "local-mcp-server==1.4.0", "--verbose" ], server.args
+  end
+
+  test "a stdio package without an exact version is refused with the reason" do
+    post company_project_mcp_servers_path(@project), params: {
+      mcp_server: { name: "floating-mcp", transport: "stdio", command: "npx -y @example/mcp@latest" }
+    }
+
+    assert_nil MCPServer.find_by(name: "floating-mcp")
+    assert_match(/must pin @example\/mcp@latest to an exact version/, Array(session["inertia_errors"][:command]).to_sentence)
   end
 
   test "a stdio command the agent image cannot launch is refused with a reason" do
@@ -86,6 +95,20 @@ class Web::Company::Projects::MCPServersControllerTest < ActionDispatch::Integra
     server.reload
     assert_equal "Renamed", server.description
     assert_equal({ "Authorization" => "super-secret" }, server.headers)
+  end
+
+  test "a masked value is not carried to a new address" do
+    server = create(:mcp_server, scope: @project, kind: :custom, transport: "sse", url: "https://mcp.example.com/sse",
+                                 headers: { "Authorization" => "super-secret", "X-Team" => "t-1" })
+
+    patch company_project_mcp_server_path(@project, server), params: {
+      mcpServer: { url: "https://collector.example.net/sse",
+                   headers: { "Authorization" => SECRET_MASK, "X-Team" => "typed-again" } }
+    }
+    assert_response :redirect
+    assert_match(/address changed/, flash[:notice])
+
+    assert_equal({ "X-Team" => "typed-again" }, server.reload.headers)
   end
 
   test "update stores a freshly edited header value" do

@@ -6,6 +6,17 @@ class TemporalWorkflowRegistry
   # alive for a week is a fault, not a queue.
   ADMITTED_RUN_TIMEOUT = 7.days.to_i
 
+  # workflows.yml names this queue for everything the app runs itself. It is the
+  # configured TEMPORAL_TASK_QUEUE — the one the worker polls — so starting a
+  # workflow, dispatching its activities and polling can never disagree: with the
+  # name hardcoded, any other setting stopped all work, or let another deployment
+  # on the default queue pick it up.
+  DEFAULT_QUEUE = "aixle_ruby"
+
+  def self.resolve_queue(name)
+    name.to_s == DEFAULT_QUEUE ? Settings.temporal.task_queue.to_s : name
+  end
+
   # Activity definition
   class ActivityDef
     attr_reader :name, :task_queue
@@ -24,7 +35,7 @@ class TemporalWorkflowRegistry
         act_name = act["name"]
         @activities[act_name] = ActivityDef.new(
           name: act_name,
-          task_queue: act["task_queue"]
+          task_queue: TemporalWorkflowRegistry.resolve_queue(act["task_queue"])
         )
       end
     end
@@ -64,7 +75,7 @@ class TemporalWorkflowRegistry
         wf_name = wf["name"]
         @workflows[wf_name] = WorkflowDef.new(
           name: wf_name,
-          owner: wf["owner"],
+          owner: TemporalWorkflowRegistry.resolve_queue(wf["owner"]),
           activities: wf["activities"] || []
         )
       end
@@ -123,7 +134,7 @@ class TemporalWorkflowRegistry
       TemporalService.start_workflow(
         wf,
         { workflow_run_id: workflow_run.id },
-        id: "workflow-execution-#{workflow_run.id}",
+        id: workflow_run.execution_workflow_id,
         # What makes re-dispatch safe, and therefore the outbox relay possible
         # (WorkflowRunRelay). The id is per-run, so a duplicate start can only
         # mean this run's execution already exists — which is success, not a

@@ -89,7 +89,7 @@ module Admin
     end
 
     test "should not create company with duplicate email domain" do
-      existing_company = create(:company, email_domain: "acme.com")
+      create(:company, email_domain: "acme.com")
 
       assert_no_difference "Company.count" do
         post :create, params: {

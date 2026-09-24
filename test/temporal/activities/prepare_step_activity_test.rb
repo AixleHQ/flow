@@ -53,6 +53,17 @@ module Activities
         assert_includes result["validation_errors"].join, "nowhere.md"
         assert_equal "failed", step_run.reload.state
       end
+
+      test "a validator that cannot read the step's input specs does not start the step" do
+        step = create(:step, workflow: @workflow, input_asset_specs: [ 42 ])
+        step_run = create(:step_run, workflow_run: @run, step: step)
+
+        result = run_activity(PrepareStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["failed"]
+        assert_match(/input validation could not run/, result["validation_errors"].join)
+        assert_equal "failed", step_run.reload.state
+      end
     end
   end
 end

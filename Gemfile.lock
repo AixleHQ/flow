@@ -1,9 +1,3 @@
-GIT
-  remote: https://github.com/stoivo/ruby-filemagic.git
-  revision: 11a606a1ec1f18e57e2b466c2c59f73ab7aa0166
-  specs:
-    ruby-filemagic (0.7.3)
-
 GEM
   remote: https://rubygems.org/
   specs:
@@ -100,9 +94,6 @@ GEM
     anonymous_loader (0.1.3)
       version_gem (~> 1.1, >= 1.1.14)
     ast (2.4.3)
-    audited (5.8.0)
-      activerecord (>= 5.2, < 8.2)
-      activesupport (>= 5.2, < 8.2)
     auth-sanitizer (0.2.3)
       version_gem (~> 1.1, >= 1.1.14)
     aws-eventstream (1.4.0)
@@ -328,10 +319,6 @@ GEM
       activerecord
       kaminari-core (= 1.2.2)
     kaminari-core (1.2.2)
-    kramdown (2.5.2)
-      rexml (>= 3.4.4)
-    kramdown-parser-gfm (1.1.0)
-      kramdown (~> 2.0)
     kubeclient (4.13.0)
       http (>= 3.0, < 6.0)
       jsonpath (~> 1.0)
@@ -386,16 +373,12 @@ GEM
       mime-types-data (~> 3.2025, >= 3.2025.0507)
     mime-types-data (3.2026.0203)
     mini_mime (1.1.5)
-    minitar (1.1.0)
     minitest (5.27.0)
     minitest-hooks (1.5.4)
       minitest (> 5.3)
     minitest-power_assert (0.3.1)
       minitest
       power_assert (>= 1.1)
-    minitest-rails (8.1.0)
-      minitest (~> 5.20)
-      railties (>= 8.1.0, < 8.2.0)
     mocha (3.1.0)
       ruby2_keywords (>= 0.0.5)
     msgpack (1.8.4)
@@ -451,9 +434,6 @@ GEM
     octokit (10.0.0)
       faraday (>= 1, < 3)
       sawyer (~> 0.9)
-    oj (3.17.6)
-      bigdecimal (>= 3.0)
-      ostruct (>= 0.2)
     omniauth (2.1.4)
       hashie (>= 3.4.6)
       logger
@@ -588,16 +568,12 @@ GEM
       io-console (~> 0.5)
     request_store (1.7.0)
       rack (>= 1.4)
-    responders (3.2.1)
-      actionpack (>= 7.0)
-      railties (>= 7.0)
     rest-client (2.1.0)
       http-accept (>= 1.7.0, < 2.0)
       http-cookie (>= 1.0.2, < 2.0)
       mime-types (>= 1.16, < 4.0)
       netrc (~> 0.8)
     rexml (3.4.4)
-    rolify (6.0.1)
     rotp (6.3.0)
     rubocop (1.91.0)
       json (>= 2.3)
@@ -674,7 +650,6 @@ GEM
       railties (>= 7.1)
       thor (>= 1.3.1)
     sorbet-runtime (0.6.13312)
-    spring (4.7.0)
     sqlite3 (2.9.6-aarch64-linux-gnu)
     sqlite3 (2.9.6-aarch64-linux-musl)
     sqlite3 (2.9.6-arm-linux-gnu)
@@ -776,7 +751,6 @@ DEPENDENCIES
   administrate-field-jsonb
   administrate-field-shrine
   alba
-  audited
   aws-sdk-bedrock (~> 1.94)
   aws-sdk-bedrockruntime (~> 1.85)
   aws-sdk-s3 (~> 1.232)
@@ -784,7 +758,6 @@ DEPENDENCIES
   bootsnap
   brakeman
   bullet
-  byebug
   capybara (>= 3)
   config
   csv
@@ -807,23 +780,19 @@ DEPENDENCIES
   json (< 3)
   json_schemer
   jwt
-  kramdown
-  kramdown-parser-gfm
   kubeclient (~> 4.13)
   letter_opener
   letter_opener_web
   license_finder
   lograge (~> 0.15.0)
+  marcel (~> 1.0)
   mcp
-  minitar
   minitest
   minitest-hooks
   minitest-power_assert
-  minitest-rails
   mocha
   oas_rails
   octokit
-  oj
   omniauth
   omniauth-google-oauth2
   omniauth-rails_csrf_protection
@@ -839,9 +808,7 @@ DEPENDENCIES
   rails (~> 8.1.3)
   rails-i18n
   ransack
-  redis
-  responders
-  rolify
+  redis (>= 4, < 6)
   rotp (~> 6.3)
   rubocop
   rubocop-factory_bot
@@ -849,7 +816,6 @@ DEPENDENCIES
   rubocop-performance
   rubocop-rails
   rubocop-rails-omakase
-  ruby-filemagic!
   ruby-vips (~> 2.3)
   sentry-rails
   sentry-ruby
@@ -857,7 +823,6 @@ DEPENDENCIES
   simplecov
   site_prism
   solid_queue (~> 1.7)
-  spring
   sqlite3 (~> 2.9)
   stackprof (~> 0.2.28)
   temporalio

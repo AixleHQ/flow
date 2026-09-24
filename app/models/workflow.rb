@@ -3,6 +3,7 @@
 class Workflow < ApplicationRecord
   include ProjectOwnedReferences
   belongs_to :scope, polymorphic: true, optional: true
+  include TenantColumns
   belongs_to :published_by, class_name: "User", optional: true
 
   has_many :steps, dependent: :destroy
@@ -51,13 +52,24 @@ class Workflow < ApplicationRecord
     association(:steps).loaded? ? steps.reject(&:deleted?) : steps.not_deleted.to_a
   end
 
+  # The one way a workflow is deleted — from the UI, the API and the personal MCP
+  # alike. Refused while a run is live or a board column still starts it;
+  # otherwise every trigger that could start it again is switched off (their
+  # schedules go with them) and it is marked deleted, in one transaction. Its
+  # runs and their history stay.
   def soft_delete!
+    raise ActiveRecord::RecordNotDestroyed.new("Cannot delete — it has active runs", self) if has_active_runs?
+
     if column_workflow_bindings.any?
       bound = column_workflow_bindings.includes(board_column: { board: :project })
       descs = bound.map { |b| "'#{b.board_column.name}' in project '#{b.board_column.board.project.name}'" }
-      raise ActiveRecord::RecordNotDestroyed, "Cannot delete — bound to column #{descs.join(', ')}"
+      raise ActiveRecord::RecordNotDestroyed.new("Cannot delete — bound to column #{descs.join(', ')}", self)
     end
-    update!(deleted_at: Time.current)
+
+    transaction do
+      trigger_bindings.where(enabled: true).find_each { |binding| binding.update!(enabled: false) }
+      update!(deleted_at: Time.current)
+    end
   end
 
   def deleted?

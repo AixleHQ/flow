@@ -55,10 +55,10 @@ module Api
                                            mode: "interactive" } }.to_json,
              headers: json_headers
 
-        assert_response :created
-        session = TerminalSession.find(response.parsed_body["id"])
-        assert_not_equal stranger_company.id, session.company_id,
-                         "a company the user is not a member of must never be bound to a session"
+        # Refused outright: every session acts for a company, and this one names a
+        # company the user is not a member of.
+        assert_response :unprocessable_entity
+        assert_not TerminalSession.exists?(company_id: stranger_company.id)
       end
 
       # Project-bound sessions keep taking the project's company: that is who the work

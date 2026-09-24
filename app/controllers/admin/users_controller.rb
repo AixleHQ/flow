@@ -68,29 +68,32 @@ module Admin
       redirect_to admin_user_path(user), notice: "User was restored."
     end
 
+    # Ends every browser sign-in of the user (a lost laptop, a leaked cookie).
+    def sign_out_everywhere
+      user = requested_resource
+      ended = UserSession.revoke_all_for!(user)
+      audit!(user, "sessions_revoked", "#{true_user.email} signed #{user.email} out everywhere (#{ended} session(s))")
+      redirect_to admin_user_path(user), notice: "Signed #{user.email} out of #{ended} session(s)."
+    end
+
     def impersonate
-      Audited::Audit.create!(
-        auditable: requested_resource,
-        action: "impersonate_start",
-        user: true_user,
-        audited_changes: {},
-        comment: "#{true_user.email} impersonating #{requested_resource.email}"
-      )
+      audit!(requested_resource, "impersonate_start", "#{true_user.email} impersonating #{requested_resource.email}")
       impersonate_user(requested_resource)
       redirect_to root_path
     end
 
     def stop_impersonate
       impersonated = current_user
-      Audited::Audit.create!(
-        auditable: impersonated,
-        action: "impersonate_stop",
-        user: true_user,
-        audited_changes: {},
-        comment: "#{true_user.email} stopped impersonating #{impersonated.email}"
-      )
+      audit!(impersonated, "impersonate_stop", "#{true_user.email} stopped impersonating #{impersonated.email}")
       stop_impersonating_user
       redirect_to admin_users_path
+    end
+
+    private
+
+    def audit!(auditable, action, comment)
+      Audit.create!(auditable:, action:, comment:, user: true_user, audited_changes: {},
+                    remote_address: request.remote_ip, request_uuid: request.uuid)
     end
   end
 end

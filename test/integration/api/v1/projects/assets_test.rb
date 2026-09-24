@@ -13,6 +13,17 @@ class Api::V1::Projects::AssetsTest < ActionDispatch::IntegrationTest
     sign_in_as(@owner)
   end
 
+  test "unshare stops a public link working" do
+    asset = create(:asset, scope: @project, created_by: @owner)
+    token = asset.share!
+
+    delete share_api_v1_project_asset_path(@project, asset), as: :json
+
+    assert_response :success
+    assert_nil response.parsed_body["shareUrl"]
+    assert_nil Asset.publicly_shared.find_by(public_token: token)
+  end
+
   test "update moves an asset to a different folder" do
     asset = create(:asset, folder: "docs", scope: @project, created_by: @owner)
 

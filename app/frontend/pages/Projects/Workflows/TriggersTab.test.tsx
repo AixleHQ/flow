@@ -10,8 +10,7 @@ type TabProps = ComponentProps<typeof TriggersTab>;
 
 // TriggersTab takes plain props (no usePage read) and talks to the backend through apiFetch(), a thin
 // wrapper over the global fetch() the test setup stubs. Each test that asserts a request (or needs
-// seeded triggers) spies on fetch() and dispatches by HTTP method, exactly like the sibling
-// WorkflowTriggersDrawer.test.tsx in this directory.
+// seeded triggers) spies on fetch() and dispatches by HTTP method.
 
 // ColumnOption / StepOption / Trigger are the component's own local interfaces (no Typelizer type, so
 // no factory exists); these literals match those interfaces exactly.

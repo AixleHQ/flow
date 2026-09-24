@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class CreateSubStepRuns < ActiveRecord::Migration[8.1]
   def change
     create_table :sub_step_runs do |t|

@@ -48,8 +48,8 @@ module Agents
       adapters.each do |agent_type, adapter|
         next unless adapter.credential_lifecycle[:refresh] == :server
 
-        assert_not_equal BaseAdapter, adapter.method(:refresh!).owner,
-                         "#{agent_type} declares refresh: :server but inherits BaseAdapter#refresh!"
+        assert_not_equal BaseAdapter, adapter.method(:perform_refresh!).owner,
+                         "#{agent_type} declares refresh: :server but inherits BaseAdapter#perform_refresh!"
         assert_not_equal BaseAdapter, adapter.method(:token_expires_at).owner,
                          "#{agent_type} declares refresh: :server but inherits BaseAdapter#token_expires_at"
       end

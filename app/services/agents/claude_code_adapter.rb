@@ -226,6 +226,13 @@ module Agents
     # Base (claude.ai) login client_id. Prefer Settings; fall back to the known public client id.
     BASE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
+    # A session container rotates the claude.ai logins and nothing else. settings.json
+    # (where ANTHROPIC_BASE_URL or a Bedrock bearer token would go) and .claude.json
+    # (primaryApiKey) are never written back from a running session.
+    def rotatable_credential_keys = OAUTH_BLOCKS
+
+    def writeback_file_paths = [ "#{home_dir}/.claude/.credentials.json" ]
+
     def merge_refreshed_credentials(current, incoming)
       merged = current.merge(incoming) # incoming wins for scalar keys (userID, oauthAccount, primaryApiKey, ...)
       OAUTH_BLOCKS.each do |block|
@@ -255,19 +262,22 @@ module Agents
     # Each block (claudeAiOauth base login + designOauth) rotates independently, so
     # we refresh only the blocks that are near expiry and persist under a row lock
     # via merge_refreshed_credentials + from_artifacts so a concurrent live session's
-    # cleanup can't clobber the rotated token.
+    # cleanup can't clobber the rotated token. Runs under the refresh lease
+    # (BaseAdapter#refresh!).
     # @param credential [AgentCredential]
     # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil,
-    #   permanent: Boolean } — `permanent` is true only when the BASE login is the block
-    #   the server rejected; a dead add-on (designOauth) leaves the credential usable.
+    #   permanent: Boolean, persisted: Boolean } — `permanent` is true only when the
+    #   BASE login is the block the server rejected; a dead add-on (designOauth)
+    #   leaves the credential usable.
     # @param margin_ms [Integer] refresh a block expiring within this many ms. The sweep
     #   uses the default; a session launch passes its own, larger, threshold so the
     #   container starts with a token that outlives the session.
-    def refresh!(credential, margin_ms: REFRESH_MARGIN_MS)
+    def perform_refresh!(credential, margin_ms: nil)
+      margin_ms ||= REFRESH_MARGIN_MS
       current = credential.config_data
       now_ms  = (Time.current.to_f * 1000).to_i
       refreshed_blocks = {}
-      invalidated_blocks = {}
+      rejected = {}
       error = nil
 
       OAUTH_BLOCKS.each do |block_name|
@@ -283,16 +293,7 @@ module Agents
                                           previous: block, now_ms: now_ms,
                                           block_name: block_name, credential_id: credential.id)
         if new_block == :invalid_grant
-          # Server has permanently rejected the refresh token. Strip every piece of
-          # token material: accessToken so config_files does not write a stale token
-          # into the next container (DesignSync or base inference would fail with an
-          # opaque 401), and refreshToken + expiresAt so the sweep stops retrying a
-          # grant the server will never honour again. Retrying it forever is what
-          # pinned expires_at in the past and re-failed the credential every 5 minutes.
-          # The block itself stays so the UI still offers "Reconnect Design" rather
-          # than losing the Design connection entirely.
-          invalidated_blocks[block_name] = block.except("accessToken", "refreshToken", "expiresAt")
-          error ||= "#{block_name} invalid_grant — reconnection required"
+          rejected[block_name] = block["refreshToken"]
         elsif new_block
           refreshed_blocks[block_name] = new_block
         else
@@ -300,33 +301,54 @@ module Agents
         end
       end
 
-      changes = refreshed_blocks.merge(invalidated_blocks)
-
-      if changes.any?
+      invalidated_blocks = {}
+      written = false
+      if refreshed_blocks.any? || rejected.any?
         credential.with_lock do
-          fresh    = credential.config_data
-          incoming = fresh.merge(changes)
+          fresh = credential.config_data
+          # An invalid_grant is a verdict on the refresh token we sent. A block that
+          # now carries another one was rotated meanwhile (a container wrote its own
+          # rotation back), and wiping it would destroy the login that won.
+          #
+          # A rejected block keeps no token material: accessToken so config_files does
+          # not write a stale token into the next container (DesignSync or base
+          # inference would fail with an opaque 401), and refreshToken + expiresAt so
+          # the sweep stops retrying a grant the server will never honour again. The
+          # block itself stays so the UI still offers "Reconnect Design".
+          rejected.each do |block_name, sent|
+            stored = fresh[block_name]
+            next unless stored.is_a?(Hash) && stored["refreshToken"] == sent
+
+            invalidated_blocks[block_name] = stored.except("accessToken", "refreshToken", "expiresAt")
+          end
+          incoming = fresh.merge(refreshed_blocks).merge(invalidated_blocks)
           merged   = merge_refreshed_credentials(fresh, incoming)
           # Invalidated blocks must bypass the freshest-token guard: the cleared block
           # has no expiresAt and would lose to the stored stale one.
           invalidated_blocks.each_key { |k| merged[k] = incoming[k] }
-          AgentCredential.from_artifacts(credential.user_id, credential.company_id, "claude_code", merged) if merged != fresh
+          if merged != fresh
+            AgentCredential.from_artifacts(credential.user_id, credential.company_id, "claude_code", merged)
+            written = true
+          end
         end
       end
+      invalidated_blocks.each_key { |block_name| error ||= "#{block_name} invalid_grant — reconnection required" }
 
       # Only a rejected BASE login makes the credential unusable, and only that may
       # flip it to `error`: a session runs on claudeAiOauth alone, so a dead
       # designOauth must not take the user's whole Claude login down with it.
       permanent = invalidated_blocks.key?(BASE_OAUTH_BLOCK)
 
-      return { status: :not_needed, detail: nil, permanent: false } if changes.empty? && error.nil?
+      return { status: :not_needed, detail: nil, permanent: false, persisted: written } if refreshed_blocks.empty? && invalidated_blocks.empty? && error.nil?
       # A rejected base login is a failure even when an add-on block rotated fine in
       # the same pass — reporting :refreshed there would clear the error the user
       # has to act on.
-      return { status: :error, detail: error, permanent: permanent } if error && (permanent || refreshed_blocks.empty?)
+      if error && (permanent || refreshed_blocks.empty?)
+        return { status: :error, detail: error, permanent: permanent, persisted: written }
+      end
 
       # partial failure (add-on block failed, base rotated) still counts as refreshed
-      { status: :refreshed, detail: error, permanent: false }
+      { status: :refreshed, detail: error, permanent: false, persisted: written }
     end
 
     # Extract only the credentials we need to persist
@@ -343,11 +365,15 @@ module Agents
     end
 
     # Generate ~/.claude.json content. Excludes claudeAiOauth + designOauth
-    # (both live in .credentials.json, never in .claude.json).
+    # (both live in .credentials.json, never in .claude.json) and the Bedrock
+    # connection: Claude Code takes Bedrock from settings.json env and its keys
+    # from the credential_process helper, while the stored block holds the
+    # Identity Center registration secret and refresh token — login material
+    # that must never enter a container.
     def generate_config(credentials, workflow_config = {})
       {
         # Credentials from database (API-key path fields, OAuth account metadata, userID, etc.)
-        **credentials.except("claudeAiOauth", "designOauth"),
+        **credentials.except("claudeAiOauth", "designOauth", BEDROCK_KEY),
 
         # Fixed values (skip onboarding, etc.)
         "installMethod" => "global",
@@ -680,7 +706,7 @@ module Agents
 
     # Session command for agent terminal.
     # Both modes use full Claude TUI to preserve streamed terminal UX.
-    def session_command(mode:, prompt: nil, model: nil)
+    def session_command(mode:, model: nil)
       model ? "claude --model #{Shellwords.shellescape(model)}" : "claude"
     end
 
@@ -855,9 +881,6 @@ module Agents
 
     # Default environment variables for Claude Code runtime.
     def default_env_vars(session)
-      route_token = session.route_token
-      resource_attributes = "terminal_session_token=#{route_token}"
-
       {
         # MITM proxy — intercept Anthropic API traffic
         "MITM_LOG_PATH" => "/var/log/mitm/http.log",
@@ -873,7 +896,7 @@ module Agents
         "OTEL_EXPORTER_OTLP_PROTOCOL" => "http/protobuf",
         "OTEL_METRICS_EXPORTER" => "otlp",
         "OTEL_METRIC_EXPORT_INTERVAL" => "2000",
-        "OTEL_RESOURCE_ATTRIBUTES" => resource_attributes,
+        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session),
         # MCP server startup timeout (ms). Default 90s — stdio servers need time for pipx/npx cold start.
         "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s
       }.merge(cloud_credential_env(session)).compact

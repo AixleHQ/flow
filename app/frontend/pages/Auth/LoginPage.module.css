@@ -92,23 +92,6 @@
   font-weight: 500;
 }
 
-/* ── Google Button ──────────────────────────────── */
-
-.googleButton {
-  background-color: var(--app-bg-elevated);
-  color: var(--app-text-primary);
-  border-color: var(--app-border-default);
-  font-family: var(--app-font-body, 'Figtree', sans-serif);
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 150ms ease, border-color 150ms ease;
-}
-
-.googleButton:hover {
-  background-color: var(--app-bg-elevated);
-  border-color: var(--app-border-strong);
-}
-
 /* ── No Workspace Screen ────────────────────────── */
 
 .noWorkspaceHeading {

@@ -292,12 +292,16 @@ module Api
           assert_equal 2, JSON.parse(response.body).length
         end
 
-        test "workflow_runs returns runs json" do
-          create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: @task)
+        test "workflow_runs returns runs json with what each run cost" do
+          run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, board_task: @task)
+          session = create(:terminal_session, :agent_session, user: @user, project: @project)
+          create(:step_run, workflow_run: run, step: create(:step, workflow: @workflow), terminal_session: session)
+          UsageStatistic.create!(terminal_session: session, cost_cents: 250)
 
           get :workflow_runs, params: { project_id: @project.id, id: @task.id }
 
           assert_response :success
+          assert_equal [ [ run.id, 250 ] ], JSON.parse(response.body).map { |r| [ r["id"], r["totalCostCents"] ] }
         end
 
         test "trigger_workflow returns run json when service succeeds" do
@@ -328,7 +332,7 @@ module Api
           ColumnWorkflowBinding.create!(
             board_column: @col1, workflow: @workflow, trigger_mode: :manual, cooldown_seconds: 0
           )
-          WorkflowService.expects(:start).with(has_entries(user: assignee))
+          WorkflowService.expects(:enqueue).with(has_entries(user: assignee))
                          .returns(create(:workflow_run, workflow: @workflow, project: @project, user: assignee))
 
           post :trigger_workflow, params: { project_id: @project.id, id: @task.id }
@@ -340,7 +344,7 @@ module Api
         # UI actually uses.
         test "move into an auto-bound column starts that column's workflow" do
           ColumnWorkflowBinding.create!(board_column: @col2, workflow: @workflow, trigger_mode: :auto, cooldown_seconds: 0)
-          WorkflowService.expects(:start).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
+          WorkflowService.expects(:enqueue).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
 
           patch :move, params: { project_id: @project.id, id: @task.id, column_id: @col2.id }
 
@@ -353,7 +357,7 @@ module Api
         # the task_moved activity and the column's auto-trigger entirely.
         test "update that changes the column moves the task, exactly as #move would" do
           ColumnWorkflowBinding.create!(board_column: @col2, workflow: @workflow, trigger_mode: :auto, cooldown_seconds: 0)
-          WorkflowService.expects(:start).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
+          WorkflowService.expects(:enqueue).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
 
           assert_difference -> { ColumnTransition.count }, 1 do
             patch :update, params: {

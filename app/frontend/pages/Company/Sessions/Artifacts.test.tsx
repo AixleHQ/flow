@@ -7,8 +7,6 @@ import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
 
 import SessionArtifactsPage from './Artifacts';
 
-// Session summary stays bespoke: it's UNMAPPED — the nearest generated type (TerminalSession) is far
-// heavier than this lightweight page-prop shape, so there's no clean typed factory to drift against.
 const session = {
   id: 42,
   agentType: 'researcher',
@@ -96,10 +94,7 @@ describe('Company/Sessions/Artifacts', () => {
         session,
         artifacts: [
           buildSessionArtifact({ id: 1, name: 'video.mp4', fileSize: 3 * 1024 * 1024 }),
-          // fileSize/contentType are optional-not-nullable in the generated SessionArtifact
-          // (fileSize?: number, contentType?: string); the page models them as `| null` and this test
-          // asserts the em-dash for the null case, so keep the null overrides bespoke off the typed base.
-          { ...buildSessionArtifact({ id: 2, name: 'unknown.bin' }), fileSize: null, contentType: null },
+          buildSessionArtifact({ id: 2, name: 'unknown.bin', fileSize: null, contentType: null }),
         ],
         alreadyReviewed: false,
       },
@@ -139,9 +134,7 @@ describe('Company/Sessions/Artifacts', () => {
         session,
         artifacts: [
           buildSessionArtifact({ id: 1, name: 'with-link.pdf', downloadUrl: 'https://example.com/file.pdf' }),
-          // downloadUrl is optional-not-nullable in the generated type (downloadUrl?: string); the page
-          // uses `| null` and this test asserts the link is omitted for the absent case, so keep it bespoke.
-          { ...buildSessionArtifact({ id: 2, name: 'no-link.pdf' }), downloadUrl: null },
+          buildSessionArtifact({ id: 2, name: 'no-link.pdf', downloadUrl: null }),
         ],
         alreadyReviewed: false,
       },

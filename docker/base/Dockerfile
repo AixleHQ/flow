@@ -132,21 +132,12 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # -----------------------------------------------------------------------------
 RUN python3 -m pip install --no-cache-dir --break-system-packages mitmproxy==10.2.4
 
-# Pre-generate MITM CA so every container starts with certs already in place
-# (eliminates the race between mitmdump startup and agent HTTPS requests).
-RUN mkdir -p /opt/mitm/ca && \
-    mitmdump --listen-port 0 -q & PID=$! && sleep 1 && kill $PID 2>/dev/null; \
-    cp /root/.mitmproxy/mitmproxy-ca*.pem /root/.mitmproxy/mitmproxy-ca*.p12 \
-       /root/.mitmproxy/mitmproxy-dhparam.pem /opt/mitm/ca/ && \
-    cat /etc/ssl/certs/ca-certificates.crt /opt/mitm/ca/mitmproxy-ca-cert.pem \
-        > /opt/mitm/ca/combined-ca-bundle.pem && \
-    chmod -R 644 /opt/mitm/ca/* && \
-    rm -rf /root/.mitmproxy
-
-# Trust MITM CA in the system bundle (curl/apt/OpenSSL; may help Chromium via platform hooks).
-# No runtime hook — same CA files are baked at build time.
-RUN cp /opt/mitm/ca/mitmproxy-ca-cert.pem /usr/local/share/ca-certificates/mitmproxy-ca.crt \
-    && update-ca-certificates
+# The interception CA is generated per container at start (logger/start-mitm.sh),
+# never here: one baked into the image put its private key in every copy of a
+# public image, and every agent container trusted it for every host. The system
+# bundle is left appendable so that container's own CA can join it — only this
+# container's processes read it.
+RUN chmod 0666 /etc/ssl/certs/ca-certificates.crt
 
 # Create fd symlink (fd-find installs as fdfind on Debian)
 RUN ln -sf /usr/bin/fdfind /usr/bin/fd || true
@@ -304,11 +295,11 @@ RUN mkdir -p /workspace/repo /workspace/outputs /opt/watcher /opt/auth-check /op
 WORKDIR /workspace
 
 # UTF-8 locale (required for tmux + Russian/CJK text)
-ENV LANG=C.UTF-8 \
-    GIT_SSL_NO_VERIFY=1
+ENV LANG=C.UTF-8
 
 # Ports:
-#   7681 - ttyd web terminal
+#   7681 - ttyd web terminal (the session's owner)
+#   7682 - read-only ttyd (everyone else)
 #   4040 - file watcher WebSocket + HTTP API / auth-check
 #   8443 - OpenVSCode Server (IDE)
-EXPOSE 7681 4040 8443
+EXPOSE 7681 7682 4040 8443

@@ -12,6 +12,8 @@ class OauthCredentialDashboard < Administrate::BaseDashboard
     oauth_client: Field::BelongsTo,
     owner: Field::Polymorphic,
     mcp_server: Field::BelongsTo,
+    connected_by: Field::BelongsTo,
+    resource: Field::String,
     provider: Field::String.with_options(searchable: true),
     status: Field::Select.with_options(include_blank: false, collection: %w[pending active error revoked]),
     scopes: Field::String,
@@ -39,6 +41,8 @@ class OauthCredentialDashboard < Administrate::BaseDashboard
     oauth_client
     owner
     mcp_server
+    resource
+    connected_by
     provider
     status
     scopes

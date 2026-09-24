@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class AddSubdomainAndLogoToCompanies < ActiveRecord::Migration[8.0]
   def change
     # Add columns as nullable first

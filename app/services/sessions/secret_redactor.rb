@@ -37,7 +37,13 @@ module Sessions
       ids = SessionConfigResolver.new(session).resolve_config_item_ids
       return [] if ids.blank?
 
-      ConfigItem.where(id: ids).with_item_type(:secret).filter_map(&:decrypted_value)
+      # One unreadable item is not a reason to redact nothing: it cannot have been
+      # handed out either, so it is simply not on the list.
+      ConfigItem.where(id: ids).with_item_type(:secret).filter_map do |item|
+        item.decrypted_value
+      rescue Encryptable::DecryptionError
+        nil
+      end
     rescue StandardError => e
       # A redactor that raises would take the whole log-collection step with it
       # and lose the log entirely. Failing closed here means "no redaction", so

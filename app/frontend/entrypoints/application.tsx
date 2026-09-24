@@ -8,6 +8,7 @@ import { registerPreloadErrorReload } from 'shared/lib/preloadErrorReload';
 import { initSentry } from 'shared/lib/sentry';
 import { cssVariablesResolver, mantineTheme } from 'shared/theme/mantineTheme';
 import { InertiaRouteIndicator } from 'shared/ui';
+import { AppCrashFallback, ProviderCrashFallback } from 'shared/ui/AppCrashFallback';
 
 // Persist the chosen color scheme. Key matches the inline anti-flash script in
 // app/views/layouts/inertia.html.haml so the scheme is applied before paint.
@@ -52,7 +53,7 @@ createInertiaApp({
 
   withApp(app: React.ReactNode) {
     return (
-      <Sentry.ErrorBoundary showDialog>
+      <Sentry.ErrorBoundary fallback={<ProviderCrashFallback />}>
         <MantineProvider
           theme={mantineTheme}
           defaultColorScheme="dark"
@@ -62,7 +63,9 @@ createInertiaApp({
           <ModalsProvider>
             <Notifications position="top-right" />
             <InertiaRouteIndicator />
-            {app}
+            <Sentry.ErrorBoundary fallback={({ resetError }) => <AppCrashFallback resetError={resetError} />}>
+              {app}
+            </Sentry.ErrorBoundary>
           </ModalsProvider>
         </MantineProvider>
       </Sentry.ErrorBoundary>

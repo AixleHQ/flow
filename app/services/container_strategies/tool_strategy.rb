@@ -87,7 +87,7 @@ module ContainerStrategies
         begin
           result = runtime.wait_container(container, slice)
           return result["StatusCode"] || result[:StatusCode] || -1
-        rescue Docker::Error::TimeoutError
+        rescue ContainerRuntime::WaitTimeout
           # Slice elapsed, container still running — heartbeat and keep waiting.
         end
       end
@@ -132,12 +132,17 @@ module ContainerStrategies
     end
 
     def handle_timeout(container, start_time)
-      container.kill rescue nil
       logs = begin
                runtime.container_logs(container)
              rescue StandardError
                { stdout: "", stderr: "" }
              end
+      # After the logs: stopping a Kubernetes run deletes its pod, and the logs with it.
+      begin
+        runtime.stop_container(container, 0)
+      rescue StandardError => e
+        Rails.logger.warn("[ToolStrategy] Stopping a timed-out run failed: #{e.message}")
+      end
       duration_ms = ms_since(start_time)
 
       persist_result(exit_code: TIMEOUT_EXIT_CODE, stdout: logs[:stdout].to_s,

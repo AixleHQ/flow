@@ -10,6 +10,8 @@
 | **Workflow Task Failure** | Workflow code throws a non-Temporal exception (`RuntimeError`, `NoMethodError`, etc.) | The task retries indefinitely. The workflow stays Open. Considered a bug that can be fixed by a deploy |
 | **Workflow Execution Failure** | Workflow code throws `Temporalio::Error::Failure` or its descendants (`ApplicationError`, `ActivityError`, `CanceledError`, `Timeout::Error`) | The workflow is marked Failed. Execution stops |
 
+A workflow task failure is reported to Sentry by `Interceptors::SentryInterceptor`; see [temporal-versioning.md](./temporal-versioning.md), which also covers the nondeterminism errors a code change can cause.
+
 **Rule**: a workflow must never fail because of an activity error. An Activity Failure arrives in the workflow as `ActivityError` — a descendant of `Failure`. If it is not caught, the workflow will fail. If caught, you can make a decision (retry, compensate, cleanup, fail).
 
 ## Errors in an Activity
@@ -132,6 +134,14 @@ The Activity base class intercepts common Rails errors (`RecordNotFound`, `Recor
 ```
 
 ## Decision table: what to do with an error
+
+For container phases the table is code: `ContainerService::ErrorClassification`
+reads the runtime's own error off `PhaseError#original_error`, and
+`Activities::Container::PhaseActivity` maps `:transient` to retryable, `:gone` to
+benign only during cleanup, and everything else to non-retryable and reported.
+The admitted launch path (`AdmittedPhaseActivity`) deliberately does not retry a
+runtime phase: an unknown outcome may be a half-sent request, so it pins the
+reservation for reconciliation instead (AD-5 in the session-admission design).
 
 | Error | retryable | benign | non_retryable | Rationale |
 |--------|-----------|--------|---------------|-------------|

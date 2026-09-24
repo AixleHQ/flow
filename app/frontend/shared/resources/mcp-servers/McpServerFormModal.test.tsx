@@ -26,15 +26,17 @@ const editServer = {
   id: 7,
   name: 'playwright',
   url: 'https://mcp.example.com',
-  transport: 'http',
+  transport: 'http' as const,
   headers: { Authorization: MASK },
   command: null,
-  env: null,
+  env: {},
   description: 'Browser automation',
   enabled: true,
   authType: 'static' as const,
   credentialScope: 'shared' as const,
   oauthStatus: null,
+  oauthClientId: null,
+  oauthClientSecretPresent: false,
 };
 
 // A saved OAuth server. oauthStatus is per-current-user and read-only.
@@ -42,15 +44,17 @@ const oauthServer = {
   id: 12,
   name: 'linear',
   url: 'https://mcp.linear.app',
-  transport: 'http',
+  transport: 'http' as const,
   headers: {},
   command: null,
-  env: null,
+  env: {},
   description: 'Linear MCP',
   enabled: true,
   authType: 'oauth' as const,
   credentialScope: 'per_user' as const,
   oauthStatus: 'pending' as const,
+  oauthClientId: null,
+  oauthClientSecretPresent: false,
 };
 
 describe('McpServerFormModal', () => {
@@ -235,6 +239,21 @@ describe('McpServerFormModal', () => {
       ),
     );
     expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('warns that stored credentials are cleared when the address moves to another host', async () => {
+    renderPage(<McpServerFormModal opened onClose={vi.fn()} editServer={editServer} {...baseProps} />);
+
+    const url = await screen.findByDisplayValue('https://mcp.example.com');
+    expect(screen.queryByText('Stored credentials will be cleared')).not.toBeInTheDocument();
+
+    await userEvent.clear(url);
+    await userEvent.type(url, 'https://mcp.example.com/v2');
+    expect(screen.queryByText('Stored credentials will be cleared')).not.toBeInTheDocument();
+
+    await userEvent.clear(url);
+    await userEvent.type(url, 'https://elsewhere.example.net');
+    expect(screen.getByText('Stored credentials will be cleared')).toBeInTheDocument();
   });
 
   it('edit mode prefills existing headers into editable rows (with masked values)', async () => {

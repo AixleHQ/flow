@@ -82,6 +82,11 @@ export function azureGitCredentialsPath(options?: object): string {
   return "/" + "azure" + "/" + "git" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /agents/git/credentials(.:format) */
+export function agentsGitCredentialsPath(options?: object): string {
+  return "/" + "agents" + "/" + "git" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /agents/credentials(.:format) */
 export function agentsCredentialsPath(options?: object): string {
   return "/" + "agents" + "/" + "credentials" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -202,6 +207,11 @@ export function downloadApiV1CompanyAssetPath(id: ScalarType, options?: object):
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "assets" + "/" + id + "/" + "download" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
+/** /api/v1/company/assets/:id/share(.:format) */
+export function shareApiV1CompanyAssetPath(id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "assets" + "/" + id + "/" + "share" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
 /** /api/v1/company/assets/bulk_actions(.:format) */
 export function bulkActionsApiV1CompanyAssetsPath(options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "company" + "/" + "assets" + "/" + "bulk_actions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -230,6 +240,11 @@ export function apiV1CompanyFoldersRelocatePath(options?: object): string {
 /** /api/v1/projects/:project_id/assets/:id/download(.:format) */
 export function downloadApiV1ProjectAssetPath(project_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "assets" + "/" + id + "/" + "download" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /api/v1/projects/:project_id/assets/:id/share(.:format) */
+export function shareApiV1ProjectAssetPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "assets" + "/" + id + "/" + "share" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /api/v1/projects/:project_id/assets/bulk_actions(.:format) */
@@ -460,6 +475,11 @@ export function stopImpersonateAdminUserPath(id: ScalarType, options?: object): 
 /** /admin/users/:id/restore(.:format) */
 export function restoreAdminUserPath(id: ScalarType, options?: object): string {
   return "/" + "admin" + "/" + "users" + "/" + id + "/" + "restore" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /admin/users/:id/sign_out_everywhere(.:format) */
+export function signOutEverywhereAdminUserPath(id: ScalarType, options?: object): string {
+  return "/" + "admin" + "/" + "users" + "/" + id + "/" + "sign_out_everywhere" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /admin/users/:id/permanent_destroy(.:format) */
@@ -1027,6 +1047,11 @@ export function regenerateMCPTokenProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "regenerate_mcp_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /profile/sign_out_other_sessions(.:format) */
+export function signOutOtherSessionsProfilePath(options?: object): string {
+  return "/" + "profile" + "/" + "sign_out_other_sessions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /profile/disable_mcp_token(.:format) */
 export function disableMCPTokenProfilePath(options?: object): string {
   return "/" + "profile" + "/" + "disable_mcp_token" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1125,6 +1150,11 @@ export function companyProjectFavoritePath(project_id: ScalarType, options?: obj
 /** /company/projects/:project_id/board(.:format) */
 export function companyProjectBoardPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "board" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/sessions/rows(.:format) */
+export function rowsCompanyProjectSessionsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "sessions" + "/" + "rows" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects/:project_id/sessions/:session_id/artifacts/review(.:format) */
@@ -1400,6 +1430,11 @@ export function companyAnalyticsPath(options?: object): string {
 /** /company/assets(.:format) */
 export function companyAssetsPath(options?: object): string {
   return "/" + "company" + "/" + "assets" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/sessions/rows(.:format) */
+export function rowsCompanySessionsPath(options?: object): string {
+  return "/" + "company" + "/" + "sessions" + "/" + "rows" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/sessions/:session_id/artifacts/review(.:format) */

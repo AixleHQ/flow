@@ -47,7 +47,7 @@ RUN chmod +x /app/entrypoint.sh
 # =============================================================================
 # Final setup
 # =============================================================================
-RUN chown -R gemini:gemini /workspace /opt/watcher /home/gemini
+RUN chown -R gemini:gemini /workspace /home/gemini
 
 WORKDIR /workspace
 ENV HOME=/home/gemini \

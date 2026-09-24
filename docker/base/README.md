@@ -67,7 +67,6 @@ Agent context files (CLAUDE.md, AGENTS.md, GEMINI.md) are hidden from the explor
 | `SESSION_TYPE` | — | `auth_setup` or `agent_session` |
 | `AGENT_NAME` | Agent | Display name in terminal |
 | `TTYD_CMD` | bash | CLI command for terminal |
-| `AGENT_PROMPT` | — | Non-interactive prompt text |
 | `VSCODE_TOKEN` | — | Connection token for IDE auth |
 | `ROUTE_TOKEN` | — | Traefik route token for URL paths |
 | `WORKSPACE` | /workspace | Working directory |

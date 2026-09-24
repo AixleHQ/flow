@@ -55,7 +55,7 @@ class QueueHealthCheck
         oldest_admission_wait_seconds: age(waiting.minimum(:created_at), now),
         pinned_reservations: SessionRuntimeOperation.pinning.count,
         pinned_overdue: SessionRuntimeOperation.pinning
-                                               .where(absent_since: ..(now - 2 * SessionAdmissionPolicy.pinned_release_window)).count,
+                                               .where(absent_since: ..(now - (2 * SessionAdmissionPolicy.pinned_release_window))).count,
         pinned_release_disabled: !SessionAdmissionPolicy.pinned_release_enabled?
       }
     end

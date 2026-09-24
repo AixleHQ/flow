@@ -3,7 +3,7 @@ import { type Element } from 'hast';
 import type { Blockquote, Root } from 'mdast';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import type { Plugin } from 'unified';
 import { visit } from 'unist-util-visit';
@@ -19,6 +19,16 @@ interface Props {
 
 const CALLOUT_TYPES = ['warning', 'danger', 'tip', 'info'] as const;
 type CalloutType = (typeof CALLOUT_TYPES)[number];
+
+// The default schema strips every data-* attribute, the callout type included,
+// which rendered each warning and tip as a plain info box.
+const SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    blockquote: [...(defaultSchema.attributes?.blockquote ?? []), 'dataCalloutType'],
+  },
+};
 
 /**
  * Remark plugin: for each blockquote whose first paragraph starts with a callout
@@ -83,7 +93,7 @@ export function DocsMdxContent({ content }: Props) {
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkCalloutType]}
-      rehypePlugins={[rehypeRaw, rehypeSanitize]}
+      rehypePlugins={[rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA]]}
       components={{
         code: ({ className, children, node, ...props }) => {
           const isInline =

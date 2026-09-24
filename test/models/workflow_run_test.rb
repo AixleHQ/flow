@@ -12,6 +12,20 @@ class WorkflowRunTest < ActiveSupport::TestCase
     @workflow = create(:workflow, scope: @project, name: "wrtest-wf-#{SecureRandom.hex(4)}")
   end
 
+  test "an update tells the project's Sessions & Runs list the run's id, and nothing more" do
+    run = create(:workflow_run, :running, workflow: @workflow, project: @project, user: @admin)
+    sent = []
+    recorder = ->(stream, payload) { sent << [ stream, payload ] }
+    InertiaCable.on_broadcast(&recorder)
+
+    run.send(:broadcast_run_list_update)
+
+    assert_equal [ [ InertiaCable::Streams::StreamName.stream_name_from([ @project, :sessions_runs ]),
+                     { type: "run_update", id: run.id } ] ], sent
+  ensure
+    InertiaCable.off_broadcast(&recorder)
+  end
+
   test "controllable_by? is true for the run's owner" do
     owner = create(:user, :employee, company: @company)
     run = create(:workflow_run, project: @project, workflow: @workflow, user: owner)
@@ -64,6 +78,22 @@ class WorkflowRunTest < ActiveSupport::TestCase
     assert_no_enqueued_jobs(only: Slack::NotifyRunFailureJob) { run.complete! }
   end
 
+  test "with_total_cost_cents adds up the sessions its step runs ran in, each once" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @admin)
+    idle = create(:workflow_run, workflow: @workflow, project: @project, user: @admin)
+    shared, other, unrelated = create_list(:terminal_session, 3, :agent_session, user: @admin, project: @project)
+    [ shared, shared, other ].each do |session|
+      create(:step_run, workflow_run: run, step: create(:step, workflow: @workflow), terminal_session: session)
+    end
+    UsageStatistic.create!(terminal_session: shared, cost_cents: 150)
+    UsageStatistic.create!(terminal_session: other, cost_cents: 100)
+    UsageStatistic.create!(terminal_session: unrelated, cost_cents: 999)
+
+    costs = WorkflowRun.with_total_cost_cents.where(id: [ run.id, idle.id ]).to_h { |r| [ r.id, r.total_cost_cents ] }
+
+    assert_equal({ run.id => 250, idle.id => 0 }, costs)
+  end
+
   test "default state is pending" do
     run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
     assert_equal "pending", run.state
@@ -109,7 +139,7 @@ class WorkflowRunTest < ActiveSupport::TestCase
   end
 
   test "can_run_non_interactive? returns true when all steps allow it" do
-    step = create(:step, workflow: @workflow, allow_non_interactive: true)
+    create(:step, workflow: @workflow, allow_non_interactive: true)
     run = create(:workflow_run, project: @project, workflow: @workflow, user: @admin)
     assert run.can_run_non_interactive?
   end
@@ -187,5 +217,25 @@ class WorkflowRunTest < ActiveSupport::TestCase
 
   test "waiting_for_slot_ids answers for a whole page in one query" do
     assert_empty WorkflowRun.waiting_for_slot_ids([])
+  end
+  test "refuses input assets and repositories that belong to another tenant" do
+    project = create(:project, :standalone)
+    other = create(:project, :standalone)
+    run = build(:workflow_run, project: project, workflow: create(:workflow, scope: project),
+      input_asset_ids: [ create(:asset, scope: other).id ],
+      repository_ids: [ create(:repository, scope: other).id ])
+
+    assert_not run.valid?
+    assert run.errors[:input_asset_ids].any?
+    assert run.errors[:repository_ids].any?
+  end
+
+  test "accepts the project's own and its company's assets" do
+    project = create(:project, :standalone)
+    run = build(:workflow_run, project: project, workflow: create(:workflow, scope: project),
+      input_asset_ids: [ create(:asset, scope: project).id, create(:asset, scope: project.company).id ],
+      repository_ids: [ create(:repository, scope: project).id ])
+
+    assert run.valid?, run.errors.full_messages.to_sentence
   end
 end

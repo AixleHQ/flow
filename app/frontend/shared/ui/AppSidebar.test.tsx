@@ -3,10 +3,11 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import type { Membership } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { AppSidebar } from './AppSidebar';
-import type { SharedMembership, SharedProject } from './types';
+import type { SharedProject } from './types';
 
 const projects: SharedProject[] = [
   { id: 7, name: 'Aurora Platform', slug: 'aurora-platform', state: 'active', favorite: false },
@@ -424,7 +425,7 @@ describe('AppSidebar', () => {
   });
 });
 
-function dualMemberships(): SharedMembership[] {
+function dualMemberships(): Membership[] {
   return [
     ...buildUser().memberships,
     {

@@ -5,6 +5,8 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState, type FC } from 'react';
 import { z } from 'zod';
 
+import type { Agent } from '@/types/generated';
+
 import { EmojiPicker } from 'shared/ui/EmojiPicker';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
@@ -21,21 +23,13 @@ const agentSchema = z.object({
   principles: z.string().max(2000).optional(),
 });
 
-interface Agent {
-  id: number;
-  name: string;
-  title: string;
-  icon: string | null;
-  persona: string;
-  communicationStyle: string | null;
-  principles: string | null;
-}
+type EditableAgent = Pick<Agent, 'id' | 'name' | 'title' | 'icon' | 'persona' | 'communicationStyle' | 'principles'>;
 
 interface AgentFormModalProps {
   opened: boolean;
   onClose: () => void;
-  editAgent?: Agent | null;
-  duplicateAgent?: Agent | null;
+  editAgent?: EditableAgent | null;
+  duplicateAgent?: EditableAgent | null;
   basePath: string;
 }
 

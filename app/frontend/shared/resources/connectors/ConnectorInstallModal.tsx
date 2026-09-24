@@ -3,9 +3,11 @@ import { Alert, Badge, Button, Code, Drawer, Group, Radio, Stack, Text } from '@
 import { IconAlertTriangle, IconLock } from '@tabler/icons-react';
 import { useEffect, useMemo, useState, type FC } from 'react';
 
+import type { Connector } from '@/types/generated';
+
 import { ConfigItemValueField } from '../mcp-servers/ConfigItemValueField';
 
-import type { Connector, ConnectorTarget } from './types';
+import type { ConnectorTarget } from './types';
 
 interface ConnectorInstallModalProps {
   connector: Connector | null;

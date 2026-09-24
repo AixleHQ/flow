@@ -6,6 +6,10 @@ module Activities
     # output for Sessions::NoOutputWatchdog::NO_OUTPUT_THRESHOLD. This catches
     # sessions blocked on an interactive prompt (quota / spend-limit dialog)
     # that the quota-error scanner cannot detect because no error text appears.
+    #
+    # An interactive step is left alone, as the quota scanner leaves it: silence
+    # is what one looks like while its person reviews the work, and whoever is
+    # watching can answer a dialog in the web terminal themselves.
     class ScanNoOutputSessionsActivity < ::Activities::Base
       MIN_AGE = Sessions::NoOutputWatchdog::NO_OUTPUT_THRESHOLD + 1.minute
 
@@ -37,6 +41,7 @@ module Activities
       def candidate_sessions
         TerminalSession
           .where(state: "ready", session_type: :workflow_step)
+          .where("mode IS NULL OR mode <> 'interactive'")
           .where.not(container_id: [ nil, "" ])
           .where("COALESCE(started_at, created_at) < ?", MIN_AGE.ago)
       end

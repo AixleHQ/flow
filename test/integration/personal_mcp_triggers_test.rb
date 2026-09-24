@@ -132,6 +132,18 @@ class PersonalMCPTriggersTest < ActionDispatch::IntegrationTest
     assert_equal @project.id, endpoint.project_id
   end
 
+  test "create_workflow_trigger's webhook demands a generated shared token by default" do
+    body = call_tool("create_workflow_trigger",
+                     { project_id: @project.id, workflow_id: @workflow.id, kind: "webhook" })
+
+    assert_not error?(body)
+    trigger = payload(body)
+    endpoint = WebhookEndpoint.find_by!(slug: trigger["webhook_url"].split("/").last)
+    assert_equal "shared_token", endpoint.verification_strategy
+    assert_equal endpoint.secret, trigger["webhook_secret"]
+    assert_operator trigger["webhook_secret"].length, :>=, 32
+  end
+
   test "an off-board trigger is rejected while a step still waits on a human" do
     create(:step, workflow: @workflow, name: "Review copy", allow_non_interactive: false)
 

@@ -13,8 +13,12 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import type { BoardColumn, Project, TerminalSession, Workflow } from '@/types/generated';
+
 import { formatTime, parseDate } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
+import { agentLabel, isAgentType } from 'shared/ui/agentRuntimes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -23,43 +27,16 @@ import classes from './SessionPage.module.css';
 
 // ── Types ──────────────────────────────────────────
 
-interface Project {
-  id: number;
-  name: string;
-}
-
-interface Session {
-  id: number;
-  state: string;
-  agentType: string | null;
-  mode: string | null;
-  websocketUrl: string | null;
-  ideUrl: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  errorMessage: string | null;
-}
-
 interface Props {
   project: Project;
-  session: Session;
+  session: TerminalSession;
   cableStream: string;
   builderActivities?: MetaActivity[];
-  workflows?: WorkflowPreview[];
-  boardColumns?: BoardColumnPreview[];
+  workflows?: Workflow[];
+  boardColumns?: BoardColumn[];
 }
 
 // ── Constants ──────────────────────────────────────
-
-const AGENT_LABELS: Record<string, string> = {
-  claude_code: 'Claude Code',
-  cursor_cli: 'Cursor CLI',
-  codex: 'Codex',
-  gemini_cli: 'Gemini CLI',
-  grok: 'Grok',
-  kiro_cli: 'Kiro CLI',
-};
 
 // ── Meta Activity Types ────────────────────────────
 
@@ -113,22 +90,6 @@ const ENTITY_ICONS: Record<string, typeof IconGitBranch> = {
   BoardTask: IconColumns,
 };
 
-// ── Workflow / Board preview types ─────────────────
-
-interface WorkflowPreview {
-  id: number;
-  name: string;
-  description: string | null;
-  stepsCount: number;
-}
-
-interface BoardColumnPreview {
-  id: number;
-  name: string;
-  purpose: string | null;
-  workflowBinding: { workflowName: string; triggerMode: string } | null;
-}
-
 // ── Main Component ─────────────────────────────────
 
 const SessionPage = () => {
@@ -157,13 +118,13 @@ const SessionPage = () => {
 
   const allActivities = useMemo(() => builderActivities ?? [], [builderActivities]);
 
-  const ttydUrl = useMemo(() => {
-    if (!s.websocketUrl) return null;
-    return s.websocketUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace('/ws', '');
-  }, [s.websocketUrl]);
+  const ttydUrl = useMemo(
+    () => terminalPageUrl({ terminalUrl: s.terminalUrl, websocketUrl: s.websocketUrl }),
+    [s.terminalUrl, s.websocketUrl],
+  );
 
   const canShowTerminal = !!ttydUrl && s.state === 'ready';
-  const agentLabel = AGENT_LABELS[s.agentType ?? ''] ?? s.agentType ?? '—';
+  const runtimeLabel = agentLabel(s.agentType);
 
   const handleFinish = useCallback(() => {
     setFinishRequested(true);
@@ -422,8 +383,8 @@ const SessionPage = () => {
             )}
           </div>
           <div className={classes.headerRight}>
-            <Badge color={AGENT_LABELS[s.agentType ?? ''] ? undefined : 'gray'} size="sm" variant="light">
-              {agentLabel}
+            <Badge color={isAgentType(s.agentType) ? undefined : 'gray'} size="sm" variant="light">
+              {runtimeLabel}
             </Badge>
             {isActive && (
               <Button

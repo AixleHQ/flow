@@ -32,9 +32,14 @@ module Web
       response.set_header("Content-Security-Policy", "sandbox")
       response.set_header("X-Content-Type-Options", "nosniff")
 
-      content_type = version.content_type.presence || "application/octet-stream"
-      data = version.file.download { |file| file.read }
-      send_data data, type: content_type, disposition: "inline", filename: asset.name
+      # Streamed from storage in chunks: reading the file into the process first put
+      # every anonymous download of a large asset into Puma's memory at once.
+      status, headers, body = version.file.to_rack_response(
+        type: version.content_type.presence || "application/octet-stream", disposition: "inline", filename: asset.name
+      )
+      headers.each { |name, value| response.headers[name] = value }
+      self.status = status
+      self.response_body = body
     end
 
     private

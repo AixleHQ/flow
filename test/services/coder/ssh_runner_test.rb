@@ -283,14 +283,17 @@ module Coder
       assert_match(%r{TMPDIR:-/tmp}, script, "expected a fallback job dir when /var/lib is not writable")
     end
 
-    # A secret belongs in the launcher, which travels over SSH and is never
-    # written down — not in the `<job_id>.cmd` file, which stays on a workspace
-    # that outlives the session.
-    test "detached start exports env in the launcher, never into the command file" do
+    # A secret travels on stdin: not in the `<job_id>.cmd` file, which stays on a
+    # workspace that outlives the session, and not in the command, which is argv —
+    # visible in `ps` on the worker and on the shared workspace.
+    test "detached start hands env over on stdin, never in the command" do
       captured_args = nil
-      stub = popen3_stub(out: "aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs\n") do |_env, argv|
+      stdin = StringIO.new
+      stub = lambda { |_env, *argv, **_opts, &blk|
         captured_args = argv
-      end
+        blk.call(stdin, StringIO.new("aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs\n"), StringIO.new,
+                 StubWaitThr.new(exitstatus: 0))
+      }
 
       Open3.stub(:popen3, stub) do
         Coder::SshRunner.new(@integration).exec_detached(
@@ -302,10 +305,15 @@ module Coder
       end
 
       script = captured_args.last
-      launcher, _, command_file = script.partition("cat > \"$BASE.cmd\"")
+      assert_no_match(/ghs_secret/, script)
+      assert_match(/IFS= read -r AIXLE_GH_TOKEN \|\| true; export AIXLE_GH_TOKEN/, script)
+      assert_equal "ghs_secret\n", stdin.string
+    end
 
-      assert_match(/AIXLE_GH_TOKEN='ghs_secret'; export AIXLE_GH_TOKEN/, launcher)
-      assert_no_match(/ghs_secret/, command_file, "the secret must not reach the job's command file")
+    test "detached start refuses a multi-line env value" do
+      assert_raises(Coder::SshRunner::CommandError) do
+        Coder::SshRunner.new(@integration).exec_detached(workspace_name: "ws-1", command: "true", env: { "T" => "a\nb" })
+      end
     end
 
     test "detached start rejects an env name that is not a shell identifier" do

@@ -30,7 +30,7 @@ class Activities::Asset::CleanupDismissedActivityTest < ActiveSupport::TestCase
   end
 
   test "leaves recently dismissed assets" do
-    asset = create(:asset,
+    create(:asset,
       name: "recent-dismiss.md",
       scope: @company,
       created_by: @user,

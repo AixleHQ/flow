@@ -32,7 +32,7 @@ module Github
       pr = client.pull_request(repo_full_name, pr_number)
       head_sha = pr[:head][:sha]
 
-      suites = Array(client.check_suites_for_ref(repo_full_name, head_sha)[:check_suites])
+      suites = Array(client.check_suites_for_ref(repo_full_name, head_sha, per_page: 100)[:check_suites])
       return unresolvable("no check suites on #{repo_full_name}@#{head_sha[0, 7]} for PR ##{pr_number}") if suites.empty?
 
       pending = suites.reject { |suite| suite[:status].to_s == "completed" }

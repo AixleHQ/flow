@@ -1,12 +1,13 @@
 import { Box, Button, Group, Stack, Tabs, Text } from '@mantine/core';
 import { IconRefresh } from '@tabler/icons-react';
 
+import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
+
 import { formatDateTime } from 'shared/lib/formatDate';
 
 import { formatCostCents } from './boardFormat';
 import { RunStepTimeline } from './RunStepTimeline';
 import { RunTileRow } from './RunTileRow';
-import type { TaskWorkflowRun } from './taskRuns';
 
 // The task drawer's "Runs" tab: totals across the task's runs, then the run history —
 // each entry the shared run tile, with the latest run also carrying its step timeline.

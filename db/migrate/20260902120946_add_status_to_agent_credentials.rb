@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class AddStatusToAgentCredentials < ActiveRecord::Migration[8.1]
   def change
     add_column :agent_credentials, :status, :string, default: "active", null: false

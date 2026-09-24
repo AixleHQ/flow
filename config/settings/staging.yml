@@ -1,5 +1,11 @@
+# Staging runs production's configuration: everything config/settings/production.yml
+# sets belongs here too (test/config/settings_parity_test.rb checks it), plus only
+# what staging does differently.
+temporal:
+  enabled: true
+
 agents:
   # See config/settings/production.yml — one registry prefix instead of seven
   # per-runtime entries.
-  image_prefix: <%= ENV['AGENT_IMAGE_PREFIX'] || 'ghcr.io/aixle/aixle-app-' %>
+  image_prefix: <%= ENV['AGENT_IMAGE_PREFIX'] || 'ghcr.io/aixlehq/flow-' %>
   image_tag: <%= ENV['AGENT_IMAGE_TAG'] || '' %>

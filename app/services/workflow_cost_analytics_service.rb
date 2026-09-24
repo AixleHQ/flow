@@ -2,12 +2,6 @@
 
 class WorkflowCostAnalyticsService
   include TaskFilterable
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
 
   DATE_TRUNC_GROUP_SQL = {
     "day"   => Arel.sql("DATE_TRUNC('day', workflow_runs.created_at)"),
@@ -43,7 +37,7 @@ class WorkflowCostAnalyticsService
     @user = user
     @scope = scope.to_s
     @period = period.to_s
-    @days = PERIOD_DAYS.fetch(@period, 30)
+    @days = AnalyticsPeriod.days(@period)
     @since = @days.days.ago
     @tags = Array.wrap(tags).reject(&:blank?)
     @task_type = task_type.presence
@@ -163,12 +157,6 @@ class WorkflowCostAnalyticsService
   end
 
   def time_series_trunc
-    case period
-    when "7d" then "day"
-    when "30d" then "day"
-    when "90d" then "week"
-    when "1y" then "month"
-    else "day"
-    end
+    AnalyticsPeriod.bucket(period)
   end
 end

@@ -15,6 +15,21 @@ class Web::Company::Projects::RepositoriesControllerTest < ActionDispatch::Integ
     assert_inertia_page "Projects/Repositories/RepositoriesPage"
   end
 
+  test "the edit dialog is handed the repository's branches" do
+    integration = create(:integration, :active, company: @company, connected_by: @user)
+    repo = create(:repository, full_name: "org/app", scope: @project, integration: integration)
+    branches = Struct.new(:names) { def list_branches(_full_name) = names }.new(%w[main release])
+    RepositoryService.stubs(:for).with(integration).returns(branches)
+
+    # The dialog's own request: a partial reload naming the prop the way the client sees it.
+    get company_project_repositories_path(@project, edit_repo_id: repo.id),
+        headers: { "X-Inertia" => "true", "X-Inertia-Partial-Component" => "Projects/Repositories/RepositoriesPage",
+                   "X-Inertia-Partial-Data" => "editBranches" }
+
+    assert_equal %w[main release], response.parsed_body.dig("props", "editBranches")
+    assert_nil response.parsed_body.dig("props", "repositories"), "a partial reload returns only what it asked for"
+  end
+
   test "create redirects on success" do
     integration = create(:integration, company: @company, connected_by: @user)
 

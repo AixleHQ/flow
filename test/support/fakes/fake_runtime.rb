@@ -32,6 +32,7 @@ module ContainerRuntime
     attr_reader :fs, :execs, :agent_type, :deleted_session_resources, :uploads
 
     def initialize(agent_type: "claude_code", filesystem: nil)
+      super()
       @agent_type = agent_type
       @fs = filesystem || build_filesystem(agent_type)
       @execs = []

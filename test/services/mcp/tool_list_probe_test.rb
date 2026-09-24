@@ -9,6 +9,7 @@ module MCP
     MCP_URL = "https://mcp.example.com/mcp"
 
     setup do
+      resolve_hosts_publicly!
       @company = create(:company)
       @user = create(:user, company: @company)
       @project = create(:project, company: @company, owner: @user)

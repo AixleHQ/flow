@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class EnableCitextExtension < ActiveRecord::Migration[8.0]
   def change
     enable_extension "citext"

@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 # The Aixle MCP server endpoint for agent containers. Authenticates the
-# TerminalSession from its per-session mcp_key (X-Session-Key header,
-# Authorization bearer, or session_key param — same contract as the old
-# actionmcp gateway), then serves the request from a stateless per-request
-# MCP::Server (Tools::MCPRequestHandler).
+# TerminalSession from its per-session key (X-Session-Key header or
+# Authorization bearer; never a query parameter, which lands in ingress logs),
+# then serves the request from a stateless per-request MCP::Server
+# (Tools::MCPRequestHandler).
 class MCPController < ActionController::API
   def handle
     handler = resolve_handler
@@ -21,20 +21,18 @@ class MCPController < ActionController::API
   # amcp_-prefixed personal token serves the user-level server; anything else
   # is a terminal session's mcp_key serving the session-scoped server.
   def resolve_handler
-    key = request.headers["X-Session-Key"].presence ||
-          bearer_token.presence ||
-          params[:session_key].presence
+    key = request.headers["X-Session-Key"].presence || bearer_token.presence
     return nil if key.blank?
 
     if key.start_with?(User::MCP_TOKEN_PREFIX)
       user = User.find_by_mcp_token(key)
       return nil if user.nil?
 
-      user.update_columns(mcp_token_last_used_at: Time.current)
+      user.note_mcp_token_use!
       Tools::PersonalMCPRequestHandler.new(user)
     else
-      session = TerminalSession.find_by(mcp_key: key)
-      return nil unless session&.active?
+      session = MCP::SessionKey.session_for(key) || TerminalSession.find_by(mcp_key: key)
+      return nil unless session&.active? && session.owner_entitled?
 
       Tools::MCPRequestHandler.new(session)
     end

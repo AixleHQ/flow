@@ -42,6 +42,22 @@ module Workflows
     end
   end
 
+  # The status the database reports for a step whose Skip was written but whose
+  # signal never arrived.
+  class SkippedInDatabaseActivity < Temporalio::Activity::Definition
+    activity_name "workflow_step_session_status_activity"
+    def execute(_input = nil)
+      { "cancelled" => false, "sessions" => { "1" => { "state" => "ready", "step_state" => "skipped" } } }
+    end
+  end
+
+  class DatabaseDecisionProbe < WorkflowExecutionWorkflowV2
+    def run(_input)
+      wait_for_signal(1)
+      { "decision" => @step_decisions[1].to_s }
+    end
+  end
+
   class WorkflowExecutionWorkflowV2Test < ActiveSupport::TestCase
     test "queue waiting can exceed the legacy 23-hour parent timeout" do
       result = run_workflow(QueueWaitProbe, {}, activities: [], task_queue: "queue-wait-test")
@@ -55,6 +71,27 @@ module Workflows
       assert_equal 5, result["refreshes"]
       # 30 + 60 + 120 + 240 seconds of timers between the five durable reads.
       assert_operator result["waited"], :>=, 450
+    end
+
+    test "a Skip written to the step is honoured without its signal" do
+      proxy = Object.new
+      proxy.define_singleton_method(:workflow_step_session_status_activity) do
+        TemporalWorkflowHelper::ActivityRef.new("workflow_step_session_status_activity", "db-decision-test")
+      end
+      DatabaseDecisionProbe.stubs(:_preloaded_activities).returns(proxy)
+
+      result = run_workflow(DatabaseDecisionProbe, {}, activities: [ SkippedInDatabaseActivity ],
+                                                       task_queue: "db-decision-test")
+
+      assert_equal "skipped", result["decision"]
+    end
+
+    # A signal can reach a handler before `run` has executed at all.
+    test "a decision signalled before the run starts is kept, not wiped or crashed on" do
+      workflow = WorkflowExecutionWorkflow.new
+      workflow.step_skipped(7)
+
+      assert_equal({ 7 => :skipped }, workflow.instance_variable_get(:@step_decisions))
     end
 
     test "early container completion signals cannot advance an admitted parent" do

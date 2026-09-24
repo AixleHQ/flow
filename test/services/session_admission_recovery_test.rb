@@ -13,7 +13,10 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     with_admission(project: 1)
   end
 
+  # Only a session that has not started can join the queue (the `enqueue` event);
+  # the tests build theirs in the state they are about, so that goes first.
   def admit(session)
+    session.update_columns(state: "not_started")
     admission = SessionAdmissionService.enqueue!(session)
     SessionAdmissionService.drain!
     admission.reload
@@ -297,6 +300,32 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     assert_equal TerminalSession::LAUNCH_ABANDONED_ERROR, session.error_message
   end
 
+  # A failed cancel RPC is sent again; left alone, the workflow would run on to its
+  # day-long timeout with the slot held.
+  test "a stop whose cancel never reached Temporal is cancelled again" do
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
+    admission = admit(session)
+    session.update!(state: "running", started_at: 1.hour.ago)
+    admission.update!(launch_state: "acknowledged", stop_requested_at: 5.minutes.ago)
+    stub_open_workflow(session.workflow_id)
+    TemporalService.expects(:cancel_workflow).with(session.workflow_id).once.returns({ ok: true })
+
+    SessionAdmissionReconciler.run
+
+    assert_nil admission.reload.released_at, "the reservation waits for the cancelled workflow's own cleanup"
+  end
+
+  test "a running workflow nobody asked to stop is left alone" do
+    session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
+    admission = admit(session)
+    session.update!(state: "running", started_at: 1.hour.ago)
+    admission.update!(launch_state: "acknowledged")
+    stub_open_workflow(session.workflow_id)
+    TemporalService.expects(:cancel_workflow).never
+
+    SessionAdmissionReconciler.run
+  end
+
   test "a workflow that is merely unreachable keeps its reservation" do
     session = create(:terminal_session, user: @user, project: @project, state: "running", started_at: 1.hour.ago)
     admission = admit(session)
@@ -350,7 +379,8 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
 
     Activities::Session::CleanupStaleActivity.new.run
 
-    assert_equal "cancelled", session.reload.state
+    # Failed, not cancelled: a cancelled step session would cancel its whole run.
+    assert_equal "failed", session.reload.state
     assert_nil admission.reload.released_at, "cleanup, not the reaper, is what frees capacity"
   end
 
@@ -382,6 +412,7 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: run.user, project: run.project, session_type: "workflow_step")
     step_run.update!(terminal_session: session)
     SessionAdmissionService.enqueue!(session)
+    TemporalService.stubs(:execution_state).with(run.execution_workflow_id).returns(:running)
 
     Activities::Workflow::CleanupStaleRunsActivity.new.run
 
@@ -429,6 +460,16 @@ class SessionAdmissionRecoveryTest < ActiveSupport::TestCase
     )
     handle = mock("workflow handle")
     handle.stubs(:describe).raises(error)
+    client = mock("temporal client")
+    client.stubs(:workflow_handle).with(workflow_id).returns(handle)
+    TemporalService.stubs(:enabled?).returns(true)
+    TemporalService.stubs(:client).returns(client)
+  end
+
+  def stub_open_workflow(workflow_id)
+    description = Struct.new(:status).new(Temporalio::Client::WorkflowExecutionStatus::RUNNING)
+    handle = mock("workflow handle")
+    handle.stubs(:describe).returns(description)
     client = mock("temporal client")
     client.stubs(:workflow_handle).with(workflow_id).returns(handle)
     TemporalService.stubs(:enabled?).returns(true)

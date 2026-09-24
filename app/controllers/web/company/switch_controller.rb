@@ -4,6 +4,8 @@
 # validated against the user's ACTIVE memberships; a non-member company_id 404s
 # and leaves the session untouched.
 class Web::Company::SwitchController < Web::Company::ApplicationController
+  allow_viewer_writes
+
   def create
     membership = current_user.company_memberships.active.find_by!(company_id: params[:company_id])
     session[:current_company_id] = membership.company_id

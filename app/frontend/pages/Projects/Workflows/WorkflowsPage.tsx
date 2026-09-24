@@ -19,6 +19,9 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
 
+import type { Picker, Project, Step, Workflow } from '@/types/generated';
+
+import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { builderCompanyProjectWorkflowPath } from 'shared/routes';
@@ -26,42 +29,7 @@ import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
-interface NamedItem {
-  id: number;
-  name: string;
-}
-
-interface WorkflowStep {
-  id: number;
-  name: string;
-  position: number;
-  allowNonInteractive: boolean;
-  dependsOnStepIds: number[];
-}
-
-interface Workflow {
-  id: number;
-  name: string;
-  description: string | null;
-  scopeType: string;
-  scopeId: number;
-  scopeIndicator: 'company' | 'project' | 'overrides_company';
-  stepsCount: number;
-  runsCount: number;
-  lastRunAt: string | null;
-  lastRunStatus: string | null;
-  hasActiveRuns: boolean;
-  descriptionExcerpt: string | null;
-  publishedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  steps: WorkflowStep[];
-}
-
-interface Project {
-  id: number;
-  name: string;
-}
+type WorkflowWithSteps = Workflow & { steps: Step[] };
 
 interface AgentModelsEntry {
   agentType: string;
@@ -70,9 +38,9 @@ interface AgentModelsEntry {
 
 interface Props {
   project: Project;
-  workflows: Workflow[];
-  assets?: NamedItem[];
-  repositories?: NamedItem[];
+  workflows: WorkflowWithSteps[];
+  assets?: AssetPickerItem[];
+  repositories?: Picker[];
   configuredAgents: string[];
   defaultAgentRuntime?: string | null;
   agentModels?: AgentModelsEntry[];
@@ -103,9 +71,9 @@ const WorkflowsPage = () => {
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
   const [createOpen, setCreateOpen] = useState(false);
-  const [editWorkflow, setEditWorkflow] = useState<Workflow | null>(null);
-  const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
-  const [runWorkflow, setRunWorkflow] = useState<Workflow | null>(null);
+  const [editWorkflow, setEditWorkflow] = useState<WorkflowWithSteps | null>(null);
+  const [deleteWorkflow, setDeleteWorkflow] = useState<WorkflowWithSteps | null>(null);
+  const [runWorkflow, setRunWorkflow] = useState<WorkflowWithSteps | null>(null);
   const [loading, setLoading] = useState(false);
 
   const filtered = useMemo(() => {
@@ -187,7 +155,7 @@ const WorkflowsPage = () => {
     });
   };
 
-  const handleCopyAndConfigure = (wf: Workflow) => {
+  const handleCopyAndConfigure = (wf: WorkflowWithSteps) => {
     setLoading(true);
     router.post(
       basePath,
@@ -199,7 +167,7 @@ const WorkflowsPage = () => {
     );
   };
 
-  const openEdit = (wf: Workflow) => {
+  const openEdit = (wf: WorkflowWithSteps) => {
     editForm.setValues({ name: wf.name, description: wf.description ?? '' });
     setEditWorkflow(wf);
   };

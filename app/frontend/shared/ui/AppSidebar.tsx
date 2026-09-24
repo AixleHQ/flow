@@ -31,7 +31,9 @@ import {
 } from '@tabler/icons-react';
 import { Fragment, useCallback, useMemo, useState } from 'react';
 
-import { CreateProjectModal } from 'pages/Projects/CreateProjectModal';
+import type { Membership } from '@/types/generated';
+
+import { CreateProjectModal } from 'shared/components/CreateProjectModal';
 import { getInitials } from 'shared/lib/getInitials';
 import {
   companyAssetsPath,
@@ -64,7 +66,7 @@ import {
 
 import classes from './AppSidebar.module.css';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
-import type { SharedMembership, SharedPermissions, SharedProject, SharedProps } from './types';
+import type { SharedPermissions, SharedProject, SharedProps } from './types';
 
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED_WIDTH = 60;
@@ -200,7 +202,7 @@ function CompanyRail({
   memberships,
   currentCompanyId,
 }: {
-  memberships: SharedMembership[];
+  memberships: Membership[];
   currentCompanyId: number | null;
 }) {
   const switchTo = (companyId: number) => {
@@ -397,7 +399,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
 
 // ─── SidebarWorkspaceSwitcher ─────────────────────────────────────────────────
 
-const MEMBERSHIP_ROLE_LABELS: Record<SharedMembership['role'], string> = {
+const MEMBERSHIP_ROLE_LABELS: Record<Membership['role'], string> = {
   admin: 'Admin',
   employee: 'Employee',
   viewer: 'Viewer',
@@ -409,6 +411,7 @@ interface SidebarWorkspaceSwitcherProps {
   currentProjectId: string | null;
   companyName: string;
   context: 'project' | 'company';
+  canCreateProject: boolean;
   onExpand: () => void;
 }
 
@@ -418,6 +421,7 @@ function SidebarWorkspaceSwitcher({
   currentProjectId,
   companyName,
   context,
+  canCreateProject,
   onExpand,
 }: SidebarWorkspaceSwitcherProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -600,16 +604,18 @@ function SidebarWorkspaceSwitcher({
             </UnstyledButton>
           </div>
 
-          <div className={classes.dpFooter}>
-            <button
-              type="button"
-              className={classes.dpNewProject}
-              onClick={handleNewProject}
-              aria-label="Create new project"
-            >
-              + New project
-            </button>
-          </div>
+          {canCreateProject && (
+            <div className={classes.dpFooter}>
+              <button
+                type="button"
+                className={classes.dpNewProject}
+                onClick={handleNewProject}
+                aria-label="Create new project"
+              >
+                + New project
+              </button>
+            </div>
+          )}
         </Popover.Dropdown>
       </Popover>
 
@@ -717,6 +723,7 @@ function SidebarContent({
         currentProjectId={currentProjectId}
         companyName={companyName}
         context={context}
+        canCreateProject={permissions?.canWrite ?? true}
         onExpand={onExpand}
       />
 

@@ -10,9 +10,10 @@ import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { postNavigate } from 'shared/lib/postNavigate';
 import { type ToolGroup } from 'shared/lib/toolPicker';
 import { apiV1TerminalSessionsPath } from 'shared/routes';
-import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
+import { AGENT_RUNTIMES, isAgentType } from 'shared/ui/agentRuntimes';
 import { FormSection, ModeCards, RuntimeTiles } from 'shared/ui/sessions';
 import type { AgentType, SharedProps } from 'shared/ui/types';
 
@@ -64,26 +65,6 @@ export interface SessionNewFormProps {
   layout?: 'page' | 'drawer';
 }
 
-const AVAILABLE_AGENTS = [
-  { type: 'claude_code', label: 'Claude Code', color: AGENT_BRAND_COLORS.claude_code },
-  { type: 'cursor_cli', label: 'Cursor CLI', color: AGENT_BRAND_COLORS.cursor_cli },
-  { type: 'codex', label: 'Codex', color: AGENT_BRAND_COLORS.codex },
-  { type: 'gemini_cli', label: 'Gemini CLI', color: AGENT_BRAND_COLORS.gemini_cli },
-  { type: 'antigravity_cli', label: 'Antigravity CLI', color: AGENT_BRAND_COLORS.antigravity_cli },
-  { type: 'grok', label: 'Grok', color: AGENT_BRAND_COLORS.grok },
-  { type: 'kiro_cli', label: 'Kiro CLI', color: AGENT_BRAND_COLORS.kiro_cli },
-];
-
-const AGENT_MANTINE_COLORS: Record<string, string> = {
-  claude_code: 'orange',
-  cursor_cli: 'violet',
-  codex: 'teal',
-  gemini_cli: 'blue',
-  antigravity_cli: 'indigo',
-  grok: 'gray',
-  kiro_cli: 'grape',
-};
-
 const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
 
 interface AgentModel {
@@ -131,7 +112,9 @@ export const SessionNewForm = ({
   const [error, setError] = useState<string | null>(null);
   // OAuth session-start preflight (§4.6): MCP servers the user must connect before this
   // session can launch. Populated from the API's 422 { reauth_required } response.
-  const [reauthRequired, setReauthRequired] = useState<{ name: string; connectUrl: string }[]>([]);
+  const [reauthRequired, setReauthRequired] = useState<{ name: string; connectUrl: string; connectMethod?: string }[]>(
+    [],
+  );
 
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [selectedPersona, setSelectedPersona] = useState<string | null>(null);
@@ -229,7 +212,11 @@ export const SessionNewForm = ({
         if (res.status === 422 && Array.isArray(reauth) && reauth.length > 0) {
           // Preflight blocked the launch: surface a Connect CTA per server instead of a raw error.
           setReauthRequired(
-            reauth.map((r: { name: string; connect_url: string }) => ({ name: r.name, connectUrl: r.connect_url })),
+            reauth.map((r: { name: string; connect_url: string; connect_method?: string }) => ({
+              name: r.name,
+              connectUrl: r.connect_url,
+              connectMethod: r.connect_method,
+            })),
           );
         } else {
           const msg = errData?.errors?.[0] ?? errData?.error ?? 'Failed to create session';
@@ -260,7 +247,7 @@ export const SessionNewForm = ({
     fallbackPath,
   ]);
 
-  const agentConfig = agentType ? AVAILABLE_AGENTS.find((a) => a.type === agentType) : null;
+  const agentConfig = isAgentType(agentType) ? AGENT_RUNTIMES[agentType] : null;
   const isDrawer = layout === 'drawer';
 
   const startButton = canExecute ? (
@@ -489,7 +476,7 @@ export const SessionNewForm = ({
             )}
             <div className={classes.summaryRow}>
               {agentConfig && (
-                <Badge color={AGENT_MANTINE_COLORS[agentType] ?? 'gray'} size="sm" variant="filled">
+                <Badge color={agentConfig.mantineColor} size="sm" variant="filled">
                   {agentConfig.label}
                 </Badge>
               )}
@@ -563,10 +550,13 @@ export const SessionNewForm = ({
                 variant="light"
                 color="yellow"
                 onClick={() => {
-                  // A top-level browser navigation, not an Inertia visit. Some connect
-                  // URLs already carry a query (the cloud CTA points at the profile page
-                  // with the modal to open), so pick the separator rather than always
-                  // appending "?".
+                  // A top-level browser navigation, not an Inertia visit. An OAuth connect
+                  // starts a flow, so it is a POST; the cloud CTA is a page (the profile,
+                  // with the modal to open) whose URL may already carry a query.
+                  if (r.connectMethod === 'post') {
+                    postNavigate(r.connectUrl, { return_to: window.location.pathname });
+                    return;
+                  }
                   const separator = r.connectUrl.includes('?') ? '&' : '?';
                   window.location.href = `${r.connectUrl}${separator}return_to=${encodeURIComponent(
                     window.location.pathname,

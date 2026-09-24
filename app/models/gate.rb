@@ -105,6 +105,10 @@ class Gate < ApplicationRecord
       .where("(metadata->>'pull_request_id')::bigint = ?", pull_request_id.to_i)
   }
 
+  scope :for_projects, ->(project_ids) {
+    joins(board_task: { board_column: { board: :project } }).where(projects: { id: project_ids })
+  }
+
   # Scope gates to tasks whose boards belong to projects connected to the given
   # repository. Handles both project-scoped and company-scoped repositories.
   scope :for_repository, ->(repo_full_name) {

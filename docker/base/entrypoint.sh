@@ -14,7 +14,6 @@ set -e
 #   AGENT_NAME      - Display name (default: "Agent")
 #   API_KEY_VAR     - Name of API key env var to validate (optional)
 #   TTYD_CMD        - CLI command, set at runtime by strategy (default: "bash")
-#   AGENT_PROMPT    - Prompt text for agent (optional, set at runtime)
 # =============================================================================
 
 # Colors
@@ -144,6 +143,13 @@ echo -e "${GREEN}✅ tmux session ready${NC}"
 ttyd -W -p "$TTYD_PORT" tmux -u attach -t agent &
 TTYD_PID=$!
 
+# The terminal everyone but the session's owner is routed to: ttyd refuses
+# input (-R) and the tmux client is read-only (-r), so watching a shell can
+# never become typing into it — the container holds its owner's credentials.
+VIEW_PORT="${VIEW_PORT:-7682}"
+ttyd -R -p "$VIEW_PORT" tmux -u attach -r -t agent &
+VIEW_PID=$!
+
 sleep 1
 if kill -0 $TTYD_PID 2>/dev/null; then
     echo -e "${GREEN}✅ Web terminal ready${NC}"
@@ -161,6 +167,7 @@ cleanup() {
     kill $MITM_PID 2>/dev/null || true
     kill $WATCHER_PID 2>/dev/null || true
     kill $TTYD_PID 2>/dev/null || true
+    kill $VIEW_PID 2>/dev/null || true
     kill $VSCODE_PID 2>/dev/null || true
     exit 0
 }

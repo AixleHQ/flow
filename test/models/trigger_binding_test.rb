@@ -64,6 +64,21 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert_includes binding.errors[:subject_column], "is required when subject_policy is create_task"
   end
 
+  test "a subject_column on another project's board is rejected" do
+    other_project = create(:project, owner: @user, company: @company)
+    foreign_column = create(:board_column, board: create(:board, project: other_project))
+    own_column = create(:board_column, board: create(:board, project: @project))
+
+    foreign = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", subject_policy: :create_task, subject_column: foreign_column)
+    own = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", subject_policy: :create_task, subject_column: own_column)
+
+    assert_not foreign.valid?
+    assert_match(/subject_column_id must belong to this project/, foreign.errors[:subject_column].join)
+    assert own.valid?
+  end
+
   test "schedule binding requires a cron in schedule_config" do
     binding = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
       event_type: "schedule.fired", schedule_config: {})

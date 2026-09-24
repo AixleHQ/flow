@@ -5,9 +5,8 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState } from 'react';
 import { z } from 'zod';
 
+import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
 import { Logo, PageShell } from 'shared/ui';
-
-import { GoogleLoginButton } from '../Auth/GoogleLoginButton';
 
 type Variant = 'expired' | 'accept' | 'wrong_account' | 'login' | 'signup';
 

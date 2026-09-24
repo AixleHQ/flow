@@ -21,10 +21,23 @@ module InternalTools
     end
 
     def execute
-      tr = ToolResult.find_by(execution_id: params[:tool_result_id])
+      tr = readable_results.find_by(execution_id: params[:tool_result_id])
       return error("Tool result not found: #{params[:tool_result_id]}") unless tr
 
       success(ToolResultResource.new(tr, params: { url_host: Settings.container_asset_host }).to_json)
+    end
+
+    private
+
+    # Results this session started, plus those of the other sessions in the same
+    # workflow run (a later step may poll a tool an earlier step launched). The
+    # execution id is random, but it is also the only thing the agent supplies.
+    def readable_results
+      session_ids = [ session&.id ].compact
+      if workflow_run
+        session_ids += TerminalSession.joins(:step_run).where(step_runs: { workflow_run_id: workflow_run.id }).pluck(:id)
+      end
+      ToolResult.where(terminal_session_id: session_ids.uniq)
     end
   end
 end

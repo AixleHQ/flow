@@ -2,18 +2,14 @@ import { Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { type FC } from 'react';
 
-import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
+import type { Skill } from '@/types/generated';
 
-interface Skill {
-  id: number;
-  name: string;
-  title: string | null;
-}
+import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
 
 interface DeleteSkillModalProps {
   opened: boolean;
   onClose: () => void;
-  skill: Skill | null;
+  skill: Pick<Skill, 'id' | 'name' | 'title'> | null;
   basePath: string;
 }
 

@@ -11,7 +11,10 @@ module Api
       end
 
       def create
-        project = session_params[:project_id] ? member_company_projects.find(session_params[:project_id]) : nil
+        # Project.for_user, not every project of a member company: launching a
+        # session is opening the project, and the project page itself is gated on
+        # owner/collaborator/company-admin access.
+        project = session_params[:project_id] ? Project.for_user(current_user).find(session_params[:project_id]) : nil
 
         if session_params[:session_type] != "auth_setup" && viewer_for?(project)
           return render json: { error: "Viewers cannot launch sessions" }, status: :forbidden
@@ -46,10 +49,8 @@ module Api
         # than starting a session doomed to fail during provisioning. Both errors carry
         # the same entry shape, so the client renders one list.
         render json: { error: e.message, reauth_required: e.connections }, status: :unprocessable_entity
-      rescue SessionService::UnsafeMcpUrlError => e
-        # F34: a selected MCP server's URL failed the launch-time safety re-check.
-        render json: { error: e.message }, status: :unprocessable_entity
-      rescue AgentCredential::PreflightError => e
+      rescue SessionService::UnsafeMcpUrlError, AgentCredential::PreflightError => e
+        # UnsafeMcpUrlError (F34): a selected MCP server's URL failed the launch-time safety re-check.
         render json: { error: e.message }, status: :unprocessable_entity
       end
 
@@ -173,24 +174,9 @@ module Api
         session
       end
 
+      # Agents are project-scoped, so a project-less session has none to pick.
       def find_accessible_agent(id, project)
-        scope = if project
-          # Agent visibility follows the PROJECT's company.
-          Agent.visible_for_project(project)
-        else
-          Agent.where(scope_type: "Company", scope_id: member_company_ids)
-        end
-        scope.find(id)
-      end
-
-      # Projects reachable through the user's ACTIVE memberships (API calls
-      # carry no web session, so the company is derived per project).
-      def member_company_projects
-        Project.where(company_id: member_company_ids)
-      end
-
-      def member_company_ids
-        current_user.company_memberships.active.select(:company_id)
+        (project ? Agent.visible_for_project(project) : Agent.none).find(id)
       end
 
       # Viewer check against the target project's company; without a project

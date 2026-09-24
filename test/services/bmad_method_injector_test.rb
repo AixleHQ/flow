@@ -262,7 +262,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   test "timeout does not raise, logs warn, and records failure in context_metadata" do
     session = build_bmad_session(agent_type: "cursor_cli")
 
-    @runtime.stubs(:exec).with do |cid, cmd|
+    @runtime.stubs(:exec).with do |_cid, cmd|
       raise Timeout::Error if cmd.is_a?(Array) && cmd[2].to_s.include?("npx")
       true
     end.returns([ [], [], 0 ])
@@ -539,11 +539,18 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
   # GitHub authentication for external-module tag resolution
   # ====================================================================
 
+  # Through a 0600 file, never in the command (argv, and the Kubernetes exec request).
   test "authenticates the install with the public read token when one is configured" do
     Settings.github.stubs(:read_token).returns("ghp_public_read")
     session = build_bmad_session(agent_type: "cursor_cli")
-
-    expect_exec_matching("GITHUB_TOKEN='ghp_public_read' npx -y bmad-method@")
+    @runtime.expects(:write_file).with do |cid, path, content, mode:, **|
+      cid == "cid-1" && path.start_with?("/tmp/.aixle-gh-read-") && content == "ghp_public_read" && mode == 0o600
+    end.returns(true)
+    @runtime.expects(:exec).with do |_cid, cmd|
+      cmd[2].to_s.match?(%r{GITHUB_TOKEN="\$\(cat /tmp/\.aixle-gh-read-\h+\)"; rm -f .*; export GITHUB_TOKEN; npx -y bmad-method@}) &&
+        !cmd[2].to_s.include?("ghp_public_read")
+    end.returns([ [], [], 0 ])
+    @runtime.expects(:exec).with { |_cid, cmd| cmd[2].to_s.start_with?("rm -f /tmp/.aixle-gh-read-") }.returns([ [], [], 0 ])
 
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
   end
@@ -566,15 +573,6 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
   end
 
-  # A token is an opaque vendor string; nothing may assume it is shell-safe.
-  test "shell-quotes a token containing a single quote" do
-    Settings.github.stubs(:read_token).returns("gh'p")
-    session = build_bmad_session(agent_type: "cursor_cli")
-
-    expect_exec_matching(%q(GITHUB_TOKEN='gh'\''p' npx))
-
-    BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!
-  end
 
   # ====================================================================
   # Failure reason carries the installer's own explanation
@@ -612,6 +610,7 @@ class BmadMethodInjectorTest < ActiveSupport::TestCase
     Settings.github.stubs(:read_token).returns("ghp_secret_value")
     session = build_bmad_session(agent_type: "cursor_cli")
 
+    @runtime.stubs(:write_file).returns(true)
     @runtime.stubs(:exec).returns([ [ "bad credentials for ghp_secret_value" ], [], 1 ])
 
     BmadMethodInjector.new("cid-1", session, runtime: @runtime).inject!

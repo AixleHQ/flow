@@ -4,21 +4,32 @@ module AuthConcern
   extend ActiveSupport::Concern
 
   IMPERSONATION_KEY = "true_user_id"
+  # Carried across the session reset at sign-in: what the flow signing the person
+  # in has just set up for them (the company of an invitation it accepted).
+  CARRIED_ACROSS_SIGN_IN = %w[current_company_id pending_invitation_token].freeze
 
-  def sign_in(user)
+  # A new session for every sign-in: the old one (and its CSRF token) is reset,
+  # and the sign-in is a UserSession row the server can end.
+  def sign_in(user, impersonator: nil)
+    carried = session.to_hash.slice(*CARRIED_ACROSS_SIGN_IN)
+    current_user_session&.revoke!
+    reset_session
+    carried.each { |key, value| session[key] = value }
+
+    user_session = UserSession.start!(user: user, impersonator: impersonator, request: request)
+    session[:user_session_id] = user_session.id
     session[:user_id] = user.id
+    remember_user_session(user_session, user)
   end
 
   def sign_out
-    session[:user_id] = nil
-    session.delete(:current_company_id)
-    session.delete(:pending_invitation_token)
-    @current_user = nil
-    reset_membership_memoization
+    current_user_session&.revoke!
+    reset_session
+    remember_user_session(nil, nil)
   end
 
   def signed_in?
-    session[:user_id].present? && current_user.present?
+    current_user.present?
   end
 
   def authenticate_user!
@@ -26,14 +37,29 @@ module AuthConcern
   end
 
   def authenticate_admin!
-    redirect_to("/login") unless signed_in? && true_user.super_admin?
+    redirect_to("/login") unless signed_in? && true_user&.super_admin?
   end
 
+  # The signed-in user: the owner of a live UserSession who is still
+  # authenticatable (`active` and not soft-deleted), so revoking the session,
+  # letting it time out, or suspending the account ends the sign-in.
   def current_user
-    # `active` is the AASM account-state scope; `not_deleted` additionally
-    # excludes soft-deleted users so an admin-deleted account cannot stay
-    # authenticated on an existing session.
-    @current_user ||= User.active.not_deleted.find_by(id: session[:user_id])
+    current_user_session
+    @current_user
+  end
+
+  def current_user_session
+    return @current_user_session if defined?(@current_user_session)
+
+    candidate = find_user_session
+    user = candidate&.live? && candidate.user&.authenticatable? && candidate.user
+    unless user
+      forget_sign_in if candidate || session[:user_id].present?
+      return remember_user_session(nil, nil)
+    end
+
+    candidate.touch_if_stale!
+    remember_user_session(candidate, user)
   end
 
   # The membership the current request operates under. Resolution order:
@@ -56,28 +82,31 @@ module AuthConcern
     current_membership.company
   end
 
+  # The admin behind an impersonation — held to the same account-state rule, so
+  # suspending or deleting a super admin mid-impersonation ends their /admin access.
   def true_user
-    @true_user ||= User.find_by(id: session[IMPERSONATION_KEY] || session[:user_id])
+    return current_user unless impersonated?
+
+    @true_user ||= User.authenticatable.find_by(id: current_user_session.impersonator_id)
   end
 
+  # The impersonation is a sign-in of its own, recording who started it; the
+  # admin's own session ends with it and a fresh one starts when it stops.
   def impersonate_user(user)
-    session[IMPERSONATION_KEY] = true_user.id
-    @current_user = nil
-    reset_membership_memoization
-    sign_in(user)
+    admin = true_user
+    sign_in(user, impersonator: admin)
+    session[IMPERSONATION_KEY] = admin.id
   end
 
   def stop_impersonating_user
-    true_user_id = session.delete(IMPERSONATION_KEY)
-    true_user = User.find(true_user_id)
-    @current_user = nil
-    reset_membership_memoization
+    admin = true_user if impersonated?
+    return sign_out if admin.nil?
 
-    sign_in(true_user)
+    sign_in(admin)
   end
 
   def impersonated?
-    session[IMPERSONATION_KEY].present?
+    current_user_session&.impersonator_id.present?
   end
 
   # Invitation continuation: an invite token parked before login (see
@@ -106,6 +135,40 @@ module AuthConcern
   end
 
   private
+
+  def remember_user_session(user_session, user)
+    @current_user_session = user_session
+    @current_user = user
+    @true_user = nil
+    Current.user_session = user_session
+    reset_membership_memoization
+    user_session
+  end
+
+  def find_user_session
+    return UserSession.eager_load(:user).find_by(id: session[:user_session_id]) if session[:user_session_id].present?
+
+    adopt_cookie_session if session[:user_id].present?
+  end
+
+  # A cookie from before sessions were kept in the database carries only the user
+  # id. It becomes a session row on first use, so the change signs nobody out —
+  # and from then on it can be ended like any other.
+  def adopt_cookie_session
+    user = User.authenticatable.find_by(id: session[:user_id])
+    return nil unless user
+
+    impersonator = User.authenticatable.find_by(id: session[IMPERSONATION_KEY]) if session[IMPERSONATION_KEY].present?
+    adopted = UserSession.start!(user: user, impersonator: impersonator, request: request)
+    session[:user_session_id] = adopted.id
+    adopted
+  end
+
+  def forget_sign_in
+    session.delete(:user_session_id)
+    session.delete(:user_id)
+    session.delete(IMPERSONATION_KEY)
+  end
 
   def resolve_current_membership
     return nil unless current_user

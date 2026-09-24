@@ -12,12 +12,10 @@ module Activities
           return quota_failure_result(step_run, session, detection)
         end
 
-        # `cancelled`, not only `failed`: every watchdog reaches a session through
-        # SessionService.fail_session, which for an admitted session cancels instead of
-        # failing (the reservation is only released once the runtime is confirmed gone).
-        # Treating cancelled as "not a failure" is what let a killed session fall through
-        # to mark_completed! — 53 step runs in the 14 days to 2026-09-17 completed on a
-        # session that had been cancelled or failed.
+        # `cancelled`, not only `failed`: a session stopped out from under its step
+        # must never read as done. Treating cancelled as "not a failure" is what let a
+        # killed session fall through to mark_completed! — 53 step runs in the 14 days
+        # to 2026-09-17 completed on a session that had been cancelled or failed.
         if session && %w[failed cancelled].include?(session.state)
           # Why it ended matters as much as that it did: an expired login is a banner in
           # the terminal and nothing else, so without this the step reports "no output for

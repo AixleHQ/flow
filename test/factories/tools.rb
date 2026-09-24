@@ -17,9 +17,6 @@ FactoryBot.define do
       scope factory: %i[project standalone]
     end
 
-    trait :project do
-    end
-
     # == Kind Traits ==
 
     trait :system do

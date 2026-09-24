@@ -9,7 +9,7 @@ class ToolResource < ApplicationResource
   # inference can only see `unknown`. Expose them as explicit attributes so the
   # keyless `typelize` annotation applies (the keyed form is gated by
   # Typelizer.enabled? at load time and is unreliable).
-  typelize "Record<string, unknown>[]"
+  typelize "string[]"
   attribute :required_config_items do |tool|
     tool.required_config_items
   end

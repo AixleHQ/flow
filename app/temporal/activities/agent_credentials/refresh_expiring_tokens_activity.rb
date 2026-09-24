@@ -67,6 +67,10 @@ module Activities
         when :error
           @errors += 1
           log(:warn, "credential #{credential.id} (#{credential.agent_type}) refresh error: #{result[:detail]}")
+        when :busy
+          # A launch or a request is refreshing it right now; the next tick sees its result.
+          @not_needed += 1
+          log(:info, "credential #{credential.id} (#{credential.agent_type}) is being refreshed elsewhere")
         else
           @not_needed += 1
         end

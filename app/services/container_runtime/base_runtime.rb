@@ -27,13 +27,17 @@ module ContainerRuntime
   #   resolve_container(id)                      → container handle
   #   container_identifier(container)            → String
   #   container_status(id)                       → Symbol (see #container_status)
-  #   wait_container(id, timeout=nil)            → Hash { "StatusCode" => int }
+  #   wait_container(id, timeout=nil)            → Hash { "StatusCode" => int }, or raises
+  #                                                WaitTimeout while it is still running
   #   container_logs(id, opts={})                → Hash { stdout:, stderr: }
   #
   # == Garbage collection
   #   list_session_resources                     → [ContainerRuntime::SessionResource]
   #   delete_session_resource(resource)          → true/false
   #
+  # Raised by #wait_container when `timeout` elapses with the workload still running.
+  class WaitTimeout < StandardError; end
+
   class BaseRuntime
     # -- Lifecycle ------------------------------------------------------------
 

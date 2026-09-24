@@ -348,7 +348,7 @@ module Agents
       expected = "codex --yolo -c projects./workspace.trust_level=trusted"
 
       assert_equal expected, @adapter.session_command(mode: "interactive")
-      assert_equal expected, @adapter.session_command(mode: "non_interactive", prompt: "Run tests")
+      assert_equal expected, @adapter.session_command(mode: "non_interactive")
     end
 
     test "session_command includes model flag when model provided" do
@@ -368,7 +368,7 @@ module Agents
     # =========================================================================
 
     test "session_command grants workspace trust so the launch cannot depend on config.toml" do
-      assert_includes @adapter.session_command(mode: "non_interactive", prompt: "Run tests"),
+      assert_includes @adapter.session_command(mode: "non_interactive"),
                       "-c projects./workspace.trust_level=trusted"
     end
 
@@ -600,6 +600,20 @@ module Agents
       assert result[:permanent]
     end
 
+    test "a rejection is not held against tokens a container rotated while the request was out" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => "old", "refresh_token" => "r1" }
+      })
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL).to_return do
+        AgentCredential.find(credential.id).update!(config_data: { "tokens" => { "access_token" => "won", "refresh_token" => "r2" } })
+        { status: 400, body: { error: "invalid_grant" }.to_json }
+      end
+
+      assert_equal :not_needed, @adapter.refresh!(credential)[:status]
+      assert_equal "won", credential.reload.config_data.dig("tokens", "access_token")
+    end
+
     test "refresh! returns error when no refresh token is present" do
       user = create(:user, company: create(:company))
       credential = create(:agent_credential, :codex, user: user, config_data: { "tokens" => {} })
@@ -749,6 +763,30 @@ module Agents
       assert_equal "auth_file_empty", result[:error_code]
     end
 
+    # == write-back from a running container ==
+
+    def tokens_for(account:, exp:, access: "at")
+      { "tokens" => { "access_token" => "#{access}.#{jwt(sub: account, exp: exp)}", "id_token" => jwt(sub: account, exp: exp),
+                      "refresh_token" => "rt-#{access}", "account_id" => account } }
+    end
+
+    test "a container may rotate the tokens of the account it was given" do
+      current = tokens_for(account: "acct-1", exp: 1.hour.from_now.to_i)
+      incoming = tokens_for(account: "acct-1", exp: 9.days.from_now.to_i, access: "new")
+
+      merged = @adapter.merge_container_credentials(current, incoming)
+
+      assert_equal "rt-new", merged.dig("tokens", "refresh_token")
+    end
+
+    test "a container may not swap in another account's tokens, or an API key" do
+      current = tokens_for(account: "acct-1", exp: 1.hour.from_now.to_i)
+      attacker = tokens_for(account: "acct-evil", exp: 9.days.from_now.to_i, access: "evil")
+                   .merge("OPENAI_API_KEY" => "sk-evil")
+
+      assert_equal current, @adapter.merge_container_credentials(current, attacker)
+    end
+
     private
 
     def preflight_runtime(auth_content)
@@ -781,6 +819,12 @@ module Agents
 
     # Minimal unsigned JWT carrying an `exp` claim (seconds). Signature segment is
     # irrelevant — token_expires_at reads the payload without verifying.
+    def jwt(sub:, exp:)
+      header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
+      payload = Base64.urlsafe_encode64({ sub: sub, exp: exp }.to_json, padding: false)
+      "#{header}.#{payload}.sig"
+    end
+
     def jwt_with_exp(exp_seconds)
       header = Base64.urlsafe_encode64({ alg: "none" }.to_json, padding: false)
       payload = Base64.urlsafe_encode64({ exp: exp_seconds }.to_json, padding: false)

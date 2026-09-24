@@ -4,7 +4,9 @@ module PersonalTools
   class UpdateMCPServer < Base
     tool do
       display_name "Update MCP Server"
-      description "Update a custom MCP server. Managed servers cannot be edited."
+      description "Update a custom MCP server. Managed servers cannot be edited. Changing url, transport or " \
+                  "command to a new address clears the server's stored header and env values and its OAuth " \
+                  "connections; a person re-enters them in the MCP servers page."
       audience :user
       tags :resources
       param :project_id, type: :integer, description: "Project id.", required: true
@@ -27,8 +29,10 @@ module PersonalTools
       attrs = params.slice(*ATTRS).reject { |_, v| v.nil? }
       return error("No fields to update") if attrs.empty?
 
-      server.update!(attrs)
-      success(id: server.id, name: server.name, updated_fields: attrs.keys)
+      server.assign_attributes(attrs)
+      moved = server.destination_changed?
+      server.save!
+      success(id: server.id, name: server.name, updated_fields: attrs.keys, secrets_cleared: moved)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to update MCP server: #{e.message}")
     end

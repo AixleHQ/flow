@@ -9,8 +9,9 @@ export const buildTaskWorkflowRun = (overrides: Partial<TaskWorkflowRun> = {}): 
   startedAt: null,
   completedAt: null,
   createdAt: '2026-01-02T00:00:00Z',
-  steps: [],
-  // optional (?) computed attributes — realistic values, no compile-time guarantee
   workflowName: 'Implement Feature',
+  totalCostCents: null,
+  durationSeconds: null,
+  steps: [],
   ...overrides,
 });

@@ -93,6 +93,19 @@ module Agents
     # soonest expiry (epoch ms) so AgentCredential#expires_at is populated and the
     # proactive-refresh sweep selects the credential before it expires (instead of
     # only refreshing reactively on a 401).
+    def rotatable_credential_keys = %w[tokens]
+
+    # The ChatGPT account the tokens act for: auth.json records it beside them, and
+    # the id_token names it too.
+    def credential_identity(credentials)
+      tokens = credentials["tokens"]
+      return nil unless tokens.is_a?(Hash)
+
+      claims = jwt_claims(tokens["id_token"])
+      tokens["account_id"].presence || claims.dig("https://api.openai.com/auth", "chatgpt_account_id").presence ||
+        claims["sub"].presence
+    end
+
     def token_expires_at(credentials)
       tokens = credentials["tokens"]
       return nil unless tokens.is_a?(Hash)
@@ -112,7 +125,7 @@ module Agents
     end
 
     # Generate auth.json config for a new container
-    def generate_config(credentials, workflow_config = {})
+    def generate_config(credentials, _workflow_config = {})
       {
         **credentials,
         "last_refresh" => credentials["last_refresh"] || Time.current.iso8601
@@ -135,8 +148,8 @@ module Agents
     end
 
     # Session command: always codex --yolo, with workspace trust granted inline.
-    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file.
-    def session_command(mode:, prompt: nil, model: nil, workspace: DEFAULT_WORKSPACE)
+    # The prompt is appended by AgentSessionStrategy, read from its prompt file.
+    def session_command(mode:, model: nil, workspace: DEFAULT_WORKSPACE)
       model_flag = model ? " --model #{Shellwords.shellescape(model)}" : ""
       "codex#{model_flag} --yolo#{cli_trust_flag(workspace)}"
     end
@@ -330,7 +343,7 @@ module Agents
     #
     # margin_ms is ignored: this agent stores no per-block expiry to compare it against,
     # so a call is already the decision to refresh.
-    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
+    def perform_refresh!(credential, margin_ms: nil)
       current_tokens = credential.config_data["tokens"] || {}
       refresh_token = current_tokens["refresh_token"]
       return { status: :error, detail: "no refresh token stored — sign in again", permanent: true } if refresh_token.blank?
@@ -359,7 +372,7 @@ module Agents
         # auth.openai.com is the token endpoint the CLI refreshes against; chatgpt.com
         # alone showed inference and nothing about the login's lifecycle.
         "MITM_TRACKED_DOMAINS" => "chatgpt.com,auth.openai.com",
-        "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}"
+        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
       }
     end
 
@@ -455,9 +468,11 @@ module Agents
       Codex::Api.models(access_token: access_token)
     rescue Codex::Api::UnauthorizedError
       raise unless credential
-      raise unless credential.renew!(source: :unauthorized)[:status] == :refreshed
 
-      Codex::Api.models(access_token: credential.reload.config_data.dig("tokens", "access_token"))
+      new_token = refresh_for_request!(credential)&.dig("tokens", "access_token")
+      raise unless new_token
+
+      Codex::Api.models(access_token: new_token)
     end
 
     CODEX_RESPONSES_PATH = "/backend-api/codex/responses"

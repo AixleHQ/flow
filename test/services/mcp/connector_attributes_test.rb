@@ -60,14 +60,15 @@ module MCP
                    "a connector offers several targets; drift detection needs the one actually used"
     end
 
-    test "installs an unpinnable package but keeps the missing pin visible" do
-      server = @project.mcp_servers.create!(
-        build_attributes("package_http_transport_latest_version", values: { "allowed-directories" => "/w" })
-      )
+    # The installer pins such a target first (PackageVersionResolver); built as is,
+    # the line is unpinned, and the server refuses it.
+    test "an unpinnable package is never emitted with a floating version, and is not saved unpinned" do
+      attributes = build_attributes("package_http_transport_latest_version", values: { "allowed-directories" => "/w" })
 
-      assert_predicate server, :persisted?, "the catalog does not gatekeep unpinnable packages"
-      assert_not server.connector_version_pinned?
-      assert_not_includes server.args.join(" "), "@latest"
+      assert_not_includes attributes[:args].join(" "), "@latest"
+      server = @project.mcp_servers.build(attributes)
+      assert_not server.valid?
+      assert_match(/must pin/, server.errors[:command].to_sentence)
     end
 
     test "a pinned package install reports itself as pinned" do

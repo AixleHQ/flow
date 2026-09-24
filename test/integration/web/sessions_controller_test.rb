@@ -77,6 +77,10 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
 
     delete logout_path
     assert_redirected_to login_path
+
+    # Signing out drops the key the encrypted history entries were sealed with.
+    follow_redirect!
+    assert_includes response.body, '"clearHistory":true'
   end
 
   test "new echoes a valid email param for pre-filling (invitation flow) and drops junk" do

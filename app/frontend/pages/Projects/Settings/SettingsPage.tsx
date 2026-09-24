@@ -69,7 +69,7 @@ const schema = z.object({
     .refine((v) => !v || /^[1-9]\d*$/.test(v), 'Must be a whole number greater than zero'),
 });
 
-interface Project {
+interface ProjectSettings {
   id: number;
   name: string;
   description: string | null;
@@ -102,7 +102,7 @@ interface Concurrency {
 }
 
 interface Props {
-  project: Project;
+  project: ProjectSettings;
   concurrency: Concurrency;
 }
 
@@ -375,7 +375,7 @@ const SettingsPage = () => {
               <Box>
                 <Text className={classes.metaKey}>Owner</Text>
                 <Group gap="sm">
-                  <Box className={classes.ownerAvatar} bg="var(--accent-dim)" c="var(--accent)">
+                  <Box className={classes.ownerAvatar} bg="var(--app-action-selected)" c="var(--app-primary)">
                     {avatarInitials(project.ownerName)}
                   </Box>
                   <Box>

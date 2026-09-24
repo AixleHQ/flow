@@ -79,7 +79,7 @@ RUN chmod +x /app/entrypoint.sh
 # and the CLI was installed as kiro, so there is nothing to fix — and a recursive
 # chown would rewrite all ~900 MB of binaries into a second layer, doubling the image
 # for no change (the failure mode documented in the agent-image size audit).
-RUN chown -R kiro:kiro /workspace /opt/watcher
+RUN chown -R kiro:kiro /workspace
 
 WORKDIR /workspace
 # ~/.local/bin is where the installer puts kiro-cli, and it is NOT on the default
