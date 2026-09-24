@@ -125,5 +125,21 @@ module MCP
 
       assert_match(/no longer offered/, error.message)
     end
+
+    # ------------------------------------------------------------- from a held manifest
+
+    test "create_from_manifest builds the server from the given manifest without asking the registry" do
+      manifest = ConnectorManifest.normalize(entry("package_npm_runtime_args"))
+
+      server = ConnectorInstaller.create_from_manifest(
+        project: @project, manifest: manifest, target_id: manifest["targets"].first["id"],
+        values: { "GCS_BUCKET" => "my-bucket" }, fallback_name: manifest["name"]
+      )
+
+      assert_equal @project, server.scope
+      assert_equal [ "-y", "remote-filesystem-mcp-server@0.1.2" ], server.args
+      assert_equal({ "GCS_BUCKET" => "my-bucket" }, server.env)
+      assert_not_requested :get, /#{Regexp.escape(REGISTRY)}/
+    end
   end
 end

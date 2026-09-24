@@ -17,11 +17,21 @@ class Board < ApplicationRecord
     raise ActiveRecord::RecordNotFound, "Invalid preset: #{preset_key}" unless preset
 
     transaction do
-      board = create!(project: project, name: name || preset[:display_name])
-      preset[:columns].each do |col_def|
-        board.board_columns.create!(name: col_def[:name], position: col_def[:position], purpose: col_def[:purpose])
-      end
+      board = create_from_columns(project: project, name: name || preset[:display_name], columns: preset[:columns])
       board.update_column(:preset_origin, preset_key.to_s)
+      board
+    end
+  end
+
+  # @param columns [Array<Hash>] `{ name:, purpose: }` in board order; an
+  #   explicit `position:` is honoured, otherwise the list order is used.
+  def self.create_from_columns(project:, name:, columns:)
+    transaction do
+      board = create!(project: project, name: name)
+      columns.each_with_index do |col_def, index|
+        col_def = col_def.to_h.symbolize_keys
+        board.board_columns.create!(name: col_def[:name], position: col_def[:position] || index + 1, purpose: col_def[:purpose])
+      end
       board
     end
   end

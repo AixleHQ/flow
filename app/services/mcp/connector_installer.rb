@@ -34,14 +34,10 @@ module MCP
 
     def call
       manifest, stale = resolve_manifest
-      target = ConnectorManifest.find_target(manifest, @target_id)
-      raise Error, "That install option is no longer offered by this connector" if target.nil?
-
-      target = PackageVersionResolver.pin(target)
-      attributes = ConnectorAttributes.build(manifest: manifest, target: target, values: @values)
-      raise Error, ConnectorAttributes.unpinned_message(target) if ConnectorAttributes.unpinned?(target)
-
-      server = @project.mcp_servers.create!(attributes.merge(name: unique_name(attributes[:name])))
+      server = self.class.create_from_manifest(
+        project: @project, manifest: manifest, target_id: @target_id, values: @values,
+        fallback_name: @connector.name, pin: ->(target) { PackageVersionResolver.pin(target) }
+      )
 
       # Record what the server declares, so a later change is detectable. Best
       # effort on purpose: an unreachable server (or one needing an OAuth token
@@ -59,6 +55,23 @@ module MCP
       server.update!(auth_type: :oauth) if needs_auth
 
       Result.new(server: server, stale: stale, needs_auth: needs_auth)
+    end
+
+    # The half of an install that needs no network: an MCPServer built from a
+    # manifest the caller already holds. Template installs call this directly
+    # with the manifest snapshot their package carries, so what gets installed
+    # is what was reviewed, not whatever the registry serves today — which is
+    # also why `pin` (the live install's release lookup) is not applied to
+    # them: a snapshot whose package version is not pinned is refused.
+    def self.create_from_manifest(project:, manifest:, target_id:, values:, fallback_name:, pin: nil)
+      target = ConnectorManifest.find_target(manifest, target_id)
+      raise Error, "That install option is no longer offered by this connector" if target.nil?
+
+      target = pin.call(target) if pin
+      attributes = ConnectorAttributes.build(manifest: manifest, target: target, values: values || {})
+      raise Error, ConnectorAttributes.unpinned_message(target) if ConnectorAttributes.unpinned?(target)
+
+      project.mcp_servers.create!(attributes.merge(name: unique_name(project, attributes[:name].presence || fallback_name)))
     rescue ConnectorAttributes::UnsupportedTargetError => e
       raise Error, "This connector cannot be installed: #{e.message}"
     end
@@ -75,14 +88,14 @@ module MCP
     end
 
     # "Linear" → "Linear (2)" on the second install into the same project.
-    def unique_name(name)
-      base = name.presence || @connector.name
-      taken = @project.mcp_servers.where("name = ? OR name LIKE ?", base, "#{MCPServer.sanitize_sql_like(base)} (%)").pluck(:name)
+    def self.unique_name(project, base)
+      taken = project.mcp_servers.where("name = ? OR name LIKE ?", base, "#{MCPServer.sanitize_sql_like(base)} (%)").pluck(:name)
       return base if taken.exclude?(base)
 
       suffix = 2
       suffix += 1 while taken.include?("#{base} (#{suffix})")
       "#{base} (#{suffix})"
     end
+    private_class_method :unique_name
   end
 end
