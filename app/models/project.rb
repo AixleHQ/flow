@@ -33,6 +33,7 @@ class Project < ApplicationRecord
   has_many :workflow_runs, dependent: :destroy
   # A limit outliving its project kept reserving capacity nobody could use.
   has_one :session_concurrency_limit, as: :scope, dependent: :destroy
+  has_many :template_installs, dependent: :destroy
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }

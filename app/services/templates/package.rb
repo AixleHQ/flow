@@ -80,9 +80,21 @@ module Templates
 
     # Identity of what a person reviewed: definition + every file. Two packages
     # with the same digest install the same thing.
+    # Keys are sorted recursively because jsonb does not keep key order, so the
+    # mirrored copy must hash the same as the package it was built from.
     def digest
-      payload = [ definition.to_json, files.sort.map { |path, bytes| [ path, Digest::SHA256.hexdigest(bytes) ] } ]
+      payload = [ canonical(definition), files.sort.map { |path, bytes| [ path, Digest::SHA256.hexdigest(bytes) ] } ]
       Digest::SHA256.hexdigest(payload.to_json)
+    end
+
+    private
+
+    def canonical(node)
+      case node
+      when Hash then node.sort_by { |key, _| key.to_s }.map { |key, value| [ key.to_s, canonical(value) ] }
+      when Array then node.map { |value| canonical(value) }
+      else node
+      end
     end
   end
 end
