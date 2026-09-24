@@ -12,11 +12,13 @@ import { apiMutate } from 'shared/lib/apiFetch';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
+import { stripContainerTicket } from 'shared/lib/terminalPageUrl';
 import {
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
 } from 'shared/routes';
+import { ContainerFrame } from 'shared/ui/ContainerFrame';
 import { ConsoleFrame, DetailHeader, SessionCard, TabBar, type SessionCardData } from 'shared/ui/sessions';
 
 import { persistentProjectLayoutNoPadding, setPageLayout } from '../ProjectLayout';
@@ -84,8 +86,8 @@ function StepConsole({ step, label }: { step: StepRun; label: string }) {
               </Text>
             </div>
           )}
-          <iframe
-            key={step.terminalUrl}
+          <ContainerFrame
+            key={stripContainerTicket(step.terminalUrl)}
             src={step.terminalUrl}
             title="Terminal"
             allow="clipboard-read; clipboard-write"

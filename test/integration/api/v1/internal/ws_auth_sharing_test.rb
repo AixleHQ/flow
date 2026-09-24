@@ -120,6 +120,23 @@ module Api
           assert_nil response.headers["Set-Cookie"]
         end
 
+        test "a frame reloaded after its pass expired is admitted by the sandbox cookie" do
+          ticket = ContainerTicket.issue(user: @member, session: @session)
+          cookie = ContainerTicket.issue(user: @member, session: @session, ttl: ContainerTicket::COOKIE_TTL)
+
+          travel ContainerTicket::TICKET_TTL + 1.minute do
+            uri = "/t/#{@session.route_token}/view?#{ContainerTicket::PARAM}=#{CGI.escape(ticket)}"
+            get api_v1_internal_ws_auth_path, headers: { "X-Forwarded-Uri" => uri }
+            assert_response :unauthorized
+
+            get api_v1_internal_ws_auth_path,
+                headers: { "X-Forwarded-Uri" => uri, "Cookie" => "#{ContainerTicket::COOKIE}=#{cookie}" }
+            assert_response :ok
+            assert_equal @member.id.to_s, response.headers["X-User-Id"]
+            assert_nil response.headers["Set-Cookie"]
+          end
+        end
+
         test "a ticket for another session, or a forged one, admits nobody" do
           other = create(:terminal_session, :agent_session, user: @owner, project: @project, state: "ready")
           ticket = ContainerTicket.issue(user: @member, session: other)

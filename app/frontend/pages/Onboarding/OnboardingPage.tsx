@@ -46,6 +46,7 @@ import { apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'share
 import { AGENT_BRAND_COLORS, TERMINAL_BG } from 'shared/theme/vendorColors';
 import { PageShell, type AgentType, type SharedProps } from 'shared/ui';
 import { AGENT_RUNTIMES, AGENT_TYPES } from 'shared/ui/agentRuntimes';
+import { ContainerFrame } from 'shared/ui/ContainerFrame';
 
 import classes from './OnboardingPage.module.css';
 
@@ -245,7 +246,7 @@ function AgentAuthTerminal({
     return (
       <Box style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Box style={{ flex: 1, overflow: 'hidden' }}>
-          <iframe
+          <ContainerFrame
             src={ttydUrl}
             title="Agent Authentication Terminal"
             allow="clipboard-read; clipboard-write"

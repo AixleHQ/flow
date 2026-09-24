@@ -51,6 +51,7 @@ import {
 import { AGENT_BRAND_COLORS, TERMINAL_BG } from 'shared/theme/vendorColors';
 import { type AgentType, type UserRole } from 'shared/ui';
 import { AGENT_RUNTIMES, AGENT_TYPES } from 'shared/ui/agentRuntimes';
+import { ContainerFrame } from 'shared/ui/ContainerFrame';
 import { StatusBadge, type StatusTone } from 'shared/ui/StatusBadge';
 
 import { ProfileTabs } from './ProfileTabs';
@@ -754,7 +755,7 @@ function AgentAuthModal({
       return (
         <Box style={{ display: 'flex', flexDirection: 'column', height: 500 }}>
           <Box style={{ flex: 1, overflow: 'hidden' }}>
-            <iframe
+            <ContainerFrame
               src={ttydUrl}
               title={`Authenticate ${agentInfo.name}`}
               allow="clipboard-read; clipboard-write"

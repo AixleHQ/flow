@@ -87,14 +87,16 @@ module Api
 
         # Containers served from a host of their own receive none of the app's
         # cookies, so the viewer is named by a ContainerTicket — in the URL the app
-        # handed out, or in the cookie this gate traded it for. On the app's own
-        # host the session cookie still works.
+        # handed out, or in the cookie this gate traded it for. A frame reloaded
+        # after its URL's pass expired still carries that pass, so an expired one
+        # falls through to the cookie. On the app's own host the session cookie
+        # still works.
         def requesting_user(terminal_session)
           ticket = forwarded_query[ContainerTicket::PARAM]
-          if ticket.present?
+          @url_ticket = ContainerTicket.verify(ticket, session: terminal_session) if ticket.present?
+          if @url_ticket
             @ticket_from_url = true
-            @url_ticket = ContainerTicket.verify(ticket, session: terminal_session)
-            return @url_ticket && User.authenticatable.find_by(id: @url_ticket["u"])
+            return User.authenticatable.find_by(id: @url_ticket["u"])
           end
 
           cookie = request.cookies[ContainerTicket::COOKIE]

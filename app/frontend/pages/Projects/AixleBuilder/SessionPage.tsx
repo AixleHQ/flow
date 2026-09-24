@@ -19,6 +19,7 @@ import { formatTime, parseDate } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
 import { agentLabel, isAgentType } from 'shared/ui/agentRuntimes';
+import { ContainerFrame } from 'shared/ui/ContainerFrame';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -183,7 +184,7 @@ const SessionPage = () => {
               </Text>
             </div>
           )}
-          <iframe
+          <ContainerFrame
             src={ttydUrl!}
             title="Terminal"
             allow="clipboard-read; clipboard-write"

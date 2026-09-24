@@ -16,6 +16,7 @@ import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
 import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
+import { ContainerFrame } from 'shared/ui/ContainerFrame';
 import { ConsoleFrame, DetailHeader, StatusTag, type Crumb, type HeaderStat } from 'shared/ui/sessions';
 
 import classes from './SessionShowContent.module.css';
@@ -245,7 +246,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
     <>
       {!termLoaded && renderLoadingOverlay('Connecting to terminal…')}
       {!isOwner && <div className={classes.viewOnlyShield} aria-label="Read-only view of another user's session" />}
-      <iframe
+      <ContainerFrame
         src={ttydUrl!}
         title="Terminal"
         allow="clipboard-read; clipboard-write"
@@ -318,7 +319,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
         <Panel defaultSize={50} minSize={20}>
           <div className={`${classes.panelFrame} ${classes.editorFrame}`}>
             {!ideLoaded && renderLoadingOverlay('Loading editor…')}
-            <iframe
+            <ContainerFrame
               src={s.ideUrl!}
               title="VS Code Editor"
               allow="clipboard-read; clipboard-write"
