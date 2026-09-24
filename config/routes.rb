@@ -269,6 +269,11 @@ Rails.application.routes.draw do
     get "docs", to: "docs#show", as: :docs
     get "docs/*slug", to: "docs#show", as: :docs_page, constraints: { slug: /[^\/]+/ }
 
+    # The template catalog is public (design D16): anyone can browse it; an
+    # install goes through company/template_installs and needs a sign-in.
+    get "templates", to: "templates#index", as: :templates
+    get "templates/:slug", to: "templates#show", as: :template, constraints: { slug: /[a-z0-9-]+/ }
+
     get "login", to: "sessions#new", as: :login
     post "login", to: "sessions#create"
     delete "logout", to: "sessions#destroy", as: :logout
@@ -337,6 +342,7 @@ Rails.application.routes.draw do
       # Company-level integration management has been removed — integrations are project-scoped.
       get "integrations/github_setup", to: "integrations/github_setup#github_setup",
           as: :integrations_github_setup
+      resources :template_installs, only: %i[new create]
       resources :projects, only: %i[index show create destroy] do
         scope module: :projects do
           resources :overview, only: :index
@@ -344,6 +350,9 @@ Rails.application.routes.draw do
           # favorite per (user, project), and the actor is always current_user.
           resource :favorite, only: %i[create destroy]
           resource :board, only: %i[show]
+          resources :template_installs, only: %i[show] do
+            resources :setup_items, only: %i[update]
+          end
           resources :sessions, only: %i[index new show] do
             get :rows, on: :collection
             scope module: :sessions do

@@ -21,7 +21,10 @@ module Templates
     # A header/env value must be a config item reference or an install input.
     # Literals are refused outright: the validator does not guess which strings
     # are secrets (design §6.2).
-    REFERENCE_VALUE = /\A(config_item:[A-Z][A-Z0-9_]*|\{\{\s*inputs\.[a-z][a-z0-9_]*\s*\}\})\z/
+    # An auth-scheme prefix is allowed in front of the reference ("Bearer
+    # config_item:TOKEN"): session start substitutes references anywhere in the
+    # string, and the prefix is a fixed word, never a value.
+    REFERENCE_VALUE = /\A((Bearer|Token|Basic) )?(config_item:[A-Z][A-Z0-9_]*|\{\{\s*inputs\.[a-z][a-z0-9_]*\s*\}\})\z/
     CONFIG_ITEM_REF = /config_item:([A-Z][A-Z0-9_]*)/
 
     def initialize(package)

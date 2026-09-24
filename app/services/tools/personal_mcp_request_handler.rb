@@ -128,6 +128,10 @@ module Tools
         title: "Aixle step authoring guide",
         description: "How to write a good Aixle workflow step: instructions, agent/tools/skills, " \
                      "sub-steps, dependencies, and failure handling." },
+      { name: "publish_template", render: ->(_defs) { PersonalMCPGuides.publish_template },
+        title: "Aixle template publishing guide",
+        description: "How to turn a working project or workflow into a template for the public catalog: " \
+                     "export it, make it portable with inputs, and open the pull request." },
       { name: "tool_catalog", render: ->(defs) { PersonalMCPGuides.tool_catalog(defs) },
         title: "Aixle tool catalog",
         description: "Every tool this server exposes, grouped by area (account, integrations, project " \

@@ -24,7 +24,7 @@ module Templates
 
     Plan = Struct.new(:catalog_template, :package, :target_kind, :company, :project, :project_name, :inputs,
                       :items, :board_action, :column_map, :warnings, :checklist, :platform_tools,
-                      keyword_init: true) do
+                      :internal_servers, keyword_init: true) do
       def conflicts = items.select { |item| item.action == "conflict" }
       def resolved? = conflicts.empty?
       def item(section, key) = items.find { |i| i.section == section && i.key == key }
@@ -65,7 +65,7 @@ module Templates
         catalog_template: @catalog_template, package: package, target_kind: target_kind,
         company: company, project: project, project_name: new_project_name(company),
         inputs: resolve_inputs!(package), items: [], warnings: [], checklist: [], column_map: {},
-        platform_tools: resolve_platform_tools!(package)
+        platform_tools: resolve_platform_tools!(package), internal_servers: resolve_internal_servers!(package)
       )
       plan_resources(plan)
       plan_board(plan)
@@ -146,12 +146,23 @@ module Templates
       found
     end
 
+    # `internal:` MCP servers are the platform's own (aixle-tools), shared by every project.
+    def resolve_internal_servers!(package)
+      names = package.section("mcp_servers").filter_map { |server| server["internal"] }
+      found = MCPServer.internal_servers.where(name: names).index_by(&:name)
+      missing = names - found.keys
+      raise NotInstallable, "This installation has no built-in MCP server named #{missing.join(', ')}" if missing.any?
+
+      found
+    end
+
     # ---- resources --------------------------------------------------------
 
     def plan_resources(plan)
       MATCHED_SECTIONS.each do |section|
         plan.package.section(section).each do |entry|
           next if section == "tools" && entry["platform"]
+          next if section == "mcp_servers" && entry["internal"]
 
           plan.items << plan_item(plan, section, entry)
         end

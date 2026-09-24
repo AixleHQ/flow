@@ -73,6 +73,10 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert(errors.any? { |e| e.include?("headers.Authorization: must be a config_item:NAME reference") })
   end
 
+  test "an auth-scheme prefix in front of a reference is allowed" do
+    assert_empty(errors_for { |d| d["mcp_servers"].last["custom"]["headers"]["Authorization"] = "Bearer config_item:SENTRY_ORG" })
+  end
+
   test "inputs must be declared and may only appear in substituted fields" do
     errors = errors_for do |d|
       d["agents"].first["persona"] = "Speaks {{inputs.tone}}."

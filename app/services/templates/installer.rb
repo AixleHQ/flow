@@ -86,7 +86,7 @@ module Templates
       create_setup_items(install, triggers)
       @catalog_template.increment!(:install_count)
 
-      created_servers = @package.section("mcp_servers").reject { |e| planned("mcp_servers", e["key"]).action == "reuse" }
+      created_servers = @package.section("mcp_servers").reject { |e| e["internal"] || planned("mcp_servers", e["key"]).action == "reuse" }
       Result.new(install: install, project: @project, plan: plan, created: true,
                  server_ids: created_servers.map { |e| @ids["mcp_servers"][e["key"]] })
     end
@@ -236,6 +236,10 @@ module Templates
 
     def create_mcp_servers
       @package.section("mcp_servers").each do |entry|
+        if entry["internal"]
+          @ids["mcp_servers"][entry["key"]] = @plan.internal_servers.fetch(entry["internal"]).id
+          next
+        end
         next if reuse?("mcp_servers", entry["key"])
 
         @ids["mcp_servers"][entry["key"]] = (entry["connector"] ? install_connector(entry) : install_custom_server(entry)).id
