@@ -555,7 +555,7 @@ module Agents
     end
 
     # =========================================================================
-    # refresh! — proactive-refresh hook (wraps refresh_access_token!)
+    # refresh!
     # =========================================================================
 
     test "refresh! returns refreshed and persists the rotated token" do
@@ -577,12 +577,27 @@ module Agents
       credential = create(:agent_credential, :codex, user: user, config_data: {
         "tokens" => { "access_token" => "old", "refresh_token" => "r1" }
       })
-      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL).to_return(status: 400, body: "nope")
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL).to_return(status: 500, body: "nope")
 
       result = @adapter.refresh!(credential)
 
       assert_equal :error, result[:status]
-      assert_equal "codex token refresh failed", result[:detail]
+      assert_match(/500/, result[:detail])
+      assert_equal false, result[:permanent] # rubocop:disable Minitest/RefuteFalse
+    end
+
+    test "refresh! treats a rejected refresh token as permanent" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :codex, user: user, config_data: {
+        "tokens" => { "access_token" => "old", "refresh_token" => "r1" }
+      })
+      stub_request(:post, Codex::Api::OAUTH_TOKEN_URL)
+        .to_return(status: 400, body: { error: { code: "refresh_token_reused" } }.to_json)
+
+      result = @adapter.refresh!(credential)
+
+      assert_equal :error, result[:status]
+      assert result[:permanent]
     end
 
     test "refresh! returns error when no refresh token is present" do
@@ -592,7 +607,7 @@ module Agents
       assert_equal :error, @adapter.refresh!(credential)[:status]
     end
 
-    test "refresh_access_token! keeps the stored refresh_token when the server omits a rotated one" do
+    test "refresh! keeps the stored refresh_token when the server omits a rotated one" do
       user = create(:user, company: create(:company))
       credential = create(:agent_credential, :codex, user: user, config_data: {
         "tokens" => { "access_token" => "old", "refresh_token" => "keep-me", "id_token" => "keep-id" }
@@ -602,7 +617,7 @@ module Agents
         .to_return(status: 200, body: { access_token: "new" }.to_json,
                    headers: { "Content-Type" => "application/json" })
 
-      @adapter.refresh_access_token!(credential)
+      @adapter.refresh!(credential)
 
       tokens = credential.reload.config_data["tokens"]
       assert_equal "new", tokens["access_token"]
@@ -610,7 +625,7 @@ module Agents
       assert_equal "keep-id", tokens["id_token"], "must not drop the stored id_token"
     end
 
-    test "refresh_access_token! does not overwrite a concurrently-stored newer token" do
+    test "refresh! does not overwrite a concurrently-stored newer token" do
       user = create(:user, company: create(:company))
       newer = jwt_with_exp(1.hour.from_now.to_i)
       credential = create(:agent_credential, :codex, user: user, config_data: {
@@ -623,9 +638,8 @@ module Agents
         .to_return(status: 200, body: { access_token: older, refresh_token: "r2" }.to_json,
                    headers: { "Content-Type" => "application/json" })
 
-      returned = @adapter.refresh_access_token!(credential)
+      @adapter.refresh!(credential)
 
-      assert_equal newer, returned
       assert_equal newer, credential.reload.config_data.dig("tokens", "access_token")
     end
 

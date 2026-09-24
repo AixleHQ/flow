@@ -63,8 +63,8 @@ class AgentCredentialResource < ApplicationResource
 
   # Whether re-authenticating is the only remedy, so the UI can say so rather than imply
   # that waiting might help. True when this runtime cannot renew server-side
-  # (BaseAdapter#credential_lifecycle) — Grok stores no refresh token at all — or when the
-  # platform has already exhausted its retries.
+  # (BaseAdapter#credential_lifecycle), or when the platform has already exhausted its
+  # retries.
   typelize :boolean
   attribute :reauth_required do |credential|
     credential.error? || credential.adapter.credential_lifecycle[:refresh] != :server

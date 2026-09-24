@@ -305,6 +305,58 @@ module Agents
       assert_equal "oauth_token_missing", result[:error_code]
     end
 
+    # == Server-side refresh ==
+    #
+    # Google installed-app OAuth, measured on a production credential: a 3599s access
+    # token and no rotated refresh token in the response.
+
+    def consumer_credential(auth_method: "consumer", refresh_token: "rt-1")
+      create(:agent_credential, user: @user, agent_type: "antigravity_cli", config_data: {
+        "access_token" => "at-old", "refresh_token" => refresh_token, "token_type" => "Bearer",
+        "expiry" => 5.minutes.from_now.utc.iso8601(9), "auth_method" => auth_method
+      }.compact)
+    end
+
+    test "refresh! renews a consumer login with agy's OAuth client and keeps the refresh token" do
+      credential = consumer_credential
+      request = stub_request(:post, AntigravityCliAdapter::GOOGLE_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", refresh_token: "rt-1",
+                      client_id: Settings.agents.antigravity.oauth_client_id,
+                      client_secret: Settings.agents.antigravity.oauth_client_secret })
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { access_token: "at-new", expires_in: 3599, token_type: "Bearer", scope: "openid" }.to_json)
+
+      assert_equal :refreshed, @adapter.refresh!(credential)[:status]
+
+      assert_requested request
+      stored = credential.reload.config_data
+      assert_equal "at-new", stored["access_token"]
+      assert_equal "rt-1", stored["refresh_token"]
+      assert_in_delta 1.hour.from_now.to_i, credential.expires_at.to_i, 5
+      assert_equal "at-new", JSON.parse(@adapter.generate_config(stored).to_json).dig("token", "access_token")
+    end
+
+    test "refresh! treats a revoked grant as permanent" do
+      credential = consumer_credential
+      stub_request(:post, AntigravityCliAdapter::GOOGLE_TOKEN_URL)
+        .to_return(status: 400, headers: { "Content-Type" => "application/json" },
+                   body: { error: "invalid_grant", error_description: "Token has been expired or revoked." }.to_json)
+
+      result = @adapter.refresh!(credential)
+
+      assert_equal :error, result[:status]
+      assert result[:permanent]
+    end
+
+    # agy's other embedded client belongs to the Cloud-project login, unverified — so that
+    # login publishes no expiry and is left to the CLI rather than refreshed with a guess.
+    test "a login other than consumer publishes no expiry and is not refreshed server-side" do
+      credential = consumer_credential(auth_method: "cloud_project")
+
+      assert_nil credential.expires_at
+      assert_equal :not_needed, @adapter.refresh!(credential)[:status]
+    end
+
     private
 
     def preflight_runtime(auth_content)

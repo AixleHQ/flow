@@ -368,6 +368,13 @@ agents:
     kiro_cli: <%= ENV['AGENT_IMAGE_KIRO_CLI'] %>
   mcp:
     startup_timeout_ms: <%= ENV['AGENT_MCP_STARTUP_TIMEOUT_MS'] || 90000 %>
+  # The Google OAuth client `agy` logs a consumer ("Google OAuth") account in with,
+  # read out of the binary. Kept out of the repo: GitHub secret scanning reports a
+  # committed GOCSPX- secret to Google, which revokes it — for every agy user, not
+  # just us. Unset, Antigravity tokens are renewed only by the CLI in the container.
+  antigravity:
+    oauth_client_id: <%= ENV['ANTIGRAVITY_OAUTH_CLIENT_ID'] %>
+    oauth_client_secret: <%= ENV['ANTIGRAVITY_OAUTH_CLIENT_SECRET'] %>
   # Where the in-container watcher reports a token the CLI rotated. Derived from
   # `internal_base` like mcp.server_url and cloud.credentials_url, so all three move
   # together when a deployment's internal host does — a hardcoded default here would

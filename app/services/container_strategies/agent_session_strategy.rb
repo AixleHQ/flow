@@ -220,19 +220,13 @@ module ContainerStrategies
         return
       end
 
-      return unless result.is_a?(Hash)
+      return unless result.is_a?(Hash) && result[:status] == :error
 
-      case result[:status]
-      when :refreshed
-        credential.clear_refresh_error! if credential.refresh_error.present?
-      when :error
-        permanent = AgentCredential.permanent_failure?(result)
-        credential.mark_refresh_error!(result[:detail], permanent: permanent)
-        raise AgentCredential::PreflightError, credential if permanent
+      # AgentCredential#renew! has already recorded and reported the failure.
+      raise AgentCredential::PreflightError, credential if AgentCredential.permanent_failure?(result)
 
-        Rails.logger.warn("[AgentSession] Pre-launch token refresh failed for credential " \
-                          "#{credential.id}: #{result[:detail]} — starting on the token in hand")
-      end
+      Rails.logger.warn("[AgentSession] Pre-launch token refresh failed for credential " \
+                        "#{credential.id}: #{result[:detail]} — starting on the token in hand")
     end
 
     # Adapter hook for launch-time credential verification (e.g. Codex's

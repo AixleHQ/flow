@@ -114,6 +114,25 @@ module Activities
         assert_equal "at-old", credential.reload.config_data.dig("claudeAiOauth", "accessToken")
       end
 
+      # Cursor's refresh returns no new refresh token, so the holder's copy stays valid and
+      # there is no reason to wait for it to go quiet.
+      test "refreshes a static-rotation credential even while its holder is mid-turn" do
+        credential = AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli",
+                                                    { "accessToken" => "at-old", "refreshToken" => "at-old" })
+        create(:terminal_session, user: @user, company_id: @company.id, agent_type: "cursor_cli",
+                                  state: "running", container_id: "ctr-1")
+        @runtime.set_terminal_pane("● Running tests…", last_output_at: 30.seconds.ago)
+        stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL)
+          .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                     body: { access_token: "at-new", id_token: "id", shouldLogout: false }.to_json)
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:refreshed]
+        assert_equal 0, result[:skipped_busy]
+        assert_equal "at-new", credential.reload.config_data["accessToken"]
+      end
+
       test "treats an unreadable container as busy rather than parked" do
         credential = claude_credential
         holder_session

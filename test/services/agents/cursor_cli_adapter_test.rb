@@ -275,6 +275,23 @@ module Agents
       assert_equal "fresh-token", credential.config_data["refreshToken"]
     end
 
+    # The web path used to call the vendor directly and log the outcome at INFO: 40+
+    # failed refreshes a day on production, and not one recorded on the credential.
+    test "fetch_available_models records a refresh the vendor refuses" do
+      user = create(:user, company: create(:company))
+      credential = create(:agent_credential, :cursor_cli, user: user,
+                          config_data: { "accessToken" => "stale", "refreshToken" => "r1" })
+      stub_request(:post, CursorCliAdapter::CURSOR_MODELS_URL).to_return(status: 401, body: "")
+      stub_request(:post, CursorCliAdapter::CURSOR_AUTH_URL).to_return(status: 404, body: "<!DOCTYPE html>")
+
+      assert_error_reported(AgentCredential::RefreshFailed) do
+        assert_empty @adapter.fetch_available_models({ "accessToken" => "stale" }, credential: credential)
+      end
+
+      assert_equal 1, credential.reload.refresh_failure_count
+      assert_match(/404/, credential.refresh_error)
+    end
+
     # =========================================================================
     # collect_usage — MITM RPC windows correlated with Dashboard API events
     # =========================================================================
