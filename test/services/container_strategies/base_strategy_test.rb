@@ -70,7 +70,8 @@ module ContainerStrategies
         spec[:image] == "test:latest" &&
           spec[:env_vars] == [ "A=1" ] &&
           spec[:labels] == { "x" => "y" } &&
-          spec[:host_config] == { "NetworkMode" => "bridge" }
+          spec[:host_config] == { "NetworkMode" => "bridge" } &&
+          spec[:privilege_escalation] == false
       end.returns(handle)
       @runtime_mock.expects(:container_identifier).with(handle).returns("container-handle-123")
 

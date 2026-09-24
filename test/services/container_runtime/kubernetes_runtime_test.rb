@@ -342,6 +342,19 @@ module ContainerRuntime
       assert_equal "RuntimeDefault", context.dig(:seccompProfile, :type)
     end
 
+    test "a pod whose image keeps sudo may escalate, and keeps what sudo needs under the restricted profile" do
+      Settings.kubernetes.stubs(:agents_node_pool).returns([])
+      Settings.kubernetes.stubs(:agents_image_pull_secrets).returns([])
+
+      context = build_agent_pod_spec(privilege_escalation: true)[:containers].first[:securityContext]
+      assert_equal({ allowPrivilegeEscalation: true, capabilities: { drop: [ "NET_RAW" ] } }, context)
+
+      Settings.kubernetes.stubs(:restricted_agent_pods).returns("true")
+      context = build_agent_pod_spec(privilege_escalation: true)[:containers].first[:securityContext]
+      assert_equal({ allowPrivilegeEscalation: true, capabilities: { drop: [ "NET_RAW" ] }, runAsNonRoot: true,
+                     seccompProfile: { type: "RuntimeDefault" } }, context)
+    end
+
     # A moving tag under IfNotPresent runs whichever copy a node cached.
     test "an image with a moving tag is pulled on every start; a pinned one keeps the configured policy" do
       Settings.kubernetes.stubs(:image_pull_policy).returns("IfNotPresent")
@@ -987,13 +1000,14 @@ module ContainerRuntime
     # Builds the pod the way create_container does — real handle, real pod-spec
     # builder — and hands back the pod spec as a plain Hash. No API calls: only
     # settings are read on this path.
-    def build_agent_pod_spec(container_name: "terminal-abc123")
+    def build_agent_pod_spec(container_name: "terminal-abc123", **extra)
       spec = {
         image: "alpine:latest",
         env_vars: [],
         labels: {},
         host_config: {},
-        container_name: container_name
+        container_name: container_name,
+        **extra
       }
       handle = @runtime.send(:build_handle, spec)
       pod = @runtime.send(:build_pod, spec, handle)

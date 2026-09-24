@@ -109,6 +109,17 @@ module ContainerStrategies
       assert_operator host_config["CpuQuota"], :>, 0
     end
 
+    test "only the Claude Code container keeps setuid escalation, for its sudo" do
+      claude = build_strategy(agent_type: "claude_code")
+      assert_nil claude.build_host_config["SecurityOpt"]
+      assert_equal [ "NET_RAW" ], claude.build_host_config["CapDrop"]
+      assert claude.before_create_container[:privilege_escalation]
+
+      codex = build_strategy(agent_type: "codex")
+      assert_equal [ "no-new-privileges" ], codex.build_host_config["SecurityOpt"]
+      assert_equal [ "NET_RAW" ], codex.build_host_config["CapDrop"]
+    end
+
     test "TTYD_CMD is bash for agent sessions" do
       strategy = build_strategy(agent_type: "claude_code")
 

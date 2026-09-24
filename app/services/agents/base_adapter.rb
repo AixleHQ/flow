@@ -181,6 +181,12 @@ module Agents
       false
     end
 
+    # Whether the image gives its agent user passwordless sudo, so the container
+    # must keep setuid escalation (no no-new-privileges, allowPrivilegeEscalation).
+    def privilege_escalation?
+      false
+    end
+
     # Agent name for `npx skills add --agent <name>`.
     # Maps to the skills.sh ecosystem agent identifiers.
     # @return [String]

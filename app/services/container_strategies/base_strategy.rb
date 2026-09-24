@@ -55,13 +55,14 @@ module ContainerStrategies
 
     # == create_container ==
 
-    def create_container(image:, env_vars: [], labels: {}, host_config: {},
+    def create_container(image:, env_vars: [], labels: {}, host_config: {}, privilege_escalation: false,
                          cmd: nil, working_dir: nil, exposed_ports: nil, container_name: nil, **)
       spec = {
         image: image,
         env_vars: env_vars,
         labels: labels,
         host_config: host_config,
+        privilege_escalation: privilege_escalation,
         cmd: cmd,
         working_dir: working_dir,
         exposed_ports: exposed_ports,

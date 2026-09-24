@@ -522,7 +522,7 @@ module ContainerRuntime
         command: spec[:cmd],
         workingDir: spec[:working_dir],
         resources: container_resources(spec),
-        securityContext: agent_security_context
+        securityContext: agent_security_context(spec)
       }
 
       ports = handle.service_ports
@@ -1142,16 +1142,19 @@ module ContainerRuntime
       tag.blank? || tag == "latest" ? "Always" : image_pull_policy
     end
 
-    # Always: no privilege escalation (setuid, sudo) and no raw sockets. The full
+    # Always: no raw sockets, and no privilege escalation (setuid) unless the spec
+    # asks for it — an image whose non-root agent user has sudo. The full
     # restricted profile additionally needs every agent image to run as a non-root
-    # user, so it is switched on per deployment once those images are rolled out.
-    def agent_security_context
-      if kube_setting(:restricted_agent_pods).to_s == "true"
-        { runAsNonRoot: true, allowPrivilegeEscalation: false,
-          capabilities: { drop: [ "ALL" ] }, seccompProfile: { type: "RuntimeDefault" } }
-      else
-        { allowPrivilegeEscalation: false, capabilities: { drop: [ "NET_RAW" ] } }
-      end
+    # user, so it is switched on per deployment once those images are rolled out;
+    # a pod that keeps sudo also keeps the capabilities sudo and its root need.
+    def agent_security_context(spec = {})
+      escalate = spec[:privilege_escalation] == true
+      base = { allowPrivilegeEscalation: escalate, capabilities: { drop: [ "NET_RAW" ] } }
+      return base unless kube_setting(:restricted_agent_pods).to_s == "true"
+      return base.merge(runAsNonRoot: true, seccompProfile: { type: "RuntimeDefault" }) if escalate
+
+      { runAsNonRoot: true, allowPrivilegeEscalation: false,
+        capabilities: { drop: [ "ALL" ] }, seccompProfile: { type: "RuntimeDefault" } }
     end
 
     # A tool run is sized by its host_config limits, as it is on Docker — requests

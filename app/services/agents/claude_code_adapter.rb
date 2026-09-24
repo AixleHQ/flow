@@ -37,6 +37,12 @@ module Agents
       auth_file_paths.join(",")
     end
 
+    # Claude refuses --dangerously-skip-permissions as root, so its image runs a
+    # non-root user and gives it sudo for installing packages.
+    def privilege_escalation?
+      true
+    end
+
     def home_dir
       "/home/claude"
     end

@@ -61,6 +61,7 @@ module ContainerStrategies
         env_vars: build_env_vars,
         labels: build_labels,
         host_config: build_host_config,
+        privilege_escalation: privilege_escalation?,
         exposed_ports: build_exposed_ports,
         cmd: build_cmd,
         working_dir: build_working_dir
@@ -201,10 +202,15 @@ module ContainerStrategies
 
     # Bounded like tool containers are — memory, CPU and processes — on Docker as
     # on Kubernetes.
-    # No setuid escalation and no raw sockets, as on Kubernetes.
+    # No raw sockets, and no setuid escalation unless the image's sudo needs it,
+    # as on Kubernetes.
     def build_host_config
-      limits_host_config(load_container_limits(:agent_session))
-        .merge("SecurityOpt" => [ "no-new-privileges" ], "CapDrop" => [ "NET_RAW" ])
+      host_config = limits_host_config(load_container_limits(:agent_session)).merge("CapDrop" => [ "NET_RAW" ])
+      privilege_escalation? ? host_config : host_config.merge("SecurityOpt" => [ "no-new-privileges" ])
+    end
+
+    def privilege_escalation?
+      AgentCredentialsService.for(input[:agent_type]).adapter.privilege_escalation?
     end
 
     def build_exposed_ports
