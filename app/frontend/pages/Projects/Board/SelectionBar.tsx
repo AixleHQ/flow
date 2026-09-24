@@ -39,6 +39,7 @@ export interface SelectionBarProps {
 }
 
 const PRIORITY_OPTIONS: { value: string | null; label: string }[] = [
+  { value: 'critical', label: 'Critical' },
   { value: 'high', label: 'High' },
   { value: 'medium', label: 'Medium' },
   { value: 'low', label: 'Low' },

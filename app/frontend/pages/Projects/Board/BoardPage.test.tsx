@@ -2474,6 +2474,17 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.getByRole('button', { name: /Move to/i })).toBeInTheDocument();
   });
 
+  it('offers every priority a task can have, critical included, in bulk', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await armBulkMode();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Priority' }));
+
+    const options = (await screen.findAllByRole('menuitem')).map((item) => item.textContent);
+    expect(options).toEqual(['Critical', 'High', 'Medium', 'Low', 'None']);
+  });
+
   it('Cancel clears the selection but stays in bulk mode', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
