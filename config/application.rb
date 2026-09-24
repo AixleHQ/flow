@@ -23,9 +23,6 @@ module Aixle
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.1
-    # 8.1 turns YJIT on outside development and test. It trades memory for speed,
-    # and no pod has been sized for it yet: switch it on with that measured.
-    config.yjit = false
 
     config.require_master_key = false
     config.secret_key_base = Settings.rails.secret_key_base
