@@ -35,6 +35,11 @@ tmp/storage/*
 
 public/assets
 
+# Dev container caches (docker-compose.yml). The directories are tracked because
+# Docker creates a missing bind-mount source as root.
+/.docker-cache/*/*
+!/.docker-cache/*/.keep
+
 # Ignore master key for decrypting credentials and more.
 config/master.key
 web_reference

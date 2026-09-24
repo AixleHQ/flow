@@ -8,7 +8,9 @@ export default defineConfig({
   build: {
     sourcemap: false,
   },
-  plugins: [ViteRuby(), tsconfigPaths(), reactSwc(), inertia()],
+  // The plugin crawls the whole checkout for tsconfig files, and .docker-cache
+  // holds the dev stack's installed gems, some of which ship one.
+  plugins: [ViteRuby(), tsconfigPaths({ skip: (dir) => dir === '.docker-cache' }), reactSwc(), inertia()],
   resolve: {
     extensions: ['.js', '.jsx', '.ts', '.tsx'],
   },
