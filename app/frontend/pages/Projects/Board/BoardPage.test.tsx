@@ -2453,6 +2453,24 @@ describe('Projects/Board/BoardPage', () => {
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument();
   });
 
+  it('offers Retry run on a failed card only to those who may run workflows', () => {
+    const failed = makeTask({
+      id: 1,
+      title: 'Wire up authentication',
+      boardColumnId: 100,
+      recentWorkflowRuns: [runOf({ state: 'failed' })],
+    });
+    const { unmount } = renderAuthedPage(<BoardPage />, { props: { ...populatedProps, tasks: [failed] } });
+    expect(screen.getByRole('button', { name: 'Retry run' })).toBeInTheDocument();
+    unmount();
+
+    renderAuthedPage(<BoardPage />, {
+      props: { ...populatedProps, tasks: [failed], projectPermissions: { canExecute: false, canManage: false } },
+    });
+
+    expect(screen.queryByRole('button', { name: 'Retry run' })).not.toBeInTheDocument();
+  });
+
   it('does not show the Bulk button for view-only users', () => {
     renderAuthedPage(<BoardPage />, {
       props: { ...populatedProps, projectPermissions: { canExecute: false, canManage: false } },

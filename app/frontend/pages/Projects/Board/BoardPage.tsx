@@ -892,7 +892,7 @@ const BoardPage = () => {
                   taskHref={taskHref}
                   onAddTask={openCreateForColumn}
                   onTaskClick={openTask}
-                  onRetryTask={handleRetryTask}
+                  onRetryTask={canExecute ? handleRetryTask : undefined}
                   onTagClick={toggleTagFilter}
                   activeTags={filters.tags}
                   collapsed={collapsedColumns.has(col.id)}

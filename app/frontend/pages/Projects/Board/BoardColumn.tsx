@@ -64,7 +64,7 @@ export function BoardColumn({
   taskHref: (task: Task) => string;
   onAddTask: (columnId: number) => void;
   onTaskClick: (task: Task) => void;
-  onRetryTask: (task: Task) => void;
+  onRetryTask?: (task: Task) => void;
   onTagClick: (tag: string) => void;
   activeTags: string[];
   collapsed: boolean;
