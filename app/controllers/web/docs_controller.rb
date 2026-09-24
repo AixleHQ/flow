@@ -31,7 +31,7 @@ class Web::DocsController < Web::ApplicationController
   # when they drift.
   PAGES = %w[using-flow getting-started project-home tasks running-workflows starting-work
              sessions-and-runs session-queues assets personas agent-capabilities repositories ai-builder
-             people-and-access secrets analytics company-workspace examples
+             people-and-access secrets templates analytics company-workspace examples
              user-guide quick-start agents runtimes tools mcp board workflows
              triggers-and-gates integrations azure-devops configuration reference cli-ref
              api-guide config-schema user-guide-outline changelog-product-areas].freeze

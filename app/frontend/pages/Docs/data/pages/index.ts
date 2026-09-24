@@ -28,6 +28,7 @@ import sessionQueues from './session-queues.md?raw';
 import sessionsAndRuns from './sessions-and-runs.md?raw';
 import startingWork from './starting-work.md?raw';
 import tasks from './tasks.md?raw';
+import templates from './templates.md?raw';
 import tools from './tools.md?raw';
 import triggersAndGates from './triggers-and-gates.md?raw';
 import userGuideOutline from './user-guide-outline.md?raw';
@@ -162,6 +163,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'Using Flow',
     content: secrets,
     toc: extractToc(secrets),
+  },
+  templates: {
+    title: 'Templates',
+    section: 'Using Flow',
+    content: templates,
+    toc: extractToc(templates),
   },
   analytics: {
     title: 'Analytics & cost',

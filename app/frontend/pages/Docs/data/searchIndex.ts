@@ -97,6 +97,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Credentials and configuration a run needs, kept out of prompts, task text and logs.',
   },
   {
+    slug: 'templates',
+    title: 'Templates',
+    section: 'Using Flow',
+    desc: 'Install reviewed connectors, boards, workflows and projects from the catalog, finish the setup checklist, and publish your own.',
+  },
+  {
     slug: 'analytics',
     title: 'Analytics & cost',
     section: 'Using Flow',
