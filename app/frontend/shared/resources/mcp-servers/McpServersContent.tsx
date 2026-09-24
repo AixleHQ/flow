@@ -370,7 +370,7 @@ export function McpServersContent({
                             </Tooltip>
                             <Tooltip label="Delete">
                               <ActionIcon
-                                aria-label="Edit"
+                                aria-label="Delete"
                                 variant="subtle"
                                 size="sm"
                                 color="red"

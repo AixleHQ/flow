@@ -132,6 +132,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
   basePath,
 }) => {
   const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [headersList, setHeadersList] = useState<KVPair[]>([]);
   const [envList, setEnvList] = useState<KVPair[]>([]);
   // Credential scope defaults to project-wide (shared); the per-user option is tucked behind an
@@ -180,6 +181,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
 
   useEffect(() => {
     if (opened) {
+      setServerError(null);
       if (editServer) {
         const headers = editServer.headers ?? {};
         setHeadersList(Object.entries(headers).map(([key, value]) => ({ key, value: String(value) })));
@@ -227,6 +229,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
 
   const handleSubmit = (values: FormData) => {
     setLoading(true);
+    setServerError(null);
 
     const payload = {
       mcpServer: {
@@ -236,10 +239,22 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
       },
     };
 
+    // A refusal can name a field this transport does not render — a URL typed before switching to
+    // stdio is still sent and still checked — so whatever has no visible field goes in the alert.
+    const shownFields = new Set(['name', 'transport', 'description', 'enabled', ...(isStdio ? ['command'] : ['url'])]);
     const opts = {
       preserveScroll: true,
       onFinish: () => setLoading(false),
       onSuccess: () => onClose(),
+      onError: (errors: Record<string, string | string[]>) => {
+        const unshown: string[] = [];
+        Object.entries(errors).forEach(([key, message]) => {
+          const text = Array.isArray(message) ? message.join('; ') : message;
+          if (key in values) form.setFieldError(key, text);
+          if (!shownFields.has(key)) unshown.push(key === 'base' ? text : `${key}: ${text}`);
+        });
+        setServerError(unshown.length > 0 ? unshown.join('\n') : null);
+      },
     };
 
     if (isEdit) {
@@ -448,9 +463,9 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
             <>
               <TextInput
                 label="Command"
-                placeholder="npx @automattic/mcp-wordpress-remote"
+                placeholder="npx package-name@1.2.3"
                 {...form.getInputProps('command')}
-                description="Full command to run (e.g., npx @playwright/mcp --no-sandbox)"
+                description="Full command to run, with the package pinned to an exact version (npx name@1.2.3, uvx name==1.2.3)"
                 styles={{ input: { fontFamily: 'monospace' } }}
               />
 
@@ -526,6 +541,12 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
               Saving a new address clears this server&apos;s stored header and env values and disconnects its OAuth
               connection, so they never reach a host they were not entered for. Enter them again here, or connect again
               after saving.
+            </Alert>
+          )}
+
+          {serverError && (
+            <Alert color="red" variant="light" title="Could not save" style={{ whiteSpace: 'pre-line' }}>
+              {serverError}
             </Alert>
           )}
 

@@ -125,8 +125,29 @@ describe('McpServerFormModal', () => {
 
     await userEvent.selectOptions(screen.getByLabelText('Transport'), 'stdio');
 
-    expect(await screen.findByPlaceholderText('npx @automattic/mcp-wordpress-remote')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('npx package-name@1.2.3')).toBeInTheDocument();
     expect(screen.queryByPlaceholderText('https://mcp.example.com')).not.toBeInTheDocument();
+  });
+
+  it('shows why the server refused the connector, under the field and for fields not on screen', async () => {
+    vi.mocked(router.post).mockImplementationOnce((_url, _data, options) => {
+      const opts = options as { onError?: (errors: Record<string, string[]>) => void; onFinish?: () => void };
+      opts.onError?.({
+        url: ['cannot point to private or internal network addresses'],
+        command: ['must pin mcp-server-fetch to an exact version'],
+      });
+      opts.onFinish?.();
+    });
+    renderPage(<McpServerFormModal opened onClose={vi.fn()} {...baseProps} />);
+
+    await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'fetcher');
+    await userEvent.type(screen.getByPlaceholderText('https://mcp.example.com'), 'http://10.0.0.5/mcp');
+    await userEvent.selectOptions(screen.getByLabelText('Transport'), 'stdio');
+    await userEvent.type(await screen.findByPlaceholderText('npx package-name@1.2.3'), 'uvx mcp-server-fetch');
+    await userEvent.click(screen.getByRole('button', { name: 'Create' }));
+
+    expect(await screen.findByText('must pin mcp-server-fetch to an exact version')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('url: cannot point to private or internal network addresses');
   });
 
   it('the Auth Type selector is only offered for remote (non-stdio) transports', async () => {
@@ -145,10 +166,7 @@ describe('McpServerFormModal', () => {
     await userEvent.type(screen.getByPlaceholderText('Playwright Browser'), 'localproc');
     await userEvent.selectOptions(screen.getByLabelText('Transport'), 'stdio');
 
-    await userEvent.type(
-      await screen.findByPlaceholderText('npx @automattic/mcp-wordpress-remote'),
-      'npx @playwright/mcp',
-    );
+    await userEvent.type(await screen.findByPlaceholderText('npx package-name@1.2.3'), 'npx @playwright/mcp');
 
     await userEvent.click(screen.getByRole('button', { name: /Add Variable/i }));
     await userEvent.type(await screen.findByPlaceholderText('WP_API_URL'), 'WP_API_URL');

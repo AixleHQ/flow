@@ -111,21 +111,14 @@ describe('McpServersContent', () => {
   });
 
   it('opens the delete confirmation modal from a row delete action', async () => {
-    const { container } = renderPage(
+    renderPage(
       <McpServersContent
         {...baseProps}
         mcpServers={[makeServer({ id: 7, name: 'Doomed Server', kind: 'custom', scopeIndicator: 'project' })]}
       />,
     );
 
-    // The edit/delete ActionIcons render only for editable custom servers, but
-    // Mantine's ActionIcon has no accessible name, so locate the delete button
-    // via its trash icon.
-    const trashIcon = container.querySelector('.tabler-icon-trash');
-    expect(trashIcon).not.toBeNull();
-    const deleteButton = trashIcon!.closest('button');
-    expect(deleteButton).not.toBeNull();
-    await userEvent.click(deleteButton!);
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Delete MCP Server')).toBeInTheDocument();
