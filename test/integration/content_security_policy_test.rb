@@ -12,6 +12,7 @@ class ContentSecurityPolicyTest < ActionDispatch::IntegrationTest
     assert_includes reported, "base-uri 'self'"
     assert_includes reported, "frame-ancestors 'self'"
     assert_no_match(/script-src[^;]*https:/, reported, "any https URL must not be a script source")
+    assert_includes reported, "media-src 'self'"
   end
 
   test "the app layout's inline script carries the nonce the policy names" do

@@ -27,6 +27,19 @@ csp_report_uri =
 # the one inline script the app layout needs carries the per-request nonce.
 script_hosts = [ :self, Settings.asset_host.presence ].compact
 
+# Outside development and test, stored files are served on presigned URLs from
+# the S3 bucket's own host (ShrineSetup.s3!): a PDF preview loads in a frame,
+# audio and video as media. The SDK signs either the global or the regional name.
+module StoredFileSources
+  module_function
+
+  def hosts(env: Rails.env, bucket: Settings.aws.bucket, region: Settings.aws.region)
+    return [] if env.local? || bucket.blank?
+
+    [ "https://#{bucket}.s3.amazonaws.com", ("https://#{bucket}.s3.#{region}.amazonaws.com" if region.present?) ].compact
+  end
+end
+
 # An enforced policy of the directives no page can trip over (nothing here uses
 # <base> or plugins, or is framed by another site), sent while the full policy is
 # still report-only. It runs outside Rails' CSP middleware on purpose: that
@@ -62,7 +75,8 @@ Rails.application.configure do
     policy.connect_src :self, :https, "wss://#{Settings.domain}"
     # The onboarding agent-auth terminal and workspace IDE/terminal panels embed
     # ttyd cross-origin (Traefik host), so frame_src must allow that origin.
-    policy.frame_src   :self, Settings.traefik.http_base
+    policy.frame_src   :self, Settings.traefik.http_base, *StoredFileSources.hosts
+    policy.media_src   :self, *StoredFileSources.hosts
     policy.report_uri  csp_report_uri
     if Rails.env.development?
       policy.script_src(*policy.script_src, :unsafe_eval)
