@@ -247,6 +247,15 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(screen.getByText('any channel')).toBeInTheDocument();
   });
 
+  it('ignores a stored name and shows the derived slack title', async () => {
+    installFetch({ triggers: [slackTrigger({ name: 'Ship command' })] });
+
+    renderPage(<TriggersTab {...baseProps()} />);
+
+    expect(await screen.findByText('Slack message contains "ship"')).toBeInTheDocument();
+    expect(screen.queryByText('Ship command')).not.toBeInTheDocument();
+  });
+
   it('defaults the slack op to "contains" when the predicate omits it', async () => {
     installFetch({ triggers: [slackTrigger({ filter_predicate: { text: { value: 'ping' } } })] });
 
