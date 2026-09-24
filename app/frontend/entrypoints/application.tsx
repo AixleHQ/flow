@@ -4,6 +4,7 @@ import { ModalsProvider } from '@mantine/modals';
 import { Notifications } from '@mantine/notifications';
 import * as Sentry from '@sentry/react';
 
+import 'shared/lib/zodConfig';
 import { registerPreloadErrorReload } from 'shared/lib/preloadErrorReload';
 import { initSentry } from 'shared/lib/sentry';
 import { cssVariablesResolver, mantineTheme } from 'shared/theme/mantineTheme';
