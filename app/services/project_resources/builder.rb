@@ -8,7 +8,7 @@ module ProjectResources
   # copied resource carries.
   class Builder
     AGENT_ATTRIBUTES = %i[name title icon persona communication_style principles source].freeze
-    SKILL_ATTRIBUTES = %i[name title description package source source_url content origin].freeze
+    SKILL_ATTRIBUTES = %i[name title description package source source_url content content_hash origin].freeze
     TOOL_ATTRIBUTES = %i[name display_name description docker_image command execution_mode input_schema
                          required_config_items enabled requires_integration].freeze
     MCP_SERVER_ATTRIBUTES = %i[name url transport description command args enabled env headers auth_type

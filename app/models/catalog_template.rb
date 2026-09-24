@@ -17,6 +17,22 @@ class CatalogTemplate < ApplicationRecord
 
   def revoked? = revoked_at.present?
 
+  # Copies a validated package into this row, as mirrored at `commit_sha`.
+  def assign_package(package, commit_sha:, synced_at: Time.current)
+    assign_attributes(
+      slug: package.slug, version: package.version, name: package.name,
+      summary: package.definition["summary"], kind: package.kind,
+      categories: Array(package.definition["categories"]),
+      format_version: package.definition["format_version"],
+      definition: package.definition, files: self.class.serialize_files(package),
+      readme: package.readme, setup_markdown: package.setup_markdown,
+      commit_sha: commit_sha, package_digest: package.digest,
+      installable: package.definition["format_version"] == Templates::Package::FORMAT_VERSION,
+      synced_at: synced_at
+    )
+    self
+  end
+
   def to_package
     Templates::Package.new(
       definition: definition,

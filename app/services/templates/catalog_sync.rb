@@ -90,24 +90,8 @@ module Templates
 
     def upsert(package, sha, revocation_reason)
       row = CatalogTemplate.find_or_initialize_by(slug: package.slug)
-      row.assign_attributes(
-        version: package.version,
-        name: package.name,
-        summary: package.definition["summary"],
-        kind: package.kind,
-        categories: Array(package.definition["categories"]),
-        format_version: package.definition["format_version"],
-        definition: package.definition,
-        files: CatalogTemplate.serialize_files(package),
-        readme: package.readme,
-        setup_markdown: package.setup_markdown,
-        commit_sha: sha,
-        package_digest: package.digest,
-        installable: package.definition["format_version"] == Package::FORMAT_VERSION,
-        revoked_at: revocation_reason ? (row.revoked_at || @now) : nil,
-        revocation_reason: revocation_reason,
-        synced_at: @now
-      )
+      row.assign_package(package, commit_sha: sha, synced_at: @now)
+      row.assign_attributes(revoked_at: revocation_reason ? (row.revoked_at || @now) : nil, revocation_reason: revocation_reason)
       row.save!
     end
 
