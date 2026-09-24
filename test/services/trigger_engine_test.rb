@@ -36,10 +36,55 @@ class TriggerEngineTest < ActiveSupport::TestCase
       event_type: "slack.message", filter_predicate: { "channel" => "C1" })
 
     WorkflowService.expects(:start).never
+    Slack::HelpResponder.expects(:call).once.returns(true)
 
     TriggerEngine.publish(
       event_type: "slack.message", source: "slack:test",
       data: { "channel" => "OTHER" }, project: @project, dedup_key: "evt-2"
+    )
+  end
+
+  test "publish replies with help when Slack text is /help and does not start a workflow" do
+    create(:trigger_binding,
+      project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", filter_predicate: { "channel" => "C1" })
+
+    WorkflowService.expects(:start).never
+    Slack::HelpResponder.expects(:call).once.returns(true)
+
+    TriggerEngine.publish(
+      event_type: "slack.message", source: "slack:test",
+      data: { "channel" => "C1", "text" => "<@B0T> /help" }, project: @project, dedup_key: "evt-help"
+    )
+  end
+
+  test "publish replies with help when no Slack binding matches" do
+    create(:trigger_binding,
+      project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "channel" => "C1", "text" => { "op" => "contains", "value" => "ship" } })
+
+    WorkflowService.expects(:start).never
+    Slack::HelpResponder.expects(:call).once.returns(true)
+
+    TriggerEngine.publish(
+      event_type: "slack.message", source: "slack:test",
+      data: { "channel" => "C1", "text" => "<@B0T>" }, project: @project, dedup_key: "evt-bare"
+    )
+  end
+
+  test "publish still starts a matching Slack binding and does not help" do
+    create(:trigger_binding,
+      project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "channel" => "C1", "text" => { "op" => "contains", "value" => "ship" } })
+
+    WorkflowService.expects(:start).once.returns(build(:workflow_run))
+    Slack::HelpResponder.expects(:call).never
+
+    TriggerEngine.publish(
+      event_type: "slack.message", source: "slack:test",
+      data: { "channel" => "C1", "text" => "<@B0T> please ship it" }, project: @project, dedup_key: "evt-ship"
     )
   end
 

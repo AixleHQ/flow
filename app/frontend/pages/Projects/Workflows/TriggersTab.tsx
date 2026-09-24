@@ -64,6 +64,7 @@ function describeCronShort(expr: string): string {
 }
 
 function triggerTitle(t: Trigger): string {
+  if (t.kind !== 'slack' && t.name?.trim()) return t.name.trim();
   if (t.kind === 'column') return `Task enters "${t.column_name ?? 'column'}"`;
   if (t.kind === 'schedule') {
     const cron = t.schedule_config?.cron ?? '';

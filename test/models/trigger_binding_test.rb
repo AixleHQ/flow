@@ -110,4 +110,40 @@ class TriggerBindingTest < ActiveSupport::TestCase
 
     assert_equal [ match.id ], TriggerBinding.for_event(event).pluck(:id)
   end
+
+  test "accepts an empty predicate and a scalar or known operator condition" do
+    empty = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, filter_predicate: {})
+    scalar = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "webhook.received", filter_predicate: { "branch" => "main" })
+    operator = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      filter_predicate: { "text" => { "op" => "contains", "value" => "ship" } })
+    present = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      filter_predicate: { "text" => { "op" => "present" } })
+
+    assert empty.valid?
+    assert scalar.valid?
+    assert operator.valid?
+    assert present.valid?
+  end
+
+  test "rejects a slack text command of help and allows a word that only contains it" do
+    help = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "text" => { "op" => "eq", "value" => "help" } })
+    slashed = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "text" => { "op" => "contains", "value" => "/HELP" } })
+    helpful = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "text" => { "op" => "contains", "value" => "helpful" } })
+    webhook = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "webhook.received",
+      filter_predicate: { "text" => "help" })
+
+    assert_not help.valid?
+    assert_match(/can't use help/, help.errors[:filter_predicate].join)
+    assert_not slashed.valid?
+    assert helpful.valid?
+    assert webhook.valid?
+  end
 end

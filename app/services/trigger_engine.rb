@@ -29,6 +29,7 @@ class TriggerEngine
   # event_type → how dispatch_pending routes it.
   COLUMN_EVENT_TYPE = "board.column.auto_triggered"
   MANUAL_EVENT_TYPE = "workflow.manual_requested"
+  SLACK_MENTION_TOKEN = /<@[A-Z0-9]+>/i
 
   class << self
     # Persist a normalized event WITHOUT dispatching.
@@ -104,10 +105,23 @@ class TriggerEngine
 
     # Match an event against the generalized binding registry and fire each.
     # Returns the array of created workflow runs (nils for suppressed duplicates).
+    # Slack: /help (and zero matches) reply with the channel's trigger catalog
+    # instead of staying silent — see Slack::HelpResponder.
     def dispatch(event)
       return [] if event.project_id.blank? && event.company_id.blank?
 
-      TriggerBinding.for_event(event).select { |b| b.matches?(event.data) }.map do |binding|
+      if slack_help_request?(event)
+        Slack::HelpResponder.call(event)
+        return []
+      end
+
+      matched = TriggerBinding.for_event(event).select { |b| b.matches?(event.data) }
+      if matched.empty? && event.event_type.to_s.start_with?("slack.")
+        Slack::HelpResponder.call(event)
+        return []
+      end
+
+      matched.map do |binding|
         fire_for_binding(binding: binding, event: event, task: event.board_task, actor: binding.created_by)
       end
     end
@@ -354,6 +368,16 @@ class TriggerEngine
         "user" => event.data["user"]
       }.compact
       slack.present? ? { "slack" => slack } : {}
+    end
+
+    # Explicit /help after stripping Slack user mentions. Bare (empty) mentions
+    # are NOT special-cased here — they fall through to matching so catch-all
+    # channel bindings still fire; HelpResponder only runs when nothing matched.
+    def slack_help_request?(event)
+      return false unless event.event_type.to_s.start_with?("slack.")
+
+      stripped = event.data.to_h["text"].to_s.gsub(SLACK_MENTION_TOKEN, "").strip
+      stripped.match?(/\A\/help\z/i)
     end
   end
 end

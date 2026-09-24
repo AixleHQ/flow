@@ -710,7 +710,7 @@ export function TriggerFormPanel({
                       }}
                     />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12, marginBottom: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12 }}>
                     <div>
                       <label
                         style={{
@@ -769,6 +769,9 @@ export function TriggerFormPanel({
                         }}
                       />
                     </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4, marginBottom: 12 }}>
+                    @mention /help lists this channel&apos;s commands. The word help can&apos;t be used as a pattern.
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <Switch
