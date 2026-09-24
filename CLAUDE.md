@@ -12,7 +12,7 @@ add, remove, or move a document under `docs/`, update `docs/index.md` in the sam
 **before push final results to repo - run the full check suite in Docker first, and only push once it is green:**
 
 ```bash
-docker compose exec -T web make check_all
+docker compose exec -T -u app web make check_all
 ```
 
 `check_all` mirrors CI in a single pass and never short-circuits — it captures
@@ -34,9 +34,13 @@ Rails, tests, and migrations run **only inside the `web` container** — the hos
 has no bundled gems, and its `node_modules` is Linux-built (native bindings fail
 on the host). If the container isn't running: `docker compose up -d`.
 
-- Backend tests: `docker compose exec -T web bin/rails test <files>`
-- Frontend tests: `docker compose exec -T web ./node_modules/.bin/vitest run <files>` (`npx` is not on the container PATH)
-- Full suite before push: `docker compose exec -T web make check_all`
+- Backend tests: `docker compose exec -T -u app web bin/rails test <files>`
+- Frontend tests: `docker compose exec -T -u app web ./node_modules/.bin/vitest run <files>` (`npx` is not on the container PATH)
+- Full suite before push: `docker compose exec -T -u app web make check_all`
+
+Always pass `-u app` to `docker compose exec`: it bypasses the entrypoint and
+runs as the image user, root, which leaves root-owned files in the `.:/app`
+bind-mount on Linux (`tmp/`, `log/`) that the `app` user then cannot write.
 
 **Never run two backend test invocations at the same time** (including from another
 agent session or a git worktree that shares a Postgres — overlapping runs corrupt

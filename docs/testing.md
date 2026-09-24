@@ -138,7 +138,7 @@ and never swap constants at runtime.
 - [ ] Assertions state outcomes, not call sequences (R5, §6)
 - [ ] New external service ⇒ adapter + fake + contract test (R3/R4), not inline `stub_request`
 - [ ] FE tests query by role/label and use the typed factories (R8, §5)
-- [ ] `docker compose exec -T web make check_all` is green — including the coverage floors
+- [ ] `docker compose exec -T -u app web make check_all` is green — including the coverage floors
 - [ ] Shrunk a frozen allowlist while you were in the area? Even better.
 
 ## Roadmap after Phase 0
