@@ -37,7 +37,7 @@ internal server (see resource resolution on the Tools page).
 
 ## Personal MCP (connect your own agent)
 
-You can point your own agent (Claude Code, Cursor, …) at Aixle directly —
+You can point your own agent (Claude Code, Codex, Cursor, …) at Aixle directly —
 no session, no container. Enable it on **Profile → MCP** to get a personal
 token. Clients register the server under the name `flow`, so its tools
 appear as `mcp__flow__list_projects` and so on:
@@ -47,9 +47,19 @@ claude mcp add flow --transport http https://<your-aixle-host>/mcp \
   --header "Authorization: Bearer amcp_…"
 ```
 
+For Codex, which reads a bearer token only from an environment variable:
+
+```
+export FLOW_MCP_TOKEN="amcp_…"
+codex mcp add flow --url https://<your-aixle-host>/mcp --bearer-token-env-var FLOW_MCP_TOKEN
+```
+
+Keep the `export` in your shell profile — Codex reads the variable every
+time it starts the server.
+
 The same tab has an **Add to Cursor** button (a one-click install
 deeplink) and a **Copy JSON** action for any other client's `mcp.json`.
-All three carry the token, so they are only offered while it is on screen
+All of these carry the token, so they are only offered while it is on screen
 — it is stored as a digest and shown exactly once.
 
 This server is **session-less** and grants **exactly your own access
