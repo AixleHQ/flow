@@ -472,6 +472,9 @@ describe('Projects/Board/BoardPage', () => {
     const drawer = within(screen.getByRole('dialog'));
     await userEvent.click(drawer.getByRole('tab', { name: /Assets/ }));
 
+    expect(drawer.getByRole('link', { name: 'Download mockup.png' })).toBeInTheDocument();
+    expect(drawer.getByRole('button', { name: 'Delete mockup.png' })).toBeInTheDocument();
+    expect(drawer.getByRole('button', { name: 'Archive task' })).toBeInTheDocument();
     expect(drawer.getByRole('link', { name: 'Public link to mockup.png' })).toHaveAttribute(
       'href',
       'https://flow.test/share/xyz',

@@ -515,6 +515,7 @@ export function TaskDetailSidebar({
               size="sm"
               onClick={handleToggleArchive}
               loading={archiving}
+              aria-label={task.archived ? 'Unarchive task' : 'Archive task'}
             >
               {task.archived ? <IconArchiveOff size={16} /> : <IconArchive size={16} />}
             </ActionIcon>
@@ -1504,7 +1505,14 @@ export function TaskDetailSidebar({
                         </Tooltip>
                       )}
                       {a.fileUrl && (
-                        <ActionIcon component="a" href={a.fileUrl} target="_blank" variant="subtle" size="sm">
+                        <ActionIcon
+                          component="a"
+                          href={a.fileUrl}
+                          target="_blank"
+                          variant="subtle"
+                          size="sm"
+                          aria-label={`Download ${a.name}`}
+                        >
                           <IconDownload size={15} />
                         </ActionIcon>
                       )}
@@ -1512,6 +1520,7 @@ export function TaskDetailSidebar({
                         <ActionIcon
                           variant="subtle"
                           size="sm"
+                          aria-label={`Delete ${a.name}`}
                           onClick={() => handleDeleteAsset(a.id)}
                           className={styles.dangerHover}
                           style={{ color: 'var(--mantine-color-placeholder)' }}
