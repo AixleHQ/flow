@@ -173,7 +173,7 @@ group :test do
   gem "site_prism"
 end
 
-gem "shrine", "~> 3.9"
+gem "shrine", "~> 3.10"
 gem "aws-sdk-s3", "~> 1.232"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
