@@ -15,6 +15,4 @@ class TemplateInstall < ApplicationRecord
   validates :idempotency_key, uniqueness: { scope: :installed_by_id }
 
   def catalog_template = CatalogTemplate.find_by(slug: slug)
-
-  def setup_complete? = setup_items.none?(&:open?)
 end

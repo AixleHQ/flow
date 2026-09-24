@@ -20,6 +20,7 @@ import {
   IconPlugConnected,
   IconRobot,
   IconSettings,
+  IconTemplate,
   IconSparkles,
   IconStar,
   IconStarFilled,
@@ -62,6 +63,7 @@ import {
   companySwitchPath,
   companyWorkflowCatalogIndexPath,
   profilePath,
+  templatesPath,
 } from 'shared/routes';
 
 import classes from './AppSidebar.module.css';
@@ -179,7 +181,10 @@ const companyNavGroups: NavGroup[] = [
   },
   {
     label: 'Library',
-    items: [{ label: 'Workflow Catalog', icon: <IconGitMerge size={18} />, path: companyWorkflowCatalogIndexPath() }],
+    items: [
+      { label: 'Templates', icon: <IconTemplate size={18} />, path: templatesPath() },
+      { label: 'Workflow Catalog', icon: <IconGitMerge size={18} />, path: companyWorkflowCatalogIndexPath() },
+    ],
   },
   {
     label: 'Admin',

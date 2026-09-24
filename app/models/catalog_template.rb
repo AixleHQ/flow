@@ -13,7 +13,6 @@ class CatalogTemplate < ApplicationRecord
   validates :kind, inclusion: { in: Templates::Package::KINDS }
 
   scope :listed, -> { where(revoked_at: nil) }
-  scope :installable, -> { listed.where(installable: true) }
 
   def revoked? = revoked_at.present?
 

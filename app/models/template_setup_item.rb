@@ -14,6 +14,4 @@ class TemplateSetupItem < ApplicationRecord
   validates :kind, inclusion: { in: KINDS }
   validates :status, inclusion: { in: STATUSES }
   validates :ref, presence: true, uniqueness: { scope: :template_install_id }
-
-  def open? = %w[pending failed].include?(status)
 end
