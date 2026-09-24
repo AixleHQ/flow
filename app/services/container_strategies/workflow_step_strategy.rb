@@ -33,11 +33,6 @@ module ContainerStrategies
 
       outputs_count = collect_workflow_outputs(container_id)
 
-      # Notify the workflow execution AFTER outputs are collected so CompleteStepActivity
-      # can validate them. session_service#signal_container_finished sends this signal
-      # immediately (causing a race), so we do it here instead for workflow steps.
-      notify_workflow_execution(session)
-
       # Provider-agnostic teardown hook: every integration that holds
       # session-scoped runtime state (Coder workspace locks today, others
       # later) releases it here. The dispatcher lives in
@@ -174,16 +169,6 @@ module ContainerStrategies
       rescue StandardError => e
         Rails.logger.warn("[WorkflowStepStrategy] Failed to inject run asset #{asset.name}: #{e.message}")
       end
-    end
-
-
-    def notify_workflow_execution(session)
-      step_run = session.step_run
-      return unless step_run&.workflow_run_id
-
-      WorkflowService.notify_container_finished(step_run: step_run)
-    rescue StandardError => e
-      Rails.logger.warn("[WorkflowStepStrategy] Failed to notify workflow execution: #{e.message}")
     end
 
     def download_to_container(container, url, target_path)

@@ -339,6 +339,7 @@ class TerminalSession < ApplicationRecord
     assign_usage_totals
     self.finished_at = Time.current
     self.container_id = nil
+    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
   end
 
   def on_failed

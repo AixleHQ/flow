@@ -19,6 +19,13 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
     @session.fail!
   end
 
+  test "a step session's finish wakes its run once the finish is committed" do
+    @session.start_finishing!
+    WorkflowService.expects(:notify_container_finished).with { TerminalSession.find(@session.id).finished? }.once
+
+    @session.finish!
+  end
+
   test "a failure that rolls back wakes nobody" do
     WorkflowService.expects(:notify_container_finished).never
 

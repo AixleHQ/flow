@@ -109,6 +109,34 @@ module ContainerStrategies
       assert_equal({}, strategy.before_cleanup(container_id: nil))
     end
 
+    # == cleanup phase ==
+
+    test "the run hears about a container that failed to start only once its session has failed" do
+      stub_container_runtime(agent_type: "claude_code")
+      create(:agent_credential, user: @user, agent_type: "claude_code")
+      session, = create_workflow_step_session
+      session.update!(state: "running")
+      WorkflowService.expects(:notify_container_finished).with { TerminalSession.find(session.id).failed? }.once
+
+      run_cleanup_phase(session, error: "Phase start_container failed: Waiting for cluster capacity")
+
+      assert_predicate session.reload, :failed?
+    end
+
+    test "the run hears about a finished step once its outputs are collected" do
+      stub_container_runtime(agent_type: "claude_code")
+      create(:agent_credential, user: @user, agent_type: "claude_code")
+      session, step_run, = create_workflow_step_session
+      session.update!(state: "finishing")
+      WorkflowService.expects(:notify_container_finished)
+        .with { |step_run:| step_run.produced_workflow_run_assets.exists? }.once
+
+      run_cleanup_phase(session)
+
+      assert_predicate session.reload, :finished?
+      assert_equal 1, step_run.produced_workflow_run_assets.count
+    end
+
     # == inject_prior_step_outputs ==
 
     test "inject_prior_step_outputs downloads dependency outputs and run input assets into the container" do
@@ -180,6 +208,13 @@ module ContainerStrategies
       )
     end
 
+    def run_cleanup_phase(session, error: nil)
+      ContainerService.new(
+        strategy: build_strategy(session: session),
+        state: { container_id: "abc123", session_id: session.id, error: error }.compact
+      ).run_phase(:cleanup)
+    end
+
     def build_strategy(session:, agent_type: "claude_code", credential: nil)
       WorkflowStepStrategy.new(
         user_id: @user.id,
@@ -196,7 +231,7 @@ module ContainerStrategies
       workflow = create(:workflow, scope: @project)
       step = create(:step, workflow: workflow, instructions: instructions, agent: agent)
       workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
-      session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "claude_code")
+      session = create(:terminal_session, session_type: "workflow_step", user: @user, project: @project, agent_type: "claude_code")
       step_run = create(:step_run, workflow_run: workflow_run, step: step, terminal_session: session)
       [ session, step_run, step, workflow_run ]
     end
