@@ -23,20 +23,24 @@ WORKDIR /home/claude
 # Download THEN run, and verify the binary — never `curl … | bash`. In a pipe, a failed
 # curl still leaves bash reading empty stdin and exiting 0, so a network blip produced an
 # image with no Claude CLI at all and the build reported success (seen 2026-08-05).
+# Pinned: the registry build cache keys this layer on the Dockerfile text, so an unpinned
+# install kept shipping whichever release first filled the cache. The installer takes
+# the release as its argument; the weekly canary builds the newest one instead.
+ARG CLAUDE_CODE_VERSION=2.1.281
 RUN curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh \
-    && bash /tmp/claude-install.sh \
+    && bash /tmp/claude-install.sh "${CLAUDE_CODE_VERSION}" \
     && rm -f /tmp/claude-install.sh \
     && test -x /home/claude/.local/bin/claude \
-    && /home/claude/.local/bin/claude --version
+    && /home/claude/.local/bin/claude --version | grep -q "^${CLAUDE_CODE_VERSION} "
 
 ENV PATH="/home/claude/.local/bin:${PATH}"
 
 USER root
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
-# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
-# Dockerfile are not the same image and nothing else says which one a container is running.
+# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
+# installers that install only the latest release, and the canary builds the newest
+# release of the pinned ones, so the version is not always the one this file names.
 RUN /home/claude/.local/bin/claude --version > /etc/aixle-cli-version
 
 # -----------------------------------------------------------------------------

@@ -32,6 +32,11 @@ RUN useradd -m -d /home/kiro -s /bin/bash -G ${AGENT_BROWSERS_GROUP} kiro
 #
 # The install is verified here rather than in a live session: a broken download or a
 # musl/glibc mismatch fails the BUILD instead of every user's first Kiro terminal.
+# The installer only installs the channel's latest release. The registry build cache
+# keys this layer on the Dockerfile text; the manifest the installer reads is ADDed —
+# BuildKit checksums an ADDed URL on every build — so the install reruns exactly when
+# a release ships.
+ADD https://prod.download.cli.kiro.dev/stable/latest/manifest.json /tmp/kiro-latest-manifest.json
 RUN set -eux; \
     su kiro -c 'set -eux; \
         export HOME=/home/kiro PATH=/home/kiro/.local/bin:$PATH; \
@@ -43,9 +48,9 @@ RUN set -eux; \
         kiro-cli chat --help > /dev/null'
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
-# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
-# Dockerfile are not the same image and nothing else says which one a container is running.
+# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
+# installers that install only the latest release, and the canary builds the newest
+# release of the pinned ones, so the version is not always the one this file names.
 RUN su kiro -c '/home/kiro/.local/bin/kiro-cli --version' > /etc/aixle-cli-version
 
 # =============================================================================
