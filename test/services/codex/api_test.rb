@@ -33,12 +33,14 @@ module Codex
       assert_requested request
     end
 
-    test "models keeps a client version new enough for the current catalog" do
-      # The endpoint hides models whose minimal_client_version is above the version
-      # we claim — the gpt-5.6 family requires 0.144.0, which is why an older
-      # client_version left those models out of the model picker entirely.
-      assert_operator Gem::Version.new(Api::CLIENT_VERSION), :>=, Gem::Version.new("0.144.0"),
-                      "Codex::Api::CLIENT_VERSION must be at least the gpt-5.6 minimal client version"
+    test "models claims the Codex CLI version the agent image installs" do
+      # The endpoint hides every model whose minimal_client_version is above the
+      # version we claim, so a CLIENT_VERSION left behind an image bump hides the
+      # newest models from the picker (gpt-6 needs >= 0.155.0).
+      image_version = Rails.root.join("docker/codex/Dockerfile").read[/^ARG CODEX_VERSION=(\S+)$/, 1]
+
+      assert_equal image_version, Api::CLIENT_VERSION,
+                   "bump Codex::Api::CLIENT_VERSION together with CODEX_VERSION in docker/codex/Dockerfile"
     end
 
     test "models returns the catalog including hidden and upgradable entries" do
