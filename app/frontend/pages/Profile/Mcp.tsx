@@ -93,6 +93,11 @@ function ConnectionSection({ mcp }: { mcp: McpProps }) {
   const claudeCommand = mcp.token
     ? `claude mcp add ${mcp.serverName} --transport http ${mcp.serverUrl} --header "Authorization: Bearer ${mcp.token}"`
     : null;
+  // Codex takes the bearer token only from an environment variable, so the
+  // snippet exports it first; the variable must also be set wherever codex runs.
+  const codexCommand = mcp.token
+    ? `export FLOW_MCP_TOKEN="${mcp.token}"\ncodex mcp add ${mcp.serverName} --url ${mcp.serverUrl} --bearer-token-env-var FLOW_MCP_TOKEN`
+    : null;
   const jsonConfig = mcp.token
     ? JSON.stringify({ mcpServers: { [mcp.serverName]: clientConfig(mcp.serverUrl, mcp.token) } }, null, 2)
     : null;
@@ -103,8 +108,8 @@ function ConnectionSection({ mcp }: { mcp: McpProps }) {
         Personal MCP
       </Title>
       <Text fz={14} c="dimmed" mb="md">
-        Connect your AI agent (Claude Code, Cursor, ...) to Aixle Flow: list your projects, manage board tasks and build
-        workflows — with exactly your access level.
+        Connect your AI agent (Claude Code, Codex, Cursor, ...) to Aixle Flow: list your projects, manage board tasks
+        and build workflows — with exactly your access level.
       </Text>
 
       <Group gap={8} mb="md">
@@ -166,6 +171,16 @@ function ConnectionSection({ mcp }: { mcp: McpProps }) {
           </Group>
           <Code block data-testid="mcp-claude-command">
             {claudeCommand}
+          </Code>
+
+          <Group justify="space-between" align="center" wrap="nowrap" gap="sm" mt="md">
+            <Text fz={13} c="dimmed" mb={4}>
+              Add to Codex (keep <Code>FLOW_MCP_TOKEN</Code> exported in your shell profile):
+            </Text>
+            <CopyAction value={codexCommand ?? ''} label="Copy command" />
+          </Group>
+          <Code block data-testid="mcp-codex-command">
+            {codexCommand}
           </Code>
         </Box>
       )}
