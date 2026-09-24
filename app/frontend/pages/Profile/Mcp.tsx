@@ -361,10 +361,17 @@ function ToolsSection({ mcp }: { mcp: McpProps }) {
 function ProfileMcpPage({ mcp: props }: Props) {
   // The token is shown from this component's own state and taken out of the page
   // props at once, so the history entry Back returns to no longer carries it.
-  const [token] = useState(props.token);
+  // Enable and Regenerate are router.post visits, which Inertia answers without
+  // remounting the page, so a token arriving later has to be taken into state too.
+  const [token, setToken] = useState(props.token);
   useEffect(() => {
-    if (props.token) router.replaceProp('mcp.token', null);
+    if (!props.token) return;
+    setToken(props.token);
+    router.replaceProp('mcp.token', null);
   }, [props.token]);
+  useEffect(() => {
+    if (!props.enabled) setToken(null);
+  }, [props.enabled]);
   const mcp = { ...props, token };
 
   return (
