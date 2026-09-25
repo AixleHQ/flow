@@ -41,6 +41,7 @@ module ContainerRuntime
       @unreachable_execs = []
       @raising_execs = []
       @unreadable_paths = []
+      @unwritable_paths = []
       @uploads = []
       @upload_handler = nil
       @terminal_pane = ""
@@ -97,6 +98,14 @@ module ContainerRuntime
     # be reachable, so the path stays in #fs and only the read fails.
     def fail_read(path)
       @unreadable_paths << path.to_s
+      self
+    end
+
+    # Write failure injection: both real runtimes answer false for a file they could
+    # not place (tar stream or exec error, tar exiting non-zero) rather than raising.
+    # `path` is a String or, for names with a random part, a Regexp.
+    def fail_write(path)
+      @unwritable_paths << path
       self
     end
 
@@ -234,6 +243,8 @@ module ContainerRuntime
     # the container's own user can neither read nor delete, and `exec` here does
     # not run as root.
     def write_file(_id, path, content, mode: 0o644, uid: 0, gid: 0)
+      return false if @unwritable_paths.any? { |unwritable| unwritable === path.to_s }
+
       @fs[path] = content
       @written_files[path] = { mode: mode, uid: uid, gid: gid }
       true

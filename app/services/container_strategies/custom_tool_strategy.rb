@@ -47,7 +47,8 @@ module ContainerStrategies
 
       runtime.wait_for_ready(resolve_container(container_id))
       store_tool_files(container_id)
-      runtime.write_file(container_id, START_GATE, "")
+      raise "could not open the start gate of the tool container" unless runtime.write_file(container_id, START_GATE, "")
+
       {}
     end
 

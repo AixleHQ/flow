@@ -54,6 +54,16 @@ class ContainerStrategies::CustomToolStrategyTest < ActiveSupport::TestCase
     assert_operator order.index("/workspace/script.py"), :<, order.index(ContainerStrategies::CustomToolStrategy::START_GATE)
   end
 
+  # The command waits for the gate, so a gate that never appears would hold the
+  # tool until its whole timeout instead of failing the call.
+  test "start_container fails when it cannot open the gate" do
+    @tool.tool_files.create!(path: "/workspace/script.py", content: "print('hi')")
+    stub_container_runtime.fail_write(ContainerStrategies::CustomToolStrategy::START_GATE)
+
+    error = assert_raises(RuntimeError) { build_strategy.start_container(container_id: "ctr-1") }
+    assert_match(/start gate/, error.message)
+  end
+
   test "a tool without files runs its command directly" do
     assert_equal [ "/bin/sh", "-c", @tool.command ], build_strategy.build_cmd
   end
