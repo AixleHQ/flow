@@ -435,6 +435,7 @@ Rails.application.routes.draw do
           resources :config_items, only: %i[index create update destroy]
           resources :members, only: %i[index create destroy]
           resource :settings, only: %i[show update]
+          resource :ownership, only: :update
         end
       end
       resources :workflow_catalog, only: :index do

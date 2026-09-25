@@ -59,6 +59,20 @@ class Web::Company::Projects::ApplicationController < Web::Company::ApplicationC
     @current_project_membership = current_user.active_memberships.find { |m| m.company_id == current_project.company_id }
   end
 
+  def ownership_props
+    can_transfer = Web::Company::Projects::OwnershipsPolicy.new(policy_context, :ownerships).update?
+    return { can_transfer: false, candidates: [] } unless can_transfer
+
+    collaborator_ids = current_project.project_collaborators.pluck(:user_id).to_set
+    candidates = current_project.ownership_candidates.order(:name)
+                                .pluck(:id, :name, :email, "company_memberships.role")
+                                .map do |id, name, email, role|
+      { id: id, name: name, email: email, company_admin: role == "admin", collaborator: collaborator_ids.include?(id) }
+    end
+
+    { can_transfer: true, candidates: candidates }
+  end
+
   def project_permissions_props
     {
       canExecute: current_project_membership.present? && !current_project_membership.viewer?,

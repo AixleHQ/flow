@@ -12,17 +12,29 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 
+import { NO_OWNERSHIP_TRANSFER, type Ownership } from '../ownership';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
+import { TransferOwnershipModal } from '../TransferOwnershipModal';
 
 interface Props {
   project: Project;
   members: User[];
   companyUsers: User[];
   ownerId: number;
+  ownership?: Ownership;
 }
 
 const MembersPage = () => {
-  const { project, members, companyUsers, ownerId } = usePage<{ props: Props }>().props as unknown as Props;
+  const {
+    project,
+    members,
+    companyUsers,
+    ownerId,
+    ownership = NO_OWNERSHIP_TRANSFER,
+  } = usePage<{ props: Props }>().props as unknown as Props;
+  const [transferTargetId, setTransferTargetId] = useState<number | null>(null);
+  const transferableIds = new Set(ownership.candidates.map((c) => c.id));
+  const owner = members.find((m) => m.id === ownerId);
   const [addOpen, setAddOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -123,7 +135,7 @@ const MembersPage = () => {
               <Table.Thead style={{ backgroundColor: 'var(--app-bg-deep)' }}>
                 <Table.Tr>
                   <ResourceTh>User</ResourceTh>
-                  <ResourceTh align="right" w={100}>
+                  <ResourceTh align="right" w={ownership.canTransfer ? 180 : 100}>
                     Actions
                   </ResourceTh>
                 </Table.Tr>
@@ -178,7 +190,17 @@ const MembersPage = () => {
                       </Table.Td>
                       <Table.Td>
                         {!isOwner && (
-                          <Group gap={4} justify="flex-end">
+                          <Group gap={4} justify="flex-end" wrap="nowrap">
+                            {transferableIds.has(member.id) && (
+                              <Button
+                                variant="default"
+                                size="compact-xs"
+                                leftSection={<IconCrown size={12} />}
+                                onClick={() => setTransferTargetId(member.id)}
+                              >
+                                Make owner
+                              </Button>
+                            )}
                             <Tooltip label="Remove">
                               <ActionIcon
                                 aria-label={`Remove ${member.name || member.email}`}
@@ -199,6 +221,17 @@ const MembersPage = () => {
               </Table.Tbody>
             </Table>
           </ResourceTableShell>
+        )}
+
+        {transferTargetId != null && (
+          <TransferOwnershipModal
+            onClose={() => setTransferTargetId(null)}
+            projectId={project.id}
+            projectName={project.name}
+            ownerName={owner ? owner.name || owner.email : ''}
+            candidates={ownership.candidates}
+            targetId={transferTargetId}
+          />
         )}
 
         <ResourceDrawer

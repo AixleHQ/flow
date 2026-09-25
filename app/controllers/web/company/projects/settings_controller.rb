@@ -4,7 +4,8 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
   def show
     render inertia: "Projects/Settings/SettingsPage", props: {
       project: settings_project_props,
-      concurrency: concurrency_props
+      concurrency: concurrency_props,
+      ownership: ownership_props
     }
   end
 

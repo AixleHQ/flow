@@ -186,4 +186,44 @@ describe('Projects/Members/MembersPage', () => {
     expect(screen.getByText('D')).toBeInTheDocument();
     expect(screen.getAllByText('dee@apollo.test').length).toBeGreaterThan(0);
   });
+
+  it('offers Make owner on eligible rows only, and confirms before transferring', async () => {
+    const viewer = { id: 5, email: 'vi@client.test', name: 'Vi Viewer', role: 'viewer', state: 'active' };
+    renderAuthedPage(<MembersPage />, {
+      props: {
+        ...baseProps,
+        members: [owner, member, viewer],
+        ownership: {
+          canTransfer: true,
+          candidates: [
+            { id: member.id, name: member.name, email: member.email, companyAdmin: false, collaborator: true },
+          ],
+        },
+      },
+    });
+
+    const makeOwner = screen.getAllByRole('button', { name: 'Make owner' });
+    expect(makeOwner).toHaveLength(1);
+
+    await userEvent.click(makeOwner[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/becomes the owner of this project/)).toHaveTextContent('Bo Member');
+    expect(within(dialog).getByText(/stays on the project as a collaborator/)).toHaveTextContent('Ada Owner');
+    expect(router.patch).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Transfer ownership' }));
+
+    expect(router.patch).toHaveBeenCalledWith(
+      '/company/projects/7/ownership',
+      { ownership: { userId: member.id } },
+      expect.anything(),
+    );
+  });
+
+  it('shows no Make owner to someone who may not transfer', () => {
+    renderAuthedPage(<MembersPage />, { props: baseProps });
+
+    expect(screen.queryByRole('button', { name: 'Make owner' })).not.toBeInTheDocument();
+  });
 });

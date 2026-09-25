@@ -25,6 +25,7 @@ import {
   IconArchive,
   IconCheck,
   IconCopy,
+  IconCrown,
   IconInfoCircle,
   IconLock,
   IconTrash,
@@ -33,7 +34,9 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useState } from 'react';
 import { z } from 'zod';
 
+import { NO_OWNERSHIP_TRANSFER, type Ownership } from '../ownership';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
+import { TransferOwnershipModal } from '../TransferOwnershipModal';
 
 import classes from './SettingsPage.module.css';
 
@@ -103,6 +106,7 @@ interface Concurrency {
 interface Props {
   project: ProjectSettings;
   concurrency: Concurrency;
+  ownership?: Ownership;
 }
 
 function avatarInitials(name: string): string {
@@ -115,7 +119,11 @@ function avatarInitials(name: string): string {
 }
 
 const SettingsPage = () => {
-  const { project, concurrency } = usePage<{ props: Props }>().props as unknown as Props;
+  const {
+    project,
+    concurrency,
+    ownership = NO_OWNERSHIP_TRANSFER,
+  } = usePage<{ props: Props }>().props as unknown as Props;
   const pageErrors = (usePage().props as unknown as { errors?: Record<string, string> }).errors;
   const basePath = `/company/projects/${project.id}`;
 
@@ -193,6 +201,7 @@ const SettingsPage = () => {
     });
   };
 
+  const [transferOpen, setTransferOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
@@ -368,7 +377,21 @@ const SettingsPage = () => {
               </Box>
 
               <Box>
-                <Text className={classes.metaKey}>Owner</Text>
+                <Group justify="space-between" gap="xs" mb={6}>
+                  <Text className={classes.metaKey} mb={0}>
+                    Owner
+                  </Text>
+                  {ownership.canTransfer && (
+                    <Button
+                      variant="subtle"
+                      size="compact-xs"
+                      leftSection={<IconCrown size={12} />}
+                      onClick={() => setTransferOpen(true)}
+                    >
+                      Transfer
+                    </Button>
+                  )}
+                </Group>
                 <Group gap="sm">
                   <Box className={classes.ownerAvatar} bg="var(--app-action-selected)" c="var(--app-primary)">
                     {avatarInitials(project.ownerName)}
@@ -465,6 +488,16 @@ const SettingsPage = () => {
           </Card>
         </div>
       </div>
+
+      {transferOpen && (
+        <TransferOwnershipModal
+          onClose={() => setTransferOpen(false)}
+          projectId={project.id}
+          projectName={project.name}
+          ownerName={project.ownerName}
+          candidates={ownership.candidates}
+        />
+      )}
 
       <Modal
         opened={deleteOpen}
