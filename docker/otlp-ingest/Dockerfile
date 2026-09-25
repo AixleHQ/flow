@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS build
+FROM golang:1.27-alpine AS build
 
 WORKDIR /src
 RUN go env -w GOPROXY=https://proxy.golang.org,direct
@@ -9,7 +9,7 @@ RUN go mod download
 COPY . ./
 RUN go build -mod=readonly -o /bin/otlp-ingest ./
 
-FROM alpine:3.22
+FROM alpine:3.24
 RUN addgroup -S app && adduser -S app -G app
 USER app
 WORKDIR /app
