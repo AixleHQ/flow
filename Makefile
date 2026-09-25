@@ -288,6 +288,14 @@ ensure-env:
 	  pw=$$(LC_ALL=C tr -dc 'a-f0-9' < /dev/urandom | head -c 32); \
 	  sed "s/^ADMIN_PASSWORD=replace_with_strong_password$$/ADMIN_PASSWORD=$$pw/" .env.example > .env.development && \
 	  echo "Created .env.development from .env.example (ADMIN_PASSWORD generated)")
+	@# Compose reads `.env` and nothing else. UID/GID are shell variables, so the
+	@# export above reaches compose only through make — a bare `docker compose`,
+	@# which is how CLAUDE.md says to run tests and migrations, would fall back to
+	@# 1000:1000 and write files owned by nobody in particular. Appended rather
+	@# than written: a worktree stack keeps its own overrides in this file.
+	@grep -qs '^UID=' .env || ( \
+	  printf 'UID=%s\nGID=%s\n' "$(UID)" "$(GID)" >> .env && \
+	  echo "Added UID=$(UID) GID=$(GID) to .env (so plain docker compose matches make)")
 
 # Point git at the repo's hooks, so commits get their DCO sign-off automatically
 git-hooks:
