@@ -369,7 +369,28 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
     step_run = create(:step_run, workflow_run: run, step: @step1)
 
-    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", :container_finished, step_run.id).once
+    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", :container_finished, step_run.id)
+                   .once.returns(ok: true)
+
+    WorkflowService.notify_container_finished(step_run: step_run)
+  end
+
+  test "a container_finished signal an open run never got is reported" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
+    step_run = create(:step_run, workflow_run: run, step: @step1)
+    TemporalService.stubs(:send_signal).returns(ok: false, error: "unavailable")
+    TemporalService.stubs(:execution_state).with("workflow-execution-#{run.id}").returns(:running)
+    Sentry.expects(:capture_exception).with { |e| e.is_a?(WorkflowService::SignalLost) && e.message.include?("step_run ##{step_run.id}") }
+
+    WorkflowService.notify_container_finished(step_run: step_run)
+  end
+
+  test "a container_finished signal to a run that has already ended is not reported" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
+    step_run = create(:step_run, workflow_run: run, step: @step1)
+    TemporalService.stubs(:send_signal).returns(ok: false, error: "workflow execution already completed")
+    TemporalService.stubs(:execution_state).returns(:closed)
+    Sentry.expects(:capture_exception).never
 
     WorkflowService.notify_container_finished(step_run: step_run)
   end

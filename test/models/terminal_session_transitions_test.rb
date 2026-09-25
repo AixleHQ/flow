@@ -26,6 +26,19 @@ class TerminalSessionTransitionsTest < ActiveSupport::TestCase
     @session.finish!
   end
 
+  test "a step session's cancellation wakes its run once the cancel is committed" do
+    WorkflowService.expects(:notify_container_finished).with { TerminalSession.find(@session.id).cancelled? }.once
+
+    @session.cancel!
+  end
+
+  test "the sessions of a run being stopped do not wake it again" do
+    @step_run.workflow_run.update!(stop_requested_at: Time.current)
+    WorkflowService.expects(:notify_container_finished).never
+
+    @session.cancel!
+  end
+
   test "a failure that rolls back wakes nobody" do
     WorkflowService.expects(:notify_container_finished).never
 

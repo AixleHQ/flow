@@ -8,6 +8,7 @@ class WorkflowService
   # committed and WILL start: telling the person it failed, and then starting it,
   # would be the worse answer.
   DispatchFailed = Class.new(StandardError)
+  SignalLost = Class.new(StandardError)
 
   class << self
     def update(workflow:, params:)
@@ -187,9 +188,20 @@ class WorkflowService
       send_signal(step_run.workflow_run, "step_skipped", step_run.id)
     end
 
+    # The V1 execution does not poll: it waits on this signal for up to 23 hours,
+    # so a wake-up that an open run never got is reported, not just logged.
+    # TemporalService.send_signal returns { ok: false } instead of raising.
     def notify_container_finished(step_run:)
       execution_id = workflow_execution_id(step_run.workflow_run)
-      TemporalService.send_signal(execution_id, :container_finished, step_run.id)
+      result = TemporalService.send_signal(execution_id, :container_finished, step_run.id)
+      return result if result[:ok]
+
+      if %i[running unknown].include?(TemporalService.execution_state(execution_id))
+        lost = SignalLost.new("container_finished for step_run ##{step_run.id} did not reach #{execution_id}: #{result[:error]}")
+        Rails.logger.error("[WorkflowService] #{lost.message}")
+        Sentry.capture_exception(lost) if defined?(Sentry)
+      end
+      result
     rescue StandardError => e
       Rails.logger.error("[WorkflowService] Failed to signal container_finished for step_run ##{step_run.id}: #{e.message}")
     end

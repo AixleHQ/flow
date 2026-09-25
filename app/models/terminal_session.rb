@@ -354,6 +354,7 @@ class TerminalSession < ApplicationRecord
   def on_cancelled
     assign_usage_totals
     self.finished_at = Time.current
+    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
   end
 
   def notify_workflow_execution_if_step_session
@@ -361,6 +362,8 @@ class TerminalSession < ApplicationRecord
 
     sr = step_run
     return unless sr&.workflow_run_id
+    # A run being stopped was already told so (workflow_cancelled); its steps end with it.
+    return if sr.workflow_run.stop_requested_at.present?
 
     WorkflowService.notify_container_finished(step_run: sr)
   rescue StandardError => e
