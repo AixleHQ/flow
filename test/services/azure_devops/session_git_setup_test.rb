@@ -77,6 +77,22 @@ module AzureDevops
       assert commands.none? { |c| c.include?("clone-token") }, "the token must not reach argv"
     end
 
+    # The runtime answers false for a write it could not complete. Unchecked, the
+    # clone died on `cat` of a missing file, or succeeded with no helper and left
+    # every later fetch and push to fail.
+    test "a credential or helper that could not be written fails the clone before git runs" do
+      [ /aixle-azure-/, SessionGitSetup::HELPER ].each do |unwritable|
+        runtime = ContainerRuntime::FakeRuntime.new.fail_write(unwritable)
+        setup = SessionGitSetup.new(runtime: runtime, container_id: "c1", session: @session)
+
+        _stdout, stderr, exit_code = setup.clone(@repository, "/workspace/repo/api", 1001)
+
+        assert_equal 1, exit_code
+        assert_match(/could not write/, Array(stderr).join)
+        assert runtime.execs.none? { |c| Array(c).join(" ").include?("clone --depth=1") }, "git ran without #{unwritable}"
+      end
+    end
+
     test "the credential file is removed even when the clone fails" do
       @runtime.fail_exec("git --config-env", stderr: "fatal: repository not found", exit_code: 128)
 

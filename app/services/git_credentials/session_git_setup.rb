@@ -14,6 +14,7 @@ module GitCredentials
   class SessionGitSetup
     HELPER = "/workspace/.aixle/git-credential-aixle"
     HELPER_SOURCE = Rails.root.join("docker/base/git/git-credential-aixle")
+    HelperNotInstalled = Class.new(StandardError)
 
     def self.container_env(session)
       return {} unless Array(session.repositories).any? { |r| Vendor::PROVIDERS.include?(r.integration&.provider.to_s) }
@@ -35,8 +36,8 @@ module GitCredentials
       credential = Vendor.new(@session).vend!(repository_id: repository.id)
       header_path = "/tmp/.aixle-git-#{SecureRandom.hex(8)}"
       header = "Authorization: Basic #{Base64.strict_encode64("#{credential.username}:#{credential.password}")}"
-      @runtime.write_file(@container_id, header_path, header, mode: 0o600, uid: uid, gid: uid)
-      install_helper!(uid)
+      return not_written("the clone credential") unless @runtime.write_file(@container_id, header_path, header, mode: 0o600, uid: uid, gid: uid)
+      return not_written("the git credential helper") unless place_helper(uid)
 
       url = Vendor.clone_url(repository)
       script = <<~SH.strip
@@ -74,11 +75,19 @@ module GitCredentials
     end
 
     def install_helper!(uid)
+      place_helper(uid) || raise(HelperNotInstalled, "could not write the git credential helper into the container")
+    end
+
+    private
+
+    def place_helper(uid)
       @runtime.exec(@container_id, [ "sh", "-c", "mkdir -p #{Shellwords.escape(File.dirname(HELPER))}" ])
       @runtime.write_file(@container_id, HELPER, File.read(HELPER_SOURCE), mode: 0o700, uid: uid, gid: uid)
     end
 
-    private
+    # A failed clone in the runtime's own shape, so the caller's retry and
+    # failed_repos bookkeeping apply to it unchanged.
+    def not_written(what) = [ [], [ "could not write #{what} into the container" ], 1 ]
 
     # `credential.useHttpPath` so two repositories on one host resolve separately;
     # the repository id is recorded here rather than derived from the remote.
