@@ -96,6 +96,9 @@ services:
     build:
       dockerfile: ./Dockerfile
     image: ${WEB_IMAGE:-web}
+    # Exported by the Makefile. A plain `docker compose` does not see them —
+    # they are shell variables, not environment ones — and lands on 1000:1000;
+    # set them in .env to make both paths agree (see .env.example).
     user: "${UID:-1000}:${GID:-1000}"
     volumes: *web-volumes
     ports:
