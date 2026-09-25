@@ -95,11 +95,26 @@ Rails.application.routes.draw do
 
   # SCIM 2.0 (CAP-6). The bearer token decides the company; there is deliberately
   # no tenant in the path, so a leaked URL reveals nothing and grants nothing.
+  #
+  # The paths are spelled out rather than drawn with `resources` for two reasons,
+  # and both are invisible to a request test that picks its own URLs:
+  #
+  #  * SCIM fixes the path as "/Users", capital U. Every provider appends it to
+  #    the base URL we hand out, and Scimitar advertises it that way in
+  #    ResourceTypes — while Rails routing is case-sensitive, so `resources`
+  #    answers "/scim/users" and 404s the only spelling a real client sends.
+  #  * PUT and PATCH are different operations here. Scimitar's #replace takes a
+  #    whole resource, #update takes a PATCH "Operations" body; `resources` maps
+  #    both verbs onto #update, so a provider's PUT would be read as a patch.
   namespace :scim do
     mount Scimitar::Engine, at: "/"
-    resources :users, only: %i[index show create update destroy] do
-      patch :patch, on: :member, action: :update
-    end
+
+    get    "Users",     to: "users#index"
+    post   "Users",     to: "users#create"
+    get    "Users/:id", to: "users#show", as: :user
+    put    "Users/:id", to: "users#replace"
+    patch  "Users/:id", to: "users#update"
+    delete "Users/:id", to: "users#destroy"
   end
 
   namespace :api, defaults: { format: :json } do
