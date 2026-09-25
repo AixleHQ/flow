@@ -141,6 +141,15 @@ Rails.application.routes.draw do
           patch "folders/relocate", to: "folders#relocate"
           delete "folders", to: "folders#destroy"
 
+          resources :entity_versions, only: %i[index show] do
+            member do
+              post :revert
+            end
+            collection do
+              post :restore
+            end
+          end
+
           resources :workflows, only: %i[show update destroy] do
             scope module: :workflows do
               resources :steps, only: %i[index show create update destroy] do

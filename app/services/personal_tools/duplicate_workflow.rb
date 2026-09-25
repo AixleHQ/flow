@@ -26,7 +26,7 @@ module PersonalTools
       # Copying into another project writes there, so it needs write access there too.
       authorize!(target, :duplicate?, policy: Web::Company::Projects::WorkflowsPolicy, project: target) unless target == project
 
-      duplicator = WorkflowDuplicator.new(workflow, target_scope: target, name: params[:name].presence)
+      duplicator = WorkflowDuplicator.new(workflow, target_scope: target, name: params[:name].presence, actor: version_actor)
       copy = duplicator.duplicate!
 
       success(id: copy.id, name: copy.name, project_id: target.id,

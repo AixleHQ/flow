@@ -20,8 +20,8 @@ module PersonalTools
       return error("Cannot delete '#{workflow.name}' — it has active runs") if workflow.has_active_runs?
 
       name = workflow.name
-      workflow.soft_delete!
-      success(deleted_workflow_id: workflow.id, name: name)
+      Versions.archive!(workflow, actor: version_actor)
+      success(archived_workflow_id: workflow.id, name: name)
     end
   end
 end

@@ -4,10 +4,11 @@ class WorkflowDuplicator
   # #duplicate! returns the new Workflow (backwards-compatible). A summary of the
   # resources that were NOT copied / need manual setup is exposed afterwards via
   # #summary so the controller can surface a "needs setup" notice (see #302).
-  def initialize(source_workflow, target_scope:, name: nil)
+  def initialize(source_workflow, target_scope:, name: nil, actor: Versions::Actor.system)
     @source = source_workflow
     @target_scope = target_scope
     @name = name
+    @actor = actor
   end
 
   attr_reader :summary
@@ -16,28 +17,17 @@ class WorkflowDuplicator
     @summary = nil
 
     workflow = ActiveRecord::Base.transaction do
-      @dep_copier = DependencyCopier.new(source: @source, target_project: target_project)
+      @dep_copier = DependencyCopier.new(source: @source, target_project: target_project, actor: @actor)
 
-      new_workflow = @target_scope.workflows.create!(
+      new_workflow = @target_scope.workflows.new(
         name: available_name,
         description: @source.description,
         config: remapped_config(@source.config.deep_dup)
       )
 
-      step_id_map = {}
-      step_pairs = []
-
-      @source.steps.not_deleted.order(:position).each do |step|
-        new_step = duplicate_step(step, new_workflow)
-        step_id_map[step.id] = new_step.id
-        step_pairs << [ step, new_step ]
-      end
-
-      step_pairs.each do |source_step, new_step|
-        next if source_step.depends_on_step_ids.blank?
-
-        remapped = source_step.depends_on_step_ids.filter_map { |old_id| step_id_map[old_id] }
-        new_step.update!(depends_on_step_ids: remapped)
+      Versions.save!(new_workflow, actor: @actor, metadata: { "duplicated_from" => @source.id }) do
+        new_workflow.save!
+        copy_steps(new_workflow)
       end
 
       new_workflow
@@ -48,6 +38,24 @@ class WorkflowDuplicator
   end
 
   private
+
+  def copy_steps(new_workflow)
+    step_id_map = {}
+    step_pairs = []
+
+    @source.steps.not_deleted.order(:position).each do |step|
+      new_step = duplicate_step(step, new_workflow)
+      step_id_map[step.id] = new_step.id
+      step_pairs << [ step, new_step ]
+    end
+
+    step_pairs.each do |source_step, new_step|
+      next if source_step.depends_on_step_ids.blank?
+
+      remapped = source_step.depends_on_step_ids.filter_map { |old_id| step_id_map[old_id] }
+      new_step.update!(depends_on_step_ids: remapped)
+    end
+  end
 
   # nil unless we're copying into a Project (in-company duplicate / catalog copy).
   # When nil (e.g. duplicating to a Company scope for publish/seed), every map_*

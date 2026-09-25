@@ -7,38 +7,37 @@ class Web::Company::Projects::ToolsController < Web::Company::Projects::Applicat
                 .includes(:tool_files)
                 .order(source: :desc, created_at: :desc) # "db" (custom) before "code" (platform)
     config_items = ConfigItem.visible_for_project(current_project).pluck(:name)
+    archived = Tool.db_source.deleted.where(scope_type: "Project", scope_id: current_project.id)
+                   .includes(:tool_files).order(deleted_at: :desc)
 
     render inertia: "Projects/Tools/ToolsPage", props: {
       project: project_props,
       tools: tools.map { |t| ToolResource.new(t).to_h },
+      archived_tools: archived.map { |t| ToolResource.new(t).to_h },
       config_item_names: config_items
     }
   end
 
   def create
     tool = current_project.tools.new(tool_params)
-
-    if tool.save
-      redirect_to company_project_tools_path(current_project), notice: "Tool created"
-    else
-      redirect_to company_project_tools_path(current_project), inertia: { errors: tool.errors }
-    end
+    Versions.save!(tool, actor: version_actor) { tool.save! }
+    redirect_to company_project_tools_path(current_project), notice: "Tool created"
+  rescue ActiveRecord::RecordInvalid
+    redirect_to company_project_tools_path(current_project), inertia: { errors: tool.errors }
   end
 
   def update
     tool = current_project.tools.not_deleted.find(params[:id])
-
-    if tool.update(tool_params)
-      redirect_to company_project_tools_path(current_project), notice: "Tool updated"
-    else
-      redirect_to company_project_tools_path(current_project), inertia: { errors: tool.errors }
-    end
+    Versions.save!(tool, actor: version_actor, base_version: params[:base_version]) { tool.update!(tool_params) }
+    redirect_to company_project_tools_path(current_project), notice: "Tool updated"
+  rescue ActiveRecord::RecordInvalid
+    redirect_to company_project_tools_path(current_project), inertia: { errors: tool.errors }
   end
 
   def destroy
     tool = current_project.tools.not_deleted.find(params[:id])
-    tool.soft_delete!
-    redirect_to company_project_tools_path(current_project), notice: "Tool deleted"
+    Versions.archive!(tool, actor: version_actor)
+    redirect_to company_project_tools_path(current_project), notice: "Tool archived"
   end
 
   private

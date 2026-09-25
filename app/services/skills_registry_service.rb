@@ -60,7 +60,7 @@ class SkillsRegistryService
   # @param installs [Integer, nil] upstream install count when the caller knows it —
   #   the download endpoint reports none, only search does
   # @return [Skill] created or updated skill record
-  def self.install(skill_id, scope:, installs: nil, acknowledge_risk: false)
+  def self.install(skill_id, scope:, installs: nil, acknowledge_risk: false, actor: Versions::Actor.system)
     skill_id = skill_id.to_s.strip
     raise RegistryError, "skill_id is required" if skill_id.blank?
 
@@ -87,23 +87,25 @@ class SkillsRegistryService
     title = extract_title(content, detail["name"].presence || slug)
     description = Skills::SkillMarkdown.description(content)
 
-    existing = scope.skills.find_by(package: package)
+    existing = scope.skills.unarchived.find_by(package: package)
     if existing
       if content.present?
-        existing.update!(
-          title: title,
-          description: description,
-          content: content,
-          content_hash: detail["content_hash"],
-          files: files
-        )
+        Versions.save!(existing, actor: actor) do
+          existing.update!(
+            title: title,
+            description: description,
+            content: content,
+            content_hash: detail["content_hash"],
+            files: files
+          )
+        end
       end
       return existing
     end
 
     raise RegistryError, "Could not fetch SKILL.md for #{skill_id}" if content.blank?
 
-    scope.skills.create!(
+    skill = scope.skills.new(
       name: slug,
       package: package,
       source: source,
@@ -115,6 +117,8 @@ class SkillsRegistryService
       description: description,
       install_count: (installs || 0).to_i
     )
+    Versions.save!(skill, actor: actor) { skill.save! }
+    skill
   end
 
   # The catalog modal asks before installing a skill an audit flags, and every other

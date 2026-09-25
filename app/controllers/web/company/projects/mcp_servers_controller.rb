@@ -11,8 +11,10 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
                        .includes({ oauth_credentials: :oauth_client }, :manual_oauth_client)
                        .order(kind: :asc, created_at: :desc)
     config_items = ConfigItem.visible_for_project(current_project).pluck(:name)
+    archived = MCPServer.for_project(current_project).archived.order(archived_at: :desc)
 
     render inertia: "Projects/McpServers/McpServersPage", props: {
+      archived_mcp_servers: archived.map { |s| MCPServerResource.new(s, params: { user: current_user }).to_h },
       project: project_props,
       # params[:user] lets oauth_status resolve the CURRENT viewer's credential for
       # per_user servers (otherwise every per_user server reads "Not connected").
@@ -36,33 +38,32 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
   def create
     server = current_project.mcp_servers.new
     assign_server_params(server)
-
-    if server.save
-      sync_manual_oauth_client(server)
-      redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server created"
-    else
-      redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
-    end
+    Versions.save!(server, actor: version_actor) { server.save! }
+    sync_manual_oauth_client(server)
+    redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server created"
+  rescue ActiveRecord::RecordInvalid
+    redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
   end
 
   def update
-    server = current_project.mcp_servers.find(params[:id])
-    assign_server_params(server)
-    moved = server.destination_changed?
-
-    if server.save
-      sync_manual_oauth_client(server)
-      notice = moved ? "MCP server updated. Its address changed, so its stored header and env values and its OAuth connections were cleared — enter them again." : "MCP server updated"
-      redirect_to company_project_mcp_servers_path(current_project), notice: notice
-    else
-      redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
+    server = current_project.mcp_servers.unarchived.find(params[:id])
+    moved = false
+    Versions.save!(server, actor: version_actor, base_version: params[:base_version]) do
+      assign_server_params(server)
+      moved = server.destination_changed?
+      server.save!
     end
+    sync_manual_oauth_client(server)
+    notice = moved ? "MCP server updated. Its address changed, so its stored header and env values and its OAuth connections were cleared — enter them again." : "MCP server updated"
+    redirect_to company_project_mcp_servers_path(current_project), notice: notice
+  rescue ActiveRecord::RecordInvalid
+    redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
   end
 
   def destroy
-    server = current_project.mcp_servers.find(params[:id])
-    server.destroy
-    redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server deleted"
+    server = current_project.mcp_servers.unarchived.find(params[:id])
+    Versions.archive!(server, actor: version_actor)
+    redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server archived"
   end
 
   # Moves an install to the version the catalog now carries. Explicit on purpose:
@@ -73,7 +74,7 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
     connector = Connector.find_by(name: server.connector_name)
     return redirect_back_with(alert: "This connector is no longer in the catalog") if connector.nil?
 
-    MCP::ConnectorUpdater.apply(server: server, connector: connector, values: install_values)
+    MCP::ConnectorUpdater.apply(server: server, connector: connector, values: install_values, actor: version_actor)
     redirect_to company_project_mcp_servers_path(current_project),
                 notice: "#{server.name} updated to #{server.connector_version}"
   rescue MCP::ConnectorUpdater::Error, ActiveRecord::RecordInvalid => e

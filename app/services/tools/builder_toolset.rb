@@ -52,12 +52,14 @@ module Tools
         handler = defn.handler_class.new(
           params: arguments.deep_stringify_keys.merge("project_id" => session.project_id),
           user: session.user,
-          pinned_project: session.project
+          pinned_project: session.project,
+          session: session
         )
         result = handler.execute
         record_activity(defn, result, session) if result[:exit_code].zero? && !read_only?(defn)
         result
-      rescue PersonalTools::Base::UnauthorizedError, PersonalTools::Base::NotFoundError => e
+      rescue PersonalTools::Base::UnauthorizedError, PersonalTools::Base::NotFoundError,
+             Versions::StaleVersion, Versions::InUse => e
         { exit_code: 1, stdout: "", stderr: e.message }
       end
 

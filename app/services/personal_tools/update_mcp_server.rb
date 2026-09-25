@@ -16,6 +16,7 @@ module PersonalTools
       param :command, type: :string, description: "Command."
       param :description, type: :string, description: "Description."
       param :enabled, type: :boolean, description: "Enabled flag."
+      param :base_version, type: :integer, description: "The version you read (current_version_number). A newer one means someone else saved since, and the update is refused."
     end
 
     ATTRS = %w[url transport command description enabled].freeze
@@ -23,15 +24,18 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :update?, policy: Web::Company::Projects::MCPServersPolicy, project: project)
-      server = project.mcp_servers.where(kind: :custom).find_by(id: params[:mcp_server_id])
+      server = project.mcp_servers.where(kind: :custom).unarchived.find_by(id: params[:mcp_server_id])
       return error("Custom MCP server not found in this project") unless server
 
       attrs = params.slice(*ATTRS).reject { |_, v| v.nil? }
       return error("No fields to update") if attrs.empty?
 
-      server.assign_attributes(attrs)
-      moved = server.destination_changed?
-      server.save!
+      moved = false
+      Versions.save!(server, actor: version_actor, base_version: base_version) do
+        server.assign_attributes(attrs)
+        moved = server.destination_changed?
+        server.save!
+      end
       success(id: server.id, name: server.name, updated_fields: attrs.keys, secrets_cleared: moved)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to update MCP server: #{e.message}")

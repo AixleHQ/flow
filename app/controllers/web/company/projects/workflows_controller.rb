@@ -91,7 +91,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
 
   def create
     workflow = current_project.workflows.new(workflow_params)
-    if workflow.save
+    if save_versioned(workflow) { workflow.save! }
       redirect_to company_project_workflows_path(current_project), notice: "Workflow created"
     else
       redirect_to company_project_workflows_path(current_project), alert: workflow.errors.full_messages.join(", ")
@@ -104,7 +104,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
   def update
     workflow = current_project.workflows.active.find(params[:id])
 
-    if WorkflowService.update(workflow: workflow, params: workflow_params)
+    if WorkflowService.update(workflow: workflow, params: workflow_params, actor: version_actor)
       redirect_to company_project_workflows_path(current_project), notice: "Workflow updated"
     else
       redirect_to company_project_workflows_path(current_project), alert: workflow.errors.full_messages.join(", ")
@@ -113,8 +113,8 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
 
   def destroy
     workflow = current_project.workflows.active.find(params[:id])
-    workflow.soft_delete!
-    redirect_to company_project_workflows_path(current_project), notice: "Workflow deleted"
+    Versions.archive!(workflow, actor: version_actor)
+    redirect_to company_project_workflows_path(current_project), notice: "Workflow archived"
   rescue ActiveRecord::RecordNotDestroyed => e
     redirect_to company_project_workflows_path(current_project), alert: e.message
   end
@@ -139,13 +139,20 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
 
   def duplicate
     source = Workflow.visible_for_project(current_project).find(params[:id])
-    duplicator = WorkflowDuplicator.new(source, target_scope: current_project)
+    duplicator = WorkflowDuplicator.new(source, target_scope: current_project, actor: version_actor)
     copy = duplicator.duplicate!
     flash[:needs_setup] = duplicator.summary[:needs_setup] if duplicator.summary
     redirect_to builder_company_project_workflow_path(current_project, copy)
   end
 
   private
+
+  def save_versioned(record, &)
+    Versions.save!(record, actor: version_actor, &)
+    true
+  rescue ActiveRecord::RecordInvalid
+    false
+  end
 
   def workflow_params
     params.require(:workflow).permit(:name, :description, config: {})

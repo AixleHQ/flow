@@ -10,6 +10,7 @@ module PersonalTools
       param :project_id, type: :integer, description: "Project id.", required: true
       param :workflow_id, type: :integer, description: "Workflow id.", required: true
       param :step_ids, type: :array, description: "Step ids in the new order.", required: true, items: { type: "integer" }
+      param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
     def execute
@@ -24,7 +25,7 @@ module PersonalTools
       unknown = ids.map(&:to_i) - steps_by_id.keys
       return error("Steps not in this workflow: #{unknown.join(', ')}") if unknown.any?
 
-      Positions.reorder!(workflow.steps, ids)
+      Versions.save!(workflow, actor: version_actor, base_version: base_version) { Positions.reorder!(workflow.steps, ids) }
       success(workflow_id: workflow.id, new_order: ids)
     end
   end

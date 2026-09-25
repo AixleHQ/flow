@@ -34,6 +34,8 @@ module Api
       # `save!`/`create!` in the tree answers 500 with no hint of which field was rejected.
       rescue_from ActiveRecord::RecordInvalid, with: :record_invalid
       rescue_from ActionController::InvalidAuthenticityToken, with: :invalid_authenticity_token
+      rescue_from Versions::StaleVersion, with: :stale_version
+      rescue_from Versions::InUse, with: :entity_in_use
 
       private
 
@@ -71,6 +73,14 @@ module Api
 
       def user_not_authorized
         render json: { error: "Not authorized" }, status: :forbidden
+      end
+
+      def stale_version(error)
+        render json: { error: error.message, currentVersionNumber: error.current_number }, status: :conflict
+      end
+
+      def entity_in_use(error)
+        render json: { error: error.message, usages: error.usages }, status: :unprocessable_entity
       end
 
       def record_not_found

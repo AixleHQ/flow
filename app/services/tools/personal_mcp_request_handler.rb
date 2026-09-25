@@ -89,7 +89,8 @@ module Tools
           CallExecutor.response_content(result),
           error: (result[:exit_code] || result["exit_code"]) != 0
         )
-      rescue PersonalTools::Base::UnauthorizedError, PersonalTools::Base::NotFoundError => e
+      rescue PersonalTools::Base::UnauthorizedError, PersonalTools::Base::NotFoundError,
+             Versions::StaleVersion, Versions::InUse => e
         MCP::Tool::Response.new([ { type: "text", text: e.message } ], error: true)
       rescue StandardError => e
         Rails.logger.error("[PersonalMCP] #{defn.name} failed: #{e.message}")

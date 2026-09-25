@@ -42,4 +42,12 @@ class ApplicationController < ActionController::Base
       target[underscored.last] = value
     end
   end
+
+  private
+
+  # Versions are attributed to the person at the keyboard: an admin
+  # impersonating a user edits as themselves in the history.
+  def version_actor
+    Versions::Actor.ui(true_user || current_user)
+  end
 end

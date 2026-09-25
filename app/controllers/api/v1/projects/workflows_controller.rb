@@ -12,7 +12,8 @@ module Api
         def update
           workflow = current_project.workflows.active.find(params[:id])
 
-          if WorkflowService.update(workflow: workflow, params: workflow_params)
+          if WorkflowService.update(workflow: workflow, params: workflow_params, actor: version_actor,
+                                    base_version: params[:base_version])
             render json: WorkflowResource.new(workflow).to_h
           else
             render json: { errors: workflow.errors.full_messages }, status: :unprocessable_entity
@@ -27,7 +28,7 @@ module Api
             return
           end
 
-          workflow.soft_delete!
+          Versions.archive!(workflow, actor: version_actor)
           head :no_content
         end
 

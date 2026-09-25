@@ -3,7 +3,12 @@
 class ToolResource < ApplicationResource
   attributes :id, :name, :display_name, :description, :source, :scope_type, :scope_id,
              :docker_image, :command,
-             :enabled, :created_at, :updated_at
+             :enabled, :current_version_number, :created_at, :updated_at
+
+  typelize "string | null"
+  attribute :archived_at do |tool|
+    tool.deleted_at
+  end
 
   # required_config_items / input_schema are free-form jsonb columns; column
   # inference can only see `unknown`. Expose them as explicit attributes so the

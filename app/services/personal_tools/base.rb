@@ -12,16 +12,19 @@ module PersonalTools
     class UnauthorizedError < StandardError; end
     class NotFoundError < StandardError; end
 
-    attr_reader :params, :user, :pinned_project
+    attr_reader :params, :user, :pinned_project, :session
 
     # `pinned_project:` confines the handler to one project — how the Aixle
     # Builder session serves these tools. Every project lookup below then
     # answers for that project only, so an id naming any other project reads
     # as not found, including a second project param like `target_project_id`.
-    def initialize(params:, user:, pinned_project: nil)
+    # `session:` is the Aixle Builder session serving the call, if any — so a
+    # version written by the builder agent names the session, not just the user.
+    def initialize(params:, user:, pinned_project: nil, session: nil)
       @params = params.with_indifferent_access
       @user = user
       @pinned_project = pinned_project
+      @session = session
     end
 
     def execute
@@ -29,6 +32,17 @@ module PersonalTools
     end
 
     private
+
+    def version_actor
+      Versions::Actor.mcp(user, session: session)
+    end
+
+    # Optional on every write tool: the version the caller read. A newer one
+    # means someone else saved in between, and the call is refused instead of
+    # overwriting their change.
+    def base_version
+      params[:base_version].presence&.to_i
+    end
 
     # Policy gate, UI-equivalent: same policy classes and context objects the
     # controllers use. Raises UnauthorizedError (mapped to an in-band tool

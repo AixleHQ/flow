@@ -3,7 +3,7 @@
 class SkillResource < ApplicationResource
   attributes :id, :name, :title, :description, :package, :source,
              :source_url, :install_count, :scope_type, :scope_id,
-             :created_at, :updated_at
+             :current_version_number, :archived_at, :created_at, :updated_at
 
   typelize %w[company project]
   attribute :scope_indicator do |skill|

@@ -42,6 +42,7 @@ module PersonalTools
             items: { type: "integer" }
       param :bmad_enabled, type: :boolean, description: "Run this step with the BMAD method enabled."
       param :allow_non_interactive, type: :boolean, description: "Allow this step to run without a human in the loop."
+      param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
     UPDATABLE = %i[
@@ -52,12 +53,13 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :update?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
-      step = find_step!(find_workflow!(project))
+      workflow = find_workflow!(project)
+      step = find_step!(workflow)
 
       attrs = UPDATABLE.each_with_object({}) { |k, h| h[k] = params[k] if params.key?(k) }
       return error("No fields to update") if attrs.empty?
 
-      step.update!(attrs)
+      Versions.save!(workflow, actor: version_actor, base_version: base_version) { step.update!(attrs) }
       success(id: step.id, name: step.name, updated_fields: attrs.keys.map(&:to_s))
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to update step: #{e.message}")
