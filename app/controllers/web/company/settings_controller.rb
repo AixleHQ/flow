@@ -100,7 +100,6 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
       reserved: allocation.allocated,
       allocations: allocation.breakdown,
       project_default: SessionAdmissionPolicy.scope_default("Project"),
-      queue_enabled: SessionAdmissionPolicy.enabled?,
       can_manage: settings_policy.manage_capacity?
     }
   end

@@ -62,7 +62,6 @@ interface Capacity {
   reserved: number;
   allocations: CapacityAllocation[];
   projectDefault: number;
-  queueEnabled: boolean;
   /** False in the hosted product: the number we invoice for is not self-serve. */
   canManage: boolean;
 }
@@ -294,12 +293,6 @@ const SettingsPage = () => {
                       </Text>
                     )}
                   </Box>
-                )}
-
-                {!capacity.queueEnabled && (
-                  <Text fz="xs" c="dimmed">
-                    The session queue is not switched on for this installation, so nothing is being held back yet.
-                  </Text>
                 )}
               </Stack>
             </Card>

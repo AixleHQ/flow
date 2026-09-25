@@ -51,12 +51,6 @@ class WorkflowService
       validate_mode!(run, workflow, overrides)
       return run if run.errors.any?
 
-      # Which launch path this run's history uses is decided once, here, and
-      # then never re-read — that is what keeps a policy change from rewriting
-      # the semantics of an already-running history. An unlocked read is enough:
-      # SessionAdmissionPolicy.sync! refuses to flip the mode while any run is
-      # pending, running or paused.
-      run.shared_context = run.shared_context.merge("session_admission" => SessionAdmissionPolicy.enabled?)
       # Enrol the run in the outbox in the very write that creates it. From here
       # on a dispatch that never lands is a row the relay can find, instead of a
       # run indistinguishable from one the worker simply has not reached yet.

@@ -10,15 +10,15 @@ one does.
 
 ## What is queued, and what is not
 
-**Queued:** every session that belongs to a project. That is workflow-step
-sessions and agent sessions started inside a project.
+**Queued:** every session. Workflow-step sessions and agent sessions started
+inside a project wait in that project's queue.
 
-**Not queued:**
+**Agent logins** have no project, so they queue per person instead: two at a
+time, outside any company's limit. Signing in to two runtimes at once starts
+both immediately.
 
-- **Agent logins.** Signing an agent runtime into your account has no project,
-  so it has no queue to wait in. It starts immediately.
-- **Tool executions.** Running a tool on its own is not a session and takes no
-  slot.
+**Not queued:** tool executions. Running a tool on its own is not a session and
+takes no slot.
 
 ## The two numbers
 
@@ -150,13 +150,10 @@ nothing refuses it — a downgrade must not be blocked by how the capacity was
 divided. The company limit is then honoured and the reservations are not, which
 the queue health line reports as over-commitment.
 
-Turning admission on for the first time is still a deliberate act, because it
-puts already-running sessions behind a queue they were never admitted to: the
-Enable button on the admin's Session admission page.
+Admission is always on and cannot be paused.
 
 The per-project default is `SESSION_PROJECT_CONCURRENCY_DEFAULT`, read live — a
 config change applies as each pod restarts, with nothing to run afterwards.
 
-`bin/rails session_admission:status` prints the current queues, what is
-reserved, and the health counters. Admission can be paused and resumed without
-losing anything already queued.
+The admin's Session admission page shows the current queues, what is reserved,
+and the health counters.

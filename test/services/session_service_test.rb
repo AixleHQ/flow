@@ -11,8 +11,9 @@ class SessionServiceTest < ActiveSupport::TestCase
 
   # == create_and_start ==
 
-  test "create_and_start creates session and starts temporal workflow" do
+  test "create_and_start admits the session and starts its container workflow" do
     mock_temporal_start
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
 
     session = SessionService.create_and_start(
       user: @user,
@@ -22,11 +23,11 @@ class SessionServiceTest < ActiveSupport::TestCase
     )
 
     assert session.persisted?
-    assert_equal "running", session.state
+    assert_equal "acknowledged", session.session_admission.launch_state
     assert_equal "agent_session", session.session_type
     assert_equal "claude_code", session.agent_type
     assert_equal @project.id, session.project_id
-    assert_not_nil session.temporal_workflow_id
+    assert_not_nil session.reload.temporal_workflow_id
   end
 
   test "create_and_start returns unsaved session on validation failure" do
@@ -446,24 +447,33 @@ class SessionServiceTest < ActiveSupport::TestCase
 
   # == cancel ==
 
-  test "cancel cancels temporal workflow and fails session" do
-    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: "wf-789")
+  test "cancel stops the admission and cancels its container workflow" do
+    mock_temporal_start
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
+    session = SessionService.create_and_start(user: @user, project: @project,
+                                              session_type: "agent_session", agent_type: "claude_code")
 
     TemporalService.expects(:cancel_workflow).with(session.workflow_id).once
 
     SessionService.cancel(session: session)
 
-    session.reload
-    assert_equal "failed", session.state
+    assert_equal "cancelled", session.reload.state
+    assert session.session_admission.reload.stop_requested_at
   end
 
-  test "cancel without temporal workflow just fails session" do
-    session = create(:terminal_session, :running, user: @user, temporal_workflow_id: nil)
+  test "cancel closes a session still waiting in the queue without touching Temporal" do
+    with_scope_defaults(project: 1)
+    create(:terminal_session, user: @user, project: @project).then { |s| SessionAdmissionService.enqueue!(s) }
+    SessionAdmissionService.drain!
+    waiting = create(:terminal_session, user: @user, project: @project)
+    SessionAdmissionService.enqueue!(waiting)
 
-    SessionService.cancel(session: session)
+    TemporalService.expects(:cancel_workflow).never
 
-    session.reload
-    assert_equal "failed", session.state
+    SessionService.cancel(session: waiting)
+
+    assert_equal "cancelled", waiting.reload.state
+    assert waiting.session_admission.reload.released_at
   end
 
   # == fail_session ==
@@ -535,6 +545,7 @@ class SessionServiceTest < ActiveSupport::TestCase
 
   test "create_for_workflow_step creates session bound to step_run" do
     mock_temporal_start
+    create(:agent_credential, user: @user, company: @company, agent_type: "claude_code")
 
     workflow = create(:workflow, scope: @project)
     step = create(:step, workflow: workflow, instructions: "Do the thing")
@@ -556,9 +567,9 @@ class SessionServiceTest < ActiveSupport::TestCase
     assert session.persisted?
     assert_equal "workflow_step", session.session_type
     assert_equal "Do the thing", session.initial_prompt
-    assert_equal "running", session.state
+    assert_equal "acknowledged", session.session_admission.launch_state
     assert_equal session, step_run.reload.terminal_session
-    assert_not_nil session.temporal_workflow_id
+    assert_not_nil session.reload.temporal_workflow_id
   end
 
   test "create_for_workflow_step attaches step assets to session input_assets" do

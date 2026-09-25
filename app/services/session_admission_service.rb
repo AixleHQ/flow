@@ -17,14 +17,19 @@ class SessionAdmissionService
   # installation on every enqueue.
   POOL_SCAN_LIMIT = 200
 
+  # A session outside a project is an agent login: interactive, short, and
+  # launched by a person watching a dialog. It queues per user so that two
+  # logins (say Claude and Codex) start at once while a runaway loop cannot
+  # fill the cluster, and it draws on no company's budget.
+  AUTH_POOL_LIMIT = 2
+
   class << self
     # The WRITER lock (AD-3). Serializes the small admission decisions — grant,
     # cancel, release, policy and pool-limit changes — so occupancy can never be
     # read stale between the count and the grant.
     #
     # Nothing slow belongs inside it: no runtime calls, no Temporal RPCs, and no
-    # record save that touches half a dozen join tables. Callers that only need
-    # to know whether admission is on use #policy instead.
+    # record save that touches half a dozen join tables.
     def transaction(&block)
       SessionAdmissionPolicy.current
       SessionAdmissionPolicy.transaction do
@@ -33,30 +38,9 @@ class SessionAdmissionService
       end
     end
 
-    # Unlocked read for branch decisions ("is admission on at all"). Every path
-    # that acts on the answer re-checks it under the writer lock, so a policy
-    # flip racing with this read costs at most one legacy-path launch — which
-    # the cutover drain in SessionAdmissionPolicy.sync! already forbids.
-    def policy = SessionAdmissionPolicy.current
-
-    # Returns the admission, or nil when admission is disabled and the caller
-    # should take the legacy launch path.
     def enqueue!(session)
-      # The queue is a property of a project: a slot is allocated to one, waited
-      # for in one, and shown in one's settings. A session with no project has no
-      # queue to join — in practice that is an agent login (`auth_setup`), which
-      # is short, interactive, and launched by a person watching a dialog. Nil
-      # sends it down the launch path that needs no reservation.
-      return nil if session.project_id.blank?
-
-      # Asked before the writer lock so that a schema that is not there yet
-      # answers "no queue" instead of failing the launch. The authoritative
-      # re-check still happens under the lock below.
-      return nil unless SessionAdmissionPolicy.enabled?
-
       transaction do |policy|
         next session.session_admission if session.session_admission
-        next nil unless policy.enabled?
 
         ensure_run_active!(session)
         key, limit = pool_configuration(policy, session)
@@ -73,8 +57,6 @@ class SessionAdmissionService
     def drain!(limit: 100)
       granted = []
       transaction do |policy|
-        next if !policy.enabled? || policy.paused?
-
         # Materialised first so the budget resolves every pool's company in one
         # query instead of one per pool.
         pools = pools_with_waiting_head.to_a
@@ -218,11 +200,12 @@ class SessionAdmissionService
       verdict == "failed" ? session.fail! : session.cancel!
     end
 
-    # Every admitted session belongs to exactly one pool: its project's. The
-    # installation limit is not one of the choices any more — it is a ceiling over
-    # all of them, spent in #drain!. A session with no project never gets here;
-    # #enqueue! sends it down the unreserved launch path.
+    # Every admitted session belongs to exactly one pool: its project's, or for an
+    # agent login its user's. The company limit is a ceiling over the project
+    # pools, spent in #drain!.
     def pool_configuration(_policy, session)
+      return [ "user:#{session.user_id}", AUTH_POOL_LIMIT ] if session.project_id.blank?
+
       configured = SessionConcurrencyLimit.find_by(scope_type: "Project", scope_id: session.project_id)
       [ "project:#{session.project_id}", configured&.max_sessions || SessionAdmissionPolicy.scope_default("Project") ]
     end

@@ -2,9 +2,6 @@
 
 require "test_helper"
 
-# A fresh installation turns the queue on in the migration; an installation with
-# history has to do it deliberately, and its operator may have an admin login
-# and nothing else.
 class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
   setup do
     @company = create(:company)
@@ -12,7 +9,6 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
                     password: AuthHelper::TEST_PASSWORD)
     sign_in_as(@admin)
     @owner = create(:user, company: @company)
-    SessionAdmissionPolicy.current.update!(enabled: false, paused: true)
   end
 
   test "the page reports what the environment currently resolves to" do
@@ -21,68 +17,7 @@ class Admin::SessionAdmissionsTest < ActionDispatch::IntegrationTest
     get admin_session_admission_path
 
     assert_response :success
-    assert_match(/Not enabled/, response.body)
     assert_match(/3 each/, response.body)
-    assert_match(/not queued at all/, response.body)
-  end
-
-  # The buttons carry no capacity: enabling only performs the cutover, and every
-  # limit keeps coming from where it already lived.
-  test "enabling carries no capacity of its own" do
-    with_scope_defaults(project: 7)
-    SessionRuntimeInventory.stubs(:fetch).returns([])
-
-    patch admin_session_admission_path, params: { commit_action: "activate" }
-
-    assert SessionAdmissionPolicy.current.enabled?
-    assert_equal 7, SessionAdmissionPolicy.scope_default("Project")
-  end
-
-  test "enabling is refused while the runtime still holds legacy session resources" do
-    SessionRuntimeInventory.stubs(:fetch).returns([ "Pod aixle-dev-project-1/terminal-abc" ])
-
-    patch admin_session_admission_path, params: { commit_action: "activate" }
-
-    assert_not SessionAdmissionPolicy.current.enabled?,
-      "a leftover Pod answers to no reservation, so the queue would hand out capacity already spent"
-    assert_match(/terminal-abc/, flash[:alert])
-  end
-
-  test "a runtime we cannot read is refused rather than treated as empty" do
-    SessionRuntimeInventory.stubs(:fetch).raises(SessionRuntimeInventory::Unavailable, "Temporal is disabled")
-
-    patch admin_session_admission_path, params: { commit_action: "activate" }
-
-    assert_not SessionAdmissionPolicy.current.enabled?
-    assert_match(/Temporal is disabled/, flash[:alert])
-  end
-
-  test "enabling is refused while a session is still running, and says so" do
-    SessionRuntimeInventory.stubs(:fetch).returns([])
-    create(:terminal_session, user: @owner, state: "running", started_at: Time.current)
-
-    patch admin_session_admission_path, params: { commit_action: "activate" }
-
-    assert_not SessionAdmissionPolicy.current.enabled?, "live sessions must not be put behind a queue they never entered"
-    assert_match(/drain/i, flash[:alert])
-  end
-
-  test "pausing keeps occupied slots and resuming admits what waited" do
-    SessionRuntimeInventory.stubs(:fetch).returns([])
-    with_admission(project: 1)
-    project = create(:project, owner: @owner, company: @owner.companies.first)
-    first = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))
-    second = SessionAdmissionService.enqueue!(create(:terminal_session, user: @owner, project: project))
-    SessionAdmissionService.drain!
-
-    patch admin_session_admission_path, params: { commit_action: "pause" }
-    assert SessionAdmissionPolicy.current.paused?
-    assert first.reload.admitted_at, "pausing must not evict a reservation"
-
-    SessionAdmissionService.cancel!(first.terminal_session)
-    patch admin_session_admission_path, params: { commit_action: "resume" }
-
-    assert_not SessionAdmissionPolicy.current.paused?
-    assert second.reload.admitted_at
+    assert_match(/queue per user, 2 at a time/, response.body)
   end
 end

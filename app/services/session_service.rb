@@ -38,9 +38,8 @@ class SessionService
 
       return session unless session.save
 
-      # #enqueue! self-gates on the policy and returns nil when admission is off,
-      # so the writer lock is taken around the queue write only — never around
-      # the save, which touches half a dozen join tables.
+      # The writer lock is taken around the queue write only — never around the
+      # save, which touches half a dozen join tables.
       SessionAdmissionService.enqueue!(session)
       launch_session(session)
 
@@ -48,7 +47,7 @@ class SessionService
     end
 
     def finish(session:)
-      if session.queued? && session.session_admission
+      if session.queued?
         if session.step_run
           WorkflowService.cancel(run: session.step_run.workflow_run)
           return session.reload
@@ -100,13 +99,9 @@ class SessionService
     end
 
     def cancel(session:)
-      if session.session_admission
-        SessionAdmissionService.cancel!(session)
-        TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission.reload.released_at
-        return session
-      end
-      cancel_temporal_workflow(session) if session.temporal_workflow_id.present?
-      session.fail! if session.may_fail?
+      SessionAdmissionService.cancel!(session)
+      TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission&.reload&.released_at
+      session
     end
 
     # Fail a session AND wake its container workflow, so the container's cleanup
@@ -229,13 +224,6 @@ class SessionService
     # session, so this hands off only THIS session and leaves the rest of the
     # newly granted batch to the relay running in the reconciler.
     def launch_session(session)
-      unless session.session_admission
-        refresh_oauth_tokens_for_session(session) if session.session_type == "workflow_step"
-        session.start! if session.may_start?
-        start_temporal_workflow(session)
-        return
-      end
-
       SessionAdmissionService.drain!
       admission = session.session_admission.reload
       SessionLaunchRelay.dispatch(admission) if admission.admitted_at && admission.launch_state == "pending"
@@ -340,51 +328,16 @@ class SessionService
       raise UnsafeMcpUrlError, "MCP server URL failed a safety check at launch: #{unsafe.join('; ')}" if unsafe.any?
     end
 
-    def start_temporal_workflow(session)
-      result = TemporalService.start_workflow(
-        TemporalWorkflowRegistry.container_workflow,
-        { session_id: session.id, manifest: session.strategy.build_manifest },
-        id: session.workflow_id,
-        execution_timeout: TerminalSession::WORKFLOW_TIMEOUT
-      )
-      raise result[:error] unless result[:ok]
-
-      session.update!(
-        temporal_workflow_id: result[:workflow_id],
-        temporal_run_id: result[:run_id]
-      )
-    rescue StandardError => e
-      Rails.logger.error("[SessionService] Failed to start workflow for session #{session.id}: #{e.message}")
-      session.update!(error_message: "Failed to start workflow: #{e.message}")
-      session.fail! if session.may_fail?
-    end
-
     def signal_container_finished(session)
       result = TemporalService.send_signal(session.workflow_id, :container_finished, session.step_run&.id)
 
+      # A workflow that is already gone leaves the reservation to the reconciler,
+      # which confirms the runtime is absent before releasing it.
       if result.is_a?(Hash) && !result[:ok]
-        error_msg = result[:error].to_s
-        Rails.logger.warn("[SessionService] Signal failed for session #{session.id}: #{error_msg}")
-
-        if error_msg.include?("already completed") || error_msg.include?("not found") || error_msg.include?("disabled")
-          Rails.logger.warn("[SessionService] Temporal workflow gone, finishing session #{session.id} directly")
-          finalize_finished(session)
-        end
+        Rails.logger.warn("[SessionService] Signal failed for session #{session.id}: #{result[:error]}")
       end
     rescue StandardError => e
       Rails.logger.error("[SessionService] Failed to signal container_finished for session #{session.id}: #{e.message}")
-      finalize_finished(session)
-    end
-
-    def finalize_finished(session)
-      return if session.session_admission
-      session.complete_finish!
-    end
-
-    def cancel_temporal_workflow(session)
-      TemporalService.cancel_workflow(session.workflow_id)
-    rescue StandardError => e
-      Rails.logger.error("[SessionService] Failed to cancel workflow for session #{session.id}: #{e.message}")
     end
 
     def refresh_oauth_tokens_for_session(session)

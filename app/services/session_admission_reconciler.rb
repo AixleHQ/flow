@@ -130,11 +130,8 @@ class SessionAdmissionReconciler
     queued = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil)
     lagging = SessionAdmission.occupied.joins(:terminal_session)
                               .where(terminal_sessions: { state: TerminalSession::TERMINAL_STATES })
-    policy = SessionAdmissionPolicy.current
 
     {
-      enabled: policy.enabled?,
-      paused: policy.paused?,
       queued: queued.count,
       occupied: SessionAdmission.occupied.count,
       pools_with_queue: SessionAdmissionPool.where(id: queued.select(:session_admission_pool_id)).count,

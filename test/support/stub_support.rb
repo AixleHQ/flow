@@ -16,23 +16,13 @@ module StubSupport
     )
   end
 
-  # Admission on with nothing above the project tier: no company has a limit, so
-  # a project's pool cap is the only bound. This is what most tests want — they
-  # care that the queue holds at N, not which tier produced N.
-  def with_admission(project: 4)
-    with_scope_defaults(project: project)
-    SessionAdmissionPolicy.sync!
-  end
-
-  # Admission on, with a company that has bought `limit` concurrent sessions.
-  # Capacity is a database row now, not a deployment variable, so this writes one
-  # — `sync!` only performs the cutover. `project:` defaults to the built-in
-  # fallback so a test that only cares about the company keeps the pool caps it
-  # would have had otherwise.
+  # A company that has bought `limit` concurrent sessions. Capacity is a
+  # database row, not a deployment variable, so this writes one. `project:`
+  # defaults to the built-in fallback so a test that only cares about the company
+  # keeps the pool caps it would have had otherwise.
   def with_company_limit(company, limit, project: 4)
     with_scope_defaults(project: project)
     SessionConcurrencyLimit.set!(scope: company, max_sessions: limit)
-    SessionAdmissionPolicy.sync!
   end
 
   # ===========================================================================

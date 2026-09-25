@@ -97,7 +97,6 @@ interface Concurrency {
   /** The most this project could be set to right now; null when there is no limit. */
   available: number | null;
   allocations: ConcurrencyAllocation[];
-  queueEnabled: boolean;
   canManage: boolean;
 }
 
@@ -278,11 +277,7 @@ const SettingsPage = () => {
                 {concurrency.canManage ? (
                   <NumberInput
                     label="Concurrent Sessions"
-                    description={
-                      concurrency.queueEnabled
-                        ? `A reservation: this project can always run this many sessions at once, and nothing else may occupy them. Leave empty to share the unreserved pool instead, up to ${concurrency.default} at a time.`
-                        : 'The session queue is switched off for this installation, so this limit is recorded but not enforced yet.'
-                    }
+                    description={`A reservation: this project can always run this many sessions at once, and nothing else may occupy them. Leave empty to share the unreserved pool instead, up to ${concurrency.default} at a time.`}
                     min={1}
                     allowDecimal={false}
                     allowNegative={false}
