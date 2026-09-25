@@ -11,12 +11,12 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
       collection: %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok kiro_cli]
     ),
     status: Field::String,
-    metadata: Field::String.with_options(truncate: 100),
+    metadata: Field::String.with_options(truncate: 100, searchable: false),
     expires_at: Field::DateTime,
     last_used_at: Field::DateTime,
     created_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
     updated_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
-    login_blocks: Field::String.with_options(truncate: 200)
+    login_blocks: Field::String.with_options(truncate: 200, searchable: false)
   }.freeze
 
   COLLECTION_ATTRIBUTES = %i[
