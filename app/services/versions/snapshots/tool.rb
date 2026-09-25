@@ -4,8 +4,7 @@ module Versions
   module Snapshots
     # A custom tool plus its files. A text file is kept inline; a binary one by
     # its Shrine reference — ToolFileUploader never deletes stored objects, so a
-    # reference in an old snapshot keeps resolving (ToolFiles::OrphanSweep only
-    # removes objects nothing points at).
+    # reference in an old snapshot keeps resolving.
     #
     # `docker_image_digest` is the pin the platform resolves for `docker_image`,
     # and `definition_digest` is derived on save: both are system state.

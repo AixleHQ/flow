@@ -158,6 +158,7 @@ Rails.application.routes.draw do
                 end
               end
               resources :triggers, only: %i[index create update destroy]
+              resource :aggregate, only: %i[update]
             end
           end
 
