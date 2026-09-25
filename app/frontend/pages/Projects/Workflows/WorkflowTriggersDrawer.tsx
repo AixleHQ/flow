@@ -636,6 +636,9 @@ function AddTriggerForm({ projectId, workflowId, columns, editing, onCancel, onC
               onChange={(e) => setTextContains(e.currentTarget.value)}
             />
           </Group>
+          <Text size="xs" c="dimmed">
+            @mention /help lists this channel&apos;s commands. The word help can&apos;t be used as a pattern.
+          </Text>
           <SubjectPicker
             subjectPolicy={subjectPolicy}
             setSubjectPolicy={setSubjectPolicy}

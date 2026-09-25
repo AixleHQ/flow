@@ -57,7 +57,7 @@ module ContainerStrategies
     # == build_env_vars ==
 
     test "build_env_vars sets AGENT_PROMPT from step instructions and agent persona/principles" do
-      agent = create(:agent, :with_project_scope, persona: "You are a QA reviewer.", principles: "Verify everything.")
+      agent = create(:agent, scope: @project, persona: "You are a QA reviewer.", principles: "Verify everything.")
       session, = create_workflow_step_session(instructions: "Review the pull request", agent: agent)
       strategy = build_strategy(session: session)
 

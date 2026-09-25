@@ -144,6 +144,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     await userEvent.click(await screen.findByRole('option', { name: 'Slack message' }));
 
     expect(screen.getByPlaceholderText('C0123ABC (blank = any)')).toBeInTheDocument();
+    expect(screen.getByText(/\/help lists this channel's commands/)).toBeInTheDocument();
     expect(screen.queryByText('Mode')).not.toBeInTheDocument();
   });
 

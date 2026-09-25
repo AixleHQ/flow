@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_23_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -257,6 +257,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
     t.index ["project_id"], name: "index_boards_on_project_id", unique: true
   end
 
+  create_table "capacity_meter_reports", force: :cascade do |t|
+    t.integer "attempts", default: 0, null: false
+    t.jsonb "breakdown", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.text "error"
+    t.string "external_id"
+    t.integer "peak_concurrent", default: 0, null: false
+    t.datetime "period_start", null: false
+    t.string "provider", null: false
+    t.integer "quantity_seconds", null: false
+    t.datetime "reported_at"
+    t.string "state", default: "pending", null: false
+    t.integer "unbounded_companies", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["provider", "period_start"], name: "index_capacity_meter_reports_on_provider_and_period_start", unique: true
+    t.index ["state", "period_start"], name: "index_capacity_meter_reports_on_state_and_period_start"
+  end
+
   create_table "catalog_search_queries", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "last_searched_at"
@@ -341,6 +359,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
     t.index ["name"], name: "index_companies_on_name", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
     t.index ["state"], name: "index_companies_on_state"
+  end
+
+  create_table "company_capacity_changes", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.integer "max_sessions"
+    t.datetime "occurred_at", null: false
+    t.index ["company_id", "occurred_at"], name: "index_company_capacity_changes_on_company_id_and_occurred_at"
+    t.index ["company_id"], name: "index_company_capacity_changes_on_company_id"
+    t.index ["occurred_at"], name: "index_company_capacity_changes_on_occurred_at"
   end
 
   create_table "company_memberships", force: :cascade do |t|
@@ -1331,6 +1359,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_120000) do
   add_foreign_key "column_workflow_bindings", "board_columns", on_delete: :cascade
   add_foreign_key "column_workflow_bindings", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "column_workflow_bindings", "workflows", on_delete: :cascade
+  add_foreign_key "company_capacity_changes", "companies", on_delete: :cascade
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
   add_foreign_key "company_memberships", "companies"
   add_foreign_key "company_memberships", "users"

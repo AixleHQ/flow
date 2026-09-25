@@ -9,8 +9,8 @@ import { AppSidebar } from './AppSidebar';
 import type { SharedMembership, SharedProject } from './types';
 
 const projects: SharedProject[] = [
-  { id: 7, name: 'Aurora Platform', slug: 'aurora-platform', state: 'active' },
-  { id: 8, name: 'Borealis Pipeline', slug: 'borealis-pipeline', state: 'active' },
+  { id: 7, name: 'Aurora Platform', slug: 'aurora-platform', state: 'active', favorite: false },
+  { id: 8, name: 'Borealis Pipeline', slug: 'borealis-pipeline', state: 'active', favorite: false },
 ];
 
 describe('AppSidebar', () => {
@@ -322,6 +322,105 @@ describe('AppSidebar', () => {
     await userEvent.click(within(rail).getByRole('button', { name: /Vega Corp/ }));
 
     expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('lists favorites before non-favorites in the workspace switcher', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[
+          { id: 1, name: 'Alpha', slug: 'alpha', state: 'active', favorite: false },
+          { id: 2, name: 'Zeta', slug: 'zeta', state: 'active', favorite: true },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+    await screen.findByRole('link', { name: /Zeta/ });
+
+    const projectLinks = screen
+      .getAllByRole('link')
+      .filter((el) => /\/company\/projects\/\d+$/.test(el.getAttribute('href') ?? ''));
+    expect(projectLinks.map((el) => el.getAttribute('href'))).toEqual(['/company/projects/2', '/company/projects/1']);
+  });
+
+  it('offers a favorite control on every project in the workspace switcher', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[
+          { id: 1, name: 'Alpha', slug: 'alpha', state: 'active', favorite: false },
+          { id: 2, name: 'Zeta', slug: 'zeta', state: 'active', favorite: true },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+
+    expect(await screen.findByRole('button', { name: 'Add Alpha to favorites' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    expect(screen.getByRole('button', { name: 'Remove Zeta from favorites' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('favorites a project from the workspace switcher without closing the popover', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[{ id: 5, name: 'Acme', slug: 'acme', state: 'active', favorite: false }]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+    await user.click(await screen.findByRole('button', { name: 'Add Acme to favorites' }));
+
+    expect(router.post).toHaveBeenCalledWith(
+      '/company/projects/5/favorite',
+      {},
+      { preserveScroll: true, preserveState: true },
+    );
+    // Popover stays open so the user can keep starring.
+    expect(screen.getByRole('button', { name: 'Add Acme to favorites' })).toBeInTheDocument();
+  });
+
+  it('unfavorites a project from the workspace switcher', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[{ id: 5, name: 'Acme', slug: 'acme', state: 'active', favorite: true }]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+    await user.click(await screen.findByRole('button', { name: 'Remove Acme from favorites' }));
+
+    expect(router.delete).toHaveBeenCalledWith('/company/projects/5/favorite', {
+      preserveScroll: true,
+      preserveState: true,
+    });
+  });
+
+  it('hides archived projects from the workspace switcher', async () => {
+    const user = userEvent.setup();
+    renderAuthedPage(
+      <AppSidebar
+        context="company"
+        projects={[
+          { id: 1, name: 'Active One', slug: 'active-one', state: 'active', favorite: false },
+          { id: 2, name: 'Old One', slug: 'old-one', state: 'archived', favorite: true },
+        ]}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: /All Projects/ }));
+
+    expect(await screen.findByRole('link', { name: /Active One/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Old One/ })).not.toBeInTheDocument();
   });
 });
 

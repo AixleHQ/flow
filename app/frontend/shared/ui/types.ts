@@ -74,6 +74,7 @@ export interface SharedProject {
   name: string;
   slug: string;
   state: string;
+  favorite: boolean;
 }
 
 export interface SharedSettings {

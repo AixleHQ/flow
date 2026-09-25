@@ -12,11 +12,16 @@ module PersonalTools
     class UnauthorizedError < StandardError; end
     class NotFoundError < StandardError; end
 
-    attr_reader :params, :user
+    attr_reader :params, :user, :pinned_project
 
-    def initialize(params:, user:)
+    # `pinned_project:` confines the handler to one project — how the Aixle
+    # Builder session serves these tools. Every project lookup below then
+    # answers for that project only, so an id naming any other project reads
+    # as not found, including a second project param like `target_project_id`.
+    def initialize(params:, user:, pinned_project: nil)
       @params = params.with_indifferent_access
       @user = user
+      @pinned_project = pinned_project
     end
 
     def execute
@@ -44,7 +49,11 @@ module PersonalTools
     # from the target resource, across every company the user actively belongs
     # to. An empty list yields `where(company_id: [])` — i.e. nothing.
     def membership_company_ids
-      @membership_company_ids ||= user.company_memberships.active.pluck(:company_id)
+      @membership_company_ids ||= begin
+        memberships = user.company_memberships.active
+        memberships = memberships.where(company_id: pinned_project.company_id) if pinned_project
+        memberships.pluck(:company_id)
+      end
     end
 
     # The single company to act in when a tool has no project to derive one
@@ -52,6 +61,7 @@ module PersonalTools
     # caller must name it explicitly.
     def resolve_company!(id = params[:company_id])
       memberships = user.company_memberships.active
+      memberships = memberships.where(company_id: pinned_project.company_id) if pinned_project
       membership = id.present? ? memberships.find_by(company_id: id) : sole_membership!(memberships)
       raise NotFoundError, "You are not an active member of company #{id}" unless membership
 
@@ -61,14 +71,19 @@ module PersonalTools
     # Projects the user can actually reach, in ANY of their companies, filtered
     # by the same accessibility rule the UI uses.
     def find_project!(id = params[:project_id])
-      project = Project.where(company_id: membership_company_ids).find_by(id: id)
+      id = pinned_project.id if pinned_project && id.blank?
+      scope = Project.where(company_id: membership_company_ids)
+      scope = scope.where(id: pinned_project.id) if pinned_project
+      project = scope.find_by(id: id)
       raise NotFoundError, "Project #{id} not found" unless project&.accessible_by?(user)
 
       project
     end
 
     def accessible_projects
-      Project.where(company_id: membership_company_ids).select { |p| p.accessible_by?(user) }
+      scope = Project.where(company_id: membership_company_ids)
+      scope = scope.where(id: pinned_project.id) if pinned_project
+      scope.select { |p| p.accessible_by?(user) }
     end
 
     # A session the user may look at: reachable (their own, or in a project they
@@ -77,7 +92,9 @@ module PersonalTools
     # session someone keeps private is indistinguishable from one that does not
     # exist — the same rule Api::V1::TerminalSessionsController applies.
     def find_session!(id = params[:session_id])
-      session = TerminalSession.readable_by(user).find_by(id: id)
+      scope = TerminalSession.readable_by(user)
+      scope = scope.where(project_id: pinned_project.id) if pinned_project
+      session = scope.find_by(id: id)
       raise NotFoundError, "Session #{id} not found" unless session&.visible_to?(user)
 
       session

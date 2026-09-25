@@ -2,6 +2,7 @@
 
 class Step < ApplicationRecord
   extend Enumerize
+  include ProjectOwnedReferences
 
   SUPPORTED_AGENT_RUNTIMES = %w[claude_code cursor_cli codex gemini_cli antigravity_cli].freeze
 
@@ -22,6 +23,7 @@ class Step < ApplicationRecord
   validates :required_agent_runtime, inclusion: { in: SUPPORTED_AGENT_RUNTIMES }, allow_nil: true
   validate :depends_on_step_ids_valid
   validate :config_item_ids_belong_to_project
+  validate :resource_ids_belong_to_project
 
   default_scope { order(:position) }
 
@@ -91,6 +93,21 @@ class Step < ApplicationRecord
     return if foreign.empty?
 
     errors.add(:config_item_ids, "contains items outside this project: #{foreign.sort.join(', ')}")
+  end
+
+  STEP_RESOURCES = {
+    agent_id: :agents, tool_ids: :tools, skill_ids: :skills, mcp_server_ids: :mcp_servers,
+    asset_ids: :assets, repository_ids: :repositories
+  }.freeze
+
+  def resource_ids_belong_to_project
+    return unless workflow&.scope_type == "Project"
+
+    STEP_RESOURCES.each do |attribute, kind|
+      next unless will_save_change_to_attribute?(attribute)
+
+      validate_owned_ids(workflow.scope, kind, attribute, attribute_in_database(attribute), self[attribute])
+    end
   end
 
   def depends_on_step_ids_valid

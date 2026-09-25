@@ -16,6 +16,8 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     @skill = create(:skill, scope: @source_project)
     @mcp = create(:mcp_server, scope: @source_project, name: "context7")
     @tool = create(:tool, scope: @source_project, name: "my_tool")
+    @company_asset = create(:asset, scope: @company)
+    @project_asset = create(:asset, scope: @source_project)
 
     @source = create(:workflow, scope: @source_project, name: "Source WF",
                                 config: {
@@ -26,7 +28,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     @step1 = create(:step, workflow: @source, position: 1, name: "First",
                            agent_id: @agent.id,
                            tool_ids: [ @tool.id ], skill_ids: [ @skill.id ],
-                           mcp_server_ids: [ @mcp.id ], asset_ids: [ 42, 43 ])
+                           mcp_server_ids: [ @mcp.id ], asset_ids: [ @company_asset.id, @project_asset.id ])
     @step2 = create(:step, workflow: @source, position: 2, name: "Second",
                            depends_on_step_ids: [ @step1.id ],
                            preferred_model: "claude-sonnet-4",
@@ -49,8 +51,8 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert copied_steps[1].bmad_enabled
     assert_equal "claude_code", copied_steps[1].required_agent_runtime
     assert_equal 1, copied_steps[0].sub_steps.active.count
-    # assets are intentionally NOT copied — asset_ids pass through unchanged (D5)
-    assert_equal [ 42, 43 ], copied_steps[0].asset_ids
+    # assets are not copied (D5): the company's carry over, the source project's cannot be reached
+    assert_equal [ @company_asset.id ], copied_steps[0].asset_ids
   end
 
   test "copies a source-project agent into the target project and remaps agent_id" do

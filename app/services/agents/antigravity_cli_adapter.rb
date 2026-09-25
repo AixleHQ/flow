@@ -83,17 +83,58 @@ module Agents
     def home_dir = "/home/antigravity"
     def config_path = "#{home_dir}/#{OAUTH_TOKEN_PATH}"
 
+    # Google installed-app OAuth: a 1h access token and a refresh token Google does not
+    # rotate (measured on a production credential 2026-09-24: `expires_in` 3599, no
+    # `refresh_token` in the response). Renewable server-side only when the platform
+    # holds agy's OAuth client — see Settings.agents.antigravity.
+    def credential_lifecycle
+      return { expiry: :none, refresh: :container_only, rotation: :static, nominal_ttl: 1.hour }.freeze unless oauth_client
+
+      { expiry: :token, refresh: :server, rotation: :static, nominal_ttl: 1.hour }.freeze
+    end
+
+    GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+    # agy embeds a second client for the "Use a Google Cloud project" login. Which login
+    # uses it is unverified, so those credentials publish no expiry and stay with the CLI.
+    SERVER_REFRESHABLE_AUTH_METHODS = %w[consumer].freeze
+
+    def token_expires_at(credentials)
+      return nil unless server_refreshable?(credentials)
+
+      expiry_ms(credentials["expiry"])
+    end
+
+    # margin_ms is ignored: a call is already the decision to refresh, and with a refresh
+    # token that does not rotate an early refresh costs nothing.
+    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
+      credentials = credential.config_data
+      return { status: :not_needed, detail: nil, permanent: false } unless server_refreshable?(credentials)
+
+      refresh_token = credentials["refresh_token"]
+      return { status: :error, detail: "no refresh token stored — sign in again", permanent: true } if refresh_token.blank?
+
+      response = Net::HTTP.post_form(URI(GOOGLE_TOKEN_URL), {
+        grant_type: "refresh_token", refresh_token: refresh_token,
+        client_id: oauth_client[:id], client_secret: oauth_client[:secret]
+      })
+      body = parse_json(response.body)
+      unless response.is_a?(Net::HTTPSuccess) && body["access_token"].present?
+        return { status: :error, detail: "#{response.code}: #{response.body.to_s.truncate(200)}",
+                 permanent: body["error"] == "invalid_grant" }
+      end
+
+      persist_refreshed!(credential, credentials.merge(
+        "access_token" => body["access_token"],
+        "token_type" => body["token_type"] || credentials["token_type"],
+        "refresh_token" => body["refresh_token"].presence || refresh_token,
+        "expiry" => body["expires_in"].to_i.seconds.from_now.utc.iso8601(9)
+      ))
+      { status: :refreshed, detail: nil }
+    end
+
     # Watch the OAuth token file, not settings.json: settings.json is written
     # up front by #auth_setup_files, before the user has logged in at all, so
     # watching it would report success prematurely.
-    # Google installed-app OAuth: ~1h access token with a refresh token stored beside it,
-    # renewed by `agy` inside the container. Server-side refresh is possible (the protocol
-    # is recovered) but not implemented, so no expiry is surfaced yet — see
-    # docs/design/agent-credential-lifecycle.md §Layer 1.
-    def credential_lifecycle
-      { expiry: :none, refresh: :container_only, rotation: :rotating, nominal_ttl: 1.hour }.freeze
-    end
-
     def auth_watch_path = config_path
 
     def auth_file_paths = [ config_path, "#{home_dir}/#{SETTINGS_PATH}" ]
@@ -336,6 +377,17 @@ module Agents
 
     def fallback_models
       { models: FALLBACK_MODELS, source: :fallback }
+    end
+
+    def oauth_client
+      config = Settings.agents.antigravity
+      return nil if config&.oauth_client_id.blank? || config.oauth_client_secret.blank?
+
+      { id: config.oauth_client_id, secret: config.oauth_client_secret }
+    end
+
+    def server_refreshable?(credentials)
+      oauth_client.present? && SERVER_REFRESHABLE_AUTH_METHODS.include?(credentials["auth_method"])
     end
 
     def settings

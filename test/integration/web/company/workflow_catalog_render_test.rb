@@ -21,7 +21,7 @@ class Web::Company::WorkflowCatalogRenderTest < ActionDispatch::IntegrationTest
 
     assert_inertia_props do |props|
       props[:workflows].any? { |w| w[:id] == workflow.id } &&
-        props[:projects].any? { |p| p[:id] == @project.id }
+        props[:projectOptions].any? { |p| p[:id] == @project.id }
     end
   end
 end

@@ -132,6 +132,29 @@ class SessionConcurrencyLimitTest < ActiveSupport::TestCase
     assert_equal [ { company_id: @company.id, limit: 3, reserved: 5 } ], overcommitted
   end
 
+  # The metered quantity is the peak the installation offered during an hour, so
+  # every move of a company limit has to leave a trace an hourly job can replay.
+  test "setting a company limit records what it became" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
+
+    change = CompanyCapacityChange.where(company_id: @company.id).last
+    assert_equal 12, change.max_sessions
+  end
+
+  test "removing a company limit records that it is gone" do
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
+
+    SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: @company.id).destroy
+
+    assert_nil CompanyCapacityChange.where(company_id: @company.id).last.max_sessions
+  end
+
+  test "a project limit is not a company capacity change" do
+    SessionConcurrencyLimit.set!(scope: @project, max_sessions: 3)
+
+    assert_empty CompanyCapacityChange.all
+  end
+
   test "a company within its reservations is not reported" do
     SessionConcurrencyLimit.set!(scope: @company, max_sessions: 10)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 4)

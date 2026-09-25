@@ -57,20 +57,23 @@ module Api
         end
 
         test "update persists multiple config keys together" do
+          tool_ids = create_list(:tool, 2, scope: @project).map(&:id)
+
           patch :update, params: {
             project_id: @project.id,
             id: @workflow.id,
-            workflow: { config: { inheritAllProjectResources: true, base_tool_ids: [ 1, 2 ] } }
+            workflow: { config: { inheritAllProjectResources: true, base_tool_ids: tool_ids } }
           }, as: :json
 
           assert_response :success
           @workflow.reload
-          assert_equal [ 1, 2 ], @workflow.config["base_tool_ids"]
+          assert_equal tool_ids, @workflow.config["base_tool_ids"]
           assert @workflow.config["inherit_all_project_resources"]
         end
 
         test "update preserves pre-existing config keys when only one config key is updated" do
-          @workflow.update!(config: { "base_tool_ids" => [ 1, 2 ] })
+          tool_ids = create_list(:tool, 2, scope: @project).map(&:id)
+          @workflow.update!(config: { "base_tool_ids" => tool_ids })
 
           patch :update, params: {
             project_id: @project.id,
@@ -80,7 +83,7 @@ module Api
 
           assert_response :success
           @workflow.reload
-          assert_equal [ 1, 2 ], @workflow.config["base_tool_ids"]
+          assert_equal tool_ids, @workflow.config["base_tool_ids"]
           assert @workflow.config["inherit_all_project_resources"]
         end
 

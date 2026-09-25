@@ -270,6 +270,7 @@ describe('Projects/Workflows/WorkflowTriggersDrawer', () => {
     expect(screen.getByText('Edit slack message trigger')).toBeInTheDocument();
     // Channel is recovered from filter_predicate.channel, and the enabled switch reflects the trigger.
     expect(screen.getByRole('textbox', { name: 'Channel id' })).toHaveValue('C1');
+    expect(screen.getByText(/\/help lists this channel's commands/)).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Enabled' })).toBeChecked();
   });
 

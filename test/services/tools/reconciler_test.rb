@@ -15,8 +15,8 @@ class Tools::ReconcilerTest < ActiveSupport::TestCase
     assert_equal "slack", slack.requires_integration
     assert_equal %w[messaging slack], slack.tags
     assert slack.enabled?
-    meta = Tool.code_source.find_by!(name: "meta_create_tool")
-    assert_not meta.user_attachable
+    lifecycle = Tool.code_source.find_by!(name: "finish_session")
+    assert_not lifecycle.user_attachable
   end
 
   test "steady-state run is write-free" do

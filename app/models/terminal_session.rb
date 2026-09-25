@@ -248,6 +248,10 @@ class TerminalSession < ApplicationRecord
   # (integration gating) is deliberately NOT applied here: serving surfaces
   # filter with Tool#available?(ctx) so tools/call can distinguish
   # entitled-but-disconnected from not-entitled.
+  def aixle_builder?
+    metadata&.dig("aixle_builder") == true
+  end
+
   def available_tools(ctx: nil)
     ctx ||= Tools::Context.for_session(self)
 

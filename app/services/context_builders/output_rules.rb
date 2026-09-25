@@ -2,6 +2,11 @@
 
 module ContextBuilders
   class OutputRules < Base
+    # The builder's deliverable is configuration made through its tools, not files.
+    def applicable?
+      !session.aixle_builder?
+    end
+
     def build
       [ section(
         tag: "output-rules",

@@ -20,9 +20,9 @@ ARG GEMINI_CLI_VERSION=0.57.0
 RUN npm install -g @google/gemini-cli@${GEMINI_CLI_VERSION} && npm cache clean --force
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
-# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
-# Dockerfile are not the same image and nothing else says which one a container is running.
+# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
+# installers that install only the latest release, and the canary builds the newest
+# release of the pinned ones, so the version is not always the one this file names.
 RUN gemini --version > /etc/aixle-cli-version
 
 # =============================================================================

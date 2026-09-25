@@ -91,6 +91,16 @@ describe('Profile MCP tab', () => {
     expect(command).toHaveTextContent('Authorization: Bearer amcp_tok_abc123');
   });
 
+  it('renders a Codex command that reads the token from an exported env var', () => {
+    renderPageWith(buildMcp({ enabled: true, token: 'amcp_tok_abc123' }));
+
+    const command = screen.getByText(/codex mcp add flow/);
+    expect(command).toHaveTextContent('export FLOW_MCP_TOKEN="amcp_tok_abc123"');
+    expect(command).toHaveTextContent(
+      'codex mcp add flow --url https://flow.example.com/mcp --bearer-token-env-var FLOW_MCP_TOKEN',
+    );
+  });
+
   // Cursor installs from a deeplink whose `config` is the base64 of the server
   // entry alone — decoded here so a wrong shape fails loudly rather than
   // silently producing a link Cursor rejects.
@@ -113,6 +123,7 @@ describe('Profile MCP tab', () => {
 
     expect(screen.queryByRole('link', { name: 'Add to Cursor' })).not.toBeInTheDocument();
     expect(screen.queryByText(/claude mcp add/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/codex mcp add/)).not.toBeInTheDocument();
   });
 
   it('treats a null selection as every tool enabled', () => {

@@ -114,7 +114,15 @@ class Company < ApplicationRecord
   # after_save callback raising.
   def session_concurrency_limit_is_a_positive_integer
     return unless @session_concurrency_limit_assigned
-    return if @session_concurrency_limit.blank?
+
+    if @session_concurrency_limit.blank?
+      return unless Deployment.requires_bounded_companies?
+
+      return errors.add(:session_concurrency_limit,
+                        "is required: this installation meters its capacity to AWS Marketplace, " \
+                        "where unlimited cannot be expressed")
+    end
+
     return if @session_concurrency_limit.match?(/\A[1-9]\d*\z/)
 
     errors.add(:session_concurrency_limit, "must be a positive whole number, or blank for no limit")

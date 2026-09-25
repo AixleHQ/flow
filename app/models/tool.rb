@@ -4,7 +4,7 @@
 #
 # source:
 # - db:   user-created custom tool (docker_image + command), Project-scoped,
-#         authored via the UI or meta_create_tool
+#         authored via the UI or the personal MCP server
 # - code: reconciler-owned shadow row of a code-defined platform tool; the
 #         definition (schema, tags, availability, injection) lives on the
 #         InternalTools::* class — see Tools::Registry / Tools::Reconciler
@@ -56,8 +56,8 @@ class Tool < ApplicationRecord
   # Tools shown in UI management: user-authored custom tools only. Platform
   # (code) tools are injected/gated automatically and are not managed here.
   scope :ui_visible, -> { db_source }
-  # Pickers: attachable platform tools (user_attachable false hides the Aixle
-  # Builder meta_* tools) plus in-scope custom tools, gated on the
+  # Pickers: attachable platform tools (user_attachable false hides session
+  # plumbing like finish_session) plus in-scope custom tools, gated on the
   # reconciler-owned requires_integration projection.
   scope :visible_for_project, ->(project) {
     not_deleted.enabled.where(source: "code", user_attachable: true)

@@ -19,6 +19,11 @@ class TriggerBinding < ApplicationRecord
     default: :none, predicates: { prefix: true }
 
   SCHEDULE_EVENT_TYPE = "schedule.fired"
+  # /help is answered before any binding runs, so a trigger whose text command
+  # is that word would appear in the catalog and never fire. Compare the
+  # command itself (optional leading slash), not whether a looser operator
+  # could also match the word.
+  RESERVED_SLACK_COMMAND = /\A\/?help\z/i
 
   # notify_on_failure (default true) — when a run this binding started fails,
   # say so in the Slack thread it came from, with what it failed with. Only
@@ -31,6 +36,7 @@ class TriggerBinding < ApplicationRecord
   validate :create_task_requires_column
   validate :schedule_requires_cron
   validate :workflow_supports_auto_run
+  validate :slack_command_not_reserved
 
   scope :active, -> { where(enabled: true) }
   # Match an event to bindings. Project-scoped events (column/webhook/schedule)
@@ -88,6 +94,24 @@ class TriggerBinding < ApplicationRecord
     return unless schedule?
 
     errors.add(:schedule_config, "must include a cron expression") if schedule_config["cron"].blank?
+  end
+
+  def slack_command_not_reserved
+    return unless event_type == "slack.message"
+    return unless filter_predicate.is_a?(Hash)
+
+    value = slack_text_command
+    return if value.blank?
+    return unless value.to_s.strip.match?(RESERVED_SLACK_COMMAND)
+
+    errors.add(:filter_predicate, "can't use help — that word lists available commands")
+  end
+
+  def slack_text_command
+    text = filter_predicate["text"]
+    return nil if text.blank?
+
+    text.is_a?(Hash) ? text["value"] : text
   end
 
   # Off-board triggers (slack / webhook / schedule) fire unattended in

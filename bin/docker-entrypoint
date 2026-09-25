@@ -1,50 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-# docker-compose overrides the image ENTRYPOINT with this script. Mirror
-# bin/run-as-app so bundle_cache/app_home stay writable under the non-root
-# app user (app_home holds corepack/yarn's global cache — see docker-compose.yml).
-#
-# The chown is UNCONDITIONAL on purpose. A "chown only if the top-level dir is
-# already root-owned" guard was tried and reverted: once /home/app itself is
-# app-owned the guard skips forever, so any subdirectory a root process creates
-# later stays root-owned permanently. That is not hypothetical — root-owned
-# 0700 /home/app/.config and /home/app/.local left Chromium unable to write its
-# profile, which SIGTRAPs it at startup and failed every system test with
-# `Ferrum::ProcessTimeoutError: Browser did not produce websocket url`.
-# The walk is cheap: bundle_cache is the larger of the two (~48k files) and was
-# already being walked unconditionally before app_home existed (~0.15s for both).
-#
-# -h (chown the symlink, never its target) is load-bearing, not cosmetic: this
-# runs as root over caches that package managers write, so a symlink planted
-# there must not hand its target to the app user. BusyBox already behaves this
-# way under -R; the flag states it, so swapping the base image for one with GNU
-# coreutils — where dereferencing is the default — can't silently reintroduce it.
-if [ "$(id -u)" = "0" ]; then
-  mkdir -p /bundle_cache /home/app
-  # Linux bind-mounts keep the host uid. The image `app` user is uid 100, so
-  # yarn cannot mkdir /app/node_modules on a uid-1000 checkout (EACCES on
-  # `make setup`). Align app with /app's owner when that owner is not root
-  # and is not already app. No-op when /app is the image tree (CI, production).
-  # Keep this block in sync with bin/run-as-app.
-  app_uid=$(id -u app)
-  app_gid=$(id -g app)
-  mnt_uid=$(stat -c '%u' /app 2>/dev/null || echo 0)
-  mnt_gid=$(stat -c '%g' /app 2>/dev/null || echo 0)
-  if [ "$mnt_uid" -gt 0 ] 2>/dev/null && [ "$mnt_uid" != "$app_uid" ]; then
-    sed -i "s/^app:x:${app_uid}:${app_gid}/app:x:${mnt_uid}:${mnt_gid}/" /etc/passwd
-    sed -i "s/^app:x:${app_gid}/app:x:${mnt_gid}/" /etc/group
-  fi
-  chown -Rh app:app /bundle_cache /home/app 2>/dev/null || true
-  # See bin/run-as-app: grant the app user access to the host Docker socket
-  # when it's mounted (root:root 660 on the host side). No-op otherwise.
-  if [ -S /var/run/docker.sock ]; then
-    chgrp app /var/run/docker.sock 2>/dev/null || true
-    chmod g+rw /var/run/docker.sock 2>/dev/null || true
-  fi
-  exec su-exec app:app "$0" "$@"
-fi
-
 if [ -z "${LD_PRELOAD+x}" ]; then
     LD_PRELOAD=$(find /usr/lib -name libjemalloc.so.2 -print -quit)
     export LD_PRELOAD

@@ -77,7 +77,7 @@ non-secret values.
 
 | Variable                              | Required | Default | Purpose                                                        |
 | ------------------------------------- | -------- | ------- | -------------------------------------------------------------- |
-| `DEPLOYMENT_MODE`                     | no       | `hosted` | `self_hosted` when the customer runs this installation in their own account and buys their own capacity — a company admin may then raise their own session limit from the company's settings page. Any other value, including unset, means we host it and only a platform administrator may move that number. |
+| `DEPLOYMENT_MODE`                     | no       | `saas`  | One of `self_hosted`, `saas`, `aws_marketplace`. Decides who may move a company's session limit and where the installation's capacity is metered: nowhere for `self_hosted`, Stripe for `saas`, AWS Marketplace for `aws_marketplace`. Unset or unrecognised reads as `saas`, so a hosted installation cannot grant itself capacity by omission. Development and test default to `self_hosted`. |
 | `SESSION_PROJECT_CONCURRENCY_DEFAULT` | no       | `4`     | Queue size for a project that has set no limit of its own. Read live — takes effect on the next boot of each pod. |
 | `SESSION_PINNED_RELEASE_ENABLED` | no | `true` | `false` stops the reconciler from ending a pinned reservation on its own, leaving it for an operator. A reservation is pinned when a create or start never reported its outcome; the slot is held so a late Pod cannot land on someone else's. |
 | `SESSION_PINNED_RELEASE_CONFIRMATION_MINUTES` | no | `5` | How long the reconciler must keep re-proving that no workload exists before it abandons such an operation and releases the slot. A pass that sees the workload again resets the clock. |
@@ -126,6 +126,8 @@ user; edit those in the admin, not here.
 | `AGENT_IMAGE_KIRO_CLI`         | no       | derived           | Per-runtime override.                                            |
 | `AGENT_MCP_STARTUP_TIMEOUT_MS` | no       | `90000`           | How long an agent CLI waits for its MCP servers to hand shake.   |
 | `AGENT_CREDENTIAL_SYNC_URL`    | no       | derived from `INTERNAL_BASE_URL` | Where the in-container watcher reports a token the CLI rotated. Internal host only: the request carries a per-session write-back key. |
+| `ANTIGRAVITY_OAUTH_CLIENT_ID`  | no       | —                 | Google OAuth client `agy` signs a consumer login in with. With the secret, Antigravity tokens are refreshed server-side; unset, only the CLI in the container renews them. |
+| `ANTIGRAVITY_OAUTH_CLIENT_SECRET` | no    | —                 | The matching secret. Never commit it: secret scanning reports it to Google, which revokes the client for every `agy` user. |
 
 ### Kubernetes runtime (when `CONTAINER_RUNTIME=kubernetes`)
 

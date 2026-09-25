@@ -146,4 +146,14 @@ class WorkflowTest < ActiveSupport::TestCase
       assert_equal 1, preloaded.visible_steps.first.sub_steps.size
     end
   end
+
+  test "rejects base resource ids of another project" do
+    other = create(:project, :standalone)
+    workflow = build(:workflow, scope: @project,
+                                config: { "base_mcp_server_ids" => [ create(:mcp_server, scope: other).id ],
+                                          "base_skill_ids" => [ create(:skill, scope: @project).id ] })
+
+    assert_not workflow.valid?
+    assert_match(/base_mcp_server_ids contains ids outside this project/, workflow.errors[:config].to_sentence)
+  end
 end

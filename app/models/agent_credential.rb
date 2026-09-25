@@ -126,6 +126,21 @@ class AgentCredential < ApplicationRecord
     result.fetch(:permanent) { result[:detail].to_s.include?("invalid_grant") }
   end
 
+  # A renewal that did not happen. Raised into the error reporter, never at the caller:
+  # the caller gets the adapter's result Hash and decides what the failure means for it.
+  class RefreshFailed < StandardError
+    attr_reader :credential, :source, :permanent
+
+    def initialize(credential, source:, detail:, permanent:)
+      @credential = credential
+      @source = source
+      @permanent = permanent
+      super("#{credential.agent_type} credential refresh failed (#{source}): #{detail}")
+    end
+  end
+
+  REFRESH_ERROR_SOURCE = "agent_credential.refresh"
+
   class PreflightError < StandardError
     attr_reader :credential
 
@@ -266,14 +281,35 @@ class AgentCredential < ApplicationRecord
   #   grant the server has already rotated out.
   def refresh_if_expiring!(within: SESSION_REFRESH_THRESHOLD, excluding_session_id: nil)
     return :not_needed unless expiring_within?(within)
-    return :held if held_by_live_session?(excluding_session_id: excluding_session_id)
+    return :held if rotating_refresh? && held_by_live_session?(excluding_session_id: excluding_session_id)
 
     with_lock do
       reload
       next :not_needed unless expiring_within?(within)
 
-      adapter.refresh!(self, margin_ms: within.in_milliseconds)
+      renew!(source: :launch, margin_ms: within.in_milliseconds)
     end
+  end
+
+  # The one way a stored credential is renewed — by the sweep, at launch, and when a
+  # vendor API rejects the token mid-request. It exists so that every renewal records
+  # its outcome the same way: success clears the error state, failure counts towards
+  # condemning the credential (and mails its owner when it does), and every failure is
+  # reported to Sentry. Before this each caller did its own subset, and the reactive
+  # path did none — 40+ Cursor refreshes a day failed with a 404 and not one of them
+  # was recorded anywhere but an INFO log line.
+  #
+  # `source` names the caller in the report (:sweep, :launch, :unauthorized).
+  # Returns the adapter's result Hash; never raises.
+  def renew!(source:, margin_ms: nil)
+    result = begin
+      # Omitted rather than passed as nil: an adapter's own default margin must survive.
+      margin_ms ? adapter.refresh!(self, margin_ms: margin_ms) : adapter.refresh!(self)
+    rescue StandardError => e
+      { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
+    end
+    record_refresh_outcome(result, source: source)
+    result
   end
 
   # Whether the login the CLI cannot run without is already past its expiry. Reads the
@@ -299,7 +335,13 @@ class AgentCredential < ApplicationRecord
     return false unless base_login_expired?
     return true unless self.class.refreshable_agent_types.include?(agent_type)
 
-    held_by_live_session?(excluding_session_id: excluding_session_id)
+    rotating_refresh? && held_by_live_session?(excluding_session_id: excluding_session_id)
+  end
+
+  # Whether renewing invalidates the grant it replaces. Only then does a live container's
+  # copy go stale under a refresh; a static refresh token can be renewed with holders.
+  def rotating_refresh?
+    adapter.credential_lifecycle[:rotation] == :rotating
   end
 
   def mark_refresh_error!(message, permanent: false)
@@ -323,6 +365,28 @@ class AgentCredential < ApplicationRecord
   end
 
   private
+
+  def record_refresh_outcome(result, source:)
+    case result[:status]
+    when :refreshed
+      clear_refresh_error! if refresh_error.present? || error?
+    when :error
+      permanent = self.class.permanent_failure?(result)
+      mark_refresh_error!(result[:detail], permanent: permanent)
+      report_refresh_failure(result[:detail], source: source, permanent: permanent)
+    end
+  end
+
+  def report_refresh_failure(detail, source:, permanent:)
+    Rails.error.report(
+      RefreshFailed.new(self, source: source, detail: detail, permanent: permanent),
+      handled: true,
+      severity: :error,
+      source: REFRESH_ERROR_SOURCE,
+      context: { agent_type: agent_type, credential_id: id, refresh_source: source.to_s,
+                 permanent: permanent, status: status.to_s, failure_count: refresh_failure_count }
+    )
+  end
 
   def notify_refresh_failure
     return if user&.email.blank?

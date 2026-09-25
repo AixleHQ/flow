@@ -3,6 +3,15 @@
 
 DOCKER_COMPOSE ?= docker compose
 
+# docker-compose.yml runs web and worker as this user, so files they write into
+# the checkout stay owned by it on a Linux host. Docker Desktop and OrbStack do
+# not map ownership, and hand containers the socket as root's group.
+export UID := $(shell id -u)
+export GID := $(shell id -g)
+ifeq ($(shell uname -s),Linux)
+export DOCKER_GID ?= $(shell stat -c %g /var/run/docker.sock 2>/dev/null || echo 0)
+endif
+
 TODAY = $$(date +"%d.%m.%Y")
 LICENSE_REPORTS_DIR := tmp/license-reports
 
@@ -85,8 +94,14 @@ define run_be_checks
 	@# writing the same database buys a few seconds and a class of flake.
 	@( bin/worker_boot_check > $(CHECK_RESULTS)/worker-boot.log 2>&1; echo $$? > $(CHECK_RESULTS)/worker-boot.status )
 	@echo "Running rails-test, rubocop, brakeman, system-test in parallel (DB-touching runs serialized by flock)..."
+	@# VITE_RUBY_PORT on the system-test run: those tests must use the assets built
+	@# above, and vite_ruby picks between built and dev by probing the dev-server port.
+	@# In a development container the dev server is up, wins the probe, and the page is
+	@# served dev tags (/@vite/client, raw application.tsx) the test server cannot
+	@# deliver — the SPA never mounts and every spec fails "Unable to find field Email".
+	@# Point the probe at a port nothing listens on so the build above is what is used.
 	@( $(RAILS_TEST_COV_ENV) $(TEST_LOCK) bundle exec rails test > $(CHECK_RESULTS)/rails-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/rails-test.status ) & \
-	 ( SKIP_COVERAGE=1 $(TEST_LOCK) bundle exec rails test:system   > $(CHECK_RESULTS)/system-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/system-test.status ) & \
+	 ( SKIP_COVERAGE=1 VITE_RUBY_PORT=59999 $(TEST_LOCK) bundle exec rails test:system > $(CHECK_RESULTS)/system-test.log 2>&1; echo $$? > $(CHECK_RESULTS)/system-test.status ) & \
 	 ( bundle exec rubocop                                          > $(CHECK_RESULTS)/rubocop.log    2>&1; echo $$? > $(CHECK_RESULTS)/rubocop.status )    & \
 	 ( bundle exec brakeman -q -z --no-pager --skip-files public/   > $(CHECK_RESULTS)/brakeman.log   2>&1; echo $$? > $(CHECK_RESULTS)/brakeman.status )   & \
 	 wait

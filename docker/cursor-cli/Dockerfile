@@ -17,7 +17,13 @@ RUN useradd -m -d /home/cursor -s /bin/bash -G ${AGENT_BROWSERS_GROUP} cursor \
 
 USER cursor
 WORKDIR /home/cursor
-RUN curl https://cursor.com/install -fsS | bash \
+# The installer embeds the one release it downloads, so it cannot pin. The registry
+# build cache keys this layer on the Dockerfile text; the script is ADDed instead —
+# BuildKit checksums an ADDed URL on every build — so the install reruns exactly when
+# a release ships. Running a downloaded file also replaces `curl … | bash`, where a
+# failed download ran an empty script and exited 0.
+ADD --chmod=755 https://cursor.com/install /tmp/cursor-install.sh
+RUN bash /tmp/cursor-install.sh \
     && test -x /home/cursor/.local/bin/agent
 RUN echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 
@@ -31,9 +37,9 @@ RUN test -x /home/cursor/.local/bin/agent \
     && install -d -o cursor -g cursor /home/cursor/.config /home/cursor/.config/cursor /home/cursor/.cursor
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
-# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
-# Dockerfile are not the same image and nothing else says which one a container is running.
+# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
+# installers that install only the latest release, and the canary builds the newest
+# release of the pinned ones, so the version is not always the one this file names.
 RUN agent --version > /etc/aixle-cli-version
 
 # =============================================================================

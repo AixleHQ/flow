@@ -66,11 +66,11 @@ hostnames that resolve to them).
 
 The same `/mcp` endpoint also serves a **personal** server: not a
 session's tools, but your own Aixle account, so an outside client
-(Claude Code, Claude Desktop, any MCP client) can drive the platform for
+(Claude Code, Codex, Claude Desktop, any MCP client) can drive the platform for
 you — list projects, build workflows, run them, work the board.
 
 Enable it under **Profile → MCP**, which hands you an `amcp_` token and,
-alongside it, the two ways to install the server. Clients register it
+alongside it, the ways to install the server. Clients register it
 under the name `flow`, so its tools appear as `mcp__flow__list_projects`
 and so on.
 
@@ -78,10 +78,20 @@ and so on.
 claude mcp add flow --transport http $MCP_SERVER_URL --header "Authorization: Bearer amcp_…"
 ```
 
+For Codex, which reads a bearer token only from an environment variable:
+
+```
+export FLOW_MCP_TOKEN="amcp_…"
+codex mcp add flow --url $MCP_SERVER_URL --bearer-token-env-var FLOW_MCP_TOKEN
+```
+
+Keep the `export` in your shell profile — Codex reads the variable every
+time it starts the server.
+
 For Cursor the same tab has an **Add to Cursor** button — a
 `cursor://anysphere.cursor-deeplink/mcp/install` link carrying the URL and
 the bearer header — plus a **Copy JSON** action for any other client's
-`mcp.json`. All three carry the token, so they are only offered while the
+`mcp.json`. All of these carry the token, so they are only offered while the
 token is on screen: it is stored as a digest and shown exactly once.
 
 The token carries **exactly your own access level** — every call runs
