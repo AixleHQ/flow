@@ -1243,7 +1243,10 @@ module Agents
         "skipDangerousModePermissionPrompt" => true,
         "enableAllProjectMcpServers" => true,
         "env" => {
-          "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s
+          "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s,
+          # The image pins the CLI version; a background self-update drifts from it
+          # (and is lost at the next start anyway).
+          "DISABLE_AUTOUPDATER" => "1"
         }
       }
       settings["model"] = model if model.present?

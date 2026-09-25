@@ -787,6 +787,9 @@ module Agents
         # Full filesystem and network access
         sandbox_mode = "danger-full-access"
 
+        # The image pins the CLI version: no startup update check or update prompt
+        check_for_update_on_startup = false
+
         [projects."#{workspace}"]
         trust_level = "trusted"
 

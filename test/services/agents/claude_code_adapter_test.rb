@@ -186,6 +186,13 @@ module Agents
       assert_equal "90000", settings.dig("env", "MCP_TIMEOUT")
     end
 
+    test "a session's Claude Code stays on the version its image pins" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk-xxx" })
+
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+      assert_equal "1", settings.dig("env", "DISABLE_AUTOUPDATER")
+    end
+
     # A mid-session delivery has no workflow_config, so re-rendering settings.json or
     # .claude.json would replace a running session's configuration with defaults. Only the
     # token file may be written.

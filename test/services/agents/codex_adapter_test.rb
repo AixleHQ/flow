@@ -96,6 +96,17 @@ module Agents
       assert_includes toml, "/project"
     end
 
+    test "Codex never offers to replace the version its image pins" do
+      stub_codex_models([])
+      [ @adapter.config_files({}, { workspace: "/project" })["/home/codex/.codex/config.toml"],
+        @adapter.auth_setup_files["/home/codex/.codex/config.toml"] ].each do |toml|
+        setting = toml.index("check_for_update_on_startup = false")
+
+        assert setting, "update check still on"
+        assert_operator setting, :<, toml.index("["), "a key after the first table belongs to that table"
+      end
+    end
+
     test "config_files uses default workspace when not provided" do
       credentials = {}
       files = @adapter.config_files(credentials)
