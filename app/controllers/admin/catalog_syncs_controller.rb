@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Admin
-  # Manual triggers for the two catalog mirrors.
+  # Manual triggers for the catalog mirrors.
   #
   # WHY THIS EXISTS: both catalogs fill on a schedule (skills daily + weekly, MCP
   # connectors weekly), which means a fresh deployment shows an empty Connectors or
@@ -16,7 +16,8 @@ module Admin
     CATALOGS = {
       "skills" => { workflow: "skills_catalog_sync_workflow", label: "Skills catalog" },
       "skills_demand" => { workflow: "skills_demand_sync_workflow", label: "Skills (demand terms)" },
-      "connectors" => { workflow: "mcp_connector_catalog_sync_workflow", label: "MCP connector catalog" }
+      "connectors" => { workflow: "mcp_connector_catalog_sync_workflow", label: "MCP connector catalog" },
+      "templates" => { workflow: "templates_catalog_sync_workflow", label: "Template catalog" }
     }.freeze
 
     def index
@@ -27,6 +28,9 @@ module Admin
       @connectors_count = Connector.count
       @connectors_synced_at = Connector.maximum(:updated_at)
       @search_terms = CatalogSearchQuery.by_demand.limit(10)
+      @templates_count = CatalogTemplate.listed.count
+      @templates_synced_at = CatalogTemplate.maximum(:synced_at)
+      @templates_commit = CatalogTemplate.listed.order(synced_at: :desc).pick(:commit_sha)
 
       render layout: "administrate/application"
     end

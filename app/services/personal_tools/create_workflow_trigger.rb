@@ -4,10 +4,6 @@ module PersonalTools
   class CreateWorkflowTrigger < Base
     include WorkflowTriggerSupport
 
-    # A column trigger binds to a board column, which cannot exist without a
-    # board — reported as a tool error, not a lookup failure.
-    BoardMissingError = Class.new(StandardError)
-
     tool do
       display_name "Create Workflow Trigger"
       description "Connect a trigger to a workflow so it launches on its own: a card entering a " \
@@ -64,9 +60,14 @@ module PersonalTools
       authorize!(project, :update?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
       workflow = find_workflow!(project)
 
-      success(build_trigger(project, workflow, kind))
-    rescue BoardMissingError
+      result = WorkflowTriggers::Creator.call(
+        project: project, workflow: workflow, user: user, kind: kind, attributes: creator_attributes(kind)
+      )
+      success(serialize_result(result))
+    rescue WorkflowTriggers::Creator::BoardMissingError
       error("This project has no board — create one with setup_board before adding a column trigger.")
+    rescue ActiveRecord::RecordNotFound
+      error("Board column #{params[:board_column_id]} not found on this project's board")
     rescue ActiveRecord::RecordInvalid => e
       error(e.record.errors.full_messages.join(", "))
     rescue Temporalio::Error => e
@@ -79,62 +80,26 @@ module PersonalTools
 
     private
 
-    def build_trigger(project, workflow, kind)
-      case kind
-      when "column" then create_column_trigger(project, workflow)
-      when "webhook" then create_webhook_trigger(project, workflow)
-      else create_event_trigger(project, workflow, kind)
-      end
-    end
+    def creator_attributes(kind)
+      return params.to_h.symbolize_keys.slice(:board_column_id, :trigger_mode, :cooldown_seconds) if kind == "column"
 
-    def create_column_trigger(project, workflow)
-      board = project.board
-      raise BoardMissingError unless board
-
-      column = board.board_columns.find_by(id: params[:board_column_id])
-      raise NotFoundError, "Board column #{params[:board_column_id]} not found on this project's board" unless column
-
-      serialize_column(ColumnWorkflowBinding.create!(
-                         board_column: column,
-                         workflow: workflow,
-                         created_by: user,
-                         trigger_mode: params[:trigger_mode].presence || "auto",
-                         cooldown_seconds: params[:cooldown_seconds].presence || 5
-                       ))
-    end
-
-    def create_event_trigger(project, workflow, kind)
-      event_type =
-        case kind
-        when "slack" then "slack.message"
-        when "schedule" then "schedule.fired"
-        else params[:event_type].to_s.presence || "webhook.received"
-        end
-
-      serialize_binding(create_binding!(project, workflow, event_type))
-    end
-
-    def create_webhook_trigger(project, workflow)
-      # One transaction so a rejected binding (the auto-run rule rejects most
-      # first attempts) doesn't leave an orphan endpoint behind on every retry.
-      endpoint, trigger = ActiveRecord::Base.transaction do
-        created = WebhookEndpoint.create_for_trigger!(
-          project: project, created_by: user,
-          verification_strategy: params[:verification_strategy], secret: params[:secret]
-        )
-        [ created, create_binding!(project, workflow, created.config["event_type"]) ]
-      end
-
-      serialize_binding(trigger).merge(
-        webhook_url: webhook_url(endpoint.slug),
-        webhook_secret: endpoint.secret,
-        verification_strategy: endpoint.verification_strategy
+      trigger_binding_attrs.merge(
+        event_type: params[:event_type],
+        verification_strategy: params[:verification_strategy],
+        secret: params[:secret]
       )
     end
 
-    def create_binding!(project, workflow, event_type)
-      workflow.trigger_bindings.create!(
-        trigger_binding_attrs.merge(project: project, created_by: user, event_type: event_type)
+    def serialize_result(result)
+      return serialize_column(result.trigger) if result.kind == "column"
+
+      payload = serialize_binding(result.trigger)
+      return payload unless result.webhook_endpoint
+
+      payload.merge(
+        webhook_url: webhook_url(result.webhook_endpoint.slug),
+        webhook_secret: result.webhook_endpoint.secret,
+        verification_strategy: result.webhook_endpoint.verification_strategy
       )
     end
 

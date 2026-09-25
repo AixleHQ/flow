@@ -31,6 +31,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'ai-builder', label: 'AI Builder' },
       { slug: 'people-and-access', label: 'Team & access' },
       { slug: 'secrets', label: 'Secrets & Variables' },
+      { slug: 'templates', label: 'Templates' },
       { slug: 'analytics', label: 'Analytics & cost' },
       { slug: 'company-workspace', label: 'Company workspace' },
       { slug: 'examples', label: 'Worked examples' },

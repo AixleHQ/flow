@@ -125,7 +125,7 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
 
   test "the guidance prompts are served" do
     names = rpc("prompts/list").dig("result", "prompts").map { |p| p["name"] }
-    assert_equal %w[author_step build_workflow setup_project tool_catalog], names.sort
+    assert_equal %w[author_step build_workflow publish_template setup_project tool_catalog], names.sort
 
     wf = prompt_text("build_workflow")
     assert_match(/create_workflow/, wf)

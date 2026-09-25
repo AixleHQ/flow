@@ -50,7 +50,7 @@ class Web::SessionsController < Web::ApplicationController
     return redirect_to login_path(error: "pending_approval") if no_active_membership?(user)
 
     sign_in(user)
-    target = onboarding_done?(user) ? company_projects_path : onboarding_path
+    target = onboarding_done?(user) ? (take_pending_template_install_path || company_projects_path) : onboarding_path
     redirect_to target
   end
 
