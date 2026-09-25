@@ -107,6 +107,58 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "an admin of the owning company can start a connection that is not enabled yet" do
+    # AD-7 wants a connection proved before it is enabled, and the proof is a
+    # sign-in through it. Without this the two guards deadlock: no sign-in until
+    # enabled, no enabling until signed in.
+    CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
+    admin = create(:user, :onboarding_completed, company: @company, membership_role: "admin",
+                          password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
+    sign_in_as(admin)
+
+    post oidc_start_path(id: @provider.id)
+
+    assert_response :redirect
+    assert_match ISSUER, response.location
+  end
+
+  test "verifying a connection returns to the screen that asked for it" do
+    CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
+    admin = create(:user, :onboarding_completed, company: @company, membership_role: "admin",
+                          email: "admin@oidc-acme.test",
+                          password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
+    create(:user_identity, user: admin, identity_provider: @provider, subject: "oidc-admin-1")
+    sign_in_as(admin)
+    state, nonce = start_and_capture_state
+    build_token_stub(nonce, email: admin.email, sub: "oidc-admin-1")
+
+    get oidc_callback_path(code: "the-code", state: state)
+
+    assert_redirected_to company_auth_policies_path
+  end
+
+  test "a member who is not an admin cannot start a connection that is not enabled" do
+    CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
+    member = create(:user, :onboarding_completed, company: @company,
+                           password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
+    sign_in_as(member)
+
+    post oidc_start_path(id: @provider.id)
+
+    assert_redirected_to login_path(error: "oauth_failed")
+  end
+
+  test "an admin of another company cannot start this company's disabled connection" do
+    CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
+    outsider = create(:user, :onboarding_completed, company: create(:company), membership_role: "admin",
+                             password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
+    sign_in_as(outsider)
+
+    post oidc_start_path(id: @provider.id)
+
+    assert_redirected_to login_path(error: "oauth_failed")
+  end
+
   test "a disabled connection cannot be started by guessing its id" do
     CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
 

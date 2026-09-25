@@ -148,7 +148,9 @@ Expand/contract, three independently deployable phases (AD-14):
 
 No phase both writes the new shape and drops the old one — the rolling-deploy failure this team already knows from splitting a JS bundle from its API.
 
-Live sessions do not survive the Migrate phase: every existing cookie session is invalidated once and everyone signs in again (AD-14). The alternative — a bounded window in which a legacy cookie mints a `Session` row — would require a half-trusted proof kind that exists only during the migration, which is exactly the sort of shape two builders interpret differently. One forced re-authentication costs every user a single sign-in and buys an invariant that holds in every phase: a proof always names a real provider.
+**Live sessions survive.** This was not always true: while the session record was this feature's own, no existing cookie named one and the cutover had to sign everyone out. The session record now belongs to the app (`UserSession`, shipped separately), and a cookie carrying only a user id is adopted into a row on first use — so nothing here ends a sign-in.
+
+What a live session does lack is a **proof**: the table is new, so its rows start empty. The entry gate reads proofs, so the first company entry after the deploy lands on step-up. The backfill leaves password and Google enabled for every existing company and gives every password holder an identity, so that step-up is one password away. The cost is a single "confirm it's you", not a re-login.
 
 ### 4.9 The operator account
 
@@ -324,7 +326,7 @@ constraint the code now depends on.
 | 2 | Does a passkey belong to the user or to a company's policy? | **To the user.** Registration and deletion are the user's alone; a company may decline to *accept* a passkey but never deletes one (AD-18). |
 | 3 | Does `super_admin` bypass the entry gate entirely, or only the activation guard? | **Entirely**, and it authenticates by password only — no federated provider may ever resolve to a `super_admin`. |
 | 4 | IdP-initiated SSO inverts the "authenticate, then enter a company" order the entry gate assumes. | **Withdrawn with SAML.** Per-company OIDC is SP-initiated; nothing in the shipped flow starts at the IdP. |
-| 5 | Live cookie sessions at the Stage 0 cutover: one forced global re-authentication, or a bounded adoption window? | **One forced re-authentication.** A product call, taken. |
+| 5 | Live cookie sessions at the Stage 0 cutover: one forced global re-authentication, or a bounded adoption window? | **Neither, in the end.** The answer was "one forced re-authentication" while the session record was this feature's own. Folding the proofs onto the app's `UserSession` made it moot: sessions survive, and the cutover costs one step-up. See §5. |
 
 ## 9. Key references (code)
 

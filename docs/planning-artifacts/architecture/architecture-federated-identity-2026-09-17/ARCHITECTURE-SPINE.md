@@ -157,7 +157,11 @@ in `Auth::` depends on a controller; nothing outside `Auth::` constructs an adap
   compromised admin unilaterally downgrading a company to its weakest seeded method.
 - **Rule:**
   1. Enabling a company-scoped provider requires a completed real sign-in through it by an admin of
-     that company first.
+     that company first. That sign-in must therefore be **startable while the connection is still
+     switched off**, for an admin of the owning company only — otherwise the two halves of this rule
+     deadlock: no sign-in until enabled, no enabling until signed in, and only a platform operator
+     could break the cycle. It remains a verification, not a way in: the company does not accept the
+     method, so the entry gate (AD-5) turns the resulting session away exactly as before.
   2. **Deleting a policy row or a provider is evaluated exactly as disabling it.**
   3. A policy edit is refused when it would leave **any currently active member** — not merely the
      acting admin — with an empty effective set. The check and the write happen in one transaction

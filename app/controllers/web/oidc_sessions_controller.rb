@@ -46,7 +46,7 @@ class Web::OidcSessionsController < Web::ApplicationController
     oidc_nonce = SecureRandom.uuid
     state = Auth::State.encode(
       identity_provider_id: provider.id,
-      return_to: params[:return_to].presence,
+      return_to: return_to_for(provider),
       code_verifier: code_verifier,
       oidc_nonce: oidc_nonce
     )
@@ -109,9 +109,32 @@ class Web::OidcSessionsController < Web::ApplicationController
     # an adapter with no #authorize_url and 500 instead of refusing.
     provider = IdentityProvider.where(scope: "company", kind: "oidc").find_by(id: params[:id])
     return nil if provider.nil?
-    return nil unless Auth::PolicyResolver.allowed_provider_ids(provider.company).include?(provider.id)
+    return provider if Auth::PolicyResolver.accepts?(company: provider.company, provider: provider)
+    return provider if verifying_own_connection?(provider)
 
-    provider
+    nil
+  end
+
+  # AD-7 requires a connection to be proved before it can be enabled, and the
+  # proof is a real sign-in through it. Refusing to START a disabled connection
+  # made that impossible: no sign-in without enabling, no enabling without a
+  # sign-in, and only a platform operator could break the cycle. An admin of the
+  # owning company may therefore start one that is still switched off.
+  #
+  # It stays a verification, not a way in: the company still does not accept the
+  # method, so the entry gate turns the resulting session away exactly as before.
+  # A verification lands back on the screen that asked for it, where the
+  # connection can now be switched on.
+  def return_to_for(provider)
+    return company_auth_policies_path unless Auth::PolicyResolver.accepts?(company: provider.company, provider: provider)
+
+    params[:return_to].presence
+  end
+
+  def verifying_own_connection?(provider)
+    return false unless signed_in?
+
+    current_user.company_memberships.active.exists?(company_id: provider.company_id, role: "admin")
   end
 
   def enter(user, provider, return_to)

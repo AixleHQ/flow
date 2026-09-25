@@ -8,6 +8,7 @@ import {
   companyIdentityProviderPath,
   companyIdentityProvidersPath,
   companyScimConfigurationPath,
+  oidcStartPath,
 } from 'shared/routes';
 
 interface Provider {
@@ -120,15 +121,20 @@ export default function AuthPoliciesIndex({ providers }: PageProps) {
                 </Group>
                 <Group gap="xs">
                   {!provider.proved && !provider.enabled && (
-                    <Tooltip label="Sign in through this connection once before enabling it">
+                    <Tooltip label="Verify signs you in through this connection once; until that works it cannot be enabled">
                       <Badge size="sm" color="yellow">
                         Not verified yet
                       </Badge>
                     </Tooltip>
                   )}
+                  {provider.scope === 'company' && !provider.proved && isAdmin && (
+                    <Button size="compact-sm" onClick={() => router.post(oidcStartPath(provider.id))}>
+                      Verify
+                    </Button>
+                  )}
                   <Switch
                     checked={provider.enabled}
-                    disabled={!isAdmin}
+                    disabled={!isAdmin || (provider.scope === 'company' && !provider.proved)}
                     onChange={(event) => toggle(provider, event.currentTarget.checked)}
                     aria-label={`${provider.name} enabled`}
                   />
@@ -202,8 +208,8 @@ export default function AuthPoliciesIndex({ providers }: PageProps) {
             <Stack gap="sm">
               <Title order={4}>Connect your own identity provider</Title>
               <Text size="sm" c="dimmed">
-                A new connection arrives switched off. Sign in through it once, then enable it here — that way a
-                misconfigured connection can never lock your workspace out.
+                A new connection arrives switched off. Verify it — that signs you in through it once — and only then can
+                it be enabled, so a misconfigured connection can never lock your workspace out.
               </Text>
               <ConnectionForm onDone={() => router.reload()} />
             </Stack>

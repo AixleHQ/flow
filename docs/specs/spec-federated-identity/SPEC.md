@@ -44,7 +44,7 @@ A pain, and an opportunity behind it. Today a person can prove who they are two 
 - Rails remains the system of record for users, companies, memberships and sessions. The existing login page and organization model survive.
 - Company policy is enforced at company entry with step-up re-authentication, re-evaluated every request — never at the login screen, which cannot know which company a person is heading for.
 - The default self-hosted footprint stays one Rails app and a Postgres. A self-hoster who does not want SAML gains no service to run.
-- At the CAP-1 cutover every live cookie session is invalidated once. One forced global re-authentication is accepted; no legacy proof shape is built.
+- Live sessions survive the CAP-1 cutover: the session record is the app's own `UserSession`, not this feature's, and a pre-existing cookie is adopted into a row. They carry no proof yet, so the first company entry lands on step-up — one confirmation, not a re-login. No legacy proof shape is built.
 - A passkey is the user's credential. Registration, listing and deletion belong to the user alone; a company may decline to accept one but may not destroy it.
 - A `super_admin` bypasses every company auth surface — it satisfies any company without a proof and is never counted as a stranded member — and in exchange may authenticate **by password only**. No OIDC, no SAML, no passkey, no magic link, whatever the deployment allowlist or a company policy says.
 - Every Rails, test and migration command runs inside the `web` container, and the full check suite must be green before a branch is pushed.
