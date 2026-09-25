@@ -48,7 +48,12 @@ module Templates
       new(definition: parse_definition(dir.join(DEFINITION_FILE).read), files: files)
     end
 
+    NAME_FORMAT = /\A[a-z0-9]+(-[a-z0-9]+)*\z/
+
+    def namespace = definition["namespace"]
     def slug = definition["slug"]
+    # The catalog identity: two publishers may each have a "code-reviewer-agent".
+    def identifier = "#{namespace}/#{slug}"
     def version = definition["version"]
     def name = definition["name"]
 

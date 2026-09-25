@@ -6,7 +6,7 @@ class Templates::ProbeServersJobTest < ActiveSupport::TestCase
   setup do
     user = create(:user, :with_company)
     @project = create(:project, company: user.companies.first, owner: user)
-    @install = @project.template_installs.create!(installed_by: user, slug: "x", version: 1, commit_sha: "a" * 40,
+    @install = @project.template_installs.create!(installed_by: user, namespace: "acme", slug: "x", version: 1, commit_sha: "a" * 40,
                                                   package_digest: "d", idempotency_key: "k")
     @server = create(:mcp_server, scope: @project, name: "Hosted", transport: "http", url: "https://mcp.example.com/mcp")
   end

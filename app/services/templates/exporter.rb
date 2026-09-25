@@ -26,9 +26,10 @@ module Templates
     # @param workflow_ids [Array<Integer>, nil] nil exports every workflow, [] none
     # @param agent_ids / skill_ids [Array<Integer>] exported even when no workflow uses them —
     #   how an agent or skill template is made
-    def initialize(project:, slug:, name:, workflow_ids: nil, agent_ids: [], skill_ids: [], include_board: true,
+    def initialize(project:, namespace:, slug:, name:, workflow_ids: nil, agent_ids: [], skill_ids: [], include_board: true,
                    include_assets: false, summary: nil)
       @project = project
+      @namespace = namespace
       @slug = slug
       @name = name
       @summary = summary
@@ -58,7 +59,8 @@ module Templates
     private
 
     def build_definition
-      definition = { "format_version" => Package::FORMAT_VERSION, "slug" => @slug, "version" => 1, "name" => @name }
+      definition = { "format_version" => Package::FORMAT_VERSION, "namespace" => @namespace, "slug" => @slug,
+                     "version" => 1, "name" => @name }
       definition["summary"] = @summary if @summary.present?
       workflows = export_workflows
       @agent_ids.each { |id| agent_key(id, "agent #{id}") }

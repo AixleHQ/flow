@@ -2,10 +2,24 @@
 
 class CreateTemplateMarketplaceTables < ActiveRecord::Migration[8.1]
   def change
+    # Publishers, from the templates repository's namespaces.yaml. A template's
+    # identity is namespace/slug, so two publishers can each have a
+    # "code-reviewer-agent".
+    create_table :catalog_namespaces do |t|
+      t.string :name, null: false, index: { unique: true }
+      t.string :display_name, null: false
+      t.string :url
+      t.boolean :verified, null: false, default: false
+      t.string :owners, array: true, null: false, default: []
+      t.datetime :synced_at, null: false
+      t.timestamps
+    end
+
     # This installation's mirror of the public templates repository. Global, not
     # tenant data — like connectors and catalog_skills.
     create_table :catalog_templates do |t|
-      t.string :slug, null: false, index: { unique: true }
+      t.string :namespace, null: false
+      t.string :slug, null: false
       t.integer :version, null: false
       t.string :name, null: false
       t.text :summary
@@ -26,6 +40,7 @@ class CreateTemplateMarketplaceTables < ActiveRecord::Migration[8.1]
       t.datetime :synced_at, null: false
       t.timestamps
 
+      t.index [ :namespace, :slug ], unique: true
       t.index :kind
     end
 
@@ -33,6 +48,7 @@ class CreateTemplateMarketplaceTables < ActiveRecord::Migration[8.1]
     create_table :template_installs do |t|
       t.references :project, null: false, foreign_key: { on_delete: :cascade }
       t.references :installed_by, foreign_key: { to_table: :users, on_delete: :nullify }
+      t.string :namespace, null: false
       t.string :slug, null: false
       t.integer :version, null: false
       t.string :commit_sha, null: false
@@ -41,7 +57,7 @@ class CreateTemplateMarketplaceTables < ActiveRecord::Migration[8.1]
       t.timestamps
 
       t.index [ :installed_by_id, :idempotency_key ], unique: true
-      t.index :slug
+      t.index [ :namespace, :slug ]
     end
 
     # The post-install checklist. One row per thing left to do; `ref` is stable

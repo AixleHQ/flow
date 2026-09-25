@@ -25,7 +25,7 @@ import { AuthLayout } from 'layouts/AuthLayout';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { KindBadge } from './components/KindBadge';
-import type { TemplateDetail, TemplateInput } from './types';
+import { templatePath, type TemplateDetail, type TemplateInput } from './types';
 
 interface Pair {
   key: string;
@@ -125,6 +125,7 @@ const InstallPage = () => {
     router.get(
       '/company/template_installs/new',
       {
+        namespace: template.namespace,
         slug: template.slug,
         version: template.version,
         ...(projectId ? { project_id: projectId } : {}),
@@ -142,6 +143,7 @@ const InstallPage = () => {
     router.post(
       '/company/template_installs',
       {
+        namespace: template.namespace,
         slug: template.slug,
         version: template.version,
         project_id: selection.projectId,
@@ -161,7 +163,7 @@ const InstallPage = () => {
   return (
     <AuthLayout>
       <Head title={`Install ${template.name}`} />
-      <Anchor component={Link} href={`/templates/${template.slug}`} size="sm" c="var(--app-text-tertiary)">
+      <Anchor component={Link} href={templatePath(template)} size="sm" c="var(--app-text-tertiary)">
         {template.name}
       </Anchor>
       <PageHeader

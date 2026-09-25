@@ -7,7 +7,8 @@
 # here and never fetch anything live, so what gets installed is what was merged
 # at `commit_sha` (design D17).
 class CatalogTemplate < ApplicationRecord
-  validates :slug, presence: true, uniqueness: true
+  validates :namespace, :slug, presence: true
+  validates :slug, uniqueness: { scope: :namespace }
   validates :name, :commit_sha, :package_digest, :synced_at, presence: true
   validates :version, :format_version, numericality: { only_integer: true, greater_than: 0 }
   validates :kind, inclusion: { in: Templates::Package::KINDS }
@@ -16,10 +17,19 @@ class CatalogTemplate < ApplicationRecord
 
   def revoked? = revoked_at.present?
 
+  def identifier = "#{namespace}/#{slug}"
+
+  def publisher = CatalogNamespace.find_by(name: namespace)
+
+  def self.find_by_identifier(identifier)
+    namespace, slug = identifier.to_s.split("/", 2)
+    find_by(namespace: namespace, slug: slug) if slug.present?
+  end
+
   # Copies a validated package into this row, as mirrored at `commit_sha`.
   def assign_package(package, commit_sha:, synced_at: Time.current)
     assign_attributes(
-      slug: package.slug, version: package.version, name: package.name,
+      namespace: package.namespace, slug: package.slug, version: package.version, name: package.name,
       summary: package.definition["summary"], kind: package.kind,
       categories: Array(package.definition["categories"]),
       format_version: package.definition["format_version"],

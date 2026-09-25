@@ -75,7 +75,7 @@ class Templates::SetupChecklistTest < ActiveSupport::TestCase
     assert_equal "dismissed", item("integration:github").status
 
     other = create(:project, company: @company, owner: @user).template_installs.create!(
-      installed_by: @user, slug: "x", version: 1, commit_sha: "b" * 40, package_digest: "d", idempotency_key: "other"
+      installed_by: @user, namespace: "acme", slug: "x", version: 1, commit_sha: "b" * 40, package_digest: "d", idempotency_key: "other"
     )
     foreign = other.setup_items.create!(kind: "secret", ref: "secret:X", detail: { "name" => "X" })
     assert_raises(Templates::SetupChecklist::Error) { @checklist.add_secret!(foreign, "v") }

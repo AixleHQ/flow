@@ -272,7 +272,8 @@ Rails.application.routes.draw do
     # The template catalog is public (design D16): anyone can browse it; an
     # install goes through company/template_installs and needs a sign-in.
     get "templates", to: "templates#index", as: :templates
-    get "templates/:slug", to: "templates#show", as: :template, constraints: { slug: /[a-z0-9-]+/ }
+    get "templates/:namespace/:slug", to: "templates#show", as: :template,
+                                      constraints: { namespace: /[a-z0-9-]+/, slug: /[a-z0-9-]+/ }
 
     get "login", to: "sessions#new", as: :login
     post "login", to: "sessions#create"

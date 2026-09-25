@@ -25,7 +25,7 @@ class Templates::InstallerTest < ActiveSupport::TestCase
   # A small workflow-kind package, installable into an existing project.
   def workflow_package(persona: "Reviews diffs.")
     Templates::Package.new(definition: {
-      "format_version" => 1, "slug" => "pr-review", "version" => 1, "name" => "PR review",
+      "format_version" => 1, "namespace" => "acme", "slug" => "pr-review", "version" => 1, "name" => "PR review",
       "agents" => [ { "key" => "reviewer", "name" => "reviewer", "title" => "Reviewer", "persona" => persona } ],
       "workflows" => [ { "key" => "review", "name" => "Review", "steps" => [
         { "key" => "read", "name" => "Read the diff", "agent" => "reviewer", "instructions" => "Read it." }
@@ -99,8 +99,8 @@ class Templates::InstallerTest < ActiveSupport::TestCase
     end
 
     install = @result.install
-    assert_equal [ @template.slug, @template.version, @template.commit_sha, @template.package_digest ],
-                 [ install.slug, install.version, install.commit_sha, install.package_digest ]
+    assert_equal [ @template.identifier, @template.version, @template.commit_sha, @template.package_digest ],
+                 [ install.identifier, install.version, install.commit_sha, install.package_digest ]
     assert_equal 1, @template.reload.install_count
   end
 
@@ -210,7 +210,7 @@ class Templates::InstallerTest < ActiveSupport::TestCase
     project = create(:project, company: @company, owner: @user)
     Board.create_from_columns(project: project, name: "Main", columns: [ { name: "Backlog" } ])
     board_template = catalog_template(Templates::Package.new(definition: {
-      "format_version" => 1, "slug" => "release-board", "version" => 1, "name" => "Release board",
+      "format_version" => 1, "namespace" => "acme", "slug" => "release-board", "version" => 1, "name" => "Release board",
       "board" => { "columns" => [ { "key" => "backlog", "name" => "Backlog" }, { "key" => "qa", "name" => "QA" } ] }
     }))
 

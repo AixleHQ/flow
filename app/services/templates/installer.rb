@@ -71,7 +71,8 @@ module Templates
       @builder = ProjectResources::Builder.new(@project)
 
       install = @project.template_installs.create!(
-        installed_by: @user, slug: @catalog_template.slug, version: @catalog_template.version,
+        installed_by: @user, namespace: @catalog_template.namespace, slug: @catalog_template.slug,
+        version: @catalog_template.version,
         commit_sha: @catalog_template.commit_sha, package_digest: @catalog_template.package_digest,
         idempotency_key: @idempotency_key
       )

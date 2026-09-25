@@ -13,11 +13,11 @@ module Activities
         result = ::Templates::CatalogSync.call
 
         log(:info, "templates catalog sync #{result}")
-        result.skipped.each { |skip| log(:warn, "templates catalog skipped #{skip[:slug]}: #{skip[:reason]}") }
+        result.skipped.each { |skip| log(:warn, "templates catalog skipped #{skip[:identifier]}: #{skip[:reason]}") }
         {
           commit_sha: result.commit_sha,
           upserted: result.upserted,
-          skipped: result.skipped.pluck(:slug),
+          skipped: result.skipped.pluck(:identifier),
           revoked: result.revoked,
           unchanged: result.unchanged
         }

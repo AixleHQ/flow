@@ -160,6 +160,14 @@ module Tools
           `include_board: false` and `agent_ids` / `skill_ids`.
           Agree on a slug (lowercase words joined by dashes), a name and a one-line summary.
 
+          Every template lives under a publisher **namespace**, and its catalog id is
+          `namespace/slug`. Check `namespaces.yaml` in the repository: if the user
+          already owns a namespace (their GitHub login is in its `owners`), use it.
+          Otherwise add an entry for a new one in the same pull request —
+          `name` (usually their GitHub login), `display_name`, `owners: [<login>]` —
+          and leave `verified` out; only the maintainers set it. A pull request that
+          changes a namespace its author does not own fails CI.
+
           ## 2. Export
 
           Call `export_template` with the project, slug and name (`workflow_ids`,
@@ -188,10 +196,9 @@ module Tools
           ## 4. Open the pull request
 
           1. Fork #{Templates::RepositoryClient::REPOSITORY} (or branch, if the user has write access).
-          2. Write `templates/<slug>/template.yaml` from `template_yaml`, and every entry
-             of `files` to `templates/<slug>/<path>` (`content` as text, `base64` decoded).
-          3. Run the repository's validator (`bin/validate templates/<slug>`) and fix
-             what it reports.
+          2. Write `templates/<namespace>/<slug>/template.yaml` from `template_yaml`, and
+             every entry of `files` next to it (`content` as text, `base64` decoded).
+          3. Run the repository's validator (`bin/validate`) and fix what it reports.
           4. Commit, push, and open the pull request against `#{Templates::RepositoryClient::BRANCH}`.
              In the description say what the template does, what it installs, and
              what it needs after install. Mention any third-party container images.

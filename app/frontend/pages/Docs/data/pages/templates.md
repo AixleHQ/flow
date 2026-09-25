@@ -11,6 +11,12 @@ Open **Templates** in the sidebar, or go to `/templates` on your installation.
 The catalog is readable without signing in, so you can share a link to a
 template with someone who has no account yet.
 
+Every template belongs to a **publisher** (its namespace), shown on the card —
+with a check mark for publishers the Flow maintainers have verified. Filter the
+catalog by publisher to see one vendor's templates. Two publishers can each
+have a template with the same name; a template's full name is
+`publisher/template`, as in `aixle/code-reviewer-agent`.
+
 Each template page shows what it creates, what it needs from you, and what it
 does **not** bring along: cards, comments, runs, secret values, integrations and
 repositories never travel in a template.
@@ -56,7 +62,10 @@ ticked off the next time you open it.
 ## Publishing your own
 
 Templates are published as pull requests to the public
-[AixleHQ/flow-templates](https://github.com/AixleHQ/flow-templates) repository.
+[AixleHQ/flow-templates](https://github.com/AixleHQ/flow-templates) repository,
+under a namespace you own. A new namespace is registered in the same pull
+request, in the repository's `namespaces.yaml`; the maintainers approve it, and
+from then on only its owners can change its templates.
 The easiest way is to let your own agent do it: connect it to Flow's
 [personal MCP server](/docs/mcp) and run the `publish_template` prompt on a
 project that works. It exports the project, helps you turn project-specific

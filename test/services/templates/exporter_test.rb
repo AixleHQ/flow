@@ -18,7 +18,7 @@ class Templates::ExporterTest < ActiveSupport::TestCase
   end
 
   def export(project = @source, **options)
-    Templates::Exporter.new(project: project, slug: "exported", name: "Exported", include_assets: true, **options).call
+    Templates::Exporter.new(project: project, namespace: "acme", slug: "exported", name: "Exported", include_assets: true, **options).call
   end
 
   test "an installed template exports to a valid package that installs again the same way" do

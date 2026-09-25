@@ -25,10 +25,10 @@ class PersonalMCPTemplatesTest < ActionDispatch::IntegrationTest
 
   test "search and get describe the catalog without installing anything" do
     results = payload(call_tool("search_template_catalog", { query: "delivery" }))["results"]
-    assert_equal [ "dev-team-sdlc" ], results.pluck("slug")
+    assert_equal [ "acme/dev-team-sdlc" ], results.pluck("identifier")
     assert_equal({ "integrations" => [ "github" ] }, results.first["requires"].slice("integrations"))
 
-    detail = payload(call_tool("get_template", { slug: "dev-team-sdlc" }))
+    detail = payload(call_tool("get_template", { template: "acme/dev-team-sdlc" }))
     assert_equal [ "Backlog", "Tech Design", "Code Review", "Done" ], detail["board_columns"]
     assert_equal %w[default_branch review_language], detail["inputs"].pluck("key")
     assert detail["runs_third_party_images"]
@@ -36,7 +36,7 @@ class PersonalMCPTemplatesTest < ActionDispatch::IntegrationTest
 
   test "a dry run returns the plan and writes nothing" do
     assert_no_difference -> { Project.count } do
-      body = call_tool("install_template", { slug: "dev-team-sdlc", company_id: @company.id,
+      body = call_tool("install_template", { template: "acme/dev-team-sdlc", company_id: @company.id,
                                              idempotency_key: "a", dry_run: true })
       plan = payload(body)["plan"]
       assert_equal "new_project", plan["target"]
@@ -45,7 +45,7 @@ class PersonalMCPTemplatesTest < ActionDispatch::IntegrationTest
   end
 
   test "install creates the project and never echoes the secret back" do
-    body = call_tool("install_template", { slug: "dev-team-sdlc", company_id: @company.id, idempotency_key: "b",
+    body = call_tool("install_template", { template: "acme/dev-team-sdlc", company_id: @company.id, idempotency_key: "b",
                                            version: @template.version, commit_sha: @template.commit_sha,
                                            secrets: { "SENTRY_TOKEN" => "tok-secret-value" } })
 
@@ -57,19 +57,19 @@ class PersonalMCPTemplatesTest < ActionDispatch::IntegrationTest
   end
 
   test "export_template packages an installed project and refuses what it cannot carry" do
-    project = Project.find(payload(call_tool("install_template", { slug: "dev-team-sdlc", company_id: @company.id,
+    project = Project.find(payload(call_tool("install_template", { template: "acme/dev-team-sdlc", company_id: @company.id,
                                                                     idempotency_key: "e" }))["project_id"])
 
-    body = call_tool("export_template", { project_id: project.id, slug: "my-delivery", name: "My delivery",
+    body = call_tool("export_template", { project_id: project.id, namespace: "acme", slug: "my-delivery", name: "My delivery",
                                           include_assets: true })
     assert_not body.dig("result", "isError"), text(body)
     exported = payload(body)
-    assert_equal "templates/my-delivery", exported["directory"]
+    assert_equal "templates/acme/my-delivery", exported["directory"]
     assert_match(/slug: my-delivery/, exported["template_yaml"])
     assert_includes exported["files"].pluck("path"), "snapshots/skills/code_review.md"
 
     project.mcp_servers.find_by!(name: "Sentry").update!(headers: { "X-Org" => "acme" })
-    refused = call_tool("export_template", { project_id: project.id, slug: "my-delivery", name: "My delivery",
+    refused = call_tool("export_template", { project_id: project.id, namespace: "acme", slug: "my-delivery", name: "My delivery",
                                             include_assets: true })
     assert refused.dig("result", "isError")
     assert_match(/X-Org holds a literal value/, text(refused))
@@ -87,7 +87,7 @@ class PersonalMCPTemplatesTest < ActionDispatch::IntegrationTest
   end
 
   test "a stale version is refused as a tool error" do
-    body = call_tool("install_template", { slug: "dev-team-sdlc", company_id: @company.id, idempotency_key: "c",
+    body = call_tool("install_template", { template: "acme/dev-team-sdlc", company_id: @company.id, idempotency_key: "c",
                                            version: @template.version + 1 })
 
     assert body.dig("result", "isError")

@@ -11,17 +11,20 @@ class Web::TemplatesController < Web::ApplicationController
 
   def index
     templates = CatalogTemplate.listed.order(install_count: :desc, name: :asc)
+    publishers = CatalogNamespace.all.index_by(&:name)
     render inertia: "Templates/IndexPage", props: {
-      templates: templates.map { |template| Templates::Presenter.summary(template) },
+      templates: templates.map { |template| Templates::Presenter.summary(template, publishers: publishers) },
       signed_in: signed_in?
     }
   end
 
   def show
-    template = CatalogTemplate.find_by!(slug: params[:slug])
+    template = CatalogTemplate.find_by!(namespace: params[:namespace], slug: params[:slug])
     render inertia: "Templates/ShowPage", props: {
       template: Templates::Presenter.detail(template),
-      install_path: template.revoked? ? nil : new_company_template_install_path(slug: template.slug, version: template.version),
+      install_path: template.revoked? ? nil : new_company_template_install_path(namespace: template.namespace,
+                                                                                 slug: template.slug,
+                                                                                 version: template.version),
       signed_in: signed_in?
     }
   end

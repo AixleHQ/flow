@@ -18,6 +18,10 @@ module PersonalTools
       tags :templates
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
+      param :namespace, type: :string,
+                        description: "Publisher namespace registered in the templates repository's namespaces.yaml " \
+                                     "(lowercase words joined by dashes). Usually the user's GitHub login.",
+                        required: true
       param :slug, type: :string, description: "Template slug: lowercase words joined by dashes.", required: true
       param :name, type: :string, description: "Template name shown in the catalog.", required: true
       param :summary, type: :string, description: "One-sentence catalog summary."
@@ -34,13 +38,14 @@ module PersonalTools
       authorize!(project, :index?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
 
       result = Templates::Exporter.new(
-        project: project, slug: params[:slug].to_s, name: params[:name].to_s, summary: params[:summary],
+        project: project, namespace: params[:namespace].to_s, slug: params[:slug].to_s, name: params[:name].to_s,
+        summary: params[:summary],
         workflow_ids: params.key?(:workflow_ids) ? Array(params[:workflow_ids]) : nil,
         agent_ids: Array(params[:agent_ids]), skill_ids: Array(params[:skill_ids]),
         include_board: params[:include_board] != false,
         include_assets: params[:include_assets] == true
       ).call
-      success(directory: "templates/#{params[:slug]}", template_yaml: result.template_yaml,
+      success(directory: "templates/#{params[:namespace]}/#{params[:slug]}", template_yaml: result.template_yaml,
               files: result.package.files.map { |path, bytes| file_entry(path, bytes) }, notes: result.notes)
     rescue Templates::Exporter::ExportError => e
       error("Export refused:\n- #{e.errors.join("\n- ")}")

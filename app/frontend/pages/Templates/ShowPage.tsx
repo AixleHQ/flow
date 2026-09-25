@@ -21,6 +21,7 @@ import Markdown from 'react-markdown';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { KindBadge } from './components/KindBadge';
+import { PublisherLabel } from './components/PublisherLabel';
 import { TemplatesShell } from './components/TemplatesShell';
 import type { TemplateDetail } from './types';
 
@@ -163,13 +164,15 @@ const ShowPage = () => {
         <Grid.Col span={{ base: 12, md: 8 }}>
           <Group gap="xs" mb={6}>
             <KindBadge kind={template.kind} />
+            <PublisherLabel publisher={template.publisher} />
           </Group>
           <PageHeader
             title={template.name}
             subtitle={template.summary ?? undefined}
             meta={
               <Text size="xs" ff="var(--app-font-mono)" c="var(--app-text-tertiary)">
-                v{template.version} · {template.commitSha.slice(0, 7)} · {template.installCount} installs here
+                {template.identifier} · v{template.version} · {template.commitSha.slice(0, 7)} · {template.installCount}{' '}
+                installs here
               </Text>
             }
           />

@@ -12,17 +12,20 @@ module AuthConcern
   # Only the template and the version the guest saw are kept; the route back is
   # built here, so there is no return_to parameter to point somewhere else.
   PENDING_TEMPLATE_INSTALL_KEY = :pending_template_install
+  TEMPLATE_NAME_FORMAT = /\A[a-z0-9]+(-[a-z0-9]+)*\z/
 
-  def remember_pending_template_install(slug:, version:)
-    session[PENDING_TEMPLATE_INSTALL_KEY] = { "slug" => slug.to_s, "version" => version.to_i }
+  def remember_pending_template_install(namespace:, slug:, version:)
+    session[PENDING_TEMPLATE_INSTALL_KEY] = { "namespace" => namespace.to_s, "slug" => slug.to_s, "version" => version.to_i }
   end
 
   def take_pending_template_install_path
     pending = session.delete(PENDING_TEMPLATE_INSTALL_KEY)
-    slug = pending.is_a?(Hash) ? pending["slug"].to_s : ""
-    return nil unless slug.match?(/\A[a-z0-9]+(-[a-z0-9]+)*\z/)
+    return nil unless pending.is_a?(Hash)
 
-    new_company_template_install_path(slug: slug, version: pending["version"].to_i)
+    namespace, slug = pending.values_at("namespace", "slug").map(&:to_s)
+    return nil unless namespace.match?(TEMPLATE_NAME_FORMAT) && slug.match?(TEMPLATE_NAME_FORMAT)
+
+    new_company_template_install_path(namespace: namespace, slug: slug, version: pending["version"].to_i)
   end
 
   # A new session for every sign-in: the old one (and its CSRF token) is reset,

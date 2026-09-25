@@ -20,17 +20,17 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
   end
 
   test "the kind follows the most encompassing section present" do
-    base = { "format_version" => 1, "slug" => "x", "version" => 1, "name" => "X" }
+    base = { "format_version" => 1, "namespace" => "acme", "slug" => "x", "version" => 1, "name" => "X" }
     agent = { "key" => "a", "name" => "a", "title" => "A", "persona" => "P." }
     server = { "key" => "s", "custom" => { "name" => "S", "transport" => "http", "url" => "https://mcp.example.com" } }
 
     assert_equal "agent", Templates::Package.new(definition: base.merge("agents" => [ agent ], "mcp_servers" => [ server ])).kind
-    assert_equal "skill", package { |d| d.slice!("format_version", "slug", "version", "name", "skills") }.kind
+    assert_equal "skill", package { |d| d.slice!("format_version", "namespace", "slug", "version", "name", "skills") }.kind
     assert_equal "connector", Templates::Package.new(definition: base.merge("mcp_servers" => [ server ])).kind
   end
 
   test "a template that installs nothing is refused" do
-    empty = Templates::Package.new(definition: { "format_version" => 1, "slug" => "x", "version" => 1, "name" => "X" })
+    empty = Templates::Package.new(definition: { "format_version" => 1, "namespace" => "acme", "slug" => "x", "version" => 1, "name" => "X" })
 
     assert_includes Templates::Validator.new(empty).errors,
                     "the template installs nothing — add at least one agent, skill, server, tool, board or workflow"

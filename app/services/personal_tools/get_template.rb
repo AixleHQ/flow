@@ -10,12 +10,13 @@ module PersonalTools
       audience :user
       tags :templates
       read_only
-      param :slug, type: :string, description: "Template slug (see search_template_catalog).", required: true
+      param :template, type: :string, description: "Template identifier, namespace/slug (see search_template_catalog).",
+                       required: true
     end
 
     def execute
-      template = CatalogTemplate.find_by(slug: params[:slug].to_s)
-      return error("Template '#{params[:slug]}' is not in the catalog") unless template
+      template = CatalogTemplate.find_by_identifier(params[:template])
+      return error("Template '#{params[:template]}' is not in the catalog") unless template
 
       success(Templates::Presenter.detail(template))
     end

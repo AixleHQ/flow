@@ -11,13 +11,22 @@ module Templates
 
     module_function
 
-    def summary(template)
+    # @param publishers [Hash{String => CatalogNamespace}] preloaded, to avoid a query per row
+    def summary(template, publishers: nil)
       package = template.to_package
+      publisher = publishers ? publishers[template.namespace] : template.publisher
       {
-        slug: template.slug, name: template.name, summary: template.summary, kind: template.kind,
+        identifier: template.identifier, namespace: template.namespace, slug: template.slug,
+        publisher: publisher_view(publisher, template.namespace),
+        name: template.name, summary: template.summary, kind: template.kind,
         version: template.version, commit_sha: template.commit_sha, categories: template.categories,
         install_count: template.install_count, requires: requires(package), includes: includes(package)
       }
+    end
+
+    def publisher_view(publisher, namespace)
+      { name: namespace, display_name: publisher&.display_name || namespace, url: publisher&.url,
+        verified: publisher&.verified || false }
     end
 
     def detail(template)
@@ -64,7 +73,7 @@ module Templates
 
     def plan(plan)
       {
-        template: { slug: plan.catalog_template.slug, version: plan.catalog_template.version,
+        template: { identifier: plan.catalog_template.identifier, version: plan.catalog_template.version,
                     commit_sha: plan.catalog_template.commit_sha },
         target: plan.target_kind, project_id: plan.project&.id, project_name: plan.project&.name || plan.project_name,
         company_id: plan.company.id, digest: plan.digest, resolved: plan.resolved?,

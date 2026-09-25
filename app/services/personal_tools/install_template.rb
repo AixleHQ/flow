@@ -17,7 +17,7 @@ module PersonalTools
                   "come with the template — confirm with the user before installing."
       audience :user
       tags :templates
-      param :slug, type: :string, description: "Template slug.", required: true
+      param :template, type: :string, description: "Template identifier, namespace/slug.", required: true
       param :version, type: :integer, description: "Version read with get_template; refused if it changed."
       param :commit_sha, type: :string, description: "commit_sha read with get_template; refused if it changed."
       param :company_id, type: :integer, description: "Company to create a new project in."
@@ -36,8 +36,8 @@ module PersonalTools
     end
 
     def execute
-      template = CatalogTemplate.find_by(slug: params[:slug].to_s)
-      return error("Template '#{params[:slug]}' is not in the catalog") unless template
+      template = CatalogTemplate.find_by_identifier(params[:template])
+      return error("Template '#{params[:template]}' is not in the catalog") unless template
 
       installer = Templates::Installer.new(
         catalog_template: template, user: user, target: target, idempotency_key: params[:idempotency_key],

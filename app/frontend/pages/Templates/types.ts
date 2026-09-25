@@ -6,8 +6,18 @@ export interface TemplateRequires {
   secrets: { name: string; description?: string; promptAtInstall?: boolean }[];
 }
 
+export interface TemplatePublisher {
+  name: string;
+  displayName: string;
+  url: string | null;
+  verified: boolean;
+}
+
 export interface TemplateSummary {
+  identifier: string;
+  namespace: string;
   slug: string;
+  publisher: TemplatePublisher;
   name: string;
   summary: string | null;
   kind: TemplateKind;
@@ -80,6 +90,8 @@ const INCLUDE_LABELS: Record<string, [string, string]> = {
   assets: ['asset', 'assets'],
   triggers: ['trigger', 'triggers'],
 };
+
+export const templatePath = (t: { namespace: string; slug: string }) => `/templates/${t.namespace}/${t.slug}`;
 
 /** "7 columns · 3 agents · 2 workflows" from a template's section counts. */
 export function describeIncludes(includes: Record<string, number>): string {

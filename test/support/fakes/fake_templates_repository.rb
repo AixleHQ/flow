@@ -8,23 +8,31 @@ require "zlib"
 # R3/R4); inject this instead:
 #
 #   repo = FakeTemplatesRepository.new
-#   repo.add_template_dir(Rails.root.join("test/fixtures/files/templates/dev-team-sdlc"))
+#   repo.add_template_dir(Rails.root.join("test/fixtures/files/templates/dev-team-sdlc"))  # → acme/dev-team-sdlc
 #   Templates::CatalogSync.new(client: repo).call
 #
 # `commit!` moves the head to a new sha, the way a merge to main would.
 class FakeTemplatesRepository
   attr_reader :head_sha, :tarball_requests
 
+  # Registers the `acme` namespace (owner acme-bot) the fixtures publish under.
+  DEFAULT_NAMESPACES = <<~YAML
+    - name: acme
+      display_name: Acme Corp
+      verified: true
+      owners: [acme-bot]
+  YAML
+
   def initialize
-    @files = {}
+    @files = { "namespaces.yaml" => DEFAULT_NAMESPACES }
     @tarball_requests = []
     commit!
   end
 
-  def add_template_dir(dir, slug: File.basename(dir))
+  def add_template_dir(dir, namespace: "acme", slug: File.basename(dir))
     Dir.glob("**/*", base: dir).each do |relative|
       path = File.join(dir, relative)
-      @files["templates/#{slug}/#{relative}"] = File.binread(path) if File.file?(path)
+      @files["templates/#{namespace}/#{slug}/#{relative}"] = File.binread(path) if File.file?(path)
     end
     self
   end
@@ -34,8 +42,8 @@ class FakeTemplatesRepository
     self
   end
 
-  def remove_template(slug)
-    @files.reject! { |path, _| path.start_with?("templates/#{slug}/") }
+  def remove_template(identifier)
+    @files.reject! { |path, _| path.start_with?("templates/#{identifier}/") }
     self
   end
 

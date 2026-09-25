@@ -1,5 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Anchor, Card, Group, SegmentedControl, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
+import { Anchor, Card, Group, SegmentedControl, Select, SimpleGrid, Stack, Text, TextInput } from '@mantine/core';
 import { useDebouncedValue } from '@mantine/hooks';
 import { IconSearch, IconTemplate } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
@@ -8,8 +8,9 @@ import { EmptyState } from 'shared/ui';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { KindBadge } from './components/KindBadge';
+import { PublisherLabel } from './components/PublisherLabel';
 import { TemplatesShell } from './components/TemplatesShell';
-import { describeIncludes, KIND_LABELS, type TemplateKind, type TemplateSummary } from './types';
+import { describeIncludes, KIND_LABELS, templatePath, type TemplateKind, type TemplateSummary } from './types';
 
 interface Props {
   templates: TemplateSummary[];
@@ -34,6 +35,7 @@ const IndexPage = () => {
   const { templates } = usePage().props as unknown as Props;
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<string>('all');
+  const [publisher, setPublisher] = useState<string | null>(null);
   const [debouncedSearch] = useDebouncedValue(search, 200);
 
   const counts = useMemo(
@@ -41,14 +43,20 @@ const IndexPage = () => {
     [templates],
   );
 
+  const publishers = useMemo(() => {
+    const byName = new Map(templates.map((t) => [t.publisher.name, t.publisher]));
+    return [...byName.values()].sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, [templates]);
+
   const filtered = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase();
     return templates.filter(
       (t) =>
         (kind === 'all' || t.kind === kind) &&
+        (!publisher || t.publisher.name === publisher) &&
         (!query || t.name.toLowerCase().includes(query) || t.summary?.toLowerCase().includes(query)),
     );
-  }, [templates, kind, debouncedSearch]);
+  }, [templates, kind, publisher, debouncedSearch]);
 
   return (
     <TemplatesShell>
@@ -72,6 +80,15 @@ const IndexPage = () => {
           value={search}
           onChange={(e) => setSearch(e.currentTarget.value)}
           w={320}
+        />
+        <Select
+          aria-label="Publisher"
+          placeholder="All publishers"
+          data={publishers.map((p) => ({ value: p.name, label: p.verified ? `${p.displayName} ✓` : p.displayName }))}
+          value={publisher}
+          onChange={setPublisher}
+          clearable
+          w={200}
         />
         <SegmentedControl
           value={kind}
@@ -97,14 +114,15 @@ const IndexPage = () => {
       ) : (
         <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
           {filtered.map((template) => (
-            <Card key={template.slug} withBorder padding="lg" radius="md">
+            <Card key={template.identifier} withBorder padding="lg" radius="md">
               <Stack gap="xs" h="100%">
                 <Group gap="xs">
                   <KindBadge kind={template.kind} />
-                  <Anchor component={Link} href={`/templates/${template.slug}`} fw={600} c="var(--app-text-primary)">
+                  <Anchor component={Link} href={templatePath(template)} fw={600} c="var(--app-text-primary)">
                     {template.name}
                   </Anchor>
                 </Group>
+                <PublisherLabel publisher={template.publisher} />
                 {template.summary && (
                   <Text size="sm" c="var(--app-text-secondary)" lineClamp={3}>
                     {template.summary}

@@ -40,11 +40,13 @@ class Web::Company::TemplateInstallsController < Web::Company::ApplicationContro
   def require_auth_remembering_template
     return if signed_in?
 
-    remember_pending_template_install(slug: params[:slug], version: params[:version]) if params[:slug].present?
+    if params[:namespace].present? && params[:slug].present?
+      remember_pending_template_install(namespace: params[:namespace], slug: params[:slug], version: params[:version])
+    end
     redirect_to login_path
   end
 
-  def find_template = CatalogTemplate.find_by!(slug: params[:slug])
+  def find_template = CatalogTemplate.find_by!(namespace: params[:namespace], slug: params[:slug])
 
   def build_installer(template, idempotency_key:, secrets: nil, confirmed_digest: nil)
     Templates::Installer.new(
@@ -95,7 +97,8 @@ class Web::Company::TemplateInstallsController < Web::Company::ApplicationContro
   def pairs(hash) = hash.map { |key, value| { key: key, value: value } }
 
   def retry_params(template)
-    { slug: template&.slug || params[:slug], project_id: params[:project_id].presence,
+    { namespace: template&.namespace || params[:namespace], slug: template&.slug || params[:slug],
+      project_id: params[:project_id].presence,
       project_name: params[:project_name].presence, inputs: hash_param(:inputs).presence,
       resolutions: hash_param(:resolutions).presence }.compact
   end

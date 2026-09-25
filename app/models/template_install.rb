@@ -10,9 +10,11 @@ class TemplateInstall < ApplicationRecord
   has_many :setup_items, -> { order(:position, :id) }, class_name: "TemplateSetupItem", dependent: :delete_all,
                                                         inverse_of: :template_install
 
-  validates :slug, :commit_sha, :package_digest, :idempotency_key, presence: true
+  validates :namespace, :slug, :commit_sha, :package_digest, :idempotency_key, presence: true
   validates :version, numericality: { only_integer: true, greater_than: 0 }
   validates :idempotency_key, uniqueness: { scope: :installed_by_id }
 
-  def catalog_template = CatalogTemplate.find_by(slug: slug)
+  def catalog_template = CatalogTemplate.find_by(namespace: namespace, slug: slug)
+
+  def identifier = "#{namespace}/#{slug}"
 end
