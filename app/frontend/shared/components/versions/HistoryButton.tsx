@@ -14,6 +14,8 @@ interface HistoryButtonProps {
   title: string;
   canRevert: boolean;
   size?: 'sm' | 'md';
+  /** After a revert lands. Defaults to reloading the page's props. */
+  onReverted?: () => void;
 }
 
 /** A row's History action: opens the entity's version timeline; a revert reloads the page. */
@@ -24,6 +26,7 @@ export function HistoryButton({
   title,
   canRevert,
   size = 'sm',
+  onReverted = () => router.reload(),
 }: HistoryButtonProps) {
   const [opened, setOpened] = useState(false);
 
@@ -43,7 +46,7 @@ export function HistoryButton({
           versionableId={versionableId}
           title={title}
           canRevert={canRevert}
-          onReverted={() => router.reload()}
+          onReverted={onReverted}
         />
       )}
     </>

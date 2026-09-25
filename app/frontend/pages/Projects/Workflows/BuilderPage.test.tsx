@@ -1,9 +1,10 @@
 import '@testing-library/jest-dom/vitest';
+import { router } from '@inertiajs/react';
 import { notifications } from '@mantine/notifications';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { answerFetch } from 'test/fetchStub';
-import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import type { aggregatePayload } from './builderDraft';
 import BuilderPage from './BuilderPage';
@@ -974,5 +975,49 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     // Run button is not shown in read-only mode.
     expect(screen.queryByRole('button', { name: 'Run' })).not.toBeInTheDocument();
+  });
+
+  it('reloads the page without its draft after a revert, so the editor shows the reverted workflow', async () => {
+    const version = (number: number) => ({
+      id: 100 + number,
+      number,
+      versionableType: 'Workflow',
+      versionableId: 3,
+      terminalSessionId: null,
+      createdAt: '2026-09-25T10:00:00Z',
+      event: 'saved',
+      source: 'ui',
+      author: { id: 1, name: 'Ada' },
+      restoredFromNumber: null,
+      baseline: false,
+      duplicatedFromId: null,
+      disabledTriggerIds: [],
+    });
+    answerFetch({
+      'GET /api/v1/projects/7/entity_versions': {
+        versions: [version(2), version(1)],
+        nextBefore: null,
+        currentVersionNumber: 2,
+      },
+      'GET /api/v1/projects/7/entity_versions/101': {
+        ...version(1),
+        snapshot: { name: 'Release pipeline', steps: [] },
+        previousSnapshot: null,
+        currentSnapshot: { name: 'Release pipeline', steps: [] },
+        currentVersionNumber: 2,
+        references: {},
+      },
+      'POST /api/v1/projects/7/entity_versions/101/revert': { ...version(3), event: 'reverted', restoredFromNumber: 1 },
+    });
+    renderAuthedPage(<BuilderPage />, { props: projectProps() });
+
+    await userEvent.click(screen.getByRole('button', { name: 'History of Release pipeline' }));
+    await userEvent.click(await screen.findByRole('button', { name: /v1 Saved/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Revert to v1' }));
+    await userEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Revert to v1?' })).getByRole('button', { name: 'Revert' }),
+    );
+
+    await waitFor(() => expect(router.visit).toHaveBeenCalledWith(window.location.pathname, { preserveState: false }));
   });
 });

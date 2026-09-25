@@ -14,7 +14,7 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
     archived = MCPServer.for_project(current_project).archived.order(archived_at: :desc)
 
     render inertia: "Projects/McpServers/McpServersPage", props: {
-      archived_mcp_servers: archived.map { |s| MCPServerResource.new(s, params: { user: current_user }).to_h },
+      archived_servers: archived.map { |s| MCPServerResource.new(s, params: { user: current_user }).to_h },
       project: project_props,
       # params[:user] lets oauth_status resolve the CURRENT viewer's credential for
       # per_user servers (otherwise every per_user server reads "Not connected").

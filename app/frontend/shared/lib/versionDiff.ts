@@ -50,9 +50,16 @@ export function getPath(source: unknown, path: string): unknown {
 }
 
 /** Line diff by longest common subsequence; null when either side is too long to diff. */
+// CRLF and LF are the same text here, and a final newline ends the last line
+// rather than starting an empty one.
+const toLines = (text: string) => {
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\n$/, '');
+  return normalized === '' ? [] : normalized.split('\n');
+};
+
 export function diffLines(before: string, after: string): DiffLine[] | null {
-  const a = before === '' ? [] : before.split('\n');
-  const b = after === '' ? [] : after.split('\n');
+  const a = toLines(before);
+  const b = toLines(after);
   if (a.length > MAX_DIFF_LINES || b.length > MAX_DIFF_LINES) return null;
 
   const table: number[][] = Array.from({ length: a.length + 1 }, () => new Array<number>(b.length + 1).fill(0));
@@ -85,7 +92,7 @@ export function diffLines(before: string, after: string): DiffLine[] | null {
 
 function asText(value: unknown): string {
   if (value === null || value === undefined) return '';
-  return typeof value === 'string' ? value : JSON.stringify(value);
+  return typeof value === 'string' ? value.replace(/\r\n/g, '\n') : JSON.stringify(value);
 }
 
 function asJson(value: unknown): string {
@@ -167,7 +174,7 @@ function diffField(spec: FieldSpec, before: unknown, after: unknown, ctx: Contex
       for (const name of names) {
         if (!(name in a)) entries.push({ name, status: 'added' });
         else if (!(name in b)) entries.push({ name, status: 'removed' });
-        else if (!same(a[name], b[name])) {
+        else if (asText(a[name]) !== asText(b[name])) {
           entries.push(
             spec.kind === 'textMap'
               ? { name, status: 'changed', lines: diffLines(asText(a[name]), asText(b[name])) }

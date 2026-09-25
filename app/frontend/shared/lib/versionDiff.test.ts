@@ -184,4 +184,17 @@ describe('diffSnapshots', () => {
       ],
     });
   });
+
+  it('treats CRLF and LF as the same text, and a final newline as no extra line', () => {
+    expect(diffLines('a\r\nb\r\n', 'a\nb\n')).toEqual([
+      { type: 'same', text: 'a' },
+      { type: 'same', text: 'b' },
+    ]);
+    const changes = diffSnapshots(
+      VERSION_SCHEMAS.Tool,
+      { files: [{ path: '/w/a.yml', content: 'x: 1\r\n', file_data: null }] },
+      { files: [{ path: '/w/a.yml', content: 'x: 1\n', file_data: null }] },
+    );
+    expect(changes).toEqual([]);
+  });
 });

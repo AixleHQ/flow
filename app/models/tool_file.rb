@@ -12,6 +12,10 @@ class ToolFile < ApplicationRecord
                    format: { with: %r{\A/workspace/.+\z}, message: "must start with /workspace/" },
                    uniqueness: { scope: :tool_id, message: "already exists for this tool" }
   validate :content_or_file_present
+  # The tool form posts multipart (it may carry an upload), and multipart form
+  # encoding turns every newline in a text value into CRLF. Kept as sent, a
+  # script's shebang line ends in "\r" and no longer runs.
+  before_validation { self.content = content.gsub("\r\n", "\n") if content&.include?("\r\n") }
 
   def binary?
     file.present?

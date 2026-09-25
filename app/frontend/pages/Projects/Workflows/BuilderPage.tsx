@@ -323,6 +323,9 @@ const BuilderPage = () => {
                 versionableId={workflow.id}
                 title={workflow.name}
                 canRevert={!readOnly}
+                // The editor holds a local draft seeded from the page's props; a plain
+                // reload would refresh the props under it and leave the draft as it was.
+                onReverted={() => router.visit(window.location.pathname, { preserveState: false })}
               />
             )}
             {project && !readOnly && (
