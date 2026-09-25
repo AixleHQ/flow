@@ -216,7 +216,7 @@ module ContainerStrategies
       })
 
       seeded = nil
-      SessionContextService.stubs(:assemble_session_context).with do |*, **kwargs|
+      SessionContextService.stubs(:assemble_session_context).with do |_container, _session, **kwargs|
         seeded = kwargs[:credential].config_data.dig("claudeAiOauth", "accessToken")
         true
       end
