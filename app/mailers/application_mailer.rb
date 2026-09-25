@@ -4,6 +4,7 @@ class ApplicationMailer < ActionMailer::Base
   include Rails.application.routes.url_helpers
   default from: "noreply@#{Settings.domain}"
   layout "mailer"
+  helper MailerHelper
   self.delivery_job = MailDeliveryJob
 
   # The shared mailer layout renders the Aixle wordmark. Email clients strip
