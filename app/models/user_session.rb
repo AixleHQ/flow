@@ -29,6 +29,9 @@ class UserSession < ApplicationRecord
   # Ends every live sign-in of `user` (but `except`), and drops the live
   # connections that were opened under them.
   def self.revoke_all_for!(user, except: nil)
+    # A cookie from before database sessions has no row here to revoke; the mark
+    # is what stops it being adopted as a fresh session afterwards.
+    user.update_column(:sessions_revoked_at, Time.current)
     scope = where(user: user, revoked_at: nil)
     scope = scope.where.not(id: except.id) if except
     ended = scope.update_all(revoked_at: Time.current)

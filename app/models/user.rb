@@ -108,6 +108,11 @@ class User < ApplicationRecord
   def authenticatable?
     active? && !deleted?
   end
+
+  # A cookie from before database sessions carries only the user id and has no
+  # session row to revoke, so it is taken only until the user's sessions are first
+  # ended everywhere (UserSession.revoke_all_for!).
+  def accepts_sessionless_cookie? = sessions_revoked_at.nil?
   scope :deleted, -> { where.not(deleted_at: nil) }
 
   # Soft delete — mirrors the deleted_at pattern used by Asset/Workflow/Tool.

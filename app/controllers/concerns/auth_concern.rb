@@ -156,7 +156,7 @@ module AuthConcern
   # and from then on it can be ended like any other.
   def adopt_cookie_session
     user = User.authenticatable.find_by(id: session[:user_id])
-    return nil unless user
+    return nil unless user&.accepts_sessionless_cookie?
 
     impersonator = User.authenticatable.find_by(id: session[IMPERSONATION_KEY]) if session[IMPERSONATION_KEY].present?
     adopted = UserSession.start!(user: user, impersonator: impersonator, request: request)

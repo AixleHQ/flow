@@ -25,6 +25,16 @@ module Api
         assert_response :unauthorized
       end
 
+      test "a cookie from before database sessions is refused once its user has signed out everywhere" do
+        ts = create(:terminal_session, user: @user, project: @project, state: "ready")
+        UserSession.revoke_all_for!(@user)
+
+        get :show, params: { id: ts.id }
+
+        assert_response :unauthorized
+        assert_nil session[:user_session_id], "nothing may be adopted after sign-out everywhere"
+      end
+
       test "show returns session json" do
         ts = create(:terminal_session, user: @user, project: @project, state: "ready")
 

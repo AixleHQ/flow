@@ -20,10 +20,15 @@ module ApplicationCable
     # user id, and the next page load turns it into a session row.
     def find_verified_user
       user_session_id = request.session[:user_session_id]
-      return User.authenticatable.find_by(id: request.session[:user_id]) if user_session_id.blank?
+      return sessionless_cookie_user if user_session_id.blank?
 
       user_session = UserSession.find_by(id: user_session_id)
       user_session&.live? ? User.authenticatable.find_by(id: user_session.user_id) : nil
+    end
+
+    def sessionless_cookie_user
+      user = User.authenticatable.find_by(id: request.session[:user_id])
+      user if user&.accepts_sessionless_cookie?
     end
 
     # Same resolution rule as AuthConcern#current_membership — the session's

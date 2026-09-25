@@ -15,6 +15,13 @@ module ApplicationCable
       assert_equal "test-session", connection.session_id
     end
 
+    # Such a cookie has no session row, so revoking the rows would leave it working.
+    test "a cookie from before database sessions is refused once its user has signed out everywhere" do
+      UserSession.revoke_all_for!(@user)
+
+      assert_reject_connection { connect "/cable", session: { user_id: @user.id } }
+    end
+
     test "a connection without a signed-in user is refused" do
       assert_reject_connection { connect "/cable", params: { session_id: "other" } }
     end
