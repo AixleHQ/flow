@@ -14,7 +14,7 @@ FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 # been released. We pin a commit for reproducibility. (Also requires the iframe
 # to carry allow="clipboard-write" and tmux `allow-passthrough on`.)
 # =============================================================================
-FROM node:22-slim AS ttyd-builder
+FROM node:24-slim AS ttyd-builder
 ARG TTYD_REF=647d55ad865f5ad85ad89ba5e1b28d9b6ac8fd55
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git ca-certificates build-essential cmake \
@@ -42,13 +42,13 @@ RUN cd /ttyd-src && corepack enable && \
 # changes don't invalidate expensive agent CLI install layers.
 #
 # Components:
-#   - Node.js 22 (Debian slim for glibc compatibility)
+#   - Node.js 24 (Debian slim for glibc compatibility)
 #   - ttyd (web terminal)
 #   - OpenVSCode Server (browser IDE)
 #   - MITM proxy for request/response logging
 #   - Common development tools (uv/uvx and pipx for Python MCP servers)
 # =============================================================================
-FROM node:22-slim
+FROM node:24-slim
 
 # -----------------------------------------------------------------------------
 # System dependencies

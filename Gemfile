@@ -157,6 +157,7 @@ group :test do
   # Rails testing
   gem "minitest"
   gem "minitest-hooks"
+  gem "minitest-mock"
   gem "minitest-power_assert"
   gem "mocha"
   # One-time-password secrets for test fixtures only.

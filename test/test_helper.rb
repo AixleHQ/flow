@@ -32,6 +32,7 @@ SimpleCov.minimum_coverage Float(ENV["COVERAGE_MIN"]) if COVERAGE_ENABLED && !EN
 require_relative "../config/environment"
 require "rails/test_help"
 require "minitest/autorun"
+require "minitest/mock"
 require "minitest/power_assert"
 require "webmock/minitest"
 require "mocha/minitest"
