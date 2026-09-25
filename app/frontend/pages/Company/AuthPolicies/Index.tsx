@@ -39,6 +39,23 @@ interface PageProps {
   [key: string]: unknown;
 }
 
+function getCsrfToken(): string {
+  return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
+}
+
+// A real form POST, not router.post: verifying redirects to the customer's
+// identity provider, and an Inertia XHR cannot follow a cross-origin redirect —
+// the browser refuses it as CORS and the page simply sits there. Same reason
+// GoogleLoginButton is a form. POST rather than a link for CVE-2015-9284.
+const VerifyConnectionButton = ({ providerId }: { providerId: number }) => (
+  <form method="post" action={oidcStartPath(providerId)}>
+    <input type="hidden" name="authenticity_token" value={getCsrfToken()} />
+    <Button type="submit" size="compact-sm">
+      Verify
+    </Button>
+  </form>
+);
+
 function ConnectionForm({ onDone }: { onDone: () => void }) {
   const form = useForm({ name: '', issuer: '', clientId: '', client_secret: '', tenantId: '' });
 
@@ -128,9 +145,7 @@ export default function AuthPoliciesIndex({ providers }: PageProps) {
                     </Tooltip>
                   )}
                   {provider.scope === 'company' && !provider.proved && isAdmin && (
-                    <Button size="compact-sm" onClick={() => router.post(oidcStartPath(provider.id))}>
-                      Verify
-                    </Button>
+                    <VerifyConnectionButton providerId={provider.id} />
                   )}
                   <Switch
                     checked={provider.enabled}

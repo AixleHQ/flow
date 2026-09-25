@@ -29,6 +29,12 @@ module Auth
           provider: provider,
           subject: subject.to_s,
           email: info["email"].presence || raw["email"].presence || raw["preferred_username"],
+          # Entra sends NO `email_verified` claim, and — unlike Google Workspace —
+          # a tenant admin can set an arbitrary `mail`/`preferred_username` without
+          # proving they own that address's domain, on a tenant anyone can create
+          # for free. So this is never evidence the person controls the address,
+          # and a Microsoft sign-in can create an account but never attach itself
+          # to one that already exists (AD-3).
           email_verified: false,
           name: info["name"].presence || raw["name"]
         )
@@ -47,21 +53,6 @@ module Auth
 
         raise Auth::Method::Failure,
               "entra assertion for tenant #{tenant.inspect} does not match this connection"
-      end
-
-      # Entra sends NO `email_verified` claim, and — unlike Google Workspace — a
-      # tenant admin can set an arbitrary `mail`/`preferred_username` on a user
-      # without proving they own that address's domain. Anyone can create a free
-      # Entra tenant. So an assertion from a multi-tenant app registration is
-      # never evidence that the person controls the address it carries, and this
-      # adapter reports `email_verified: false` unconditionally.
-      #
-      # The consequence is deliberate: a Microsoft sign-in can CREATE an account
-      # (subject to the usual domain auto-join) but can never attach itself to an
-      # account that already exists. Linking Microsoft to an existing account is
-      # an explicit act from an authenticated session (AD-3).
-      def personal_account?(tenant)
-        tenant.blank? || tenant == PERSONAL_ACCOUNTS_TENANT
       end
     end
   end
