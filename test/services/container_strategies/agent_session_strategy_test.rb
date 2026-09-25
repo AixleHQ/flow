@@ -198,6 +198,34 @@ module ContainerStrategies
       assert_equal "old-tok", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
     end
 
+    # "Starting on whatever is stored" has to mean the stored copy, not the one the
+    # launch was handed: a refresh writes through a separate instance and the sweep
+    # rotates rows a launch already has in hand, so the object reaching the container
+    # can be a rotation behind the row it came from.
+    test "before_exec seeds the stored token, not the copy the launch started with" do
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-tok", "refreshToken" => "old-ref",
+                             "expiresAt" => (20.minutes.from_now.to_f * 1000).to_i }
+      })
+      stale = AgentCredential.find(@credential.id)
+      create(:terminal_session, user: @user, company_id: @credential.company_id,
+                                agent_type: "claude_code", state: "running")
+      @credential.update!(config_data: {
+        "claudeAiOauth" => { "accessToken" => "fresh-tok", "refreshToken" => "fresh-ref",
+                             "expiresAt" => (80.minutes.from_now.to_f * 1000).to_i }
+      })
+
+      seeded = nil
+      SessionContextService.stubs(:assemble_session_context).with do |*, **kwargs|
+        seeded = kwargs[:credential].config_data.dig("claudeAiOauth", "accessToken")
+        true
+      end
+
+      run_before_exec(build_strategy(credential: stale))
+
+      assert_equal "fresh-tok", seeded
+    end
+
     # Deferring is only tolerable while the token is alive. A dead one cannot be renewed
     # from inside the container either, so starting would buy 30 minutes of an agent
     # staring at a login prompt before the no-output watchdog reaps it.

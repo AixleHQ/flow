@@ -302,6 +302,17 @@ module Agents
       files
     end
 
+    # The credential on its own, for a mid-session delivery. The base implementation
+    # would JSON-encode #generate_config over #config_path — which on this runtime is
+    # the SQLite database itself, so a delivery would overwrite the CLI's state store
+    # with `{"state_b64":"..."}` and leave the container signed out with no way back.
+    # An unusable blob yields nothing rather than a truncated database: the container is
+    # better off on the token it already has.
+    def credential_files(credentials)
+      state = decoded_state(credentials)
+      state.present? ? { state_path => state } : {}
+    end
+
     # Seeded before the login runs. The MCP config is not needed to sign in — it is
     # here because writing it creates ~/.kiro, which the login command's marker
     # redirect would otherwise have to `mkdir` for itself. The settings come along so

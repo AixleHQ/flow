@@ -203,6 +203,29 @@ module Agents
       assert_includes files.keys, "/home/kiro/.kiro/settings/mcp.json"
     end
 
+    # == Credential delivery ==
+
+    # A mid-session delivery writes these files over a live container's. The base
+    # implementation would JSON-encode the credential onto #config_path, which here is
+    # the state database — destroying the only copy of the login the CLI has.
+    test "credential_files hands over the state database itself, not a JSON document" do
+      files = @adapter.credential_files(@adapter.extract_credentials(sqlite_blob))
+
+      assert_equal [ "/home/kiro/.local/share/kiro-cli/data.sqlite3" ], files.keys
+      assert_equal sqlite_blob, files.values.first
+      assert files.values.first.start_with?(KiroCliAdapter::SQLITE_MAGIC)
+    end
+
+    test "credential_files is empty when the credential holds no login" do
+      assert_empty @adapter.credential_files({})
+    end
+
+    # Half a database is worse than none: the container still has a working login until
+    # something overwrites it.
+    test "credential_files is empty when the stored blob does not decode" do
+      assert_empty @adapter.credential_files({ "state_b64" => "!!not base64!!" })
+    end
+
     test "auth_setup_files seeds the shared Kiro settings before the login runs" do
       assert_includes @adapter.auth_setup_files.keys, "/home/kiro/.kiro/settings/mcp.json"
     end
