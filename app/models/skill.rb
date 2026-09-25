@@ -24,6 +24,8 @@ class Skill < ApplicationRecord
 
   belongs_to :scope, polymorphic: true
   include TenantColumns
+  include Versioned
+  include Archivable
 
   # Where the row came from. Everything conditional about a skill keys off this
   # rather than off which columns happen to be filled in.
@@ -55,7 +57,8 @@ class Skill < ApplicationRecord
               message: "must start with a letter or number and use lowercase letters, numbers, . _ : -"
             },
             if: -> { !manual? && name_changed? }
-  validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
+  validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(archived_at: nil) },
+                                 message: "already exists in this scope" }
   validates :package, presence: true, unless: :manual?
   validates :source, presence: true, unless: :manual?
   validates :content, presence: true
@@ -93,7 +96,7 @@ class Skill < ApplicationRecord
   end
 
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
-  scope :visible_for_project, ->(project) { for_project(project) }
+  scope :visible_for_project, ->(project) { unarchived.for_project(project) }
 
   def name=(val)
     super(val&.to_s&.strip&.downcase)

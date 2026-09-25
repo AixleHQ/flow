@@ -25,6 +25,8 @@ class MCPServer < ApplicationRecord
   # Polymorphic scope (Project, null for internal)
   belongs_to :scope, polymorphic: true, optional: true
   include TenantColumns
+  include Versioned
+  include Archivable
 
   # Header and env values carry the server's own credentials. They are encrypted
   # at rest, and they belong to the destination they were entered for: when the
@@ -97,7 +99,8 @@ class MCPServer < ApplicationRecord
 
   # Validations
   validates :name, presence: true
-  validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
+  validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(archived_at: nil) },
+                                 message: "already exists in this scope" }
   validates :kind, presence: true
   validates :url, presence: true, if: -> { custom? && !transport_stdio? }
   validates :command, presence: true, if: :transport_stdio?
@@ -118,8 +121,8 @@ class MCPServer < ApplicationRecord
   # Visibility includes internal servers plus any custom server scoped to the
   # given project. MCP servers exist only at Project scope (or as internal).
   scope :visible_for_project, ->(project) {
-    enabled.internal_servers
-           .or(enabled.where(scope_type: "Project", scope_id: project.id))
+    enabled.unarchived.internal_servers
+           .or(enabled.unarchived.where(scope_type: "Project", scope_id: project.id))
   }
 
   def transport_stdio?

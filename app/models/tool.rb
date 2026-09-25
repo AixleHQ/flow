@@ -22,6 +22,7 @@ class Tool < ApplicationRecord
 
   belongs_to :scope, polymorphic: true, optional: true
   include TenantColumns
+  include Versioned
 
   has_many :tool_files, dependent: :destroy
   has_many :tool_results, dependent: :destroy
@@ -182,6 +183,13 @@ class Tool < ApplicationRecord
 
   def deleted?
     deleted_at.present?
+  end
+
+  alias archived? deleted?
+  alias archive! soft_delete!
+
+  def unarchive!
+    update!(deleted_at: nil)
   end
 
   # Rug-pull check: true when the stored digest matches the current

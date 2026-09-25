@@ -11,6 +11,8 @@ class Agent < ApplicationRecord
   # Polymorphic scope (Project only)
   belongs_to :scope, polymorphic: true
   include TenantColumns
+  include Versioned
+  include Archivable
 
   # Source: custom (created in UI) or bmad_import (imported from BMAD files)
   enumerize :source, in: %i[custom bmad_import], default: :custom, predicates: true
@@ -23,7 +25,8 @@ class Agent < ApplicationRecord
   # Validations
   validates :name, presence: true,
                    format: { with: /\A[a-z][a-z0-9_]*\z/, message: "must start with letter, use lowercase letters, numbers, underscores" }
-  validates :name, uniqueness: { scope: %i[scope_type scope_id], message: "already exists in this scope" }
+  validates :name, uniqueness: { scope: %i[scope_type scope_id], conditions: -> { where(archived_at: nil) },
+                                 message: "already exists in this scope" }
   validates :title, presence: true
   validates :persona, presence: true
   validates :scope_type, presence: true, inclusion: { in: %w[Project] }
@@ -33,7 +36,7 @@ class Agent < ApplicationRecord
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
 
   scope :visible_for_project, ->(project) {
-    where(scope_type: "Project", scope_id: project.id)
+    unarchived.where(scope_type: "Project", scope_id: project.id)
   }
   # Every agent this company can see: the agents of all its projects.
   scope :belonging_to_company, ->(company) {
