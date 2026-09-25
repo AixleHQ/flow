@@ -31,7 +31,7 @@ class CompanyDashboard < Administrate::BaseDashboard
     # Virtual, so never searchable: Administrate would build a LIKE against a
     # column that is not there.
     session_concurrency_limit: CompanyCapacityField.with_options(searchable: false),
-    initial_admin_email: Field::String,
+    initial_admin_email: Field::String.with_options(searchable: false),
     initial_admin_password: Field::Password,
     users: Field::HasMany,
     projects: Field::HasMany,

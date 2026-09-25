@@ -437,5 +437,20 @@ module Admin
       get admin_usage_statistic_path(@usage)
       assert_response :success
     end
+
+    # Administrate turns every searchable attribute into `CAST(col AS CHAR(256)) LIKE ?`,
+    # so a jsonb column or a virtual attribute left searchable 500s every search.
+    test "every dashboard index answers a search" do
+      controllers = Rails.application.routes.routes.filter_map do |route|
+        route.defaults[:controller] if route.defaults[:action] == "index" && route.defaults[:controller]&.start_with?("admin/")
+      end.uniq
+
+      failures = controllers.filter_map do |controller|
+        get url_for(controller: controller, action: :index, search: "kiro", only_path: true)
+        "#{controller} -> #{response.status}" unless response.successful?
+      end
+
+      assert_empty failures
+    end
   end
 end
