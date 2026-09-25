@@ -15,6 +15,12 @@ module Admin
       assert_response :success
     end
 
+    test "a format the admin cannot render is refused, not a server error" do
+      get :index, format: :json
+
+      assert_response :not_acceptable
+    end
+
     test "should get new" do
       get :new
       assert_response :success
