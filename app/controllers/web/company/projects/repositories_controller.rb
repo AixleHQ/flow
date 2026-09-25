@@ -52,7 +52,7 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
       elsif azure_integration
         build_azure_repository(azure_integration)
       else
-        Repository.new(create_params.merge(scope: current_project))
+        build_code_host_repository
       end
 
     if repo.save
@@ -117,6 +117,28 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
   def create_params
     params.require(:repository).permit(:full_name, :source_branch, :integration_id, :description, :purpose,
                                        :is_private, :external_id)
+  end
+
+  # The picker sends a name, not a visibility, so a private repository was
+  # listed as public. The code host is asked — only through a connection this
+  # project can see; any other id is left to the model's validation to refuse.
+  def build_code_host_repository
+    repo = Repository.new(create_params.merge(scope: current_project))
+    integration = Integration.visible_for_project(current_project)
+                             .where(provider: Repository::CODE_HOST_PROVIDERS)
+                             .find_by(id: repo.integration_id)
+    found = integration && code_host_repository(integration, repo.full_name)
+    repo.is_private = found[:is_private] if found
+    repo
+  end
+
+  # Only a label: a lookup that cannot run (no GitHub App configured, the host
+  # unreachable) must not stop the repository from being added.
+  def code_host_repository(integration, full_name)
+    RepositoryService.for(integration).find_repo(full_name)
+  rescue StandardError => e
+    Rails.logger.warn("[Repositories] visibility of #{full_name} unknown: #{e.class}")
+    nil
   end
 
   # The integration named in the request, only when it is an Azure connection

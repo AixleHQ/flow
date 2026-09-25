@@ -32,6 +32,7 @@ class Web::Company::Projects::RepositoriesControllerTest < ActionDispatch::Integ
 
   test "create redirects on success" do
     integration = create(:integration, company: @company, connected_by: @user)
+    RepositoryService.stubs(:for).returns(FakeGithub::RepositoryService.new(integration))
 
     post company_project_repositories_path(@project), params: {
       repository: { full_name: "org/proj-repo", source_branch: "main", integration_id: integration.id }
@@ -40,6 +41,40 @@ class Web::Company::Projects::RepositoriesControllerTest < ActionDispatch::Integ
 
     repo = Repository.find_by(full_name: "org/proj-repo")
     assert_equal "https://github.com/org/proj-repo.git", repo.clone_url
+  end
+
+  test "a repository added through a connection takes its visibility from the code host" do
+    integration = create(:integration, company: @company, connected_by: @user)
+    RepositoryService.stubs(:for).with(integration).returns(FakeGithub::RepositoryService.new(integration))
+
+    post company_project_repositories_path(@project), params: {
+      repository: { full_name: "acme/infra", source_branch: "develop", integration_id: integration.id }
+    }
+
+    assert Repository.find_by(full_name: "acme/infra").is_private
+  end
+
+  test "a repository whose visibility cannot be looked up is still added" do
+    integration = create(:integration, company: @company, connected_by: @user)
+    RepositoryService.stubs(:for).raises(Github::TokenService::ConfigurationError, "GitHub App ID not configured")
+
+    post company_project_repositories_path(@project), params: {
+      repository: { full_name: "acme/infra", source_branch: "develop", integration_id: integration.id }
+    }
+
+    assert_not Repository.find_by!(full_name: "acme/infra").is_private
+  end
+
+  test "another company's connection is never asked about a repository" do
+    other = create(:company)
+    foreign = create(:integration, company: other, connected_by: create(:user, company: other))
+    RepositoryService.expects(:for).never
+
+    post company_project_repositories_path(@project), params: {
+      repository: { full_name: "acme/infra", source_branch: "develop", integration_id: foreign.id }
+    }
+
+    assert_nil Repository.find_by(full_name: "acme/infra")
   end
 
   test "create attaches a verified public repository without an integration" do
