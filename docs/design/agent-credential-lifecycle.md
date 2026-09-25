@@ -294,6 +294,15 @@ an unreadable container counts as working rather than as idle. That covers the i
 shape — a session parked for twenty hours — without rotating a grant under an agent that
 is using it.
 
+Delivery is the adapter's call (`BaseAdapter#deliver_credential`). Most runtimes keep the
+token in a file of its own, and that file is written over. Kiro keeps it in a row of the
+SQLite database the CLI holds open, next to state the CLI writes after launch, so writing
+the stored blob over it would replace that database. Kiro instead runs a python3 script in the
+container that updates only the `auth_kv` token row, inside a `BEGIN IMMEDIATE` transaction.
+It keeps a row that the container has already renewed past the offered expiry. The token
+reaches the script in a 0600 handoff file, not in argv, because a Kubernetes exec command is
+part of the request URL.
+
 **2c. A lease, still open.** The idle probe is an exec per holder per sweep and it says
 nothing about a session that never goes quiet. The durable form is an explicit hold:
 

@@ -11,7 +11,7 @@ module Agents
   # (docs/design/agent-credential-lifecycle.md §3.1).
   #
   # Refreshing and then delivering is the other resolution: the rotation happens once, here,
-  # and the holders are handed the result. Only the token files are written — never the
+  # and the holders are handed the result. Only the token is written — never the
   # rendered configuration, which a delivery has no workflow_config to reproduce.
   #
   # What this cannot promise: that a CLI already running re-reads the file. Claude Code is
@@ -31,10 +31,8 @@ module Agents
     # @return [Result] how many containers took it, and how many could not be written
     def deliver(credential, sessions:)
       adapter = credential.adapter
-      files = adapter.credential_files(credential.config_data)
-      return Result.new(delivered: 0, failed: 0) if files.blank?
-
-      uid = adapter.container_uid
+      credentials = credential.config_data
+      return Result.new(delivered: 0, failed: 0) unless adapter.credential_deliverable?(credentials)
 
       delivered = 0
       failed = 0
@@ -42,7 +40,7 @@ module Agents
       sessions.each do |session|
         next if session.container_id.blank?
 
-        if write(session, files, uid)
+        if write(session, adapter, credentials)
           delivered += 1
         else
           failed += 1
@@ -60,14 +58,9 @@ module Agents
     # has already rotated the token and persisted it, and the next launch reads the stored
     # copy regardless. A container we could not write to is one that was going to die on
     # its stale token anyway.
-    # Written as the agent's own user, not as root: the CLI has to be able to rewrite this
-    # file when it rotates the token itself, and a root-owned one leaves it dependent on
-    # the directory permissions to replace it.
-    def write(session, files, uid)
-      files.each do |path, content|
-        ok = container_runtime.write_file(session.container_id, path, content, uid: uid, gid: uid)
-        raise "write_file returned #{ok.inspect} for #{path}" unless ok
-      end
+    def write(session, adapter, credentials)
+      raise "the container did not take it" unless adapter.deliver_credential(container_runtime, session.container_id, credentials)
+
       Rails.logger.info("[CredentialDelivery] session=#{session.id} container=#{session.container_id} " \
                         "took a refreshed #{session.agent_type} token")
       true
