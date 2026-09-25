@@ -40,6 +40,7 @@ a document is added, removed, or moved here, update this index in the same chang
   - **[design/session-admission-queue/ROLLOUT.md](./design/session-admission-queue/ROLLOUT.md)** — Operator runbook: deployment settings read live, the drain-gated cutover, pause/resume and recovery
   - **[design/session-admission-queue/reviews/](./design/session-admission-queue/reviews/)** — Design-phase review records (invariants, evidence, coverage, editorial) kept alongside the contract they checked
 - **[design/azure-devops-integration.md](./design/azure-devops-integration.md)** — Azure DevOps integration: Entra service-principal auth with approved organization installations, GUID-based repository identity, session Git via a derived-key credential endpoint, PR/Boards agent tools, and a phased CI/webhook parity extension
+- **[design/entity-versioning.md](./design/entity-versioning.md)** — RFC: version history, diff and revert for workflows (with steps and sub-steps), agents, skills, custom tools and MCP servers; explicit Save replaces builder autosave, delete becomes archive, runs and sessions record the versions they launched with; hazards (MCP secrets, Shrine tool files, hard-deleted steps) and a phased plan
 - **[design/grok-runtime-integration.md](./design/grok-runtime-integration.md)** — Grok (xAI) runtime decisions: the official `@xai-official/grok` CLI, device-code auth with `~/.grok/auth.json` as the credential, model catalogue + pricing from `/v1/language-models`, and why usage comes from the MITM log rather than OTLP
 
 ## Feature Pipeline
