@@ -27,6 +27,13 @@ x-web-environment: &web-environment
   <<: *db-environment
   APP_VERSION: dev
   HOME: /home/app
+  # The container runs as the host's uid, which has no passwd entry inside the
+  # image. Go's user.Current() needs one or $USER, and without either the
+  # Temporal test server refuses to boot ("error detecting resource: user:
+  # Current requires cgo or $USER set in environment") — every workflow test
+  # fails with a Go dependency-injection wall of text. CI sets USER itself, so
+  # only local runs saw it.
+  USER: app
   BUNDLE_PATH: /bundle_cache
   GEM_HOME: /bundle_cache
   GEM_PATH: /bundle_cache
