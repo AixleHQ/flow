@@ -9,6 +9,66 @@ class SessionServiceTest < ActiveSupport::TestCase
     @project = create(:project, owner: @user, company: @company)
   end
 
+  # == suspended companies ==
+  #
+  # A suspended or archived company runs nothing. Billing::CapacityWindow bills
+  # only active companies, which is only honest while they are also the only ones
+  # that can occupy a slot.
+
+  test "create_and_start refuses a session for a suspended company" do
+    @company.update_column(:state, "suspended")
+
+    error = assert_raises(SessionAdmissionService::Stopped) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session", agent_type: "claude_code"
+      )
+    end
+
+    assert_match(/suspended and cannot run sessions/, error.message)
+    assert_equal 0, TerminalSession.count, "nothing may be created for a company that cannot run it"
+  end
+
+  test "create_and_start refuses a session for an archived company" do
+    @company.update_column(:state, "archived")
+
+    assert_raises(SessionAdmissionService::Stopped) do
+      SessionService.create_and_start(
+        user: @user, project: @project, session_type: "agent_session", agent_type: "claude_code"
+      )
+    end
+  end
+
+  # The company can be suspended while a session is already queued or running, so
+  # the gate has to be on the recurring check too, not only on creation.
+  test "revalidate_admission! stops a session whose company was suspended" do
+    session = create(:terminal_session, user: @user, project: @project)
+    @company.update_column(:state, "suspended")
+
+    error = assert_raises(SessionAdmissionService::Stopped) do
+      SessionService.revalidate_admission!(session)
+    end
+
+    assert_match(/cannot run sessions/, error.message)
+  end
+
+  test "revalidate_admission! lets an active company through" do
+    session = create(:terminal_session, user: @user, project: @project)
+
+    assert_nothing_raised { SessionService.revalidate_admission!(session) }
+  end
+
+  # A project-less auth_setup session names its company explicitly, and is gated
+  # on the same rule.
+  test "create_and_start refuses a project-less session for a suspended company" do
+    @company.update_column(:state, "suspended")
+
+    assert_raises(SessionAdmissionService::Stopped) do
+      SessionService.create_and_start(
+        user: @user, company: @company, session_type: "auth_setup", agent_type: "claude_code"
+      )
+    end
+  end
+
   # == create_and_start ==
 
   test "create_and_start creates session and starts temporal workflow" do

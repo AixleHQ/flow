@@ -18,6 +18,7 @@ class SessionService
       preflight_cloud!(user, company || project&.company)
       preflight_agent_credential!(user, company || project&.company, agent_type, session_type: session_type)
       preflight_url_safety!(params[:mcp_server_ids])
+      preflight_company_active!(company || project&.company)
 
       # auth_kind ("design") is carried in metadata so AgentAuthStrategy can run the
       # /design-login variant (inject the base credential, watch designOauth.accessToken).
@@ -83,6 +84,7 @@ class SessionService
       if session.company_id && !CompanyMembership.active.exists?(company_id: session.company_id, user_id: session.user_id)
         raise SessionAdmissionService::Stopped, "Company membership revoked"
       end
+      preflight_company_active!(SessionCompany.company_for(session))
       if session.session_type != "auth_setup" && session.session_credential.nil?
         raise SessionAdmissionService::Stopped, "Agent credential unavailable"
       end
@@ -146,6 +148,7 @@ class SessionService
         step_run.lock!
         return step_run.terminal_session if step_run.terminal_session
         raise SessionAdmissionService::Stopped, "Workflow cancelled" if step_run.workflow_run.stop_requested_at || step_run.workflow_run.state == "cancelled"
+        preflight_company_active!(step_run.workflow_run.project&.company)
         session = build_for_workflow_step(step_run: step_run)
         SessionAdmissionService.enqueue!(session)
       end
@@ -327,6 +330,20 @@ class SessionService
     # model validates at create/update, but DNS (rebinding) or the stored value
     # may have changed since — a host that now resolves to a private/internal IP
     # must not be dialed. Cheap: url_safety uses local resolvers only.
+    # A suspended or archived company runs nothing. Checked at creation and again
+    # on every phase, because a company suspended while a session is queued or
+    # running has to stop that session too — the same shape as a revoked
+    # membership, and the relay turns it into a cancellation the owner can read.
+    #
+    # Metering leans on this: Billing::CapacityWindow bills only active
+    # companies, which is only honest while they are also the only ones that can
+    # occupy a slot.
+    def preflight_company_active!(company)
+      return if company.nil? || company.active?
+
+      raise SessionAdmissionService::Stopped, "Company #{company.name} is #{company.state} and cannot run sessions"
+    end
+
     def preflight_url_safety!(mcp_server_ids)
       return if mcp_server_ids.blank?
 

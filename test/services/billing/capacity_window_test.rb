@@ -128,26 +128,26 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
     assert_equal 1, result.unbounded_companies
   end
 
-  # Admission does not look at company state, so a suspended organisation's
-  # projects still get slots. If metering skipped it, suspending a company would
-  # be a way to keep the capacity and stop paying for it — in a Marketplace
-  # installation the customer owns that button.
-  test "a suspended company is still metered, because it can still run sessions" do
+  # Admission refuses a suspended company (SessionService#preflight_company_active!),
+  # so its capacity cannot be occupied and billing for it would overcharge. The two
+  # rules have to agree: were admission to let it run, skipping it here would make
+  # suspending a company a way to keep the capacity and stop paying for it.
+  test "a suspended company is not metered, because it cannot run sessions" do
     change(@acme, 10, @hour - 2.hours)
     change(@globex, 5, @hour - 2.hours)
     @globex.update_column(:state, "suspended")
 
     result = window
 
-    assert_minutes 900, result
-    assert_equal [ @acme.id, @globex.id ].sort, result.per_company.keys.sort
+    assert_minutes 600, result
+    assert_equal [ @acme.id ], result.per_company.keys
   end
 
-  test "an archived company is metered on the same rule" do
+  test "an archived company is not metered on the same rule" do
     change(@acme, 10, @hour - 2.hours)
     change(@globex, 5, @hour - 2.hours)
     @globex.update_column(:state, "archived")
 
-    assert_minutes 900, window
+    assert_minutes 600, window
   end
 end
