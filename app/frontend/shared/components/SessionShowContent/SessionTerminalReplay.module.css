@@ -23,3 +23,23 @@
   justify-content: center;
   z-index: 1;
 }
+
+.fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fillBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.terminal.terminalFill {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+}

@@ -1,9 +1,19 @@
 import { router } from '@inertiajs/react';
 import { ActionIcon, Badge, Box, Button, Center, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
-import { useHotkeys } from '@mantine/hooks';
+import { useClipboard, useHotkeys } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
-import { IconChevronLeft, IconChevronRight, IconCopy, IconEye, IconPlus, IconSquareCheck } from '@tabler/icons-react';
-import { useCallback, useMemo, useState } from 'react';
+import {
+  IconCheck,
+  IconChevronLeft,
+  IconChevronRight,
+  IconCopy,
+  IconEye,
+  IconMaximize,
+  IconMinimize,
+  IconPlus,
+  IconSquareCheck,
+} from '@tabler/icons-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels';
 
 import type TerminalSession from 'types/generated/TerminalSession';
@@ -81,6 +91,9 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   const [termLoaded, setTermLoaded] = useState(false);
   const [finishRequested, setFinishRequested] = useState(false);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  const frameRef = useRef<HTMLDivElement>(null);
+  const clipboard = useClipboard({ timeout: 2000 });
 
   const now = useElapsedTimer(isActive);
 
@@ -101,28 +114,77 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   // has the route token, so opening it directly still yields a live shell.
   const isOwner = s.ownedByViewer;
   const hasIde = !!s.ideUrl && isOwner;
-  const canShowEditor = hasIde && !editorCollapsed;
+  // Full screen is for the agent's terminal alone; the editor comes back with
+  // the split it had once the console is restored.
+  const canShowEditor = hasIde && !editorCollapsed && !maximized;
   const canShowTerminal = !!ttydUrl;
 
+  const exitMaximized = useCallback(() => {
+    setMaximized(false);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+  }, []);
+
+  const enterMaximized = useCallback(() => {
+    setMaximized(true);
+    // The fixed-position layout stays underneath as the fallback when the
+    // browser refuses (no user activation, iframe without allowfullscreen).
+    void frameRef.current?.requestFullscreen?.().catch(() => {});
+  }, []);
+
+  const toggleMaximized = useCallback(() => {
+    if (maximized) exitMaximized();
+    else enterMaximized();
+  }, [maximized, enterMaximized, exitMaximized]);
+
+  // The browser owns Esc while fullscreen and exits without a keydown reaching
+  // the page; this is what brings the React state back in line.
+  useEffect(() => {
+    const onChange = () => {
+      if (!document.fullscreenElement) setMaximized(false);
+    };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+
   const handleFinish = useCallback(async () => {
+    // The finishing overlay lives outside the console frame, so it would not
+    // be visible over a fullscreen frame.
+    exitMaximized();
     setFinishRequested(true);
     if (await apiMutate(finishApiV1TerminalSessionPath(s.id), { method: 'POST' })) {
       router.reload({ onFinish: () => setFinishRequested(false) });
     } else {
       setFinishRequested(false);
     }
-  }, [s.id]);
+  }, [s.id, exitMaximized]);
 
   const handleCopyLink = useCallback(() => {
-    navigator.clipboard.writeText(window.location.href);
+    clipboard.copy(window.location.href);
     notifications.show({ message: 'Session link copied', color: 'green', autoClose: 2000 });
-  }, []);
+  }, [clipboard]);
 
   const toggleEditor = useCallback(() => {
     if (hasIde) setEditorCollapsed((prev) => !prev);
   }, [hasIde]);
 
-  useHotkeys([['mod+b', toggleEditor]]);
+  // Keys typed inside the ttyd/VS Code iframes never reach this document, so
+  // these only fire while focus is on the page itself — Esc in the CLI stays
+  // the CLI's.
+  useHotkeys([
+    ['mod+b', toggleEditor],
+    ['mod+shift+F', toggleMaximized],
+  ]);
+
+  // Capture phase: an open Mantine tooltip (the one on the button just
+  // clicked) stops Escape's propagation, which would take two presses to exit.
+  useEffect(() => {
+    if (!maximized) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMaximized(false);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [maximized]);
 
   const { defaultLayout: savedLayout, onLayoutChanged } = useDefaultLayout({
     id: 'session-panels',
@@ -170,6 +232,22 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
     ? `Step ${workflowContext.stepPosition ?? '?'} of ${workflowContext.stepsTotal} · Workflow step`
     : 'Standalone session';
 
+  // Finish is owner-only at the API (`current_user.terminal_sessions`), so
+  // offering it to a viewer would only produce a failed request.
+  const canFinish = canExecute && isOwner && !isTerminal && !isFinishing;
+  const finishLabel = isQueued ? (workflowContext ? 'Cancel workflow' : 'Cancel session') : 'Finish session';
+
+  // Portalled popovers and notifications render under a fullscreen element, so
+  // controls on the console bar keep their tooltip inside the frame and show
+  // the copy confirmation on the button itself.
+  const renderCopyLinkButton = (withinPortal = true) => (
+    <Tooltip label={clipboard.copied ? 'Link copied' : 'Copy session link'} withinPortal={withinPortal}>
+      <ActionIcon aria-label="Copy session link" variant="subtle" size="sm" onClick={handleCopyLink}>
+        {clipboard.copied ? <IconCheck size={15} /> : <IconCopy size={15} />}
+      </ActionIcon>
+    </Tooltip>
+  );
+
   const header = (
     <DetailHeader
       crumbs={crumbs}
@@ -205,16 +283,10 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
               </Badge>
             </Tooltip>
           )}
-          <Tooltip label="Copy session link">
-            <ActionIcon aria-label="Copy session link" variant="subtle" size="sm" onClick={handleCopyLink}>
-              <IconCopy size={15} />
-            </ActionIcon>
-          </Tooltip>
-          {/* Finish is owner-only at the API (`current_user.terminal_sessions`),
-              so offering it to a viewer would only produce a failed request. */}
-          {canExecute && isOwner && !isTerminal && !isFinishing && (
+          {renderCopyLinkButton()}
+          {canFinish && (
             <Button leftSection={<IconSquareCheck size={15} />} onClick={handleFinish} loading={finishRequested}>
-              {isQueued ? (workflowContext ? 'Cancel workflow' : 'Cancel session') : 'Finish session'}
+              {finishLabel}
             </Button>
           )}
           {canExecute && isTerminal && ctx.newSessionPath && (
@@ -349,10 +421,41 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
 
   const frameLabel = `session #${s.id} · /workspace`;
 
+  const maximizeLabel = maximized ? 'Exit full screen (Esc)' : 'Full screen (⌘⇧F)';
+  const frameActions = (
+    <>
+      {maximized && renderCopyLinkButton(false)}
+      {maximized && canFinish && (
+        <Button
+          size="compact-sm"
+          leftSection={<IconSquareCheck size={14} />}
+          onClick={handleFinish}
+          loading={finishRequested}
+        >
+          {finishLabel}
+        </Button>
+      )}
+      <Tooltip label={maximizeLabel} withinPortal={false}>
+        <ActionIcon
+          aria-label={maximizeLabel}
+          aria-pressed={maximized}
+          variant="subtle"
+          size="sm"
+          onClick={toggleMaximized}
+        >
+          {maximized ? <IconMinimize size={15} /> : <IconMaximize size={15} />}
+        </ActionIcon>
+      </Tooltip>
+    </>
+  );
+
   const frame = isTerminal ? (
     <ConsoleFrame
       className={classes.frame}
       label={frameLabel}
+      ref={frameRef}
+      actions={frameActions}
+      maximized={maximized}
       footer={
         s.state === 'cancelled'
           ? 'Session cancelled'
@@ -362,7 +465,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       }
     >
       {s.terminalLogUrl ? (
-        <SessionTerminalReplay logUrl={s.terminalLogUrl} />
+        <SessionTerminalReplay logUrl={s.terminalLogUrl} fill={maximized} />
       ) : (
         <Center h="100%" p="xl">
           <Text size="sm" c="dimmed">
@@ -372,7 +475,14 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
       )}
     </ConsoleFrame>
   ) : (
-    <ConsoleFrame className={`${classes.frame} ${classes.frameLive}`} label={frameLabel} live={isReady}>
+    <ConsoleFrame
+      className={`${classes.frame} ${classes.frameLive}`}
+      label={frameLabel}
+      live={isReady}
+      ref={frameRef}
+      actions={frameActions}
+      maximized={maximized}
+    >
       {renderWorkspace()}
     </ConsoleFrame>
   );
