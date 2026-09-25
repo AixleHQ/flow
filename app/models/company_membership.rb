@@ -45,6 +45,12 @@ class CompanyMembership < ApplicationRecord
   validate :cannot_remove_last_admin, on: :update
   before_destroy :refuse_to_remove_last_admin, unless: -> { destroyed_by_association&.active_record == Company }
   validate :owned_projects_have_an_heir, on: :update
+  validate :viewer_promotion_allowed, on: :update
+
+  # A viewer finished onboarding without the agent step. Promotion reopens it
+  # even when credentials already exist here, so write access never arrives
+  # without the member passing that step.
+  before_update :reopen_onboarding_after_promotion, if: :promoted_from_viewer?
 
   # Ransack (members search: by the member's name/email through :user)
   def self.ransackable_attributes(_auth_object = nil)
@@ -163,6 +169,10 @@ class CompanyMembership < ApplicationRecord
     true
   end
 
+  def promoted_from_viewer?
+    role_changed? && attribute_was(:role) == "viewer" && !viewer?
+  end
+
   def agent_models_by_type
     credentials.each_with_object({}) do |cred, hash|
       models = fetch_or_cache_agent_models(cred)
@@ -246,6 +256,25 @@ class CompanyMembership < ApplicationRecord
 
   def set_onboarding_completed_at
     self.onboarding_completed_at = Time.current
+  end
+
+  def clear_onboarding_completed_at
+    self.onboarding_completed_at = nil
+  end
+
+  def reopen_onboarding_after_promotion
+    aasm(:onboarding_state).fire(:reopen) if onboarding_completed?
+  end
+
+  # Product rule (flow-dev #2025): a viewer becomes Employee first, never Admin
+  # in one step. A re-invite of a revoked viewer is a fresh invitation in the
+  # new role, so neither rule applies to it.
+  def viewer_promotion_allowed
+    return unless promoted_from_viewer?
+    return if attribute_was(:state) == "revoked"
+
+    errors.add(:role, "of a viewer can only change to Employee") unless employee?
+    errors.add(:base, "Only an active viewer can be promoted") unless attribute_was(:state) == "active" && active?
   end
 
   def selected_agents_valid
