@@ -27,7 +27,7 @@ module PersonalTools
 
       success({ id: server.id, name: server.name, kind: server.kind, enabled: server.enabled,
                 transport: server.transport, url: server.url, command: server.command_line.presence,
-                description: server.description,
+                description: server.description, current_version_number: server.current_version_number,
                 auth_type: server.auth_type.to_s, credential_scope: server.credential_scope.to_s,
                 # Keys only: a value here can be a bearer token or an API key, and a
                 # read tool has no business handing those back out (see MCPServerResource).

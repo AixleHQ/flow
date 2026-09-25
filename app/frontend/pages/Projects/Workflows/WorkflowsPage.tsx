@@ -12,8 +12,8 @@ import {
   IconPlayerPlay,
   IconPlus,
   IconSearch,
+  IconArchive,
   IconStack2,
-  IconTrash,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useMemo, useState } from 'react';
@@ -23,6 +23,9 @@ import type { Picker, Project, Step, Workflow } from '@/types/generated';
 
 import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
+import { ArchivedList } from 'shared/components/versions/ArchivedList';
+import { ArchiveSwitch, type ArchiveView } from 'shared/components/versions/ArchiveSwitch';
+import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { builderCompanyProjectWorkflowPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -39,6 +42,7 @@ interface AgentModelsEntry {
 interface Props {
   project: Project;
   workflows: WorkflowWithSteps[];
+  archivedWorkflows?: { id: number; name: string; archivedAt: string | null }[];
   assets?: AssetPickerItem[];
   repositories?: Picker[];
   configuredAgents: string[];
@@ -57,6 +61,7 @@ const WorkflowsPage = () => {
   const {
     project,
     workflows,
+    archivedWorkflows = [],
     assets: rawAssets,
     repositories: rawRepositories,
     configuredAgents,
@@ -68,6 +73,7 @@ const WorkflowsPage = () => {
   const repositories = rawRepositories ?? [];
   const basePath = `/company/projects/${project.id}/workflows`;
 
+  const [view, setView] = useState<ArchiveView>('active');
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
   const [createOpen, setCreateOpen] = useState(false);
@@ -130,7 +136,7 @@ const WorkflowsPage = () => {
     setLoading(true);
     router.patch(
       `${basePath}/${editWorkflow.id}`,
-      { workflow: values },
+      { workflow: values, baseVersion: editWorkflow.currentVersionNumber },
       {
         preserveScroll: true,
         onFinish: () => setLoading(false),
@@ -249,6 +255,12 @@ const WorkflowsPage = () => {
             onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--app-border-default)')}
           />
         </div>
+        <ArchiveSwitch
+          value={view}
+          onChange={setView}
+          activeCount={workflows.length}
+          archivedCount={archivedWorkflows.length}
+        />
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button
             type="button"
@@ -287,7 +299,15 @@ const WorkflowsPage = () => {
       </div>
 
       {/* Card grid / empty state */}
-      {filtered.length === 0 ? (
+      {view === 'archived' ? (
+        <ArchivedList
+          projectId={project.id}
+          versionableType="Workflow"
+          noun="workflows"
+          canRestore={canExecute}
+          items={archivedWorkflows}
+        />
+      ) : filtered.length === 0 ? (
         <Box py={60} ta="center" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
           <Text size="xl">&#128736;</Text>
           <Text c="dimmed" mt="sm">
@@ -392,6 +412,15 @@ const WorkflowsPage = () => {
                     </button>
                   </div>
                   <div className="wf-foot-right">
+                    {!isInherited && (
+                      <HistoryButton
+                        projectId={project.id}
+                        versionableType="Workflow"
+                        versionableId={wf.id}
+                        title={wf.name}
+                        canRevert={canExecute}
+                      />
+                    )}
                     {canExecute &&
                       (isInherited ? (
                         <Tooltip label="Copy & Configure">
@@ -438,14 +467,14 @@ const WorkflowsPage = () => {
                               <IconEdit size={14} />
                             </button>
                           </Tooltip>
-                          <Tooltip label="Delete workflow">
+                          <Tooltip label="Archive workflow">
                             <button
                               type="button"
                               className="wf-icon-btn wf-icon-btn-danger"
-                              aria-label="Delete workflow"
+                              aria-label="Archive workflow"
                               onClick={() => setDeleteWorkflow(wf)}
                             >
-                              <IconTrash size={14} />
+                              <IconArchive size={14} />
                             </button>
                           </Tooltip>
                         </>
@@ -495,9 +524,10 @@ const WorkflowsPage = () => {
       </Modal>
 
       {/* Delete Confirmation */}
-      <Modal opened={!!deleteWorkflow} onClose={() => setDeleteWorkflow(null)} title="Delete Workflow" centered>
+      <Modal opened={!!deleteWorkflow} onClose={() => setDeleteWorkflow(null)} title="Archive Workflow" centered>
         <Text size="sm" mb="md">
-          Are you sure you want to delete <strong>{deleteWorkflow?.name}</strong>?
+          Archive <strong>{deleteWorkflow?.name}</strong>? Its triggers are switched off and it leaves the list; its
+          runs and history stay, and you can restore it from the Archived view.
           {deleteWorkflow?.hasActiveRuns && (
             <Text c="var(--app-danger-fg)" size="sm" mt="xs">
               This workflow has active runs. Stop them first.
@@ -509,7 +539,7 @@ const WorkflowsPage = () => {
             Cancel
           </Button>
           <Button color="red" onClick={handleDelete} loading={loading} disabled={deleteWorkflow?.hasActiveRuns}>
-            Delete
+            Archive
           </Button>
         </Group>
       </Modal>

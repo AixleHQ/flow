@@ -19,10 +19,11 @@ export const DeleteToolModal: FC<DeleteToolModalProps> = ({ opened, onClose, too
     <ConfirmDeleteModal
       opened={opened}
       onClose={onClose}
-      title="Delete Tool"
+      title="Archive Tool"
+      confirmLabel="Archive"
       itemId={tool.id}
       basePath={basePath}
-      description="Are you sure you want to delete this tool?"
+      description="Archive this tool? Agents stop being served it; it keeps its history, and you can restore it from the Archived tab. Archiving is refused while a workflow uses it."
       preview={
         <Box>
           <Text fw={500} c="var(--app-text-primary)">
@@ -33,7 +34,6 @@ export const DeleteToolModal: FC<DeleteToolModalProps> = ({ opened, onClose, too
           </Text>
         </Box>
       }
-      warning="This action cannot be undone. Any workflows using this tool may be affected."
     />
   );
 };

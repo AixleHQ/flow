@@ -19,16 +19,18 @@ export const DeleteMcpServerModal: FC<DeleteMcpServerModalProps> = ({ opened, on
     <ConfirmDeleteModal
       opened={opened}
       onClose={onClose}
-      title="Delete MCP Server"
+      title="Archive MCP Server"
+      confirmLabel="Archive"
       itemId={server.id}
       basePath={basePath}
       description={
         <>
-          Are you sure you want to delete{' '}
+          Archive{' '}
           <Text span fw={600} c="var(--app-text-primary)">
             {server.name}
           </Text>
-          ? This action cannot be undone.
+          ? New sessions stop getting it; its history and OAuth connections are kept, and you can restore it from the
+          Archived tab. Archiving is refused while a workflow uses it.
         </>
       }
     />

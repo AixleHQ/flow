@@ -10,6 +10,7 @@ module PersonalTools
       param :project_id, type: :integer, description: "Project id.", required: true
       param :workflow_id, type: :integer, description: "Workflow id.", required: true
       param :step_id, type: :integer, description: "Step id.", required: true
+      param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
     def execute
@@ -24,7 +25,7 @@ module PersonalTools
       end
 
       name = step.name
-      step.destroy!
+      Versions.save!(workflow, actor: version_actor, base_version: base_version) { step.destroy! }
       success(deleted_step_id: step.id, name: name, workflow_id: workflow.id)
     end
   end

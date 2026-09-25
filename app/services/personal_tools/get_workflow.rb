@@ -23,7 +23,7 @@ module PersonalTools
 
       steps = workflow.steps.not_deleted.includes(:agent).order(:position).map { |step| step_view(step) }
       success(id: workflow.id, name: workflow.name, description: workflow.description,
-              published_at: workflow.published_at,
+              published_at: workflow.published_at, current_version_number: workflow.current_version_number,
               base_tool_ids: workflow.base_tool_ids, base_skill_ids: workflow.base_skill_ids,
               base_mcp_server_ids: workflow.base_mcp_server_ids,
               base_repository_ids: workflow.base_repository_ids,

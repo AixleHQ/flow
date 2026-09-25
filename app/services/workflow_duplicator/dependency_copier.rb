@@ -21,9 +21,10 @@ class WorkflowDuplicator
     # config_item:NAME references live inside MCP env/headers values.
     CONFIG_ITEM_REF = /config_item:(\w+)/
 
-    def initialize(source:, target_project:)
+    def initialize(source:, target_project:, actor: Versions::Actor.system)
       @source = source
       @project = target_project
+      @actor = actor
       @not_copied = {
         config_items: [],   # config_item:NAME refs the workflow relies on
         gated_tools: [],    # copied tools hidden until an integration is connected
@@ -107,14 +108,14 @@ class WorkflowDuplicator
       return nil unless agent                                 # unknown or another tenant's → dropped
       return id if project_local?(agent)                      # already target-local
 
-      existing = @project.agents.find_by(name: agent.name)    # name unique per scope → reuse
+      existing = @project.agents.unarchived.find_by(name: agent.name) # name unique per scope → reuse
       return existing.id if existing
 
-      @project.agents.create!(
+      created(@project.agents.new(
         name: agent.name, title: agent.title, icon: agent.icon,
         persona: agent.persona, communication_style: agent.communication_style,
         principles: agent.principles, source: agent.source
-      ).id
+      )).id
     end
 
     # ---- Skill -------------------------------------------------------------
@@ -124,15 +125,15 @@ class WorkflowDuplicator
       return nil unless skill
       return id if project_local?(skill)
 
-      existing = Skill.for_project(@project).find_by(name: skill.name)
+      existing = Skill.for_project(@project).unarchived.find_by(name: skill.name)
       return existing.id if existing
 
-      Skill.create!(
+      created(Skill.new(
         scope: @project, origin: skill.origin,
         name: skill.name, title: skill.title, description: skill.description,
         package: skill.package, source: skill.source, source_url: skill.source_url,
         content: skill.content, content_hash: skill.content_hash, files: skill.files, install_count: 0
-      ).id
+      )).id
     end
 
     # ---- MCPServer ---------------------------------------------------------
@@ -146,16 +147,16 @@ class WorkflowDuplicator
       collect_config_item_refs(server.env)
       collect_config_item_refs(server.headers)
 
-      existing = MCPServer.for_project(@project).find_by(name: server.name)
+      existing = MCPServer.for_project(@project).unarchived.find_by(name: server.name)
       return existing.id if existing
 
-      MCPServer.create!(
+      created(MCPServer.new(
         scope: @project,
         name: server.name,
         url: server.url, transport: server.transport, description: server.description,
         command: server.command, args: server.args, enabled: server.enabled,
         env: server.env, headers: server.headers # verbatim — secrets live in ConfigItem, not here (D3)
-      ).id
+      )).id
     end
 
     # ---- Tool --------------------------------------------------------------
@@ -173,7 +174,7 @@ class WorkflowDuplicator
       existing = Tool.for_project(@project).find_by(name: tool.name)
       return existing.id if existing
 
-      new_tool = Tool.create!(
+      new_tool = Tool.new(
         scope: @project,
         name: tool.name, display_name: tool.display_name, description: tool.description,
         docker_image: tool.docker_image, command: tool.command,
@@ -182,7 +183,10 @@ class WorkflowDuplicator
         requires_integration: tool.requires_integration # D9 — kept; tool stays gated until integration connected
       )
 
-      copy_tool_files(tool, new_tool)
+      Versions.save!(new_tool, actor: @actor) do
+        new_tool.save!
+        copy_tool_files(tool, new_tool)
+      end
       new_tool.id
     end
 
@@ -197,6 +201,11 @@ class WorkflowDuplicator
         copy.file_attacher.attach(tf.file) if tf.file.present?
         copy.save!
       end
+    end
+
+    def created(record)
+      Versions.save!(record, actor: @actor) { record.save! }
+      record
     end
 
     # ---- ConfigItem --------------------------------------------------------

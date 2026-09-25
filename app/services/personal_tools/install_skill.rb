@@ -22,7 +22,8 @@ module PersonalTools
       # path installed the skill.
       installs = CatalogSkill.find_by(registry_id: params[:skill_id].to_s)&.installs
       skill = SkillsRegistryService.install(params[:skill_id], scope: project, installs: installs,
-                                                               acknowledge_risk: params[:acknowledge_risk] == true)
+                                                               acknowledge_risk: params[:acknowledge_risk] == true,
+                                                               actor: version_actor)
       success(id: skill.id, name: skill.name, title: skill.title)
     rescue SkillsRegistryService::RegistryError => e
       error("Install failed: #{e.message}")

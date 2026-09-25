@@ -20,7 +20,7 @@ class Web::Company::WorkflowCatalogController < Web::Company::ApplicationControl
     workflow = Workflow.published_in_company(current_company).find(params[:id])
     project = Project.for_user(current_user).find(params[:project_id])
 
-    duplicator = WorkflowDuplicator.new(workflow, target_scope: project)
+    duplicator = WorkflowDuplicator.new(workflow, target_scope: project, actor: version_actor)
     copy = duplicator.duplicate!
 
     flash[:notice] = "Workflow and its resources copied to #{project.name}. Assets, repositories, integrations and secrets are not copied."

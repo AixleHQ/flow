@@ -24,4 +24,10 @@ class ToolFileTest < ActiveSupport::TestCase
 
     assert_equal "new", tool_file.reload.file.download.read
   end
+
+  test "text content posted with CRLF newlines is stored with LF" do
+    tool_file = @tool.tool_files.create!(path: "/workspace/run.sh", content: "#!/bin/sh\r\necho hi\r\n")
+
+    assert_equal "#!/bin/sh\necho hi\n", tool_file.reload.content
+  end
 end

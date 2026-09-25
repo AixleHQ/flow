@@ -7,7 +7,7 @@ class MCPServerResource < ApplicationResource
            transport: %w[http sse stdio], kind: %w[internal custom]
   attributes :id, :name, :url, :transport,
              :description, :kind, :scope_type, :scope_id, :enabled,
-             :created_at, :updated_at
+             :current_version_number, :archived_at, :created_at, :updated_at
 
   # The whole launch line, not the `command` column. Storage keeps the executable
   # and its argv apart (see MCPServer#split_command_line); the form has always

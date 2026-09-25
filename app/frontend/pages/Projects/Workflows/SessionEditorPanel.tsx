@@ -174,7 +174,7 @@ interface SessionEditorPanelProps {
   configItems: ConfigItemPicker[];
   agentModels?: AgentModelsEntry[];
   readOnly: boolean;
-  onFieldChange: (field: string, value: unknown, immediate?: boolean) => void;
+  onFieldChange: (field: string, value: unknown) => void;
   onAssetSpecsChange: (field: 'inputAssetSpecs' | 'outputAssetSpecs', specs: AssetSpec[]) => void;
 }
 
@@ -300,7 +300,7 @@ export function SessionEditorPanel({
             <Select
               data={[{ value: '', label: 'No agent' }, ...toSelectData(agents)]}
               value={step.agentId ? String(step.agentId) : ''}
-              onChange={(v) => onFieldChange('agentId', v ? Number(v) : null, true)}
+              onChange={(v) => onFieldChange('agentId', v ? Number(v) : null)}
               disabled={readOnly}
               clearable
               placeholder="No agent"
@@ -332,8 +332,8 @@ export function SessionEditorPanel({
               onChange={(v) => {
                 const runtime = v || null;
                 if (runtime === step.requiredAgentRuntime) return;
-                onFieldChange('requiredAgentRuntime', runtime, true);
-                if (step.preferredModel) onFieldChange('preferredModel', null, true);
+                onFieldChange('requiredAgentRuntime', runtime);
+                if (step.preferredModel) onFieldChange('preferredModel', null);
               }}
               disabled={readOnly}
               clearable
@@ -364,7 +364,7 @@ export function SessionEditorPanel({
               <Select
                 data={preferredModelOptions}
                 value={step.preferredModel ?? null}
-                onChange={(v) => onFieldChange('preferredModel', v || null, true)}
+                onChange={(v) => onFieldChange('preferredModel', v || null)}
                 disabled={readOnly}
                 clearable
                 searchable
@@ -401,7 +401,7 @@ export function SessionEditorPanel({
             tools={tools}
             groups={toolGroups}
             value={step.toolIds}
-            onChange={(ids) => onFieldChange('toolIds', ids, true)}
+            onChange={(ids) => onFieldChange('toolIds', ids)}
             disabled={readOnly}
             placeholder="None added"
             aria-label="Tools"
@@ -421,7 +421,7 @@ export function SessionEditorPanel({
           <MultiSelect
             data={toSelectData(mcpServers)}
             value={toStringArr(step.mcpServerIds)}
-            onChange={(v) => onFieldChange('mcpServerIds', toNumberArr(v), true)}
+            onChange={(v) => onFieldChange('mcpServerIds', toNumberArr(v))}
             disabled={readOnly}
             searchable
             placeholder="None added"
@@ -439,7 +439,7 @@ export function SessionEditorPanel({
           <MultiSelect
             data={toSelectData(skills)}
             value={toStringArr(step.skillIds)}
-            onChange={(v) => onFieldChange('skillIds', toNumberArr(v), true)}
+            onChange={(v) => onFieldChange('skillIds', toNumberArr(v))}
             disabled={readOnly}
             searchable
             placeholder="None added"
@@ -457,7 +457,7 @@ export function SessionEditorPanel({
           <AssetPicker
             assets={assets}
             value={step.assetIds}
-            onChange={(ids) => onFieldChange('assetIds', ids, true)}
+            onChange={(ids) => onFieldChange('assetIds', ids)}
             disabled={readOnly}
             placeholder="None added"
             aria-label="Assets"
@@ -471,7 +471,7 @@ export function SessionEditorPanel({
           <MultiSelect
             data={configItemSelectData}
             value={toStringArr(stepConfigItemIds)}
-            onChange={(v) => onFieldChange('configItemIds', toNumberArr(v), true)}
+            onChange={(v) => onFieldChange('configItemIds', toNumberArr(v))}
             disabled={readOnly}
             searchable
             placeholder="None added"
@@ -489,7 +489,7 @@ export function SessionEditorPanel({
           <MultiSelect
             data={toSelectData(repositories)}
             value={toStringArr(step.repositoryIds)}
-            onChange={(v) => onFieldChange('repositoryIds', toNumberArr(v), true)}
+            onChange={(v) => onFieldChange('repositoryIds', toNumberArr(v))}
             disabled={readOnly}
             searchable
             placeholder="None added"
@@ -519,7 +519,7 @@ export function SessionEditorPanel({
         <MultiSelect
           data={dependencyOptions}
           value={toStringArr(step.dependsOnStepIds)}
-          onChange={(v) => onFieldChange('dependsOnStepIds', toNumberArr(v), true)}
+          onChange={(v) => onFieldChange('dependsOnStepIds', toNumberArr(v))}
           disabled={readOnly}
           searchable
           placeholder="Select sessions this session depends on…"
@@ -575,7 +575,7 @@ export function SessionEditorPanel({
             </div>
             <Switch
               checked={step.allowNonInteractive}
-              onChange={(e) => onFieldChange('allowNonInteractive', e.currentTarget.checked, true)}
+              onChange={(e) => onFieldChange('allowNonInteractive', e.currentTarget.checked)}
               disabled={readOnly}
             />
           </div>
@@ -594,7 +594,7 @@ export function SessionEditorPanel({
                 { value: 'manual', label: 'Manual' },
               ]}
               value={step.skipPolicy}
-              onChange={(v) => onFieldChange('skipPolicy', v ?? 'never', true)}
+              onChange={(v) => onFieldChange('skipPolicy', v ?? 'never')}
               disabled={readOnly}
               allowDeselect={false}
               styles={{
@@ -627,7 +627,7 @@ export function SessionEditorPanel({
                 { value: 'skip', label: 'Skip' },
               ]}
               value={step.onFailure}
-              onChange={(v) => onFieldChange('onFailure', v ?? 'fail', true)}
+              onChange={(v) => onFieldChange('onFailure', v ?? 'fail')}
               disabled={readOnly}
               allowDeselect={false}
               styles={{
@@ -659,7 +659,7 @@ export function SessionEditorPanel({
             </div>
             <Switch
               checked={step.bmadEnabled}
-              onChange={(e) => onFieldChange('bmadEnabled', e.currentTarget.checked, true)}
+              onChange={(e) => onFieldChange('bmadEnabled', e.currentTarget.checked)}
               disabled={readOnly}
             />
           </div>

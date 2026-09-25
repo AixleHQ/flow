@@ -25,18 +25,20 @@ module MCP
     # @param target_id [String] stable target id from the manifest
     # @param values [Hash] user-supplied input values
     # @param project [Project]
-    def initialize(connector:, target_id:, values:, project:)
+    # @param actor [Versions::Actor] who installs it, for the server's version history
+    def initialize(connector:, target_id:, values:, project:, actor: Versions::Actor.system)
       @connector = connector
       @target_id = target_id
       @values = values || {}
       @project = project
+      @actor = actor
     end
 
     def call
       manifest, stale = resolve_manifest
       server = self.class.create_from_manifest(
         project: @project, manifest: manifest, target_id: @target_id, values: @values,
-        fallback_name: @connector.name, pin: ->(target) { PackageVersionResolver.pin(target) }
+        fallback_name: @connector.name, pin: ->(target) { PackageVersionResolver.pin(target) }, actor: @actor
       )
 
       # Record what the server declares, so a later change is detectable. Best
@@ -52,7 +54,7 @@ module MCP
       # detected here rather than guessed from the shape of the manifest.
       outcome = ToolDriftDetector.capture(server)
       needs_auth = outcome.status == :unauthorized && server.auth_type_none? && !server.transport_stdio?
-      server.update!(auth_type: :oauth) if needs_auth
+      Versions.save!(server, actor: @actor) { server.update!(auth_type: :oauth) } if needs_auth
 
       Result.new(server: server, stale: stale, needs_auth: needs_auth)
     end
@@ -63,7 +65,8 @@ module MCP
     # is what was reviewed, not whatever the registry serves today — which is
     # also why `pin` (the live install's release lookup) is not applied to
     # them: a snapshot whose package version is not pinned is refused.
-    def self.create_from_manifest(project:, manifest:, target_id:, values:, fallback_name:, pin: nil)
+    def self.create_from_manifest(project:, manifest:, target_id:, values:, fallback_name:, pin: nil,
+                                  actor: Versions::Actor.system)
       target = ConnectorManifest.find_target(manifest, target_id)
       raise Error, "That install option is no longer offered by this connector" if target.nil?
 
@@ -71,7 +74,9 @@ module MCP
       attributes = ConnectorAttributes.build(manifest: manifest, target: target, values: values || {})
       raise Error, ConnectorAttributes.unpinned_message(target) if ConnectorAttributes.unpinned?(target)
 
-      project.mcp_servers.create!(attributes.merge(name: unique_name(project, attributes[:name].presence || fallback_name)))
+      server = project.mcp_servers.new(attributes.merge(name: unique_name(project, attributes[:name].presence || fallback_name)))
+      Versions.save!(server, actor: actor) { server.save! }
+      server
     rescue ConnectorAttributes::UnsupportedTargetError => e
       raise Error, "This connector cannot be installed: #{e.message}"
     end

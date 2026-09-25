@@ -14,6 +14,8 @@ interface ConfirmDeleteModalProps {
   preview?: ReactNode;
   warning?: ReactNode;
   onDeleteError?: () => void;
+  /** The confirm button's label: "Archive" where the entity is archived rather than deleted. */
+  confirmLabel?: string;
 }
 
 export const ConfirmDeleteModal: FC<ConfirmDeleteModalProps> = ({
@@ -26,6 +28,7 @@ export const ConfirmDeleteModal: FC<ConfirmDeleteModalProps> = ({
   preview,
   warning,
   onDeleteError,
+  confirmLabel = 'Delete',
 }) => {
   const [loading, setLoading] = useState(false);
 
@@ -74,7 +77,7 @@ export const ConfirmDeleteModal: FC<ConfirmDeleteModalProps> = ({
           Cancel
         </Button>
         <Button color="red" onClick={handleDelete} loading={loading}>
-          Delete
+          {confirmLabel}
         </Button>
       </Group>
     </Modal>

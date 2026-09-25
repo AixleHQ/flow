@@ -5,6 +5,9 @@ import { useEffect, useState, type FC } from 'react';
 
 import type { Skill } from '@/types/generated';
 
+import { UNSAVED_CHANGES_PROMPT } from 'shared/lib/hooks/useUnsavedChangesGuard';
+import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
+
 interface ManualSkillModalProps {
   opened: boolean;
   onClose: () => void;
@@ -14,7 +17,7 @@ interface ManualSkillModalProps {
    * When present the modal edits that skill instead of creating one: the same file is
    * the same form, so there is no second editor to keep in sync.
    */
-  skill?: Pick<Skill, 'id' | 'name' | 'content'> | null;
+  skill?: (Pick<Skill, 'id' | 'name' | 'content'> & Partial<Pick<Skill, 'currentVersionNumber'>>) | null;
 }
 
 // A skill IS a SKILL.md, so the form is that file. Name and description are read
@@ -67,14 +70,25 @@ export const ManualSkillModal: FC<ManualSkillModalProps> = ({ opened, onClose, b
     };
 
     if (editing) {
-      router.patch(`${basePath}/${skill.id}`, { content }, options);
+      router.patch(`${basePath}/${skill.id}`, { content, baseVersion: skill.currentVersionNumber }, options);
     } else {
       router.post(`${basePath}/manual`, { content }, options);
     }
   };
 
+  const unsaved = editing && content !== (skill.content ?? STARTER);
+  const handleClose = () => {
+    if (unsaved && !window.confirm(UNSAVED_CHANGES_PROMPT)) return;
+    onClose();
+  };
+
   return (
-    <Modal opened={opened} onClose={onClose} title={editing ? `Edit ${skill.name}` : 'Add a skill by hand'} size="lg">
+    <Modal
+      opened={opened}
+      onClose={handleClose}
+      title={editing ? `Edit ${skill.name}` : 'Add a skill by hand'}
+      size="lg"
+    >
       <Stack gap="md">
         <Alert variant="light" color="blue" icon={<IconInfoCircle size={16} />}>
           <Text fz={13}>
@@ -103,7 +117,8 @@ export const ManualSkillModal: FC<ManualSkillModalProps> = ({ opened, onClose, b
         </Text>
 
         <Group justify="flex-end">
-          <Button variant="default" onClick={onClose} disabled={submitting}>
+          <UnsavedChangesNotice visible={unsaved} />
+          <Button variant="default" onClick={handleClose} disabled={submitting}>
             Cancel
           </Button>
           <Button onClick={submit} loading={submitting} disabled={!content.trim()}>

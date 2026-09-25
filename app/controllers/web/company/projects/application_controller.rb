@@ -6,6 +6,10 @@ class Web::Company::Projects::ApplicationController < Web::Company::ApplicationC
   # the membership, so the page, its sidebar and the next navigation all agree.
   prepend_before_action :follow_project_company
 
+  rescue_from Versions::StaleVersion, Versions::InUse do |error|
+    redirect_back fallback_location: company_project_path(current_project), alert: error.message
+  end
+
   inertia_share do
     {
       project: InertiaRails.always { project_props },

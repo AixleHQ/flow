@@ -71,6 +71,13 @@ class WorkflowRunResource < ApplicationResource
     run.step_runs.sum { |sr| sr.terminal_session&.cost_cents.to_i }
   end
 
+  # Distinct workflow versions the launched steps ran, oldest first. More than
+  # one means someone saved the workflow while this run was in progress.
+  typelize "number[]"
+  attribute :workflow_version_numbers do |run|
+    run.step_runs.filter_map { |sr| sr.workflow_version&.number }.uniq.sort
+  end
+
   typelize "StepRun[]"
   attribute :step_runs do |run|
     step_name_map = run.workflow.steps.each_with_object({}) { |s, h| h[s.id] = s.name }

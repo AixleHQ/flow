@@ -15,6 +15,15 @@ class ToolFileUploader < Shrine
     validate_max_size 50 * 1024 * 1024
   end
 
+  # Stored objects are never deleted on replace or destroy: a tool version
+  # snapshot (Versions::Snapshots::Tool) references them by id, and a revert
+  # writes that reference back. History is kept indefinitely, so every stored
+  # object stays referenced; a retention policy would have to bring a sweep of
+  # the objects no row and no snapshot points at.
+  class Attacher
+    def destroy_attached; end
+  end
+
   # Unique per upload: tool + basename alone would make /workspace/a/config.json and
   # /workspace/b/config.json one object, the later upload overwriting the other.
   def generate_location(io, record: nil, name: nil, **)

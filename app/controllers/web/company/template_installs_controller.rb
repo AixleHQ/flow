@@ -52,7 +52,8 @@ class Web::Company::TemplateInstallsController < Web::Company::ApplicationContro
     Templates::Installer.new(
       catalog_template: template, user: current_user, target: target(template), idempotency_key: idempotency_key,
       inputs: hash_param(:inputs), secrets: hash_param(:secrets, secrets), resolutions: hash_param(:resolutions),
-      expected: { version: params[:version].presence }.compact, confirmed_digest: confirmed_digest.presence
+      expected: { version: params[:version].presence }.compact, confirmed_digest: confirmed_digest.presence,
+      actor: version_actor
     )
   end
 

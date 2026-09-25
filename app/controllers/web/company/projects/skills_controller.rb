@@ -3,10 +3,12 @@
 class Web::Company::Projects::SkillsController < Web::Company::Projects::ApplicationController
   def index
     skills = Skill.visible_for_project(current_project).order(created_at: :desc)
+    archived = Skill.for_project(current_project).archived.order(archived_at: :desc)
 
     props = {
       project: project_props,
       skills: skills.map { |s| SkillResource.new(s).to_h },
+      archivedSkills: archived.map { |s| SkillResource.new(s).to_h },
       catalogQuery: catalog_query,
       catalogSkills: Skills::CatalogSearch.call(catalog_query).map { |c| CatalogSkillResource.new(c).to_h },
       catalogSyncedAt: CatalogSkill.maximum(:registry_synced_at)
@@ -20,7 +22,8 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
       params[:skill_id],
       scope: current_project,
       installs: catalog_installs(params[:skill_id]),
-      acknowledge_risk: ActiveModel::Type::Boolean.new.cast(params[:acknowledge_risk])
+      acknowledge_risk: ActiveModel::Type::Boolean.new.cast(params[:acknowledge_risk]),
+      actor: version_actor
     )
     redirect_to company_project_skills_path(current_project), notice: "Skill '#{skill.name}' installed"
   rescue SkillsRegistryService::RegistryError => e
@@ -50,13 +53,14 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
       return
     end
 
-    skill = current_project.skills.create!(
+    skill = current_project.skills.new(
       name: result.name,
       title: result.frontmatter["title"].presence || result.name,
       description: result.description,
       content: result.content,
       origin: :manual
     )
+    Versions.save!(skill, actor: version_actor) { skill.save! }
     redirect_to company_project_skills_path(current_project), notice: "Skill '#{skill.name}' added"
   rescue ActiveRecord::RecordInvalid => e
     redirect_to company_project_skills_path(current_project),
@@ -95,12 +99,14 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
       return
     end
 
-    skill.update!(
-      name: result.name,
-      title: result.frontmatter["title"].presence || result.name,
-      description: result.description,
-      content: result.content
-    )
+    Versions.save!(skill, actor: version_actor, base_version: params[:base_version]) do
+      skill.update!(
+        name: result.name,
+        title: result.frontmatter["title"].presence || result.name,
+        description: result.description,
+        content: result.content
+      )
+    end
     redirect_to company_project_skills_path(current_project), notice: "Skill '#{skill.name}' updated"
   rescue ActiveRecord::RecordInvalid => e
     redirect_to company_project_skills_path(current_project),
@@ -118,8 +124,8 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
       return
     end
 
-    skill.destroy
-    redirect_to company_project_skills_path(current_project), notice: "Skill removed"
+    Versions.archive!(skill, actor: version_actor)
+    redirect_to company_project_skills_path(current_project), notice: "Skill archived"
   end
 
   private

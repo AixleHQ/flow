@@ -21,7 +21,8 @@ module PersonalTools
       project = find_project!
       authorize!(project, :create?, policy: Web::Company::Projects::MCPServersPolicy, project: project)
       attrs = params.slice(*ATTRS).compact
-      server = project.mcp_servers.create!(attrs.merge(kind: :custom))
+      server = project.mcp_servers.new(attrs.merge(kind: :custom))
+      Versions.save!(server, actor: version_actor) { server.save! }
       success(id: server.id, name: server.name, kind: server.kind, transport: server.transport)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create MCP server: #{e.message}")

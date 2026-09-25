@@ -23,6 +23,7 @@ module PersonalTools
       step = find_step!(workflow)
 
       success(id: step.id, workflow_id: workflow.id, name: step.name, position: step.position,
+              workflow_version_number: workflow.current_version_number,
               instructions: step.instructions,
               agent: step.agent && { id: step.agent.id, title: step.agent.title },
               tool_ids: step.tool_ids, skill_ids: step.skill_ids, mcp_server_ids: step.mcp_server_ids,

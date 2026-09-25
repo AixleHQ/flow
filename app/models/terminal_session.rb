@@ -289,7 +289,7 @@ class TerminalSession < ApplicationRecord
   def available_tools(ctx: nil)
     ctx ||= Tools::Context.for_session(self)
 
-    base = tools.enabled.where(id: TenantScope.owned(Tool, project: project, company: company || project&.company).select(:id)).to_a
+    base = tools.not_deleted.enabled.where(id: TenantScope.owned(Tool, project: project, company: company || project&.company).select(:id)).to_a
     if base.none?(&:db_source?) && project.present?
       base += Tool.for_project(project).enabled.to_a
     end

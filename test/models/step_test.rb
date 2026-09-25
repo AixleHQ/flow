@@ -93,12 +93,15 @@ class StepTest < ActiveSupport::TestCase
     assert_equal 2, step.sub_steps.count
   end
 
-  test "destroying step destroys sub_steps" do
+  test "destroy soft-deletes a step that never ran, keeping its id and sub-steps" do
     step = create(:step, workflow: @workflow, position: 1)
-    create(:sub_step, step: step, position: 1)
-    assert_difference "SubStep.count", -1 do
+    sub = create(:sub_step, step: step, position: 1)
+
+    assert_no_difference [ "Step.count", "SubStep.count" ] do
       step.destroy
     end
+    assert step.reload.deleted?
+    assert_equal step, sub.reload.step
   end
 
   test "steps that would wait on each other are rejected, naming the cycle" do
@@ -142,9 +145,8 @@ class StepTest < ActiveSupport::TestCase
     step_b = create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [ step_a.id ])
     step_b.soft_delete!
 
-    assert_difference "Step.count", -1 do
-      step_a.destroy
-    end
+    step_a.destroy
+    assert step_a.reload.deleted?
   end
 
   test "rejects agents, tools, MCP servers and repositories of another project" do

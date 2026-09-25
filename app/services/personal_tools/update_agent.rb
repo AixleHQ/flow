@@ -15,6 +15,7 @@ module PersonalTools
       param :communication_style, type: :string, description: "Communication style."
       param :principles, type: :string, description: "Principles."
       param :icon, type: :string, description: "Icon key."
+      param :base_version, type: :integer, description: "The version you read (current_version_number). A newer one means someone else saved since, and the update is refused."
     end
 
     ATTRS = %w[name title persona communication_style principles icon].freeze
@@ -22,13 +23,13 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :update?, policy: Web::Company::Projects::AgentsPolicy, project: project)
-      agent = project.agents.find_by(id: params[:agent_id])
+      agent = project.agents.unarchived.find_by(id: params[:agent_id])
       return error("Agent not found in this project") unless agent
 
       attrs = params.slice(*ATTRS).reject { |_, v| v.nil? }
       return error("No fields to update") if attrs.empty?
 
-      agent.update!(attrs)
+      Versions.save!(agent, actor: version_actor, base_version: base_version) { agent.update!(attrs) }
       success(id: agent.id, name: agent.name, updated_fields: attrs.keys)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to update agent: #{e.message}")

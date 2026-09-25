@@ -20,19 +20,21 @@ export const DeleteSkillModal: FC<DeleteSkillModalProps> = ({ opened, onClose, s
     <ConfirmDeleteModal
       opened={opened}
       onClose={onClose}
-      title="Delete Skill"
+      title="Archive Skill"
+      confirmLabel="Archive"
       itemId={skill.id}
       basePath={basePath}
       description={
         <>
-          Are you sure you want to delete skill{' '}
+          Archive skill{' '}
           <Text span fw={600} c="var(--app-text-primary)">
             {skill.title || skill.name}
           </Text>
-          ? This action cannot be undone.
+          ? It disappears from pickers and new sessions but keeps its history, and you can restore it from the Archived
+          tab. Archiving is refused while a workflow uses it.
         </>
       }
-      onDeleteError={() => notifications.show({ message: 'Failed to delete skill', color: 'red' })}
+      onDeleteError={() => notifications.show({ message: 'Failed to archive skill', color: 'red' })}
     />
   );
 };

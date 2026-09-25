@@ -9,27 +9,27 @@ import { DeleteAgentModal } from './DeleteAgentModal';
 const agent = { id: 42, name: 'support_bot', title: 'Support Bot', icon: '🛟' };
 
 describe('DeleteAgentModal', () => {
-  it('renders the title, agent details and warning when opened with an agent', () => {
+  it('renders the title, agent details and what archiving does when opened with an agent', () => {
     renderPage(<DeleteAgentModal opened onClose={vi.fn()} agent={agent} basePath="/projects/1/agents" />);
 
-    expect(screen.getByText('Delete Agent')).toBeInTheDocument();
+    expect(screen.getByText('Archive Agent')).toBeInTheDocument();
     expect(screen.getByText('Support Bot')).toBeInTheDocument();
     expect(screen.getByText('support_bot')).toBeInTheDocument();
     expect(screen.getByText('🛟')).toBeInTheDocument();
-    expect(screen.getByText(/this action cannot be undone/i)).toBeInTheDocument();
+    expect(screen.getByText(/restore it from the Archived tab/i)).toBeInTheDocument();
   });
 
   it('renders nothing when no agent is provided', () => {
     renderPage(<DeleteAgentModal opened onClose={vi.fn()} agent={null} basePath="/projects/1/agents" />);
 
-    expect(screen.queryByText('Delete Agent')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Archive Agent')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^archive$/i })).not.toBeInTheDocument();
   });
 
-  it('confirming Delete fires router.delete to the agent path', async () => {
+  it('confirming Archive fires router.delete to the agent path', async () => {
     renderPage(<DeleteAgentModal opened onClose={vi.fn()} agent={agent} basePath="/projects/1/agents" />);
 
-    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^archive$/i }));
 
     expect(router.delete).toHaveBeenCalledWith(
       '/projects/1/agents/42',

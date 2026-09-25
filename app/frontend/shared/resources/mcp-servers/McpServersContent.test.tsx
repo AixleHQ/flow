@@ -36,12 +36,15 @@ function makeServer(overrides: Partial<MCPServer> = {}): MCPServer {
     oauthStatus: null,
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
+    currentVersionNumber: 1,
+    archivedAt: null,
     ...overrides,
   };
 }
 
 const baseProps = {
   configItemNames: ['API_KEY'],
+  projectId: 1,
   basePath: '/company/mcp_servers',
   title: 'MCP Servers',
   subtitle: 'Connect external tools',
@@ -110,7 +113,7 @@ describe('McpServersContent', () => {
     expect(within(dialog).getByRole('button', { name: /create/i })).toBeInTheDocument();
   });
 
-  it('opens the delete confirmation modal from a row delete action', async () => {
+  it('opens the archive confirmation modal from a row archive action', async () => {
     renderPage(
       <McpServersContent
         {...baseProps}
@@ -118,10 +121,10 @@ describe('McpServersContent', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Delete MCP Server')).toBeInTheDocument();
+    expect(within(dialog).getByText('Archive MCP Server')).toBeInTheDocument();
     expect(within(dialog).getByText('Doomed Server')).toBeInTheDocument();
   });
 
@@ -412,10 +415,11 @@ describe('McpServersContent', () => {
     expect(screen.getByText('2 connectors')).toBeInTheDocument();
   });
 
-  it('renders edit and delete icons for every custom server', () => {
-    const { container } = renderPage(
+  it('renders edit, archive and history actions for every custom server', () => {
+    renderPage(
       <McpServersContent
         configItemNames={['API_KEY']}
+        projectId={1}
         basePath="/company/mcp_servers"
         title="MCP Servers"
         subtitle="Connect external tools"
@@ -426,7 +430,8 @@ describe('McpServersContent', () => {
       />,
     );
 
-    expect(container.querySelectorAll('.tabler-icon-edit')).toHaveLength(2);
-    expect(container.querySelectorAll('.tabler-icon-trash')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Archive' })).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'History of Server A' })).toBeInTheDocument();
   });
 });

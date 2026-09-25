@@ -4,6 +4,7 @@ class Workflow < ApplicationRecord
   include ProjectOwnedReferences
   belongs_to :scope, polymorphic: true, optional: true
   include TenantColumns
+  include Versioned
   belongs_to :published_by, class_name: "User", optional: true
 
   has_many :steps, dependent: :destroy
@@ -74,6 +75,18 @@ class Workflow < ApplicationRecord
 
   def deleted?
     deleted_at.present?
+  end
+
+  alias archived? deleted?
+  alias archive! soft_delete!
+
+  # Triggers archiving switched off stay off unless named here — a schedule
+  # coming back to life on its own would start runs nobody asked for.
+  def unarchive!(enable_trigger_ids: [])
+    transaction do
+      update!(deleted_at: nil)
+      trigger_bindings.where(id: enable_trigger_ids).find_each { |binding| binding.update!(enabled: true) }
+    end
   end
 
   def published?

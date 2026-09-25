@@ -7,6 +7,10 @@ module Api
         class ApplicationController < Api::V1::Projects::ApplicationController
           private
 
+          def versioned(&)
+            Versions.save!(current_workflow, actor: version_actor, base_version: params[:base_version], &)
+          end
+
           def current_workflow
             @current_workflow ||= current_project.workflows.active.find(params[:workflow_id])
           end

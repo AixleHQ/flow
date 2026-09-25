@@ -24,6 +24,9 @@ import { z } from 'zod';
 
 import type { MCPServer } from '@/types/generated';
 
+import { UNSAVED_CHANGES_PROMPT } from 'shared/lib/hooks/useUnsavedChangesGuard';
+import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
+
 import { ConfigItemValueField } from './ConfigItemValueField';
 
 // The MCPServerResource masks every stored header/env value to a sentinel before it reaches the
@@ -114,7 +117,8 @@ type EditableServer = Pick<
   | 'oauthStatus'
   | 'oauthClientId'
   | 'oauthClientSecretPresent'
->;
+> &
+  Partial<Pick<MCPServer, 'currentVersionNumber'>>;
 
 interface McpServerFormModalProps {
   opened: boolean;
@@ -187,7 +191,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
         setHeadersList(Object.entries(headers).map(([key, value]) => ({ key, value: String(value) })));
         const env = editServer.env ?? {};
         setEnvList(Object.entries(env).map(([key, value]) => ({ key, value: String(value) })));
-        form.setValues({
+        const values = {
           name: editServer.name,
           transport: editServer.transport,
           url: editServer.url ?? '',
@@ -198,7 +202,9 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
           credentialScope: editServer.credentialScope ?? 'shared',
           oauthClientId: editServer.oauthClientId ?? '',
           oauthClientSecret: editServer.oauthClientSecretPresent ? SECRET_MASK : '',
-        });
+        };
+        form.setValues(values);
+        form.resetDirty(values);
         // Reveal the advanced scope control up-front only when it's already non-default.
         setShowScopeOptions(editServer.credentialScope === 'per_user');
         setShowClientOptions(!!editServer.oauthClientId);
@@ -237,6 +243,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
         headers: isStdio ? {} : kvToObj(headersList),
         env: isStdio ? kvToObj(envList) : {},
       },
+      baseVersion: editServer?.currentVersionNumber,
     };
 
     // A refusal can name a field this transport does not render — a URL typed before switching to
@@ -280,10 +287,20 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
     setList(list.filter((_, i) => i !== index));
   };
 
+  const kvChanged = (list: KVPair[], original: Record<string, unknown> | null | undefined) =>
+    JSON.stringify(kvToObj(list)) !==
+    JSON.stringify(Object.fromEntries(Object.entries(original ?? {}).map(([k, v]) => [k, String(v)])));
+  const unsaved =
+    isEdit && (form.isDirty() || kvChanged(headersList, editServer?.headers) || kvChanged(envList, editServer?.env));
+  const handleClose = () => {
+    if (unsaved && !window.confirm(UNSAVED_CHANGES_PROMPT)) return;
+    onClose();
+  };
+
   return (
     <Drawer
       opened={opened}
-      onClose={onClose}
+      onClose={handleClose}
       title={isEdit ? 'Edit MCP Server' : 'Add MCP Server'}
       position="right"
       size={460}
@@ -551,7 +568,8 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
           )}
 
           <Group justify="flex-end" mt="sm">
-            <Button variant="default" onClick={onClose} disabled={loading}>
+            <UnsavedChangesNotice visible={unsaved} />
+            <Button variant="default" onClick={handleClose} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" loading={loading}>

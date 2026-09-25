@@ -9,17 +9,20 @@ import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 interface Props {
   project: Project;
   tools: Tool[];
+  archivedTools: Tool[];
   configItemNames: string[];
 }
 
 const ToolsPage = () => {
-  const { project, tools, configItemNames } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, tools, archivedTools, configItemNames } = usePage<{ props: Props }>().props as unknown as Props;
 
   return (
     <>
       <Head title={`Wrappers — ${project.name}`} />
       <ToolsContent
         tools={tools}
+        archivedTools={archivedTools}
+        projectId={project.id}
         configItemNames={configItemNames}
         basePath={`/company/projects/${project.id}/tools`}
         title="Wrappers"

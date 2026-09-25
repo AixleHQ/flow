@@ -23,6 +23,8 @@ const skill = (overrides: Partial<Skill> = {}): Skill => ({
   registryUrl: 'https://skills.sh/acme/skills/react-expert',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  currentVersionNumber: 1,
+  archivedAt: null,
   ...overrides,
   content: overrides.content ?? null,
 });

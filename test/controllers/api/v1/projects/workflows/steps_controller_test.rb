@@ -98,7 +98,7 @@ module Api
             assert_equal [ asset.id ], @step.asset_ids
           end
 
-          test "destroy removes step" do
+          test "destroy soft-deletes the step" do
             delete :destroy, params: {
               project_id: @project.id,
               workflow_id: @workflow.id,
@@ -106,6 +106,7 @@ module Api
             }
 
             assert_response :no_content
+            assert @step.reload.deleted?
           end
 
           test "reorder returns ok" do

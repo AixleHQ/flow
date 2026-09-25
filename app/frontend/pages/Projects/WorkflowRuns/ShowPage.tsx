@@ -59,7 +59,10 @@ const RUN_STATE_LABELS: Record<string, string> = {
 function toCardData(stepRun: StepRun, index: number): SessionCardData {
   return {
     id: stepRun.id,
-    ordinal: `Session ${index + 1}`,
+    ordinal:
+      stepRun.workflowVersionNumber === null
+        ? `Session ${index + 1}`
+        : `Session ${index + 1} · v${stepRun.workflowVersionNumber}`,
     title: stepRun.stepName ?? `Step ${stepRun.stepPosition ?? index + 1}`,
     state: stepRun.terminalSessionState === 'queued' ? 'queued' : stepRun.state,
     terminalSessionId: stepRun.terminalSessionId,
@@ -220,6 +223,9 @@ const WorkflowRunShowPage = () => {
     { label: 'Sessions', value: `${run.stepsCompleted}/${run.stepsTotal}` },
     { label: 'Duration', value: formatDuration(run.startedAt, run.completedAt, run.state, now) },
     { label: 'Cost', value: formatCost(run.costCents), color: costColor(run.costCents) },
+    ...(run.workflowVersionNumbers.length > 0
+      ? [{ label: 'Workflow version', value: run.workflowVersionNumbers.map((n) => `v${n}`).join(' → ') }]
+      : []),
     run.state === 'failed' && failedStep
       ? {
           label: 'Failed at',
@@ -394,6 +400,21 @@ const WorkflowRunShowPage = () => {
             />
           }
         />
+
+        {run.workflowVersionNumbers.length > 1 && (
+          <Alert
+            icon={<IconAlertTriangle size={16} />}
+            color="yellow"
+            title="The workflow was saved while this run was in progress"
+            radius={0}
+          >
+            <Text size="sm">
+              Its sessions launched with different versions (
+              {run.workflowVersionNumbers.map((n) => `v${n}`).join(' → ')}): each session ran the version saved when it
+              started. Each session card names its version.
+            </Text>
+          </Alert>
+        )}
 
         {run.failureReason === 'quota_exceeded' && (
           <Alert

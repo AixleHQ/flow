@@ -11,12 +11,15 @@ class WorkflowService
   SignalLost = Class.new(StandardError)
 
   class << self
-    def update(workflow:, params:)
+    # Raises Versions::StaleVersion when `base_version` is behind.
+    def update(workflow:, params:, actor:, base_version: nil)
       attrs = params.to_h
-      if (incoming_config = attrs.delete("config")).present?
-        workflow.merge_config!(incoming_config)
+      incoming_config = attrs.delete("config")
+      Versions.save!(workflow, actor: actor, base_version: base_version) do
+        workflow.merge_config!(incoming_config) if incoming_config.present?
+        workflow.update!(attrs) if attrs.any?
       end
-      attrs.any? ? workflow.update(attrs) : workflow.errors.none?
+      true
     rescue ActiveRecord::RecordInvalid
       false
     end

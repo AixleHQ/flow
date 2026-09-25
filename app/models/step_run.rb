@@ -6,6 +6,7 @@ class StepRun < ApplicationRecord
   belongs_to :workflow_run, counter_cache: true
   belongs_to :step
   belongs_to :terminal_session, optional: true
+  belongs_to :workflow_version, class_name: "EntityVersion", optional: true
 
   has_many :sub_step_runs, dependent: :destroy
   has_many :produced_workflow_run_assets, class_name: "WorkflowRunAsset", foreign_key: :produced_by_step_run_id,

@@ -145,11 +145,16 @@ class Web::Company::Projects::MCPServersControllerTest < ActionDispatch::Integra
     assert_response :redirect
   end
 
-  test "destroy redirects" do
+  test "destroy archives the server, and the index lists it as archived" do
     server = create(:mcp_server, scope: @project, kind: :custom)
 
     delete company_project_mcp_server_path(@project, server)
     assert_response :redirect
+    assert server.reload.archived?
+
+    get company_project_mcp_servers_path(@project)
+    assert_equal [ server.id ], inertia.props[:archivedServers].pluck(:id)
+    assert_not_includes inertia.props[:mcpServers].pluck(:id), server.id
   end
 
   # ---------------------------------------------- connector catalog (same page)

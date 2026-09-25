@@ -39,6 +39,9 @@ class Step < ApplicationRecord
     deleted_at.present?
   end
 
+  # Always a soft delete: a version snapshot names steps by id, and a revert
+  # brings one back by clearing `deleted_at` — a hard-deleted id would leave the
+  # snapshot's `depends_on_step_ids` pointing at nothing.
   def destroy
     dependent = workflow.steps.not_deleted.where.not(id: id)
                         .where("depends_on_step_ids @> ?::jsonb", [ id ].to_json)
@@ -47,12 +50,8 @@ class Step < ApplicationRecord
       return false
     end
 
-    if step_runs.exists?
-      soft_delete!
-      self
-    else
-      super
-    end
+    soft_delete!
+    self
   end
 
   def dependency_steps

@@ -12,34 +12,46 @@ module ProjectResources
     MCP_SERVER_ATTRIBUTES = %i[name url transport description command args enabled env headers auth_type
                                credential_scope connector_name connector_version connector_manifest].freeze
 
-    def initialize(project)
+    # @param actor [Versions::Actor] who is creating them, for their version history
+    def initialize(project, actor: Versions::Actor.system)
       @project = project
+      @actor = actor
     end
 
     def agent!(attributes)
-      @project.agents.create!(attributes.to_h.symbolize_keys.slice(*AGENT_ATTRIBUTES))
+      created(@project.agents.new(attributes.to_h.symbolize_keys.slice(*AGENT_ATTRIBUTES)))
     end
 
     def skill!(attributes)
-      Skill.create!(attributes.to_h.symbolize_keys.slice(*SKILL_ATTRIBUTES).merge(scope: @project, install_count: 0))
+      created(Skill.new(attributes.to_h.symbolize_keys.slice(*SKILL_ATTRIBUTES).merge(scope: @project, install_count: 0)))
     end
 
     # @param files [Array<Hash>] `{ path:, content: }` for text files; add
     #   `file:` (an uploaded file or IO) for a binary one, stored as a new object
     #   of this tool's own.
     def tool!(attributes, files: [])
-      tool = Tool.create!(attributes.to_h.symbolize_keys.slice(*TOOL_ATTRIBUTES).merge(scope: @project))
-      files.each do |file|
-        file = file.to_h.symbolize_keys
-        copy = tool.tool_files.build(file.slice(:path, :content))
-        copy.file_attacher.attach(file[:file]) if file[:file]
-        copy.save!
+      tool = Tool.new(attributes.to_h.symbolize_keys.slice(*TOOL_ATTRIBUTES).merge(scope: @project))
+      Versions.save!(tool, actor: @actor) do
+        tool.save!
+        files.each do |file|
+          file = file.to_h.symbolize_keys
+          copy = tool.tool_files.build(file.slice(:path, :content))
+          copy.file_attacher.attach(file[:file]) if file[:file]
+          copy.save!
+        end
       end
       tool
     end
 
     def mcp_server!(attributes)
-      MCPServer.create!(attributes.to_h.symbolize_keys.slice(*MCP_SERVER_ATTRIBUTES).merge(scope: @project))
+      created(MCPServer.new(attributes.to_h.symbolize_keys.slice(*MCP_SERVER_ATTRIBUTES).merge(scope: @project)))
+    end
+
+    private
+
+    def created(record)
+      Versions.save!(record, actor: @actor) { record.save! }
+      record
     end
   end
 end

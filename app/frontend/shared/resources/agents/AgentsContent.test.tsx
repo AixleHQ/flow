@@ -21,6 +21,8 @@ const makeAgent = (overrides: Partial<Agent> = {}): Agent => ({
   scopeIndicator: 'company',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  currentVersionNumber: 1,
+  archivedAt: null,
   ...overrides,
 });
 
@@ -32,7 +34,13 @@ describe('AgentsContent', () => {
     ];
 
     renderPage(
-      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={agents}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     expect(screen.getByText('Agents')).toBeInTheDocument();
@@ -42,7 +50,15 @@ describe('AgentsContent', () => {
   });
 
   it('shows the empty state when there are no agents', () => {
-    renderPage(<AgentsContent agents={[]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />);
+    renderPage(
+      <AgentsContent
+        projectId={1}
+        agents={[]}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
+    );
 
     expect(screen.getByText('No agents yet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /add your first agent/i })).toBeInTheDocument();
@@ -55,7 +71,13 @@ describe('AgentsContent', () => {
     ];
 
     renderPage(
-      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={agents}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     await userEvent.type(screen.getByPlaceholderText(/search by name or title/i), 'writer');
@@ -66,7 +88,13 @@ describe('AgentsContent', () => {
 
   it('clicking "Add Agent" opens the create form modal', async () => {
     renderPage(
-      <AgentsContent agents={[makeAgent()]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={[makeAgent()]}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     await userEvent.click(screen.getByRole('button', { name: /add agent/i }));
@@ -75,21 +103,23 @@ describe('AgentsContent', () => {
     expect(screen.getByRole('textbox', { name: /^title$/i })).toBeInTheDocument();
   });
 
-  it('confirming delete fires router.delete for the agent', async () => {
+  it('confirming archive fires router.delete for the agent', async () => {
     const agent = makeAgent({ id: 7, name: 'market_analyst', title: 'Market Analyst' });
 
     renderPage(
-      <AgentsContent agents={[agent]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={[agent]}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
-    // Open the delete confirm modal via the row's Delete (trash) action.
-    // The action-cell ActionIcons have no accessible name, so locate the trash button by its icon.
-    const row = screen.getByText('Market Analyst').closest('tr') as HTMLElement;
-    const trashButton = row.querySelector('.tabler-icon-trash')?.closest('button') as HTMLElement;
-    await userEvent.click(trashButton);
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
 
     const dialog = await screen.findByRole('dialog');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
 
     expect(router.delete).toHaveBeenCalledWith('/company/agents/7', expect.objectContaining({ preserveScroll: true }));
   });
@@ -99,6 +129,7 @@ describe('AgentsContent', () => {
 
     renderPage(
       <AgentsContent
+        projectId={1}
         agents={[companyAgent]}
         basePath="/projects/1/agents"
         title="Agents"
@@ -108,19 +139,22 @@ describe('AgentsContent', () => {
 
     expect(screen.getByText('Scope')).toBeInTheDocument();
 
-    // The Edit and Delete actions are disabled for company-managed agents in a project context.
-    const row = screen.getByText('Shared Analyst').closest('tr') as HTMLElement;
-    const editButton = row.querySelector('.tabler-icon-edit')?.closest('button') as HTMLElement;
-    const trashButton = row.querySelector('.tabler-icon-trash')?.closest('button') as HTMLElement;
-    expect(editButton).toBeDisabled();
-    expect(trashButton).toBeDisabled();
+    // The Edit and Archive actions are disabled for company-managed agents in a project context.
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeDisabled();
   });
 
   it('shows the "no match" empty state (without the add-first-agent button) when search matches nothing', async () => {
     const agents = [makeAgent({ id: 1, name: 'market_analyst', title: 'Market Analyst' })];
 
     renderPage(
-      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={agents}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     await userEvent.type(screen.getByPlaceholderText(/search by name or title/i), 'nonexistent_zzz');
@@ -137,7 +171,13 @@ describe('AgentsContent', () => {
     ];
 
     renderPage(
-      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={agents}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     await userEvent.type(screen.getByPlaceholderText(/search by name or title/i), 'tech_writer');
@@ -147,7 +187,15 @@ describe('AgentsContent', () => {
   });
 
   it('clicking "Add your first agent" in the empty state opens the create modal', async () => {
-    renderPage(<AgentsContent agents={[]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />);
+    renderPage(
+      <AgentsContent
+        projectId={1}
+        agents={[]}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /add your first agent/i }));
 
@@ -158,7 +206,13 @@ describe('AgentsContent', () => {
     const agent = makeAgent({ id: 9, name: 'market_analyst', title: 'Market Analyst' });
 
     renderPage(
-      <AgentsContent agents={[agent]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={[agent]}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     const row = screen.getByText('Market Analyst').closest('tr') as HTMLElement;
@@ -175,7 +229,13 @@ describe('AgentsContent', () => {
     const agent = makeAgent({ id: 5, name: 'market_analyst', title: 'Market Analyst' });
 
     renderPage(
-      <AgentsContent agents={[agent]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={[agent]}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     const row = screen.getByText('Market Analyst').closest('tr') as HTMLElement;
@@ -188,7 +248,15 @@ describe('AgentsContent', () => {
   });
 
   it('submitting a valid create form fires router.post with the agent payload', async () => {
-    renderPage(<AgentsContent agents={[]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />);
+    renderPage(
+      <AgentsContent
+        projectId={1}
+        agents={[]}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /add agent/i }));
     await screen.findByRole('heading', { name: 'Create Agent' });
@@ -221,7 +289,13 @@ describe('AgentsContent', () => {
     });
 
     renderPage(
-      <AgentsContent agents={[agent]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={[agent]}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     const row = screen.getByText('Market Analyst').closest('tr') as HTMLElement;
@@ -248,7 +322,13 @@ describe('AgentsContent', () => {
     const agent = makeAgent({ id: 1, title: 'Iconless Agent', icon: null });
 
     renderPage(
-      <AgentsContent agents={[agent]} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={[agent]}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     const row = screen.getByText('Iconless Agent').closest('tr') as HTMLElement;
@@ -260,6 +340,7 @@ describe('AgentsContent', () => {
 
     renderPage(
       <AgentsContent
+        projectId={1}
         agents={[projectAgent]}
         basePath="/projects/1/agents"
         title="Agents"
@@ -267,20 +348,23 @@ describe('AgentsContent', () => {
       />,
     );
 
-    // The project's own scope badge renders and edit/delete remain enabled.
+    // The project's own scope badge renders and edit/archive remain enabled.
     expect(screen.getByText('project')).toBeInTheDocument();
-    const row = screen.getByText('Local Helper').closest('tr') as HTMLElement;
-    const editButton = row.querySelector('.tabler-icon-edit')?.closest('button') as HTMLElement;
-    const trashButton = row.querySelector('.tabler-icon-trash')?.closest('button') as HTMLElement;
-    expect(editButton).not.toBeDisabled();
-    expect(trashButton).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Edit' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Archive' })).not.toBeDisabled();
   });
 
   it('does not render the Scope column in a company context', () => {
     const agents = [makeAgent({ id: 1, title: 'Market Analyst' })];
 
     renderPage(
-      <AgentsContent agents={agents} basePath="/company/agents" title="Agents" subtitle="Manage your agents" />,
+      <AgentsContent
+        projectId={1}
+        agents={agents}
+        basePath="/company/agents"
+        title="Agents"
+        subtitle="Manage your agents"
+      />,
     );
 
     expect(screen.queryByText('Scope')).not.toBeInTheDocument();

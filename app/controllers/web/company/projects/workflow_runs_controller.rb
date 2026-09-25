@@ -10,7 +10,7 @@ class Web::Company::Projects::WorkflowRunsController < Web::Company::Projects::A
   def show
     run = WorkflowRun.where(project: current_project)
                      .includes(
-                       step_runs: [ { sub_step_runs: :sub_step }, :step, :terminal_session ],
+                       step_runs: [ { sub_step_runs: :sub_step }, :step, :terminal_session, :workflow_version ],
                        workflow: { steps: :sub_steps },
                        workflow_run_assets: { produced_by_step_run: :step }
                      )

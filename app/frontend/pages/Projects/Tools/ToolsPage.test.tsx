@@ -28,6 +28,8 @@ const makeTool = (overrides: Partial<Tool> = {}): Tool => ({
   toolFiles: [],
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  currentVersionNumber: 1,
+  archivedAt: null,
   ...overrides,
 });
 
@@ -94,16 +96,13 @@ describe('Projects/Tools/ToolsPage', () => {
     expect(screen.queryByText('No wrappers yet')).not.toBeInTheDocument();
   });
 
-  it('deletes an editable project tool via the row action after confirmation', async () => {
+  it('archives an editable project tool via the row action after confirmation', async () => {
     renderAuthedPage(<ToolsPage />, { props: { project, tools, configItemNames: [] } });
 
     const firstRow = screen.getByText('PDF Extractor').closest('tr') as HTMLElement;
-    // Editable project tool exposes Edit + Delete action icons; click Delete (the red one is last).
-    const actionButtons = within(firstRow).getAllByRole('button');
-    await userEvent.click(actionButtons[actionButtons.length - 1]);
+    await userEvent.click(within(firstRow).getByRole('button', { name: 'Archive' }));
 
-    // Confirm in the DeleteToolModal (its confirm button is labelled "Delete").
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Archive' }));
 
     expect(router.delete).toHaveBeenCalledWith(
       '/company/projects/7/tools/1',

@@ -1,9 +1,12 @@
 import { ActionIcon, Badge, Box, Button, Center, Group, Table, Text, TextInput, Tooltip } from '@mantine/core';
-import { IconCopy, IconEdit, IconPlus, IconRobot, IconSearch, IconTrash } from '@tabler/icons-react';
+import { IconArchive, IconCopy, IconEdit, IconPlus, IconRobot, IconSearch } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import type { Agent } from '@/types/generated';
 
+import { ArchivedList } from 'shared/components/versions/ArchivedList';
+import { ArchiveSwitch, type ArchiveView } from 'shared/components/versions/ArchiveSwitch';
+import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -14,6 +17,8 @@ import { DeleteAgentModal } from './DeleteAgentModal';
 
 interface AgentsContentProps {
   agents: Agent[];
+  archivedAgents?: Agent[];
+  projectId: number;
   basePath: string;
   title: string;
   subtitle: string;
@@ -24,7 +29,15 @@ const SCOPE_COLORS: Record<string, string> = {
   project: 'green',
 };
 
-export function AgentsContent({ agents, basePath, title, subtitle }: AgentsContentProps) {
+export function AgentsContent({
+  agents,
+  archivedAgents = [],
+  projectId,
+  basePath,
+  title,
+  subtitle,
+}: AgentsContentProps) {
+  const [view, setView] = useState<ArchiveView>('active');
   const [search, setSearch] = useState('');
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editAgent, setEditAgent] = useState<Agent | null>(null);
@@ -85,9 +98,23 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
         <ResourceCount>
           {agents.length} {agents.length === 1 ? 'agent' : 'agents'}
         </ResourceCount>
+        <ArchiveSwitch
+          value={view}
+          onChange={setView}
+          activeCount={agents.length}
+          archivedCount={archivedAgents.length}
+        />
       </Group>
 
-      {filtered.length === 0 ? (
+      {view === 'archived' ? (
+        <ArchivedList
+          projectId={projectId}
+          versionableType="Agent"
+          noun="agents"
+          canRestore={canExecute}
+          items={archivedAgents.map((a) => ({ id: a.id, name: a.title, detail: a.name, archivedAt: a.archivedAt }))}
+        />
+      ) : filtered.length === 0 ? (
         <Box
           style={{
             border: '1px solid var(--app-border-default)',
@@ -176,43 +203,52 @@ export function AgentsContent({ agents, basePath, title, subtitle }: AgentsConte
                     </Table.Td>
                   )}
                   <Table.Td>
-                    {canExecute && (
-                      <Group gap={4} justify="flex-end">
-                        <Tooltip label="Duplicate">
-                          <ActionIcon
-                            aria-label="Duplicate"
-                            variant="subtle"
-                            size="sm"
-                            onClick={() => handleDuplicate(agent)}
-                          >
-                            <IconCopy size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Edit'}>
-                          <ActionIcon
-                            aria-label="Edit"
-                            variant="subtle"
-                            size="sm"
-                            disabled={isReadOnly(agent)}
-                            onClick={() => handleEdit(agent)}
-                          >
-                            <IconEdit size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                        <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Delete'}>
-                          <ActionIcon
-                            aria-label="Delete"
-                            variant="subtle"
-                            size="sm"
-                            color="red"
-                            disabled={isReadOnly(agent)}
-                            onClick={() => setDeleteAgent(agent)}
-                          >
-                            <IconTrash size={16} />
-                          </ActionIcon>
-                        </Tooltip>
-                      </Group>
-                    )}
+                    <Group gap={4} justify="flex-end">
+                      <HistoryButton
+                        projectId={projectId}
+                        versionableType="Agent"
+                        versionableId={agent.id}
+                        title={agent.title}
+                        canRevert={canExecute}
+                      />
+                      {canExecute && (
+                        <>
+                          <Tooltip label="Duplicate">
+                            <ActionIcon
+                              aria-label="Duplicate"
+                              variant="subtle"
+                              size="sm"
+                              onClick={() => handleDuplicate(agent)}
+                            >
+                              <IconCopy size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Edit'}>
+                            <ActionIcon
+                              aria-label="Edit"
+                              variant="subtle"
+                              size="sm"
+                              disabled={isReadOnly(agent)}
+                              onClick={() => handleEdit(agent)}
+                            >
+                              <IconEdit size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                          <Tooltip label={isReadOnly(agent) ? 'Company-managed' : 'Archive'}>
+                            <ActionIcon
+                              aria-label="Archive"
+                              variant="subtle"
+                              size="sm"
+                              color="red"
+                              disabled={isReadOnly(agent)}
+                              onClick={() => setDeleteAgent(agent)}
+                            >
+                              <IconArchive size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        </>
+                      )}
+                    </Group>
                   </Table.Td>
                 </Table.Tr>
               ))}

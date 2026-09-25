@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_25_200100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -38,9 +38,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
   end
 
   create_table "agents", force: :cascade do |t|
+    t.datetime "archived_at"
     t.text "communication_style"
     t.bigint "company_id"
     t.datetime "created_at", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.string "icon"
     t.string "name", null: false
     t.text "persona", null: false
@@ -53,7 +55,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
     t.datetime "updated_at", null: false
     t.index ["company_id"], name: "index_agents_on_company_id"
     t.index ["project_id"], name: "index_agents_on_project_id"
-    t.index ["scope_type", "scope_id", "name"], name: "index_agents_on_scope_type_and_scope_id_and_name", unique: true
+    t.index ["scope_type", "scope_id", "name"], name: "index_agents_on_scope_type_and_scope_id_and_name", unique: true, where: "(archived_at IS NULL)"
     t.index ["scope_type", "scope_id"], name: "index_agents_on_scope_type_and_scope_id"
   end
 
@@ -513,6 +515,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
     t.index ["status"], name: "index_connectors_on_status"
   end
 
+  create_table "entity_versions", force: :cascade do |t|
+    t.bigint "author_id"
+    t.bigint "company_id"
+    t.datetime "created_at", null: false
+    t.string "event", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.integer "number", null: false
+    t.bigint "project_id"
+    t.bigint "restored_from_id"
+    t.jsonb "snapshot", default: {}, null: false
+    t.integer "snapshot_format", default: 1, null: false
+    t.string "source", null: false
+    t.bigint "terminal_session_id"
+    t.bigint "versionable_id", null: false
+    t.string "versionable_type", null: false
+    t.index ["project_id", "created_at"], name: "index_entity_versions_on_project_id_and_created_at"
+    t.index ["terminal_session_id"], name: "index_entity_versions_on_terminal_session_id", where: "(terminal_session_id IS NOT NULL)"
+    t.index ["versionable_type", "versionable_id", "number"], name: "index_entity_versions_on_versionable_and_number", unique: true
+    t.check_constraint "number > 0", name: "entity_versions_number_positive"
+  end
+
   create_table "folders", force: :cascade do |t|
     t.bigint "company_id"
     t.datetime "created_at", null: false
@@ -594,6 +617,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
   end
 
   create_table "mcp_servers", force: :cascade do |t|
+    t.datetime "archived_at"
     t.jsonb "args", default: []
     t.string "auth_type", default: "none", null: false
     t.string "command"
@@ -603,6 +627,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
     t.string "connector_version"
     t.datetime "created_at", null: false
     t.string "credential_scope", default: "shared", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.text "description"
     t.boolean "enabled", default: true, null: false
     t.text "encrypted_env"
@@ -623,7 +648,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
     t.index ["company_id"], name: "index_mcp_servers_on_company_id"
     t.index ["connector_name"], name: "index_mcp_servers_on_connector_name"
     t.index ["id"], name: "index_mcp_servers_with_tool_drift", where: "(tool_drift <> '{}'::jsonb)"
-    t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true, nulls_not_distinct: true
+    t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true, where: "(archived_at IS NULL)", nulls_not_distinct: true
     t.index ["project_id"], name: "index_mcp_servers_on_project_id"
     t.index ["scope_type", "scope_id"], name: "index_mcp_servers_on_scope"
   end
@@ -881,10 +906,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
   end
 
   create_table "skills", force: :cascade do |t|
+    t.datetime "archived_at"
     t.bigint "company_id"
     t.text "content"
     t.string "content_hash"
     t.datetime "created_at", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.text "description"
     t.jsonb "files", default: {}, null: false
     t.integer "install_count", default: 0
@@ -902,7 +929,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
     t.index ["origin"], name: "index_skills_on_origin"
     t.index ["package"], name: "index_skills_on_package"
     t.index ["project_id"], name: "index_skills_on_project_id"
-    t.index ["scope_type", "scope_id", "name"], name: "index_skills_on_scope_type_and_scope_id_and_name", unique: true, nulls_not_distinct: true
+    t.index ["scope_type", "scope_id", "name"], name: "index_skills_on_scope_type_and_scope_id_and_name", unique: true, where: "(archived_at IS NULL)", nulls_not_distinct: true
     t.index ["scope_type", "scope_id"], name: "index_skills_on_scope_type_and_scope_id"
   end
 
@@ -1044,10 +1071,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
     t.bigint "terminal_session_id"
     t.datetime "updated_at", null: false
     t.bigint "workflow_run_id", null: false
+    t.bigint "workflow_version_id"
     t.index ["step_id"], name: "index_step_runs_on_step_id"
     t.index ["terminal_session_id"], name: "index_step_runs_on_terminal_session_id"
     t.index ["workflow_run_id", "state"], name: "index_step_runs_on_workflow_run_id_and_state"
     t.index ["workflow_run_id"], name: "index_step_runs_on_workflow_run_id"
+    t.index ["workflow_version_id"], name: "index_step_runs_on_workflow_version_id", where: "(workflow_version_id IS NOT NULL)"
   end
 
   create_table "steps", force: :cascade do |t|
@@ -1207,6 +1236,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
     t.bigint "total_tokens", default: 0, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id"
+    t.jsonb "version_ids", default: {}, null: false
     t.index ["company_id"], name: "index_terminal_sessions_on_company_id"
     t.index ["configured_agent_id"], name: "index_terminal_sessions_on_configured_agent_id"
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
@@ -1258,6 +1288,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
     t.text "command"
     t.bigint "company_id"
     t.datetime "created_at", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.string "definition_digest"
     t.datetime "deleted_at"
     t.text "description"
@@ -1490,6 +1521,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
     t.bigint "company_id"
     t.jsonb "config", default: {}, null: false
     t.datetime "created_at", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.datetime "deleted_at"
     t.text "description"
     t.string "name", null: false
@@ -1558,6 +1590,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
   add_foreign_key "config_items", "companies", on_delete: :cascade, validate: false
   add_foreign_key "config_items", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_config_items_project_company", on_delete: :cascade, validate: false
   add_foreign_key "config_items", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "entity_versions", "companies", on_delete: :cascade
+  add_foreign_key "entity_versions", "entity_versions", column: "restored_from_id", on_delete: :nullify
+  add_foreign_key "entity_versions", "projects", on_delete: :cascade
+  add_foreign_key "entity_versions", "terminal_sessions", on_delete: :nullify
+  add_foreign_key "entity_versions", "users", column: "author_id", on_delete: :nullify
   add_foreign_key "folders", "companies", on_delete: :cascade, validate: false
   add_foreign_key "folders", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_folders_project_company", on_delete: :cascade, validate: false
   add_foreign_key "folders", "projects", on_delete: :cascade, validate: false
@@ -1614,6 +1651,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_140000) do
   add_foreign_key "solid_queue_ready_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_recurring_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_scheduled_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "step_runs", "entity_versions", column: "workflow_version_id", on_delete: :nullify
   add_foreign_key "step_runs", "steps", on_delete: :cascade
   add_foreign_key "step_runs", "terminal_sessions"
   add_foreign_key "step_runs", "workflow_runs", on_delete: :cascade
