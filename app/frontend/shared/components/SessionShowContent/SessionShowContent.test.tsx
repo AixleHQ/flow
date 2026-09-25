@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
 
 import { SessionShowContent, type SessionShowContext } from './SessionShowContent';
@@ -396,5 +396,139 @@ describe('SessionShowContent', () => {
     expect(screen.queryByLabelText("Read-only view of another user's session")).not.toBeInTheDocument();
     expect(screen.queryByText('View only')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /finish session/i })).toBeInTheDocument();
+  });
+
+  describe('full screen console', () => {
+    const liveSession = (overrides: Partial<TerminalSession> = {}) =>
+      makeSession({ state: 'ready', websocketUrl: 'wss://host.test/sess/ws', ...overrides });
+
+    it('pins the live console over the page and restores it on Esc without reloading the terminal', async () => {
+      renderPage(<SessionShowContent session={liveSession()} cableStream="signed-stream" context={ctx} />);
+
+      const terminal = screen.getByTitle('Terminal');
+      const frame = screen.getByRole('region', { name: 'Console' });
+      expect(frame).not.toHaveAttribute('data-maximized');
+
+      await userEvent.click(screen.getByRole('button', { name: /full screen/i }));
+
+      expect(frame).toHaveAttribute('data-maximized');
+      expect(screen.getByRole('button', { name: /exit full screen/i })).toHaveAttribute('aria-pressed', 'true');
+      // The header is covered, so Finish and Copy link move onto the console bar.
+      expect(within(frame).getByRole('button', { name: /finish session/i })).toBeInTheDocument();
+      expect(within(frame).getByRole('button', { name: /copy session link/i })).toBeInTheDocument();
+      // Same iframe node: remounting it would drop the ttyd websocket.
+      expect(screen.getByTitle('Terminal')).toBe(terminal);
+
+      await userEvent.keyboard('{Escape}');
+
+      expect(frame).not.toHaveAttribute('data-maximized');
+      expect(within(frame).queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
+      expect(screen.getByTitle('Terminal')).toBe(terminal);
+    });
+
+    it('puts the console frame into browser fullscreen and follows the browser out of it', async () => {
+      let fullscreenElement: Element | null = null;
+      const fullscreenDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'fullscreenElement');
+      Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => fullscreenElement });
+      const requestFullscreen = vi.fn(function (this: Element) {
+        fullscreenElement = screen.getByRole('region', { name: 'Console' });
+        document.dispatchEvent(new Event('fullscreenchange'));
+        return Promise.resolve();
+      });
+      HTMLElement.prototype.requestFullscreen = requestFullscreen;
+
+      try {
+        renderPage(<SessionShowContent session={liveSession()} cableStream="signed-stream" context={ctx} />);
+        const frame = screen.getByRole('region', { name: 'Console' });
+
+        await userEvent.click(screen.getByRole('button', { name: /full screen/i }));
+
+        expect(requestFullscreen).toHaveBeenCalledTimes(1);
+        expect(fullscreenElement).toBe(frame);
+        expect(frame).toHaveAttribute('data-maximized');
+
+        // The browser handles Esc itself in fullscreen and only reports the exit.
+        fullscreenElement = null;
+        act(() => {
+          document.dispatchEvent(new Event('fullscreenchange'));
+        });
+
+        expect(frame).not.toHaveAttribute('data-maximized');
+        expect(screen.getByRole('button', { name: /full screen/i })).toHaveAttribute('aria-pressed', 'false');
+      } finally {
+        delete (HTMLElement.prototype as Partial<HTMLElement>).requestFullscreen;
+        delete (document as Partial<Document> & { fullscreenElement?: Element | null }).fullscreenElement;
+        if (fullscreenDescriptor) Object.defineProperty(Document.prototype, 'fullscreenElement', fullscreenDescriptor);
+      }
+    });
+
+    it('shows only the agent terminal while full screen and brings the editor back after', async () => {
+      renderPage(
+        <SessionShowContent
+          session={liveSession({ ideUrl: 'https://host.test/ide' })}
+          cableStream="signed-stream"
+          context={ctx}
+        />,
+      );
+      expect(screen.getByTitle('VS Code Editor')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /full screen/i }));
+
+      expect(screen.queryByTitle('VS Code Editor')).not.toBeInTheDocument();
+      expect(screen.getByTitle('Terminal')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /show editor/i })).not.toBeInTheDocument();
+
+      await userEvent.keyboard('{Escape}');
+
+      expect(screen.getByTitle('VS Code Editor')).toBeInTheDocument();
+      expect(screen.getByTitle('Terminal')).toBeInTheDocument();
+    });
+
+    it('toggles with the keyboard shortcut', async () => {
+      renderPage(<SessionShowContent session={liveSession()} cableStream="signed-stream" context={ctx} />);
+      const frame = screen.getByRole('region', { name: 'Console' });
+
+      await userEvent.keyboard('{Control>}{Shift>}F{/Shift}{/Control}');
+      expect(frame).toHaveAttribute('data-maximized');
+
+      await userEvent.keyboard('{Control>}{Shift>}F{/Shift}{/Control}');
+      expect(frame).not.toHaveAttribute('data-maximized');
+    });
+
+    it('lets a viewer go full screen while the terminal stays read-only', async () => {
+      renderPage(
+        <SessionShowContent
+          session={liveSession({ ownedByViewer: false })}
+          cableStream="signed-stream"
+          context={ctx}
+        />,
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: /full screen/i }));
+
+      const frame = screen.getByRole('region', { name: 'Console' });
+      expect(frame).toHaveAttribute('data-maximized');
+      expect(within(frame).getByLabelText("Read-only view of another user's session")).toBeInTheDocument();
+      expect(within(frame).queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
+      expect(within(frame).getByRole('button', { name: /copy session link/i })).toBeInTheDocument();
+    });
+
+    it('offers the same control on a finished session', async () => {
+      renderPage(
+        <SessionShowContent
+          session={makeSession({ state: 'finished', finishedAt: '2026-06-26T10:05:00Z' })}
+          cableStream="signed-stream"
+          context={ctx}
+        />,
+      );
+
+      const frame = screen.getByRole('region', { name: 'Console' });
+
+      await userEvent.click(screen.getByRole('button', { name: /full screen/i }));
+      expect(frame).toHaveAttribute('data-maximized');
+
+      await userEvent.click(screen.getByRole('button', { name: /exit full screen/i }));
+      expect(frame).not.toHaveAttribute('data-maximized');
+    });
   });
 });

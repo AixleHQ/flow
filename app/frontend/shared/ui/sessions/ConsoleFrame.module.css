@@ -15,6 +15,19 @@
   min-height: 0;
 }
 
+/* Fixed rather than portalled: moving the frame in the DOM would reload its
+   iframes and drop the ttyd websocket. Growing the iframe viewport is what
+   makes ttyd refit its rows/columns. z-index clears the sidebar (≤100) and
+   stays under Mantine popovers/tooltips (300) and notifications (400). */
+.frame.maximized {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  border: 0;
+  border-radius: 0;
+  min-height: 0;
+}
+
 .bar {
   height: 38px;
   display: flex;
@@ -47,8 +60,15 @@
   text-overflow: ellipsis;
 }
 
-.live {
+.barEnd {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+}
+
+.live {
   display: inline-flex;
   align-items: center;
   gap: 6px;
