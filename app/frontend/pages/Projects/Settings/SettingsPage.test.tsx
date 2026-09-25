@@ -27,7 +27,6 @@ const concurrency = {
   companyLimit: null,
   available: null,
   allocations: [],
-  queueEnabled: true,
   canManage: true,
 };
 

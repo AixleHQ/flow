@@ -12,7 +12,7 @@ class Admin::CompanySessionLimitsTest < ActionDispatch::IntegrationTest
     @admin = create(:user, :super_admin, :onboarding_completed, company: @company,
                     password: AuthHelper::TEST_PASSWORD)
     sign_in_as(@admin)
-    with_admission(project: 1)
+    with_scope_defaults(project: 1)
   end
 
   def limit_row

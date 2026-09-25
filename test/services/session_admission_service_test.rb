@@ -7,11 +7,10 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     @user = create(:user, :with_company)
     @company = @user.companies.first
     @project = create(:project, owner: @user, company: @company)
-    with_admission(project: 1)
+    with_scope_defaults(project: 1)
   end
 
-  # Every queued session belongs to a project — that is what the queue is for.
-  # Pass `project: nil` only to exercise the sessions that are exempt from it.
+  # Pass `project: nil` for an agent login, which queues per user.
   def enqueue(user: @user, project: @project)
     session = create(:terminal_session, user: user, project: project)
     SessionAdmissionService.enqueue!(session)
@@ -167,7 +166,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "with no company limit each project has its own independent queue" do
-    with_admission(project: 1)
+    with_scope_defaults(project: 1)
     other_project = create(:project, owner: @user, company: @user.companies.first)
     mine_first = enqueue
     mine_second = enqueue
@@ -177,22 +176,23 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_nil mine_second.reload.admitted_at, "one project filling up must not hold up another"
   end
 
-  # The queue is a project feature: a slot is allocated to a project, waited for
-  # in one and shown in one's settings. A session with no project — in practice an
-  # agent login — has no queue to join and launches without a reservation.
-  test "a session with no project is not queued at all" do
-    with_company_limit(@company, 1)
+  test "agent logins queue per user, two at a time" do
+    first = enqueue(project: nil)
+    second = enqueue(project: nil)
+    third = enqueue(project: nil)
+    other = enqueue(user: create(:user, :with_company), project: nil)
 
-    assert_nil enqueue(project: nil)
-    assert_equal 0, SessionAdmission.count
+    assert_equal [ first.id, second.id, other.id ].sort, SessionAdmissionService.drain!.sort
+    assert_nil third.reload.admitted_at
+    assert_equal "user:#{@user.id}", first.session_admission_pool.key
   end
 
-  test "an exempt session does not consume the company's capacity" do
+  test "an agent login does not consume the company's capacity" do
     with_company_limit(@company, 1)
-    enqueue(project: nil)
+    login = enqueue(project: nil)
     queued = enqueue
 
-    assert_equal [ queued.id ], SessionAdmissionService.drain!
+    assert_equal [ login.id, queued.id ].sort, SessionAdmissionService.drain!.sort
   end
 
   # Both tiers apply at once: the company bounds the total, the project bounds
@@ -296,7 +296,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "a changed scope default takes effect without writing policy" do
-    with_admission(project: 1)
+    with_scope_defaults(project: 1)
     project = create(:project, owner: @user, company: @user.companies.first)
     first = enqueue(project: project)
     second = enqueue(project: project)
@@ -318,7 +318,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "a scope override beats the deployment default, which beats nothing" do
-    with_admission(project: 1)
+    with_scope_defaults(project: 1)
     project = create(:project, owner: @user, company: @user.companies.first)
     SessionConcurrencyLimit.set!(scope: project, max_sessions: 2)
 
@@ -332,7 +332,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "a session in a project draws on the project pool, not its launcher's" do
-    with_admission(project: 1)
+    with_scope_defaults(project: 1)
     project = create(:project, owner: @user, company: @user.companies.first)
     other = create(:user, :with_company)
     create(:company_membership, user: other, company: project.company, state: :active)
@@ -346,7 +346,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "raising a scope limit admits the queue without waiting for reconciliation" do
-    with_admission(project: 1)
+    with_scope_defaults(project: 1)
     project = create(:project, owner: @user, company: @user.companies.first)
     first = enqueue(project: project)
     second = enqueue(project: project)
@@ -357,12 +357,6 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
 
     assert second.reload.admitted_at, "the write itself wakes the queue"
     assert_equal [ first.id, second.id ], SessionAdmission.occupied.order(:id).pluck(:id)
-  end
-
-  test "disabling admission with queued work is rejected" do
-    enqueue
-    assert_raises(ArgumentError) { SessionAdmissionPolicy.sync!(enabled: false) }
-    assert SessionAdmissionPolicy.current.enabled?
   end
 
   test "queued session finish cancels without sending runtime commands" do

@@ -78,7 +78,6 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
       # What this project could be raised to right now. Nil means no limit.
       available: headroom,
       allocations: budget.breakdown,
-      queue_enabled: SessionAdmissionPolicy.enabled?,
       can_manage: settings_policy.manage_concurrency?
     }
   end

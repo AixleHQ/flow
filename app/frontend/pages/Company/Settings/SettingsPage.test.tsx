@@ -22,7 +22,6 @@ const capacity = {
   reserved: 6,
   allocations: [{ name: 'Gateway', maxSessions: 6 }],
   projectDefault: 4,
-  queueEnabled: true,
   canManage: true,
 };
 
@@ -87,14 +86,6 @@ describe('Company settings page', () => {
 
     expect(screen.getByText('Not set')).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: /Accept new people automatically/ })).toBeDisabled();
-  });
-
-  it('says nothing is held back while the queue is off', () => {
-    renderAuthedPage(<SettingsPage />, {
-      props: { company, capacity: { ...capacity, queueEnabled: false }, canManage: true },
-    });
-
-    expect(screen.getByText(/nothing is being held back yet/)).toBeInTheDocument();
   });
 
   it('hides the save button from someone who may not write', () => {
