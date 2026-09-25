@@ -9,6 +9,17 @@ class Web::SessionsController < Web::ApplicationController
   skip_before_action :enforce_company_auth_policy
   skip_before_action :redirect_super_admin_to_admin_panel, only: %i[omniauth failure]
 
+  # NO membership at all, which is a signup — not "no ACTIVE membership", which
+  # is an invitation awaiting an admin and must keep waiting for one. Only where
+  # we host: elsewhere a workspace is made in the admin, so a person with nothing
+  # to join is a refusal.
+  def may_sign_up_a_workspace?(user)
+    return false unless Deployment.saas?
+    return false if user.nil? || user.super_admin? || user.deleted?
+
+    user.company_memberships.none?
+  end
+
   def new
     if signed_in?
       # A session outlives its memberships: revocation, a membership pushed back
@@ -17,6 +28,8 @@ class Web::SessionsController < Web::ApplicationController
       # survives with nothing to sign in TO — and #new sends it to onboarding
       # while Onboarding#require_membership sends it straight back here, which
       # the browser reports as ERR_TOO_MANY_REDIRECTS rather than as a refusal.
+      return redirect_to(new_workspace_path) if may_sign_up_a_workspace?(current_user)
+
       if no_active_membership?(current_user)
         sign_out
         redirect_to login_path(error: "no_workspace")
@@ -58,6 +71,11 @@ class Web::SessionsController < Web::ApplicationController
     # active membership would otherwise be walked all the way through
     # onboarding (enforce_onboarding runs before require_active_membership!)
     # and only then signed out at the first company-scoped page.
+    if may_sign_up_a_workspace?(user)
+      sign_in(user)
+      return redirect_to(new_workspace_path)
+    end
+
     return redirect_to login_path(error: "pending_approval") if no_active_membership?(user)
 
     # The password credential gets its identity row here, not only in the
@@ -96,6 +114,12 @@ class Web::SessionsController < Web::ApplicationController
     # it by email, but AuthConcern#current_user filters it out, so signing it in
     # produces a redirect loop instead of a refusal.
     return redirect_to login_path(error: "account_deleted") if user.deleted?
+
+    if may_sign_up_a_workspace?(user)
+      sign_in(user)
+      redirect_to new_workspace_path
+      return
+    end
 
     if user.pending? || no_active_membership?(user)
       redirect_to login_path(error: "pending_approval")

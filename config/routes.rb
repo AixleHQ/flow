@@ -375,6 +375,7 @@ Rails.application.routes.draw do
       # surface (CAP-4, AD-18).
       get :security, on: :member
     end
+    resource :workspace, only: %i[new create], controller: "workspaces"
     resource :onboarding, only: %i[show update], controller: "onboarding"
 
     # The organization-visible member profile. Company-scoped like everything
