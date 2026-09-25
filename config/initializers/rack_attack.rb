@@ -35,6 +35,16 @@ class Rack::Attack
     Digest::SHA256.hexdigest(key)[0, 32] if key
   end
 
+  # A digest, so the throttle's cache keys never hold a live credential.
+  def self.scim_credential(req)
+    token = req.get_header("HTTP_AUTHORIZATION").to_s.delete_prefix("Bearer ").presence
+    Digest::SHA256.hexdigest(token)[0, 32] if token
+  end
+
+  def self.scim?(req)
+    req.path == "/scim" || req.path.start_with?("/scim/")
+  end
+
   def self.member_invite?(req)
     req.post? && (req.path == "/company/members" || req.path.match?(%r{\A/company/members/\d+/resend\z}))
   end
@@ -107,6 +117,14 @@ class Rack::Attack
   throttle("member-invites/session", limit: 60, period: 3600) do |req|
     req.session["user_session_id"].presence if member_invite?(req)
   end
+
+  # A customer's directory reaches SCIM with a bearer token and nothing else, and
+  # on a deployment that publishes the endpoint that token is the only thing
+  # between the internet and a company's membership list. Two throttles: one per
+  # credential, generous enough for a real directory's reconciliation sweep, and
+  # one per IP that caps guessing at an unusable rate.
+  throttle("scim/credential", limit: 600, period: 60) { |req| scim_credential(req) if scim?(req) }
+  throttle("scim/ip", limit: 60, period: 60) { |req| req.ip if scim?(req) }
 
   throttle("csp-reports/ip", limit: 60, period: 60) do |req|
     req.ip if req.post? && req.path == "/csp-violation-report-endpoint"
