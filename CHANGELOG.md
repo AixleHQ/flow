@@ -18,6 +18,17 @@ governance, community health — carry none.
 ## [Unreleased]
 
 ### Added
+- **Workflows**: version history. The builder keeps edits local until **Save**
+  (with an *Unsaved changes* notice and a prompt before leaving), and each Save
+  records the whole workflow as one numbered version. The History view shows
+  who changed what — a person, or the Aixle Builder on their behalf — with a
+  diff against the previous or the current version, and reverts to any version
+  by saving it as the newest. A Save over someone else's newer version is
+  refused instead of overwriting it.
+- **Agents**, **Skills**, **Wrappers**, **Connectors**: the same version
+  history, diff and revert. Connector secrets never enter a version.
+- **Sessions & Runs**: the run page names the workflow version each session
+  launched with, and says when the workflow was saved mid-run.
 - Apache License 2.0, `NOTICE` attribution file, and third-party license
   inventory (`THIRD-PARTY-LICENSES.md`, `NOTICES.md`).
 - Contributor model: Contributor License Agreement (`CLA.md`) and Developer
@@ -29,6 +40,11 @@ governance, community health — carry none.
   and pull-request templates, CODEOWNERS, and this changelog.
 
 ### Changed
+- **Workflows**, **Agents**, **Skills**, **Wrappers**, **Connectors**: delete
+  is now archive. Archived entities keep their history, leave pickers and new
+  sessions, and can be restored from each screen's *Archived* view; archiving
+  is refused while a workflow uses the entity. Workflow steps and sub-steps
+  are always soft-deleted.
 - Configuration: every deployment input is now declared in `config/settings.yml`
   and documented in `docs/reference/configuration.md`, which the docs portal
   serves directly instead of a hand-copy. A test fails when a variable gains no

@@ -1,6 +1,6 @@
 # RFC: Version history, revert and archive for workflows, agents, skills, tools and MCP servers
 
-**Status:** Draft
+**Status:** Implemented (see §13 for how the build differs from the first draft)
 **Date:** 2026-09-25
 **Baseline:** `develop` @ `6ffc0e61`
 **Scope:** Every explicit save of a workflow (with its steps and sub-steps), agent, skill, custom tool or MCP server becomes an immutable, numbered version. Each entity gets a Versions tab with diffs and revert. Delete becomes archive, and every list screen shows the archive.
@@ -131,10 +131,10 @@ Each versioned model gets `lock_version`-style protection through `current_versi
 
 | Type | Included | Excluded |
 |---|---|---|
-| **Workflow** | `name`, `description`, `config` (all `base_*_ids`, `inherit_all_project_resources`). **Steps**, including soft-deleted ones, each with id and every column `WorkflowDuplicator#duplicate_step` copies: `name`, `instructions`, `position`, `agent_id`, `preferred_model`, `required_agent_runtime`, `skip_policy`, `on_failure`, `max_retries`, `input_asset_specs`, `output_asset_specs`, `tool_ids`, `skill_ids`, `mcp_server_ids`, `asset_ids`, `repository_ids`, `config_item_ids`, `depends_on_step_ids`, `deleted_at`. **Sub-steps** per step: id, `name`, `instructions`, `position`, `required`, `deleted_at`. | `published_at`/`published_by_id` (catalog sharing), timestamps, triggers and column bindings |
+| **Workflow** | `name`, `description`, `config` (all `base_*_ids`, `inherit_all_project_resources`). **Live steps** (soft-deleted ones are not in the snapshot; their rows stay so a revert can bring them back), each with id and every column `WorkflowDuplicator#duplicate_step` copies: `name`, `instructions`, `position`, `agent_id`, `preferred_model`, `required_agent_runtime`, `skip_policy`, `on_failure`, `max_retries`, `input_asset_specs`, `output_asset_specs`, `tool_ids`, `skill_ids`, `mcp_server_ids`, `asset_ids`, `repository_ids`, `config_item_ids`, `depends_on_step_ids`, `bmad_enabled`, `allow_non_interactive`. **Live sub-steps** per step: id, `name`, `instructions`, `position`, `required`. | `published_at`/`published_by_id` (catalog sharing), timestamps, triggers and column bindings |
 | **Agent** | `name`, `title`, `icon`, `persona`, `communication_style`, `principles`, `source` | timestamps |
 | **Skill** | `name`, `title`, `description`, `content`, `files` (`{path => contents}`), `origin`, `source`, `source_url`, `package`, `content_hash` | `install_count`, timestamps |
-| **Tool** (`source: "db"` only) | `name`, `display_name`, `description`, `command`, `docker_image`, `docker_image_digest`, `execution_mode`, `input_schema`, `required_config_items`, `requires_integration`, `tags`, `enabled`, `user_attachable`. **Tool files**: `path`, `content` (text), `file_data` (Shrine reference, §8.2). | `definition_digest` (derived, §8.3), timestamps |
+| **Tool** (`source: "db"` only) | `name`, `display_name`, `description`, `command`, `docker_image`, `execution_mode`, `input_schema`, `required_config_items`, `requires_integration`, `tags`, `enabled`, `user_attachable`. **Tool files**: `path`, `content` (text), `file_data` (Shrine reference, §8.2). | `definition_digest` (derived, §8.3), `docker_image_digest` (the pin the platform resolves), timestamps |
 | **MCP server** | `name`, `description`, `transport`, `url`, `command`, `args`, `auth_type`, `credential_scope`, `enabled`, `kind`, `connector_name`, `connector_version`, `connector_manifest`. **Secret fingerprints**: `env` and `headers` as `{key => "hmac:…"}` (§8.1). | secret values, `tool_snapshot`, `tool_drift`, `tool_snapshot_at`, OAuth credentials and client, timestamps |
 
 Snapshots are produced by one serializer per type, `Versions::Snapshot::<Type>`, and read back by the matching `Versions::Restore::<Type>`. The column lists live in one place per type. A test asserts that every column of the table is either snapshotted or explicitly excluded, so a new column cannot silently fall out of history.
@@ -387,3 +387,51 @@ Each phase ships on its own. Entities start with an empty history at deployment;
 2. **Retention:** D9 says indefinite. Revisit if skill snapshots grow (§8.9).
 3. **Triggers:** whether trigger bindings become part of the workflow snapshot in a later iteration.
 4. **Project-wide activity feed:** the `(project_id, created_at)` index allows a "recent changes across the project" page, which is not scoped here.
+
+## 13. As built
+
+The implementation follows this RFC with these differences and specifics:
+
+- **Code map.** `Versions` (`app/services/versions.rb`: `save!`, `revert!`,
+  `archive!`, `restore!`, `ensure_baseline!`), one serializer per type under
+  `app/services/versions/snapshots/`, `Versions::References` (archive guard),
+  `Versions::ReferenceNames` (names for a diff), `Versions::LaunchRecord` (§7),
+  and `WorkflowStepSync`, the one writer behind both a workflow revert and the
+  builder's Save. Models include `Versioned`; agents, skills and MCP servers
+  also `Archivable`.
+- **Baseline is lazy.** An entity that predates version history gets a
+  `created` version with `metadata.baseline = true` (source `system`) from its
+  state just before its first change — or at its first launch, when a run
+  records what it used. No backfill task is needed.
+- **Snapshots hold live steps only.** Soft-deleted steps and sub-steps are left
+  out; a revert soft-deletes live steps the snapshot lacks and brings back the
+  ones it names by clearing `deleted_at` (§8.4 made steps and sub-steps always
+  soft-deleted).
+- **No object sweep.** History is kept indefinitely (D9), so every stored tool
+  file stays referenced; `ToolFileUploader` simply never deletes. A retention
+  policy would have to bring a sweep with it.
+- **`docker_image_digest` is not versioned.** It is the pin the platform
+  resolves for `docker_image`, i.e. system state.
+- **API.** `GET/POST /api/v1/projects/:project_id/entity_versions` —
+  `index` (`versionable_type`, `versionable_id`, `before`; 20 per page,
+  `nextBefore`), `show` (the version with `snapshot`, `previousSnapshot`,
+  `currentSnapshot` and `references`, snapshot keys verbatim), `revert`
+  (`base_version`) and `restore` (`enable_trigger_ids`). The builder saves
+  through `PUT /api/v1/projects/:project_id/workflows/:id/aggregate`
+  (`base_version`, `aggregate: { name, description, config, steps }`, new steps
+  keyed by a client `key`). A stale `base_version` answers 409 with
+  `currentVersionNumber` everywhere, including the Inertia forms (a flash alert).
+- **Personal MCP tools** take an optional `base_version`, and the read tools
+  return `current_version_number`. `delete_*` / `uninstall_skill` archive.
+- **Completeness guards.** `Versions::SnapshotCompletenessTest` fails on an
+  unclassified column; `Versions::WritePathCoverageTest` fails on a personal
+  tool or controller that writes a versioned entity without `Versions`.
+- **UI.** A shared `VersionDiff` computes diffs client-side from per-type
+  schemas (`shared/lib/versionSchemas.ts`); `VersionHistoryDrawer` (timeline,
+  diff vs previous/current, revert with warnings), `ArchivedList` and an
+  Active/Archived switch on the Workflows, Agents, Skills, Wrappers and
+  Connectors screens. The builder keeps a local draft and saves it with one
+  **Save**; forms show *Unsaved changes* and ask before discarding them. The
+  run page shows the workflow version per session and flags a run whose
+  sessions ran different versions.
+

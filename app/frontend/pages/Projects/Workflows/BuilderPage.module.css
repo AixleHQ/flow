@@ -47,7 +47,9 @@
   margin-bottom: 4px;
   border-radius: 6px;
   cursor: pointer;
-  transition: background-color 0.15s, border-color 0.15s;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
   border-left: 3px solid transparent;
 }
 
@@ -221,7 +223,9 @@
   border: 1px solid transparent;
   border-radius: 5px;
   margin: 1px 4px;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
   position: relative;
 }
 

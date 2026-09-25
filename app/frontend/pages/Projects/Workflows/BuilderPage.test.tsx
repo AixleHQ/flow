@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { answerFetch } from 'test/fetchStub';
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 
+import type { aggregatePayload } from './builderDraft';
 import BuilderPage from './BuilderPage';
 
 // --- Inline fixtures (structurally match the page's Props/Step/Workflow shapes) ---
@@ -47,6 +48,7 @@ const makeWorkflow = (overrides: Record<string, unknown> = {}) => ({
   description: null,
   scopeType: 'project',
   scopeIndicator: 'Project',
+  currentVersionNumber: 1,
   inheritAllProjectResources: false,
   baseToolIds: [] as number[],
   baseSkillIds: [] as number[],
@@ -74,6 +76,74 @@ const projectProps = (overrides: Record<string, unknown> = {}) => ({
   configuredAgents: [] as string[],
   ...overrides,
 });
+
+// --- Save: PUT …/aggregate, answered with the saved state the way the server echoes it ---
+
+const SAVE_ROUTE = 'PUT /api/v1/projects/7/workflows/3/aggregate';
+
+type Aggregate = ReturnType<typeof aggregatePayload>;
+interface SaveBody {
+  baseVersion: number;
+  aggregate: Aggregate;
+}
+
+const CONFIG_FIELDS: Record<string, string> = {
+  inherit_all_project_resources: 'inheritAllProjectResources',
+  base_tool_ids: 'baseToolIds',
+  base_skill_ids: 'baseSkillIds',
+  base_mcp_server_ids: 'baseMCPServerIds',
+  base_asset_ids: 'baseAssetIds',
+  base_repository_ids: 'baseRepositoryIds',
+  base_config_item_ids: 'baseConfigItemIds',
+};
+
+function savedState({ aggregate }: SaveBody, workflow: ReturnType<typeof makeWorkflow>) {
+  const idByKey = new Map(aggregate.steps.map((step, i) => [step.key, step.id ?? 100 + i]));
+  const steps = aggregate.steps.map(({ key, dependsOnStepIds, subSteps, ...fields }, i) =>
+    makeStep({
+      ...fields,
+      id: idByKey.get(key),
+      position: i + 1,
+      dependsOnStepIds: dependsOnStepIds.map((depKey) => idByKey.get(depKey)),
+      subSteps: subSteps.map((sub, j) => ({ ...sub, id: sub.id ?? 1000 + 10 * i + j, position: j + 1 })),
+    }),
+  );
+  const config = Object.fromEntries(
+    Object.entries(aggregate.config).map(([key, value]) => [CONFIG_FIELDS[key], value]),
+  );
+  return {
+    workflow: {
+      ...workflow,
+      name: aggregate.name,
+      description: aggregate.description,
+      ...config,
+      currentVersionNumber: 2,
+    },
+    steps,
+    currentVersionNumber: 2,
+    versionCreated: true,
+  };
+}
+
+/** Answers the Save request, recording each body it was sent. */
+function answerSave(workflow = makeWorkflow()) {
+  const bodies: SaveBody[] = [];
+  const fetchSpy = answerFetch({
+    [SAVE_ROUTE]: (init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as SaveBody;
+      bodies.push(body);
+      return savedState(body, workflow);
+    },
+  });
+  return { fetchSpy, bodies };
+}
+
+/** Clicks Save and returns the aggregate it sent. */
+async function save(bodies: SaveBody[]): Promise<Aggregate> {
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  return bodies[0].aggregate;
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -117,30 +187,45 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getByDisplayValue('Implement')).toBeInTheDocument();
   });
 
-  it('creating the first session posts to the workflow steps endpoint', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('a session added from the ghost row is sent on Save as a new step and shows under its saved name', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, { props: projectProps({ steps: [] }) });
 
     // The "Add a session…" ghost row is a div, not a button — click it to start.
     await userEvent.click(screen.getByText('Add a session…'));
+    await userEvent.type(screen.getByPlaceholderText('Session name…'), 'My session{Enter}');
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    // The ghost input should now be focused; type a name and confirm.
-    const ghostInput = screen.getByPlaceholderText('Session name…');
-    await userEvent.type(ghostInput, 'My session{Enter}');
+    const aggregate = await save(bodies);
 
-    expect(fetchSpy).toHaveBeenCalledWith(
-      '/api/v1/projects/7/workflows/3/steps',
-      expect.objectContaining({ method: 'POST' }),
-    );
+    expect(aggregate.steps).toHaveLength(1);
+    expect(aggregate.steps[0]).toMatchObject({ id: null, name: 'My session' });
+    expect(aggregate.steps[0].key).toMatch(/^new/);
+    expect(await screen.findByDisplayValue('My session')).toBeInTheDocument();
+    expect(screen.getByText('My session')).toBeInTheDocument();
+  });
 
-    // No position: soft-deleted steps keep theirs and never reach this list, so
-    // anything derived from it collides with a step the user already deleted.
-    const postCall = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps');
-    const body: unknown = JSON.parse(String((postCall?.[1] as RequestInit | undefined)?.body ?? '{}'));
-    expect(body).toEqual({ step: { name: 'My session' } });
+  it('a new session that an existing session depends on is sent with the dependency as the new step key', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
+    });
+
+    // The ghost row focuses its input; the detail panel holds a second "Session name…" field.
+    await userEvent.click(screen.getByText('Add a session…'));
+    await userEvent.keyboard('Research{Enter}');
+
+    // Back on the existing session, make it wait for the new one.
+    await userEvent.click(screen.getByText('Draft spec'));
+    await userEvent.click(screen.getByPlaceholderText('Select sessions this session depends on…'));
+    await userEvent.click(await screen.findByRole('option', { name: '2. Research' }));
+
+    const aggregate = await save(bodies);
+
+    const [existing, added] = aggregate.steps;
+    expect(added).toMatchObject({ id: null, name: 'Research' });
+    expect(existing).toMatchObject({ id: 1, dependsOnStepIds: [added.key] });
+    expect(await screen.findByText(/↳ AFTER\s*Research/)).toBeInTheDocument();
   });
 
   it('renders a read-only company workflow without editing affordances', () => {
@@ -212,63 +297,51 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getAllByText('Builder Bot').length).toBeGreaterThan(0);
   });
 
-  it('opening the delete-step modal and confirming fires a DELETE to the step endpoint', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('removing a session through the modal drops it, and the dependencies on it, from the Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
-      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
+      props: projectProps({
+        steps: [
+          makeStep({ id: 1, name: 'Draft spec', position: 1 }),
+          makeStep({ id: 2, name: 'Implement', position: 2, dependsOnStepIds: [1] }),
+        ],
+      }),
     });
 
-    // The only trash icon on screen (no sub-steps / specs) is the detail-panel "Delete step" control.
-    const deleteIcon = document.querySelector('.tabler-icon-trash');
-    expect(deleteIcon).not.toBeNull();
-    await userEvent.click(deleteIcon!.closest('button')!);
+    await userEvent.click(screen.getByRole('button', { name: 'Delete session "Draft spec"' }));
+    expect(await screen.findByRole('dialog', { name: 'Remove Session' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
 
-    // Confirmation modal appears.
-    expect(
-      screen.getByText('Are you sure you want to delete this session? This action cannot be undone.'),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Remove Session' })).not.toBeInTheDocument());
+    expect(screen.queryByText('Draft spec')).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    // Confirm.
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const aggregate = await save(bodies);
 
-    expect(fetchSpy).toHaveBeenCalledWith(
-      '/api/v1/projects/7/workflows/3/steps/1',
-      expect.objectContaining({ method: 'DELETE' }),
-    );
+    expect(aggregate.steps).toHaveLength(1);
+    expect(aggregate.steps[0]).toMatchObject({ id: 2, name: 'Implement', dependsOnStepIds: [] });
   });
 
-  it('cancelling the delete-session modal closes it without any request', async () => {
+  it('cancelling the remove-session modal closes it and keeps the session', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
 
-    await userEvent.click(document.querySelector('.tabler-icon-trash')!.closest('button')!);
-    expect(
-      screen.getByText('Are you sure you want to delete this session? This action cannot be undone.'),
-    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Delete session "Draft spec"' }));
+    expect(await screen.findByRole('dialog', { name: 'Remove Session' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    await waitFor(() =>
-      expect(
-        screen.queryByText('Are you sure you want to delete this session? This action cannot be undone.'),
-      ).not.toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Remove Session' })).not.toBeInTheDocument());
+    expect(screen.getByDisplayValue('Draft spec')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('attaching a config item to a step PATCHes configItemIds', async () => {
-    const user = userEvent.setup();
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({}),
-    } as Response);
-
+  it('a config item attached to a step is sent in its configItemIds on Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })],
@@ -279,12 +352,13 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    await user.click(screen.getByRole('combobox', { name: /secrets and variables/i }));
-    await user.click(await screen.findByText('STRIPE_KEY (secret)'));
+    await userEvent.click(screen.getByRole('combobox', { name: /secrets and variables/i }));
+    await userEvent.click(await screen.findByText('STRIPE_KEY (secret)'));
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    const patch = fetchSpy.mock.calls.find(([, init]) => init?.method === 'PATCH');
-    expect(JSON.parse(patch![1]!.body as string).step.configItemIds).toEqual([11]);
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].configItemIds).toEqual([11]);
   });
 
   it('renders drag handles for sessions in the tree nav', () => {
@@ -324,52 +398,77 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
   });
 
-  it('editing the session name in the detail panel debounce-PATCHes the step endpoint', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('an edited session name is sent on Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
 
-    // The unlabelled session name input in the detail panel — find by current value.
-    const nameInput = screen.getByDisplayValue('Draft spec');
-    await userEvent.type(nameInput, '!');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Session name' }), '!');
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    await waitFor(
-      () =>
-        expect(fetchSpy).toHaveBeenCalledWith(
-          '/api/v1/projects/7/workflows/3/steps/1',
-          expect.objectContaining({ method: 'PATCH' }),
-        ),
-      { timeout: 2000 },
-    );
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0]).toMatchObject({ id: 1, key: '1', name: 'Draft spec!' });
   });
 
-  it('an edit still inside its debounce window is saved when the builder unmounts', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  it('an edit shows the unsaved-changes notice until Save succeeds, then reports the new version', async () => {
+    const { bodies } = answerSave();
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, instructions: 'Do the thing' })],
+      }),
+    });
 
-    const { unmount } = renderAuthedPage(<BuilderPage />, {
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.queryByText('Unsaved changes — press Save to keep them')).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'Session name' }), '!');
+
+    expect(screen.getByText('Unsaved changes — press Save to keep them')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+    // A run uses the saved workflow, so it waits for the save.
+    expect(screen.getByRole('button', { name: 'Run' })).toBeDisabled();
+
+    const aggregate = await save(bodies);
+
+    expect(bodies[0].baseVersion).toBe(1);
+    expect(aggregate.steps[0].name).toBe('Draft spec!');
+    expect(await screen.findByText('Saved as version 2')).toBeInTheDocument();
+    expect(screen.queryByText('Unsaved changes — press Save to keep them')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled();
+  });
+
+  it('a Save refused with a conflict keeps the edit on screen and says how to recover it', async () => {
+    answerFetch({
+      [SAVE_ROUTE]: new Response(
+        JSON.stringify({
+          error: 'Someone else saved a newer version (v2). Reload to see their changes before saving.',
+          currentVersionNumber: 2,
+        }),
+        { status: 409, headers: { 'Content-Type': 'application/json' } },
+      ),
+    });
+    renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
 
-    await userEvent.type(screen.getByDisplayValue('Draft spec'), '!');
-    // An Inertia visit to another page unmounts the builder well inside the 500 ms window.
-    unmount();
+    await userEvent.type(screen.getByRole('textbox', { name: 'Session name' }), '!');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    const patch = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    expect(patch).toBeDefined();
-    expect(JSON.parse((patch![1] as RequestInit).body as string)).toEqual({ step: { name: 'Draft spec!' } });
+    expect(
+      await screen.findByText(
+        'Someone else saved a newer version (v2). Reload to see their changes before saving. Your edits are still here — copy what you need, then reload.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Draft spec!')).toBeInTheDocument();
+    expect(screen.getByText('Unsaved changes — press Save to keep them')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
-  it('selecting an agent immediately PATCHes the step with the chosen agentId', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('the chosen agent is sent in the step agentId on Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         agents: [{ id: 42, name: 'Builder Bot' }],
@@ -377,20 +476,13 @@ describe('Projects/Workflows/BuilderPage', () => {
       }),
     });
 
-    // Open the Agent <Select> (first combobox — the agent picker) and pick the option.
-    const comboboxes = screen.getAllByRole('combobox');
-    await userEvent.click(comboboxes[0]);
-    const option = await screen.findByRole('option', { name: 'Builder Bot' });
-    await userEvent.click(option);
+    await userEvent.click(screen.getByRole('combobox', { name: 'Agent' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Builder Bot' }));
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/v1/projects/7/workflows/3/steps/1',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
-    const body = JSON.parse((fetchSpy.mock.calls.at(-1)![1] as RequestInit).body as string);
-    expect(body.step.agentId).toBe(42);
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].agentId).toBe(42);
   });
 
   it('shows the On Failure select in the Behavior section', () => {
@@ -414,8 +506,6 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('adds an asset spec row when "+ Add input" is clicked in the Data Flow section', async () => {
-    // The new row is saved (debounced) with the step.
-    answerFetch({ 'PATCH /api/v1/projects/7/workflows/:workflow/steps/1': {} });
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
@@ -513,80 +603,53 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(await screen.findByText(/how this workflow launches/)).toBeInTheDocument();
   });
 
-  it('editing the workflow name in the header debounce-PATCHes the workflow endpoint', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('an edited workflow name is sent on Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
-    // The header workflow-name field is an unlabelled input holding the workflow name.
-    await userEvent.type(screen.getByDisplayValue('Release pipeline'), '!');
+    await userEvent.type(screen.getByRole('textbox', { name: 'Workflow name' }), '!');
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    await waitFor(
-      () =>
-        expect(fetchSpy).toHaveBeenCalledWith(
-          '/api/v1/projects/7/workflows/3',
-          expect.objectContaining({ method: 'PATCH' }),
-        ),
-      { timeout: 2000 },
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.workflow.name).toBe('Release pipeline!');
+    const aggregate = await save(bodies);
+
+    expect(aggregate.name).toBe('Release pipeline!');
+    expect(await screen.findByDisplayValue('Release pipeline!')).toBeInTheDocument();
   });
 
-  it('editing the workflow description debounce-PATCHes the workflow endpoint', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('an edited workflow description is sent on Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
     await userEvent.type(screen.getByPlaceholderText('Add a description…'), 'Ship');
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    await waitFor(
-      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
-      { timeout: 2000 },
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.workflow.description).toBe('Ship');
+    const aggregate = await save(bodies);
+
+    expect(aggregate.description).toBe('Ship');
   });
 
-  it('toggling "Inherit all project resources" PATCHes the config-nested field and shows the helper text', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
-    renderAuthedPage(<BuilderPage />, {
-      props: projectProps({ workflow: makeWorkflow({ inheritAllProjectResources: false }) }),
-    });
+  it('toggling "Inherit all project resources" shows the helper text and is sent in the config on Save', async () => {
+    const workflow = makeWorkflow({ inheritAllProjectResources: false });
+    const { fetchSpy, bodies } = answerSave(workflow);
+    renderAuthedPage(<BuilderPage />, { props: projectProps({ workflow }) });
 
     // Navigate to the Base Resources tab, then flip the inherit switch.
     await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
     await userEvent.click(await screen.findByRole('switch'));
 
-    // Observable state change: the helper text is always shown (it's static, not conditional).
     expect(
       await screen.findByText(/Tools, skills, MCP servers, and assets from the project level are included/),
     ).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    // Config-backed field must be sent nested under `config`.
-    await waitFor(
-      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
-      { timeout: 2000 },
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.workflow.config.inheritAllProjectResources).toBe(true);
+    const aggregate = await save(bodies);
+
+    expect(aggregate.config.inherit_all_project_resources).toBe(true);
   });
 
-  it('attaching a base tool group from its header PATCHes config.baseToolIds with every member', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('attaching a base tool group from its header sends every member in base_tool_ids on Save', async () => {
+    const workflow = makeWorkflow({ inheritAllProjectResources: false });
+    const { bodies } = answerSave(workflow);
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         tools: [
@@ -594,31 +657,23 @@ describe('Projects/Workflows/BuilderPage', () => {
           { id: 11, name: 'Board Move Task' },
         ],
         toolGroups: [{ tag: 'board', label: 'Board management', toolIds: [10, 11] }],
-        workflow: makeWorkflow({ inheritAllProjectResources: false }),
+        workflow,
       }),
     });
 
-    // Navigate to the Base Resources tab so its Tools picker is accessible.
     await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
-    // Open the base-resources Tools picker by placeholder.
     await userEvent.click(await screen.findByPlaceholderText('Select tools…'));
     await userEvent.click(await screen.findByRole('checkbox', { name: /Board management/ }));
 
-    await waitFor(
-      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
-      { timeout: 2000 },
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
+    const aggregate = await save(bodies);
+
     // One click on the header attaches the whole family.
-    expect(body.workflow.config.baseToolIds).toEqual([10, 11]);
+    expect(aggregate.config.base_tool_ids).toEqual([10, 11]);
   });
 
-  it('attaching one tool out of a base group PATCHes config.baseToolIds with that id alone', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('attaching one tool out of a base group sends that id alone in base_tool_ids on Save', async () => {
+    const workflow = makeWorkflow({ inheritAllProjectResources: false });
+    const { bodies } = answerSave(workflow);
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         tools: [
@@ -626,7 +681,7 @@ describe('Projects/Workflows/BuilderPage', () => {
           { id: 11, name: 'Board Move Task' },
         ],
         toolGroups: [{ tag: 'board', label: 'Board management', toolIds: [10, 11] }],
-        workflow: makeWorkflow({ inheritAllProjectResources: false }),
+        workflow,
       }),
     });
 
@@ -635,39 +690,26 @@ describe('Projects/Workflows/BuilderPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Expand Board management' }));
     await userEvent.click(screen.getByRole('option', { name: 'Board Move Task' }));
 
-    await waitFor(
-      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
-      { timeout: 2000 },
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
+    const aggregate = await save(bodies);
+
     // A subset stays a subset — no silent expansion to the whole group.
-    expect(body.workflow.config.baseToolIds).toEqual([11]);
+    expect(aggregate.config.base_tool_ids).toEqual([11]);
   });
 
-  it('selecting a base repository PATCHes config.baseRepositoryIds', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('a selected base repository is sent in base_repository_ids on Save', async () => {
+    const workflow = makeWorkflow({ inheritAllProjectResources: false });
+    const { bodies } = answerSave(workflow);
     renderAuthedPage(<BuilderPage />, {
-      props: projectProps({
-        repositories: [{ id: 21, name: 'acme/api' }],
-        workflow: makeWorkflow({ inheritAllProjectResources: false }),
-      }),
+      props: projectProps({ repositories: [{ id: 21, name: 'acme/api' }], workflow }),
     });
 
     await userEvent.click(screen.getByRole('button', { name: /Base Resources/ }));
     await userEvent.click(await screen.findByPlaceholderText('Select repositories…'));
     await userEvent.click((await screen.findAllByRole('option', { name: 'acme/api' }))[0]);
 
-    await waitFor(
-      () => expect(fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3')).toBeTruthy(),
-      { timeout: 2000 },
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.workflow.config.baseRepositoryIds).toEqual([21]);
+    const aggregate = await save(bodies);
+
+    expect(aggregate.config.base_repository_ids).toEqual([21]);
   });
 
   // Repositories narrow the project-wide set rather than adding to it, so this
@@ -686,11 +728,8 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(screen.getByPlaceholderText('Select tools…')).toBeDisabled();
   });
 
-  it('selecting a repository on a session PATCHes the step repositoryIds', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('a repository selected on a session is sent in the step repositoryIds on Save', async () => {
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         repositories: [{ id: 21, name: 'acme/api' }],
@@ -703,21 +742,13 @@ describe('Projects/Workflows/BuilderPage', () => {
     await userEvent.click((await screen.findAllByLabelText('Repositories'))[0]);
     await userEvent.click((await screen.findAllByRole('option', { name: 'acme/api' }))[0]);
 
-    await waitFor(() => expect(fetchSpy.mock.calls.find(([url]) => String(url).includes('/steps/1'))).toBeTruthy(), {
-      timeout: 2000,
-    });
-    const call = fetchSpy.mock.calls.find(([url]) => String(url).includes('/steps/1'));
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.repositoryIds).toEqual([21]);
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].repositoryIds).toEqual([21]);
   });
 
-  // step.asset_ids has always been a real column the API and MCP tools accept —
-  // the session panel just never rendered a control for it.
-  it('selecting an asset on a session PATCHes the step assetIds', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('an asset selected on a session is sent in the step assetIds on Save', async () => {
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         assets: [{ id: 31, name: 'brand-guide.pdf' }],
@@ -729,136 +760,74 @@ describe('Projects/Workflows/BuilderPage', () => {
     await userEvent.click((await screen.findAllByLabelText('Assets'))[0]);
     await userEvent.click((await screen.findAllByRole('option', { name: 'brand-guide.pdf' }))[0]);
 
-    await waitFor(() => expect(fetchSpy.mock.calls.find(([url]) => String(url).includes('/steps/1'))).toBeTruthy(), {
-      timeout: 2000,
-    });
-    const call = fetchSpy.mock.calls.find(([url]) => String(url).includes('/steps/1'));
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.assetIds).toEqual([31]);
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].assetIds).toEqual([31]);
   });
 
-  it('toggling "Auto-run available" immediately PATCHes the step and surfaces the "Auto" badge', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('toggling "Auto-run available" surfaces the "AUTO" badge and is sent on Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, allowNonInteractive: false })],
       }),
     });
 
-    // The Behavior section has the auto-run switch; find all switches and click the first one
-    // (Auto-run available is the first switch in the Behavior section).
-    const switches = screen.getAllByRole('switch');
-    const autoRunSwitch =
-      switches.find((s) => {
-        const row = s.closest('[class*=togRow]') ?? s.parentElement?.parentElement;
-        return row?.textContent?.includes('Auto-run available');
-      }) ?? switches[0];
-    await userEvent.click(autoRunSwitch);
+    // With no asset specs, the first switch on the session panel is "Auto-run available".
+    await userEvent.click(screen.getAllByRole('switch')[0]);
 
-    // The sidebar session card now shows the "AUTO" badge.
     expect(await screen.findByText('AUTO')).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/v1/projects/7/workflows/3/steps/1',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.allowNonInteractive).toBe(true);
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].allowNonInteractive).toBe(true);
+    expect(screen.getByText('AUTO')).toBeInTheDocument();
   });
 
-  it('takes back a toggle the server refused and says the change was not saved', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ errors: ['Auto-run is not available for this agent'] }), {
-        status: 422,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-
-    renderAuthedPage(<BuilderPage />, {
-      props: projectProps({
-        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, allowNonInteractive: false })],
-      }),
-    });
-
-    const switches = screen.getAllByRole('switch');
-    const autoRunSwitch =
-      switches.find((s) => {
-        const row = s.closest('[class*=togRow]') ?? s.parentElement?.parentElement;
-        return row?.textContent?.includes('Auto-run available');
-      }) ?? switches[0];
-    await userEvent.click(autoRunSwitch);
-
-    expect(await screen.findByText('Auto-run is not available for this agent')).toBeInTheDocument();
-    expect(screen.getByText('Not saved')).toBeInTheDocument();
-    await waitFor(() => expect(screen.queryByText('AUTO')).not.toBeInTheDocument());
-    expect(autoRunSwitch).not.toBeChecked();
-  });
-
-  it('setting On Failure to "Retry" PATCHes the step with the new value', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('setting On Failure to "Retry" is sent on Save', async () => {
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, onFailure: 'fail' })] }),
     });
 
-    // Open the On Failure select by finding the combobox that currently shows "Fail".
-    const allComboboxes = screen.getAllByRole('combobox');
-    const onFailureCombobox = allComboboxes.find((cb) => cb.getAttribute('value') === 'Fail') ?? allComboboxes[3];
-    await userEvent.click(onFailureCombobox);
-    const retryOption = await screen.findByRole('option', { name: 'Retry' });
-    await userEvent.click(retryOption);
+    // The On Failure select has no accessible name; it is the combobox currently showing "Fail".
+    const onFailureCombobox = screen.getAllByRole('combobox').find((cb) => cb.getAttribute('value') === 'Fail');
+    await userEvent.click(onFailureCombobox!);
+    await userEvent.click(await screen.findByRole('option', { name: 'Retry' }));
 
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/v1/projects/7/workflows/3/steps/1',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.onFailure).toBe('retry');
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].onFailure).toBe('retry');
   });
 
-  it('choosing an Execution Environment PATCHes the runtime and resets preferredModel', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('choosing an Execution Environment sends the runtime and a cleared preferredModel on Save', async () => {
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
-        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: null })],
+        steps: [
+          makeStep({
+            id: 1,
+            name: 'Draft spec',
+            position: 1,
+            requiredAgentRuntime: 'claude_code',
+            preferredModel: 'opus-9',
+          }),
+        ],
+        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] }],
       }),
     });
 
-    // Execution Environment is the 2nd Select/combobox in the session editor (Agent is first).
-    const comboboxes = screen.getAllByRole('combobox');
-    const envCombobox = comboboxes[1];
-    await userEvent.click(envCombobox);
+    await userEvent.click(screen.getByRole('combobox', { name: 'Required agent runtime' }));
     await userEvent.click(await screen.findByRole('option', { name: 'Cursor CLI' }));
 
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/v1/projects/7/workflows/3/steps/1',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.requiredAgentRuntime).toBe('cursor_cli');
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0]).toMatchObject({ requiredAgentRuntime: 'cursor_cli', preferredModel: null });
   });
 
-  it('selecting an agent immediately PATCHes the step with the chosen agentId and runtime', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  it('shows a step runtime set on the server without making a request', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
@@ -873,38 +842,30 @@ describe('Projects/Workflows/BuilderPage', () => {
     await waitFor(() => expect(fetchSpy).not.toHaveBeenCalled());
   });
 
-  it("choosing a Preferred Model PATCHes preferredModel, scoped to the runtime's models", async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it("a Preferred Model picked from the runtime's models is sent on Save", async () => {
+    const { bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, requiredAgentRuntime: 'claude_code' })],
-        agentModels: [{ agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] }],
+        agentModels: [
+          { agentType: 'claude_code', models: [{ modelId: 'opus-9', displayName: 'Opus 9' }] },
+          { agentType: 'cursor_cli', models: [{ modelId: 'gpt-x', displayName: 'GPT X' }] },
+        ],
       }),
     });
 
-    const preferredModelCombobox = screen.getAllByLabelText('Preferred model')[0];
-    await userEvent.click(preferredModelCombobox);
-    await userEvent.click(await screen.findByRole('option', { name: 'Opus 9' }));
+    await userEvent.click(screen.getAllByLabelText('Preferred model')[0]);
+    expect(await screen.findByRole('option', { name: 'Opus 9' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'GPT X' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: 'Opus 9' }));
 
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/v1/projects/7/workflows/3/steps/1',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.preferredModel).toBe('opus-9');
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].preferredModel).toBe('opus-9');
   });
 
-  it('selecting a dependency PATCHes dependsOnStepIds and shows the "↳ AFTER" badge in the sidebar', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('a selected dependency shows the "↳ AFTER" badge in the sidebar and is sent by step key on Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({
         steps: [
@@ -920,51 +881,30 @@ describe('Projects/Workflows/BuilderPage', () => {
 
     // The sidebar card for session 1 now records the dependency.
     expect(await screen.findByText(/↳ AFTER\s*Implement/)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/v1/projects/7/workflows/3/steps/1',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.dependsOnStepIds).toEqual([2]);
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].dependsOnStepIds).toEqual(['2']);
   });
 
-  it('adding a sub-step via the tree nav ghost row PATCHes the step endpoint', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: { id: 1, name: 'Draft spec', subSteps: [{ id: 99, name: 'New step', position: 1, required: true }] },
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
-    );
-
+  it('a sub-step added via the tree nav ghost row is sent as a new sub-step on Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, subSteps: [] })] }),
     });
 
-    // Click "Add a step…" ghost row inside the session.
     await userEvent.click(screen.getByText('Add a step…'));
+    await userEvent.type(screen.getByPlaceholderText('Step name…'), 'New step{Enter}');
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    // Type a step name in the ghost input and confirm.
-    const ghostInput = screen.getByPlaceholderText('Step name…');
-    await userEvent.type(ghostInput, 'New step{Enter}');
+    const aggregate = await save(bodies);
 
-    await waitFor(() =>
-      expect(fetchSpy).toHaveBeenCalledWith(
-        '/api/v1/projects/7/workflows/3/steps/1',
-        expect.objectContaining({ method: 'PATCH' }),
-      ),
-    );
-    const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-    const body = JSON.parse((call![1] as RequestInit).body as string);
-    expect(body.step.subStepsAttributes[0]).toMatchObject({ name: 'New step', position: 1, required: true });
+    expect(aggregate.steps[0].subSteps).toEqual([{ id: null, name: 'New step', instructions: null, required: true }]);
+    expect(screen.getByText('New step')).toBeInTheDocument();
   });
 
-  it('confirming a blank step name does not PATCH', async () => {
+  it('confirming a blank step name adds nothing', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
     renderAuthedPage(<BuilderPage />, {
@@ -977,6 +917,7 @@ describe('Projects/Workflows/BuilderPage', () => {
     await userEvent.type(ghostInput, '   {Enter}');
 
     expect(fetchSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
   it('clicking a sub-step in the tree nav opens the StepEditorPanel', async () => {
@@ -1000,39 +941,24 @@ describe('Projects/Workflows/BuilderPage', () => {
     expect(await screen.findByPlaceholderText('Step name…')).toBeInTheDocument();
   });
 
-  it('adding an output asset spec reveals the Match pattern input and PATCHes outputAssetSpecs', async () => {
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
-
+  it('adding an output asset spec reveals the Match pattern input and is sent in outputAssetSpecs on Save', async () => {
+    const { fetchSpy, bodies } = answerSave();
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
 
-    // Click "+ Add output" to add an output spec.
     await userEvent.click(screen.getByRole('button', { name: '+ Add output' }));
 
     // Output specs support a name pattern; the pattern input only renders there.
     expect(screen.getByPlaceholderText('e.g. report')).toBeInTheDocument();
 
-    // Typing the path debounce-saves the output specs to the step endpoint.
     await userEvent.type(screen.getByPlaceholderText('e.g. tasks/report.md'), 'out.md');
+    expect(fetchSpy).not.toHaveBeenCalled();
 
-    // Clicking "Add" and each keystroke both schedule a debounced save, so several
-    // PATCHes can land for the step endpoint (the empty spec from "Add", then the
-    // partial values) before "out.md" settles. Assert on the LAST such PATCH and
-    // poll until the trailing debounced call carries the fully typed value —
-    // grabbing the first matching call races the debounce and sees an empty name.
-    await waitFor(
-      () => {
-        const stepCalls = fetchSpy.mock.calls.filter(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
-        expect(stepCalls.length).toBeGreaterThan(0);
-        const body = JSON.parse((stepCalls.at(-1)![1] as RequestInit).body as string);
-        expect(Array.isArray(body.step.outputAssetSpecs)).toBe(true);
-        expect(body.step.outputAssetSpecs[0].name).toBe('out.md');
-      },
-      { timeout: 2000 },
-    );
+    const aggregate = await save(bodies);
+
+    expect(aggregate.steps[0].outputAssetSpecs).toHaveLength(1);
+    expect(aggregate.steps[0].outputAssetSpecs[0].name).toBe('out.md');
   });
 
   it('renders a read-only project workflow with disabled editing affordances', () => {

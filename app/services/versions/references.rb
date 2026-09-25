@@ -32,7 +32,8 @@ module Versions
     end
 
     def config_usages(record, key)
-      Workflow.active.where("config -> '#{key}' @> ?::jsonb OR config -> '#{key}' @> ?::jsonb", *id_forms(record.id))
+      as_number, as_string = id_forms(record.id)
+      Workflow.active.where("config -> ? @> ?::jsonb OR config -> ? @> ?::jsonb", key, as_number, key, as_string)
               .order(:name).map { |workflow| { workflow: workflow.name } }
     end
 

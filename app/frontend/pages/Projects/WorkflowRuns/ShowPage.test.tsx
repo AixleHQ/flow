@@ -38,6 +38,30 @@ function seed(props: Record<string, unknown> = {}) {
 }
 
 describe('Projects/WorkflowRuns/ShowPage', () => {
+  it('names the workflow version each session ran, and warns when it changed mid-run', () => {
+    const run = makeRun({
+      workflowVersionNumbers: [7, 8],
+      stepRuns: [
+        buildStepRun({ id: 101, stepId: 1, stepName: 'Compile Specs', stepPosition: 1, workflowVersionNumber: 7 }),
+        buildStepRun({ id: 102, stepId: 2, stepName: 'Render Output', stepPosition: 2, workflowVersionNumber: 8 }),
+      ],
+    });
+
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
+
+    expect(screen.getByText('The workflow was saved while this run was in progress')).toBeInTheDocument();
+    expect(screen.getByText('Session 1 · v7')).toBeInTheDocument();
+    expect(screen.getByText('Session 2 · v8')).toBeInTheDocument();
+    expect(screen.getByText('v7 → v8')).toBeInTheDocument();
+  });
+
+  it('says nothing about versions for a run that kept one', () => {
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ workflowVersionNumbers: [3] }) }) });
+
+    expect(screen.queryByText('The workflow was saved while this run was in progress')).not.toBeInTheDocument();
+    expect(screen.getByText('v3')).toBeInTheDocument();
+  });
+
   it('renders the shared detail header: breadcrumb, name, status, id and stats', () => {
     renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ costCents: 1234 }) }) });
 

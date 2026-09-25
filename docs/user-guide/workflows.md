@@ -122,6 +122,34 @@ Everything lands under `/workspace/assets/`. Agents write outputs to
 `/workspace/outputs/` — those files become `WorkflowRunAssets` you can
 download from the UI or via `GET /api/v1/projects/:id/workflow_runs/:run_id/workflow_run_assets`.
 
+## Saving, versions and the archive
+
+Edits in the workflow builder stay in your browser until you press **Save** —
+the header says *Unsaved changes* until you do, and leaving the page asks
+first. One Save stores the whole workflow (its fields, every step and
+sub-step) as one numbered **version**. Agents, skills, wrappers and MCP servers
+are versioned the same way, one version per Save of their form.
+
+- **History** (the clock icon on every workflow, agent, skill, wrapper and
+  connector) lists the versions newest first: who saved each one — a person or
+  the Aixle Builder acting for them — when, and what changed, compared with
+  the version before it or with the current one.
+- **Revert** puts an earlier version's content back and saves it as the newest
+  version; nothing in the history is overwritten. The confirmation spells out
+  what will change. MCP server secrets are never stored in a version, so a
+  revert keeps the current header and env values — and one that moves the
+  server to another address clears them, as an edit would.
+- **If someone saved first**, your Save is refused rather than silently
+  overwriting their change; reload to see it.
+- **Archive** replaces delete. An archived entity leaves pickers and new
+  sessions but keeps its history, and can be restored from the list screen's
+  *Archived* view. Archiving is refused while a workflow still uses the entity.
+  Restoring a workflow offers to switch back on the triggers archiving turned off.
+- **Which version ran**: runs read the saved workflow at the moment each
+  session launches, and the run page shows the version per session. A Save made
+  while a run is in progress affects the sessions that have not started yet —
+  the run page then says so.
+
 ## Aixle Builder
 
 Building a workflow by hand is rare in practice. The **Aixle Builder**

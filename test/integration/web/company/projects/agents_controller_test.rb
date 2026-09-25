@@ -31,10 +31,38 @@ class Web::Company::Projects::AgentsControllerTest < ActionDispatch::Integration
     assert_response :redirect
   end
 
-  test "destroy redirects" do
+  test "destroy archives the agent, and the index lists it as archived" do
     agent = Agent.create!(name: "pa2", title: "PA2", persona: "p", source: :custom, scope: @project)
 
     delete company_project_agent_path(@project, agent)
+    assert_redirected_to company_project_agents_path(@project)
+    assert_equal "Agent archived", flash[:notice]
+    assert agent.reload.archived?
+
+    get company_project_agents_path(@project)
+    assert_empty inertia.props[:agents]
+    assert_equal [ agent.id ], inertia.props[:archivedAgents].pluck(:id)
+  end
+
+  test "destroy refuses an agent a workflow step uses, and says where" do
+    agent = Agent.create!(name: "pa3", title: "PA3", persona: "p", source: :custom, scope: @project)
+    workflow = create(:workflow, scope: @project, name: "Release")
+    create(:step, workflow: workflow, name: "Build", agent: agent)
+
+    delete company_project_agent_path(@project, agent)
+
     assert_response :redirect
+    assert_match(/Release → Build/, flash[:alert])
+    assert_not agent.reload.archived?
+  end
+
+  test "update from a stale version is refused and changes nothing" do
+    agent = Agent.create!(name: "pa4", title: "PA4", persona: "p", source: :custom, scope: @project)
+    Versions.save!(agent, actor: Versions::Actor.ui(@user)) { agent.update!(title: "Newer") }
+
+    patch company_project_agent_path(@project, agent), params: { agent: { title: "Lost" }, base_version: 1 }
+
+    assert_match(/newer version/, flash[:alert])
+    assert_equal "Newer", agent.reload.title
   end
 end

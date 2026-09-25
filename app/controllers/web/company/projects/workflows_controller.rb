@@ -6,6 +6,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
     # `visible_steps` filters in Ruby so the preload survives (see Workflow#visible_steps).
     workflows = Workflow.visible_for_project(current_project)
                         .includes(:runs, steps: :sub_steps)
+    archived = Workflow.for_project(current_project).where.not(deleted_at: nil).order(deleted_at: :desc)
 
     render inertia: "Projects/Workflows/WorkflowsPage", props: {
       project: project_props,
@@ -14,6 +15,7 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
           steps: w.visible_steps.map { |s| StepResource.new(s).to_h }
         )
       },
+      archived_workflows: archived.map { |w| { id: w.id, name: w.name, archived_at: w.deleted_at } },
       configured_agents: current_project_membership&.configured_agents || [],
       default_agent_runtime: current_project_membership&.default_agent_runtime,
       # Company-scoped assets are shared with every project in the company and are

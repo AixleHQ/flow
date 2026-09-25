@@ -170,15 +170,16 @@ describe('Projects/Workflows/WorkflowsPage', () => {
     );
   });
 
-  it('shows publish/edit/delete controls for project-scoped workflows', () => {
+  it('shows publish/edit/archive/history controls for project-scoped workflows', () => {
     const { container } = renderAuthedPage(<WorkflowsPage />, {
       props: baseProps([workflow({ id: 1, name: 'Nightly Build', scopeIndicator: 'project', publishedAt: null })]),
     });
 
-    // Unpublished project workflow shows the globe-off (publish) icon, plus edit + trash.
+    // Unpublished project workflow shows the globe-off (publish) icon, plus edit, archive and history.
     expect(container.querySelector('svg.tabler-icon-globe-off')).toBeInTheDocument();
     expect(container.querySelector('svg.tabler-icon-edit')).toBeInTheDocument();
-    expect(container.querySelector('svg.tabler-icon-trash')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Archive workflow' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'History of Nightly Build' })).toBeInTheDocument();
     expect(container.querySelector('svg.tabler-icon-copy')).not.toBeInTheDocument();
   });
 
@@ -268,17 +269,17 @@ describe('Projects/Workflows/WorkflowsPage', () => {
     expect(within(dialog).getByRole('button', { name: 'Create' })).toBeInTheDocument();
   });
 
-  it('opens the delete confirmation naming the workflow and deletes it', async () => {
-    const { container } = renderAuthedPage(<WorkflowsPage />, {
+  it('opens the archive confirmation naming the workflow and archives it', async () => {
+    renderAuthedPage(<WorkflowsPage />, {
       props: baseProps([workflow({ id: 11, name: 'Nightly Build', hasActiveRuns: false })]),
     });
 
-    await userEvent.click(iconButton(container, 'tabler-icon-trash'));
+    await userEvent.click(screen.getByRole('button', { name: 'Archive workflow' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Delete Workflow' });
+    const dialog = await screen.findByRole('dialog', { name: 'Archive Workflow' });
     expect(within(dialog).getByText('Nightly Build')).toBeInTheDocument();
 
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
 
     expect(router.delete).toHaveBeenCalledWith(
       '/company/projects/7/workflows/11',
@@ -286,17 +287,17 @@ describe('Projects/Workflows/WorkflowsPage', () => {
     );
   });
 
-  it('disables Delete and warns when the workflow has active runs', async () => {
-    const { container } = renderAuthedPage(<WorkflowsPage />, {
+  it('disables Archive and warns when the workflow has active runs', async () => {
+    renderAuthedPage(<WorkflowsPage />, {
       props: baseProps([workflow({ id: 11, name: 'Nightly Build', hasActiveRuns: true })]),
     });
 
-    await userEvent.click(iconButton(container, 'tabler-icon-trash'));
+    await userEvent.click(screen.getByRole('button', { name: 'Archive workflow' }));
 
-    const dialog = await screen.findByRole('dialog', { name: 'Delete Workflow' });
+    const dialog = await screen.findByRole('dialog', { name: 'Archive Workflow' });
     expect(within(dialog).getByText('This workflow has active runs. Stop them first.')).toBeInTheDocument();
 
-    const deleteBtn = within(dialog).getByRole('button', { name: 'Delete' });
+    const deleteBtn = within(dialog).getByRole('button', { name: 'Archive' });
     expect(deleteBtn).toBeDisabled();
 
     await userEvent.click(deleteBtn);
@@ -386,17 +387,17 @@ describe('Projects/Workflows/WorkflowsPage', () => {
     expect(router.post).not.toHaveBeenCalled();
   });
 
-  it('closes the delete confirmation via Cancel without deleting', async () => {
-    const { container } = renderAuthedPage(<WorkflowsPage />, {
+  it('closes the archive confirmation via Cancel without archiving', async () => {
+    renderAuthedPage(<WorkflowsPage />, {
       props: baseProps([workflow({ id: 11, name: 'Nightly Build' })]),
     });
 
-    await userEvent.click(iconButton(container, 'tabler-icon-trash'));
-    const dialog = await screen.findByRole('dialog', { name: 'Delete Workflow' });
+    await userEvent.click(screen.getByRole('button', { name: 'Archive workflow' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Archive Workflow' });
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Delete Workflow' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Archive Workflow' })).not.toBeInTheDocument());
     expect(router.delete).not.toHaveBeenCalled();
   });
 
