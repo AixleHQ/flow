@@ -9,6 +9,7 @@ import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 interface Props {
   project: Project;
   mcpServers: MCPServer[];
+  archivedMcpServers: MCPServer[];
   configItemNames: string[];
   connectors: Connector[];
   connectorQuery: string;
@@ -16,15 +17,18 @@ interface Props {
 }
 
 const McpServersPage = () => {
-  const { project, mcpServers, configItemNames, connectors, connectorQuery, catalogSyncedAt } = usePage<{
-    props: Props;
-  }>().props as unknown as Props;
+  const { project, mcpServers, archivedMcpServers, configItemNames, connectors, connectorQuery, catalogSyncedAt } =
+    usePage<{
+      props: Props;
+    }>().props as unknown as Props;
 
   return (
     <>
       <Head title={`Connectors — ${project.name}`} />
       <McpServersContent
         mcpServers={mcpServers}
+        archivedMcpServers={archivedMcpServers}
+        projectId={project.id}
         configItemNames={configItemNames}
         basePath={`/company/projects/${project.id}/mcp_servers`}
         title="Connectors"

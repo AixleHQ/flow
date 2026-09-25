@@ -17,6 +17,7 @@ const editAgent = {
   persona: 'Senior analyst with deep market expertise.',
   communicationStyle: 'Precise and clear.',
   principles: 'Ground findings in evidence.',
+  currentVersionNumber: 4,
 };
 
 describe('AgentFormModal', () => {
@@ -238,6 +239,34 @@ describe('AgentFormModal', () => {
     act(() => options.onError?.({ title: 'is invalid' }));
 
     expect(await screen.findByText('is invalid')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('sends the version it loaded, so a save over a newer one is refused', async () => {
+    renderPage(<AgentFormModal opened onClose={vi.fn()} editAgent={editAgent} basePath="/projects/1/agents" />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(router.patch).toHaveBeenCalledWith(
+        '/projects/1/agents/7',
+        expect.objectContaining({ baseVersion: 4 }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it('flags unsaved edits and asks before closing over them', async () => {
+    const onClose = vi.fn();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderPage(<AgentFormModal opened onClose={onClose} editAgent={editAgent} basePath="/projects/1/agents" />);
+
+    expect(screen.queryByText(/Unsaved changes/)).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText(/Title/), ' II');
+
+    expect(screen.getByText('Unsaved changes — press Save to keep them')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(confirm).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 });

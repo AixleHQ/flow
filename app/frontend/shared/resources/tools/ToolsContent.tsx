@@ -10,11 +10,14 @@ import {
   TextInput,
   Tooltip,
 } from '@mantine/core';
-import { IconEdit, IconPlus, IconSearch, IconTool, IconTrash } from '@tabler/icons-react';
+import { IconArchive, IconEdit, IconPlus, IconSearch, IconTool } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import type { Tool } from '@/types/generated';
 
+import { ArchivedList } from 'shared/components/versions/ArchivedList';
+import { ArchiveSwitch, type ArchiveView } from 'shared/components/versions/ArchiveSwitch';
+import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -27,6 +30,8 @@ type ScopeIndicator = 'system' | 'company' | 'project' | 'overrides_company';
 
 interface ToolsContentProps {
   tools: Tool[];
+  archivedTools?: Tool[];
+  projectId: number;
   configItemNames: string[];
   basePath: string;
   title: string;
@@ -43,6 +48,8 @@ const SCOPE_BADGE: Record<ScopeIndicator, { label: string; color: string }> = {
 
 export function ToolsContent({
   tools,
+  archivedTools = [],
+  projectId,
   configItemNames,
   basePath,
   title,
@@ -50,6 +57,7 @@ export function ToolsContent({
   editableScopeIndicator = 'company',
 }: ToolsContentProps) {
   const { canExecute } = useProjectPermissions();
+  const [view, setView] = useState<ArchiveView>('active');
   const [search, setSearch] = useState('');
   const [sourceFilter, setSourceFilter] = useState('db');
   const [formModalOpen, setFormModalOpen] = useState(false);
@@ -121,9 +129,28 @@ export function ToolsContent({
         <ResourceCount>
           {filtered.length} {filtered.length === 1 ? 'wrapper' : 'wrappers'}
         </ResourceCount>
+        <ArchiveSwitch
+          value={view}
+          onChange={setView}
+          activeCount={tools.filter((t) => t.source === 'db').length}
+          archivedCount={archivedTools.length}
+        />
       </Group>
 
-      {filtered.length === 0 ? (
+      {view === 'archived' ? (
+        <ArchivedList
+          projectId={projectId}
+          versionableType="Tool"
+          noun="wrappers"
+          canRestore={canExecute}
+          items={archivedTools.map((t) => ({
+            id: t.id,
+            name: t.displayName,
+            detail: t.name,
+            archivedAt: t.archivedAt,
+          }))}
+        />
+      ) : filtered.length === 0 ? (
         <Box
           style={{
             border: '1px solid var(--app-border-default)',
@@ -207,6 +234,15 @@ export function ToolsContent({
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end">
+                        {tool.source === 'db' && (
+                          <HistoryButton
+                            projectId={projectId}
+                            versionableType="Tool"
+                            versionableId={tool.id}
+                            title={tool.displayName}
+                            canRevert={canExecute && canEdit(tool)}
+                          />
+                        )}
                         {canExecute && canEdit(tool) && (
                           <Tooltip label="Edit">
                             <ActionIcon aria-label="Edit" variant="subtle" size="sm" onClick={() => handleEdit(tool)}>
@@ -215,15 +251,15 @@ export function ToolsContent({
                           </Tooltip>
                         )}
                         {canExecute && canDelete(tool) && (
-                          <Tooltip label="Delete">
+                          <Tooltip label="Archive">
                             <ActionIcon
-                              aria-label="Edit"
+                              aria-label="Archive"
                               variant="subtle"
                               size="sm"
                               color="red"
                               onClick={() => setDeleteTool(tool)}
                             >
-                              <IconTrash size={16} />
+                              <IconArchive size={16} />
                             </ActionIcon>
                           </Tooltip>
                         )}

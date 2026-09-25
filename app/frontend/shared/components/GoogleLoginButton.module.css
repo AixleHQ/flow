@@ -5,7 +5,9 @@
   font-family: var(--app-font-body, 'Figtree', sans-serif);
   font-size: 14px;
   font-weight: 500;
-  transition: background-color 150ms ease, border-color 150ms ease;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
 }
 
 .googleButton:hover {

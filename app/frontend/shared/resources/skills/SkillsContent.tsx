@@ -11,11 +11,14 @@ import {
   TextInput,
   Tooltip,
 } from '@mantine/core';
-import { IconExternalLink, IconPencil, IconPencilPlus, IconSearch, IconTrash } from '@tabler/icons-react';
+import { IconArchive, IconExternalLink, IconPencil, IconPencilPlus, IconSearch } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import type { CatalogSkill, Skill } from '@/types/generated';
 
+import { ArchivedList } from 'shared/components/versions/ArchivedList';
+import { ArchiveSwitch, type ArchiveView } from 'shared/components/versions/ArchiveSwitch';
+import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 
 import { DeleteSkillModal } from './DeleteSkillModal';
@@ -24,6 +27,8 @@ import { SkillsCatalogModal } from './SkillsCatalogModal';
 
 interface SkillsContentProps {
   skills: Skill[];
+  archivedSkills?: Skill[];
+  projectId: number;
   basePath: string;
   title: string;
   subtitle: string;
@@ -40,6 +45,8 @@ function formatInstalls(count: number): string {
 
 export function SkillsContent({
   skills,
+  archivedSkills = [],
+  projectId,
   basePath,
   title,
   subtitle,
@@ -48,6 +55,7 @@ export function SkillsContent({
   catalogSyncedAt,
 }: SkillsContentProps) {
   const { canExecute } = useProjectPermissions();
+  const [view, setView] = useState<ArchiveView>('active');
   const [filterSearch, setFilterSearch] = useState('');
   const [deleteSkill, setDeleteSkill] = useState<Skill | null>(null);
   const [catalogOpen, setCatalogOpen] = useState(false);
@@ -95,16 +103,36 @@ export function SkillsContent({
         )}
       </Group>
 
-      <TextInput
-        placeholder="Filter installed skills..."
-        leftSection={<IconSearch size={16} />}
-        value={filterSearch}
-        onChange={(e) => setFilterSearch(e.currentTarget.value)}
-        mb="lg"
-        maw={300}
-      />
+      <Group gap="md" mb="lg">
+        <TextInput
+          placeholder="Filter installed skills..."
+          leftSection={<IconSearch size={16} />}
+          value={filterSearch}
+          onChange={(e) => setFilterSearch(e.currentTarget.value)}
+          maw={300}
+        />
+        <ArchiveSwitch
+          value={view}
+          onChange={setView}
+          activeCount={skills.length}
+          archivedCount={archivedSkills.length}
+        />
+      </Group>
 
-      {filtered.length === 0 ? (
+      {view === 'archived' ? (
+        <ArchivedList
+          projectId={projectId}
+          versionableType="Skill"
+          noun="skills"
+          canRestore={canExecute}
+          items={archivedSkills.map((s) => ({
+            id: s.id,
+            name: s.title || s.name,
+            detail: s.name,
+            archivedAt: s.archivedAt,
+          }))}
+        />
+      ) : filtered.length === 0 ? (
         <Center
           mih={300}
           style={{
@@ -161,36 +189,45 @@ export function SkillsContent({
                     </Badge>
                   )}
                 </Group>
-                {canExecute && (
-                  <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
-                    {/* Only hand-written skills: a registry skill's content belongs to
+                <Group gap={2} wrap="nowrap" style={{ flexShrink: 0 }}>
+                  <HistoryButton
+                    projectId={projectId}
+                    versionableType="Skill"
+                    versionableId={skill.id}
+                    title={skill.title || skill.name}
+                    canRevert={canExecute}
+                  />
+                  {canExecute && (
+                    <>
+                      {/* Only hand-written skills: a registry skill's content belongs to
                         the source it names, and the next install would clobber an edit. */}
-                    {skill.origin === 'manual' && (
-                      <Tooltip label="Edit">
+                      {skill.origin === 'manual' && (
+                        <Tooltip label="Edit">
+                          <ActionIcon
+                            aria-label={`Edit ${skill.name}`}
+                            variant="subtle"
+                            size="sm"
+                            color="gray"
+                            onClick={() => setEditSkill(skill)}
+                          >
+                            <IconPencil size={16} />
+                          </ActionIcon>
+                        </Tooltip>
+                      )}
+                      <Tooltip label="Archive">
                         <ActionIcon
-                          aria-label={`Edit ${skill.name}`}
+                          aria-label={`Archive ${skill.name}`}
                           variant="subtle"
                           size="sm"
-                          color="gray"
-                          onClick={() => setEditSkill(skill)}
+                          color="red"
+                          onClick={() => setDeleteSkill(skill)}
                         >
-                          <IconPencil size={16} />
+                          <IconArchive size={16} />
                         </ActionIcon>
                       </Tooltip>
-                    )}
-                    <Tooltip label="Remove">
-                      <ActionIcon
-                        aria-label={`Remove ${skill.name}`}
-                        variant="subtle"
-                        size="sm"
-                        color="red"
-                        onClick={() => setDeleteSkill(skill)}
-                      >
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Group>
-                )}
+                    </>
+                  )}
+                </Group>
               </Group>
 
               {skill.title && skill.title !== skill.name && (

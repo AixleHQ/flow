@@ -12,18 +12,21 @@ import {
 } from '@mantine/core';
 import {
   IconAlertTriangle,
+  IconArchive,
   IconEdit,
   IconPhoto,
   IconPlug,
   IconPlugConnected,
   IconPlus,
   IconSearch,
-  IconTrash,
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
 import type { Connector, MCPServer } from '@/types/generated';
 
+import { ArchivedList } from 'shared/components/versions/ArchivedList';
+import { ArchiveSwitch, type ArchiveView } from 'shared/components/versions/ArchiveSwitch';
+import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { postNavigate } from 'shared/lib/postNavigate';
 import { EmptyState } from 'shared/ui/EmptyState';
@@ -51,6 +54,8 @@ const OAUTH_STATUS_BADGE: Record<string, { tone: StatusTone; color: string; labe
 
 interface McpServersContentProps {
   mcpServers: MCPServer[];
+  archivedMcpServers?: MCPServer[];
+  projectId: number;
   configItemNames: string[];
   basePath: string;
   title: string;
@@ -80,6 +85,8 @@ function readOnlyLabel(server: MCPServer): string {
 
 export function McpServersContent({
   mcpServers,
+  archivedMcpServers = [],
+  projectId,
   configItemNames,
   basePath,
   title,
@@ -90,6 +97,7 @@ export function McpServersContent({
   catalogSyncedAt = null,
 }: McpServersContentProps) {
   const { canExecute } = useProjectPermissions();
+  const [view, setView] = useState<ArchiveView>('active');
   const [search, setSearch] = useState('');
   // Defaults to 'all'. It used to default to 'custom', which silently hid every
   // system server on first paint — the list looked empty when it was not.
@@ -203,9 +211,28 @@ export function McpServersContent({
         <ResourceCount>
           {filtered.length} {filtered.length === 1 ? 'connector' : 'connectors'}
         </ResourceCount>
+        <ArchiveSwitch
+          value={view}
+          onChange={setView}
+          activeCount={mcpServers.filter((server) => server.kind === 'custom').length}
+          archivedCount={archivedMcpServers.length}
+        />
       </Group>
 
-      {filtered.length === 0 ? (
+      {view === 'archived' ? (
+        <ArchivedList
+          projectId={projectId}
+          versionableType="MCPServer"
+          noun="connectors"
+          canRestore={canExecute}
+          items={archivedMcpServers.map((server) => ({
+            id: server.id,
+            name: server.name,
+            detail: server.url ?? server.command,
+            archivedAt: server.archivedAt,
+          }))}
+        />
+      ) : filtered.length === 0 ? (
         <Box
           style={{
             border: '1px solid var(--app-border-default)',
@@ -356,6 +383,15 @@ export function McpServersContent({
                     </Table.Td>
                     <Table.Td>
                       <Group gap={4} justify="flex-end">
+                        {server.kind === 'custom' && (
+                          <HistoryButton
+                            projectId={projectId}
+                            versionableType="MCPServer"
+                            versionableId={server.id}
+                            title={server.name}
+                            canRevert={canEdit}
+                          />
+                        )}
                         {canEdit ? (
                           <>
                             <Tooltip label="Edit">
@@ -368,15 +404,15 @@ export function McpServersContent({
                                 <IconEdit size={16} />
                               </ActionIcon>
                             </Tooltip>
-                            <Tooltip label="Delete">
+                            <Tooltip label="Archive">
                               <ActionIcon
-                                aria-label="Delete"
+                                aria-label="Archive"
                                 variant="subtle"
                                 size="sm"
                                 color="red"
                                 onClick={() => setDeleteServer(server)}
                               >
-                                <IconTrash size={16} />
+                                <IconArchive size={16} />
                               </ActionIcon>
                             </Tooltip>
                           </>
