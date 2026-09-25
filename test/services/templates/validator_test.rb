@@ -114,6 +114,16 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_includes errors_for(files: files), "file snapshots/skills/code-review.md does not match its sha256"
   end
 
+  test "an authored SKILL.md must parse and carry a valid name" do
+    files = Templates::Package.from_directory(FIXTURE).files.merge(
+      "skills/house-style/SKILL.md" => "---\nname: House Style\ndescription: Rules.\n---\n\nBody.\n"
+    )
+
+    assert_includes errors_for(files: files),
+                    'skills/house-style/SKILL.md: name "House Style" must be lowercase words joined by dashes'
+    assert(errors_for(files: files.merge("skills/house-style/SKILL.md" => "no frontmatter")).any? { |e| e.include?("frontmatter") })
+  end
+
   test "a referenced file missing from the package is refused" do
     files = Templates::Package.from_directory(FIXTURE).files.except("assets/coding-standards.md")
     assert_includes errors_for(files: files), "file assets/coding-standards.md is referenced but missing from the package"

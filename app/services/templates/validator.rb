@@ -54,6 +54,7 @@ module Templates
       check_mcp_values
       check_inputs
       check_files
+      check_authored_skills
       @errors
     end
 
@@ -193,6 +194,20 @@ module Templates
         elsif expected_sha && @package.sha256(path) != expected_sha
           @errors << "file #{path} does not match its sha256"
         end
+      end
+    end
+
+    # An authored SKILL.md becomes a manual Skill at install, so it must parse and
+    # carry a name that model accepts — or the install fails after review.
+    def check_authored_skills
+      @package.section("skills").each do |skill|
+        next unless skill["path"] && @package.file(skill["path"])
+
+        markdown = Skills::SkillMarkdown.parse(@package.file(skill["path"]).dup.force_encoding(Encoding::UTF_8))
+        markdown.errors.each { |error| @errors << "#{skill['path']}: #{error}" }
+        next if markdown.name.nil? || markdown.name.match?(Skill::MANUAL_NAME_FORMAT)
+
+        @errors << "#{skill['path']}: name #{markdown.name.inspect} must be lowercase words joined by dashes"
       end
     end
 
