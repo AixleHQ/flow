@@ -61,12 +61,21 @@ class MembershipMailerTest < ActionMailer::TestCase
   end
 
   test "role_changed names both the old and the new role" do
-    @membership.update!(role: "admin")
-    email = MembershipMailer.role_changed(@membership, "employee")
+    membership = create(:company_membership, :admin, user: @invitee, company: create(:company))
+    email = MembershipMailer.role_changed(membership, "employee")
 
     assert_equal [ "invitee@example.com" ], email.to
     body = email.text_part.decoded
     assert_includes body, "Employee"
     assert_includes body, "Admin"
+    assert_not_includes body, "finish onboarding"
+  end
+
+  test "role_changed tells a promoted viewer to finish onboarding with a CLI" do
+    membership = create(:company_membership, user: @invitee, company: create(:company))
+    email = MembershipMailer.role_changed(membership, "viewer")
+
+    assert_includes email.text_part.decoded, "finish onboarding and connect at least one agent CLI"
+    assert_includes email.html_part.decoded, "finish onboarding and connect at least one agent CLI"
   end
 end

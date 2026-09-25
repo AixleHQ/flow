@@ -179,6 +179,47 @@ describe('MembersContent', () => {
     );
   });
 
+  it('promoting a viewer asks for confirmation, then patches the role to employee', async () => {
+    renderAuthedPage(<MembersContent {...baseProps([makeUser({ id: 11, name: 'Vic Viewer', role: 'viewer' })])} />);
+
+    const row = screen.getByText('Vic Viewer').closest('tr') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button'));
+
+    expect(screen.queryByRole('menuitem', { name: /make admin/i })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('menuitem', { name: /make employee/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/connect at least one CLI/i)).toBeInTheDocument();
+    expect(router.patch).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Make Employee' }));
+
+    await waitFor(() =>
+      expect(router.patch).toHaveBeenCalledWith(
+        '/company/members/11',
+        { user: { role: 'employee' } },
+        expect.objectContaining({ preserveScroll: true }),
+      ),
+    );
+  });
+
+  it('offers no Make Employee on a suspended viewer', async () => {
+    renderAuthedPage(
+      <MembersContent
+        {...baseProps([makeUser({ id: 12, name: 'Sid Suspended', role: 'viewer', state: 'suspended' })])}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by status' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'All Statuses' }));
+
+    const row = screen.getByText('Sid Suspended').closest('tr') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button'));
+
+    expect(await screen.findByRole('menuitem', { name: /activate/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /make employee/i })).not.toBeInTheDocument();
+  });
+
   it('a pending invite shows Invited status and a Resend Invitation action', async () => {
     renderAuthedPage(
       <MembersContent

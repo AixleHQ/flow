@@ -1,3 +1,6 @@
 Your role in <%= @company.branded_name %> changed from <%= @previous_role.humanize %> to <%= @role.humanize %>.
+<% if @previous_role == "viewer" %>
+Next time you sign in, finish onboarding and connect at least one agent CLI for this company before you can run agents.
+<% end %>
 
 Roles are managed by the administrators of that company.

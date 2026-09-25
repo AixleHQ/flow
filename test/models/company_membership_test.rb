@@ -358,4 +358,91 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert_equal admin, project.reload.owner
     assert_empty project.collaborators
   end
+
+  # === viewer promotion (flow-dev #2025) ===
+
+  def onboarded_viewer(**attrs)
+    create(:company_membership, :viewer, user: create(:user), company: @company,
+                                         onboarding_state: "completed", onboarding_completed_at: 1.day.ago,
+                                         position: "dev", preferred_agent_language: "en", **attrs)
+  end
+
+  test "promoting an onboarded viewer to employee reopens onboarding at the agent step" do
+    membership = onboarded_viewer
+
+    assert membership.update(role: "employee"), membership.errors.full_messages.to_sentence
+
+    membership.reload
+    assert_equal "step2", membership.onboarding_state
+    assert_nil membership.onboarding_completed_at
+    assert_not membership.can_complete_onboarding?
+  end
+
+  test "promotion reopens onboarding even when the member already has a credential in this company" do
+    membership = onboarded_viewer
+    create(:agent_credential, user: membership.user, company: @company)
+
+    membership.update!(role: "employee")
+
+    assert_equal "step2", membership.reload.onboarding_state
+    assert membership.can_complete_onboarding?
+  end
+
+  test "a credential in another company does not let a promoted member complete onboarding" do
+    membership = onboarded_viewer
+    other = create(:company_membership, user: membership.user)
+    create(:agent_credential, user: membership.user, company: other.company)
+
+    membership.update!(role: "employee")
+
+    assert_not membership.reload.can_complete_onboarding?
+    assert_not membership.aasm(:onboarding_state).may_fire_event?(:complete)
+  end
+
+  test "a viewer promoted before finishing onboarding keeps their step" do
+    membership = create(:company_membership, :viewer, user: create(:user), company: @company, onboarding_state: "step1")
+
+    membership.update!(role: "employee")
+
+    assert_equal "step1", membership.reload.onboarding_state
+  end
+
+  test "switching between employee and admin leaves onboarding completed" do
+    create(:company_membership, :admin, user: create(:user), company: @company)
+    membership = create(:company_membership, user: create(:user), company: @company,
+                                             onboarding_state: "completed", onboarding_completed_at: 1.day.ago)
+
+    membership.update!(role: "admin")
+    membership.update!(role: "employee")
+
+    assert_equal "completed", membership.reload.onboarding_state
+    assert membership.onboarding_completed_at.present?
+  end
+
+  test "a viewer cannot become admin in one step" do
+    membership = onboarded_viewer
+
+    assert_not membership.update(role: "admin")
+    assert_includes membership.errors[:role], "of a viewer can only change to Employee"
+    assert_equal "viewer", membership.reload.role
+  end
+
+  test "only an active viewer can be promoted" do
+    %i[invited suspended].each do |state|
+      membership = create(:company_membership, :viewer, state, user: create(:user), company: @company)
+
+      assert_not membership.update(role: "employee"), "#{state} viewer must not be promotable"
+      assert_includes membership.errors[:base], "Only an active viewer can be promoted"
+    end
+  end
+
+  test "re-inviting a revoked viewer as employee is allowed and still reopens onboarding" do
+    membership = onboarded_viewer(state: "revoked")
+
+    membership.assign_attributes(role: "employee", invited_at: Time.current)
+    membership.aasm(:state).fire(:reinvite)
+
+    assert membership.save, membership.errors.full_messages.to_sentence
+    assert_equal "step2", membership.reload.onboarding_state
+  end
 end

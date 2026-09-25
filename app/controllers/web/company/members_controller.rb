@@ -69,8 +69,11 @@ class Web::Company::MembersController < Web::Company::ApplicationController
                          inertia: { errors: { base: "This action is not available for the member's current state" } }
     end
 
+    promoted = membership.promoted_from_viewer?
+
     if membership.save
-      redirect_to company_members_path, notice: "Member updated"
+      notice = promoted ? "Role updated. They must connect a CLI to finish onboarding." : "Member updated"
+      redirect_to company_members_path, notice: notice
     else
       redirect_to company_members_path, inertia: { errors: membership.errors }
     end

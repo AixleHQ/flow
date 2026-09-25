@@ -163,6 +163,20 @@ export const MembersContent = ({
     router.patch(`${basePath}/${userId}`, { user: { role } }, { preserveScroll: true });
   };
 
+  const handlePromoteViewer = (userId: number, name: string) => {
+    modals.openConfirmModal({
+      title: 'Make employee',
+      children: (
+        <Text size="sm">
+          <b>{name}</b> will get member access to this company. They must finish onboarding and connect at least one CLI
+          before they can run agents.
+        </Text>
+      ),
+      labels: { confirm: 'Make Employee', cancel: 'Cancel' },
+      onConfirm: () => handleRoleChange(userId, 'employee'),
+    });
+  };
+
   const handleStateEvent = (userId: number, event: string) => {
     router.patch(`${basePath}/${userId}`, { user: { stateEvent: event } }, { preserveScroll: true });
   };
@@ -367,6 +381,14 @@ export const MembersContent = ({
                                     onClick={() => handleRoleChange(user.id, 'admin')}
                                   >
                                     Make Admin
+                                  </Menu.Item>
+                                )}
+                                {showRoleActions && user.role === 'viewer' && user.state === 'active' && (
+                                  <Menu.Item
+                                    leftSection={<IconUserCheck size={14} />}
+                                    onClick={() => handlePromoteViewer(user.id, user.name)}
+                                  >
+                                    Make Employee
                                   </Menu.Item>
                                 )}
                                 {showRoleActions && user.role === 'admin' && (

@@ -111,8 +111,9 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
   # === /company/sessions ===
 
   test "company sessions index shows only the current company's project sessions and flips after a switch" do
-    # The sessions screen is admin-gated; promote the user in B for this test.
-    @membership_b.update!(role: "admin")
+    # The sessions screen is admin-gated. Set the role directly: promoting a
+    # viewer through the model goes via Employee and reopens onboarding.
+    @membership_b.update_column(:role, "admin")
     # A project-less session belongs to the company it acts for — here A — and
     # to no other company the user happens to belong to.
     projectless = build(:terminal_session, user: @user, project: nil, company: @company_a,

@@ -122,6 +122,40 @@ class Web::Company::MembersControllerTest < ActionDispatch::IntegrationTest
     assert @company.company_memberships.find_by(user: member).viewer?
   end
 
+  test "promoting a viewer sends them back through onboarding until they connect a CLI here" do
+    viewer = create(:user, :viewer, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+
+    assert_enqueued_emails 1 do
+      patch company_member_path(viewer), params: { user: { role: "employee" } }
+    end
+    assert_redirected_to company_members_path
+    assert_equal "Role updated. They must connect a CLI to finish onboarding.", flash[:notice]
+    membership = @company.company_memberships.find_by!(user: viewer)
+    assert membership.employee?
+    assert_equal "step2", membership.onboarding_state
+
+    delete logout_path
+    sign_in_as(viewer)
+    get company_projects_path
+    assert_redirected_to onboarding_path
+
+    patch onboarding_path, params: { onboarding: { onboarding_state_event: "complete" } }
+    assert_equal "step2", membership.reload.onboarding_state
+
+    create(:agent_credential, user: viewer, company: @company)
+    patch onboarding_path, params: { onboarding: { onboarding_state_event: "complete" } }
+    assert_equal "completed", membership.reload.onboarding_state
+  end
+
+  test "promoting a viewer straight to admin is rejected" do
+    viewer = create(:user, :viewer, company: @company)
+
+    patch company_member_path(viewer), params: { user: { role: "admin" } }
+
+    assert_redirected_to company_members_path
+    assert @company.company_memberships.find_by!(user: viewer).viewer?
+  end
+
   test "index supports searching members by name/email (ransack over memberships)" do
     create(:user, :employee, company: @company, name: "Findable Fred")
     create(:user, :employee, company: @company, name: "Other Olga")
