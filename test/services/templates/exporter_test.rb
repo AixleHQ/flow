@@ -69,6 +69,16 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert(result.notes.any? { |note| note.include?("inherited every project resource") })
   end
 
+  test "a single agent exports on its own as an agent template" do
+    agent = @source.agents.find_by!(name: "architect")
+
+    result = export(workflow_ids: [], agent_ids: [ agent.id ], include_board: false, include_assets: false)
+
+    assert_equal "agent", result.package.kind
+    assert_equal [ "architect" ], result.package.section("agents").pluck("name")
+    assert_empty result.package.section("workflows")
+  end
+
   test "exporting some workflows without the board leaves column triggers out" do
     result = export(include_board: false)
 

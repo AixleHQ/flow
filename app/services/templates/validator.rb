@@ -45,6 +45,7 @@ module Templates
       # Semantic checks assume the shape the schema guarantees.
       return @errors if @errors.any?
 
+      @errors << "the template installs nothing — add at least one agent, skill, server, tool, board or workflow" if @package.empty?
       check_unique_keys
       check_step_references
       check_depends_on

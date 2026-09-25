@@ -1,4 +1,4 @@
-export type TemplateKind = 'connector' | 'board' | 'workflow' | 'project';
+export type TemplateKind = 'project' | 'workflow' | 'board' | 'agent' | 'skill' | 'connector';
 
 export interface TemplateRequires {
   integrations: string[];
@@ -55,6 +55,8 @@ export const KIND_LABELS: Record<TemplateKind, string> = {
   project: 'Project',
   workflow: 'Workflow',
   board: 'Board',
+  agent: 'Agent',
+  skill: 'Skill',
   connector: 'Connector',
 };
 
@@ -62,6 +64,8 @@ export const KIND_COLORS: Record<TemplateKind, string> = {
   project: 'brand',
   workflow: 'blue',
   board: 'violet',
+  agent: 'orange',
+  skill: 'yellow',
   connector: 'teal',
 };
 

@@ -16,7 +16,7 @@ interface Props {
   signedIn: boolean;
 }
 
-const KIND_FILTERS: TemplateKind[] = ['project', 'workflow', 'board', 'connector'];
+const KIND_FILTERS: TemplateKind[] = ['project', 'workflow', 'board', 'agent', 'skill', 'connector'];
 
 function requirementLine(template: TemplateSummary): string {
   const { integrations, repositories, secrets } = template.requires;

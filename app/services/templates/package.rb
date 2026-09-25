@@ -8,7 +8,7 @@ module Templates
     FORMAT_VERSION = 1
     SCHEMA_PATH = Rails.root.join("config/templates/template.v1.json")
 
-    KINDS = %w[connector board workflow project].freeze
+    KINDS = %w[project workflow board agent skill connector].freeze
     DEFINITION_FILE = "template.yaml"
     README_FILE = "README.md"
     SETUP_FILE = "SETUP.md"
@@ -56,14 +56,22 @@ module Templates
 
     def board = definition["board"]
 
-    # Derived, not declared: the sections present decide what the template is.
+    # Derived, not declared: the sections present decide what the template is,
+    # most encompassing first. An agent template may bring skills and servers
+    # along; a connector template is servers and tools only.
     def kind
       if board && section("workflows").any? then "project"
       elsif section("workflows").any? then "workflow"
       elsif board then "board"
+      elsif section("agents").any? then "agent"
+      elsif section("skills").any? then "skill"
       else "connector"
       end
     end
+
+    RESOURCE_SECTIONS = %w[board agents skills mcp_servers tools assets workflows].freeze
+
+    def empty? = RESOURCE_SECTIONS.none? { |key| definition[key].present? }
 
     def inputs = section("inputs")
     def requires = definition["requires"] || {}

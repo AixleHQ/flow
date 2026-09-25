@@ -8,8 +8,10 @@ module PersonalTools
   class ExportTemplate < Base
     tool do
       display_name "Export Template"
-      description "Export a project, or some of its workflows, as a template package: template.yaml plus the " \
-                  "files next to it. Secrets are exported by name only; variables with their values. Anything " \
+      description "Export a project, some of its workflows, or single agents and skills as a template package: " \
+                  "template.yaml plus the files next to it. For an agent or skill template pass workflow_ids: [] " \
+                  "and include_board: false with agent_ids / skill_ids. " \
+                  "Secrets are exported by name only; variables with their values. Anything " \
                   "that cannot be carried faithfully (a literal MCP header, an unpinned image) aborts the export " \
                   "with the reason. Follow the publish_template prompt to open the catalog pull request."
       audience :user
@@ -20,7 +22,9 @@ module PersonalTools
       param :name, type: :string, description: "Template name shown in the catalog.", required: true
       param :summary, type: :string, description: "One-sentence catalog summary."
       param :workflow_ids, type: :array, items: { type: "integer" },
-                           description: "Only these workflows. Omit to export every workflow."
+                           description: "Only these workflows. Omit to export every workflow; [] for none."
+      param :agent_ids, type: :array, items: { type: "integer" }, description: "Agents to export on their own."
+      param :skill_ids, type: :array, items: { type: "integer" }, description: "Skills to export on their own."
       param :include_board, type: :boolean, description: "Export the board and its column triggers (default true)."
       param :include_assets, type: :boolean, description: "Export the project assets the workflows use (default false)."
     end
@@ -31,7 +35,9 @@ module PersonalTools
 
       result = Templates::Exporter.new(
         project: project, slug: params[:slug].to_s, name: params[:name].to_s, summary: params[:summary],
-        workflow_ids: params[:workflow_ids].presence, include_board: params[:include_board] != false,
+        workflow_ids: params.key?(:workflow_ids) ? Array(params[:workflow_ids]) : nil,
+        agent_ids: Array(params[:agent_ids]), skill_ids: Array(params[:skill_ids]),
+        include_board: params[:include_board] != false,
         include_assets: params[:include_assets] == true
       ).call
       success(directory: "templates/#{params[:slug]}", template_yaml: result.template_yaml,

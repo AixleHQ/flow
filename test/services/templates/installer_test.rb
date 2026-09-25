@@ -183,6 +183,18 @@ class Templates::InstallerTest < ActiveSupport::TestCase
     assert copied.created
   end
 
+  test "an agent template adds just the agent to an existing project" do
+    project = create(:project, company: @company, owner: @user)
+    definition = workflow_package.definition.except("workflows").merge("slug" => "reviewer-agent", "name" => "Reviewer")
+    template = catalog_template(Templates::Package.new(definition: definition))
+
+    installer(template: template, target: { project: project }).apply
+
+    assert_equal "agent", template.kind
+    assert_equal [ "reviewer" ], project.agents.pluck(:name)
+    assert_empty project.workflows
+  end
+
   test "a second workflow install into the same project gets a suffixed name" do
     project = create(:project, company: @company, owner: @user)
     template = catalog_template(workflow_package)

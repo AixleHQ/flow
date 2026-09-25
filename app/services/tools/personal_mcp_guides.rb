@@ -154,8 +154,10 @@ module Tools
           ## 1. Choose what to publish
 
           Ask the user which project, and whether it is the whole project (board +
-          workflows) or only some workflows. A whole-project template always installs
-          as a new project; anything else can be added to an existing project.
+          workflows), only some workflows, or a single agent or skill. A whole-project
+          template always installs as a new project; anything else can be added to an
+          existing project. For an agent or skill, export with `workflow_ids: []`,
+          `include_board: false` and `agent_ids` / `skill_ids`.
           Agree on a slug (lowercase words joined by dashes), a name and a one-line summary.
 
           ## 2. Export

@@ -1,8 +1,8 @@
 # Templates
 
 Ready-made setups you can install instead of building from scratch: a single
-connector, a board layout, a workflow, or a whole project with its board,
-agents and workflows. Every template is reviewed by the Flow maintainers before
+agent, skill or connector, a board layout, a workflow, or a whole project with
+its board, agents and workflows. Every template is reviewed by the Flow maintainers before
 it appears in the catalog.
 
 ## Browsing
@@ -21,8 +21,8 @@ Press **Install** on the template page (you are asked to sign in first if you
 are not). Then:
 
 - **Where it goes.** A whole-project template always installs as a new project
-  that you own. Any other kind — a connector, a board, a workflow — can go into
-  a project you already have, or into a new one.
+  that you own. Any other kind — an agent, a skill, a connector, a board, a
+  workflow — can go into a project you already have, or into a new one.
 - **Settings.** A template can ask for a few values, such as a branch name or a
   language. Secrets it needs can be pasted here or added later.
 - **What happens.** A table lists every resource and whether it is created, an

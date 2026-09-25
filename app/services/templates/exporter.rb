@@ -23,13 +23,18 @@ module Templates
 
     CONFIG_ITEM_REF = /config_item:([A-Z][A-Z0-9_]*)/
 
-    # @param workflow_ids [Array<Integer>, nil] nil exports every workflow
-    def initialize(project:, slug:, name:, workflow_ids: nil, include_board: true, include_assets: false, summary: nil)
+    # @param workflow_ids [Array<Integer>, nil] nil exports every workflow, [] none
+    # @param agent_ids / skill_ids [Array<Integer>] exported even when no workflow uses them —
+    #   how an agent or skill template is made
+    def initialize(project:, slug:, name:, workflow_ids: nil, agent_ids: [], skill_ids: [], include_board: true,
+                   include_assets: false, summary: nil)
       @project = project
       @slug = slug
       @name = name
       @summary = summary
       @workflow_ids = workflow_ids
+      @agent_ids = Array(agent_ids)
+      @skill_ids = Array(skill_ids)
       @include_board = include_board
       @include_assets = include_assets
       @errors = []
@@ -56,6 +61,8 @@ module Templates
       definition = { "format_version" => Package::FORMAT_VERSION, "slug" => @slug, "version" => 1, "name" => @name }
       definition["summary"] = @summary if @summary.present?
       workflows = export_workflows
+      @agent_ids.each { |id| agent_key(id, "agent #{id}") }
+      @skill_ids.each { |id| skill_key(id, "skill #{id}") }
       definition["board"] = export_board if @include_board && @project.board
       definition["agents"] = @agents.values if @agents.any?
       definition["skills"] = @skills.values if @skills.any?
