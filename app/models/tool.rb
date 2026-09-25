@@ -21,6 +21,7 @@ class Tool < ApplicationRecord
   enumerize :execution_mode, in: %i[app container], default: :container, predicates: true
 
   belongs_to :scope, polymorphic: true, optional: true
+  include TenantColumns
 
   has_many :tool_files, dependent: :destroy
   has_many :tool_results, dependent: :destroy
@@ -206,6 +207,15 @@ class Tool < ApplicationRecord
     Digest::SHA256.hexdigest(JSON.dump(payload))
   end
 
+  # Ransack
+  def self.ransackable_attributes(_auth_object = nil)
+    %w[name display_name source scope_type enabled deleted_at created_at updated_at]
+  end
+
+  def self.ransackable_associations(_auth_object = nil)
+    %w[scope tool_files]
+  end
+
   private
 
   SCHEMA_MAX_BYTES = 64_000
@@ -327,14 +337,5 @@ class Tool < ApplicationRecord
         timeout: timeout, tool_result_id: tool_result_id
       )
     end
-  end
-
-  # Ransack
-  def self.ransackable_attributes(_auth_object = nil)
-    %w[name display_name source scope_type enabled deleted_at created_at updated_at]
-  end
-
-  def self.ransackable_associations(_auth_object = nil)
-    %w[scope tool_files]
   end
 end

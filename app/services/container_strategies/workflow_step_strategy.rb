@@ -18,23 +18,6 @@ module ContainerStrategies
       end
     end
 
-    def build_env_vars
-      env_vars_list = super
-
-      session = TerminalSession.find(input[:session_id])
-      step_run = session.step_run
-      step = step_run&.step
-
-      prompt = build_workflow_prompt(step, step_run)
-      upsert_env_var(env_vars_list, "AGENT_PROMPT", prompt) if prompt.present?
-
-      if step&.agent.present?
-        upsert_env_var(env_vars_list, "CONFIGURED_AGENT_PERSONA", step.agent.persona)
-        upsert_env_var(env_vars_list, "CONFIGURED_AGENT_PRINCIPLES", step.agent.principles)
-      end
-
-      env_vars_list
-    end
 
     def before_cleanup(container_id: nil, **)
       return {} if container_id.blank?
@@ -49,11 +32,6 @@ module ContainerStrategies
       persist_refreshed_credentials(container, session, agent_service)
 
       outputs_count = collect_workflow_outputs(container_id)
-
-      # Notify the workflow execution AFTER outputs are collected so CompleteStepActivity
-      # can validate them. session_service#signal_container_finished sends this signal
-      # immediately (causing a race), so we do it here instead for workflow steps.
-      notify_workflow_execution(session)
 
       # Provider-agnostic teardown hook: every integration that holds
       # session-scoped runtime state (Coder workspace locks today, others
@@ -182,7 +160,7 @@ module ContainerStrategies
       ids = workflow_run.input_asset_ids
       return if ids.blank?
 
-      Asset.where(id: ids).each do |asset|
+      TenantScope.owned(Asset, project: workflow_run.project).where(id: ids).each do |asset|
         version = asset.latest_version
         next unless version&.file
 
@@ -191,16 +169,6 @@ module ContainerStrategies
       rescue StandardError => e
         Rails.logger.warn("[WorkflowStepStrategy] Failed to inject run asset #{asset.name}: #{e.message}")
       end
-    end
-
-
-    def notify_workflow_execution(session)
-      step_run = session.step_run
-      return unless step_run&.workflow_run_id
-
-      WorkflowService.notify_container_finished(step_run: step_run)
-    rescue StandardError => e
-      Rails.logger.warn("[WorkflowStepStrategy] Failed to notify workflow execution: #{e.message}")
     end
 
     def download_to_container(container, url, target_path)
@@ -231,6 +199,12 @@ module ContainerStrategies
     # not here. This method only returns static step instructions.
     def build_workflow_prompt(step, _step_run)
       step&.instructions
+    end
+
+    # The step's own instructions, not the session's initial prompt.
+    def agent_prompt(session)
+      step_run = session.step_run
+      build_workflow_prompt(step_run&.step, step_run)
     end
   end
 end

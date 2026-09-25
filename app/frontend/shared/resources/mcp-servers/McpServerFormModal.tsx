@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import {
   ActionIcon,
+  Alert,
   Anchor,
   Badge,
   Box,
@@ -21,14 +22,26 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState, type FC } from 'react';
 import { z } from 'zod';
 
+import type { MCPServer } from '@/types/generated';
+
 import { ConfigItemValueField } from './ConfigItemValueField';
 
 // The MCPServerResource masks every stored header/env value to a sentinel before it reaches the
 // browser. The modal echoes that sentinel back untouched for values the user didn't edit; the
-// backend swaps each sentinel for the stored secret (see McpServersController#unmask_secrets!), so
-// the modal itself no longer needs to know the sentinel string.
+// backend swaps each sentinel for the stored secret (see McpServersController#unmasked_secrets) —
+// unless the server's address changed, in which case every stored value is dropped.
 
-type OauthStatus = 'pending' | 'active' | 'expiring' | 'error';
+// Mirrors MCPServer.destination: the origin for a network server, the launch line for stdio.
+const destinationOf = (transport: string, url: string | null, command: string | null): string => {
+  if (transport === 'stdio') return `stdio:${(command ?? '').trim().split(/\s+/).join(' ')}`;
+  try {
+    return `net:${new URL(url ?? '').origin}`;
+  } catch {
+    return `net:${(url ?? '').trim().toLowerCase()}`;
+  }
+};
+
+type OauthStatus = NonNullable<MCPServer['oauthStatus']>;
 
 // Maps the per-user oauth_status from the resource to a connection badge (functional labels, not
 // colours-only, so the state is legible without relying on hue).
@@ -85,31 +98,28 @@ interface KVPair {
   value: string;
 }
 
-interface McpServer {
-  id: number;
-  name: string;
-  url: string | null;
-  transport: string;
-  headers: Record<string, string> | null;
-  command: string | null;
-  env: Record<string, string> | null;
-  description: string | null;
-  enabled: boolean;
-  // OAuth fields (optional so the list's richer McpServer type stays assignable). The resource
-  // always sends auth_type/credential_scope; oauth_status is read-only and per-current-user.
-  authType?: 'none' | 'static' | 'oauth';
-  credentialScope?: 'shared' | 'per_user';
-  oauthStatus?: OauthStatus | null;
-  // An OAuth client the operator registered themselves, for a server whose authorization server
-  // refuses to register us. The id round-trips; the secret never does — only whether one is stored.
-  oauthClientId?: string | null;
-  oauthClientSecretPresent?: boolean;
-}
+type EditableServer = Pick<
+  MCPServer,
+  | 'id'
+  | 'name'
+  | 'url'
+  | 'transport'
+  | 'headers'
+  | 'command'
+  | 'env'
+  | 'description'
+  | 'enabled'
+  | 'authType'
+  | 'credentialScope'
+  | 'oauthStatus'
+  | 'oauthClientId'
+  | 'oauthClientSecretPresent'
+>;
 
 interface McpServerFormModalProps {
   opened: boolean;
   onClose: () => void;
-  editServer?: McpServer | null;
+  editServer?: EditableServer | null;
   configItemNames: string[];
   basePath: string;
 }
@@ -122,6 +132,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
   basePath,
 }) => {
   const [loading, setLoading] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
   const [headersList, setHeadersList] = useState<KVPair[]>([]);
   const [envList, setEnvList] = useState<KVPair[]>([]);
   // Credential scope defaults to project-wide (shared); the per-user option is tucked behind an
@@ -157,9 +168,20 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
   // The one callback URL this deployment uses; the operator has to register exactly this.
   const callbackUrl = `${window.location.origin}/oauth/callback`;
   const statusMeta = OAUTH_STATUS_META[oauthStatus] ?? OAUTH_STATUS_META.pending;
+  const holdsCredentials =
+    !!editServer &&
+    (Object.keys(editServer.headers ?? {}).length > 0 ||
+      Object.keys(editServer.env ?? {}).length > 0 ||
+      (editServer.oauthStatus ?? 'pending') !== 'pending' ||
+      !!editServer.oauthClientSecretPresent);
+  const destinationMoved =
+    !!editServer &&
+    destinationOf(editServer.transport, editServer.url, editServer.command) !==
+      destinationOf(form.values.transport, form.values.url, form.values.command);
 
   useEffect(() => {
     if (opened) {
+      setServerError(null);
       if (editServer) {
         const headers = editServer.headers ?? {};
         setHeadersList(Object.entries(headers).map(([key, value]) => ({ key, value: String(value) })));
@@ -167,7 +189,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
         setEnvList(Object.entries(env).map(([key, value]) => ({ key, value: String(value) })));
         form.setValues({
           name: editServer.name,
-          transport: editServer.transport as 'http' | 'sse' | 'stdio',
+          transport: editServer.transport,
           url: editServer.url ?? '',
           command: editServer.command ?? '',
           description: editServer.description ?? '',
@@ -207,6 +229,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
 
   const handleSubmit = (values: FormData) => {
     setLoading(true);
+    setServerError(null);
 
     const payload = {
       mcpServer: {
@@ -216,10 +239,22 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
       },
     };
 
+    // A refusal can name a field this transport does not render — a URL typed before switching to
+    // stdio is still sent and still checked — so whatever has no visible field goes in the alert.
+    const shownFields = new Set(['name', 'transport', 'description', 'enabled', ...(isStdio ? ['command'] : ['url'])]);
     const opts = {
       preserveScroll: true,
       onFinish: () => setLoading(false),
       onSuccess: () => onClose(),
+      onError: (errors: Record<string, string | string[]>) => {
+        const unshown: string[] = [];
+        Object.entries(errors).forEach(([key, message]) => {
+          const text = Array.isArray(message) ? message.join('; ') : message;
+          if (key in values) form.setFieldError(key, text);
+          if (!shownFields.has(key)) unshown.push(key === 'base' ? text : `${key}: ${text}`);
+        });
+        setServerError(unshown.length > 0 ? unshown.join('\n') : null);
+      },
     };
 
     if (isEdit) {
@@ -428,9 +463,9 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
             <>
               <TextInput
                 label="Command"
-                placeholder="npx @automattic/mcp-wordpress-remote"
+                placeholder="npx package-name@1.2.3"
                 {...form.getInputProps('command')}
-                description="Full command to run (e.g., npx @playwright/mcp --no-sandbox)"
+                description="Full command to run, with the package pinned to an exact version (npx name@1.2.3, uvx name==1.2.3)"
                 styles={{ input: { fontFamily: 'monospace' } }}
               />
 
@@ -500,6 +535,20 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
           />
 
           <Switch label="Enabled" {...form.getInputProps('enabled', { type: 'checkbox' })} />
+
+          {holdsCredentials && destinationMoved && (
+            <Alert color="yellow" variant="light" title="Stored credentials will be cleared">
+              Saving a new address clears this server&apos;s stored header and env values and disconnects its OAuth
+              connection, so they never reach a host they were not entered for. Enter them again here, or connect again
+              after saving.
+            </Alert>
+          )}
+
+          {serverError && (
+            <Alert color="red" variant="light" title="Could not save" style={{ whiteSpace: 'pre-line' }}>
+              {serverError}
+            </Alert>
+          )}
 
           <Group justify="flex-end" mt="sm">
             <Button variant="default" onClick={onClose} disabled={loading}>

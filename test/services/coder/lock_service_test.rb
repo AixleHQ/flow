@@ -33,6 +33,31 @@ module Coder
       end
     end
 
+    # One pool, reached through two integrations — two companies, or two projects of
+    # one — is still one set of machines.
+    test "a box locked through one integration cannot be locked through another" do
+      other_company = create(:company)
+      other = create(:integration, :coder, :active, company: other_company,
+                                                    connected_by: create(:user, :admin, company: other_company))
+      @service.acquire(**lock_args(terminal_session_id: "sess-A"))
+
+      error = assert_raises(Coder::LockService::LockNotAcquired) do
+        Coder::LockService.new(other).acquire(**lock_args(workspace_name: "ws-1", terminal_session_id: "sess-B"))
+      end
+      assert_match(/another integration/, error.message)
+    end
+
+    test "another integration's expired lock on the box does not keep it" do
+      other_company = create(:company)
+      other = create(:integration, :coder, :active, company: other_company,
+                                                    connected_by: create(:user, :admin, company: other_company))
+      Coder::LockService.new(other).acquire(**lock_args(terminal_session_id: "sess-A"))
+      IntegrationData.where(integration: other).update_all(expires_at: 1.minute.ago)
+
+      assert @service.acquire(**lock_args(terminal_session_id: "sess-B"))
+      assert_not IntegrationData.exists?(integration: other)
+    end
+
     test "acquire reclaims an expired row in a single statement" do
       stale = create(
         :integration_data, :expired,
@@ -107,15 +132,15 @@ module Coder
       assert_not @service.held_by_session?(workspace_name: "ws-1", terminal_session_id: "sess-B")
     end
 
-    test "two integrations isolate their locks for the same workspace name" do
+    # Same name, different machines: another Coder user's (or deployment's) "ws-1".
+    test "two integrations isolate their locks for different machines of the same name" do
       other = create(:integration, :coder, :active, company: @company, connected_by: @user)
       other_service = Coder::LockService.new(other)
 
       @service.acquire(**lock_args(terminal_session_id: "sess-A"))
 
-      # No conflict — different integration_id, even with the same key.
       assert_nothing_raised do
-        other_service.acquire(**lock_args(terminal_session_id: "sess-A"))
+        other_service.acquire(**lock_args(workspace_id: "ws-uuid-2", terminal_session_id: "sess-A"))
       end
 
       # release on one does not affect the other.

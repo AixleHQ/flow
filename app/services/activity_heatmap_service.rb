@@ -9,7 +9,6 @@
 # re-apply the `agent_type IS NOT NULL` filter, so workflow_step sessions (which may
 # have a null agent_type) still appear on the calendar as launched sessions.
 class ActivityHeatmapService
-  USAGE_SESSION_TYPES = %w[agent_session workflow_step].freeze
   DayCount = Struct.new(:date, :count, keyword_init: true)
 
   # scope: an ActiveRecord relation of terminal_sessions (already narrowed to a user,
@@ -23,7 +22,7 @@ class ActivityHeatmapService
   def call
     day = Arel.sql("date_trunc('day', terminal_sessions.created_at)")
     @scope
-      .where(created_at: @since.., session_type: USAGE_SESSION_TYPES)
+      .where(created_at: @since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
       .group(day)
       .order(day)
       .pluck(day, Arel.sql("COUNT(terminal_sessions.id)"))

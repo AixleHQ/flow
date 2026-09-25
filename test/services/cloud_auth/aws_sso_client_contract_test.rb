@@ -21,6 +21,7 @@ module CloudAuth
       list_accounts
       list_account_roles
       role_credentials
+      caller_arn
     ].freeze
 
     test "the fake implements every public method of the real client" do
@@ -155,6 +156,27 @@ module CloudAuth
       Rails.logger.expects(:warn).with { |message| message.to_s.include?("list_accounts truncated") }
 
       assert_equal AwsSsoClient::MAX_PAGES, client.list_accounts(access_token: "bearer-token").length
+    end
+
+
+    test "caller_arn asks STS who the role credentials act as" do
+      stub_request(:post, "https://sts.us-east-1.amazonaws.com/")
+        .with(body: /Action=GetCallerIdentity/)
+        .to_return(status: 200, headers: { "Content-Type" => "text/xml" }, body: <<~XML)
+          <GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+            <GetCallerIdentityResult>
+              <Arn>arn:aws:sts::111122223333:assumed-role/AWSReservedSSO_BedrockUser_0123/dev@example.com</Arn>
+              <UserId>AROAEXAMPLE:dev@example.com</UserId>
+              <Account>111122223333</Account>
+            </GetCallerIdentityResult>
+          </GetCallerIdentityResponse>
+        XML
+      credentials = AwsSsoClient::RoleCredentials.new(access_key_id: "ASIA", secret_access_key: "s",
+                                                      session_token: "t", expiration: 1.hour.from_now)
+
+      arn = AwsSsoClient.new(region: "us-east-1").caller_arn(role_credentials: credentials, region: "us-east-1")
+
+      assert_equal "arn:aws:sts::111122223333:assumed-role/AWSReservedSSO_BedrockUser_0123/dev@example.com", arn
     end
 
     private

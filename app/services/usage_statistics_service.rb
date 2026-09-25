@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "set"
-
 class UsageStatisticsService
   Result = Struct.new(:status, :error, keyword_init: true)
 
@@ -22,6 +20,9 @@ class UsageStatisticsService
 
     sessions = find_sessions(tokens)
     return Result.new(status: :not_found, error: "Terminal session not found") unless sessions
+
+    sessions = authenticated_sessions(payload, sessions)
+    return Result.new(status: :unauthorized, error: "Invalid session key") if sessions.empty?
 
     persisted = false
     sessions.each_value do |terminal_session|
@@ -84,6 +85,42 @@ class UsageStatisticsService
     end
 
     tokens.to_a
+  end
+
+  def authenticated_sessions(payload, sessions)
+    keyed = authenticated_tokens(payload)
+    sessions.select do |token, session|
+      next true if keyed.include?(token) || !UsageStatistics::SessionKey.required_for?(session)
+
+      Rails.logger.warn("[UsageStatisticsService] dropped a batch for session #{session.id}: missing or invalid session key")
+      false
+    end
+  end
+
+  # A token counts only where the same attribute set carries its key, so a batch
+  # that is keyed for one session cannot smuggle in data points naming another.
+  def authenticated_tokens(payload)
+    attribute_sets(payload).filter_map do |attrs|
+      token = normalize_terminal_session_token(attribute_value(attrs, "terminal_session_token"))
+      key = attribute_value(attrs, UsageStatistics::SessionKey::ATTRIBUTE)
+      token if UsageStatistics::SessionKey.valid?(token, key)
+    end.to_set
+  end
+
+  def attribute_sets(payload)
+    metrics = Array(payload["resourceMetrics"]).flat_map do |resource_metric|
+      points = Array(resource_metric["scopeMetrics"]).flat_map do |scope_metric|
+        Array(scope_metric["metrics"]).flat_map { |metric| extract_data_points(metric).map { |point| point["attributes"] } }
+      end
+      [ resource_metric.dig("resource", "attributes"), *points ]
+    end
+    logs = Array(payload["resourceLogs"]).flat_map do |resource_log|
+      records = Array(resource_log["scopeLogs"]).flat_map do |scope_log|
+        Array(scope_log["logRecords"]).map { |record| record["attributes"] }
+      end
+      [ resource_log.dig("resource", "attributes"), *records ]
+    end
+    (metrics + logs).select { |attrs| attrs.is_a?(Array) }
   end
 
   def extract_data_points(metric)

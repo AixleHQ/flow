@@ -64,7 +64,6 @@ RUN chmod +x /app/entrypoint.sh
 # =============================================================================
 # Final setup
 # =============================================================================
-RUN chown -R cursor:cursor /opt/watcher
 
 WORKDIR /workspace
 ENV HOME=/home/cursor \

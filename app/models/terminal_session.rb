@@ -4,6 +4,7 @@ class TerminalSession < ApplicationRecord
   class InvalidStateError < StandardError; end
 
   include TerminalSessionStateMachine
+  include JsonbDocument
 
   WORKFLOW_TIMEOUT = 86_400 # 24 hours
 
@@ -31,6 +32,8 @@ class TerminalSession < ApplicationRecord
 
   GENERIC_ERROR_MESSAGES = [ "Workflow cancelled", "Session admission is closed", LAUNCH_ABANDONED_ERROR ].freeze
 
+  TERMINAL_STATES = %w[finished failed cancelled].freeze
+
   # A specific reason always outranks a generic one, whichever arrives last.
   def self.preferred_error_message(existing, incoming)
     return existing if incoming.blank?
@@ -48,12 +51,11 @@ class TerminalSession < ApplicationRecord
   # `session_config.bmad_modules`.
   BMAD_DEFAULT_MODULES = %w[bmm wds].freeze
 
-  # Serialized keys (camelCase, as ApplicationResource emits them) stripped from
-  # the session-list broadcast — see #broadcast_session_list_update.
-  BROADCAST_REDACTED_KEYS = %w[initialPrompt metadata contextMetadata].freeze
-
   # Associations
-  belongs_to :user
+  # Optional only for history: a permanently deleted user's sessions stay as the
+  # company's record of work, owned by nobody. Every new session has an owner.
+  belongs_to :user, optional: true
+  validates :user, presence: true, on: :create
   belongs_to :project, optional: true
   # Explicit tenant, needed because auth_setup sessions are project-less and
   # create a per-company (billed) agent credential — see SessionCompany.
@@ -85,7 +87,7 @@ class TerminalSession < ApplicationRecord
 
   # Callbacks
   before_create :generate_route_token
-  before_create :generate_mcp_key
+  after_create :store_mcp_key_for_older_pods
 
   broadcasts_to ->(s) { s }, on: :update
   broadcasts_to ->(s) { s.step_run.workflow_run }, on: :update, if: :step_run
@@ -103,11 +105,21 @@ class TerminalSession < ApplicationRecord
   }, allow_nil: true
   validates :state, presence: true
   validates :route_token, uniqueness: true, allow_nil: true
-  validates :mcp_key, uniqueness: true, allow_nil: true
   validates :mode, inclusion: { in: %w[interactive non_interactive] }, allow_nil: true
   validates :initial_prompt, presence: true, if: -> { mode == "non_interactive" }
   validates :requested_model, format: { with: /\A[a-z0-9][a-z0-9._:-]*\z/, message: "invalid model ID format" }, allow_nil: true
-  validate :config_items_belong_to_project
+  # Whatever the container is handed — a repository cloned with its
+  # integration's token, an MCP server with its headers, an asset's bytes, a
+  # config item's decrypted value — must be this tenant's. Checked on create,
+  # where the ids arrive; the readers in SessionContextService scope again.
+  { tools: Tool, skills: Skill, mcp_servers: MCPServer, repositories: Repository, input_assets: Asset,
+    config_items: ConfigItem }.each do |association, model|
+    validates association, tenant_ids: { model: model, company: :company }, on: :create
+  end
+  before_validation :inherit_project_company
+  before_save :inherit_project_company
+  validates :company_id, presence: true
+  validate :company_is_project_company, if: -> { project && company_id }
 
   # Ransack
   def self.ransackable_attributes(_auth_object = nil)
@@ -131,7 +143,11 @@ class TerminalSession < ApplicationRecord
   # shared depends on its type and lifecycle phase rather than on anything SQL
   # can select. Callers that skip the second half leak other people's shells.
   scope :readable_by, ->(user) {
-    where(user_id: user.id).or(where(project_id: Project.for_user(user).select(:id)))
+    # "Their own" still means their own in a company they belong to: a member
+    # removed from a company loses its sessions with it.
+    member_company_ids = user.company_memberships.active.select(:company_id)
+    where(user_id: user.id, company_id: member_company_ids)
+      .or(where(project_id: Project.for_user(user).select(:id)))
   }
   scope :with_cached_resource_counts, -> {
     select(
@@ -143,6 +159,12 @@ class TerminalSession < ApplicationRecord
 
   def active?
     state.in?(%w[not_started queued running ready])
+  end
+
+  # The key the session's container holds for the aixle-tools MCP server. A
+  # session launched before keys were derived keeps the random one it was given.
+  def mcp_key
+    self[:mcp_key].presence || (MCP::SessionKey.generate(self) if persisted?)
   end
 
   def finishing?
@@ -190,9 +212,21 @@ class TerminalSession < ApplicationRecord
   def container_accessible_by?(viewer)
     return false if queued? || cancelled?
     return false unless visible_to?(viewer)
-    return true if user_id == viewer.id
+    return owner_entitled? if user_id == viewer.id
 
     project.present? && project.accessible_by?(viewer)
+  end
+
+  # Whether the session's owner may still act through it: an authenticatable
+  # account with an active membership in the session's company. Checked by every
+  # gate a running container reaches — the terminal proxy, the MCP key, the
+  # credential vending endpoints — so offboarding a member or suspending an
+  # account takes effect on sessions already running.
+  def owner_entitled?
+    return false unless user && User.authenticatable.exists?(id: user_id)
+
+    company_id = SessionCompany.company_id_for(self)
+    company_id.present? && CompanyMembership.active.exists?(company_id: company_id, user_id: user_id)
   end
 
   # Idempotently runs the `start_finishing! → finish!` chain that fires at the
@@ -255,7 +289,7 @@ class TerminalSession < ApplicationRecord
   def available_tools(ctx: nil)
     ctx ||= Tools::Context.for_session(self)
 
-    base = tools.enabled.to_a
+    base = tools.enabled.where(id: TenantScope.owned(Tool, project: project, company: company || project&.company).select(:id)).to_a
     if base.none?(&:db_source?) && project.present?
       base += Tool.for_project(project).enabled.to_a
     end
@@ -269,47 +303,58 @@ class TerminalSession < ApplicationRecord
 
   private
 
-  # Attaching a config item is what lets this session decrypt its value, so the
-  # ids cannot be taken on trust from whoever posted them: a session may only
-  # attach config items of its OWN project. Enforced on the model rather than in
-  # a controller so every path — the API, the meta tools, a console — is covered.
-  def config_items_belong_to_project
-    return if config_items.empty?
+  def inherit_project_company
+    self.company_id ||= project&.company_id
+  end
 
-    if project_id.blank?
-      errors.add(:config_items, "cannot be attached to a session without a project")
-      return
-    end
-
-    foreign = config_items.reject { |item| item.scope_type == "Project" && item.scope_id == project_id }
-    return if foreign.empty?
-
-    errors.add(:config_items, "must belong to this session's project: #{foreign.map(&:name).sort.join(', ')}")
+  def company_is_project_company
+    errors.add(:company_id, "must be the project's company") if company_id != project.company_id
   end
 
   # == State machine callbacks ==
+  #
+  # A transition's `after:` runs before AASM writes the new state, so these only
+  # assign: the attributes land in the same save as the state. Anything that
+  # leaves the process waits for the commit — a signal sent from inside the
+  # transaction can reach the workflow before the state does, or announce a
+  # transition that then rolls back.
 
   def on_started
-    update!(started_at: Time.current)
+    self.started_at = Time.current
   end
 
   def on_ready
-    update!(ready_at: Time.current)
+    self.ready_at = Time.current
+  end
+
+  def on_queued
+    self.queued_at = Time.current
   end
 
   def on_finishing
-    update!(finishing_at: Time.current)
+    self.finishing_at = Time.current
   end
 
   def on_finished
-    sync_usage
-    update!(finished_at: Time.current, container_id: nil)
+    assign_usage_totals
+    self.finished_at = Time.current
+    self.container_id = nil
+    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
   end
 
   def on_failed
-    sync_usage
-    update!(finished_at: Time.current, container_id: nil)
-    notify_workflow_execution_if_step_session
+    assign_usage_totals
+    self.finished_at = Time.current
+    self.container_id = nil
+    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
+  end
+
+  # The container is still being torn down (by its own workflow), so it keeps
+  # its id; the usage it ran up so far is recorded like any other ending.
+  def on_cancelled
+    assign_usage_totals
+    self.finished_at = Time.current
+    ActiveRecord.after_all_transactions_commit { notify_workflow_execution_if_step_session }
   end
 
   def notify_workflow_execution_if_step_session
@@ -317,6 +362,8 @@ class TerminalSession < ApplicationRecord
 
     sr = step_run
     return unless sr&.workflow_run_id
+    # A run being stopped was already told so (workflow_cancelled); its steps end with it.
+    return if sr.workflow_run.stop_requested_at.present?
 
     WorkflowService.notify_container_finished(step_run: sr)
   rescue StandardError => e
@@ -324,10 +371,17 @@ class TerminalSession < ApplicationRecord
   end
 
   def sync_usage
+    assign_usage_totals
+    save! if changed?
+  rescue StandardError => e
+    Rails.logger.error("[TerminalSession] Failed to sync usage for #{id}: #{e.message}")
+  end
+
+  def assign_usage_totals
     stat = usage_statistic&.reload
     return if stat.nil?
 
-    update!(
+    assign_attributes(
       total_tokens: stat.total_tokens,
       input_tokens: stat.input_tokens,
       output_tokens: stat.output_tokens,
@@ -337,7 +391,7 @@ class TerminalSession < ApplicationRecord
       models: stat.models
     )
   rescue StandardError => e
-    Rails.logger.error("[TerminalSession] Failed to sync usage for #{id}: #{e.message}")
+    Rails.logger.error("[TerminalSession] Failed to read usage for #{id}: #{e.message}")
   end
 
   def strategy_params
@@ -353,34 +407,31 @@ class TerminalSession < ApplicationRecord
     self.route_token ||= SecureRandom.hex(16)
   end
 
-  def generate_mcp_key
-    self.mcp_key ||= SecureRandom.urlsafe_base64(32)
+  # Written only so pods still running the previous release, which read the key
+  # from this column, can launch and serve a session created by this one. Drop
+  # with the column once that release is gone.
+  def store_mcp_key_for_older_pods
+    update_column(:mcp_key, MCP::SessionKey.generate(self)) if self[:mcp_key].blank?
   end
 
+  # The lists that show this session hear that it changed, and nothing else: one
+  # message reaches every subscriber and cannot be redacted per viewer, so each
+  # page fetches the row back through its own authorized endpoint. The streams
+  # are signed, and only a page that already authorized its viewer hands one out
+  # (see #session_list_streams). A dropped update costs a stale row, never the
+  # write that caused it.
   def broadcast_session_list_update
-    # Project sessions go to the project's company; project-less sessions go to
-    # EVERY company where the user is an active member — matching the listing
-    # rule in Web::Company::ApplicationController#company_sessions_scope.
-    explicit = company_id || project&.company_id
-    company_ids = if explicit
-      [ explicit ]
-    else
-      # Legacy rows only: nothing recorded the tenant, so fall back to every
-      # company the user is an active member of (matches the listing rule in
-      # Web::Company::ApplicationController#company_sessions_scope).
-      user&.company_memberships&.active&.pluck(:company_id) || []
-    end
-    return if company_ids.empty?
+    return if company_id.blank? || SessionsRunsFeed::LISTABLE_SESSION_TYPES.exclude?(session_type)
 
-    # One payload fans out to every listener on the company/project channel, so
-    # it cannot be redacted per viewer the way a page render can. What the list
-    # rows never display — the prompt and the metadata blobs, i.e. what the
-    # person is working on — is therefore dropped outright rather than pushed at
-    # everyone in the company. The route token and its URLs stay: they are gated
-    # at the proxy (Api::V1::Internal::WsAuth), not by being kept quiet.
-    session_payload = TerminalSessionResource.new(self).to_h.except(*BROADCAST_REDACTED_KEYS)
-    payload = { type: "session_update", session: session_payload }
-    company_ids.each { |cid| ActionCable.server.broadcast("session_list:company:#{cid}", payload) }
-    ActionCable.server.broadcast("session_list:project:#{project_id}", payload) if project_id.present?
+    session_list_streams.each do |stream|
+      InertiaCable.broadcast(stream, { type: "session_update", id: id })
+    end
+  rescue StandardError => e
+    Rails.logger.warn("[TerminalSession] Session-list update for #{id} not sent: #{e.class}: #{e.message}")
+  end
+
+  # The company feed, the owner's member page, and the project's Sessions & Runs.
+  def session_list_streams
+    [ [ company, :sessions ], ([ company, user, :sessions ] if user), ([ project, :sessions_runs ] if project) ].compact
   end
 end

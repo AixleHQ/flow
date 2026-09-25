@@ -39,12 +39,19 @@ mkdir -p "$(dirname "${MITM_LOG_PATH}")" 2>/dev/null || true
 
 echo -e "${CYAN:-}🛡️  Starting MITM proxy on port ${MITM_PROXY_PORT}...${NC:-}"
 
-# Seed $HOME/.mitmproxy with the pre-generated CA from the Docker image.
-# This avoids the race between mitmdump generating a CA on first start and
-# child processes making HTTPS requests before the cert exists.
+# This container's own interception CA, made before mitmdump starts so no child
+# process can ask for a certificate first. Never baked into the image: that would
+# put one private key, trusted for every host, in every copy of a public image.
 MITMPROXY_DIR="${HOME:-/root}/.mitmproxy"
 mkdir -p "$MITMPROXY_DIR" 2>/dev/null || true
-cp /opt/mitm/ca/* "$MITMPROXY_DIR/" 2>/dev/null || true
+if [ ! -s "$MITMPROXY_DIR/mitmproxy-ca-cert.pem" ]; then
+  python3 - "$MITMPROXY_DIR" <<'PY' || echo -e "${YELLOW:-}⚠️  Could not generate the proxy CA${NC:-}"
+import sys
+from pathlib import Path
+from mitmproxy.certs import CertStore
+CertStore.from_store(Path(sys.argv[1]), "mitmproxy", 2048)
+PY
+fi
 
 # TLS trust (MITM TLS to the proxy uses a cert signed by mitm CA):
 # - Node: use built-in Mozilla roots for real sites + NODE_EXTRA_CA_CERTS for mitm only.
@@ -57,6 +64,11 @@ COMBINED_CA_PEM="$MITMPROXY_DIR/combined-ca-bundle.pem"
 if [ -r "$MITM_CA_PEM" ] && [ -r "$SYSTEM_CA_BUNDLE" ]; then
   cat "$SYSTEM_CA_BUNDLE" "$MITM_CA_PEM" >"$COMBINED_CA_PEM"
   chmod 644 "$COMBINED_CA_PEM" 2>/dev/null || true
+  # Programs that read the system store and no environment variable (apt, for
+  # one) trust it too. The image leaves the bundle appendable for this.
+  if [ -w "$SYSTEM_CA_BUNDLE" ] && ! grep -qF "$(sed -n 2p "$MITM_CA_PEM")" "$SYSTEM_CA_BUNDLE"; then
+    cat "$MITM_CA_PEM" >>"$SYSTEM_CA_BUNDLE"
+  fi
 fi
 
 export NODE_EXTRA_CA_CERTS="$MITM_CA_PEM"
@@ -77,7 +89,7 @@ export HTTP_PROXY HTTPS_PROXY NO_PROXY
 
 # Chromium/Playwright: trust MITM CA via NSS (~/.pki/nssdb), not only NODE_EXTRA_CA_CERTS.
 if command -v certutil >/dev/null 2>&1 && [ -r /opt/mitm/nss-trust-mitm-ca.sh ]; then
-  bash /opt/mitm/nss-trust-mitm-ca.sh || echo -e "${YELLOW:-}⚠️  NSS mitm CA import failed (HTTPS via proxy may fail)${NC:-}"
+  bash /opt/mitm/nss-trust-mitm-ca.sh "$MITM_CA_PEM" || echo -e "${YELLOW:-}⚠️  NSS mitm CA import failed (HTTPS via proxy may fail)${NC:-}"
 fi
 
 # Start mitmdump in background with logging addon

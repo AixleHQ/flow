@@ -2,7 +2,7 @@ import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core'
 import { arrayMove } from '@dnd-kit/sortable';
 import { type Dispatch, type SetStateAction, useCallback, useRef, useState } from 'react';
 
-import { apiFetch } from 'shared/lib/apiFetch';
+import { apiMutate } from 'shared/lib/apiFetch';
 import { moveApiV1ProjectTaskPath, reorderApiV1ProjectColumnsPath } from 'shared/routes';
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
@@ -146,14 +146,12 @@ export function useBoardDnd<T extends DndTask, C extends DndColumn>({
         // no ordering guarantee against any other in-flight reload (e.g. one from creating a
         // column moments earlier), so it can land second and clobber this persisted order with
         // stale data (#580). Only revert on failure.
-        apiFetch(reorderApiV1ProjectColumnsPath(projectId), {
+        const saved = await apiMutate(reorderApiV1ProjectColumnsPath(projectId), {
           method: 'PATCH',
           headers: jsonHeaders,
           body: JSON.stringify({ columnIds: newOrder.map((c) => c.id) }),
-        }).catch(() => {
-          setColumns(columns); // revert on error
-          // Error toast would be shown by global error handler
         });
+        if (!saved) setColumns(columns);
         return;
       }
 
@@ -225,16 +223,13 @@ export function useBoardDnd<T extends DndTask, C extends DndColumn>({
         return next;
       });
 
-      try {
-        await apiFetch(moveApiV1ProjectTaskPath(projectId, origTask.id), {
-          method: 'PATCH',
-          headers: jsonHeaders,
-          body: JSON.stringify({ columnId: targetColumnId, position }),
-        });
-        // cable confirms via board.touch → broadcast_refresh_to(board) → only: ['tasks', 'columns', 'recent_activities']
-      } catch {
-        setTasks(preDragSnapshotRef.current);
-      }
+      const moved = await apiMutate(moveApiV1ProjectTaskPath(projectId, origTask.id), {
+        method: 'PATCH',
+        headers: jsonHeaders,
+        body: JSON.stringify({ columnId: targetColumnId, position }),
+      });
+      // On success the cable confirms via board.touch → broadcast_refresh_to(board) → only: ['tasks', 'columns', 'recent_activities']
+      if (!moved) setTasks(preDragSnapshotRef.current);
     },
     [enabled, projectId, columns, setColumns, setTasks],
   );

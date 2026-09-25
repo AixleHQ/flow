@@ -5,6 +5,23 @@ require "test_helper"
 class TemporalWorkflowRegistryTest < ActiveSupport::TestCase
   # == ActivityDef Tests ==
 
+  # The worker polls TEMPORAL_TASK_QUEUE; starting and dispatching must use the
+  # same queue, or any other setting stops all work.
+  test "the default queue in workflows.yml is the configured TEMPORAL_TASK_QUEUE" do
+    Settings.temporal.stubs(:task_queue).returns("staging-queue")
+
+    workflows = TemporalWorkflowRegistry::WorkflowsCollection.new(
+      [ { "name" => "container_workflow", "owner" => "aixle_ruby",
+          "activities" => [ { "name" => "container_phase_activity", "task_queue" => "aixle_ruby" },
+                            { "name" => "external_activity", "task_queue" => "someone-elses" } ] } ]
+    )
+    workflow = workflows.container_workflow
+
+    assert_equal "staging-queue", workflow.owner
+    assert_equal "staging-queue", workflow.activities.container_phase_activity.task_queue
+    assert_equal "someone-elses", workflow.activities.external_activity.task_queue
+  end
+
   test "ActivityDef stores name and task_queue" do
     activity = TemporalWorkflowRegistry::ActivityDef.new(name: "my_activity", task_queue: "my-queue")
 

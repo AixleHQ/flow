@@ -1,17 +1,15 @@
 import { Head, usePage } from '@inertiajs/react';
 import { Box } from '@mantine/core';
 
+import type { Project } from '@/types/generated';
+
+import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { SessionNewForm } from 'shared/components/SessionNewForm';
 import type { ConfigItemOption, NamedItem, SessionCostHint } from 'shared/components/SessionNewForm';
 import type { ToolGroup } from 'shared/lib/toolPicker';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface AgentModel {
   modelId: string;
@@ -32,7 +30,7 @@ interface Props {
   skills?: NamedItem[];
   mcpServers?: NamedItem[];
   repositories?: NamedItem[];
-  assets?: NamedItem[];
+  assets?: AssetPickerItem[];
   configItems?: ConfigItemOption[];
   costHint?: SessionCostHint;
 }

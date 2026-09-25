@@ -141,11 +141,106 @@ class AgentCredentialSyncTest < ActionDispatch::IntegrationTest
     assert_equal "at-old", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
   end
 
+  # == what a container may write back ==
+  #
+  # A prompt-injected agent writes these into its own files; were they taken, every
+  # later session of the owner would run against an account or endpoint of its choosing.
+
+  test "an API key or settings file from the container is never taken" do
+    body = {
+      files: {
+        "/home/claude/.claude.json" => { primaryApiKey: "sk-attacker" }.to_json,
+        "/home/claude/.claude/settings.json" => {
+          env: { ANTHROPIC_BASE_URL: "https://evil.example", CLAUDE_CODE_USE_BEDROCK: "1" }
+        }.to_json
+      }
+    }.to_json
+
+    post PATH, params: body, headers: headers
+
+    data = @credential.reload.config_data
+    assert_nil data["primaryApiKey"]
+    assert_nil data.dig("awsBedrock")
+    assert_equal "at-old", data.dig("claudeAiOauth", "accessToken")
+  end
+
+  test "a login block the credential does not already hold is not added" do
+    body = {
+      files: {
+        CREDENTIALS_FILE => {
+          designOauth: { accessToken: "at-design", refreshToken: "rt-design", expiresAt: (8.hours.from_now.to_f * 1000).to_i }
+        }.to_json
+      }
+    }.to_json
+
+    post PATH, params: body, headers: headers
+
+    assert_nil @credential.reload.config_data["designOauth"]
+  end
+
+  # A forged far-future expiry would win every "which copy is freshest" comparison and
+  # discard the real refresh token.
+  test "a rotation with an implausible expiry is refused" do
+    post PATH, params: rotated_body(access_token: "at-forged", expires_at: 5.years.from_now), headers: headers
+
+    assert_equal "at-old", @credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+  end
+
   test "answers not_found when the session's company has no credential for the agent" do
     @credential.destroy!
 
     post PATH, params: rotated_body, headers: headers
 
     assert_response :not_found
+  end
+
+  # == binary login files ==
+
+  def kiro_state(access_token:, expires_at:)
+    Tempfile.create([ "kiro-sync", ".sqlite3" ]) do |file|
+      db = SQLite3::Database.new(file.path)
+      db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
+      db.execute("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT)")
+      db.execute("INSERT INTO auth_kv VALUES (?, ?)", [ "kirocli:social:token", {
+        "access_token" => access_token, "refresh_token" => "ref-#{access_token}",
+        "expires_at" => expires_at.utc.iso8601, "profile_arn" => "arn:aws:codewhisperer:us-east-1:1:profile/A"
+      }.to_json ])
+      db.close
+      File.binread(file.path)
+    end
+  end
+
+  def kiro_session_with_login
+    session = create(:terminal_session, :running, user: @user, project: @project, company_id: @company.id,
+                                                  agent_type: "kiro_cli", session_type: "agent_session")
+    credential = AgentCredential.from_artifacts(@user.id, @company.id, "kiro_cli", {
+      "state_b64" => Base64.strict_encode64(kiro_state(access_token: "old", expires_at: 10.minutes.from_now))
+    })
+    [ session, credential, Agents::KiroCliAdapter.new.send(:state_path) ]
+  end
+
+  test "a login database arrives base64 and is stored byte for byte" do
+    session, credential, path = kiro_session_with_login
+    rotated = kiro_state(access_token: "new", expires_at: 1.hour.from_now)
+
+    post PATH, params: { files_b64: { path => Base64.strict_encode64(rotated) } }.to_json,
+               headers: headers(key: Agents::SessionKey.generate(session), session_id: session.id)
+
+    assert_response :no_content
+    assert_equal rotated, Base64.strict_decode64(credential.reload.config_data["state_b64"])
+  end
+
+  # An older watcher sends every file as text, and decoding a database as UTF-8 has
+  # already replaced every byte that was not UTF-8.
+  test "a login database sent as text is not taken" do
+    session, credential, path = kiro_session_with_login
+    stored = credential.config_data["state_b64"]
+    as_text = kiro_state(access_token: "new", expires_at: 1.hour.from_now).force_encoding(Encoding::UTF_8).scrub
+
+    post PATH, params: { files: { path => as_text } }.to_json,
+               headers: headers(key: Agents::SessionKey.generate(session), session_id: session.id)
+
+    assert_response :unprocessable_entity
+    assert_equal stored, credential.reload.config_data["state_b64"]
   end
 end

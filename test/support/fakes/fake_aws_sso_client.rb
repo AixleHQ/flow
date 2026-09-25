@@ -19,7 +19,7 @@ class FakeAwsSsoClient
   RoleCredentials = CloudAuth::AwsSsoClient::RoleCredentials
 
   attr_reader :region, :calls
-  attr_accessor :pending_polls, :accounts, :roles, :raise_on, :refresh_token_value
+  attr_accessor :pending_polls, :accounts, :roles, :raise_on, :refresh_token_value, :approver
 
   def initialize(region:)
     @region = region
@@ -89,6 +89,12 @@ class FakeAwsSsoClient
       session_token: "fake-session-token",
       expiration: 1.hour.from_now
     )
+  end
+
+  # The Identity Center user who approved; set it to the person the flow is for.
+  def caller_arn(role_credentials:, region:)
+    record(:caller_arn, role_credentials: role_credentials, region: region)
+    "arn:aws:sts::111122223333:assumed-role/AWSReservedSSO_BedrockUser_0123456789abcdef/#{@approver}"
   end
 
   # -- Introspection ---------------------------------------------------------

@@ -1,3 +1,5 @@
+import type { AgentType } from 'shared/ui/types';
+
 /**
  * The one legitimate home for literal colors outside the theme.
  *
@@ -13,7 +15,7 @@
  */
 
 /** Agent-runtime identity swatches, keyed by `agentType`. */
-export const AGENT_BRAND_COLORS: Record<string, string> = {
+export const AGENT_BRAND_COLORS: Record<AgentType, string> = {
   claude_code: '#d97706',
   cursor_cli: '#7c3aed',
   codex: '#10a37f',

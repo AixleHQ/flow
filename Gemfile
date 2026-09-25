@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 source "https://rubygems.org"
 
 ruby file: ".ruby-version"
@@ -6,7 +8,6 @@ ruby file: ".ruby-version"
 gem "rails", "~> 8.1.3"
 # Use postgresql as the database for Active Record
 gem "pg", "~> 1.6"
-gem "responders"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 
@@ -35,25 +36,19 @@ gem "administrate-field-jsonb"
 # so we now declare a pipeline directly (Propshaft serves the gem's prebuilt
 # CSS/JS without a compile step). See administrate docs/migrating-to-v1.md.
 gem "propshaft"
-gem "audited"
 gem "config"
 gem "enumerize"
 gem "gitlab"
 gem "haml-rails"
 gem "hashie"
-gem "kramdown"
-gem "kramdown-parser-gfm"
 gem "jwt"
 gem "octokit"
 gem "ts_routes"
-gem "oj"
 gem "pundit"
 gem "pagy"
 gem "rack-attack"
 gem "rack-cors"
 gem "ransack"
-gem "rolify"
-gem "ruby-filemagic", github: "stoivo/ruby-filemagic"
 
 gem "sentry-ruby"
 gem "sentry-rails"
@@ -63,19 +58,24 @@ gem "rails-i18n"
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 # gem "tzinfo-data", platforms: %i[ windows jruby ]
 
-gem "redis"
+# Action Cable's Redis adapter asks for redis >= 4, < 6 when it loads (until Rails
+# 8.2 moves it onto redis-client), and only production loads it: the test env's
+# cable adapter is `test`, so a redis 6 bump passed CI and would have failed at
+# boot. test/config/action_cable_redis_test.rb loads the adapter to catch that.
+gem "redis", ">= 4", "< 6"
 
 # Temporal workflow orchestration (official SDK)
 gem "temporalio"
 
-# Held below json 3.0, which takes the options of `JSON.parse` as keywords only.
-# temporalio's payload converter still passes them positionally
-# (`JSON.parse(payload.data, @parse_options)` in
-# converters/payload_converter/json_plain.rb), so under json 3 every payload
+# Held below json 3.0, whose `JSON.parse` takes its options as keywords only and
+# rejects `create_additions`, an option json 3 removed. temporalio's payload
+# converter passes them positionally (`JSON.parse(payload.data, @parse_options)`
+# in converters/payload_converter/json_plain.rb), so under json 3 every payload
 # decode raises ArgumentError and every workflow task fails — the worker retries
 # them forever rather than erroring out, which reads as a hang, not a failure.
-# Present in temporalio 1.7, 1.8 and 1.9 alike. Drop the pin once the SDK
-# switches to keywords.
+# Present in temporalio 1.7, 1.8 and 1.9 alike. The SDK's default options are
+# `{ create_additions: true }`; TemporalService.data_converter already passes none,
+# so the pin can go once the SDK switches to keywords.
 gem "json", "< 3"
 
 # Reduces boot times through caching; required in config/boot.rb
@@ -128,7 +128,6 @@ group :development, :test do
   gem "debug"
   gem "dotenv-rails", require: false
   gem "bullet"
-  gem "byebug"
   gem "pry-byebug"
   gem "pry-rails"
 
@@ -138,7 +137,6 @@ end
 
 group :development do
   gem "foreman"
-  gem "spring"
 
   # Rubocop and related gems
   gem "rubocop"
@@ -160,8 +158,9 @@ group :test do
   gem "minitest"
   gem "minitest-hooks"
   gem "minitest-power_assert"
-  gem "minitest-rails"
   gem "mocha"
+  # One-time-password secrets for test fixtures only.
+  gem "rotp", "~> 6.3"
 
   # Coverage and mocking
   gem "simplecov", require: false
@@ -174,6 +173,10 @@ group :test do
 end
 
 gem "shrine", "~> 3.10"
+# Content types, for Shrine's determine_mime_type analyzer and the code that labels
+# session logs and step outputs. Nothing else requires it: the app does not load
+# Active Storage, which would.
+gem "marcel", "~> 1.0"
 gem "aws-sdk-s3", "~> 1.232"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
@@ -192,15 +195,12 @@ gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.r
 gem "faraday-retry", "~> 2.3"
 
 gem "lograge", "~> 0.15.0"
-gem "minitar"
 
 # Reads ONE credential format, not an application database. Kiro CLI keeps its login in
 # a SQLite file rather than a JSON document, so Agents::KiroCliAdapter has to open that
 # file to lift the bearer token and profile ARN its API calls need. Every other runtime
 # hands us JSON and needs nothing here.
 gem "sqlite3", "~> 2.9"
-
-gem "rotp", "~> 6.3"
 
 # Docker API for container management
 gem "docker-api", "~> 2.3"

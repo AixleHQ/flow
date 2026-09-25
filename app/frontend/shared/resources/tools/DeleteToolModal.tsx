@@ -1,18 +1,14 @@
 import { Box, Text } from '@mantine/core';
 import { type FC } from 'react';
 
-import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
+import type { Tool } from '@/types/generated';
 
-interface Tool {
-  id: number;
-  name: string;
-  displayName: string;
-}
+import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
 
 interface DeleteToolModalProps {
   opened: boolean;
   onClose: () => void;
-  tool: Tool | null;
+  tool: Pick<Tool, 'id' | 'name' | 'displayName'> | null;
   basePath: string;
 }
 

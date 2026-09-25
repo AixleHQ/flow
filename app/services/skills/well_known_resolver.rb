@@ -126,11 +126,10 @@ module Skills
 
       # One plain GET. Redirects are NOT followed: a redirect is how a published
       # index would try to send us off-host.
+      # The publisher's domain is whatever the skill id says, so the host is vetted
+      # and pinned like any other user-supplied URL (SafeHttp).
       def get(uri, max_bytes:)
-        http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl = true
-        http.open_timeout = TIMEOUT
-        http.read_timeout = TIMEOUT
+        http = SafeHttp.http_for(uri, open_timeout: TIMEOUT, read_timeout: TIMEOUT)
 
         request = Net::HTTP::Get.new(uri)
         request["User-Agent"] = "Aixle/1.0"

@@ -1,9 +1,10 @@
+import type { Member } from '@/types/generated';
 import { AuthLayout } from 'layouts/AuthLayout';
 
-import { MembersContent, type MemberUser } from 'shared/resources/members/MembersContent';
+import { MembersContent } from 'shared/resources/members/MembersContent';
 
 interface Props {
-  users: MemberUser[];
+  users: Member[];
 }
 
 function MembersIndex({ users }: Props) {

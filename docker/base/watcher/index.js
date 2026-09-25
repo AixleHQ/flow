@@ -22,14 +22,16 @@
  *   - GET /auth - Check authentication status (for auth_setup sessions)
  */
 
+const { isUtf8 } = require('buffer');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const net = require('net');
 const path = require('path');
 
-const chokidar = require('chokidar');
-const { WebSocketServer } = require('ws');
+// Loaded on first use so the pure helpers below can be unit-tested without
+// the watcher's npm dependencies installed.
+const chokidar = { watch: (...args) => require('chokidar').watch(...args) };
 
 // Configuration
 const PORT = parseInt(process.env.WATCHER_PORT || '4040', 10);
@@ -87,7 +89,7 @@ function formatFileSize(bytes) {
 function getFileType(ext) {
   const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
   const pdfExts = ['pdf'];
-  const binaryExts = ['zip', 'tar', 'gz', 'rar', '7z', 'exe', 'dll', 'so', 'dylib', 'bin', 'dat'];
+  const binaryExts = ['zip', 'tar', 'gz', 'rar', '7z', 'exe', 'dll', 'so', 'dylib', 'bin', 'dat', 'sqlite', 'sqlite3', 'db'];
   const videoExts = ['mp4', 'webm', 'avi', 'mov', 'mkv'];
   const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac'];
 
@@ -226,6 +228,47 @@ function buildTree(dir, depth = 0) {
 }
 
 /**
+ * Resolve a client-supplied path inside `root`, or return null when it escapes.
+ * A plain prefix test lets `/workspace-x` through for `/workspace`, and a
+ * symlink planted inside the workspace can point anywhere, so both the lexical
+ * path and its real target have to stay under the root.
+ */
+function resolveInside(root, requested) {
+  const base = path.resolve(root);
+  const candidate = path.resolve(base, requested);
+  const inside = (p, r) => p === r || p.startsWith(r + path.sep);
+  if (!inside(candidate, base)) return null;
+
+  try {
+    const realBase = fs.realpathSync(base);
+    const realCandidate = fs.realpathSync(candidate);
+    if (!inside(realCandidate, realBase)) return null;
+  } catch (e) {
+    if (e.code !== 'ENOENT') return null;
+  }
+  return candidate;
+}
+
+/**
+ * Where /preload may send the browser: somewhere on the host that served the
+ * preload page, under the /t/ routes. Anything else — another host, `//evil`,
+ * `javascript:` — is refused, so the page cannot be used as an open redirect.
+ */
+function safePreloadTarget(to, requestHost) {
+  if (!to || !requestHost) return null;
+  let target;
+  try {
+    target = new URL(to, `http://${requestHost}`);
+  } catch (e) {
+    return null;
+  }
+  if (!['http:', 'https:'].includes(target.protocol)) return null;
+  if (target.host !== requestHost) return null;
+  if (!target.pathname.startsWith('/t/')) return null;
+  return target.href;
+}
+
+/**
  * HTTP request handler
  */
 function handleRequest(req, res) {
@@ -252,9 +295,8 @@ function handleRequest(req, res) {
       return;
     }
 
-    // Resolve full path and ensure it's within WATCH_DIR (security)
-    const fullPath = path.resolve(WATCH_DIR, filePath);
-    if (!fullPath.startsWith(path.resolve(WATCH_DIR))) {
+    const fullPath = resolveInside(WATCH_DIR, filePath);
+    if (!fullPath) {
       res.setHeader('Content-Type', 'application/json');
       res.writeHead(403);
       res.end(JSON.stringify({ error: 'Access denied: path outside workspace' }));
@@ -334,8 +376,8 @@ function handleRequest(req, res) {
   // Preload page: patches VS Code IndexedDB then redirects to VS Code.
   // Served at the same traefik origin as VS Code so IndexedDB is shared.
   if (url.pathname === '/preload') {
-    const to = url.searchParams.get('to');
-    if (!to || (!to.startsWith('/') && !to.startsWith('http'))) {
+    const to = safePreloadTarget(url.searchParams.get('to'), req.headers.host);
+    if (!to) {
       res.writeHead(400);
       res.end('Missing or invalid ?to= parameter');
       return;
@@ -582,27 +624,35 @@ function startCredentialSync() {
   let lastPostAt = 0;
   let lastPayload = null;
 
+  // A file that is not UTF-8 (Kiro's login is a SQLite database) travels as base64:
+  // decoding it as text replaces every invalid byte, and the platform would store a
+  // database the CLI can no longer open.
   function collect() {
     const files = {};
+    const filesB64 = {};
     for (const filePath of CREDENTIAL_SYNC_PATHS) {
       try {
         const stats = fs.statSync(filePath);
         if (!stats.isFile() || stats.size === 0 || stats.size > CREDENTIAL_SYNC_MAX_BYTES) continue;
-        files[filePath] = fs.readFileSync(filePath, 'utf8');
+        const content = fs.readFileSync(filePath);
+        if (isUtf8(content)) files[filePath] = content.toString('utf8');
+        else filesB64[filePath] = content.toString('base64');
       } catch (e) {
         // Absent or unreadable: nothing to report for this path.
       }
     }
-    return files;
+    return { files, filesB64 };
   }
 
   function post() {
-    const files = collect();
-    if (Object.keys(files).length === 0) return;
+    const { files, filesB64 } = collect();
+    const count = Object.keys(files).length + Object.keys(filesB64).length;
+    if (count === 0) return;
 
     // Unchanged content is not news. The CLI rewrites these files for reasons other than a
     // rotation, and every post takes a row lock on the credential.
-    const body = JSON.stringify({ files });
+    const payload = Object.keys(filesB64).length > 0 ? { files, files_b64: filesB64 } : { files };
+    const body = JSON.stringify(payload);
     if (body === lastPayload) return;
 
     const request = transport.request(
@@ -623,7 +673,7 @@ function startCredentialSync() {
         res.resume();
         if (res.statusCode >= 200 && res.statusCode < 300) {
           lastPayload = body;
-          log.info(`Credential sync: reported ${Object.keys(files).length} file(s)`);
+          log.info(`Credential sync: reported ${count} file(s)`);
         } else {
           log.warn(`Credential sync rejected: HTTP ${res.statusCode}`);
         }
@@ -668,6 +718,7 @@ function startCredentialSync() {
 function startServer() {
   startMcpForwarder();
   const server = http.createServer(handleRequest);
+  const { WebSocketServer } = require('ws');
   const wss = new WebSocketServer({ server });
 
   // Track connected clients
@@ -804,6 +855,9 @@ function startServer() {
   });
 }
 
-// Start the server
-startServer();
-startCredentialSync();
+if (require.main === module) {
+  startServer();
+  startCredentialSync();
+}
+
+module.exports = { resolveInside, safePreloadTarget };

@@ -30,7 +30,7 @@ class CompanyOverviewService
     if project
       TerminalSession.where(project_id: project.id)
     else
-      company.terminal_sessions
+      company.terminal_sessions.where.not(project_id: nil)
     end
   end
 

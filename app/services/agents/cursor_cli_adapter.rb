@@ -2,7 +2,6 @@
 
 require "net/http"
 require "json"
-require "set"
 
 module Agents
   # Cursor CLI adapter for credential handling
@@ -68,6 +67,12 @@ module Agents
       jwt_exp_ms(credentials["accessToken"])
     end
 
+    def rotatable_credential_keys = %w[accessToken refreshToken]
+
+    def credential_identity(credentials)
+      jwt_claims(credentials["accessToken"])["sub"].presence
+    end
+
     # Extract only the credentials we need to persist
     def extract_credentials(config_content)
       config = parse_json(config_content)
@@ -75,7 +80,7 @@ module Agents
     end
 
     # Generate auth.json for a new container
-    def generate_config(credentials, workflow_config = {})
+    def generate_config(credentials, _workflow_config = {})
       {
         "accessToken" => credentials["accessToken"],
         "refreshToken" => credentials["refreshToken"]
@@ -99,8 +104,8 @@ module Agents
 
     # Session command: agent --force (interactive), agent --force -p (non-interactive)
     # --force: auto-approve all tools unless explicitly denied (yolo mode)
-    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
-    def session_command(mode:, prompt: nil, model: nil)
+    # The prompt is appended by AgentSessionStrategy, read from its prompt file.
+    def session_command(mode:, model: nil)
       model ? "agent --force --model #{Shellwords.shellescape(model)}" : "agent --force"
     end
 
@@ -166,9 +171,10 @@ module Agents
       response = request_models(access_token)
 
       if response_unauthorized?(response) && credential
-        return [] unless credential.renew!(source: :unauthorized)[:status] == :refreshed
+        new_token = refresh_for_request!(credential)&.dig("accessToken")
+        return [] if new_token.blank?
 
-        response = request_models(credential.reload.config_data["accessToken"])
+        response = request_models(new_token)
       end
 
       return [] unless response.is_a?(Net::HTTPSuccess)
@@ -193,7 +199,7 @@ module Agents
     #
     # margin_ms is ignored: this agent stores no per-block expiry to compare it against,
     # so a call is already the decision to refresh.
-    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
+    def perform_refresh!(credential, margin_ms: nil)
       refresh_token = credential.config_data["refreshToken"]
       return { status: :error, detail: "no refresh token stored — sign in again", permanent: true } if refresh_token.blank?
 
@@ -262,14 +268,12 @@ module Agents
       api_events = fetch_filtered_events(access_token, { start_ms: api_start, end_ms: api_end })
 
       # Store raw API result in metadata for debugging
-      meta = terminal_session.metadata || {}
-      meta["usage_api_result"] = {
+      terminal_session.merge_jsonb!(:metadata, "usage_api_result" => {
         "fetched_at" => Time.current.iso8601,
         "time_window" => { "start_ms" => api_start, "end_ms" => api_end },
         "events" => api_events || [],
         "total_fetched" => api_events&.size || 0
-      }
-      terminal_session.update_column(:metadata, meta)
+      })
 
       if api_events.blank?
         Rails.logger.warn("[CursorCliAdapter] API returned 0 events for session #{terminal_session.id}")
@@ -557,7 +561,7 @@ module Agents
     # OTLP payload helpers
     # =========================================================================
 
-    def generate_cli_config(workflow_config)
+    def generate_cli_config(_workflow_config)
       {
         # Required fields per docs
         "version" => 1,

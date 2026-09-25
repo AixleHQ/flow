@@ -8,13 +8,15 @@ import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultL
 
 import type TerminalSession from 'types/generated/TerminalSession';
 
-import { apiFetch } from 'shared/lib/apiFetch';
+import { apiMutate } from 'shared/lib/apiFetch';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
+import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
+import { ContainerFrame } from 'shared/ui/ContainerFrame';
 import { ConsoleFrame, DetailHeader, StatusTag, type Crumb, type HeaderStat } from 'shared/ui/sessions';
 
 import classes from './SessionShowContent.module.css';
@@ -84,10 +86,10 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
 
   useInertiaCableStream(cableStream, { only: ['session'], enabled: !isTerminal });
 
-  const ttydUrl = useMemo(() => {
-    if (!s.websocketUrl) return null;
-    return s.websocketUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace('/ws', '');
-  }, [s.websocketUrl]);
+  const ttydUrl = useMemo(
+    () => terminalPageUrl({ terminalUrl: s.terminalUrl, websocketUrl: s.websocketUrl }),
+    [s.terminalUrl, s.websocketUrl],
+  );
 
   // Someone else's session, shared with this viewer. They get to watch: the
   // terminal renders behind a shield that swallows clicks (so the iframe never
@@ -104,12 +106,10 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
 
   const handleFinish = useCallback(async () => {
     setFinishRequested(true);
-    try {
-      await apiFetch(finishApiV1TerminalSessionPath(s.id), { method: 'POST' });
+    if (await apiMutate(finishApiV1TerminalSessionPath(s.id), { method: 'POST' })) {
       router.reload({ onFinish: () => setFinishRequested(false) });
-    } catch (e) {
+    } else {
       setFinishRequested(false);
-      throw e;
     }
   }, [s.id]);
 
@@ -246,7 +246,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
     <>
       {!termLoaded && renderLoadingOverlay('Connecting to terminal…')}
       {!isOwner && <div className={classes.viewOnlyShield} aria-label="Read-only view of another user's session" />}
-      <iframe
+      <ContainerFrame
         src={ttydUrl!}
         title="Terminal"
         allow="clipboard-read; clipboard-write"
@@ -319,7 +319,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
         <Panel defaultSize={50} minSize={20}>
           <div className={`${classes.panelFrame} ${classes.editorFrame}`}>
             {!ideLoaded && renderLoadingOverlay('Loading editor…')}
-            <iframe
+            <ContainerFrame
               src={s.ideUrl!}
               title="VS Code Editor"
               allow="clipboard-read; clipboard-write"

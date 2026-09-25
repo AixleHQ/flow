@@ -19,6 +19,8 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useCallback, useEffect, useRef, useState, type FC } from 'react';
 import { z } from 'zod';
 
+import type { Tool, ToolFile } from '@/types/generated';
+
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 import { ToolFileEditor } from './ToolFileEditor';
@@ -36,27 +38,20 @@ const toolSchema = z.object({
   requiredConfigItems: z.array(z.string()).optional(),
 });
 
-interface ToolFile {
-  id?: number;
-  path: string;
-  content: string;
-  binary: boolean;
-  fileName: string | null;
-  fileUrl: string | null;
-}
-
-interface Tool {
-  id: number;
-  name: string;
-  displayName: string;
-  description: string | null;
-  dockerImage: string | null;
-  command: string | null;
-  requiredConfigItems: string[];
-  inputSchema: Record<string, unknown>;
-  scopeType: string | null;
-  toolFiles: ToolFile[];
-}
+type EditableTool = Pick<
+  Tool,
+  | 'id'
+  | 'name'
+  | 'displayName'
+  | 'description'
+  | 'dockerImage'
+  | 'command'
+  | 'requiredConfigItems'
+  | 'inputSchema'
+  | 'scopeType'
+> & {
+  toolFiles: Pick<ToolFile, 'id' | 'path' | 'content' | 'binary' | 'fileName' | 'fileUrl'>[];
+};
 
 type FileMode = 'text' | 'upload';
 
@@ -80,7 +75,7 @@ function formatFileSize(bytes: number): string {
 interface ToolFormModalProps {
   opened: boolean;
   onClose: () => void;
-  editTool?: Tool | null;
+  editTool?: EditableTool | null;
   configItemNames: string[];
   basePath: string;
 }

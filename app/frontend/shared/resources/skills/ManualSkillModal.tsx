@@ -3,6 +3,8 @@ import { Alert, Button, Group, Modal, Stack, Text, Textarea } from '@mantine/cor
 import { IconInfoCircle } from '@tabler/icons-react';
 import { useEffect, useState, type FC } from 'react';
 
+import type { Skill } from '@/types/generated';
+
 interface ManualSkillModalProps {
   opened: boolean;
   onClose: () => void;
@@ -12,7 +14,7 @@ interface ManualSkillModalProps {
    * When present the modal edits that skill instead of creating one: the same file is
    * the same form, so there is no second editor to keep in sync.
    */
-  skill?: { id: number; name: string; content: string | null } | null;
+  skill?: Pick<Skill, 'id' | 'name' | 'content'> | null;
 }
 
 // A skill IS a SKILL.md, so the form is that file. Name and description are read

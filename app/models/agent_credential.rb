@@ -3,6 +3,10 @@
 # AgentCredential - Stores encrypted authentication artifacts for agents
 class AgentCredential < ApplicationRecord
   include Encryptable
+  include RefreshLease
+
+  encryption_key :credentials_key
+  encrypted_column :encrypted_config_data
   extend Enumerize
 
   belongs_to :user
@@ -90,6 +94,7 @@ class AgentCredential < ApplicationRecord
     undetermined = arel_table[:expires_at].eq(nil)
                                           .and(arel_table[:agent_type].in(token_expiry_agent_types))
     where(status: :active).where(arel_table[:expires_at].lteq(within.from_now).or(undetermined))
+      .where(user_id: User.authenticatable.select(:id)) # a suspended or deleted account's logins lapse
   }
   # Credentials no live container currently holds.
   #
@@ -144,16 +149,19 @@ class AgentCredential < ApplicationRecord
   class PreflightError < StandardError
     attr_reader :credential
 
-    def initialize(credential)
+    # `reason: :unreadable` — the stored login cannot be decrypted with this
+    # server's keys; signing in again stores a fresh one.
+    def initialize(credential, reason: :expired)
       @credential = credential
-      super("Your #{credential.agent_type.titleize} login has expired. Go to profile settings and sign in again.")
+      problem = reason == :unreadable ? "can't be read on this server" : "has expired"
+      super("Your #{credential.agent_type.titleize} login #{problem}. Go to profile settings and sign in again.")
     end
   end
 
-  # Virtual attribute for admin display (shows keys without values)
-  def config_keys
-    config_data.keys.join(", ")
-  rescue StandardError
+  # The admin page lists every credential, including one this server's keys cannot read.
+  def login_blocks
+    config_keys.join(", ")
+  rescue Encryptable::DecryptionError
     "Unable to decrypt"
   end
 
@@ -212,23 +220,30 @@ class AgentCredential < ApplicationRecord
     "agent_models/#{agent_type}/#{id}"
   end
 
-  # Get decrypted config data as hash
+  # Decrypted config data. Raises Encryptable::DecryptionError when the stored
+  # blob cannot be read: an unreadable credential must stop a launch with a
+  # sign-in prompt, never start a session that has no credentials at all.
   def config_data
     return {} if encrypted_config_data.blank?
 
-    decrypted = encryptor.decrypt_and_verify(encrypted_config_data)
-    JSON.parse(decrypted)
-  rescue ActiveSupport::MessageVerifier::InvalidSignature,
-         ActiveSupport::MessageEncryptor::InvalidMessage, JSON::ParserError, TypeError
-    # Fallback: try reading as plain JSON (for existing unencrypted data).
-    # InvalidMessage (AES-GCM wrong/rotated key) is rescued too so an un-recrypted
-    # row degrades gracefully instead of 500ing during the key-migration window.
-    JSON.parse(encrypted_config_data) rescue {}
+    JSON.parse(decrypt_secret(encrypted_config_data, column: "encrypted_config_data"))
+  rescue JSON::ParserError
+    raise Encryptable::DecryptionError.new("AgentCredential#encrypted_config_data (id=#{id.inspect}) is not a credential",
+                                           model: "AgentCredential", record_id: id)
   end
 
-  # Set config data (will be encrypted)
   def config_data=(hash)
-    self.encrypted_config_data = encryptor.encrypt_and_sign(hash.to_json)
+    self.encrypted_config_data = encrypt_secret(hash.to_json, column: "encrypted_config_data")
+    self.metadata = (metadata || {}).merge("config_keys" => hash.keys.map(&:to_s))
+  end
+
+  # Which login blocks the credential holds (claudeAiOauth, designOauth, …) — not
+  # their contents. Recorded in the clear when the data is written, because the
+  # current user, credentials included, is serialized on every page, and reading
+  # the keys from the blob would decrypt every credential on every request. A row
+  # written before the names were recorded still decrypts, until its next write.
+  def config_keys
+    metadata&.dig("config_keys") || config_data.keys
   end
 
   # Get adapter for this agent type
@@ -276,19 +291,26 @@ class AgentCredential < ApplicationRecord
   # - :held — another live container already holds these tokens. Rotating now would
   #   invalidate the copy it is running on, turning one stale session into several.
   #   That container refreshes for itself and cleanup merges the result back.
-  # - the re-check under the row lock — parallel launches of the same credential
-  #   would otherwise each fire a refresh, and every one after the first replays a
-  #   grant the server has already rotated out.
+  # - the refresh lease, and the re-check once it is held — parallel launches of the
+  #   same credential (or a launch racing the sweep) would otherwise each fire a
+  #   refresh, and every one after the first replays a grant the server has already
+  #   rotated out. A launch that finds the lease taken waits for that refresh and
+  #   starts on its result.
   def refresh_if_expiring!(within: SESSION_REFRESH_THRESHOLD, excluding_session_id: nil)
     return :not_needed unless expiring_within?(within)
     return :held if rotating_refresh? && held_by_live_session?(excluding_session_id: excluding_session_id)
 
-    with_lock do
-      reload
+    outcome = with_refresh_lease do
       next :not_needed unless expiring_within?(within)
 
       renew!(source: :launch, margin_ms: within.in_milliseconds)
     end
+    return outcome unless outcome == :busy
+
+    await_refresh
+    return :not_needed unless expiring_within?(within)
+
+    { status: :error, detail: "a concurrent refresh did not renew the token", permanent: false }
   end
 
   # The one way a stored credential is renewed — by the sweep, at launch, and when a
@@ -441,9 +463,5 @@ class AgentCredential < ApplicationRecord
   rescue StandardError => e
     Rails.logger.warn("[AgentCredential] sync_expires_at failed for #{id}: #{e.message}")
     self.expires_at = nil
-  end
-
-  def encryption_key_setting
-    Settings.encryption.credentials_key
   end
 end

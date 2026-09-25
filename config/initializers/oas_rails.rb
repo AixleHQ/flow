@@ -1,8 +1,15 @@
-# config/initializers/oas_rails.rb
-if !Rails.env.development?
+# frozen_string_literal: true
+
+# Outside development /api-docs sits behind Basic auth with the DOCS_LOGIN /
+# DOCS_PASSWORD pair, and with either unset nobody gets in — there is no default
+# login, and a missing password is a refusal, not an error.
+unless Rails.env.development?
   OasRails::Engine.middleware.use(Rack::Auth::Basic) do |username, password|
-    ActiveSupport::SecurityUtils.secure_compare(Settings.docs.login, username) &
-      ActiveSupport::SecurityUtils.secure_compare(Settings.docs.password, password)
+    login = Settings.docs.login.to_s
+    secret = Settings.docs.password.to_s
+    login.present? && (secret.present? &
+      ActiveSupport::SecurityUtils.secure_compare(login, username.to_s) &
+      ActiveSupport::SecurityUtils.secure_compare(secret, password.to_s))
   end
 end
 
@@ -18,8 +25,11 @@ OasRails.configure do |config|
 
     ## Authentication
 
-    Most endpoints require authentication. Authentication is handled via session cookies.
-    To authenticate, use the `/api/v1/sessions` endpoint with your credentials.
+    This is the API the Aixle web app itself calls. It is authenticated by the
+    signed-in browser session (the `_aixle_session` cookie); there is no token or
+    login endpoint here. Requests other than GET must also send the page's CSRF
+    token in `X-CSRF-Token`. Programmatic access goes through the MCP server with
+    a personal token instead.
 
     ## Response Format
 
@@ -37,7 +47,9 @@ OasRails.configure do |config|
 
     ## Rate Limiting
 
-    API requests are subject to rate limiting. Excessive requests will be rejected with a 429 status code.
+    Signed-in API calls are not rate limited. The endpoints that answer without a
+    signed-in user — login, invitations, webhooks, MCP, share links — are, and
+    answer 429 when a client exceeds its limit.
   HEREDOC
   config.info.contact.name = "Aixle Flow Support"
   config.info.contact.email = "support@aixle.com"

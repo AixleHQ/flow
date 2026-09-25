@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module AuthHelper
   TEST_PASSWORD = "TestPassword1!"
 
@@ -8,6 +10,7 @@ module AuthHelper
 
   def sign_out
     session[:user_id] = nil
+    session.delete(:user_session_id)
   end
 
   # Integration tests: POST to the login form so the session cookie is set.

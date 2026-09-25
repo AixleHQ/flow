@@ -65,6 +65,14 @@ class Step < ApplicationRecord
     depends_on_step_ids.blank?
   end
 
+  def self.ransackable_attributes(_auth_object = nil)
+    %w[name position created_at updated_at]
+  end
+
+  def self.ransackable_associations(_auth_object = nil)
+    %w[workflow agent sub_steps]
+  end
+
   private
 
   # Appending is the server's job. A soft-deleted step keeps its position and
@@ -118,18 +126,40 @@ class Step < ApplicationRecord
       return
     end
 
-    sibling_ids = workflow.steps.not_deleted.where.not(id: id).pluck(:id)
-    invalid_ids = depends_on_step_ids - sibling_ids
+    siblings = workflow.steps.not_deleted.where.not(id: id).pluck(:id, :name, :depends_on_step_ids)
+    invalid_ids = depends_on_step_ids - siblings.map(&:first)
     if invalid_ids.any?
       errors.add(:depends_on_step_ids, "contains invalid step ids: #{invalid_ids.join(', ')}")
+      return
     end
+
+    cycle = dependency_cycle(siblings)
+    errors.add(:depends_on_step_ids, "would create a cycle: #{cycle.join(' → ')}") if cycle
   end
 
-  def self.ransackable_attributes(_auth_object = nil)
-    %w[name position created_at updated_at]
+  # A run starts only the steps whose dependencies have all finished, so steps
+  # that wait on each other never start, and the run ends with them still pending.
+  def dependency_cycle(siblings)
+    return nil if new_record?
+
+    names = siblings.to_h { |step_id, step_name, _| [ step_id, step_name ] }.merge(id => name)
+    graph = siblings.to_h { |step_id, _, deps| [ step_id, Array(deps) ] }.merge(id => depends_on_step_ids)
+    path = path_back_to_self(graph)
+    path&.map { |step_id| names[step_id] }
   end
 
-  def self.ransackable_associations(_auth_object = nil)
-    %w[workflow agent sub_steps]
+  def path_back_to_self(graph)
+    stack = [ [ id, [ id ] ] ]
+    seen = Set.new
+    until stack.empty?
+      step_id, path = stack.pop
+      graph.fetch(step_id, []).each do |dep|
+        return path + [ id ] if dep == id
+        next unless seen.add?(dep)
+
+        stack.push([ dep, path + [ dep ] ])
+      end
+    end
+    nil
   end
 end

@@ -1,15 +1,12 @@
 import { Head, usePage } from '@inertiajs/react';
 
+import type { Integration, Project } from '@/types/generated';
+
 import type { AzureDevopsProps } from 'shared/resources/integrations/AzureDevopsConnectModal';
 import type { GithubProps } from 'shared/resources/integrations/GithubConnectModal';
-import { Integration, IntegrationsContent } from 'shared/resources/integrations/IntegrationsContent';
+import { IntegrationsContent } from 'shared/resources/integrations/IntegrationsContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface Props {
   project: Project;

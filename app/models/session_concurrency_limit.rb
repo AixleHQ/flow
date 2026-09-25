@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class SessionConcurrencyLimit < ApplicationRecord
+  include TenantColumns
+
   # A Company row is what the installation sells and bills for; a Project row is
   # a reservation drawn from the company that owns the project.
   SCOPE_TYPES = %w[Project Company].freeze
@@ -58,13 +60,6 @@ class SessionConcurrencyLimit < ApplicationRecord
 
   def scope_record
     scope_type&.safe_constantize&.find_by(id: scope_id)
-  end
-
-  def company_id
-    case scope_type
-    when "Company" then scope_id
-    when "Project" then scope_record&.company_id
-    end
   end
 
   # The screens need the same arithmetic the validation uses, so both ask this.

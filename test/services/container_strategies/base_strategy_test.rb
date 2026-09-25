@@ -59,7 +59,7 @@ module ContainerStrategies
       assert_equal "test-image:latest", result[:image]
       assert_equal [ "FOO=bar", "BAZ=qux" ], result[:env_vars]
       assert_equal({ "test" => "true", "env" => "test" }, result[:labels])
-      assert_equal Settings.docker.network, result[:host_config]["NetworkMode"]
+      assert_equal Settings.docker.agent_network, result[:host_config]["NetworkMode"]
     end
 
     test "create_container creates container via runtime" do
@@ -70,7 +70,8 @@ module ContainerStrategies
         spec[:image] == "test:latest" &&
           spec[:env_vars] == [ "A=1" ] &&
           spec[:labels] == { "x" => "y" } &&
-          spec[:host_config] == { "NetworkMode" => "bridge" }
+          spec[:host_config] == { "NetworkMode" => "bridge" } &&
+          spec[:privilege_escalation] == false
       end.returns(handle)
       @runtime_mock.expects(:container_identifier).with(handle).returns("container-handle-123")
 
@@ -235,7 +236,7 @@ module ContainerStrategies
       strategy = BaseStrategy.new
       config = strategy.build_host_config
 
-      assert_equal Settings.docker.network, config["NetworkMode"]
+      assert_equal Settings.docker.agent_network, config["NetworkMode"]
       refute config["AutoRemove"]
     end
 

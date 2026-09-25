@@ -7,10 +7,12 @@ class WorkflowRunAssetUploader < Shrine
   plugin :restore_cached_data
   plugin :cached_attachment_data
   plugin :validation_helpers
+  plugin :rack_response
 
   # Agent run outputs are arbitrary artifacts (spreadsheets, video, office docs,
-  # binaries, …) — no MIME allowlist. Served only from the isolated S3 bucket
-  # origin, never rendered on the app origin.
+  # binaries, …) — no MIME allowlist. Served from the isolated S3 bucket origin;
+  # a shared one reaches the app origin only through the public viewer's raw
+  # endpoint, under `Content-Security-Policy: sandbox`.
   Attacher.validate do
     validate_max_size 1024 * 1024 * 1024, message: "is too large (max is 1 GB)"
   end

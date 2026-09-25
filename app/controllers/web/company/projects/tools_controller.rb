@@ -6,7 +6,7 @@ class Web::Company::Projects::ToolsController < Web::Company::Projects::Applicat
                 .ui_visible
                 .includes(:tool_files)
                 .order(source: :desc, created_at: :desc) # "db" (custom) before "code" (platform)
-    config_items = current_company.config_items.pluck(:name)
+    config_items = ConfigItem.visible_for_project(current_project).pluck(:name)
 
     render inertia: "Projects/Tools/ToolsPage", props: {
       project: project_props,

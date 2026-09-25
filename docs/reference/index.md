@@ -14,7 +14,7 @@ For conceptual explanations of *why* a thing exists, see the
 
 ```
 Company
-├── Users (roles: employee, admin, super_admin)
+├── Memberships → Users (roles: admin, employee, viewer; a user can belong to several companies)
 ├── Agents, Tools, Skills, MCP Servers, Workflows  (company-scoped, inherited by all projects)
 ├── Repositories, ConfigItems
 └── Projects
@@ -22,7 +22,7 @@ Company
     │   ├── BoardColumns
     │   │   └── ColumnWorkflowBinding (0..1)
     │   ├── BoardTasks
-    │   │   ├── TaskComments, TaskAssets, TaskWaits, ColumnTransitions
+    │   │   ├── TaskComments, TaskAssets, Gates, ColumnTransitions
     │   │   └── WorkflowRuns
     │   ├── BoardActivities (immutable log)
     │   └── BoardViewPresets

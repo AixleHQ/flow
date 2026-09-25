@@ -101,6 +101,30 @@ describe('Profile MCP tab', () => {
     );
   });
 
+  it('keeps showing the one-time token while taking it out of the history entry Back returns to', () => {
+    renderPageWith(buildMcp({ enabled: true, token: 'amcp_tok_abc123' }));
+
+    expect(router.replaceProp).toHaveBeenCalledWith('mcp.token', null);
+    expect(screen.getByTestId('mcp-token')).toHaveTextContent('amcp_tok_abc123');
+  });
+
+  // Enable MCP is a router.post, which Inertia answers without remounting the page.
+  it('shows a token that arrives while the page is already open', () => {
+    const { rerender } = renderPageWith();
+
+    rerender(<ProfileMcpPage mcp={buildMcp({ enabled: true, token: 'amcp_tok_new' })} />);
+
+    expect(screen.getByTestId('mcp-token')).toHaveTextContent('amcp_tok_new');
+  });
+
+  it('takes the token off the screen once MCP is disabled', () => {
+    const { rerender } = renderPageWith(buildMcp({ enabled: true, token: 'amcp_tok_abc123' }));
+
+    rerender(<ProfileMcpPage mcp={buildMcp({ enabled: false })} />);
+
+    expect(screen.queryByTestId('mcp-token')).not.toBeInTheDocument();
+  });
+
   // Cursor installs from a deeplink whose `config` is the base64 of the server
   // entry alone — decoded here so a wrong shape fails loudly rather than
   // silently producing a link Cursor rejects.

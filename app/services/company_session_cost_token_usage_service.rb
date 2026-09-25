@@ -1,20 +1,6 @@
 # frozen_string_literal: true
 
 class CompanySessionCostTokenUsageService
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
-
-  DATE_TRUNC_KEY = {
-    "7d"  => "day",
-    "30d" => "day",
-    "90d" => "week",
-    "1y"  => "month"
-  }.freeze
-
   TimeSeriesPoint = Struct.new(:date, :cost_cents, :total_tokens, keyword_init: true)
   Totals = Struct.new(:total_cost_cents, :total_tokens, :avg_cost_cents_per_session, keyword_init: true)
   Result = Struct.new(:time_series, :totals, keyword_init: true)
@@ -24,14 +10,13 @@ class CompanySessionCostTokenUsageService
     @user    = user
     @scope   = scope.to_s
     @period  = period.to_s
-    @since   = PERIOD_DAYS.fetch(@period, 30).days.ago
+    @since   = AnalyticsPeriod.since(@period)
   end
 
   def call
     sessions = base_sessions
 
-    trunc = DATE_TRUNC_KEY.fetch(period, "day")
-    trunc_sql = Arel.sql("DATE_TRUNC('#{trunc}', terminal_sessions.created_at)")
+    trunc_sql = AnalyticsPeriod.date_trunc(period, TerminalSession.arel_table[:created_at])
 
     points = sessions
       .joins("LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = terminal_sessions.id")
@@ -69,7 +54,7 @@ class CompanySessionCostTokenUsageService
   attr_reader :company, :user, :scope, :since, :period
 
   def base_sessions
-    scope_sessions.where(created_at: since..)
+    scope_sessions.where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
   end
 
   def scope_sessions

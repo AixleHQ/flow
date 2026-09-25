@@ -15,10 +15,15 @@
 # source: "owner/repo" (GitHub repository) — registry only
 # content: SKILL.md content (used for title/description extraction and context summary)
 # content_hash: registry digest from the download endpoint, for update detection
+# files: the skill directory as installed ({ relative path => contents }) — what a
+#        session writes into the container, so it runs the release that was installed
+#        rather than whatever upstream holds today. Empty on rows installed before it
+#        existed; those still go through `npx skills add` until `skills:snapshot`.
 class Skill < ApplicationRecord
   extend Enumerize
 
   belongs_to :scope, polymorphic: true
+  include TenantColumns
 
   # Where the row came from. Everything conditional about a skill keys off this
   # rather than off which columns happen to be filled in.
@@ -57,6 +62,35 @@ class Skill < ApplicationRecord
   validates :origin, presence: true
   validates :scope_type, presence: true, inclusion: { in: %w[Project] }
   validates :scope_id, presence: true
+
+  # A skill directory is instructions plus the odd script; far below these.
+  MAX_FILES = 200
+  MAX_BUNDLE_BYTES = 2 * 1024 * 1024
+
+  # The skill directory from a registry bundle ([{ "path", "contents" }]): paths made
+  # relative to the directory holding SKILL.md, and anything that could land outside
+  # it refused. nil when the bundle is unusable, so the caller keeps its fallback.
+  def self.files_from_bundle(entries)
+    entries = Array(entries).select { |e| e.is_a?(Hash) && e["path"].is_a?(String) && e["contents"].is_a?(String) }
+    skill_md = entries.find { |e| e["path"] == "SKILL.md" || e["path"].end_with?("/SKILL.md") }
+    return nil unless skill_md
+
+    root = skill_md["path"].delete_suffix("SKILL.md")
+    files = entries.filter_map do |entry|
+      next unless entry["path"].start_with?(root)
+
+      [ entry["path"].delete_prefix(root), entry["contents"] ]
+    end.to_h
+    return nil unless files.size <= MAX_FILES && files.sum { |_, c| c.bytesize } <= MAX_BUNDLE_BYTES
+    return nil unless files.keys.all? { |path| safe_relative_path?(path) }
+
+    files
+  end
+
+  def self.safe_relative_path?(path)
+    path.present? && !path.start_with?("/", "~") && !path.include?("\\") && !path.include?("\0") &&
+      path.split("/").none? { |part| part.empty? || part == "." || part == ".." }
+  end
 
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }
   scope :visible_for_project, ->(project) { for_project(project) }

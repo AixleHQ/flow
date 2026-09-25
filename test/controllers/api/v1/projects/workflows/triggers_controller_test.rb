@@ -79,6 +79,19 @@ module Api
             assert_match(/\Awebhook\./, json["event_type"])
           end
 
+          test "a webhook trigger created without a strategy demands a generated shared token" do
+            post :create, params: {
+              project_id: @project.id, workflow_id: @workflow.id,
+              trigger: { kind: "webhook", subject_policy: "none" }
+            }
+
+            assert_response :created
+            endpoint = WebhookEndpoint.find_by!(slug: json["webhook_url"].split("/").last)
+            assert_equal "shared_token", endpoint.verification_strategy
+            assert_equal endpoint.secret, json["webhook_secret"]
+            assert_operator json["webhook_secret"].length, :>=, 32
+          end
+
           test "create column trigger persists a ColumnWorkflowBinding" do
             assert_difference -> { ColumnWorkflowBinding.count }, 1 do
               post :create, params: {

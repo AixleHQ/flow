@@ -1,7 +1,10 @@
+# frozen_string_literal: true
+
 class ApplicationMailer < ActionMailer::Base
   include Rails.application.routes.url_helpers
   default from: "noreply@#{Settings.domain}"
   layout "mailer"
+  self.delivery_job = MailDeliveryJob
 
   # The shared mailer layout renders the Aixle wordmark. Email clients strip
   # JavaScript (so an onerror fallback never fires) and Gmail refuses to render

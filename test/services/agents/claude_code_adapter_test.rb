@@ -186,6 +186,13 @@ module Agents
       assert_equal "90000", settings.dig("env", "MCP_TIMEOUT")
     end
 
+    test "a session's Claude Code stays on the version its image pins" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk-xxx" })
+
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+      assert_equal "1", settings.dig("env", "DISABLE_AUTOUPDATER")
+    end
+
     # A mid-session delivery has no workflow_config, so re-rendering settings.json or
     # .claude.json would replace a running session's configuration with defaults. Only the
     # token file may be written.
@@ -780,6 +787,37 @@ module Agents
       assert_equal "design-client", block["clientId"], "the block stays so the UI still offers Reconnect Design"
     end
 
+    # The loser of a race must not wipe the winner's login: the rejection was of the
+    # refresh token it sent, and a container rotated it (and wrote the rotation back)
+    # while the request was out.
+    test "refresh! leaves a block alone when its refresh token was rotated while the request was out" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-a", "refreshToken" => "old-r", "expiresAt" => soon }
+      })
+      winner = { "accessToken" => "won-a", "refreshToken" => "won-r", "expiresAt" => ms_from_now(8 * 3_600_000) }
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL).to_return do
+        AgentCredential.find(cred.id).tap { |row| row.update!(config_data: row.config_data.merge("claudeAiOauth" => winner)) }
+        { status: 400, body: { error: "invalid_grant" }.to_json, headers: { "Content-Type" => "application/json" } }
+      end
+
+      result = @adapter.refresh!(cred)
+
+      assert_not_equal :error, result[:status]
+      assert_equal winner, cred.reload.config_data["claudeAiOauth"]
+    end
+
+    test "a second refresher finds the lease taken and leaves the credential to the first" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "a", "refreshToken" => "r", "expiresAt" => soon }
+      })
+      AgentCredential.where(id: cred.id).update_all(refresh_lease_until: 1.minute.from_now, refresh_lease_token: "other")
+
+      assert_equal :busy, @adapter.refresh!(cred)[:status]
+      assert_not_requested :post, ClaudeCodeAdapter::OAUTH_TOKEN_URL
+    end
+
     test "refresh! clears claudeAiOauth accessToken on invalid_grant" do
       soon = ms_from_now(5 * 60 * 1000)
       cred = create(:agent_credential, :claude_code, user: @user, config_data: {
@@ -876,6 +914,27 @@ module Agents
 
       assert_not_includes files.keys, "/home/claude/.aws/config"
       assert_not_includes settings_env(files).keys, "CLAUDE_CODE_USE_BEDROCK"
+    end
+
+    # A contract over every file the container is handed: the Identity Center
+    # material the device flow stores server-side reaches none of them.
+    test "no rendered file carries the Identity Center registration or tokens" do
+      block = bedrock_block.merge(
+        "identity_center" => {
+          "start_url" => "https://acme.awsapps.com/start", "sso_region" => "us-east-1",
+          "account_id" => "111122223333", "role_name" => "Bedrock",
+          "registration" => { "client_id" => "cid", "client_secret" => "idc-client-secret" },
+          "token" => { "access_token" => "idc-access", "refresh_token" => "idc-refresh-token" }
+        }
+      )
+
+      files = @adapter.config_files({ "awsBedrock" => block })
+      rendered = files.values.join("\n")
+
+      assert_not_includes rendered, "idc-client-secret"
+      assert_not_includes rendered, "idc-refresh-token"
+      assert_not_includes rendered, "identity_center"
+      assert_equal "1", settings_env(files)["CLAUDE_CODE_USE_BEDROCK"], "Bedrock is still configured"
     end
 
     test "an awsBedrock block without a region is ignored" do

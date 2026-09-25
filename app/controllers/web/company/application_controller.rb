@@ -9,6 +9,7 @@ class Web::Company::ApplicationController < Web::ApplicationController
   before_action :require_auth
   before_action :require_active_membership!
   before_action :dynamic_authorize!
+  before_action :deny_read_only_mutation!
 
   rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
 
@@ -18,16 +19,34 @@ class Web::Company::ApplicationController < Web::ApplicationController
         {
           is_admin: current_membership&.admin? || false,
           can_manage_members: current_membership&.admin? || false,
-          can_manage_projects: current_membership&.admin? || false
+          can_manage_projects: current_membership&.admin? || false,
+          can_write: current_membership.present? && !current_membership.viewer?
         }
       }
     }
+  end
+
+  # For a write that is the actor's own business — a favourite, which company
+  # they are on, leaving one — rather than a change to what the company owns.
+  def self.allow_viewer_writes(**options)
+    skip_before_action :deny_read_only_mutation!, **options
   end
 
   private
 
   def policy_context
     BaseContext.new(current_user, params, company: current_company)
+  end
+
+  # The backstop behind the policies, as Api::V1 has: a viewer changes nothing
+  # the company owns, whatever an action's policy says. Two policies once said
+  # otherwise (a viewer could create a project, and review company artifacts).
+  def deny_read_only_mutation!
+    return if request.get? || request.head?
+    return unless signed_in?
+
+    membership = policy_context.membership
+    user_not_authorized if membership.nil? || membership.viewer?
   end
 
   def user_not_authorized
@@ -65,15 +84,11 @@ class Web::Company::ApplicationController < Web::ApplicationController
     session
   end
 
-  # All sessions belonging to the current company: sessions in the company's
-  # projects, plus project-less sessions (e.g. auth_setup) of active members.
-  # The user_id branch is restricted to project-less rows so a dual-membership
-  # user's sessions in another company's projects never leak in.
+  # All sessions belonging to the current company, project-less ones (auth_setup)
+  # included: every session records the company it acts for. Matching project-less
+  # rows by owner instead showed a multi-company member's logins to all of their
+  # companies.
   def company_sessions_scope
-    member_ids = User.for_company(current_company).merge(CompanyMembership.active).select(:id)
-
-    TerminalSession.left_joins(:project)
-                   .where("projects.company_id = ? OR (terminal_sessions.project_id IS NULL AND terminal_sessions.user_id IN (?))",
-                          current_company.id, member_ids)
+    TerminalSession.where(company_id: current_company.id)
   end
 end

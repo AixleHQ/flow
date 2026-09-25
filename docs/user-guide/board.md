@@ -24,7 +24,7 @@ have **at most one** `ColumnWorkflowBinding`:
 | ----------------- | ---------------------------------------------------------------------- |
 | `workflow_id`     | Which workflow to run when a card enters the column.                   |
 | `trigger_mode`    | `manual` (a button in the UI) or `auto` (fires on card entry).         |
-| `cooldown_seconds`| Minimum gap between auto-triggers (default `5`).                       |
+| `cooldown_seconds`| Minimum gap between two auto-triggers of the same card (default `5`).  |
 
 When a card enters a bound column in auto mode and:
 

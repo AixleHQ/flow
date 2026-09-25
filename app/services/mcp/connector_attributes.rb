@@ -52,6 +52,15 @@ module MCP
         base.merge(target["kind"] == "remote" ? remote_attributes(target, values) : package_attributes(target, values))
       end
 
+      def unpinned?(target)
+        target["kind"] == "package" && target["version_pinned"] == false
+      end
+
+      def unpinned_message(target)
+        "#{target['identifier']} has no release to pin — the catalog lists none and the package registry " \
+          "did not answer. Try again later."
+      end
+
       private
 
       def remote_attributes(target, values)

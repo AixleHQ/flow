@@ -2,6 +2,8 @@ import { ActionIcon, Badge, Box, Button, Center, Group, Table, Text, TextInput, 
 import { IconCopy, IconEdit, IconPlus, IconRobot, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import type { Agent } from '@/types/generated';
+
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -9,22 +11,6 @@ import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/Resourc
 
 import { AgentFormModal } from './AgentFormModal';
 import { DeleteAgentModal } from './DeleteAgentModal';
-
-export interface Agent {
-  id: number;
-  name: string;
-  title: string;
-  icon: string | null;
-  persona: string;
-  communicationStyle: string | null;
-  principles: string | null;
-  source: string;
-  scopeType: string;
-  scopeId: number;
-  scopeIndicator: string;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface AgentsContentProps {
   agents: Agent[];

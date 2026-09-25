@@ -3,7 +3,8 @@
 class MCPServerResource < ApplicationResource
   preserve_keys :env, :headers
 
-  typelize headers: "Record<string, unknown>", env: "Record<string, unknown>"
+  typelize headers: "Record<string, string>", env: "Record<string, string>",
+           transport: %w[http sse stdio], kind: %w[internal custom]
   attributes :id, :name, :url, :transport,
              :description, :kind, :scope_type, :scope_id, :enabled,
              :created_at, :updated_at
@@ -25,11 +26,11 @@ class MCPServerResource < ApplicationResource
   # "unchanged" and the write path drops it, so an edit never overwrites the stored
   # secret. preserve_keys keeps the masked hash serialized as a JSON object.
   attribute :headers do |server|
-    (server.headers || {}).transform_values { "••••••" }
+    server.masked_headers
   end
 
   attribute :env do |server|
-    (server.env || {}).transform_values { "••••••" }
+    server.masked_env
   end
 
   typelize :boolean
@@ -46,12 +47,12 @@ class MCPServerResource < ApplicationResource
   # Null/false for hand-authored servers, which is the honest answer: nobody
   # promised anything about a server someone typed in themselves.
 
-  typelize :string?
+  typelize "string | null"
   attribute :connector_name do |server|
     server.connector_name
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :connector_version do |server|
     server.connector_version
   end
@@ -61,7 +62,7 @@ class MCPServerResource < ApplicationResource
   # per row. "deleted" means the registry pulled the entry — possible spam,
   # malware, or illegal content — and the install keeps running with a warning
   # rather than being cut off underneath the user (decision, 2026-08-01).
-  typelize :string?
+  typelize "'active' | 'deprecated' | 'deleted' | null"
   attribute :connector_status do |server|
     next nil if server.connector_name.blank?
 
@@ -78,7 +79,7 @@ class MCPServerResource < ApplicationResource
   # The version the catalog now carries, when it differs from the installed one.
   # Null when they match, when the catalog entry is gone, or when either version
   # is unknown — offering an update on a guess is worse than staying quiet.
-  typelize :string?
+  typelize "string | null"
   attribute :connector_update_version do |server|
     next nil if server.connector_name.blank?
 
@@ -98,7 +99,7 @@ class MCPServerResource < ApplicationResource
 
   # Tools whose declarations changed after the install was approved — the
   # rug-pull shape. Empty when nothing changed.
-  typelize tool_drift: "{ added?: string[]; removed?: string[]; changed?: string[]; detected_at?: string } | null"
+  typelize tool_drift: "{ added?: string[]; removed?: string[]; changed?: string[]; detectedAt?: string } | null"
   attribute :tool_drift do |server|
     server.tool_drift.presence
   end
@@ -136,7 +137,7 @@ class MCPServerResource < ApplicationResource
   # identity is the viewer (passed as params[:user]); for shared servers it is the
   # server's scope owner. When no user is supplied a per_user server reads as
   # "pending" (the viewer must connect).
-  typelize :string?
+  typelize "'pending' | 'active' | 'expiring' | 'error' | null"
   attribute :oauth_status do |server|
     next nil unless server.auth_type_oauth?
 
@@ -149,9 +150,10 @@ class MCPServerResource < ApplicationResource
     cred = server.oauth_credentials
                  .reject(&:revoked?)
                  .select { |c| c.owner_type == owner.class.polymorphic_name && c.owner_id == owner.id }
-                 .max_by(&:updated_at)
+                 .sort_by(&:updated_at).reverse
+                 .detect { |c| c.bound_to?(server) }
     next "pending" if cred.nil?
-    next "error" if cred.error?
+    next "error" if cred.error? || !cred.tokens_readable?
 
     # A refreshable credential never needs the viewer's attention: the */5 sweep and
     # the session-start injection both renew it (Oauth::TokenService), and a refresh

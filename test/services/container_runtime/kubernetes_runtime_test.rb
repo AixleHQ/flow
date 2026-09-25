@@ -29,6 +29,13 @@ module ContainerRuntime
       Kubeclient::Resource.new(metadata: { name: "aixle-resource-quota", namespace: "aixle-prod-project-27", uid: uid })
     end
 
+    def current_terminal_auth_middleware
+      Kubeclient::Resource.new(
+        spec: { forwardAuth: { authResponseHeadersRegex: KubernetesRuntime::TERMINAL_AUTH_RESPONSE_HEADERS_REGEX,
+                               addAuthCookiesToResponse: KubernetesRuntime::TERMINAL_AUTH_RESPONSE_COOKIES } }
+      )
+    end
+
 
 
 
@@ -270,13 +277,14 @@ module ContainerRuntime
       %w[
         runtime-default-deny
         runtime-allow-traefik-ingress
+        runtime-allow-traefik-view-ingress
         runtime-allow-dns-egress
         runtime-allow-aixle-service-egress
         runtime-allow-public-internet-egress
       ].each do |name|
         networking_mock.expects(:get_entity).with("networkpolicies", name, "aixle-project-77").raises(StandardError)
       end
-      5.times do
+      6.times do
         networking_mock.expects(:create_entity).with do |kind, resource_type, resource|
           kind == "NetworkPolicy" &&
             resource_type == "networkpolicies" &&
@@ -315,6 +323,51 @@ module ContainerRuntime
                    "unconfigured agent pod spec gained or lost a key"
       assert_not pod_spec.key?(:nodeSelector)
       assert_not pod_spec.key?(:tolerations)
+    end
+
+    # An agent pod holds its owner's credentials: nothing in it may escalate
+    # (setuid, sudo) or open raw sockets, and the restricted profile is one
+    # switch away once every image runs as a non-root user.
+    test "build_pod forbids privilege escalation and raw sockets, and restricts fully when asked" do
+      Settings.kubernetes.stubs(:agents_node_pool).returns([])
+      Settings.kubernetes.stubs(:agents_image_pull_secrets).returns([])
+
+      context = build_agent_pod_spec[:containers].first[:securityContext]
+      assert_equal({ allowPrivilegeEscalation: false, capabilities: { drop: [ "NET_RAW" ] } }, context)
+
+      Settings.kubernetes.stubs(:restricted_agent_pods).returns("true")
+      context = build_agent_pod_spec[:containers].first[:securityContext]
+      assert context[:runAsNonRoot]
+      assert_equal [ "ALL" ], context.dig(:capabilities, :drop)
+      assert_equal "RuntimeDefault", context.dig(:seccompProfile, :type)
+    end
+
+    test "a pod whose image keeps sudo may escalate, and keeps what sudo needs under the restricted profile" do
+      Settings.kubernetes.stubs(:agents_node_pool).returns([])
+      Settings.kubernetes.stubs(:agents_image_pull_secrets).returns([])
+
+      context = build_agent_pod_spec(privilege_escalation: true)[:containers].first[:securityContext]
+      assert_equal({ allowPrivilegeEscalation: true, capabilities: { drop: [ "NET_RAW" ] } }, context)
+
+      Settings.kubernetes.stubs(:restricted_agent_pods).returns("true")
+      context = build_agent_pod_spec(privilege_escalation: true)[:containers].first[:securityContext]
+      assert_equal({ allowPrivilegeEscalation: true, capabilities: { drop: [ "NET_RAW" ] }, runAsNonRoot: true,
+                     seccompProfile: { type: "RuntimeDefault" } }, context)
+    end
+
+    # A moving tag under IfNotPresent runs whichever copy a node cached.
+    test "an image with a moving tag is pulled on every start; a pinned one keeps the configured policy" do
+      Settings.kubernetes.stubs(:image_pull_policy).returns("IfNotPresent")
+
+      {
+        "ghcr.io/aixlehq/flow-claude-code" => "Always",
+        "ghcr.io/aixlehq/flow-claude-code:latest" => "Always",
+        "localhost:5000/flow-codex" => "Always",
+        "ghcr.io/aixlehq/flow-claude-code:1a2b3c4" => "IfNotPresent",
+        "ghcr.io/aixlehq/flow-claude-code@sha256:#{'a' * 64}" => "IfNotPresent"
+      }.each do |image, policy|
+        assert_equal policy, @runtime.send(:image_pull_policy_for, image), image
+      end
     end
 
     test "build_pod pins agent pods to the configured node pool and tolerates its matching taint" do
@@ -381,6 +434,76 @@ module ContainerRuntime
 
       stub_pod_phase("Succeeded")
       assert_equal :terminated, @runtime.container_status(pod_handle)
+    end
+
+    # Container tools wait on these two; without them every tool run on
+    # Kubernetes died with NotImplementedError.
+    test "wait_container returns the main container's exit code once it has terminated" do
+      terminated = OpenStruct.new(status: OpenStruct.new(phase: "Failed", containerStatuses: [
+        OpenStruct.new(name: "main", state: OpenStruct.new(terminated: OpenStruct.new(exitCode: 3)))
+      ]))
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).with("my-pod", "default").returns(terminated)
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      assert_equal({ "StatusCode" => 3 }, @runtime.wait_container(pod_handle, 5))
+    end
+
+    test "wait_container raises WaitTimeout while the pod is still running" do
+      stub_pod_phase("Running")
+      @runtime.stubs(:sleep)
+
+      assert_raises(ContainerRuntime::WaitTimeout) { @runtime.wait_container(pod_handle, 0) }
+    end
+
+    test "wait_container reports a pod deleted mid-wait as a run with no clean exit" do
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).raises(Kubeclient::ResourceNotFoundError.new(404, "pods 'my-pod' not found", nil))
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      assert_equal({ "StatusCode" => -1 }, @runtime.wait_container(pod_handle, 5))
+    end
+
+    test "wait_container gives up on an image the kubelet has failed to pull for a minute" do
+      freeze_time
+      stub_pod(waiting_pod(reason: "ImagePullBackOff", message: 'Back-off pulling image "alpine:nope"',
+                           started: 61.seconds.ago))
+
+      error = assert_raises(ContainerRuntime::ImagePullError) { @runtime.wait_container(pod_handle, 0) }
+      assert_equal 'ImagePullBackOff: Back-off pulling image "alpine:nope"', error.message
+    end
+
+    test "wait_container leaves a fresh pull failure to the kubelet's own retries" do
+      freeze_time
+      stub_pod(waiting_pod(reason: "ErrImagePull", started: 5.seconds.ago))
+
+      assert_raises(ContainerRuntime::WaitTimeout) { @runtime.wait_container(pod_handle, 0) }
+    end
+
+    test "wait_container gives up at once on an image name that can never resolve" do
+      freeze_time
+      stub_pod(waiting_pod(reason: "InvalidImageName", started: Time.current))
+
+      assert_raises(ContainerRuntime::ImagePullError) { @runtime.wait_container(pod_handle, 0) }
+    end
+
+    test "container_logs reads the main container's log" do
+      core_mock = mock("core_client")
+      core_mock.expects(:get_pod_log).with("my-pod", "default", container: "main").returns("hello\n")
+      @runtime.stubs(:core_client).returns(core_mock)
+
+      assert_equal({ stdout: "hello\n", stderr: "" }, @runtime.container_logs(pod_handle))
+    end
+
+    test "a tool run's pod is sized by its host_config limits; an agent's keeps the runtime sizing" do
+      tool_spec = { labels: { "aixle.type" => "tool_execution" },
+                    host_config: { "Memory" => 536_870_912, "CpuQuota" => 50_000, "CpuPeriod" => 100_000 } }
+      sized = @runtime.send(:container_resources, tool_spec)
+      assert_equal({ cpu: "500m", memory: "536870912" }, sized[:limits])
+      assert_equal sized[:limits], sized[:requests]
+
+      agent_spec = { labels: {}, host_config: { "Memory" => 536_870_912, "CpuQuota" => 50_000 } }
+      assert_equal @runtime.send(:runtime_container_resources), @runtime.send(:container_resources, agent_spec)
     end
 
     test "container_status reports a pod the API no longer knows as missing" do
@@ -456,7 +579,7 @@ module ContainerRuntime
           ingress.kind == "IngressRoute" &&
           (metadata[:namespace] || metadata["namespace"]) == "default" &&
           (metadata.dig(:labels, :"aixle.com/runtime-origin") || metadata.dig("labels", "aixle.com/runtime-origin")) == "aixle" &&
-          routes.size == 3 &&
+          routes.size == 4 &&
           ide_route.present? &&
           normalized_middlewares == [ { name: "terminal-auth" } ] &&
           normalized_services == [ { name: "my-pod", namespace: "default", port: 8443 } ]
@@ -467,17 +590,23 @@ module ContainerRuntime
       @runtime.send(:create_ingressroute, handle)
     end
 
-    test "build_route includes host matcher from settings domain" do
+    test "build_route matches the host containers are served from" do
       Settings.stubs(:domain).returns("aixle.com")
+      Settings.traefik.stubs(:http_base).returns("https://aixle.com")
       handle = OpenStruct.new(route_token: "abc123", service_name: "svc")
 
       route = @runtime.send(:build_route, handle, "tty", 7681, [ "terminal-auth" ])
-
       assert_equal "Host(`aixle.com`) && PathPrefix(`/t/abc123/tty`)", route[:match]
+
+      # A sandbox host of their own (ContainerTicket): the routes move with it.
+      Settings.traefik.stubs(:http_base).returns("https://t.aixle.com")
+      route = @runtime.send(:build_route, handle, "tty", 7681, [ "terminal-auth" ])
+      assert_equal "Host(`t.aixle.com`) && PathPrefix(`/t/abc123/tty`)", route[:match]
     end
 
-    test "build_route falls back to path matcher when settings domain blank" do
+    test "build_route falls back to path matcher when no host is configured" do
       Settings.stubs(:domain).returns("")
+      Settings.traefik.stubs(:http_base).returns("")
       handle = OpenStruct.new(route_token: "abc123", service_name: "svc")
 
       route = @runtime.send(:build_route, handle, "tty", 7681, [ "terminal-auth" ])
@@ -549,8 +678,8 @@ module ContainerRuntime
       created_entities = []
       traefik_mock = mock("traefik_client")
       # Auth middleware already present in the namespace -> no create for it.
-      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "default").returns(true)
-      traefik_mock.expects(:create_entity).times(3).with do |kind, resource_type, resource|
+      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "default").returns(current_terminal_auth_middleware)
+      traefik_mock.expects(:create_entity).times(4).with do |kind, resource_type, resource|
         created_entities << [ kind, resource_type, resource ]
         true
       end.returns(true)
@@ -567,8 +696,12 @@ module ContainerRuntime
       assert_equal [ 7681, 4040 ], ports.map { |port| port[:port] || port["port"] }
       assert_equal [ 7681, 4040 ], ports.map { |port| port[:targetPort] || port["targetPort"] }
 
-      assert_equal [ "Middleware", "Middleware", "IngressRoute" ], created_entities.map(&:first)
-      assert_equal [ "middlewares", "middlewares", "ingressroutes" ], created_entities.map { |entity| entity[1] }
+      assert_equal [ "Middleware", "Middleware", "Middleware", "IngressRoute" ], created_entities.map(&:first)
+      assert_equal %w[middlewares middlewares middlewares ingressroutes], created_entities.map { |entity| entity[1] }
+      # The read-only terminal everyone but the owner is sent to.
+      view = created_entities.last.last.spec.routes.find { |route| route[:match].to_s.include?("/t/abc123/view") }
+      assert_equal 7682, view[:services].first[:port]
+      assert_equal [ "terminal-auth", "my-pod-view-strip" ], view[:middlewares].map { |mw| mw[:name] }
     end
 
     test "remove_container tears down ingressroute, middlewares, service, and pod" do
@@ -697,8 +830,8 @@ module ContainerRuntime
       core_mock = mock("core_client")
       core_mock.expects(:create_service).with { |service| created << service }.returns(true)
       traefik_mock = mock("traefik_client")
-      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "aixle-project-7").returns(true)
-      traefik_mock.expects(:create_entity).times(3).with { |_kind, _plural, resource| created << resource }.returns(true)
+      traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "aixle-project-7").returns(current_terminal_auth_middleware)
+      traefik_mock.expects(:create_entity).times(4).with { |_kind, _plural, resource| created << resource }.returns(true)
 
       @runtime.stubs(:core_client).returns(core_mock)
       @runtime.stubs(:traefik_client).returns(traefik_mock)
@@ -706,7 +839,7 @@ module ContainerRuntime
       @runtime.start_container(handle)
       created << @runtime.send(:build_pod, { image: "alpine", env_vars: [] }, handle)
 
-      assert_equal 5, created.size
+      assert_equal 6, created.size
       created.each do |resource|
         labels = labels_of(resource)
         assert_equal "aixle-runtime", labels["app"],
@@ -742,6 +875,62 @@ module ContainerRuntime
       labels = labels_of(middleware)
       assert_equal "aixle", labels["aixle.com/runtime-origin"]
       assert_not labels.key?("aixle-container")
+    end
+
+    test "the terminal-auth middleware takes Cookie and Authorization from ws_auth instead of the browser" do
+      middleware = @runtime.send(:build_terminal_auth_middleware, "aixle-project-7")
+
+      regex = Regexp.new(middleware.spec.forwardAuth.authResponseHeadersRegex)
+      assert_match regex, "Cookie"
+      assert_match regex, "Authorization"
+      assert_match regex, "X-User-Id"
+      assert_no_match regex, "Content-Type"
+    end
+
+    test "ensure_terminal_auth_middleware creates the middleware when the namespace has none" do
+      traefik_mock = mock("traefik_client")
+      traefik_mock.expects(:get_entity).raises(StandardError, "not found")
+      traefik_mock.expects(:create_entity).with("Middleware", "middlewares", anything).returns(:created)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      assert_equal :created, @runtime.send(:ensure_terminal_auth_middleware, "aixle-project-7")
+    end
+
+    test "ensure_terminal_auth_middleware repairs a middleware that still forwards the browser's cookies" do
+      stale = Kubeclient::Resource.new(spec: { forwardAuth: { authResponseHeadersRegex: "^X-" } })
+      traefik_mock = mock("traefik_client")
+      traefik_mock.expects(:get_entity).returns(stale)
+      traefik_mock.expects(:patch_entity).with(
+        "middlewares", "terminal-auth",
+        { spec: { forwardAuth: { authResponseHeadersRegex: KubernetesRuntime::TERMINAL_AUTH_RESPONSE_HEADERS_REGEX,
+                                 addAuthCookiesToResponse: KubernetesRuntime::TERMINAL_AUTH_RESPONSE_COOKIES } } },
+        "merge-patch", "aixle-project-7"
+      ).returns(:patched)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      assert_equal :patched, @runtime.send(:ensure_terminal_auth_middleware, "aixle-project-7")
+    end
+
+    test "ensure_terminal_auth_middleware replaces the middleware when the role may not patch it" do
+      stale = Kubeclient::Resource.new(spec: { forwardAuth: { authResponseHeadersRegex: "^X-" } })
+      traefik_mock = mock("traefik_client")
+      traefik_mock.expects(:get_entity).returns(stale)
+      traefik_mock.expects(:patch_entity).raises(Kubeclient::HttpError.new(403, "forbidden", nil))
+      traefik_mock.expects(:delete_entity).with("middlewares", "terminal-auth", "aixle-project-7")
+      traefik_mock.expects(:create_entity).with("Middleware", "middlewares", anything).returns(:replaced)
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      assert_equal :replaced, @runtime.send(:ensure_terminal_auth_middleware, "aixle-project-7")
+    end
+
+    test "ensure_terminal_auth_middleware leaves a current middleware alone" do
+      current = current_terminal_auth_middleware
+      traefik_mock = mock("traefik_client")
+      traefik_mock.expects(:get_entity).returns(current)
+      traefik_mock.expects(:patch_entity).never
+      @runtime.stubs(:traefik_client).returns(traefik_mock)
+
+      assert_equal current, @runtime.send(:ensure_terminal_auth_middleware, "aixle-project-7")
     end
 
     # == Garbage-collection primitives ==
@@ -834,13 +1023,14 @@ module ContainerRuntime
     # Builds the pod the way create_container does — real handle, real pod-spec
     # builder — and hands back the pod spec as a plain Hash. No API calls: only
     # settings are read on this path.
-    def build_agent_pod_spec(container_name: "terminal-abc123")
+    def build_agent_pod_spec(container_name: "terminal-abc123", **extra)
       spec = {
         image: "alpine:latest",
         env_vars: [],
         labels: {},
         host_config: {},
-        container_name: container_name
+        container_name: container_name,
+        **extra
       }
       handle = @runtime.send(:build_handle, spec)
       pod = @runtime.send(:build_pod, spec, handle)
@@ -875,6 +1065,18 @@ module ContainerRuntime
       )
       @runtime.stubs(:core_client).returns(core_mock)
       core_mock
+    end
+
+    def stub_pod(pod)
+      core_mock = mock("core_client")
+      core_mock.stubs(:get_pod).with("my-pod", "default").returns(pod)
+      @runtime.stubs(:core_client).returns(core_mock)
+    end
+
+    def waiting_pod(reason:, started:, message: nil)
+      Kubeclient::Resource.new(status: { phase: "Pending", startTime: started.utc.iso8601, containerStatuses: [
+        { name: "main", state: { waiting: { reason: reason, message: message }.compact } }
+      ] })
     end
 
     POD_NOT_FOUND_BODY = {

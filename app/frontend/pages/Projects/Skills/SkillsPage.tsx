@@ -1,13 +1,10 @@
 import { Head, usePage } from '@inertiajs/react';
 
-import { SkillsContent, type CatalogSkill, type Skill } from 'shared/resources/skills/SkillsContent';
+import type { CatalogSkill, Project, Skill } from '@/types/generated';
+
+import { SkillsContent } from 'shared/resources/skills/SkillsContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface Props {
   project: Project;

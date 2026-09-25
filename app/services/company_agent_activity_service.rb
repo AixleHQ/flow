@@ -1,13 +1,6 @@
 # frozen_string_literal: true
 
 class CompanyAgentActivityService
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
-
   AgentBreakdown = Struct.new(:agent_type, :sessions, :cost_cents, :tokens, keyword_init: true)
   ActivityPoint = Struct.new(:date, :agent_type, :sessions, keyword_init: true)
 
@@ -17,7 +10,7 @@ class CompanyAgentActivityService
     @company = company
     @user = user
     @scope = scope.to_s
-    @since = PERIOD_DAYS.fetch(period.to_s, 30).days.ago
+    @since = AnalyticsPeriod.since(period.to_s)
   end
 
   def call
@@ -37,8 +30,8 @@ class CompanyAgentActivityService
         AgentBreakdown.new(
           agent_type:,
           sessions: count,
-          cost_cents: cost,
-          tokens: tokens
+          cost_cents: cost.to_i,
+          tokens: tokens.to_i
         )
       end
       .sort_by { |a| -a.sessions }
@@ -74,7 +67,7 @@ class CompanyAgentActivityService
   attr_reader :company, :user, :scope, :since
 
   def base_sessions
-    scope_sessions.where(created_at: since..)
+    scope_sessions.where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
   end
 
   def scope_sessions

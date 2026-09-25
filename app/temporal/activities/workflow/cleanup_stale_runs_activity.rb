@@ -2,11 +2,21 @@
 
 module Activities
   module Workflow
+    # Settles runs whose WorkflowExecutionWorkflow is gone but whose row still
+    # says running or paused — the parent was terminated, timed out, crashed on a
+    # workflow task, or its history expired, and nothing wrote the final status.
+    #
+    # Liveness comes from Temporal, not from age. An age threshold (it was 4 hours
+    # on started_at) failed long agent steps, approvals waiting over lunch and runs
+    # that had queued for most of that time, while a run whose parent really died
+    # sat "running" until the threshold came round. A RUNNING execution owns its
+    # run — its execution timeout is the backstop for a wedged one — and a probe
+    # that fails proves nothing.
     class CleanupStaleRunsActivity < ::Activities::Base
-      # A run that has been running or paused for longer than this is assumed
-      # to have lost its WorkflowExecutionWorkflow process. Sized to cover the
-      # longest realistic single-step run without prematurely killing slow-but-live work.
-      STALE_THRESHOLD = 4.hours
+      # A run younger than this is not probed; one sweep is the soonest it could
+      # have been orphaned and noticed anyway.
+      PROBE_AFTER = 15.minutes
+      GONE = %i[closed not_found].freeze
 
       def run(_input = nil)
         cleaned_running = cleanup_stale(:running)
@@ -14,19 +24,20 @@ module Activities
         { cleaned_running:, cleaned_paused: }
       end
 
+      # Public for maintenance:cleanup_stale_runs, which previews before it acts.
+      def orphaned_runs(state)
+        candidates(state).to_a.select { |run| execution_gone?(run) }
+      end
+
       private
 
       def cleanup_stale(state)
         count = 0
-        stale_runs_scope(state).find_each do |run|
-          next if deliberately_waiting?(run)
+        orphaned_runs(state).each do |run|
+          # It may have finished between the query and the probe.
+          next unless run.reload.state == state.to_s
 
-          # The durable stop marker is what stops a queued child from being
-          # admitted after the parent has been declared stale.
-          mark_stopped(run)
-          fail_active_sessions(run)
-          run.update_column(:failure_reason, "stale_run")
-          run.fail! if run.may_fail?
+          reap(run)
           count += 1
         rescue StandardError => e
           log(:warn, "Failed to clean WorkflowRun #{run.id}: #{e.message}")
@@ -34,12 +45,17 @@ module Activities
         count
       end
 
-      # A run is not stale because one of its steps is queued behind the
-      # concurrency cap or waiting for cluster capacity (AD-7, AD-8).
-      def deliberately_waiting?(run)
-        SessionAdmission.joins(terminal_session: :step_run)
-                        .where(step_runs: { workflow_run_id: run.id })
-                        .waiting.exists?
+      def execution_gone?(run)
+        TemporalService.execution_state(run.execution_workflow_id).in?(GONE)
+      end
+
+      def reap(run)
+        # The durable stop marker is what stops a queued child from being
+        # admitted after the parent has been declared stale.
+        mark_stopped(run)
+        fail_active_sessions(run)
+        run.update_column(:failure_reason, "stale_run")
+        run.fail! if run.may_fail?
       end
 
       def mark_stopped(run)
@@ -66,9 +82,8 @@ module Activities
         end
       end
 
-      def stale_runs_scope(state)
-        WorkflowRun.where(state: state.to_s)
-                   .where(started_at: ...STALE_THRESHOLD.ago)
+      def candidates(state)
+        WorkflowRun.where(state: state.to_s).where(started_at: ...PROBE_AFTER.ago)
       end
     end
   end

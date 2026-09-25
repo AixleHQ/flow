@@ -18,7 +18,7 @@ module Coder
 
     DEFAULT_TIMEOUT        = 60
     MAX_TIMEOUT            = 600
-    DEFAULT_RESPONSE_BYTES = (Settings.coder&.ssh_exec_inline_bytes || 256 * 1024).to_i
+    DEFAULT_RESPONSE_BYTES = (Settings.coder&.ssh_exec_inline_bytes || (256 * 1024)).to_i
     READ_CHUNK_BYTES       = 16 * 1024
 
     # `coder ssh <ws> -- <cmd>` runs a non-interactive shell that inherits
@@ -117,7 +117,7 @@ module Coder
       @integration = integration
     end
 
-    def exec(workspace_name:, command:, timeout: DEFAULT_TIMEOUT, max_bytes: DEFAULT_RESPONSE_BYTES)
+    def exec(workspace_name:, command:, timeout: DEFAULT_TIMEOUT, max_bytes: DEFAULT_RESPONSE_BYTES, stdin_data: nil)
       timeout = clamp_timeout(timeout)
       raise CommandError, "command must be a non-empty string" if command.to_s.strip.empty?
       raise CommandError, "workspace_name must be present" if workspace_name.to_s.strip.empty?
@@ -152,6 +152,7 @@ module Coder
 
       begin
         Open3.popen3(env, *argv, pgroup: true) do |stdin, sout, serr, wait_thr|
+          stdin.write(stdin_data) if stdin_data
           stdin.close
 
           # Bounded chunked reads: stop once `max_bytes + 1` has been seen so
@@ -197,11 +198,11 @@ module Coder
     # The remote script provisions what it needs (job directory, `setsid`
     # fallback), so a workspace from an older template works unchanged.
     #
-    # `env` is exported by the launcher, which travels over SSH and is never
-    # written anywhere, so a secret passed this way reaches the job's process
-    # environment without landing in the `<job_id>.cmd` file — the workspace is
-    # long-lived and shared between sessions, and a credential left on its disk
-    # outlives the session that minted it.
+    # `env` values travel on the SSH channel's stdin and the launcher reads them
+    # into its environment, so a secret reaches the job's process without landing
+    # in the `<job_id>.cmd` file (the workspace is long-lived and shared between
+    # sessions) and without being part of the command — which is argv on both
+    # ends, visible in `ps` on the worker and on the workspace.
     def exec_detached(workspace_name:, command:, job_id: nil, env: {})
       raise CommandError, "command must be a non-empty string" if command.to_s.strip.empty?
 
@@ -216,7 +217,8 @@ module Coder
           workspace_name: workspace_name,
           env:            env
         ),
-        timeout:        DETACH_TIMEOUT
+        timeout:        DETACH_TIMEOUT,
+        stdin_data:     env_stdin(env)
       )
 
       unless result[:exit_code].to_i.zero?
@@ -297,7 +299,7 @@ module Coder
       delimiter = "AIXLE_JOB_EOF_#{SecureRandom.hex(4)}"
 
       <<~SH
-        #{env_exports(env)}JOB_DIR="${AIXLE_JOB_DIR:-#{DEFAULT_JOB_DIR}}"
+        #{env_reads(env)}JOB_DIR="${AIXLE_JOB_DIR:-#{DEFAULT_JOB_DIR}}"
         mkdir -p "$JOB_DIR" 2>/dev/null || JOB_DIR="${TMPDIR:-/tmp}/aixle-jobs"
         mkdir -p "$JOB_DIR" || { echo "cannot create a job directory" >&2; exit 1; }
         BASE="$JOB_DIR/#{job_id}"
@@ -651,16 +653,25 @@ module Coder
       workspace_name.to_s.gsub(/[^A-Za-z0-9._-]/, "_")
     end
 
-    # Single-quoted with the standard `'\''` escape, so a value cannot break out
-    # of its quoting and become shell.
-    def env_exports(env)
+    # One `read` per variable, in the order #env_stdin writes the values.
+    def env_reads(env)
       return "" if env.blank?
 
-      env.map do |key, value|
+      env.each_key.map do |key|
         name = key.to_s
         raise CommandError, "invalid env name: #{name}" unless name.match?(/\A[A-Za-z_][A-Za-z0-9_]*\z/)
 
-        "#{name}='#{value.to_s.gsub("'", "'\\\\''")}'; export #{name}\n"
+        "IFS= read -r #{name} || true; export #{name}\n"
+      end.join
+    end
+
+    def env_stdin(env)
+      return nil if env.blank?
+
+      env.each_value.map do |value|
+        raise CommandError, "env values must be single-line" if value.to_s.include?("\n")
+
+        "#{value}\n"
       end.join
     end
 

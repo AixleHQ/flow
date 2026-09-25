@@ -88,12 +88,15 @@ class OauthCredentialTest < ActiveSupport::TestCase
     assert_nil cred.encrypted_refresh_token
   end
 
-  test "access_token returns nil when the ciphertext is tampered" do
+  # An unreadable token is a connection that needs reconnecting, never one that
+  # silently holds no token.
+  test "a tampered access token raises, and the credential reads as unreadable" do
     cred = build_credential(access_token: "at-123")
     cred.save!
     cred.update_column(:encrypted_access_token, "garbage")
 
-    assert_nil cred.reload.access_token
+    assert_raises(Encryptable::DecryptionError) { cred.reload.access_token }
+    assert_not cred.tokens_readable?
   end
 
   # --- expired? ---
@@ -323,6 +326,17 @@ class OauthCredentialTest < ActiveSupport::TestCase
     assert_includes result, no_refresh
     assert_not_includes result, not_active
     assert_not_includes result, null_expiry
+  end
+
+  test "refresh_due leaves the grants of an account that cannot sign in to lapse" do
+    cred = build_credential(owner: @user, provider: "mine", status: :active, refresh_token: "rt",
+                            expires_at: 5.minutes.from_now)
+    cred.save!
+    assert_includes OauthCredential.refresh_due, cred
+
+    @user.suspend!
+
+    assert_not_includes OauthCredential.refresh_due, cred
   end
 
   test "refresh_due honors a custom window argument" do

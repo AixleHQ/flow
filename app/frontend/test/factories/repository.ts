@@ -18,6 +18,8 @@ export const buildRepository = (overrides: Partial<Repository> = {}): Repository
   integration: buildIntegration(),
   publicSource: false,
   scopeIndicator: 'project',
+  externalId: null,
+  provider: 'github',
   // Null for GitHub and GitLab rows: only an Azure row's `fullName` splits into
   // organization / project / repository.
   azureDisplay: null,

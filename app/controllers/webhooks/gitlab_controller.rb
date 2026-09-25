@@ -25,28 +25,25 @@ class Webhooks::GitlabController < ActionController::API
     mr_iid = payload.dig("merge_request", "iid")
 
     ResolveGitlabPipelineJob.perform_later(
-      repo_full_name: @repository.full_name,
+      repository_id: @repository.id,
       pipeline_id: pipeline_id,
       status: status,
       mr_iid: mr_iid
     )
   end
 
+  # Several repositories can name the same GitLab project — two companies, or two
+  # projects of one — each with its own hook and secret. The delivery belongs to
+  # the one whose secret it carries, and resolves that repository's gates only.
   def authenticate_by_repository
     payload = request.request_parameters
     path_with_namespace = payload.dig("project", "path_with_namespace")
-    return head :unauthorized if path_with_namespace.blank?
-
-    @repository = Repository.find_by(full_name: path_with_namespace)
-    return head :unauthorized unless @repository
-
     token_header = request.headers["X-Gitlab-Token"]
-    return head :unauthorized if token_header.blank?
-    return head :unauthorized if @repository.webhook_secret.blank?
+    return head :unauthorized if path_with_namespace.blank? || token_header.blank?
 
-    head :unauthorized unless ActiveSupport::SecurityUtils.secure_compare(
-      token_header,
-      @repository.webhook_secret
-    )
+    @repository = Repository.where(full_name: path_with_namespace).where.not(webhook_secret: [ nil, "" ]).find do |repository|
+      ActiveSupport::SecurityUtils.secure_compare(token_header, repository.webhook_secret)
+    end
+    head :unauthorized unless @repository
   end
 end

@@ -24,6 +24,7 @@ module PersonalTools
       project = find_project!
       authorize!(project, :create?, policy: Web::Company::Projects::RepositoriesPolicy, project: project)
       repo = Repository.create!(attributes_for(project))
+      Repositories::CiWebhook.register(repo)
       success(id: repo.id, full_name: repo.full_name, source_branch: repo.source_branch,
               public_source: repo.public_source?)
     rescue PublicRepositoryService::Error => e

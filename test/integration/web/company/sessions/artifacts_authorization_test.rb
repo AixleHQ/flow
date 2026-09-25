@@ -5,15 +5,13 @@ require "test_helper"
 # Authorization matrix for the company-level Sessions::Artifacts controller, via
 # the shared AuthorizationMatrix harness (docs/testing.md §2).
 #
-# Policy (Web::Company::Sessions::ArtifactsPolicy) is plain-permissive:
+# Policy (Web::Company::Sessions::ArtifactsPolicy):
 #   index?  => true
-#   review? => true
-# So the policy admits every persona; the real gate is record scoping in the
-# controller (`company_sessions_scope`): a session is reachable by ANY member of
-# the company that owns it (session.user in company.users OR session.project in
-# company) and is scoped out (404) for a user of a different company. There is no
-# read_only gate here, so the external viewer may review too — both actions are
-# "any company member", not project- or admin-scoped.
+#   review? => !read_only?
+# Record scoping in the controller (`company_sessions_scope`) makes a session
+# reachable by ANY member of the company that owns it and scopes it out (404)
+# for a user of a different company. Reviewing writes, so the viewer is denied;
+# a project session's files additionally need access to that project.
 class Web::Company::Sessions::ArtifactsAuthorizationTest < ActionDispatch::IntegrationTest
   include AuthorizationMatrix
 
@@ -46,18 +44,32 @@ class Web::Company::Sessions::ArtifactsAuthorizationTest < ActionDispatch::Integ
     end
   end
 
-  # review persists artifact decisions. The policy is `true` (no read_only gate),
-  # so every company member is allowed; the foreign admin is scoped out (404). A
-  # one-key `decisions` body clears the `params.require(:decisions)` guard and
-  # dismisses the artifact, yielding a clean 302 redirect for the allowed roles.
-  test "review is a company-member write" do
+  # review persists artifact decisions: any member but the viewer; the foreign
+  # admin is scoped out (404). A one-key `decisions` body clears the
+  # `params.require(:decisions)` guard and dismisses the artifact, yielding a
+  # clean 302 redirect for the allowed roles.
+  test "review is a company-member write the viewer may not make" do
     assert_role_matrix(
       { owner: :allowed_write, admin: :allowed_write, collaborator: :allowed_write,
-        viewer: :allowed_write, stranger: :allowed_write, foreign_admin: :not_found },
+        viewer: :denied, stranger: :allowed_write, foreign_admin: :not_found },
       transport: :web
     ) do
       post review_company_session_artifacts_path(@session),
            params: { decisions: { @artifact.id.to_s => "dismiss" } }
     end
+  end
+
+  # The company feed lists every member's sessions, project ones included; saving
+  # a project session's files would write into a project the reviewer cannot open.
+  test "review of a project session needs access to that project" do
+    project = create(:project, company: @company, owner: @owner)
+    session = create(:terminal_session, :agent_session, user: @owner, project: project)
+    artifact = create(:asset, terminal_session: session, scope: project, created_by: @owner, status: "pending_review")
+    sign_in_as(@stranger)
+
+    post review_company_session_artifacts_path(session), params: { decisions: { artifact.id.to_s => "save" } }
+
+    assert_equal AuthorizationMatrix::DENIAL_ALERT, flash[:alert]
+    assert_equal "pending_review", artifact.reload.status
   end
 end

@@ -8,7 +8,7 @@ module Activities
         step = Step.find(input["step_id"])
 
         step_run = if input["force_new"]
-                     workflow_run.step_runs.create!(step: step, state: :pending)
+                     StepRun.next_attempt!(workflow_run: workflow_run, step: step)
         else
                      workflow_run.step_runs.find_or_create_by!(step: step)
         end

@@ -39,6 +39,8 @@ class SkillsRegistryService
   class ResolveTimeout < StandardError; end
 
   class RegistryError < StandardError; end
+  # An audit flagged the skill and the installer has not said they saw it.
+  class RiskNotAcknowledged < RegistryError; end
 
   # Search skills.sh. Kept here so existing callers (MCP tools) have one entry point;
   # the transport is Skills::RegistryClient.
@@ -58,9 +60,11 @@ class SkillsRegistryService
   # @param installs [Integer, nil] upstream install count when the caller knows it —
   #   the download endpoint reports none, only search does
   # @return [Skill] created or updated skill record
-  def self.install(skill_id, scope:, installs: nil)
+  def self.install(skill_id, scope:, installs: nil, acknowledge_risk: false)
     skill_id = skill_id.to_s.strip
     raise RegistryError, "skill_id is required" if skill_id.blank?
+
+    ensure_risk_acknowledged!(skill_id, acknowledge_risk)
 
     detail = begin
       fetch_skill_detail(skill_id)
@@ -77,6 +81,9 @@ class SkillsRegistryService
 
     package = "#{source}@#{slug}"
     content = detail["content"]
+    # Only a whole bundle is kept. The fallbacks resolve SKILL.md alone, and a skill
+    # written from that would lose the scripts beside it that `skills add` fetches.
+    files = detail["files"].presence || {}
     title = extract_title(content, detail["name"].presence || slug)
     description = Skills::SkillMarkdown.description(content)
 
@@ -87,7 +94,8 @@ class SkillsRegistryService
           title: title,
           description: description,
           content: content,
-          content_hash: detail["content_hash"]
+          content_hash: detail["content_hash"],
+          files: files
         )
       end
       return existing
@@ -102,10 +110,26 @@ class SkillsRegistryService
       source_url: source_url_for(source),
       content: content,
       content_hash: detail["content_hash"],
+      files: files,
       title: title,
       description: description,
       install_count: (installs || 0).to_i
     )
+  end
+
+  # The catalog modal asks before installing a skill an audit flags, and every other
+  # way in (the personal MCP tool, a hand-made request) must ask the same question.
+  # A skill the mirror has never audited is not flagged: nobody looking is not a
+  # finding, and the modal treats it the same way.
+  def self.ensure_risk_acknowledged!(skill_id, acknowledged)
+    return if acknowledged
+
+    catalog = CatalogSkill.find_by(registry_id: skill_id)
+    return unless catalog&.audit_warning?
+
+    providers = catalog.audit_providers.map { |p| "#{p[:provider]}: #{p[:risk] || 'unknown'}" }.join(", ")
+    raise RiskNotAcknowledged, "#{skill_id} is flagged as #{catalog.audit_risk} risk (#{providers}). " \
+                               "Review the audit, then confirm the install."
   end
 
   # @param deadline [Time] hard stop for the whole resolution; each source is only
@@ -153,7 +177,8 @@ class SkillsRegistryService
       "slug" => slug,
       "name" => Skills::SkillMarkdown.name(content) || slug,
       "content" => content,
-      "content_hash" => bundle&.content_hash
+      "content_hash" => bundle&.content_hash,
+      "files" => bundle && Skill.files_from_bundle(bundle.files)
     }
   rescue RegistryError, ResolveTimeout
     raise

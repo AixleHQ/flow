@@ -1,11 +1,14 @@
 # frozen_string_literal: true
 
 class WorkflowService
-  # A run was saved but its Temporal execution could not be started. Raised, not
-  # returned: an undispatched run is an outage, not a validation error, and the
-  # thing that used to happen instead — log a line and hand the caller a run that
-  # looked started — is what let a queue stall go unnoticed for two hours.
+  # A run was saved but its Temporal execution could not be started. Raised by
+  # #dispatch!, not returned: an undispatched run is an outage, and logging a line
+  # while handing back a run that looks started lets a queue stall go unnoticed.
+  # #start reports it and leaves the run to WorkflowRunRelay, since the run is
+  # committed and WILL start: telling the person it failed, and then starting it,
+  # would be the worse answer.
   DispatchFailed = Class.new(StandardError)
+  SignalLost = Class.new(StandardError)
 
   class << self
     def update(workflow:, params:)
@@ -18,7 +21,18 @@ class WorkflowService
       false
     end
 
-    def start(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil, shared_context: {})
+    def start(**args)
+      run = enqueue(**args)
+      dispatch_or_leave_to_relay(run) if run.persisted?
+      run
+    end
+
+    # Creates the run and enrols it in the outbox, without dialling Temporal: the
+    # half a caller holding a database lock may do. Dispatch it after the commit
+    # (#dispatch_or_leave_to_relay), never inside the transaction — a rolled-back
+    # run whose execution already started, or a started run whose row a failed
+    # RPC rolled back, is what that ordering produced.
+    def enqueue(workflow:, project:, user:, task: nil, mode: :interactive, overrides: {}, input_asset_ids: [], repository_ids: [], agent_runtime: nil, requested_model: nil, shared_context: {})
       run = project.workflow_runs.new(
         workflow: workflow,
         user: user,
@@ -30,6 +44,9 @@ class WorkflowService
         agent_runtime: agent_runtime.presence,
         shared_context: { "requested_model" => requested_model.presence }.compact.merge(shared_context.to_h.stringify_keys)
       )
+
+      run.errors.add(:workflow, "has been deleted") if workflow.deleted?
+      return run if run.errors.any?
 
       validate_mode!(run, workflow, overrides)
       return run if run.errors.any?
@@ -50,11 +67,21 @@ class WorkflowService
         run.step_runs.find_or_create_by!(step: step)
       end
 
-      dispatch!(run)
       record_activity(run, :workflow_started)
       broadcast_task_updated(run)
 
       run
+    end
+
+    # Dispatches once every open transaction has committed. A failure is reported
+    # and left to WorkflowRunRelay, which re-drives the run within RELAY_GRACE.
+    def dispatch_or_leave_to_relay(run)
+      ActiveRecord.after_all_transactions_commit do
+        dispatch!(run)
+      rescue DispatchFailed => e
+        Rails.logger.error("[WorkflowService] #{e.message}; WorkflowRunRelay will retry")
+        Sentry.capture_exception(e) if defined?(Sentry)
+      end
     end
 
     # Turns a saved run into a Temporal execution, and is the only thing allowed
@@ -161,9 +188,20 @@ class WorkflowService
       send_signal(step_run.workflow_run, "step_skipped", step_run.id)
     end
 
+    # The V1 execution does not poll: it waits on this signal for up to 23 hours,
+    # so a wake-up that an open run never got is reported, not just logged.
+    # TemporalService.send_signal returns { ok: false } instead of raising.
     def notify_container_finished(step_run:)
       execution_id = workflow_execution_id(step_run.workflow_run)
-      TemporalService.send_signal(execution_id, :container_finished, step_run.id)
+      result = TemporalService.send_signal(execution_id, :container_finished, step_run.id)
+      return result if result[:ok]
+
+      if %i[running unknown].include?(TemporalService.execution_state(execution_id))
+        lost = SignalLost.new("container_finished for step_run ##{step_run.id} did not reach #{execution_id}: #{result[:error]}")
+        Rails.logger.error("[WorkflowService] #{lost.message}")
+        Sentry.capture_exception(lost) if defined?(Sentry)
+      end
+      result
     rescue StandardError => e
       Rails.logger.error("[WorkflowService] Failed to signal container_finished for step_run ##{step_run.id}: #{e.message}")
     end
@@ -171,7 +209,7 @@ class WorkflowService
     private
 
     def retry_step_in_place(run, step_run)
-      new_step_run = run.step_runs.create!(step: step_run.step, state: :pending)
+      new_step_run = StepRun.next_attempt!(workflow_run: run, step: step_run.step)
       result = send_signal(run, "step_retried",
                   { "old_step_run_id" => step_run.id, "new_step_run_id" => new_step_run.id })
 
@@ -207,7 +245,7 @@ class WorkflowService
     end
 
     def workflow_execution_id(run)
-      "workflow-execution-#{run.id}"
+      run.execution_workflow_id
     end
 
     def send_signal(run, signal_name, payload = nil)

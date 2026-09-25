@@ -49,6 +49,22 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
     assert_response :unauthorized
   end
 
+  # Two companies can attach the same GitLab project, each with its own hook.
+  test "a delivery belongs to the repository whose secret it carries" do
+    other_company = create(:company)
+    other_user = create(:user, company: other_company)
+    other_secret = "b" * 64
+    other = create(:repository, full_name: "group/app", webhook_secret: other_secret,
+                                scope: create(:project, company: other_company, owner: other_user),
+                                integration: create(:integration, :gitlab, :active, company: other_company,
+                                                                                     connected_by: other_user))
+
+    assert_enqueued_with(job: ResolveGitlabPipelineJob,
+      args: [ { repository_id: other.id, pipeline_id: 7000, status: "success", mr_iid: nil } ]) do
+      post_json(pipeline_payload(status: "success", pipeline_id: 7000), token: other_secret, event: "Pipeline Hook")
+    end
+  end
+
   test "accepts request with correct token" do
     post_json({ "project" => { "path_with_namespace" => "group/app" },
                 "object_kind" => "pipeline",
@@ -74,7 +90,7 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
     payload = pipeline_payload(status: "success", pipeline_id: 5000)
 
     assert_enqueued_with(job: ResolveGitlabPipelineJob,
-      args: [ { repo_full_name: "group/app", pipeline_id: 5000,
+      args: [ { repository_id: @repository.id, pipeline_id: 5000,
                 status: "success", mr_iid: nil } ]) do
       post_json(payload, token: @webhook_secret, event: "Pipeline Hook")
     end
@@ -86,7 +102,7 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
     payload = pipeline_payload(status: "failed", pipeline_id: 5001)
 
     assert_enqueued_with(job: ResolveGitlabPipelineJob,
-      args: [ { repo_full_name: "group/app", pipeline_id: 5001,
+      args: [ { repository_id: @repository.id, pipeline_id: 5001,
                 status: "failed", mr_iid: nil } ]) do
       post_json(payload, token: @webhook_secret, event: "Pipeline Hook")
     end
@@ -98,7 +114,7 @@ class Webhooks::GitlabControllerTest < ActionController::TestCase
     payload = pipeline_payload(status: "canceled", pipeline_id: 5002)
 
     assert_enqueued_with(job: ResolveGitlabPipelineJob,
-      args: [ { repo_full_name: "group/app", pipeline_id: 5002,
+      args: [ { repository_id: @repository.id, pipeline_id: 5002,
                 status: "canceled", mr_iid: nil } ]) do
       post_json(payload, token: @webhook_secret, event: "Pipeline Hook")
     end

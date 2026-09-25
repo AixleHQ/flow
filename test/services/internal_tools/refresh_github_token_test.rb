@@ -24,23 +24,26 @@ class InternalTools::RefreshGithubTokenTest < ActiveSupport::TestCase
     InternalTools::RefreshGithubToken.new(params: params, session: @session).execute
   end
 
-  test "re-points origin at a freshly minted token scoped to the repository" do
+  def repair_commands
+    @runtime.execs.map { |cmd| Array(cmd).join(" ") }.select { |c| c.include?("remote set-url") }
+  end
+
+  # Nothing is minted here any more: the credential helper fetches a fresh token on
+  # every git operation, and this tool only puts a checkout back on that footing.
+  test "re-points origin at the clean URL and configures the credential helper" do
     result = run_tool
 
     assert_equal 0, result[:exit_code]
-
-    command = @runtime.execs.last.last
-    assert_match(%r{git -c safe\.directory=/workspace/repo/my-app -C /workspace/repo/my-app}, command)
-    assert_match(%r{remote set-url origin.*x-access-token:ghs_fresh@github\.com/acme/my-app\.git}, command)
+    command = repair_commands.last
+    assert_match(%r{git -c safe\.directory=/workspace/repo/my-app -C /workspace/repo/my-app remote set-url origin https://github\.com/acme/my-app\.git}, command)
+    assert_match(%r{credential\.https://github\.com/acme/my-app\.git\.helper /workspace/\.aixle/git-credential-aixle}, command)
     assert_match(%r{chown 1001:1001 /workspace/repo/my-app/\.git/config}, command)
-
-    assert_equal [ { repositories: [ "my-app" ] } ],
-                 @tokens.calls_to(:generate_installation_token).map { |c| c.except(:method) }
+    assert @runtime.fs["/workspace/.aixle/git-credential-aixle"].present?
+    assert_not @tokens.called?(:generate_installation_token)
 
     payload = JSON.parse(result[:stdout])
     assert_equal [ "acme/my-app" ], payload["refreshed"].map { |r| r["repository"] }
     assert_empty payload["failed"]
-    assert_not_includes result[:stdout], "ghs_fresh"
   end
 
   test "refreshes every attached GitHub repository by default" do
@@ -51,7 +54,7 @@ class InternalTools::RefreshGithubTokenTest < ActiveSupport::TestCase
     payload = JSON.parse(result[:stdout])
 
     assert_equal %w[acme/infra acme/my-app], payload["refreshed"].map { |r| r["repository"] }.sort
-    assert_equal 2, @runtime.execs.size
+    assert_equal 2, repair_commands.size
   end
 
   test "the repository argument narrows the refresh to one clone, by full name or bare name" do
@@ -98,21 +101,6 @@ class InternalTools::RefreshGithubTokenTest < ActiveSupport::TestCase
     assert_empty @runtime.execs
   end
 
-  test "a repository whose token cannot be minted fails alone and does not stop the others" do
-    other = create(:repository, full_name: "acme/gone", integration: @integration, scope: @project)
-    @session.repositories << other
-    @tokens = FakeGithub::TokenService.new(token: "ghs_fresh", unreachable: [ "gone" ])
-    Github::TokenService.stubs(:new).returns(@tokens)
-
-    result = run_tool
-    payload = JSON.parse(result[:stdout])
-
-    assert_equal 0, result[:exit_code]
-    assert_equal [ "acme/my-app" ], payload["refreshed"].map { |r| r["repository"] }
-    assert_equal [ "acme/gone" ], payload["failed"].map { |r| r["repository"] }
-    assert_match(/does not exist or is not accessible/, payload["failed"].first["error"])
-  end
-
   test "an inactive integration is reported rather than called" do
     @integration.update!(status: :inactive)
 
@@ -120,20 +108,17 @@ class InternalTools::RefreshGithubTokenTest < ActiveSupport::TestCase
 
     assert_equal 1, result[:exit_code]
     assert_match(/integration is not active/, result[:stderr])
-    assert_not @tokens.called?(:generate_installation_token)
-    assert_empty @runtime.execs
+    assert_empty repair_commands
   end
 
-  test "a failing git command surfaces its stderr with the token redacted" do
-    @runtime.fail_exec("remote set-url", stderr: "fatal: 'origin' does not appear to be a git repository ghs_fresh", exit_code: 128)
+  test "a failing git command surfaces its stderr" do
+    @runtime.fail_exec("remote set-url", stderr: "fatal: 'origin' does not appear to be a git repository", exit_code: 128)
 
     result = run_tool
 
     assert_equal 1, result[:exit_code]
     payload = JSON.parse(result[:stderr])
     assert_equal [ "acme/my-app" ], payload["failed"].map { |r| r["repository"] }
-    assert_match(/exited with 128/, payload["failed"].first["error"])
-    assert_match(/\[REDACTED\]/, payload["failed"].first["error"])
-    assert_not_includes result[:stderr], "ghs_fresh"
+    assert_match(/exited with 128.*does not appear to be a git repository/, payload["failed"].first["error"])
   end
 end

@@ -112,7 +112,7 @@ module Coder
       }
       @integration.save!
 
-      UrlSafetyValidator.stubs(:trusted_host?).with("coder.example.com").returns(false)
+      UrlSafetyValidator.stubs(:configured_trusted_hosts).returns([])
       UrlSafetyValidator.stubs(:resolve_public_ipv4).with("coder.example.com").returns("203.0.113.10")
 
       stub_request(:get, "https://203.0.113.10/api/v2/users/me")
@@ -138,7 +138,7 @@ module Coder
       }
       @integration.save!
 
-      UrlSafetyValidator.stubs(:trusted_host?).with("coder.staging.aixle.com").returns(true)
+      UrlSafetyValidator.stubs(:configured_trusted_hosts).returns([ "coder.staging.aixle.com" ])
       UrlSafetyValidator.expects(:resolve_public_ipv4).never
 
       stub_request(:get, "https://coder.staging.aixle.com/api/v2/users/me")
@@ -159,7 +159,7 @@ module Coder
       }
       @integration.save!
 
-      UrlSafetyValidator.stubs(:trusted_host?).with("coder.example.com").returns(false)
+      UrlSafetyValidator.stubs(:configured_trusted_hosts).returns([])
       UrlSafetyValidator.stubs(:resolve_public_ipv4).with("coder.example.com").returns(nil)
 
       stub_request(:get, "https://coder.example.com/api/v2/users/me")
@@ -180,7 +180,7 @@ module Coder
       }
       @integration.save!
 
-      UrlSafetyValidator.stubs(:trusted_host?).with("coder.example.com").returns(false)
+      UrlSafetyValidator.stubs(:configured_trusted_hosts).returns([])
       UrlSafetyValidator.stubs(:resolve_public_ipv4).with("coder.example.com").returns("203.0.113.10")
 
       stub_request(:get, "https://203.0.113.10:8443/api/v2/users/me")

@@ -148,12 +148,13 @@ module Agents
     # Session Command (mode-aware CLI command for ttyd)
     # =================================================================
 
-    # Generate CLI command for the session based on mode.
+    # The command that starts the CLI, without the prompt: for a non_interactive
+    # session AgentSessionStrategy appends the prompt as the last argument, read from
+    # a file in the container. `mode` is for the flags a runtime needs to take it.
     # @param mode [String] "interactive" or "non_interactive"
-    # @param prompt [String, nil] initial prompt for non_interactive mode
     # @param model [String, nil] requested model ID (nil = runtime default)
     # @return [String] CLI command string
-    def session_command(mode:, prompt: nil, model: nil)
+    def session_command(mode:, model: nil)
       raise NotImplementedError, "#{self.class} must implement #session_command"
     end
 
@@ -177,6 +178,12 @@ module Agents
     # When true, npx skills add is skipped and skills are merged into context.
     # @return [Boolean]
     def includes_skills_in_context?
+      false
+    end
+
+    # Whether the image gives its agent user passwordless sudo, so the container
+    # must keep setuid escalation (no no-new-privileges, allowPrivilegeEscalation).
+    def privilege_escalation?
       false
     end
 
@@ -207,7 +214,7 @@ module Agents
     # Generate MCP config files for this CLI.
     # @param servers [Array<OpenStruct>] resolved servers with :name, :url, :transport, :headers
     # @return [Hash<String, String>] { path => content }
-    def mcp_config(servers)
+    def mcp_config(_servers)
       {}
     end
 
@@ -316,7 +323,7 @@ module Agents
     # Extract environment variables from metadata (session or credential)
     # @param metadata [Hash] metadata hash
     # @return [Hash<String, String>] env var name => value
-    def env_vars_from_metadata(metadata)
+    def env_vars_from_metadata(_metadata)
       {}
     end
 
@@ -342,7 +349,7 @@ module Agents
     # @param terminal_session [TerminalSession]
     # @return [Symbol] :ok when persisted, :accepted when no usage found
     def ingest_usage(_payload, _terminal_session)
-      pp _payload
+      :accepted
     end
 
     # =================================================================
@@ -479,16 +486,21 @@ module Agents
     # @param token [String, nil]
     # @return [Integer, nil]
     def jwt_exp_ms(token)
-      return nil if token.blank?
-
-      segments = token.split(".")
-      return nil unless segments.size == 3
-
-      payload = JSON.parse(Base64.urlsafe_decode64(base64_pad(segments[1])))
-      exp = payload["exp"]
+      exp = jwt_claims(token)["exp"]
       exp.present? ? exp.to_i * 1000 : nil
+    end
+
+    # The unverified payload of a JWT, or {} when the token is not one.
+    def jwt_claims(token)
+      return {} if token.blank?
+
+      segments = token.to_s.split(".")
+      return {} unless segments.size == 3
+
+      claims = JSON.parse(Base64.urlsafe_decode64(base64_pad(segments[1])))
+      claims.is_a?(Hash) ? claims : {}
     rescue StandardError
-      nil
+      {}
     end
 
     # Merge freshly-collected credentials (from a live session's container) onto the
@@ -499,6 +511,69 @@ module Agents
     # @param current [Hash] currently-stored credential data
     # @param incoming [Hash] credentials collected from the session container
     # @return [Hash] the blob to persist
+    # == What a running container may write back ==
+    #
+    # The write-back endpoint and the cleanup collector both read the credential out
+    # of the container, and the container is the thing that may be compromised. So it
+    # may only ROTATE what the server already holds: a token the stored credential
+    # already has, replaced by a fresher one for the same account whose expiry is
+    # plausible for this runtime. Nothing else it sends is taken — not a new key, an
+    # API key, a Bedrock block or a settings file — or a prompt-injected agent could
+    # point every later session of its owner at an account or endpoint of its own.
+
+    # The keys of the credential hash a session's container may replace. Default: none.
+    def rotatable_credential_keys
+      []
+    end
+
+    # The files the in-container watcher reports while a session runs; only those that
+    # carry rotating tokens. Empty turns the write-back off for this runtime.
+    def writeback_file_paths
+      rotatable_credential_keys.empty? ? [] : auth_file_paths
+    end
+
+    # A write-back file whose content is bytes, not text; the watcher sends those base64.
+    def binary_writeback_path?(_path)
+      false
+    end
+
+    # The account a credential's tokens belong to, when the tokens say so (a JWT's
+    # subject); nil when they cannot tell. A rotation must not change it.
+    def credential_identity(_credentials)
+      nil
+    end
+
+    # Rotations only. Returns `current` unchanged unless every rule holds.
+    def merge_container_credentials(current, incoming)
+      keys = rotatable_credential_keys & current.keys & incoming.keys
+      return current if keys.empty?
+
+      candidate = merge_refreshed_credentials(current, incoming.slice(*keys))
+      rotated = current.merge(candidate.slice(*keys))
+      return current if rotated == current
+      return current unless same_credential_identity?(current, rotated) && plausible_expiry?(rotated)
+
+      rotated
+    end
+
+    # Far enough past the runtime's nominal lifetime to be forged: a far-future expiry
+    # was how a written-back token won every "which copy is freshest" comparison.
+    MAX_PLAUSIBLE_TOKEN_LIFETIME = 90.days
+
+    def plausible_expiry?(credentials)
+      expires_ms = token_expires_at(credentials)
+      return true if expires_ms.nil?
+
+      ttl = credential_lifecycle[:nominal_ttl]
+      horizon = ttl ? (ttl * 2) + 1.day : MAX_PLAUSIBLE_TOKEN_LIFETIME
+      expires_ms.to_i <= ((Time.current + horizon).to_f * 1000)
+    end
+
+    def same_credential_identity?(current, rotated)
+      held = credential_identity(current)
+      held.nil? || credential_identity(rotated) == held
+    end
+
     def merge_refreshed_credentials(current, incoming)
       new_exp = token_expires_at(incoming)
       old_exp = token_expires_at(current)
@@ -508,25 +583,66 @@ module Agents
     end
 
     # Proactively refresh this credential's OAuth token(s) server-side, persisting
-    # any rotated tokens back onto the AgentCredential. Called by the Temporal
-    # token-refresh sweep for credentials nearing expiry. Default: no-op (agents
-    # whose credentials don't carry a refreshable OAuth token).
-    #
-    # MUST persist via credential.with_lock + merge_refreshed_credentials +
-    # AgentCredential.from_artifacts (never a bare update! of a whole blob) so a
-    # concurrent live session's cleanup can't race the read-merge-write.
+    # any rotated tokens back onto the AgentCredential. Every refresh — the sweep, a
+    # launch, a request that found its token rejected — comes through here, under the
+    # credential's refresh lease (RefreshLease): one refresher at a time, and the
+    # provider call outside any transaction.
     #
     # @param credential [AgentCredential]
-    # @return [Hash] { status: :refreshed | :not_needed | :error, detail: String | nil,
+    # @return [Hash] { status: :refreshed | :not_needed | :error | :busy, detail: String | nil,
     #   permanent: Boolean } — `permanent` tells the refresh sweep whether the failure
     #   makes the credential unusable (flip it to `error`, forcing a re-login) or is a
-    #   transient/partial one. Optional: an adapter that omits it falls back to the
-    #   sweep's invalid_grant check.
+    #   transient/partial one. :busy means another refresher holds the lease.
     # @param margin_ms [Integer, nil] how close to expiry a token must be to be worth
     #   refreshing. Only agents that store their own expiry (Claude, with a block per
     #   login) can honour it; single-block agents refresh whenever they are called.
-    def refresh!(_credential, margin_ms: nil)
+    def refresh!(credential, margin_ms: nil)
+      return NOT_REFRESHABLE unless server_refresh?
+
+      outcome = credential.with_refresh_lease do
+        stored = credential.encrypted_config_data
+        result = perform_refresh!(credential, margin_ms: margin_ms)
+        rotated_elsewhere?(credential, stored, result) ? ROTATED_ELSEWHERE : result.except(:persisted)
+      end
+      outcome == :busy ? REFRESH_BUSY : outcome
+    end
+
+    NOT_REFRESHABLE = { status: :not_needed, detail: nil, permanent: false }.freeze
+    REFRESH_BUSY = { status: :busy, detail: "another refresh of this credential is in progress", permanent: false }.freeze
+    ROTATED_ELSEWHERE = { status: :not_needed, detail: "the stored tokens changed while refreshing", permanent: false }.freeze
+
+    def server_refresh?
+      method(:perform_refresh!).owner != BaseAdapter
+    end
+
+    # A request found the stored access token rejected. Renewed through
+    # AgentCredential#renew! like the sweep and a launch, so the outcome is recorded
+    # and a failure reported: never rotating a refresh token a live container holds,
+    # and never alongside another refresher — that one's result is taken instead.
+    # Returns the credential's config after a refresh, or nil.
+    def refresh_for_request!(credential)
+      return nil if credential.rotating_refresh? && credential.held_by_live_session?
+
+      result = credential.renew!(source: :unauthorized)
+      credential.await_refresh if result[:status] == :busy
+      result[:status].in?(%i[refreshed busy]) ? credential.reload.config_data : nil
+    end
+
+    # Adapter-specific refresh: call the provider, then persist through
+    # #persist_refreshed! (or an equivalent read-merge-write under the row lock).
+    # Report `persisted: true` in the result when anything was written. Default:
+    # no-op (agents whose credentials don't carry a refreshable OAuth token).
+    def perform_refresh!(_credential, margin_ms: nil)
       { status: :not_needed, detail: nil, permanent: false }
+    end
+
+    # A rejection only condemns the credential when it was of the tokens still
+    # stored. If a container wrote rotated tokens back while the provider was being
+    # asked, it rejected a grant that is no longer ours to judge by.
+    def rotated_elsewhere?(credential, stored, result)
+      return false unless result[:status] == :error && !result[:persisted]
+
+      credential.class.where(id: credential.id).pick(:encrypted_config_data) != stored
     end
 
     # Persist a freshly-refreshed credential blob under a row lock, guarding

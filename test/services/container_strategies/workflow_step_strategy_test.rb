@@ -56,28 +56,23 @@ module ContainerStrategies
 
     # == build_env_vars ==
 
-    test "build_env_vars sets AGENT_PROMPT from step instructions and agent persona/principles" do
+    test "build_env_vars carries neither the step's instructions nor its agent's persona" do
       agent = create(:agent, scope: @project, persona: "You are a QA reviewer.", principles: "Verify everything.")
       session, = create_workflow_step_session(instructions: "Review the pull request", agent: agent)
-      strategy = build_strategy(session: session)
 
-      env_vars = strategy.build_env_vars
+      env_vars = build_strategy(session: session).build_env_vars
 
-      assert_includes env_vars, "AGENT_PROMPT=Review the pull request"
-      assert_includes env_vars, "CONFIGURED_AGENT_PERSONA=You are a QA reviewer."
-      assert_includes env_vars, "CONFIGURED_AGENT_PRINCIPLES=Verify everything."
       assert_includes env_vars, "SESSION_TYPE=workflow_step"
+      [ "Review the pull request", "You are a QA reviewer.", "Verify everything." ].each do |text|
+        assert_not env_vars.any? { |v| v.include?(text) }, "#{text} must not be in the environment"
+      end
     end
 
-    test "build_env_vars omits agent persona vars when the step has no agent" do
-      session, = create_workflow_step_session(instructions: "Just run it", agent: nil)
-      strategy = build_strategy(session: session)
+    test "the step's instructions are the prompt the CLI is launched with" do
+      session, = create_workflow_step_session(instructions: "Review the pull request")
+      session.update!(mode: "non_interactive", initial_prompt: "session summary")
 
-      env_vars = strategy.build_env_vars
-
-      assert_includes env_vars, "AGENT_PROMPT=Just run it"
-      assert_not env_vars.any? { |v| v.start_with?("CONFIGURED_AGENT_PERSONA=") }
-      assert_not env_vars.any? { |v| v.start_with?("CONFIGURED_AGENT_PRINCIPLES=") }
+      assert_equal "Review the pull request", build_strategy(session: session).send(:agent_prompt, session)
     end
 
     # == before_cleanup ==
@@ -114,6 +109,34 @@ module ContainerStrategies
       assert_equal({}, strategy.before_cleanup(container_id: nil))
     end
 
+    # == cleanup phase ==
+
+    test "the run hears about a container that failed to start only once its session has failed" do
+      stub_container_runtime(agent_type: "claude_code")
+      create(:agent_credential, user: @user, agent_type: "claude_code")
+      session, = create_workflow_step_session
+      session.update!(state: "running")
+      WorkflowService.expects(:notify_container_finished).with { TerminalSession.find(session.id).failed? }.once
+
+      run_cleanup_phase(session, error: "Phase start_container failed: Waiting for cluster capacity")
+
+      assert_predicate session.reload, :failed?
+    end
+
+    test "the run hears about a finished step once its outputs are collected" do
+      stub_container_runtime(agent_type: "claude_code")
+      create(:agent_credential, user: @user, agent_type: "claude_code")
+      session, step_run, = create_workflow_step_session
+      session.update!(state: "finishing")
+      WorkflowService.expects(:notify_container_finished)
+        .with { |step_run:| step_run.produced_workflow_run_assets.exists? }.once
+
+      run_cleanup_phase(session)
+
+      assert_predicate session.reload, :finished?
+      assert_equal 1, step_run.produced_workflow_run_assets.count
+    end
+
     # == inject_prior_step_outputs ==
 
     test "inject_prior_step_outputs downloads dependency outputs and run input assets into the container" do
@@ -136,7 +159,7 @@ module ContainerStrategies
       )
 
       # Run-level input asset.
-      input_asset = create(:asset, :with_company_scope, name: "brief.md", created_by: @user)
+      input_asset = create(:asset, scope: @project.company, name: "brief.md", created_by: @user)
       create(:asset_version, :with_file, asset: input_asset, version: 1, uploaded_by: @user)
       workflow_run.update!(input_asset_ids: [ input_asset.id ])
 
@@ -185,6 +208,13 @@ module ContainerStrategies
       )
     end
 
+    def run_cleanup_phase(session, error: nil)
+      ContainerService.new(
+        strategy: build_strategy(session: session),
+        state: { container_id: "abc123", session_id: session.id, error: error }.compact
+      ).run_phase(:cleanup)
+    end
+
     def build_strategy(session:, agent_type: "claude_code", credential: nil)
       WorkflowStepStrategy.new(
         user_id: @user.id,
@@ -201,7 +231,7 @@ module ContainerStrategies
       workflow = create(:workflow, scope: @project)
       step = create(:step, workflow: workflow, instructions: instructions, agent: agent)
       workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
-      session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "claude_code")
+      session = create(:terminal_session, session_type: "workflow_step", user: @user, project: @project, agent_type: "claude_code")
       step_run = create(:step_run, workflow_run: workflow_run, step: step, terminal_session: session)
       [ session, step_run, step, workflow_run ]
     end

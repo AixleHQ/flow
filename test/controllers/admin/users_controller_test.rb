@@ -15,6 +15,12 @@ module Admin
       assert_response :success
     end
 
+    test "a format the admin cannot render is refused, not a server error" do
+      get :index, format: :json
+
+      assert_response :not_acceptable
+    end
+
     test "should get new" do
       get :new
       assert_response :success
@@ -164,7 +170,7 @@ module Admin
     test "permanent_destroy writes an audit record" do
       target = create(:user, :with_company)
 
-      assert_difference("Audited::Audit.where(action: 'permanent_delete').count", 1) do
+      assert_difference("Audit.where(action: 'permanent_delete').count", 1) do
         delete :permanent_destroy, params: { id: target.id, confirm_email: target.email }
       end
     end
@@ -194,6 +200,27 @@ module Admin
       assert_equal @user.id, session[:user_id]
       assert_equal @super_admin.id, session["true_user_id"]
       assert_redirected_to root_path
+    end
+
+    test "sign out everywhere ends every session of the user" do
+      elsewhere = UserSession.start!(user: @user)
+
+      delete :sign_out_everywhere, params: { id: @user.id }
+
+      assert elsewhere.reload.revoked_at
+      assert_redirected_to admin_user_path(@user)
+    end
+
+    test "an impersonation is a sign-in of its own that records who started it" do
+      post :impersonate, params: { id: @user.id }
+
+      impersonation = UserSession.find(session[:user_session_id])
+      assert_equal [ @user, @super_admin ], [ impersonation.user, impersonation.impersonator ]
+
+      post :stop_impersonate, params: { id: @user.id }
+
+      assert impersonation.reload.revoked_at
+      assert_equal @super_admin, UserSession.find(session[:user_session_id]).user
     end
 
     test "should stop impersonating user" do

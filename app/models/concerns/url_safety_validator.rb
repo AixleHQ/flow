@@ -95,9 +95,17 @@ module UrlSafetyValidator
     trusted_hosts(trusted_hosts_override).include?(host.to_s.downcase)
   end
 
+  # Only what the call site passes. URL_SAFETY_TRUSTED_HOSTS names our own hosts
+  # that resolve privately inside the cluster, for the integration that has to
+  # reach them (Coder); applied to every URL check it let any tenant aim an MCP
+  # server or an OAuth endpoint at the same internal service.
   def trusted_hosts(extra_hosts = nil)
+    Array(extra_hosts).map { |h| h.to_s.downcase.strip }.reject(&:empty?).uniq
+  end
+
+  def configured_trusted_hosts
     raw = Settings.respond_to?(:url_safety) ? Settings.url_safety&.trusted_hosts : nil
-    Array(raw).concat(Array(extra_hosts)).map { |h| h.to_s.downcase.strip }.reject(&:empty?).uniq
+    trusted_hosts(raw)
   end
 
   # Parse a host as an IP literal, or nil when it is not a well-formed IPAddr.
@@ -111,11 +119,38 @@ module UrlSafetyValidator
     nil
   end
 
+  # Special-purpose ranges (RFC 6890) a server-side request has no business dialing,
+  # beyond what IPAddr#private?/#loopback?/#link_local? already cover. 100.64.0.0/10
+  # matters most: EKS clusters commonly put their pod network in it.
+  BLOCKED_RANGES = %w[
+    0.0.0.0/8 100.64.0.0/10 192.0.0.0/24 192.0.2.0/24 192.88.99.0/24 198.18.0.0/15
+    198.51.100.0/24 203.0.113.0/24 224.0.0.0/4 240.0.0.0/4
+    ::/128 100::/64 2001::/32 2001:db8::/32 64:ff9b:1::/48 ff00::/8
+  ].map { |cidr| IPAddr.new(cidr) }.freeze
+
+  # IPv6 forms that carry an IPv4 address the packet ends up at: the address is
+  # judged by the IPv4 inside it.
+  NAT64_PREFIX = IPAddr.new("64:ff9b::/96")
+  SIX_TO_FOUR_PREFIX = IPAddr.new("2002::/16")
+
   # A resolved/literal IP that must never be dialed server-side: RFC1918 private,
-  # loopback, link-local (incl. the 169.254.169.254 cloud-metadata address), or
-  # the unspecified address (0.0.0.0 / ::, which the OS routes to loopback).
+  # loopback, link-local (incl. the 169.254.169.254 cloud-metadata address), the
+  # unspecified address, and the special-purpose ranges above.
   def blocked_ip?(ip)
-    ip.private? || ip.loopback? || ip.link_local? || ip.to_i.zero?
+    embedded = embedded_ipv4(ip)
+    return blocked_ip?(embedded) if embedded
+
+    ip.private? || ip.loopback? || ip.link_local? || ip.to_i.zero? ||
+      BLOCKED_RANGES.any? { |range| range.family == ip.family && range.include?(ip) }
+  end
+
+  def embedded_ipv4(ip)
+    return nil unless ip.ipv6?
+    return ip.native if ip.ipv4_mapped? || ip.ipv4_compat?
+    return IPAddr.new(ip.to_i & 0xffff_ffff, Socket::AF_INET) if NAT64_PREFIX.include?(ip)
+    return IPAddr.new((ip.to_i >> 80) & 0xffff_ffff, Socket::AF_INET) if SIX_TO_FOUR_PREFIX.include?(ip)
+
+    nil
   end
 
   # Reject the host if ANY address it resolves to is blocked, using two LOCAL
@@ -128,9 +163,8 @@ module UrlSafetyValidator
   # runs on every URL validation AND every redirect hop in OAuth discovery, and a
   # public-DNS round-trip (multi-second timeouts) on each call stalls hot paths —
   # badly so in a cluster where egress :53 is firewalled. DNS rebinding is
-  # defended at connect time instead, by pinning the resolved IP in the HTTP
-  # clients (resolve_public_ipv4 / pin_public_ip!). An unresolvable host yields []
-  # (not blocked — the connection would fail anyway).
+  # defended at connect time instead: SafeHttp dials the address it vetted. An
+  # unresolvable host yields [] (not blocked — the connection would fail anyway).
   def resolves_to_blocked?(host)
     resolved_addresses(host).any? { |ip| blocked_ip?(ip) }
   end

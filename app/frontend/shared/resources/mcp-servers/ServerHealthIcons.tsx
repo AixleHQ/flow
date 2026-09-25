@@ -8,8 +8,9 @@ import {
 } from '@tabler/icons-react';
 import type { FC } from 'react';
 
+import type { MCPServer } from '@/types/generated';
+
 import { serverHealthSignals, type ServerHealthSignal } from './serverHealth';
-import type { McpServer } from './types';
 
 // Health reads as one glyph per fact, sitting with the server's name. In a
 // dense table the alternative — a badge per condition — would double the row's
@@ -29,9 +30,9 @@ const COLOR: Record<ServerHealthSignal['level'], string> = {
 };
 
 interface ServerHealthIconsProps {
-  server: McpServer;
-  onReviewDrift?: (server: McpServer) => void;
-  onReviewUpdate?: (server: McpServer) => void;
+  server: MCPServer;
+  onReviewDrift?: (server: MCPServer) => void;
+  onReviewUpdate?: (server: MCPServer) => void;
 }
 
 export const ServerHealthIcons: FC<ServerHealthIconsProps> = ({ server, onReviewDrift, onReviewUpdate }) => {

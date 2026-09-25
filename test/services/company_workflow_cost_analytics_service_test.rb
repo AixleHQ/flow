@@ -16,7 +16,7 @@ class CompanyWorkflowCostAnalyticsServiceTest < ActiveSupport::TestCase
   def create_workflow_run_with_cost(project:, user:, cost_cents:, input_tokens:, output_tokens:, created_at: Time.current)
     workflow = project.workflows.first || create(:workflow, :with_project_scope, scope: project)
     run = create(:workflow_run, workflow: workflow, project: project, user: user, created_at: created_at)
-    session = create(:terminal_session, user: user, project: project)
+    session = create(:terminal_session, user: user, project: project, session_type: "workflow_step")
     step = create(:step, workflow: workflow)
     create(:step_run, workflow_run: run, step: step, terminal_session: session)
     UsageStatistic.create!(

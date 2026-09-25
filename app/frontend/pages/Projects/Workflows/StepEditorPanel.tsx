@@ -2,15 +2,9 @@ import { Switch } from '@mantine/core';
 import { IconArrowUpRight, IconFileDescription, IconMaximize, IconShieldCheck } from '@tabler/icons-react';
 import { useState } from 'react';
 
-import classes from './BuilderPage.module.css';
+import type { SubStep } from '@/types/generated';
 
-interface SubStep {
-  id: number;
-  name: string;
-  instructions: string | null;
-  position: number;
-  required: boolean;
-}
+import classes from './BuilderPage.module.css';
 
 interface SectionLabelProps {
   label: string;
@@ -27,7 +21,7 @@ function SectionLabel({ label, icon }: SectionLabelProps) {
 }
 
 interface StepEditorPanelProps {
-  step: SubStep;
+  step: Pick<SubStep, 'id' | 'name' | 'instructions' | 'position' | 'required'>;
   readOnly: boolean;
   onFieldChange: (field: string, value: unknown) => void;
 }

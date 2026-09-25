@@ -2,24 +2,26 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Integration } from '@/types/generated';
+import { buildIntegration } from 'test/factories/integration';
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import type { Integration } from './IntegrationsContent';
 import { IntegrationsContent } from './IntegrationsContent';
 
 const settingsProps = { settings: { githubAppSlug: 'aixle-app' } };
 
-const makeIntegration = (overrides: Partial<Integration> = {}): Integration => ({
-  id: 1,
-  name: 'Acme GitHub',
-  provider: 'github',
-  status: 'active',
-  scopeIndicator: 'company',
-  githubUrl: null,
-  connectedBy: { id: 10, name: 'Jane Doe' },
-  createdAt: '2026-01-15T10:00:00Z',
-  ...overrides,
-});
+const makeIntegration = (overrides: Partial<Integration> = {}): Integration =>
+  buildIntegration({
+    id: 1,
+    name: 'Acme GitHub',
+    provider: 'github',
+    status: 'active',
+    scopeIndicator: 'company',
+    githubUrl: null,
+    connectedBy: { id: 10, name: 'Jane Doe' },
+    createdAt: '2026-01-15T10:00:00Z',
+    ...overrides,
+  });
 
 describe('IntegrationsContent', () => {
   it('renders the title and a row for each seeded integration', () => {

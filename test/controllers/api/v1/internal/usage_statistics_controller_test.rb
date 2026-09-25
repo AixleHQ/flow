@@ -53,6 +53,15 @@ module Api
           assert_response :not_found
         end
 
+        test "#create returns unauthorized when the batch's session key does not check out" do
+          result = UsageStatisticsService::Result.new(status: :unauthorized, error: "Invalid session key")
+          UsageStatisticsService.stubs(:process).returns(result)
+
+          post :create, body: '{"resourceMetrics":[{}]}', as: :json
+
+          assert_response :unauthorized
+        end
+
         test "#create returns internal_server_error when service returns error" do
           result = UsageStatisticsService::Result.new(status: :error, error: "Failed to persist usage")
           UsageStatisticsService.stubs(:process).returns(result)

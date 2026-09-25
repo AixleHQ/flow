@@ -67,11 +67,11 @@ class FolderService
     ActiveRecord::Base.transaction do
       guard_destination_collisions!(from_path, to_path)
 
-      own_assets.where("folder = :p OR folder LIKE :pre", p: from_path, pre: "#{from_path}/%")
+      own_assets.where("folder = :p OR folder LIKE :pre", p: from_path, pre: subtree_pattern(from_path))
                 .update_all([ "folder = CASE WHEN folder = :from THEN :to ELSE :to || substr(folder, :cut) END, " \
                              "updated_at = :now",
                              from: from_path, to: to_path, cut: cut, now: Time.current ])
-      own_folders.where("path = :p OR path LIKE :pre", p: from_path, pre: "#{from_path}/%")
+      own_folders.where("path = :p OR path LIKE :pre", p: from_path, pre: subtree_pattern(from_path))
                  .update_all([ "path = CASE WHEN path = :from THEN :to ELSE :to || substr(path, :cut) END, " \
                               "updated_at = :now",
                               from: from_path, to: to_path, cut: cut, now: Time.current ])
@@ -92,9 +92,9 @@ class FolderService
       deleted_assets = 0
       deleted_folders = 0
       ActiveRecord::Base.transaction do
-        deleted_assets = own_assets.where("folder = :p OR folder LIKE :pre", p: path, pre: "#{path}/%")
-                                    .update_all(deleted_at: Time.current, updated_at: Time.current)
-        deleted_folders = own_folders.where("path = :p OR path LIKE :pre", p: path, pre: "#{path}/%")
+        deleted_assets = own_assets.where("folder = :p OR folder LIKE :pre", p: path, pre: subtree_pattern(path))
+                                    .update_all(Asset::UNSHARED.merge(deleted_at: Time.current, updated_at: Time.current))
+        deleted_folders = own_folders.where("path = :p OR path LIKE :pre", p: path, pre: subtree_pattern(path))
                                       .delete_all
       end
       { path: path, deleted_assets: deleted_assets, deleted_folders: deleted_folders }
@@ -123,7 +123,7 @@ class FolderService
   # has no Folder row but is still "there" as long as this scope's own assets populate it).
   def own_path?(path)
     own_folders.exists?(path: path) ||
-      own_assets.where("folder = :p OR folder LIKE :pre", p: path, pre: "#{path}/%").exists?
+      own_assets.where("folder = :p OR folder LIKE :pre", p: path, pre: subtree_pattern(path)).exists?
   end
 
   def own_folders
@@ -183,7 +183,7 @@ class FolderService
     return false unless project?
 
     visible_assets.where(scope_type: "Company")
-                  .where("folder = :p OR folder LIKE :pre", p: path, pre: "#{path}/%")
+                  .where("folder = :p OR folder LIKE :pre", p: path, pre: subtree_pattern(path))
                   .exists?
   end
 
@@ -199,14 +199,14 @@ class FolderService
   # of the moved subtree — this catches the narrower case where a *nested* descendant's computed
   # destination lands on an existing name a few levels down.
   def guard_destination_collisions!(from_path, to_path)
-    own_assets.where("folder = :p OR folder LIKE :pre", p: from_path, pre: "#{from_path}/%").find_each do |asset|
+    own_assets.where("folder = :p OR folder LIKE :pre", p: from_path, pre: subtree_pattern(from_path)).find_each do |asset|
       new_folder = relocate_value(asset.folder, from_path, to_path)
       if own_assets.where(folder: new_folder, name: asset.name).where.not(id: asset.id).exists?
         raise CollisionError, "\"#{asset.name}\" already exists at the destination."
       end
     end
 
-    own_folders.where("path = :p OR path LIKE :pre", p: from_path, pre: "#{from_path}/%").find_each do |folder|
+    own_folders.where("path = :p OR path LIKE :pre", p: from_path, pre: subtree_pattern(from_path)).find_each do |folder|
       new_path = relocate_value(folder.path, from_path, to_path)
       if own_folders.where(path: new_path).where.not(id: folder.id).exists?
         raise CollisionError, "A folder already exists at the destination."
@@ -218,5 +218,12 @@ class FolderService
     child_folders = own_folders.to_a.count { |f| f.parent_path == path }
     child_files = own_assets.where(folder: path).count
     child_folders + child_files
+  end
+
+  # Everything under a folder. Folder names are user input, so LIKE's own
+  # wildcards in them are literal: deleting `q1_2026` must not take `q1-2026/…`
+  # with it, and a folder named `%` must not match the whole scope.
+  def subtree_pattern(path)
+    "#{ActiveRecord::Base.sanitize_sql_like(path)}/%"
   end
 end

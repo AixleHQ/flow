@@ -19,12 +19,12 @@ class WorkflowResource < ApplicationResource
     workflow.runs.size
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :last_run_at do |workflow|
     workflow.runs.max_by(&:created_at)&.created_at
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :last_run_status do |workflow|
     workflow.runs.max_by(&:created_at)&.state
   end
@@ -34,7 +34,7 @@ class WorkflowResource < ApplicationResource
     workflow.runs.any? { |r| %w[running paused].include?(r.state) }
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :description_excerpt do |workflow|
     workflow.description&.truncate(100)
   end

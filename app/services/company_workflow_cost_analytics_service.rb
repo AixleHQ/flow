@@ -7,20 +7,6 @@
 # Bucketing and period filtering use workflow_runs.created_at (not terminal_sessions.created_at
 # like CompanySessionCostTokenUsageService) — intentional: workflow spend is attributed to run start.
 class CompanyWorkflowCostAnalyticsService
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
-
-  DATE_TRUNC_KEY = {
-    "7d"  => "day",
-    "30d" => "day",
-    "90d" => "week",
-    "1y"  => "month"
-  }.freeze
-
   TimeSeriesPoint = Struct.new(:date, :cost_cents, :total_tokens, keyword_init: true)
   Result = Struct.new(:time_series, keyword_init: true)
 
@@ -29,12 +15,11 @@ class CompanyWorkflowCostAnalyticsService
     @user    = user
     @scope   = scope.to_s
     @period  = period.to_s
-    @since   = PERIOD_DAYS.fetch(@period, 30).days.ago
+    @since   = AnalyticsPeriod.since(@period)
   end
 
   def call
-    trunc = DATE_TRUNC_KEY.fetch(period, "day")
-    trunc_sql = Arel.sql("DATE_TRUNC('#{trunc}', workflow_runs.created_at)")
+    trunc_sql = AnalyticsPeriod.date_trunc(period, WorkflowRun.arel_table[:created_at])
 
     points = base_runs
       .joins("LEFT JOIN step_runs ON step_runs.workflow_run_id = workflow_runs.id")

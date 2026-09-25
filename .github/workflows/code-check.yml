@@ -57,7 +57,7 @@ jobs:
     outputs:
       line-coverage: ${{ steps.line-coverage.outputs.percent }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Enable the containerd image store
         # `load: true` below is the single most expensive thing in this job, and
@@ -88,7 +88,7 @@ jobs:
           docker info --format '{{.DriverStatus}}'
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           # Pull docker.io base images through Google's mirror to avoid Docker
           # Hub's anonymous pull rate limit on CI runners (shared egress IPs).
@@ -108,7 +108,7 @@ jobs:
         # Read-only on purpose, no cache-to. Two check jobs writing one cache in
         # parallel cannot warm each other, and ci.yml's build-cache job already
         # owns the write.
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           load: true
@@ -185,7 +185,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ inputs.artifact-path != '' }}
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ inputs.artifact-name }}
           path: ${{ inputs.artifact-path }}

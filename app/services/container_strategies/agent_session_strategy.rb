@@ -5,13 +5,20 @@ module ContainerStrategies
   # Strategy for agent session containers with pre-loaded credentials.
   #
   # Session-specific:
-  #   - build_env_vars: credential/context env vars, AGENT_PROMPT for non-interactive
+  #   - build_env_vars: credential/context env vars (the prompt goes in PROMPT_PATH)
   #   - before_exec: loads credentials via SessionContextService
-  #   - exec: interactive → URLs; non-interactive → polls for completion
+  #   - exec: starts the agent in tmux and returns the terminal URLs (both modes)
   #   - before_cleanup: collects logs, outputs, usage
   #   - phase_config: non-interactive long timeout, interactive awaits signal
   #
   class AgentSessionStrategy < AgentBaseStrategy
+    # Where a non_interactive session's prompt waits for the CLI, readable by the
+    # agent's user only. An environment variable would be part of the pod spec, so
+    # anyone who can read the Kubernetes API would see the whole task, and every
+    # process in the container would inherit it — MCP servers, tools, whatever the
+    # agent runs.
+    PROMPT_PATH = "/tmp/.aixle-prompt"
+
     # Raised by an adapter's #credential_preflight when the credential written
     # to the container fails launch-time verification (see BaseAdapter).
     class ProvisioningError < StandardError
@@ -35,12 +42,6 @@ module ContainerStrategies
 
     def build_env_vars
       env_vars_list = super
-
-      session = TerminalSession.find(input[:session_id])
-
-      if session.mode == "non_interactive" && session.initial_prompt.present?
-        env_vars_list << "AGENT_PROMPT=#{session.initial_prompt}"
-      end
 
       if input[:credential]&.metadata.present?
         agent_service = AgentCredentialsService.for(input[:agent_type])
@@ -97,6 +98,8 @@ module ContainerStrategies
         raise_unresolved_credential!(session)
       end
 
+      # Read before anything reaches the container: an unreadable login stops here.
+      credential&.config_data
       refresh_expiring_credential!(credential, session)
       initial_write_error = nil
       begin
@@ -106,6 +109,13 @@ module ContainerStrategies
       end
       run_credential_preflight!(adapter, container, cid, initial_write_error: initial_write_error) if credential.present?
       {}
+    rescue Encryptable::DecryptionError => e
+      # The agent's own login is unreadable: signing in again stores a readable one.
+      # Anything else unreadable (an MCP server's values, a config item) fails as is.
+      raise unless credential && e.model == "AgentCredential" && e.record_id == credential.id
+
+      Rails.logger.error("[AgentSession] #{e.message}")
+      raise AgentCredential::PreflightError.new(credential, reason: :unreadable)
     end
 
     # == exec(container_id:, **) → { websocket_url:, ... } ==
@@ -259,16 +269,27 @@ module ContainerStrategies
     def launch_agent_in_tmux(container)
       session = TerminalSession.find(input[:session_id])
       agent_service = AgentCredentialsService.for(input[:agent_type])
-      cmd = agent_service.adapter.session_command(mode: session.mode, prompt: session.initial_prompt, model: resolve_model(session))
+      cmd = agent_service.adapter.session_command(mode: session.mode, model: resolve_model(session))
 
       tmux_cmd = if session.mode == "non_interactive" && session.initial_prompt.present?
-        "#{cmd} \"$AGENT_PROMPT\""
+        write_prompt!(container, agent_prompt(session), agent_service.adapter.container_uid)
+        "#{cmd} \"$(cat #{PROMPT_PATH})\""
       else
         cmd
       end
 
       send_tmux_command(container, tmux_cmd)
       Rails.logger.info("[AgentSession] Launched agent in tmux: #{cmd}")
+    end
+
+    def agent_prompt(session)
+      session.initial_prompt
+    end
+
+    def write_prompt!(container, prompt, uid)
+      return if runtime.write_file(container, PROMPT_PATH, prompt.to_s, mode: 0o600, uid: uid, gid: uid)
+
+      raise "Could not write the session's prompt into the container"
     end
 
     # Built once per cleanup: resolving the session's attached secrets decrypts
@@ -424,7 +445,8 @@ module ContainerStrategies
       # an already-revoked token or wipe a token block (e.g. designOauth) it never touched.
       credential.with_lock do
         current = credential.config_data
-        merged = adapter.merge_refreshed_credentials(current, config_data)
+        # Read out of the container, so rotations only (BaseAdapter#merge_container_credentials).
+        merged = adapter.merge_container_credentials(current, config_data)
         next if merged == current
 
         AgentCredential.from_artifacts(session.user_id, SessionCompany.company_id_for(session), input[:agent_type], merged)

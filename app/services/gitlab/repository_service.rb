@@ -32,12 +32,16 @@ module Gitlab
       []
     end
 
+    # One hook per repository row: a previous hook of ours on the project is
+    # replaced, since its secret is about to stop matching.
     def configure(repository)
       webhook_secret = SecureRandom.hex(32)
       repository.update!(webhook_secret: webhook_secret)
 
       client = token_service.client
       webhook_url = "#{Settings.protocol}://#{Settings.domain}/webhooks/gitlab"
+      client.project_hooks(repository.full_name).select { |h| h.url == webhook_url }
+            .each { |h| client.delete_project_hook(repository.full_name, h.id) }
       client.add_project_hook(
         repository.full_name,
         webhook_url,

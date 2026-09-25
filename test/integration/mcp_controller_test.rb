@@ -73,6 +73,41 @@ class McpControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  # A query string lands in ingress and proxy logs.
+  test "refuses a key sent as a query parameter" do
+    post "/action_mcp?session_key=#{@session.mcp_key}",
+         params: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }.to_json,
+         headers: { "Content-Type" => "application/json", "Accept" => "application/json, text/event-stream" }
+
+    assert_response :unauthorized
+  end
+
+  test "a key minted for one session does not open another" do
+    other = create(:terminal_session, :agent_session, :started, user: @user, project: @project)
+    forged = "#{other.id}.#{@session.mcp_key.split('.', 2).last}"
+
+    rpc("tools/list", key: forged)
+
+    assert_response :unauthorized
+  end
+
+  # Sessions launched before keys were derived hold a random key in their container.
+  test "a session launched with a stored random key still authenticates" do
+    @session.update_column(:mcp_key, "legacy-random-key")
+
+    rpc("tools/list", key: "legacy-random-key")
+
+    assert_response :success
+  end
+
+  test "an ended session's key is refused" do
+    @session.update_column(:state, "finished")
+
+    rpc("tools/list")
+
+    assert_response :unauthorized
+  end
+
   test "initialize negotiates and reports the server" do
     body = rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } })
 

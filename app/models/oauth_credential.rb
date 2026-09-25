@@ -5,11 +5,16 @@
 # service identity (today's config_item semantics); User = per-user identity.
 class OauthCredential < ApplicationRecord
   include Encryptable
+  include RefreshLease
   extend Enumerize
+
+  encryption_key :oauth_key
+  encrypted_column :encrypted_access_token, :encrypted_refresh_token
 
   belongs_to :owner, polymorphic: true
   belongs_to :oauth_client
   belongs_to :mcp_server, optional: true
+  belongs_to :connected_by, class_name: "User", optional: true
 
   enumerize :status, in: %i[pending active error revoked],
                      default: :pending, predicates: true, scope: true
@@ -43,24 +48,42 @@ class OauthCredential < ApplicationRecord
   # they leave this scope via with_status(:active), so the sweep does not loop on
   # them forever.
   scope :refresh_due, ->(within = 15.minutes) {
-    with_status(:active).where(expires_at: ..within.from_now)
+    with_status(:active).where(expires_at: ..within.from_now).with_authenticatable_owner
+  }
+  # A suspended or deleted account's grants are left to lapse rather than kept
+  # alive; restoring the account brings them back to the sweep.
+  scope :with_authenticatable_owner, -> {
+    where.not(owner_type: "User").or(where(owner_type: "User", owner_id: User.authenticatable.select(:id)))
   }
 
   # --- Encrypted accessors (Encryptable) ---
+  # Readers raise Encryptable::DecryptionError on a ciphertext the configured keys
+  # cannot open: an unreadable token is a credential that needs reconnecting, not
+  # one that silently holds nothing.
   def access_token=(val)
-    self.encrypted_access_token = val.present? ? encryptor.encrypt_and_sign(val) : nil
+    self.encrypted_access_token = val.present? ? encrypt_secret(val, column: "encrypted_access_token") : nil
   end
 
   def access_token
-    decrypt(encrypted_access_token)
+    decrypt_secret(encrypted_access_token, column: "encrypted_access_token")
   end
 
   def refresh_token=(val)
-    self.encrypted_refresh_token = val.present? ? encryptor.encrypt_and_sign(val) : nil
+    self.encrypted_refresh_token = val.present? ? encrypt_secret(val, column: "encrypted_refresh_token") : nil
   end
 
   def refresh_token
-    decrypt(encrypted_refresh_token)
+    decrypt_secret(encrypted_refresh_token, column: "encrypted_refresh_token")
+  end
+
+  # False when a stored token cannot be decrypted with the configured keys — the
+  # connection shows as needing a reconnect rather than failing the page.
+  def tokens_readable?
+    access_token
+    refresh_token
+    true
+  rescue Encryptable::DecryptionError
+    false
   end
 
   # --- Methods the TokenService and callback rely on (pinned; see §9) ---
@@ -79,12 +102,41 @@ class OauthCredential < ApplicationRecord
 
   # Callback (FLOW_ENGINE) upserts here after a code exchange. Idempotent on the
   # unique index; always lands status: :active. token_response keys are strings.
-  def self.upsert_from_token!(owner:, oauth_client:, provider:, token_response:, mcp_server: nil)
+  #
+  # `resource` is the MCP server URL the authorization was requested for (RFC
+  # 8707); the credential is only ever handed to that origin (#bound_to?).
+  def self.upsert_from_token!(owner:, oauth_client:, provider:, token_response:, mcp_server: nil, resource: nil,
+                              connected_by: nil)
     cred = find_or_initialize_by(
       owner: owner, oauth_client: oauth_client, provider: provider, mcp_server_id: mcp_server&.id
     )
+    cred.resource = resource.presence || mcp_server&.url
+    cred.connected_by = connected_by if connected_by
     cred.apply_token_response!(token_response)
     cred
+  end
+
+  # The credential a server uses for `owner`: the newest live one issued for the
+  # server's current origin. Every reader — token injection, the session-start
+  # preflight and refresh, the status badge — picks through here.
+  def self.current_for(server:, owner:)
+    return nil if owner.nil?
+
+    for_mcp_server(server).for_owner(owner).where.not(status: :revoked).order(updated_at: :desc)
+                          .detect { |cred| cred.bound_to?(server) }
+  end
+
+  # A token issued for one MCP origin is never sent to another: a server whose
+  # URL moved elsewhere has to be connected again. A credential with no recorded
+  # resource was written by code from before the binding, for the URL the server
+  # had then — the move itself would have deleted it — so it is bound now.
+  def bound_to?(server)
+    if resource.nil?
+      update_column(:resource, server.url) if persisted?
+      return true
+    end
+
+    MCPServer.origin_of(resource) == MCPServer.origin_of(server.url)
   end
 
   # Persist a token/refresh response (from exchange OR refresh). Never wipes an
@@ -128,22 +180,5 @@ class OauthCredential < ApplicationRecord
     return unless owner.is_a?(User) && owner.email.present?
 
     OauthMailer.refresh_failed(self).deliver_later
-  end
-
-  def decrypt(cipher)
-    return nil if cipher.blank?
-
-    encryptor.decrypt_and_verify(cipher)
-  # AES-GCM (this app's cipher) raises InvalidMessage on wrong-key/tampered
-  # ciphertext; InvalidSignature is the CBC/HMAC-era name. Rescue both so a
-  # rotated or corrupt key decrypts to nil instead of crashing (mirrors
-  # Integration#credentials_data).
-  rescue ActiveSupport::MessageVerifier::InvalidSignature,
-         ActiveSupport::MessageEncryptor::InvalidMessage
-    nil
-  end
-
-  def encryption_key_setting
-    Settings.encryption.oauth_key
   end
 end

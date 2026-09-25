@@ -1,6 +1,14 @@
 import { Head, router, usePage } from '@inertiajs/react';
 import { Alert, Anchor, Button, Group, Loader, Modal, Stack, Text, Textarea, TextInput } from '@mantine/core';
-import { IconAlertTriangle, IconDownload, IconFile, IconPlayerStop, IconUpload } from '@tabler/icons-react';
+import {
+  IconAlertTriangle,
+  IconDownload,
+  IconFile,
+  IconPlayerStop,
+  IconUpload,
+  IconWorld,
+  IconWorldOff,
+} from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -8,15 +16,19 @@ import type StepRun from 'types/generated/StepRun';
 import type WorkflowRun from 'types/generated/WorkflowRun';
 import type WorkflowRunAsset from 'types/generated/WorkflowRunAsset';
 
-import { apiFetch } from 'shared/lib/apiFetch';
+import { apiMutate } from 'shared/lib/apiFetch';
+import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
+import { stripContainerTicket } from 'shared/lib/terminalPageUrl';
 import {
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
+  shareApiV1ProjectWorkflowRunWorkflowRunAssetPath,
 } from 'shared/routes';
+import { ContainerFrame } from 'shared/ui/ContainerFrame';
 import { ConsoleFrame, DetailHeader, SessionCard, TabBar, type SessionCardData } from 'shared/ui/sessions';
 
 import { persistentProjectLayoutNoPadding, setPageLayout } from '../ProjectLayout';
@@ -84,8 +96,8 @@ function StepConsole({ step, label }: { step: StepRun; label: string }) {
               </Text>
             </div>
           )}
-          <iframe
-            key={step.terminalUrl}
+          <ContainerFrame
+            key={stripContainerTicket(step.terminalUrl)}
             src={step.terminalUrl}
             title="Terminal"
             allow="clipboard-read; clipboard-write"
@@ -116,6 +128,7 @@ const WorkflowRunShowPage = () => {
   const canControl = run.controllableByViewer;
   const notYoursNote = `Started by ${run.userName ?? 'someone else'} — only they or a company admin can control this run.`;
   const now = useElapsedTimer(isActive);
+  const canWrite = useCanWrite();
 
   const [tab, setTab] = useState<'sessions' | 'assets'>('sessions');
   const [skipStepId, setSkipStepId] = useState<number | null>(null);
@@ -155,8 +168,8 @@ const WorkflowRunShowPage = () => {
   const handleFinishSession = useCallback(async (sessionId: number) => {
     setActionLoading(true);
     try {
-      await apiFetch(finishApiV1TerminalSessionPath(sessionId), { method: 'POST' });
-      router.reload({ only: ['run'] });
+      if (await apiMutate(finishApiV1TerminalSessionPath(sessionId), { method: 'POST' }))
+        router.reload({ only: ['run'] });
     } finally {
       setActionLoading(false);
     }
@@ -169,18 +182,28 @@ const WorkflowRunShowPage = () => {
       const url = promoteOpen.assetId
         ? exportApiV1ProjectWorkflowRunWorkflowRunAssetPath(project.id, run.id, promoteOpen.assetId)
         : exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath(project.id, run.id);
-      await apiFetch(url, {
+      const exported = await apiMutate(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder: promoteFolder || null }),
       });
-      router.reload({ only: ['assets'] });
+      if (exported) router.reload({ only: ['assets'] });
     } finally {
       setPromoteLoading(false);
       setPromoteOpen(null);
       setPromoteFolder('');
     }
   }, [project.id, run.id, promoteOpen, promoteFolder]);
+
+  const handleUnshare = useCallback(
+    async (assetId: number) => {
+      const unshared = await apiMutate(shareApiV1ProjectWorkflowRunWorkflowRunAssetPath(project.id, run.id, assetId), {
+        method: 'DELETE',
+      });
+      if (unshared) router.reload({ only: ['assets'] });
+    },
+    [project.id, run.id],
+  );
 
   const stepIsInteractive = useCallback(
     (step: StepRun) => run.mode === 'interactive' || (run.mode === 'mixed' && !step.allowNonInteractive),
@@ -273,6 +296,29 @@ const WorkflowRunShowPage = () => {
               </div>
             </div>
             <div className={classes.assetActions}>
+              {asset.shareUrl && (
+                <Button
+                  size="xs"
+                  variant="default"
+                  component="a"
+                  href={asset.shareUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  leftSection={<IconWorld size={12} />}
+                >
+                  Public link
+                </Button>
+              )}
+              {asset.shareUrl && canWrite && (
+                <Button
+                  size="xs"
+                  variant="default"
+                  leftSection={<IconWorldOff size={12} />}
+                  onClick={() => void handleUnshare(asset.id)}
+                >
+                  Stop sharing
+                </Button>
+              )}
               {asset.downloadUrl && (
                 <Button
                   size="xs"

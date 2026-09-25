@@ -53,6 +53,12 @@ workflows:
       - name: asset_cleanup_dismissed_activity
         task_queue: aixle_ruby
 
+  - name: tool_result_cleanup_workflow
+    owner: aixle_ruby
+    activities:
+      - name: tool_results_cleanup_activity
+        task_queue: aixle_ruby
+
   - name: membership_invitation_reminder_workflow
     owner: aixle_ruby
     activities:

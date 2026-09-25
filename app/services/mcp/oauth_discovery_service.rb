@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "public_suffix"
+
 module MCP
   # Discovers an MCP server's OAuth 2.1 configuration and prepares a persisted
   # client for the authorize flow, per the MCP authorization spec:
@@ -41,11 +43,8 @@ module MCP
   #      body is read for an allowlisted RFC 7591 error code and nothing else.
   #   5. No secrets/metadata in logs. Discovered metadata may embed tokens/urls;
   #      exceptions carry only a host + status, never a body or a full url.
-  #   6. DNS pinning caveat (TOCTOU): errors_for resolves, then the HTTP client
-  #      resolves AGAIN. Where feasible the validated public IPv4 is pinned into
-  #      the request (UrlSafetyValidator.resolve_public_ipv4); the redirect cap +
-  #      per-hop re-validation are the always-present backstop when pinning is
-  #      unavailable.
+  #   6. DNS pinning (TOCTOU): every connection goes through SafeHttp, which
+  #      resolves the host once, vets every address, and dials the one it vetted.
   # =======================================================================
   class OauthDiscoveryService
     Result = Struct.new(:oauth_client, :resource, :scopes, keyword_init: true)
@@ -138,6 +137,8 @@ module MCP
       prm = first_usable_prm(prm_candidates(probe))
       raise NoAuthServerError, "no protected-resource metadata" if prm.nil?
 
+      ensure_resource_matches!(prm["resource"])
+
       servers = Array(prm["authorization_servers"]).map { |s| s.to_s.strip }.reject(&:blank?)
       raise NoAuthServerError, "protected-resource metadata lists no authorization_servers" if servers.empty?
 
@@ -226,6 +227,8 @@ module MCP
       meta = discover_metadata(issuer)
       raise NoAuthServerError, "no authorization-server metadata for issuer" if meta.nil?
 
+      ensure_issuer_matches!(issuer, meta["issuer"])
+
       endpoints = {
         issuer: issuer,
         authorization_endpoint: meta["authorization_endpoint"].to_s,
@@ -243,6 +246,7 @@ module MCP
       guard!(endpoints[:authorization_endpoint])
       guard!(endpoints[:token_endpoint])
       guard!(endpoints[:registration_endpoint]) if endpoints[:registration_endpoint].present?
+      ensure_consent_page_belongs!(issuer, endpoints[:authorization_endpoint])
 
       endpoints
     end
@@ -342,7 +346,8 @@ module MCP
         authorization_endpoint: asm[:authorization_endpoint],
         token_endpoint: asm[:token_endpoint],
         registration_endpoint: asm[:registration_endpoint],
-        scopes: @manual_client.scopes.presence || asm[:scopes]
+        scopes: @manual_client.scopes.presence || asm[:scopes],
+        metadata: @manual_client.metadata.to_h.merge("asm" => asm[:raw])
       )
       @manual_client
     end
@@ -357,7 +362,8 @@ module MCP
         authorization_endpoint: asm[:authorization_endpoint],
         token_endpoint: asm[:token_endpoint],
         registration_endpoint: asm[:registration_endpoint],
-        scopes: asm[:scopes]
+        scopes: asm[:scopes],
+        metadata: existing.metadata.to_h.merge("asm" => asm[:raw])
       )
       existing
     end
@@ -506,6 +512,61 @@ module MCP
       Rails.logger.warn("[MCP::OauthDiscovery] metadata cache write failed: #{e.class}")
     end
 
+    # ---- Metadata must describe the server it came from ------------------------
+
+    # RFC 9728 §3.3, as MCP clients apply it: the advertised resource shares the
+    # server's origin, and the server URL lies under its path. Absent is taken to
+    # mean the server URL itself.
+    def ensure_resource_matches!(resource)
+      return if resource.blank?
+
+      ours = URI.parse(@mcp_url)
+      theirs = URI.parse(resource.to_s)
+      covered = MCPServer.origin_of(@mcp_url) == MCPServer.origin_of(resource.to_s) &&
+                path_under?(ours.path, theirs.path)
+      raise MetadataMismatchError.new("protected resource does not cover the server url", code: "resource") unless covered
+    rescue URI::InvalidURIError
+      raise MetadataMismatchError.new("protected resource is not a url", code: "resource")
+    end
+
+    # RFC 8414 §3.3 / OIDC Discovery §4.3: the document names the issuer it was
+    # fetched for.
+    def ensure_issuer_matches!(issuer, advertised)
+      return if advertised.blank? || normalized_issuer(advertised) == normalized_issuer(issuer)
+
+      raise MetadataMismatchError.new("authorization-server metadata names another issuer", code: "issuer")
+    end
+
+    # The user consents on the issuer's own site, or the MCP server's (a server
+    # may host its own consent page in front of a hosted identity provider).
+    def ensure_consent_page_belongs!(issuer, authorization_endpoint)
+      site = registrable_domain(authorization_endpoint)
+      return if site && [ registrable_domain(issuer), registrable_domain(@mcp_url) ].include?(site)
+
+      raise MetadataMismatchError.new("authorization endpoint is on another site", code: "authorization_endpoint")
+    end
+
+    def path_under?(path, prefix)
+      mine = path.to_s.split("/").reject(&:empty?)
+      theirs = prefix.to_s.split("/").reject(&:empty?)
+      mine.first(theirs.size) == theirs
+    end
+
+    def normalized_issuer(value)
+      MCPServer.origin_of(value) + URI.parse(value.to_s).path.to_s.chomp("/")
+    rescue URI::InvalidURIError
+      value.to_s
+    end
+
+    def registrable_domain(url)
+      host = URI.parse(url.to_s).host.to_s.downcase
+      return nil if host.empty?
+
+      (!ip_literal?(host) && PublicSuffix.domain(host)) || host
+    rescue URI::InvalidURIError, PublicSuffix::Error
+      nil
+    end
+
     # ---- The one SSRF choke point ----------------------------------------------
     def guard!(url)
       errors = UrlSafetyValidator.errors_for(url, require_https: true)
@@ -566,32 +627,16 @@ module MCP
       raise
     rescue URI::InvalidURIError
       raise FetchError, "invalid url"
-    rescue SocketError, SystemCallError, Timeout::Error, OpenSSL::SSL::SSLError,
-           Net::OpenTimeout, Net::ReadTimeout, Net::ProtocolError, IOError, EOFError => e
+    rescue SocketError, SystemCallError, Timeout::Error, OpenSSL::SSL::SSLError, Net::ProtocolError, IOError => e
       raise FetchError, e.class.name
     end
 
+    # Connects to the address guard! vetted, not to a fresh lookup of the name
+    # (SafeHttp): a rebinding DNS answer cannot move the request between the two.
     def build_http(uri)
-      http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl = uri.scheme == "https"
-      http.open_timeout = TIMEOUT
-      http.read_timeout = TIMEOUT
-      pin_public_ip!(http, uri.host)
-      http
-    end
-
-    # Best-effort DNS pinning (SSRF doctrine rule 6). Pin the pre-validated public
-    # IPv4 so the HTTP client cannot re-resolve the hostname into private space
-    # between guard! and connect (TOCTOU). Never pins a literal IP host (nothing to
-    # re-resolve) and degrades to the hostname when no public IP is found — the
-    # redirect cap + per-hop re-guard remain the backstop.
-    def pin_public_ip!(http, host)
-      return if ip_literal?(host)
-
-      ip = UrlSafetyValidator.resolve_public_ipv4(host)
-      http.ipaddr = ip if ip.present?
-    rescue StandardError
-      nil
+      SafeHttp.http_for(uri, open_timeout: TIMEOUT, read_timeout: TIMEOUT)
+    rescue SafeHttp::UnsafeUrl => e
+      raise UnsafeUrlError, "unsafe url (host=#{log_host(uri.to_s)}): #{e.message}"
     end
 
     def build_request(uri, method, json, accept)

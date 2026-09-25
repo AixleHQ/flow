@@ -13,7 +13,6 @@ export const buildBoardTask = (overrides: Partial<BoardTask> = {}): BoardTask =>
   tags: null,
   createdAt: '2026-06-25T00:00:00Z',
   updatedAt: '2026-06-25T00:00:00Z',
-  // computed Alba attributes — emitted as `unknown` by Typelizer
   assigneeName: 'Ada',
   archived: false,
   commentsCount: 3,

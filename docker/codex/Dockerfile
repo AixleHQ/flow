@@ -50,7 +50,7 @@ RUN chmod +x /app/entrypoint.sh
 # =============================================================================
 # Final setup
 # =============================================================================
-RUN chown -R codex:codex /workspace /opt/watcher /home/codex
+RUN chown -R codex:codex /workspace /home/codex
 
 WORKDIR /workspace
 ENV HOME=/home/codex \

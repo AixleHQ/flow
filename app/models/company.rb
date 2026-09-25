@@ -22,14 +22,24 @@ class Company < ApplicationRecord
   has_many :assets, as: :scope, dependent: :destroy
   has_many :folders, as: :scope, dependent: :destroy
   has_many :integrations, dependent: :destroy
+  has_many :oauth_credentials, as: :owner, dependent: :destroy
+  # After :integrations — an installation refuses to go while integrations use it.
+  has_many :azure_devops_installations, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   # Workflows are owned by projects (company-level workflows were removed).
   # A company's workflows are the aggregate of its projects' workflows.
   # Cascade on destroy is handled by projects' own `dependent: :destroy`.
   has_many :workflows, through: :projects
-  # Sessions belong to the company through its PROJECTS (not through users —
-  # a multi-company user's sessions in another company must never leak in).
-  has_many :terminal_sessions, through: :projects
+  # Every session records the company it acts for (project-less logins
+  # included). After :projects, whose destroy detaches their sessions.
+  has_many :terminal_sessions, dependent: :destroy
+  has_many :agent_credentials, dependent: :destroy
+  has_many :trigger_events, dependent: :destroy
+
+  # A session whose runtime is still being torn down holds a reservation, and
+  # destroying it would free a slot that is not free (TerminalSession refuses).
+  # Refused up front, with a reason, instead of failing halfway on a foreign key.
+  before_destroy :refuse_while_runtimes_remain, prepend: true
 
   # Virtual attributes for initial admin creation (used in admin form)
   attr_accessor :initial_admin_email, :initial_admin_password
@@ -66,6 +76,13 @@ class Company < ApplicationRecord
   def session_concurrency_limit=(value)
     @session_concurrency_limit = value.to_s.strip.presence
     @session_concurrency_limit_assigned = true
+  end
+
+  def refuse_while_runtimes_remain
+    return unless SessionAdmission.unreleased.joins(:terminal_session).where(terminal_sessions: { company_id: id }).exists?
+
+    errors.add(:base, "This company still has sessions whose runtime is being cleaned up; stop them and try again")
+    throw :abort
   end
 
   # White label / branding helpers

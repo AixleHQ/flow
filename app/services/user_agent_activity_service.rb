@@ -3,9 +3,6 @@
 # Per-user agent-type breakdown. Mirrors CompanyAgentActivityService (joins
 # usage_statistics for cost/tokens) but keys off a target user's sessions.
 class UserAgentActivityService
-  PERIOD_DAYS = { "7d" => 7, "30d" => 30, "90d" => 90, "1y" => 365 }.freeze
-  USAGE_SESSION_TYPES = %w[agent_session workflow_step].freeze
-
   AgentBreakdown = Struct.new(:agent_type, :sessions, :cost_cents, :tokens, keyword_init: true)
 
   Result = Struct.new(:sessions_by_agent, keyword_init: true)
@@ -14,7 +11,7 @@ class UserAgentActivityService
     @user       = user
     @company    = company
     @period     = period.to_s
-    @since      = PERIOD_DAYS.fetch(@period, 30).days.ago
+    @since      = AnalyticsPeriod.since(@period)
     @project_id = project_id.presence
   end
 
@@ -48,7 +45,7 @@ class UserAgentActivityService
     scope = user.terminal_sessions
                 .joins(:project)
                 .where(projects: { company_id: company.id })
-                .where(created_at: since.., session_type: USAGE_SESSION_TYPES)
+                .where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
     project_id ? scope.where(project_id:) : scope
   end
 end

@@ -2,9 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { CatalogSkill } from '@/types/generated';
 import { act, renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
-import { SkillsCatalogModal, type CatalogSkill } from './SkillsCatalogModal';
+import { SkillsCatalogModal } from './SkillsCatalogModal';
 
 function makeCatalogSkill(overrides: Partial<CatalogSkill> = {}): CatalogSkill {
   return {
@@ -21,6 +22,8 @@ function makeCatalogSkill(overrides: Partial<CatalogSkill> = {}): CatalogSkill {
     registryUrl: 'https://skills.sh/anthropics/skills/pdf',
     auditRisk: null,
     auditProviders: [],
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }
@@ -122,8 +125,8 @@ describe('SkillsCatalogModal — audit badges', () => {
           makeCatalogSkill({
             auditRisk: 'high',
             auditProviders: [
-              { provider: 'snyk', risk: 'high', score: null, alerts: null, analyzed_at: '2026-02-17T22:15:27Z' },
-              { provider: 'socket', risk: 'safe', score: 90, alerts: 0, analyzed_at: '2026-03-18T16:47:53Z' },
+              { provider: 'snyk', risk: 'high', score: null, alerts: null, analyzedAt: '2026-02-17T22:15:27Z' },
+              { provider: 'socket', risk: 'safe', score: 90, alerts: 0, analyzedAt: '2026-03-18T16:47:53Z' },
             ],
           }),
         ]}
@@ -142,7 +145,7 @@ describe('SkillsCatalogModal — audit badges', () => {
           makeCatalogSkill({
             auditRisk: 'safe',
             auditProviders: [
-              { provider: 'socket', risk: 'safe', score: 90, alerts: 0, analyzed_at: '2026-03-18T16:47:53Z' },
+              { provider: 'socket', risk: 'safe', score: 90, alerts: 0, analyzedAt: '2026-03-18T16:47:53Z' },
             ],
           }),
         ]}
@@ -210,7 +213,7 @@ describe('SkillsCatalogModal — flagged installs', () => {
     makeCatalogSkill({
       auditRisk: 'critical',
       auditProviders: [
-        { provider: 'snyk', risk: 'critical', score: null, alerts: null, analyzed_at: '2026-02-17T22:15:27Z' },
+        { provider: 'snyk', risk: 'critical', score: null, alerts: null, analyzedAt: '2026-02-17T22:15:27Z' },
       ],
     });
 
@@ -242,9 +245,10 @@ describe('SkillsCatalogModal — flagged installs', () => {
     await userEvent.click(screen.getByRole('button', { name: /^install$/i }));
     await userEvent.click(screen.getByRole('button', { name: 'Install anyway' }));
 
+    // The server refuses a flagged install that does not say the audit was seen.
     expect(router.post).toHaveBeenCalledWith(
       '/company/projects/1/skills',
-      { skillId: 'anthropics/skills/pdf' },
+      { skillId: 'anthropics/skills/pdf', acknowledgeRisk: true },
       expect.objectContaining({ preserveScroll: true }),
     );
   });
@@ -264,7 +268,7 @@ describe('SkillsCatalogModal — flagged installs', () => {
   it('installs a safe-rated skill without a confirmation step', async () => {
     const safe = makeCatalogSkill({
       auditRisk: 'safe',
-      auditProviders: [{ provider: 'socket', risk: 'safe', score: 90, alerts: 0, analyzed_at: null }],
+      auditProviders: [{ provider: 'socket', risk: 'safe', score: 90, alerts: 0, analyzedAt: null }],
     });
     renderPage(<SkillsCatalogModal {...baseProps} catalogSkills={[safe]} query="pdf" />);
 

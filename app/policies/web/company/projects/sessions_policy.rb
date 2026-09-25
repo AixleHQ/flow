@@ -6,6 +6,7 @@ module Web
       class SessionsPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
         def show? = project_accessible?
+        def rows? = project_accessible?
         def new? = project_writable?
       end
     end

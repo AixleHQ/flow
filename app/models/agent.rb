@@ -10,6 +10,7 @@ class Agent < ApplicationRecord
 
   # Polymorphic scope (Project only)
   belongs_to :scope, polymorphic: true
+  include TenantColumns
 
   # Source: custom (created in UI) or bmad_import (imported from BMAD files)
   enumerize :source, in: %i[custom bmad_import], default: :custom, predicates: true

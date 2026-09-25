@@ -21,8 +21,11 @@ module Coder
       @token       = Coder::TokenService.new(integration)
     end
 
-    def list(prefix: nil)
-      workspaces = Coder::Api.list_workspaces(coder_url: coder_url, session_token: session_token)
+    # `own: true` lists only workspaces the integration's token owns — never the
+    # personal workspaces an admin token can also see.
+    def list(prefix: nil, own: false)
+      workspaces = Coder::Api.list_workspaces(coder_url: coder_url, session_token: session_token,
+                                              query: own ? "owner:me" : nil)
       workspaces = workspaces.select { |w| w["name"].to_s.start_with?(prefix) } if prefix.present?
       workspaces
     rescue Coder::Api::ApiError => e

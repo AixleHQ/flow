@@ -54,6 +54,12 @@ describe('Docs/components/DocsMdxContent', () => {
     expect(screen.queryByText(/tip Remember/)).not.toBeInTheDocument();
   });
 
+  it('keeps the callout type through sanitizing, so a warning renders as a warning', () => {
+    renderPage(<DocsMdxContent content={'> **warning** Rotating the key logs everyone out.'} />);
+
+    expect(screen.getByRole('note', { name: 'Warning' })).toHaveTextContent('Rotating the key logs everyone out.');
+  });
+
   it('renders GFM tables and lists from markdown', () => {
     renderPage(
       <DocsMdxContent

@@ -2,11 +2,12 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { Connector } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import McpServersPage from 'pages/Projects/McpServers/McpServersPage';
 
-import type { Connector, ConnectorInput, ConnectorTarget } from './types';
+import type { ConnectorInput, ConnectorTarget } from './types';
 
 // Exercised through the MCP servers page, because that is where the catalog
 // lives: a connector is a pre-described MCP server, not a separate resource.

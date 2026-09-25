@@ -76,7 +76,7 @@ class SessionService
     # would put a token round-trip in front of each container step.
     def revalidate_admission!(session, refresh_tokens: false)
       SessionAdmissionService.ensure_run_active!(session)
-      raise SessionAdmissionService::Stopped, "User account unavailable" if session.user.deleted_at || !session.user.active?
+      raise SessionAdmissionService::Stopped, "User account unavailable" unless session.user&.authenticatable?
       if session.project && !session.project.accessible_by?(session.user)
         raise SessionAdmissionService::Stopped, "Project access revoked"
       end
@@ -131,10 +131,7 @@ class SessionService
     # accumulated state, not from the row.
     def fail_session(session:, error_message: nil)
       session.update!(error_message: error_message) if error_message.present?
-      # Marking the row failed frees nothing: the reservation is only released
-      # once the runtime is confirmed gone (AD-6). Cancelling is what starts
-      # that, for a queued session and an admitted one alike.
-      return cancel(session: session) if unreleased_admission?(session)
+      return fail_admitted_session(session) if unreleased_admission?(session)
 
       stop_admission_operations(session)
       session.fail! if session.may_fail?
@@ -211,6 +208,22 @@ class SessionService
       admission.present? && admission.released_at.nil?
     end
 
+    # Marking the row failed frees nothing: the reservation is only released once
+    # the runtime is confirmed gone (AD-6), and cancelling the session's container
+    # workflow is what starts that. The verdict is `failed`, not `cancelled`: a
+    # cancelled step session cancels its whole run (WorkflowExecutionWorkflowV2),
+    # which would skip on_failure, quota classification and the Slack failure notice.
+    def fail_admitted_session(session)
+      SessionAdmissionService.cancel!(session, outcome: "failed")
+      TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission.reload.released_at
+      # #cancel! fails the session under the writer lock, and #fail! wakes the parent
+      # run only after that commits. This covers a session that had already ended,
+      # which #cancel! leaves alone; the signal just sets a decision flag, so a
+      # second one changes nothing.
+      WorkflowService.notify_container_finished(step_run: session.step_run) if session.step_run
+      session
+    end
+
     # Granting is cheap and must happen now so the caller sees a real queue
     # position. Dispatching is not: it costs a preflight and a Temporal RPC per
     # session, so this hands off only THIS session and leaves the rest of the
@@ -261,15 +274,14 @@ class SessionService
         owner = server.credential_scope_per_user? ? user : server.scope
         next if owner.nil?
 
-        cred = OauthCredential.for_mcp_server(server).for_owner(owner)
-                              .where.not(status: :revoked).order(updated_at: :desc).first
+        cred = OauthCredential.current_for(server: server, owner: owner)
         next if cred.nil?
 
         Oauth::TokenService.refresh_if_expiring_soon(cred)
         cred.reload
         if cred.error?
           raise Oauth::PreflightError, [ { mcp_server_id: server.id, name: server.name, reason: :credential_error,
-                                           connect_url: "/oauth/mcp/#{server.id}/connect" } ]
+                                           connect_url: "/oauth/mcp/#{server.id}/connect", connect_method: "post" } ]
         end
       end
     end
@@ -382,20 +394,19 @@ class SessionService
         owner = server.credential_scope_per_user? ? session.user : server.scope
         next if owner.nil?
 
-        cred = OauthCredential.for_mcp_server(server).for_owner(owner)
-                              .where.not(status: :revoked).order(updated_at: :desc).first
+        cred = OauthCredential.current_for(server: server, owner: owner)
         next if cred.nil?
 
         if cred.error?
           raise Oauth::PreflightError, [ { mcp_server_id: server.id, name: server.name, reason: :credential_error,
-                                           connect_url: "/oauth/mcp/#{server.id}/connect" } ]
+                                           connect_url: "/oauth/mcp/#{server.id}/connect", connect_method: "post" } ]
         end
 
         Oauth::TokenService.refresh_if_expiring_soon(cred)
         cred.reload
         if cred.error?
           raise Oauth::PreflightError, [ { mcp_server_id: server.id, name: server.name, reason: :credential_error,
-                                           connect_url: "/oauth/mcp/#{server.id}/connect" } ]
+                                           connect_url: "/oauth/mcp/#{server.id}/connect", connect_method: "post" } ]
         end
       end
     end

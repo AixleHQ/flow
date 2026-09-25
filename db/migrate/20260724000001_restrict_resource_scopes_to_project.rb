@@ -43,11 +43,22 @@ class RestrictResourceScopesToProject < ActiveRecord::Migration[8.0]
       execute("DELETE FROM repositories WHERE scope_type = 'Company'")
     end
 
-    # --- Custom (db-source) tools: company scope removed. Destroy via the model
-    # so tool_files / tool_results (both RESTRICT FKs) are torn down; session_tools
-    # cascade at the DB. Code/platform tool rows (scope-less) are untouched. ---
+    # Tools and workflows are deleted in SQL, children first, following the foreign
+    # keys as they stood on this date — not through the models, whose callbacks and
+    # associations are today's and would run against this date's schema (and reach
+    # Temporal and object storage from inside a migration). What the callbacks did
+    # besides deleting rows is left behind on purpose: stored files stay in object
+    # storage, and the Temporal schedules of deleted schedule bindings are pruned by
+    # ScheduleReconciler.reconcile_all on the next worker boot.
+
+    # --- Custom (db-source) tools: company scope removed. tool_files / tool_results
+    # are RESTRICT FKs; session_tools cascade at the DB. Code/platform tool rows
+    # (scope-less) are untouched. ---
     say_with_time "Removing company-scoped custom tools" do
-      Tool.where(source: "db", scope_type: "Company").find_each(&:destroy!)
+      tools = "SELECT id FROM tools WHERE source = 'db' AND scope_type = 'Company'"
+      execute("DELETE FROM tool_files WHERE tool_id IN (#{tools})")
+      execute("DELETE FROM tool_results WHERE tool_id IN (#{tools})")
+      execute("DELETE FROM tools WHERE id IN (#{tools})")
     end
 
     # --- Agents: company AND system scope removed (steps.agent_id and
@@ -57,17 +68,28 @@ class RestrictResourceScopesToProject < ActiveRecord::Migration[8.0]
     end
 
     # --- Workflows: company scope removed (System "Aixle Builder" stays) ---
-    # Use the model so the full dependent chain (steps, sub-steps, runs, step
-    # runs, run assets, trigger bindings) is torn down correctly. column_
-    # transitions -> workflow_runs is RESTRICT with no dependent, so null it
-    # first; column_workflow_bindings -> workflows is also RESTRICT.
+    # RESTRICT: column_workflow_bindings, steps, workflow_runs -> workflows;
+    # sub_steps, step_runs -> steps; step_runs, workflow_run_assets,
+    # column_transitions (kept, unlinked) -> workflow_runs; sub_step_runs ->
+    # step_runs and sub_steps. trigger_bindings cascade; trigger_dispatches,
+    # tool_results and produced run assets are nullified by the DB.
     say_with_time "Removing company-scoped workflows" do
-      Workflow.where(scope_type: "Company").find_each do |workflow|
-        run_ids = workflow.runs.ids
-        ColumnTransition.where(workflow_run_id: run_ids).update_all(workflow_run_id: nil) if run_ids.any?
-        ColumnWorkflowBinding.where(workflow_id: workflow.id).delete_all
-        workflow.destroy!
-      end
+      workflows = "SELECT id FROM workflows WHERE scope_type = 'Company'"
+      runs = "SELECT id FROM workflow_runs WHERE workflow_id IN (#{workflows})"
+      steps = "SELECT id FROM steps WHERE workflow_id IN (#{workflows})"
+      step_runs = "SELECT id FROM step_runs WHERE step_id IN (#{steps}) OR workflow_run_id IN (#{runs})"
+      execute("DELETE FROM column_workflow_bindings WHERE workflow_id IN (#{workflows})")
+      execute("UPDATE column_transitions SET workflow_run_id = NULL WHERE workflow_run_id IN (#{runs})")
+      execute(<<~SQL.squish)
+        DELETE FROM sub_step_runs
+        WHERE step_run_id IN (#{step_runs}) OR sub_step_id IN (SELECT id FROM sub_steps WHERE step_id IN (#{steps}))
+      SQL
+      execute("DELETE FROM workflow_run_assets WHERE workflow_run_id IN (#{runs})")
+      execute("DELETE FROM step_runs WHERE id IN (#{step_runs})")
+      execute("DELETE FROM sub_steps WHERE step_id IN (#{steps})")
+      execute("DELETE FROM steps WHERE id IN (#{steps})")
+      execute("DELETE FROM workflow_runs WHERE id IN (#{runs})")
+      execute("DELETE FROM workflows WHERE id IN (#{workflows})")
     end
   end
 

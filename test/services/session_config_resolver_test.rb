@@ -257,11 +257,12 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "workflow session returns input_asset_ids from workflow_run" do
-    session = build_workflow_session(run_input_asset_ids: [ 100, 101 ])
+    run_a, run_b = project_assets(2)
+    session = build_workflow_session(run_input_asset_ids: [ run_a, run_b ])
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 100, 101 ], result[:input_asset_ids]
+    assert_equal [ run_a, run_b ], result[:input_asset_ids]
   end
 
   # === Story 29.2: Additive Resource Resolution ===
@@ -426,6 +427,19 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     assert_equal [ step_item.id ], SessionConfigResolver.resolve(session)[:config_item_ids]
   end
 
+  test "an attached MCP server attaches the config items its values reference" do
+    referenced = create(:config_item, :secret, scope: @project, name: "SERVER_TOKEN")
+    create(:config_item, :secret, scope: @project, name: "NOT_REFERENCED")
+    server = create(:mcp_server, scope: @project, headers: { "Authorization" => "Bearer config_item:SERVER_TOKEN" })
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, mcp_servers: [ server ])
+
+    resolver = SessionConfigResolver.new(session)
+
+    assert_equal [ referenced.id ], resolver.resolve_config_item_ids
+    assert_equal [ referenced.id ], SessionConfigResolver.resolve_with_breakdown(session)[:config_items][:from_mcp_servers]
+    assert_includes Sessions::SecretRedactor.secret_values_for(session), referenced.decrypted_value
+  end
+
   test "config item breakdown records which level supplied each item" do
     base = create(:config_item, scope: @project, name: "BASE_KEY")
     step_item = create(:config_item, scope: @project, name: "STEP_KEY")
@@ -503,39 +517,42 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   # === Story 29.4: Input Assets Resolution with Board Task Assets ===
 
   test "workflow session merges base + run assets for board_triggered" do
+    base, run = project_assets(2)
     session = build_board_triggered_session(
-      workflow_config: { "base_asset_ids" => [ 100 ] },
-      run_input_asset_ids: [ 101 ]
+      workflow_config: { "base_asset_ids" => [ base ] },
+      run_input_asset_ids: [ run ]
     )
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_includes result[:input_asset_ids], 100
-    assert_includes result[:input_asset_ids], 101
+    assert_includes result[:input_asset_ids], base
+    assert_includes result[:input_asset_ids], run
     assert_equal :board_triggered, result[:session_type]
   end
 
   test "workflow session without board_task returns base + run assets" do
+    base, run = project_assets(2)
     session = build_workflow_session(
-      workflow_config: { "base_asset_ids" => [ 100 ] },
-      run_input_asset_ids: [ 101 ]
+      workflow_config: { "base_asset_ids" => [ base ] },
+      run_input_asset_ids: [ run ]
     )
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 100, 101 ], result[:input_asset_ids]
+    assert_equal [ base, run ], result[:input_asset_ids]
   end
 
   test "workflow session merges base + step + run assets" do
+    base, step, run = project_assets(3)
     session = build_workflow_session(
-      workflow_config: { "base_asset_ids" => [ 100 ] },
-      step_asset_ids: [ 200 ],
-      run_input_asset_ids: [ 101 ]
+      workflow_config: { "base_asset_ids" => [ base ] },
+      step_asset_ids: [ step ],
+      run_input_asset_ids: [ run ]
     )
 
     result = SessionConfigResolver.resolve(session)
 
-    assert_equal [ 100, 200, 101 ], result[:input_asset_ids]
+    assert_equal [ base, step, run ], result[:input_asset_ids]
   end
 
   test "workflow session deduplicates assets shared across base and step" do
@@ -592,18 +609,19 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
   end
 
   test "resolve_with_breakdown returns input_asset breakdown" do
+    base, step, run = project_assets(3)
     session = build_workflow_session(
-      workflow_config: { "base_asset_ids" => [ 100 ] },
-      step_asset_ids: [ 200 ],
-      run_input_asset_ids: [ 101 ]
+      workflow_config: { "base_asset_ids" => [ base ] },
+      step_asset_ids: [ step ],
+      run_input_asset_ids: [ run ]
     )
 
     result = SessionConfigResolver.resolve_with_breakdown(session)
 
-    assert_equal [ 100 ], result[:input_assets][:from_workflow_base]
-    assert_equal [ 200 ], result[:input_assets][:from_step]
-    assert_equal [ 101 ], result[:input_assets][:from_run_user]
-    assert_equal [ 100, 200, 101 ], result[:input_assets][:resolved]
+    assert_equal [ base ], result[:input_assets][:from_workflow_base]
+    assert_equal [ step ], result[:input_assets][:from_step]
+    assert_equal [ run ], result[:input_assets][:from_run_user]
+    assert_equal [ base, step, run ], result[:input_assets][:resolved]
   end
 
   test "resolve_with_breakdown returns repository project fallback for board_triggered sessions" do
@@ -742,6 +760,10 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
 
   private
 
+  def project_assets(count)
+    Array.new(count) { create(:asset, scope: @project).id }
+  end
+
   def build_workflow_session(step_tool_ids: [], step_skill_ids: [], step_mcp_server_ids: [],
                              step_asset_ids: [],
                              agent_runtime: "claude_code", step_agent: nil,
@@ -769,7 +791,7 @@ class SessionConfigResolverTest < ActiveSupport::TestCase
     session = create(:terminal_session, user: @user, project: @project,
       session_type: "workflow_step", agent_type: agent_runtime || "claude_code")
 
-    step_run = create(:step_run, workflow_run: workflow_run, step: step, terminal_session: session)
+    create(:step_run, workflow_run: workflow_run, step: step, terminal_session: session)
     session.reload
 
     session

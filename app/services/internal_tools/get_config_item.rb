@@ -60,7 +60,7 @@ module InternalTools
       item = available_items.find { |ci| ci.name == requested }
       return error(unavailable_message(requested)) if item.nil?
 
-      value = item.decrypted_value
+      value = readable_value(item)
       return error(undecryptable_message(item)) if value.nil?
       return error(oversized_message(item, value)) if value.bytesize > MAX_VALUE_BYTES
 
@@ -95,7 +95,7 @@ module InternalTools
     def available_items
       @available_items ||= begin
         ids = SessionConfigResolver.new(session).resolve_config_item_ids
-        ids.present? ? ConfigItem.where(id: ids).to_a : []
+        ids.present? ? TenantScope.owned(ConfigItem, project: session.project).where(id: ids).to_a : []
       end
     end
 
@@ -124,6 +124,13 @@ module InternalTools
     # decrypted with the current key (a rotation that never got its recrypt).
     # Returning "" here would read as a legitimately empty secret and send the
     # agent off to debug the wrong system.
+    def readable_value(item)
+      item.decrypted_value
+    rescue Encryptable::DecryptionError => e
+      Rails.logger.error("[GetConfigItem] #{e.message}")
+      nil
+    end
+
     def undecryptable_message(item)
       "Config item #{item.name} could not be decrypted — its stored value does not match the " \
         "current encryption key. Re-enter the value in the project's Secrets & Variables page."

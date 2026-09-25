@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import { buildSharedPermissions } from 'test/factories/sharedProps';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import IndexPage from './IndexPage';
@@ -72,6 +73,19 @@ describe('Company/WorkflowCatalog/IndexPage', () => {
     expect(within(dialog).getByText('Duplicate to project')).toBeInTheDocument();
     // The confirm button is disabled until a project is selected.
     expect(within(dialog).getByRole('button', { name: 'Duplicate' })).toBeDisabled();
+  });
+
+  it('offers a viewer the catalog to read but nothing to copy', () => {
+    renderAuthedPage(<IndexPage />, {
+      props: {
+        workflows: [workflow({ id: 5, name: 'Onboarding Flow' })],
+        projectOptions: [{ id: 9, name: 'Mercury' }],
+        permissions: buildSharedPermissions({ isAdmin: false, canWrite: false }),
+      },
+    });
+
+    expect(screen.getByText('Onboarding Flow')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Duplicate to project' })).not.toBeInTheDocument();
   });
 
   it('does not post a duplicate while no project is selected', async () => {

@@ -34,7 +34,7 @@ It is the only open platform we know of that combines:
 
 - A **board** with column → workflow bindings (drop a card, trigger a run)
 - A **DAG workflow engine** with retries, approval gates, and parallel steps
-- **Container-isolated** agent execution (Claude Code, Cursor CLI, Codex, Gemini CLI, Grok CLI)
+- **Container-isolated** agent execution (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok CLI, Kiro CLI)
 - **MCP-native** tool integration
 - **Per-session cost tracking** in tokens and cents
 - **Temporal** under the hood for durable, long-running runs
@@ -86,8 +86,9 @@ contributing.
 
 - **Backend** — Ruby on Rails 8, PostgreSQL, Redis, Temporal
 - **Frontend** — React 19, Inertia.js, Mantine 9, Vite, TypeScript
-- **Agents** — Claude Code, Cursor CLI, OpenAI Codex CLI, Gemini CLI, xAI Grok CLI
-  (each runs in its own Docker container)
+- **Agents** — Claude Code, Cursor CLI, OpenAI Codex CLI, Gemini CLI, Antigravity CLI,
+  xAI Grok CLI, Kiro CLI (each runs in its own container — Docker locally, Kubernetes in
+  production)
 - **Protocols** — MCP for tools, ActionCable for live updates
 - **Dev environment** — Docker Compose, one Makefile
 
@@ -122,7 +123,7 @@ We welcome PRs, issues, and discussion.
 1. Read [CONTRIBUTING.md](CONTRIBUTING.md).
 2. Pick up a [`good first issue`][gfi] or open a discussion before
    starting on something larger.
-3. Run `make check` before opening a PR.
+3. Run `docker compose exec -T web make check_all` before opening a PR.
 
 ## License
 

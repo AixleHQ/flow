@@ -1,22 +1,27 @@
 # Temporal Schedules Configuration
-# Replaces Sidekiq-cron schedules
 
 schedules:
   - workflow: stale_session_cleanup_workflow
     cron: "0 * * * *"
     enabled: true
 
-  # Reaps WorkflowRun rows that have been running/paused beyond the stale threshold
-  # (4 hours). These accumulate when the WorkflowExecutionWorkflow process crashes
-  # without sending a final status update, leaving the run permanently active and
-  # holding pod quota. Hourly is sufficient: quota is released within one sweep window.
+  # Settles WorkflowRun rows still running/paused after their Temporal execution
+  # closed or disappeared without writing a final status — they hold pod quota and
+  # read as live. Each sweep is one describe per candidate run, so it runs often.
   - workflow: stale_run_cleanup_workflow
-    cron: "30 * * * *"
+    cron: "*/15 * * * *"
     enabled: true
 
   - workflow: dismissed_asset_cleanup_workflow
     cron: "0 3 * * *"
     enabled: true
+
+  # Expires tool output past TOOL_RESULTS_RETENTION_DAYS and fails results stuck
+  # in processing. Hourly so a stuck result is settled within two hours.
+  - workflow: tool_result_cleanup_workflow
+    cron: "17 * * * *"
+    enabled: true
+    overlap: skip
 
   - workflow: quota_error_scan_workflow
     cron: "* * * * *"

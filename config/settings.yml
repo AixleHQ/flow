@@ -41,11 +41,19 @@ app:
   # Empty counts as unset: the Dockerfile declares APP_VERSION as an ENV, so an
   # image built without the build arg carries it as "" rather than not at all.
   version: <%= app_version %>
+  # Host header allowlist for deployed environments, comma-separated. Empty leaves
+  # host authorization off: the app answers on more names than DOMAIN (a webhook
+  # host, the in-cluster service names agent containers and Traefik's ForwardAuth
+  # dial), and only the deployment knows them all.
+  allowed_hosts: <%= ENV['ALLOWED_HOSTS'].to_s.split(',').map(&:strip).reject(&:empty?).to_json %>
 
 sentry:
   rails_dsn: <%= ENV['SENTRY_RAILS_DSN'] %>
   frontend_dsn: <%= ENV['SENTRY_FRONTEND_DSN'] %>
   temporal_dsn: <%= ENV['SENTRY_TEMPORAL_DSN'] %>
+  # Share of requests traced (the OTLP ingest route is never traced). 1.0 keeps
+  # the long-standing behaviour; lower it to cut volume.
+  traces_sample_rate: <%= ENV['SENTRY_TRACES_SAMPLE_RATE'] || 1.0 %>
 
 database:
   name: <%= ENV['DB_NAME'] %>
@@ -76,13 +84,17 @@ mailer:
 redis:
   url: <%= ENV['REDIS_URL'] || 'redis://redis:6379/1'%>
 
+# /api-docs Basic auth outside development; with either unset, nobody gets in.
 docs:
-  login: <%= ENV['DOCS_LOGIN'] || 'user' %>
+  login: <%= ENV['DOCS_LOGIN'] %>
   password: <%= ENV['DOCS_PASSWORD'] %>
 
 admin:
   password: <%= ENV['ADMIN_PASSWORD'] %>
-  email: <%= ENV['SUPER_ADMIN_EMAIL'] || "admin@aixle.com" %>
+  # Seeded super admin (development and test only). A reserved example.com
+  # address: the old default was a real mailbox, and Google sign-in binds an
+  # account by email — whoever owned it would have signed in as super admin.
+  email: <%= ENV['SUPER_ADMIN_EMAIL'] || "admin@example.com" %>
 
 aws:
   access_key_id:     <%= ENV['AWS_ACCESS_KEY_ID']%>
@@ -135,6 +147,18 @@ temporal:
   # feeds it where a deployment sets one value for the whole image.
   worker_max_threads: <%= (ENV['TEMPORAL_WORKER_MAX_THREADS'] || ENV['RAILS_MAX_THREADS'] || 5).to_i %>
 
+# Signed-in browser sessions (UserSession): ended after this many hours unused,
+# and after this many in all, whatever the use.
+auth:
+  session_idle_timeout_hours: <%= ENV.fetch('SESSION_IDLE_TIMEOUT_HOURS', 336).to_i %>
+  session_max_age_hours: <%= ENV.fetch('SESSION_MAX_AGE_HOURS', 720).to_i %>
+
+# The Content-Security-Policy (config/initializers/content_security_policy.rb) is
+# only reported until this is true; base-uri, object-src and frame-ancestors are
+# enforced either way.
+security:
+  csp_enforce: <%= ENV['CSP_ENFORCE'] == 'true' %>
+
 # At-rest encryption keys. Bare ENV in the base file (no fallbacks): production
 # MUST set these — see config/initializers/required_env.rb, which fails the boot
 # if any is blank. Dev/test fallbacks live in config/settings/{development,test}.yml.
@@ -144,6 +168,16 @@ encryption:
   config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] %>
   integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] %>
   oauth_key: <%= ENV['OAUTH_SECRET_KEY'] %>
+  # Retired keys, comma-separated, still accepted for reading while
+  # `bin/rails encryption:reencrypt` moves every stored secret onto the new one.
+  credentials_key_previous: <%= ENV['CREDENTIALS_SECRET_KEY_PREVIOUS'] %>
+  config_items_key_previous: <%= ENV['CONFIG_ITEMS_SECRET_KEY_PREVIOUS'] %>
+  integrations_key_previous: <%= ENV['INTEGRATIONS_SECRET_KEY_PREVIOUS'] %>
+  oauth_key_previous: <%= ENV['OAUTH_SECRET_KEY_PREVIOUS'] %>
+  # Bind new ciphertexts to their model and column. Off until no pod of the
+  # previous release can run (it reads a bound value as empty); after turning it
+  # on, `bin/rails encryption:reencrypt` binds what is already stored.
+  bind_purpose: <%= ENV['ENCRYPTION_BIND_PURPOSE'] == 'true' %>
 
 # Unified OAuth provider client credentials (operator-set once per deployment,
 # multi-tenant via per-owner OauthCredential). Distinct from the `sentry:` DSN
@@ -168,6 +202,12 @@ github:
   app_slug: <%= ENV['GITHUB_APP_SLUG'] %>
   private_key: "<%= ENV['GITHUB_APP_PRIVATE_KEY'] %>"
   webhook_secret: <%= ENV['GITHUB_WEBHOOK_SECRET'] %>
+  # The App's OAuth client. Optional; when both are set, connecting a NEW
+  # installation also requires the installing user to be able to see it
+  # (Github::InstallationOwnership) — enable "Request user authorization (OAuth)
+  # during installation" on the App for GitHub to send the code.
+  client_id: "<%= ENV['GITHUB_APP_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['GITHUB_APP_CLIENT_SECRET'] %>"
   # Alternative to GITHUB_APP_PRIVATE_KEY for a deployment that mounts the PEM
   # as a file. Read only when the inline key is blank (Github::TokenService) —
   # which until now could never resolve to anything, because the service asked
@@ -188,6 +228,11 @@ github:
 
 gitlab:
   endpoint: <%= ENV['GITLAB_ENDPOINT'] || 'https://gitlab.com/api/v4' %>
+
+# Credential vending for the in-container git helper (GitHub and GitLab
+# repositories). Reached over the internal network, like cloud.credentials_url.
+git:
+  credentials_url: <%= ENV['GIT_CREDENTIALS_URL'] || "#{internal_base}/agents/git/credentials" %>
 
 # Azure DevOps (docs/design/azure-devops-integration.md). One operator-owned
 # multi-tenant Entra app registration per deployment: its client id is public,
@@ -384,6 +429,10 @@ agents:
 
 docker:
   network: <%= ENV['DOCKER_NETWORK'] || 'app_default' %>
+  # The network agent containers join: a separate one that reaches the app and
+  # not its data stores (docker-compose.yml). A deployment that sets only
+  # DOCKER_NETWORK keeps its agents where they were.
+  agent_network: <%= ENV['DOCKER_AGENT_NETWORK'] || ENV['DOCKER_NETWORK'] || 'app_agents' %>
 
 kubernetes:
   namespace: <%= ENV['K8S_NAMESPACE'] || 'aixle' %>
@@ -391,11 +440,11 @@ kubernetes:
   service_port: <%= ENV['KUBERNETES_SERVICE_PORT'] || '443' %>
   traefik_entrypoint: <%= ENV['TRAEFIK_ENTRYPOINT'] || 'websecure' %>
   traefik_auth_middleware: <%= ENV['TRAEFIK_AUTH_MIDDLEWARE'] || 'terminal-auth' %>
-  # Stated positively (it used to be `skip_tls_verify`, i.e. a double negative
-  # over the same variable). Verification stays OFF unless explicitly enabled:
-  # the in-cluster Traefik that terminates agent traffic serves a self-signed
-  # certificate, so flipping the default would break those deployments.
-  traefik_verify_tls: <%= ENV['K8S_TRAEFIK_VERIFY_TLS'] == 'true' %>
+  # The route-readiness probe goes to traefik.http_base, which a deployment sets
+  # to its public name (a real certificate). Set false only when it points at a
+  # listener with a self-signed one, such as the traefik.<namespace>.svc fallback;
+  # a probe that cannot verify waits out ready_timeout before the session starts.
+  traefik_verify_tls: <%= ENV['K8S_TRAEFIK_VERIFY_TLS'] != 'false' %>
   service_ports: <%= (ENV['K8S_SERVICE_PORTS'] || '7681,4040').split(',').map(&:to_i) %>
   workspace_dir: <%= ENV['K8S_WORKSPACE_DIR'] || '/workspace' %>
   image_pull_policy: <%= ENV['K8S_IMAGE_PULL_POLICY'] || 'IfNotPresent' %>
@@ -406,6 +455,11 @@ kubernetes:
   runtime_requests_memory: <%= ENV['K8S_RUNTIME_REQUESTS_MEMORY'] || '512Mi' %>
   runtime_limits_cpu: <%= ENV['K8S_RUNTIME_LIMITS_CPU'] || '1000m' %>
   runtime_limits_memory: <%= ENV['K8S_RUNTIME_LIMITS_MEMORY'] || '1Gi' %>
+  # The Pod Security "restricted" profile for agent pods (non-root, every
+  # capability dropped, RuntimeDefault seccomp). Needs agent images that run as a
+  # non-root user; without it pods still get no privilege escalation and no
+  # raw sockets.
+  restricted_agent_pods: <%= ENV['K8S_RESTRICTED_AGENT_PODS'] || 'false' %>
   agents_image_pull_secrets: <%= (ENV['K8S_AGENTS_IMAGE_PULL_SECRETS'] || '').split(',').map(&:strip).reject(&:empty?) %>
   # Dedicated node group for agent session pods (the `terminal-*` pods) — a
   # runaway agent then only starves other agents, never a platform pod.
@@ -445,6 +499,12 @@ container_execution:
       memory_mb: 1024      # Max memory per tool container (1GB)
       cpu_percent: 50      # Max CPU (50% of 1 core) - prevents mining
       pids_limit: 100      # Max processes
+    # Agent session containers on the Docker runtime (Kubernetes pods take
+    # kubernetes.runtime_* instead). Sized for builds and a browser.
+    agent_session:
+      memory_mb: 4096
+      cpu_percent: 200     # two cores
+      pids_limit: 4096
 
 # Which product this installation is: `self_hosted`, `saas` or `aws_marketplace`.
 # It decides who may move a company's session limit and who is billed for it.

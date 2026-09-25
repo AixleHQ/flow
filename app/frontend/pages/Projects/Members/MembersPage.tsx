@@ -4,6 +4,8 @@ import { modals } from '@mantine/modals';
 import { IconCrown, IconPlus, IconSearch, IconTrash, IconUsers } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import type { Project, User } from '@/types/generated';
+
 import { getInitials } from 'shared/lib/getInitials';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -11,19 +13,6 @@ import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface User {
-  id: number;
-  email: string;
-  name: string;
-  role: string;
-  state: string;
-}
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface Props {
   project: Project;

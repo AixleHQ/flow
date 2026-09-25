@@ -17,6 +17,7 @@ class CloudCredentialsController < ActionController::API
     session = TerminalSession.find_by(id: request.headers["X-Session-Id"])
     return unauthorized unless session&.active?
     return unauthorized unless CloudAuth::SessionKey.valid?(session, request.headers["X-Cloud-Key"])
+    return unauthorized unless session.owner_entitled?
 
     # An auth session must start with nothing connected. Vending a connection made earlier
     # would silently log the user in to the account they are trying to change, and the
@@ -70,13 +71,15 @@ class CloudCredentialsController < ActionController::API
     render json: { error: "not_connected" }, status: :conflict
   end
 
-  # Recorded via update! rather than update_column on purpose: the model's broadcasts_to
-  # is what wakes the browser. Set once — the helper retries while it waits, and each
-  # write would otherwise be another broadcast.
+  # Saved through the model on purpose: its broadcasts_to is what wakes the browser. Set
+  # once — the helper retries while it waits, and each write would otherwise be another
+  # broadcast.
   def request_cloud_connect(session)
     return if session.metadata&.dig("cloud_connect_requested_at").present?
 
-    session.update!(metadata: (session.metadata || {}).merge("cloud_connect_requested_at" => Time.current.iso8601))
+    session.change_jsonb!(:metadata, callbacks: true) do |doc|
+      doc["cloud_connect_requested_at"] ||= Time.current.iso8601
+    end
   end
 
   def fail_with(session, status, code, error)

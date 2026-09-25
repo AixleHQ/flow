@@ -8,6 +8,7 @@ module Api
         def download? = project_accessible?
         def export? = project_writable?
         def export_all? = project_writable?
+        def unshare? = project_writable?
       end
     end
   end

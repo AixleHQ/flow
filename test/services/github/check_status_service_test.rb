@@ -31,7 +31,7 @@ module Github
     end
 
     teardown do
-      File.delete(@pem_path) if File.exist?(@pem_path)
+      FileUtils.rm_f(@pem_path)
     end
 
     # == pull_request_checks ==
@@ -178,8 +178,7 @@ module Github
         end
       }
 
-      # Regex, not a literal url: Octokit paginates this endpoint, and with
-      # auto_paginate on (config/initializers/octokit.rb) it appends per_page=100.
+      # Regex, not a literal url: the call asks for per_page=100.
       stub_request(:get, %r{\Ahttps://api\.github\.com/repos/org/app/commits/#{head_sha}/check-suites})
         .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: body.to_json)
     end

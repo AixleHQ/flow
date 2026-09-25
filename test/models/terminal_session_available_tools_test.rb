@@ -18,6 +18,19 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
       execution_mode: :container)
   end
 
+  # The explicitly attached container tool, owned by the session's own project.
+  def local_container_tool
+    @local_container_tool ||= create(:tool, name: "static_analyzer", scope: @project,
+      display_name: "Static Analyzer", docker_image: "analyzer:latest", execution_mode: :container)
+  end
+
+  test "a tool of another project is never available, even when attached" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.tools << @system_tool
+
+    refute_includes session.available_tools.map(&:name), "static_analyzer"
+  end
+
   # == Workflow tools: auto-injected for workflow_step sessions ==
 
   test "registry workflow tools are injected for workflow_step sessions without pre-seeded rows" do
@@ -161,7 +174,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
 
   test "system tool is included when explicitly added to session tools" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
-    session.tools << @system_tool
+    session.tools << local_container_tool
 
     names = session.available_tools.map(&:name)
 
@@ -172,7 +185,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
 
   test "internal tools are auto-injected when container tool is attached" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
-    session.tools << @system_tool
+    session.tools << local_container_tool
 
     names = session.available_tools.map(&:name)
 
@@ -226,7 +239,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
   end
 
   test "falls back to project custom tools when no custom tools explicitly selected" do
-    project_tool = create(:tool, scope: @project, name: "project_tool",
+    create(:tool, scope: @project, name: "project_tool",
       display_name: "Project Tool", docker_image: "pt:1.0")
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
@@ -256,7 +269,7 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
   test "workflow_step session gets workflow tools and explicitly selected tools" do
     session = create(:terminal_session, user: @user, project: @project,
       session_type: "workflow_step", agent_type: nil)
-    session.tools << @system_tool
+    session.tools << local_container_tool
 
     names = session.available_tools.map(&:name)
 

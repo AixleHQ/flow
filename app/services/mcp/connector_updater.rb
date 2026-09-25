@@ -61,7 +61,9 @@ module MCP
         target = ConnectorManifest.find_target(manifest, installed_target_id(server))
         raise Error, "This version no longer offers the install option you are using" if target.nil?
 
+        target = PackageVersionResolver.pin(target)
         attributes = ConnectorAttributes.build(manifest: manifest, target: target, values: merged_values(server, values))
+        raise Error, ConnectorAttributes.unpinned_message(target) if ConnectorAttributes.unpinned?(target)
         # The user's own label survives: they may have renamed the server, and an
         # update is not the place to take that back.
         server.update!(attributes.except(:name))

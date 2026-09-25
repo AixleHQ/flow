@@ -16,18 +16,12 @@ import {
   IconX,
 } from '@tabler/icons-react';
 
+import type BoardColumn from 'types/generated/BoardColumn';
+import type BoardMember from 'types/generated/BoardMember';
+
 export type BulkAction = 'delete' | 'archive' | 'move_to_column' | 'set_priority' | 'set_assignee' | 'add_tag';
 
-interface BulkColumn {
-  id: number;
-  name: string;
-  workflowBinding: { triggerMode: string } | null;
-}
-
-interface Member {
-  id: number;
-  name: string;
-}
+type BulkColumn = Pick<BoardColumn, 'id' | 'name' | 'workflowBinding'>;
 
 export interface SelectionBarProps {
   /** Whether bulk-selection mode is armed. The bar shows while armed even with nothing selected yet. */
@@ -35,7 +29,7 @@ export interface SelectionBarProps {
   selectedCount: number;
   selectedIds: Set<number>;
   columns: BulkColumn[];
-  members: Member[];
+  members: Pick<BoardMember, 'id' | 'name'>[];
   canExecute: boolean;
   onAction: (action: BulkAction, columnId?: number) => void;
   onBulkPriority: (priority: string | null) => void;
@@ -45,6 +39,7 @@ export interface SelectionBarProps {
 }
 
 const PRIORITY_OPTIONS: { value: string | null; label: string }[] = [
+  { value: 'critical', label: 'Critical' },
   { value: 'high', label: 'High' },
   { value: 'medium', label: 'Medium' },
   { value: 'low', label: 'Low' },

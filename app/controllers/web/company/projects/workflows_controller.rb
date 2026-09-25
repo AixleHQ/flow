@@ -112,9 +112,11 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
   end
 
   def destroy
-    workflow = current_project.workflows.find(params[:id])
-    workflow.destroy
+    workflow = current_project.workflows.active.find(params[:id])
+    workflow.soft_delete!
     redirect_to company_project_workflows_path(current_project), notice: "Workflow deleted"
+  rescue ActiveRecord::RecordNotDestroyed => e
+    redirect_to company_project_workflows_path(current_project), alert: e.message
   end
 
   def publish

@@ -19,8 +19,10 @@ module ContainerStrategies
   #   on_failure(error: nil, **_) → {}  (called by workflow when execution fails)
   #
   class BaseStrategy
+    # Agent and tool containers join the agent network, never the platform's own:
+    # see Settings.docker.agent_network.
     def self.docker_network
-      Settings.docker.network
+      Settings.docker.agent_network
     end
 
     attr_reader :input
@@ -31,7 +33,7 @@ module ContainerStrategies
 
     # == Phase config (for workflow orchestration) ==
 
-    def phase_config(phase)
+    def phase_config(_phase)
       { timeout: 300 }
     end
 
@@ -53,13 +55,14 @@ module ContainerStrategies
 
     # == create_container ==
 
-    def create_container(image:, env_vars: [], labels: {}, host_config: {},
+    def create_container(image:, env_vars: [], labels: {}, host_config: {}, privilege_escalation: false,
                          cmd: nil, working_dir: nil, exposed_ports: nil, container_name: nil, **)
       spec = {
         image: image,
         env_vars: env_vars,
         labels: labels,
         host_config: host_config,
+        privilege_escalation: privilege_escalation,
         cmd: cmd,
         working_dir: working_dir,
         exposed_ports: exposed_ports,
@@ -160,14 +163,7 @@ module ContainerStrategies
     def services_ports = []
 
     def build_host_config_with_limits
-      limits = container_limits
-      base_host_config.merge(
-        "Memory" => limits[:memory_bytes],
-        "MemorySwap" => limits[:memory_bytes],
-        "CpuPeriod" => 100_000,
-        "CpuQuota" => limits[:cpu_quota],
-        "PidsLimit" => limits[:pids_limit]
-      )
+      limits_host_config(container_limits)
     end
 
     def base_host_config
@@ -176,6 +172,16 @@ module ContainerStrategies
 
     def container_limits
       @container_limits ||= load_container_limits
+    end
+
+    def limits_host_config(limits)
+      base_host_config.merge(
+        "Memory" => limits[:memory_bytes],
+        "MemorySwap" => limits[:memory_bytes],
+        "CpuPeriod" => 100_000,
+        "CpuQuota" => limits[:cpu_quota],
+        "PidsLimit" => limits[:pids_limit]
+      )
     end
 
     def read_file_from_container(container, path)
@@ -223,12 +229,12 @@ module ContainerStrategies
       @current_terminal_session = TerminalSession.find_by(id: input[:session_id])
     end
 
-    def load_container_limits
+    def load_container_limits(kind = :tool_execution)
       defaults = { memory_bytes: 1024 * 1024 * 1024, cpu_quota: 50_000, pids_limit: 100 }
 
       return defaults unless defined?(Settings) && Settings.respond_to?(:container_execution)
 
-      limits_config = Settings.container_execution&.limits&.tool_execution
+      limits_config = Settings.container_execution&.limits&.public_send(kind)
       return defaults unless limits_config
 
       {

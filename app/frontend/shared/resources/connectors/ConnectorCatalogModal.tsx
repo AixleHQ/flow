@@ -17,8 +17,9 @@ import { useDebouncedCallback } from '@mantine/hooks';
 import { IconPlugConnected, IconSearch } from '@tabler/icons-react';
 import { useState, type FC } from 'react';
 
+import type { Connector } from '@/types/generated';
+
 import { ConnectorInstallModal } from './ConnectorInstallModal';
-import type { Connector } from './types';
 
 interface ConnectorCatalogModalProps {
   opened: boolean;

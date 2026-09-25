@@ -1,6 +1,8 @@
 import '@testing-library/jest-dom/vitest';
+import { notifications } from '@mantine/notifications';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { answerFetch } from 'test/fetchStub';
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import BuilderPage from './BuilderPage';
@@ -75,6 +77,7 @@ const projectProps = (overrides: Record<string, unknown> = {}) => ({
 
 afterEach(() => {
   vi.restoreAllMocks();
+  notifications.clean();
 });
 
 describe('Projects/Workflows/BuilderPage', () => {
@@ -344,6 +347,24 @@ describe('Projects/Workflows/BuilderPage', () => {
     );
   });
 
+  it('an edit still inside its debounce window is saved when the builder unmounts', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+
+    const { unmount } = renderAuthedPage(<BuilderPage />, {
+      props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
+    });
+
+    await userEvent.type(screen.getByDisplayValue('Draft spec'), '!');
+    // An Inertia visit to another page unmounts the builder well inside the 500 ms window.
+    unmount();
+
+    const patch = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
+    expect(patch).toBeDefined();
+    expect(JSON.parse((patch![1] as RequestInit).body as string)).toEqual({ step: { name: 'Draft spec!' } });
+  });
+
   it('selecting an agent immediately PATCHes the step with the chosen agentId', async () => {
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
@@ -393,6 +414,8 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('adds an asset spec row when "+ Add input" is clicked in the Data Flow section', async () => {
+    // The new row is saved (debounced) with the step.
+    answerFetch({ 'PATCH /api/v1/projects/7/workflows/:workflow/steps/1': {} });
     renderAuthedPage(<BuilderPage />, {
       props: projectProps({ steps: [makeStep({ id: 1, name: 'Draft spec', position: 1 })] }),
     });
@@ -477,6 +500,7 @@ describe('Projects/Workflows/BuilderPage', () => {
   });
 
   it('opening the Triggers tab reveals the triggers content', async () => {
+    answerFetch({ 'GET /api/v1/projects/7/workflows/:workflow/triggers': { triggers: [] } });
     renderAuthedPage(<BuilderPage />, { props: projectProps() });
 
     // Tab is not active initially — triggers content not visible.
@@ -746,6 +770,34 @@ describe('Projects/Workflows/BuilderPage', () => {
     const call = fetchSpy.mock.calls.find(([url]) => url === '/api/v1/projects/7/workflows/3/steps/1');
     const body = JSON.parse((call![1] as RequestInit).body as string);
     expect(body.step.allowNonInteractive).toBe(true);
+  });
+
+  it('takes back a toggle the server refused and says the change was not saved', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ errors: ['Auto-run is not available for this agent'] }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    renderAuthedPage(<BuilderPage />, {
+      props: projectProps({
+        steps: [makeStep({ id: 1, name: 'Draft spec', position: 1, allowNonInteractive: false })],
+      }),
+    });
+
+    const switches = screen.getAllByRole('switch');
+    const autoRunSwitch =
+      switches.find((s) => {
+        const row = s.closest('[class*=togRow]') ?? s.parentElement?.parentElement;
+        return row?.textContent?.includes('Auto-run available');
+      }) ?? switches[0];
+    await userEvent.click(autoRunSwitch);
+
+    expect(await screen.findByText('Auto-run is not available for this agent')).toBeInTheDocument();
+    expect(screen.getByText('Not saved')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('AUTO')).not.toBeInTheDocument());
+    expect(autoRunSwitch).not.toBeChecked();
   });
 
   it('setting On Failure to "Retry" PATCHes the step with the new value', async () => {

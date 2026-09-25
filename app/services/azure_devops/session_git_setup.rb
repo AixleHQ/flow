@@ -86,9 +86,10 @@ module AzureDevops
       # — "cat: Permission denied", and an empty workspace — nor delete, which
       # left the credential sitting in /tmp after the failure. 0600 still means
       # only that user, and it is the user git runs as anyway.
-      runtime.write_file(container_id, header_path, authorization_header(credential),
-                         mode: 0o600, uid: uid, gid: uid)
-      install_helper!(uid)
+      unless runtime.write_file(container_id, header_path, authorization_header(credential), mode: 0o600, uid: uid, gid: uid)
+        return not_written("the clone credential")
+      end
+      return not_written("the git credential helper") unless install_helper(uid)
 
       branch = Shellwords.escape(repository.source_branch)
       url = Shellwords.escape(repository.clone_url)
@@ -119,8 +120,8 @@ module AzureDevops
 
     # The helper itself, placed once per session. Idempotent: writing it again
     # for a second repository costs one small file and keeps the clone path free
-    # of ordering assumptions.
-    def install_helper!(uid)
+    # of ordering assumptions. False when the runtime could not write it.
+    def install_helper(uid)
       runtime.exec(container_id, [ "sh", "-c", "mkdir -p #{Shellwords.escape(File.dirname(HELPER))}" ])
       runtime.write_file(container_id, HELPER, File.read(HELPER_SOURCE), mode: 0o700, uid: uid, gid: uid)
     end
@@ -171,6 +172,10 @@ module AzureDevops
     end
 
     private
+
+    # A failed clone in the runtime's own shape, so the caller's failed_repos
+    # bookkeeping applies to it unchanged.
+    def not_written(what) = [ [], [ "could not write #{what} into the container" ], 1 ]
 
     # Microsoft documents `Authorization: Bearer <entra token>` for Entra and
     # Basic for PATs. Reusing GitHub's `user:token@host` URL convention for

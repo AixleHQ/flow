@@ -101,13 +101,20 @@ module Tools
         end
         raise "Repository #{repo.full_name} is not a GitHub repository" unless repo.integration.github?
 
-        token = Github::TokenService.new(repo.integration).generate_installation_token
-
-        arguments.except("repository_id").merge(
+        bound = arguments.except("repository_id").merge(
           "REPO" => repo.full_name,
-          "GITHUB_TOKEN" => token,
           "BRANCH" => arguments["BRANCH"].presence || repo.source_branch
         )
+
+        # A container tool's arguments become the input of its Temporal workflow,
+        # which history keeps; the tool gets a repository reference and the
+        # strategy mints the credential inside the activity.
+        if tool.respond_to?(:execution_mode) && tool.execution_mode.container?
+          return bound.merge(ContainerStrategies::CustomToolStrategy::REPOSITORY_REFERENCE => repo.id)
+        end
+
+        bound.merge("GITHUB_TOKEN" => Github::TokenService.new(repo.integration)
+                                                         .generate_installation_token(repositories: [ repo.repo_name ]))
       end
     end
   end

@@ -106,7 +106,7 @@ module Agents
 
     # margin_ms is ignored: a call is already the decision to refresh, and with a refresh
     # token that does not rotate an early refresh costs nothing.
-    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
+    def perform_refresh!(credential, margin_ms: nil)
       credentials = credential.config_data
       return { status: :not_needed, detail: nil, permanent: false } unless server_refreshable?(credentials)
 
@@ -138,6 +138,11 @@ module Agents
     def auth_watch_path = config_path
 
     def auth_file_paths = [ config_path, "#{home_dir}/#{SETTINGS_PATH}" ]
+
+    # agy renews its Google token inside the container; that is all it may report.
+    def rotatable_credential_keys = %w[access_token refresh_token token_type expiry]
+
+    def writeback_file_paths = [ config_path ]
     def auth_required_keys = %w[token.access_token]
 
     def auth_complete?(content)
@@ -241,7 +246,7 @@ module Agents
       details.merge(valid: false, error_code: "oauth_token_missing")
     end
 
-    def session_command(mode:, prompt: nil, model: nil)
+    def session_command(mode:, model: nil)
       parts = [ "agy" ]
       parts += [ "--model", Shellwords.shellescape(model) ] if model.present?
       parts << "--dangerously-skip-permissions"

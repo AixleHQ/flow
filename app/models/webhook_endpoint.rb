@@ -5,6 +5,9 @@
 # how to verify the signature and which secret to use — lives here as data.
 class WebhookEndpoint < ApplicationRecord
   include Encryptable
+
+  encryption_key :integrations_key
+  encrypted_column :encrypted_secret
   extend Enumerize
 
   belongs_to :project, optional: true
@@ -14,7 +17,7 @@ class WebhookEndpoint < ApplicationRecord
 
   enumerize :provider, in: %i[slack github gitlab generic], default: :generic, predicates: true
   # No predicates here: the `none` value would define a clashing `none?` method.
-  enumerize :verification_strategy, in: %i[slack_v0 hmac_sha256 shared_token none], default: :none
+  enumerize :verification_strategy, in: %i[slack_v0 hmac_sha256 shared_token none], default: :shared_token
 
   validates :slug, presence: true, uniqueness: true
   validates :provider, presence: true
@@ -22,22 +25,25 @@ class WebhookEndpoint < ApplicationRecord
 
   scope :active, -> { where(enabled: true) }
 
+  # A workflow's inbound webhook. Unless the caller explicitly chooses otherwise
+  # it demands a shared token, generated here, so the URL alone never fires the
+  # workflow; the 128-bit slug is an address, not the credential.
+  def self.create_for_trigger!(project:, created_by:, verification_strategy: nil, secret: nil)
+    token = SecureRandom.hex(16)
+    strategy = verification_strategy.presence || "shared_token"
+    create!(
+      slug: "wh-#{token}", provider: :generic, verification_strategy: strategy,
+      secret: secret.presence || (strategy.to_s == "none" ? nil : SecureRandom.hex(24)),
+      config: { "event_type" => "webhook.#{token}" },
+      project: project, company: project.company, created_by: created_by
+    )
+  end
+
   def secret=(value)
-    self.encrypted_secret = value.present? ? encryptor.encrypt_and_sign(value.to_s) : nil
+    self.encrypted_secret = value.present? ? encrypt_secret(value.to_s, column: "encrypted_secret") : nil
   end
 
   def secret
-    return nil if encrypted_secret.blank?
-
-    encryptor.decrypt_and_verify(encrypted_secret)
-  rescue ActiveSupport::MessageVerifier::InvalidSignature,
-         ActiveSupport::MessageEncryptor::InvalidMessage
-    nil
-  end
-
-  private
-
-  def encryption_key_setting
-    Settings.encryption.integrations_key
+    decrypt_secret(encrypted_secret, column: "encrypted_secret")
   end
 end

@@ -88,7 +88,7 @@ RUN chmod +x /app/entrypoint.sh
 # =============================================================================
 # Final setup
 # =============================================================================
-RUN chown -R grok:grok /workspace /opt/watcher /home/grok
+RUN chown -R grok:grok /workspace /home/grok
 
 WORKDIR /workspace
 ENV HOME=/home/grok \

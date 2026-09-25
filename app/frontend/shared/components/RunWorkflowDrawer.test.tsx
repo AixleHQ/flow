@@ -28,7 +28,7 @@ function renderDrawer(overrides: Partial<React.ComponentProps<typeof RunWorkflow
       configuredAgents={['claude_code']}
       defaultAgentRuntime="claude_code"
       repositories={[{ id: 1, name: 'acme/app' }]}
-      assets={[{ id: 2, name: 'brand.css' }]}
+      assets={[{ id: 2, name: 'brand.css', folder: null }]}
       {...overrides}
     />,
   );

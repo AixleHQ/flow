@@ -2,24 +2,27 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Repository } from '@/types/generated';
+import { buildIntegration } from 'test/factories/integration';
+import { buildRepository } from 'test/factories/repository';
 import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import type { Repository } from './RepositoriesContent';
 import { RepositoriesContent } from './RepositoriesContent';
 
-const makeRepo = (overrides: Partial<Repository> = {}): Repository => ({
-  id: 1,
-  fullName: 'acme/backend',
-  cloneUrl: 'https://github.com/acme/backend.git',
-  sourceBranch: 'main',
-  isPrivate: false,
-  description: 'Core API service',
-  purpose: 'Primary Rails app',
-  scopeIndicator: 'company',
-  integration: { id: 10, name: 'Acme GitHub', provider: 'github' },
-  createdAt: '2026-01-01T00:00:00Z',
-  ...overrides,
-});
+const makeRepo = (overrides: Partial<Repository> = {}): Repository =>
+  buildRepository({
+    id: 1,
+    fullName: 'acme/backend',
+    cloneUrl: 'https://github.com/acme/backend.git',
+    sourceBranch: 'main',
+    isPrivate: false,
+    description: 'Core API service',
+    purpose: 'Primary Rails app',
+    scopeIndicator: 'company',
+    integration: buildIntegration({ id: 10, name: 'Acme GitHub', provider: 'github' }),
+    createdAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  });
 
 describe('RepositoriesContent', () => {
   it('marks a public repository as read-only and survives its missing integration', () => {

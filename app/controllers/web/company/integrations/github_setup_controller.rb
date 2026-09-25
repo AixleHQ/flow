@@ -43,35 +43,18 @@ class Web::Company::Integrations::GithubSetupController < Web::Company::Applicat
       return
     end
 
-    integration = Integration.find_or_build_github_for_installation(
-      company: current_company,
-      connected_by: current_user,
-      project: target_project,
-      installation_id: installation_id
-    )
-    integration.credentials_data = { installation_id: installation_id.to_s }
-
-    begin
-      info = Github::TokenService.new(integration).verify_installation
-      integration.name = info[:account_login]
-      integration.settings = {
-        # Explicit even though it is the default: PAT connections carry
-        # auth_mode: "pat", and a reader should not have to know that a missing
-        # key means an App installation.
-        auth_mode: "app",
-        account_type: info[:account_type],
-        target_type: info[:target_type]
-      }
-      integration.status = :active
-    rescue Github::TokenService::ConfigurationError, Github::TokenService::AuthenticationError => e
-      integration.name ||= "GitHub (unverified)"
-      integration.status = :error
-      integration.settings = { error: e.message }
+    # The project's company, not the session's: a user in two companies may
+    # have switched away since starting the install.
+    integration = Github::IntegrationService.new(
+      company: target_project.company, connected_by: current_user, project: target_project
+    ).create(installation_id: installation_id, via_setup: true, oauth_code: params[:code])
+    if integration.persisted? && integration.active?
+      redirect_to github_setup_redirect_path(target_project), notice: "GitHub connected"
+    else
+      redirect_to github_setup_redirect_path(target_project),
+                  alert: integration.errors.full_messages.to_sentence.presence ||
+                         integration.settings&.dig("error") || "GitHub connection failed — check integration status"
     end
-
-    integration.save
-    redirect_to github_setup_redirect_path(target_project),
-                notice: integration.active? ? "GitHub connected" : "GitHub connection failed — check integration status"
   end
 
   private

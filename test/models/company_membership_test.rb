@@ -95,6 +95,26 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert admin.reload.active?
   end
 
+  test "the sole active admin's membership cannot be deleted either, except with its company" do
+    admin = create(:company_membership, :admin, user: @user, company: @company)
+
+    assert_not admin.destroy
+    assert_includes admin.errors[:base].to_sentence, "last admin"
+
+    @company.destroy!
+    assert_not CompanyMembership.exists?(admin.id)
+  end
+
+  # Two admins demoting each other at the same moment must not both succeed:
+  # the check holds the company row while it counts.
+  test "the last-admin check locks the company row before counting admins" do
+    admin = create(:company_membership, :admin, user: @user, company: @company)
+    create(:company_membership, :admin, user: create(:user), company: @company)
+    admin.role = "employee"
+
+    assert_queries_match(/FROM "companies".*FOR UPDATE/m) { admin.save! }
+  end
+
   test "demote is valid once a second active admin exists" do
     admin = create(:company_membership, :admin, user: @user, company: @company)
     create(:company_membership, :admin, user: create(:user), company: @company)

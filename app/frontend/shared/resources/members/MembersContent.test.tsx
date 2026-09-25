@@ -2,12 +2,13 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Member } from '@/types/generated';
 import { buildSharedPermissions, buildSharedUser } from 'test/factories/sharedProps';
 import { buildSharedProps, renderAuthedPage, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import { MembersContent, type MemberUser } from './MembersContent';
+import { MembersContent } from './MembersContent';
 
-const makeUser = (over: Partial<MemberUser> = {}): MemberUser => ({
+const makeUser = (over: Partial<Member> = {}): Member => ({
   id: 1,
   email: 'ada@example.com',
   name: 'Ada Lovelace',
@@ -15,12 +16,13 @@ const makeUser = (over: Partial<MemberUser> = {}): MemberUser => ({
   state: 'active',
   position: null,
   invitedAt: null,
+  acceptedAt: null,
   createdAt: '2024-01-01T00:00:00Z',
   invitedBy: null,
   ...over,
 });
 
-const baseProps = (users: MemberUser[]) => ({
+const baseProps = (users: Member[]) => ({
   users,
   basePath: '/company/members',
   title: 'Members',

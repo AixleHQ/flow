@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class CreateSolidMCPMessages < ActiveRecord::Migration[8.1]
   def change
     create_table :solid_mcp_messages do |t|

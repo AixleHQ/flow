@@ -3,32 +3,17 @@ import { Box, Button, Group, SegmentedControl, Select, Text, TextInput } from '@
 import { IconArrowsSort, IconFilterOff, IconFolder, IconPlus, IconSearch } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import type { Project } from '@/types/generated';
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { CreateProjectModal } from 'shared/components/CreateProjectModal';
+import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { companyProjectFavoritePath } from 'shared/routes';
 import { EmptyState } from 'shared/ui';
 import { PageHeader } from 'shared/ui/PageHeader';
 
-import { CreateProjectModal } from './CreateProjectModal';
 import classes from './IndexPage.module.css';
 import { ProjectCard } from './ProjectCard';
-
-interface Project {
-  id: number;
-  name: string;
-  description?: string | null;
-  slug: string;
-  state: string;
-  collaboratorsCount: number;
-  membersCount: number;
-  sessionsCount: number;
-  workflowsCount: number;
-  boardTasksCount: number;
-  lastActivityAt?: string | null;
-  createdAt: string;
-  members: { id: number; initials: string }[];
-  favorite: boolean;
-}
 
 interface PageProps {
   projects: Project[];
@@ -70,6 +55,7 @@ const compareFavoritesFirst = (a: Project, b: Project, sortBy: SortKey): number 
 
 const IndexPage = () => {
   const { projects } = usePage<PageProps>().props;
+  const canWrite = useCanWrite();
   const [createOpened, setCreateOpened] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortKey>('name');
@@ -121,9 +107,11 @@ const IndexPage = () => {
           subtitle="Select a project to view workflows, assets, and tasks"
           mb={24}
           actions={
-            <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateOpened(true)}>
-              Create Project
-            </Button>
+            canWrite && (
+              <Button leftSection={<IconPlus size={16} />} onClick={() => setCreateOpened(true)}>
+                Create Project
+              </Button>
+            )
           }
         />
 
@@ -166,8 +154,12 @@ const IndexPage = () => {
           <EmptyState
             icon={<IconFolder size={22} />}
             title="No projects yet"
-            description="Create your first project to start organizing your work and collaborate with your team."
-            action={<Button onClick={() => setCreateOpened(true)}>Create Your First Project</Button>}
+            description={
+              canWrite
+                ? 'Create your first project to start organizing your work and collaborate with your team.'
+                : 'You have not been added to a project yet.'
+            }
+            action={canWrite && <Button onClick={() => setCreateOpened(true)}>Create Your First Project</Button>}
           />
         ) : byState.length === 0 ? (
           <EmptyState icon={<IconFilterOff size={22} />} title={`No ${stateFilterLabel.toLowerCase()} projects`} />

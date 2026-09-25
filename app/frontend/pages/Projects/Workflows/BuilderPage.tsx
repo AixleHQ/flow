@@ -1,14 +1,16 @@
 import { arrayMove } from '@dnd-kit/sortable';
 import { Head, router, usePage } from '@inertiajs/react';
 import { Alert, Button, Group, Modal, Text, TextInput, Tooltip } from '@mantine/core';
+import { useDebouncedCallback } from '@mantine/hooks';
 import { IconArrowLeft, IconInfoCircle, IconPlayerPlay } from '@tabler/icons-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useDebouncedCallback } from 'use-debounce';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import type { ConfigItemPicker } from '@/types/generated';
+import type { ConfigItemPicker, Picker, Project, Step, Workflow } from '@/types/generated';
 
+import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
 import { apiFetch } from 'shared/lib/apiFetch';
+import { useFlushWhenHidden } from 'shared/lib/hooks/useFlushWhenHidden';
 import type { ToolGroup } from 'shared/lib/toolPicker';
 import {
   apiV1ProjectWorkflowPath,
@@ -29,67 +31,8 @@ import { StepEditorPanel } from './StepEditorPanel';
 import { TriggersTab } from './TriggersTab';
 import { useSavingState } from './useSavingState';
 
-interface Project {
-  id: number;
-  name: string;
-}
 type ProjectOrNull = Project | null;
-interface NamedItem {
-  id: number;
-  name: string;
-}
-
-interface SubStep {
-  id: number;
-  name: string;
-  instructions: string | null;
-  position: number;
-  required: boolean;
-}
-interface AssetSpec {
-  name: string;
-  assetType: string;
-  required: boolean;
-  namePattern?: string | null;
-}
-interface Step {
-  id: number;
-  name: string;
-  instructions: string | null;
-  position: number;
-  agentId: number | null;
-  requiredAgentRuntime: string | null;
-  preferredModel: string | null;
-  allowNonInteractive: boolean;
-  skipPolicy: string;
-  onFailure: string;
-  maxRetries: number;
-  repositoryIds: number[];
-  bmadEnabled: boolean;
-  dependsOnStepIds: number[];
-  toolIds: number[];
-  mcpServerIds: number[];
-  skillIds: number[];
-  assetIds: number[];
-  configItemIds: number[];
-  inputAssetSpecs: AssetSpec[];
-  outputAssetSpecs: AssetSpec[];
-  subSteps: SubStep[];
-}
-interface Workflow {
-  id: number;
-  name: string;
-  description: string | null;
-  scopeType: string;
-  scopeIndicator: string;
-  inheritAllProjectResources: boolean;
-  baseToolIds: number[];
-  baseSkillIds: number[];
-  baseMCPServerIds: number[];
-  baseAssetIds: number[];
-  baseRepositoryIds: number[];
-  baseConfigItemIds: number[];
-}
+type AssetSpec = Step['outputAssetSpecs'][number];
 interface AgentModel {
   modelId: string;
   displayName: string;
@@ -103,13 +46,13 @@ interface Props {
   project: ProjectOrNull;
   workflow: Workflow;
   steps: Step[];
-  agents?: NamedItem[];
-  tools?: NamedItem[];
+  agents?: Picker[];
+  tools?: Picker[];
   toolGroups?: ToolGroup[];
-  skills?: NamedItem[];
-  mcpServers?: NamedItem[];
-  assets?: NamedItem[];
-  repositories?: NamedItem[];
+  skills?: Picker[];
+  mcpServers?: Picker[];
+  assets?: AssetPickerItem[];
+  repositories?: Picker[];
   configItems?: ConfigItemPicker[];
   agentModels?: AgentModelsEntry[];
   readOnly: boolean;
@@ -147,6 +90,11 @@ const stepsReorderApi = (projectId: number | null, workflowId: number) =>
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
 
+// An edit still inside its debounce window is saved when the builder unmounts (an
+// Inertia visit to another page) or the tab is hidden (useFlushWhenHidden below),
+// instead of dropped while the chip already read "saved".
+const SAVE_DEBOUNCE = { delay: 500, flushOnUnmount: true };
+
 const BuilderPage = () => {
   const {
     project,
@@ -182,6 +130,8 @@ const BuilderPage = () => {
 
   const [workflow, setWorkflow] = useState(initialWorkflow);
   const [steps, setSteps] = useState(initialSteps);
+  const stepsRef = useRef(steps);
+  stepsRef.current = steps;
   const [activeTab, setActiveTab] = useState<string>('sessions');
   const [selection, setSelection] = useState<Selection | null>(() =>
     initialSteps.length > 0 ? { mode: 'session', sessionId: initialSteps[0].id } : null,
@@ -189,7 +139,7 @@ const BuilderPage = () => {
   const [deleteStepConfirm, setDeleteStepConfirm] = useState<number | null>(null);
   const [runModalOpen, setRunModalOpen] = useState(false);
 
-  const { saving, withSave } = useSavingState();
+  const { saving, failed: saveFailed, withSave } = useSavingState();
 
   const sortedSteps = useMemo(() => [...steps].sort((a, b) => a.position - b.position), [steps]);
 
@@ -208,7 +158,7 @@ const BuilderPage = () => {
         body: JSON.stringify(payload),
       }),
     );
-  }, 500);
+  }, SAVE_DEBOUNCE);
 
   const updateWorkflowField = useCallback(
     (field: string, value: unknown) => {
@@ -255,16 +205,9 @@ const BuilderPage = () => {
   const deleteSession = useCallback(
     async (stepId: number) => {
       try {
-        const res = await apiFetch(stepApi(projectId, workflow.id, stepId), { method: 'DELETE' });
-        if (!res.ok) {
-          console.error('Failed to delete session:', res.statusText);
-          return;
-        }
-        await withSave(Promise.resolve(res));
+        if (!(await withSave(apiFetch(stepApi(projectId, workflow.id, stepId), { method: 'DELETE' })))) return;
         setSteps((prev) => prev.filter((s) => s.id !== stepId));
         if (selection?.sessionId === stepId) setSelection(null);
-      } catch (error) {
-        console.error('Error deleting session:', error);
       } finally {
         setDeleteStepConfirm(null);
       }
@@ -280,13 +223,14 @@ const BuilderPage = () => {
 
       const positions: Record<string, number> = {};
       updated.forEach((s) => (positions[s.id] = s.position));
-      await withSave(
+      const saved = await withSave(
         apiFetch(stepsReorderApi(projectId, workflow.id), {
           method: 'PATCH',
           headers: jsonHeaders,
           body: JSON.stringify({ positions }),
         }),
       );
+      if (!saved) setSteps(sortedSteps);
     },
     [sortedSteps, projectId, workflow.id, withSave],
   );
@@ -300,11 +244,11 @@ const BuilderPage = () => {
         body: JSON.stringify({ step: { [field]: value } }),
       }),
     );
-  }, 500);
+  }, SAVE_DEBOUNCE);
 
   const saveStepFieldImmediate = useCallback(
-    async (stepId: number, field: string, value: unknown) => {
-      await withSave(
+    (stepId: number, field: string, value: unknown) => {
+      return withSave(
         apiFetch(stepApi(projectId, workflow.id, stepId), {
           method: 'PATCH',
           headers: jsonHeaders,
@@ -317,9 +261,22 @@ const BuilderPage = () => {
 
   const updateStepField = useCallback(
     (stepId: number, field: string, value: unknown, immediate = false) => {
+      const fieldOf = (s: Step) => (s as unknown as Record<string, unknown>)[field];
+      const current = stepsRef.current.find((s) => s.id === stepId);
+      const previous = current ? fieldOf(current) : undefined;
       setSteps((prev) => prev.map((s) => (s.id === stepId ? { ...s, [field]: value } : s)));
-      if (immediate) saveStepFieldImmediate(stepId, field, value);
-      else saveStepField(stepId, field, value);
+      if (!immediate) {
+        saveStepField(stepId, field, value);
+        return;
+      }
+      // A pick the server refused (a dependency that closes a cycle, say) must not stay on
+      // screen as if saved — unless a later pick has replaced it in the meantime.
+      void saveStepFieldImmediate(stepId, field, value).then((saved) => {
+        if (saved) return;
+        setSteps((prev) =>
+          prev.map((s) => (s.id === stepId && fieldOf(s) === value ? { ...s, [field]: previous } : s)),
+        );
+      });
     },
     [saveStepField, saveStepFieldImmediate],
   );
@@ -356,7 +313,7 @@ const BuilderPage = () => {
 
   const removeSubStep = useCallback(
     async (sessionId: number, subStepId: number) => {
-      await withSave(
+      const removed = await withSave(
         apiFetch(stepApi(projectId, workflow.id, sessionId), {
           method: 'PATCH',
           headers: jsonHeaders,
@@ -365,6 +322,7 @@ const BuilderPage = () => {
           }),
         }),
       );
+      if (!removed) return;
       setSteps((prev) =>
         prev.map((s) => (s.id === sessionId ? { ...s, subSteps: s.subSteps.filter((ss) => ss.id !== subStepId) } : s)),
       );
@@ -387,7 +345,7 @@ const BuilderPage = () => {
         }),
       );
     },
-    500,
+    SAVE_DEBOUNCE,
   );
 
   const handleSubStepFieldChange = useCallback(
@@ -412,7 +370,7 @@ const BuilderPage = () => {
       const reordered = arrayMove(sorted, oldIndex, newIndex);
       const updated = reordered.map((ss, i) => ({ ...ss, position: i + 1 }));
       setSteps((prev) => prev.map((s) => (s.id === sessionId ? { ...s, subSteps: updated } : s)));
-      await withSave(
+      const saved = await withSave(
         apiFetch(stepApi(projectId, workflow.id, sessionId), {
           method: 'PATCH',
           headers: jsonHeaders,
@@ -421,6 +379,7 @@ const BuilderPage = () => {
           }),
         }),
       );
+      if (!saved) setSteps((prev) => prev.map((s) => (s.id === sessionId ? { ...s, subSteps: step.subSteps } : s)));
     },
     [steps, projectId, workflow.id, withSave],
   );
@@ -433,7 +392,9 @@ const BuilderPage = () => {
         body: JSON.stringify({ step: { [field]: specs } }),
       }),
     );
-  }, 500);
+  }, SAVE_DEBOUNCE);
+
+  useFlushWhenHidden(saveWorkflow, saveStepField, updateSubStepField, debouncedSaveAssetSpecs);
 
   const handleAssetSpecsChange = useCallback(
     (stepId: number, field: 'inputAssetSpecs' | 'outputAssetSpecs', specs: AssetSpec[]) => {
@@ -524,7 +485,7 @@ const BuilderPage = () => {
               <IconArrowLeft size={13} /> Workflows
             </button>
             <div style={{ flex: 1 }} />
-            <SaveChip saving={saving} />
+            <SaveChip saving={saving} failed={saveFailed} />
             {project && !readOnly && (
               <Tooltip label="Add instructions to at least one session to run" disabled={canRun}>
                 <button

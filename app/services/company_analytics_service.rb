@@ -1,13 +1,6 @@
 # frozen_string_literal: true
 
 class CompanyAnalyticsService
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
-
   ProjectBreakdown = Struct.new(:project_id, :project_name, :sessions, :cost_cents, :tokens, keyword_init: true)
 
   Result = Struct.new(
@@ -20,7 +13,7 @@ class CompanyAnalyticsService
     @company = company
     @user = user
     @scope = scope.to_s
-    @since = PERIOD_DAYS.fetch(period.to_s, 30).days.ago
+    @since = AnalyticsPeriod.since(period.to_s)
   end
 
   def call
@@ -49,7 +42,7 @@ class CompanyAnalyticsService
   attr_reader :company, :user, :scope, :since
 
   def base_sessions
-    scope_sessions.where(created_at: since..)
+    scope_sessions.where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
   end
 
   def scope_sessions

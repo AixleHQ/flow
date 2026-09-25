@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 Rails.application.routes.draw do
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
@@ -20,6 +22,7 @@ Rails.application.routes.draw do
   # per-session key (AzureDevops::GitSessionKey), NOT by the session's mcp_key —
   # see the controller for why. Not an MCP tool and not in any tool list.
   post "/azure/git/credentials", to: "azure_git_credentials#create"
+  post "/agents/git/credentials", to: "git_credentials#create"
 
   # Credential write-back from agent containers: the in-container watcher posts an auth
   # file here as soon as the CLI rotates it, so a container that dies without cleanup no
@@ -107,6 +110,7 @@ Rails.application.routes.draw do
         resources :assets, only: %i[create update destroy] do
           member do
             get :download
+            delete :share, action: :unshare
           end
           collection do
             post :bulk_actions
@@ -126,6 +130,7 @@ Rails.application.routes.draw do
           resources :assets, only: %i[create update destroy] do
             member do
               get :download
+              delete :share, action: :unshare
             end
             collection do
               post :bulk_actions
@@ -152,6 +157,7 @@ Rails.application.routes.draw do
               member do
                 post :export
                 get :download
+                delete :share, action: :unshare
               end
               collection do
                 post :export_all
@@ -184,7 +190,9 @@ Rails.application.routes.draw do
               end
               scope module: :task do
                 resources :comments, only: %i[index create]
-                resources :assets, only: %i[index create destroy]
+                resources :assets, only: %i[index create destroy] do
+                  member { delete :share, action: :unshare }
+                end
                 resources :gates, only: %i[destroy]
                 resources :transitions, only: %i[index]
                 resources :activities, only: %i[index]
@@ -205,6 +213,7 @@ Rails.application.routes.draw do
         post :impersonate
         post :stop_impersonate
         post :restore
+        delete :sign_out_everywhere
         delete :permanent_destroy
       end
     end
@@ -282,6 +291,7 @@ Rails.application.routes.draw do
       put :update_default_model, on: :member
       delete :destroy_credential, on: :member
       post :regenerate_mcp_token, on: :member
+      delete :sign_out_other_sessions, on: :member
       delete :disable_mcp_token, on: :member
       patch :update_mcp_tools, on: :member
     end
@@ -303,12 +313,15 @@ Rails.application.routes.draw do
     # Public RFC "Client ID Metadata Document" (CIMD). When an MCP authorization
     # server supports CIMD, this URL is our client_id and the AS dereferences it.
     get "oauth/client-metadata.json", to: "oauth#client_metadata", as: :oauth_client_metadata
-    get "oauth/:provider/authorize", to: "oauth#authorize", as: :oauth_authorize
+    post "oauth/:provider/authorize", to: "oauth#authorize", as: :oauth_authorize
     get "oauth/callback", to: "oauth#callback", as: :oauth_callback
     # MCP OAuth 2.1 connect (oauth-unification §5): discovery + dynamic client
     # registration, then the SAME consent flow as #authorize. The mcp_server_id
     # sources the discovered DCR client; the callback stays the shared oauth_callback.
-    get "oauth/mcp/:mcp_server_id/connect", to: "oauth#mcp_connect", as: :oauth_mcp_connect
+    post "oauth/mcp/:mcp_server_id/connect", to: "oauth#mcp_connect", as: :oauth_mcp_connect
+    # Links (a reconnect email, a page from before connect became a POST) land on
+    # the server's page instead: a GET must not start anything.
+    get "oauth/mcp/:mcp_server_id/connect", to: "oauth#mcp_connect_page"
 
     namespace :company do
       post "switch", to: "switch#create", as: :switch
@@ -332,6 +345,7 @@ Rails.application.routes.draw do
           resource :favorite, only: %i[create destroy]
           resource :board, only: %i[show]
           resources :sessions, only: %i[index new show] do
+            get :rows, on: :collection
             scope module: :sessions do
               resources :artifacts, only: :index do
                 collection do
@@ -411,6 +425,7 @@ Rails.application.routes.draw do
       resources :analytics, only: :index
       resources :assets, only: %i[index]
       resources :sessions, only: %i[index show] do
+        get :rows, on: :collection
         scope module: :sessions do
           resources :artifacts, only: :index do
             collection do

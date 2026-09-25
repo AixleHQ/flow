@@ -29,6 +29,35 @@ function actionLabel(action: BulkAction): string {
   }
 }
 
+// One PATCH per task, and fetch resolves for a refused one too: the count comes from the
+// answers, or a 403 on every task would still read as "Updated priority for 3 tasks".
+function patchEach(projectId: number, taskIds: number[], boardTask: Record<string, unknown>): Promise<number> {
+  return Promise.all(
+    taskIds.map((id) =>
+      apiFetch(apiV1ProjectTaskPath(projectId, id), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ board_task: boardTask }),
+      }).then(
+        (res) => res.ok,
+        () => false,
+      ),
+    ),
+  ).then((results) => results.filter(Boolean).length);
+}
+
+function reportEach(label: string, updated: number, total: number, failure: string) {
+  const tasks = (n: number) => `${n} task${n === 1 ? '' : 's'}`;
+  if (updated === total) notifications.show({ color: 'green', message: `${label} ${tasks(total)}.` });
+  else if (updated > 0)
+    notifications.show({
+      color: 'yellow',
+      title: 'Partial success',
+      message: `${label} ${updated} of ${tasks(total)}. ${total - updated} not saved.`,
+    });
+  else notifications.show({ color: 'red', message: failure });
+}
+
 interface UseBulkActionsOptions {
   projectId: number;
   onSuccess: () => void;
@@ -89,29 +118,9 @@ export function useBulkActions({ projectId, onSuccess }: UseBulkActionsOptions) 
   // Bulk set priority: calls single-task PATCH for each selected task
   const bulkSetPriority = useCallback(
     async (taskIds: number[], priority: string | null) => {
-      try {
-        await Promise.all(
-          taskIds.map((id) =>
-            apiFetch(apiV1ProjectTaskPath(projectId, id), {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ board_task: { priority } }),
-            }),
-          ),
-        );
-
-        notifications.show({
-          color: 'green',
-          message: `Updated priority for ${taskIds.length} task${taskIds.length === 1 ? '' : 's'}.`,
-        });
-
-        router.reload({ only: ['tasks'] });
-      } catch {
-        notifications.show({
-          color: 'red',
-          message: 'Failed to update priority. Please try again.',
-        });
-      }
+      const updated = await patchEach(projectId, taskIds, { priority });
+      reportEach('Updated priority for', updated, taskIds.length, 'Failed to update priority. Please try again.');
+      router.reload({ only: ['tasks'] });
     },
     [projectId],
   );
@@ -119,29 +128,9 @@ export function useBulkActions({ projectId, onSuccess }: UseBulkActionsOptions) 
   // Bulk assign: calls single-task PATCH for each selected task
   const bulkAssign = useCallback(
     async (taskIds: number[], assigneeId: number | null) => {
-      try {
-        await Promise.all(
-          taskIds.map((id) =>
-            apiFetch(apiV1ProjectTaskPath(projectId, id), {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ board_task: { assignee_id: assigneeId } }),
-            }),
-          ),
-        );
-
-        notifications.show({
-          color: 'green',
-          message: `Updated assignee for ${taskIds.length} task${taskIds.length === 1 ? '' : 's'}.`,
-        });
-
-        router.reload({ only: ['tasks'] });
-      } catch {
-        notifications.show({
-          color: 'red',
-          message: 'Failed to update assignee. Please try again.',
-        });
-      }
+      const updated = await patchEach(projectId, taskIds, { assignee_id: assigneeId });
+      reportEach('Updated assignee for', updated, taskIds.length, 'Failed to update assignee. Please try again.');
+      router.reload({ only: ['tasks'] });
     },
     [projectId],
   );

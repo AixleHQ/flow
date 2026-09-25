@@ -13,6 +13,8 @@ import {
 import { IconEdit, IconPlus, IconSearch, IconTool, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import type { Tool } from '@/types/generated';
+
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -21,37 +23,7 @@ import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/Resourc
 import { DeleteToolModal } from './DeleteToolModal';
 import { ToolFormModal } from './ToolFormModal';
 
-type ToolSource = 'code' | 'db';
 type ScopeIndicator = 'system' | 'company' | 'project' | 'overrides_company';
-
-interface ToolFile {
-  id?: number;
-  path: string;
-  content: string;
-  binary: boolean;
-  fileName: string | null;
-  fileUrl: string | null;
-}
-
-export interface Tool {
-  id: number;
-  name: string;
-  displayName: string;
-  description: string | null;
-  source: ToolSource;
-  scopeType: string | null;
-  scopeId: number | null;
-  dockerImage: string | null;
-  command: string | null;
-  requiredConfigItems: string[];
-  inputSchema: Record<string, unknown>;
-  enabled: boolean;
-  platformTool: boolean;
-  scopeIndicator: ScopeIndicator;
-  toolFiles: ToolFile[];
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface ToolsContentProps {
   tools: Tool[];

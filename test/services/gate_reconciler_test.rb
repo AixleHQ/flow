@@ -204,7 +204,7 @@ class GateReconcilerTest < ActiveSupport::TestCase
     create_gate(created_at: 1.hour.ago)
     stub_probe(Ci::ProbeResult.unresolvable("workflow run 99 not found in org/app"))
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: @task, mode: :non_interactive)
     ).once
 
@@ -221,7 +221,7 @@ class GateReconcilerTest < ActiveSupport::TestCase
     create_gate(created_at: 1.minute.ago, metadata: { "repo_full_name" => "org/app", "pr_number" => 43 })
     stub_probe(Ci::ProbeResult.unresolvable("PR #42 not found in org/app"))
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     GateReconciler.reconcile_all
 
@@ -272,10 +272,10 @@ class GateReconcilerTest < ActiveSupport::TestCase
   test "does not overwrite a webhook verdict that lands while the provider is being probed" do
     gate = create_gate(created_at: 20.hours.ago, expires_at: 8.hours.ago)
 
-    # The gate's real webhook arrives mid-probe and records the provider's failure.
-    # Without the pending re-check, the TTL branch below would then bury it as stale.
+    # Another writer lands the provider's failure mid-probe. Without the pending
+    # re-check, the TTL branch below would then bury it as stale.
     stub_probe(Ci::ProbeResult.in_progress("still running")) do
-      GateService.resolve_github_checks(repo_full_name: "org/app", pr_number: 42, conclusion: "failure")
+      TaskService.resolve_gate(gate: Gate.find(gate.id), resolution_data: { conclusion: "failure" })
     end
 
     counts = GateReconciler.reconcile_all
@@ -316,7 +316,7 @@ class GateReconcilerTest < ActiveSupport::TestCase
     gate = create_gate(created_at: 1.hour.ago)
     stub_probe(Ci::ProbeResult.unresolvable("PR #42 not found in org/app"))
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: @task, mode: :non_interactive)
     ).once
 

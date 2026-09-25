@@ -21,6 +21,20 @@ class Api::V1::Company::FoldersTest < ActionDispatch::IntegrationTest
     assert { Folder.for_company(@company).exists?(path: "shared") }
   end
 
+  test "a multi-company user creates the folder in the company they are working in" do
+    other = create(:company)
+    create(:company_membership, user: @owner, company: other, role: "admin", accepted_at: Time.current)
+    @owner.company_memberships.find_by!(company: @company).update!(accepted_at: 3.days.ago)
+    @owner.update_column(:last_company_id, other.id)
+    sign_in_as(@owner)
+
+    post api_v1_company_folders_path, params: { folder: { path: "shared" } }, as: :json
+
+    assert_response :created
+    assert { Folder.for_company(other).exists?(path: "shared") }
+    assert_not Folder.for_company(@company).exists?(path: "shared")
+  end
+
   test "relocate renames a folder" do
     create(:folder, path: "shared", scope: @company, created_by: @owner)
 

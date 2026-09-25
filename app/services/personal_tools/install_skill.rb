@@ -9,6 +9,10 @@ module PersonalTools
       tags :resources
       param :project_id, type: :integer, description: "Project id.", required: true
       param :skill_id, type: :string, description: "Registry skill id.", required: true
+      param :acknowledge_risk, type: :boolean,
+                               description: "Required when an audit flags the skill (high, critical or an unknown " \
+                                            "verdict). Show the user the audit from get_registry_skill and set this " \
+                                            "only after they confirm."
     end
 
     def execute
@@ -17,7 +21,8 @@ module PersonalTools
       # Same install count the UI records, so the figure does not depend on which
       # path installed the skill.
       installs = CatalogSkill.find_by(registry_id: params[:skill_id].to_s)&.installs
-      skill = SkillsRegistryService.install(params[:skill_id], scope: project, installs: installs)
+      skill = SkillsRegistryService.install(params[:skill_id], scope: project, installs: installs,
+                                                               acknowledge_risk: params[:acknowledge_risk] == true)
       success(id: skill.id, name: skill.name, title: skill.title)
     rescue SkillsRegistryService::RegistryError => e
       error("Install failed: #{e.message}")

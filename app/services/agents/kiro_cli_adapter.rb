@@ -105,6 +105,12 @@ module Agents
     # escape rather than a literal NUL so this file stays text.
     SQLITE_MAGIC = "SQLite format 3\u0000"
 
+    # Far above any login database the CLI writes; a blob this large is refused unread.
+    MAX_STATE_BYTES = 32 * 1024 * 1024
+
+    # A state database this process will not open or write.
+    class UntrustedState < SQLite3::Exception; end
+
     # Kiro's control plane, read off the CLI's own traffic through the MITM proxy: a
     # private AWS-JSON 1.0 service, operation in X-Amz-Target, bearer token. Undocumented
     # and not anonymous.
@@ -282,7 +288,7 @@ module Agents
 
     # Not meaningful for this runtime: the credential is a binary blob, not a document
     # the CLI merges. #config_files is what actually writes the container's state.
-    def generate_config(credentials, workflow_config = {})
+    def generate_config(credentials, _workflow_config = {})
       credentials
     end
 
@@ -290,7 +296,7 @@ module Agents
     # at the path the CLI reads, and an MCP config for SessionContextService to merge
     # into. User scope (~/.kiro/settings/mcp.json) is loaded for every session, so no
     # custom agent definition is needed to pick the servers up.
-    def config_files(credentials, workflow_config = {})
+    def config_files(credentials, _workflow_config = {})
       files = {
         mcp_config_path => { "mcpServers" => {} }.to_json,
         cli_settings_path => CLI_SETTINGS.to_json,
@@ -318,8 +324,8 @@ module Agents
     # that is not a preference — it is the only mode in which the prompt arrives.
     #
     # `chat --help` documents a positional `[INPUT]` ("the first question to ask"), and
-    # every other runtime here is driven that way: AgentSessionStrategy appends
-    # "$AGENT_PROMPT" to the launch command. On V3 the interactive TUI **ignores** it.
+    # every other runtime here is driven that way: AgentSessionStrategy appends the
+    # prompt to the launch command. On V3 the interactive TUI **ignores** it.
     # Measured on 2.21.3 in a real tmux pane, with the trust confirmation pre-answered
     # so nothing else could swallow it: `kiro-cli --v3 chat --trust-all-tools "…"`
     # comes up at an empty "ask a question or describe a task" prompt and waits. A
@@ -333,7 +339,7 @@ module Agents
     #
     # `--trust-all-tools` is what makes the container the sandbox, as it is for every
     # other runtime here; its startup confirmation is pre-answered in CLI_SETTINGS.
-    def session_command(mode:, prompt: nil, model: nil)
+    def session_command(mode:, model: nil)
       flags = [ "--trust-all-tools" ]
       flags << "--model #{Shellwords.shellescape(model)}" if model.present?
       flags << "--no-interactive" if mode.to_s == "non_interactive"
@@ -467,10 +473,20 @@ module Agents
       expiry_ms(auth_record(decoded_state(credentials))["expires_at"])
     end
 
+    # The state database is the whole credential, so it is what rotates; the profile it
+    # is signed in to must stay the same.
+    def rotatable_credential_keys = %w[state_b64]
+
+    def binary_writeback_path?(path) = path == state_path
+
+    def credential_identity(credentials)
+      auth_record(decoded_state(credentials))["profile_arn"].presence
+    end
+
     # Renew the login without a container. The credential is the CLI's SQLite database,
     # so the refreshed token is written back into the row it came from and the whole
     # database is re-stored — the CLI must find it exactly where it left it.
-    def refresh!(credential, margin_ms: nil)
+    def perform_refresh!(credential, margin_ms: nil)
       blob = decoded_state(credential.config_data)
       rows = auth_rows(blob)
       token = rows[:token]
@@ -489,7 +505,7 @@ module Agents
       return { status: :error, detail: "could not write the refreshed token back", permanent: false } if blob.blank?
 
       persist_refreshed!(credential, { "state_b64" => Base64.strict_encode64(blob) })
-      { status: :refreshed, detail: nil, permanent: false }
+      { status: :refreshed, detail: nil, permanent: false, persisted: true }
     rescue StandardError => e
       Rails.logger.warn("[KiroCliAdapter] refresh failed: #{e.class}: #{e.message}")
       { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
@@ -628,7 +644,7 @@ module Agents
         "KIRO_TELEMETRY_OTEL" => "1",
         "KIRO_TELEMETRY_OTLP_ENDPOINT" => Settings.otel.endpoint,
         "KIRO_TELEMETRY_EXPORT_INTERVAL_MS" => OTEL_EXPORT_INTERVAL_MS,
-        "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session&.route_token}"
+        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
       }.compact_blank
     end
 
@@ -659,20 +675,14 @@ module Agents
     def auth_record(blob)
       return {} if blob.blank?
 
-      Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
-        file.binmode
-        file.write(blob)
-        file.flush
+      with_state_database(blob) do |db|
+        token = token_row(db)
+        return {} if token.blank?
 
-        SQLite3::Database.new(file.path, readonly: true) do |db|
-          token = token_row(db)
-          return {} if token.blank?
-
-          # The `state` table is what the CLI itself reads, so it wins; the token row is
-          # the fallback, because a social refresh hands the profile ARN back with the
-          # new token and that is the only place we can have stored it.
-          return token.merge("profile_arn" => profile_arn_from(db) || token["profile_arn"]).compact
-        end
+        # The `state` table is what the CLI itself reads, so it wins; the token row is
+        # the fallback, because a social refresh hands the profile ARN back with the
+        # new token and that is the only place we can have stored it.
+        return token.merge("profile_arn" => profile_arn_from(db) || token["profile_arn"]).compact
       end
       {}
     rescue SQLite3::Exception => e
@@ -774,6 +784,12 @@ module Agents
     # credential IS those bytes.
     def blob_with_token(blob, key, token)
       with_state_database(blob, readonly: false) do |db, path|
+        # An UPDATE runs whatever triggers the file declares. The CLI's own database has
+        # none on this table; one that does was not written by the CLI.
+        if db.get_first_value("SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'auth_kv'").to_i.positive?
+          raise UntrustedState, "auth_kv carries triggers"
+        end
+
         db.execute("UPDATE auth_kv SET value = ? WHERE key = ?", [ token.to_json, key ])
         db.close
         return File.binread(path)
@@ -784,7 +800,14 @@ module Agents
       nil
     end
 
+    # The database comes back from the container, which is the thing that may be
+    # compromised, so it is opened as a hostile file: it must be a SQLite database of a
+    # plausible size, pass quick_check, and its schema is not trusted — views and
+    # triggers may not call functions with side effects (trusted_schema).
     def with_state_database(blob, readonly: true)
+      raise UntrustedState, "not a SQLite database" unless sqlite_blob?(blob)
+      raise UntrustedState, "#{blob.bytesize} bytes" if blob.bytesize > MAX_STATE_BYTES
+
       Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
         file.binmode
         file.write(blob)
@@ -792,6 +815,10 @@ module Agents
 
         db = SQLite3::Database.new(file.path, readonly: readonly)
         begin
+          db.execute("PRAGMA trusted_schema = OFF")
+          db.execute("PRAGMA cell_size_check = ON")
+          raise UntrustedState, "failed quick_check" unless db.get_first_value("PRAGMA quick_check") == "ok"
+
           yield db, file.path
         ensure
           db.close unless db.closed?

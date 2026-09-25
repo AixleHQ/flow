@@ -6,13 +6,11 @@ class InternalTools::ReadToolResultTest < ActiveSupport::TestCase
   setup do
     @tool = create(:tool, :internal, name: "read_tool_result",
       display_name: "Read Tool Result")
-    @session = Object.new
-    @session.define_singleton_method(:project) { nil }
-    @session.define_singleton_method(:step_run) { nil }
+    @session = create(:terminal_session, :agent_session, user: create(:user, :with_company))
   end
 
   test "returns serialized JSON for completed tool result" do
-    tr = create(:tool_result, tool: @tool)
+    tr = create(:tool_result, tool: @tool, terminal_session: @session)
     tr.complete!(exit_code: 0, stdout: '{"issues": 3}', stderr: "", duration_ms: 100)
 
     handler = InternalTools::ReadToolResult.new(
@@ -32,7 +30,7 @@ class InternalTools::ReadToolResultTest < ActiveSupport::TestCase
   end
 
   test "returns processing state for unfinished tool result" do
-    tr = create(:tool_result, tool: @tool)
+    tr = create(:tool_result, tool: @tool, terminal_session: @session)
 
     handler = InternalTools::ReadToolResult.new(
       params: { tool_result_id: tr.execution_id },
@@ -58,7 +56,7 @@ class InternalTools::ReadToolResultTest < ActiveSupport::TestCase
   end
 
   test "returns failed state with error field" do
-    tr = create(:tool_result, tool: @tool)
+    tr = create(:tool_result, tool: @tool, terminal_session: @session)
     tr.complete!(exit_code: 1, stdout: "", stderr: "crash", duration_ms: 500,
                  error: "Timed out after 600s")
 
@@ -71,5 +69,14 @@ class InternalTools::ReadToolResultTest < ActiveSupport::TestCase
     parsed = JSON.parse(result[:stdout])
     assert_equal "failed", parsed["state"]
     assert_equal "Timed out after 600s", parsed["error"]
+  end
+  test "does not read a result that belongs to another session" do
+    other = create(:tool_result, tool: @tool, terminal_session: create(:terminal_session, :agent_session, user: create(:user, :with_company)))
+    other.complete!(exit_code: 0, stdout: "theirs", stderr: "", duration_ms: 10)
+
+    result = InternalTools::ReadToolResult.new(params: { tool_result_id: other.execution_id }, session: @session).execute
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "not found"
   end
 end

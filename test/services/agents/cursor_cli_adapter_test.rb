@@ -160,7 +160,7 @@ module Agents
 
     test "session_command returns agent --force without a model" do
       assert_equal "agent --force", @adapter.session_command(mode: "interactive")
-      assert_equal "agent --force", @adapter.session_command(mode: "non_interactive", prompt: "do it")
+      assert_equal "agent --force", @adapter.session_command(mode: "non_interactive")
     end
 
     test "session_command appends a shell-escaped model flag when model provided" do

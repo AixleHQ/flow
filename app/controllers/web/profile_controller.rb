@@ -17,6 +17,7 @@ class Web::ProfileController < Web::ApplicationController
                                        .includes(:company)
                                        .map { |m| MembershipResource.new(m).to_h },
       language_options: CompanyMembership::AGENT_LANGUAGES,
+      other_sessions_count: current_user.user_sessions.live.where.not(id: current_user_session&.id).count,
       agent_models: current_membership&.agent_models_for_props || [],
       cable_stream: inertia_cable_stream(current_user),
       # Plan-usage windows are fetched from runtime vendors over HTTP, so they
@@ -47,7 +48,13 @@ class Web::ProfileController < Web::ApplicationController
         # renders that as everything checked, and sends nil back for it.
         enabled_tools: current_user.mcp_enabled_tools
       }
-    }
+    }, encrypt_history: true
+  end
+
+  # Ends every other browser this person is signed in on; this one stays.
+  def sign_out_other_sessions
+    ended = UserSession.revoke_all_for!(current_user, except: current_user_session)
+    redirect_to profile_path, notice: "Signed out of #{ended} other #{'session'.pluralize(ended)}"
   end
 
   # Enable / rotate in one action: the previous token stops working the

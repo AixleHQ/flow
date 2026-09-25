@@ -2,9 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Tool } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-
-import type { Tool } from 'shared/resources/tools/ToolsContent';
 
 import ToolsPage from './ToolsPage';
 
@@ -22,6 +21,7 @@ const makeTool = (overrides: Partial<Tool> = {}): Tool => ({
   command: 'python extract.py',
   requiredConfigItems: [],
   inputSchema: {},
+  tags: [],
   enabled: true,
   platformTool: false,
   scopeIndicator: 'project',
@@ -39,7 +39,18 @@ const tools: Tool[] = [
     name: 'image_resizer',
     displayName: 'Image Resizer',
     dockerImage: null,
-    toolFiles: [{ path: 'a.txt', content: 'x', binary: false, fileName: null, fileUrl: null }],
+    toolFiles: [
+      {
+        id: 1,
+        path: 'a.txt',
+        content: 'x',
+        binary: false,
+        fileName: null,
+        fileUrl: null,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    ],
   }),
 ];
 

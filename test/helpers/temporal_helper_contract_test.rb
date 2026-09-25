@@ -15,8 +15,8 @@ require "test_helper"
 # the REAL success return so the seam and reality cannot silently drift apart.
 #
 # Why we do NOT invoke the real success path here: in Rails.env.test that path
-# runs through TemporalService.with_test_environment_handling, which calls
-# Temporalio::Testing::WorkflowEnvironment.start_local — booting a real local
+# runs through TemporalService.with_client, which the suite points at
+# Temporalio::Testing::WorkflowEnvironment.start_local (test/test_helper.rb) — booting a real local
 # Temporal dev server (test-server binary + gRPC port). It is slow and hangs often
 # enough that temporal_service_test.rb stubs start_local in setup just to keep the
 # suite moving. The one shortcut that would make a "real" call cheap — stubbing

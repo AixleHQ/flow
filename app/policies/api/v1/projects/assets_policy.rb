@@ -8,6 +8,7 @@ module Api
         def create? = project_writable?
         def update? = project_writable?
         def destroy? = project_writable?
+        def unshare? = project_writable?
         def bulk_actions? = project_writable?
       end
     end

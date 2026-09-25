@@ -3,7 +3,13 @@ http:
     terminal-auth:
       forwardAuth:
         address: "http://web:4000/api/v1/internal/ws_auth"
-        authResponseHeadersRegex: "^X-"
+        # Cookie/Authorization are replaced by what ws_auth answers, so the
+        # agent container never receives the viewer's Rails session cookie.
+        authResponseHeadersRegex: "^(X-.*|Cookie|Authorization)$"
+        # The sandbox host's pass (ContainerTicket), when containers are served
+        # from a host of their own.
+        addAuthCookiesToResponse:
+          - aixle_container
     terminal-cors:
       headers:
         accessControlAllowOriginList:

@@ -3,45 +3,24 @@ import { Alert, Badge, Box, Divider, Group, Paper, Select, Skeleton, Table, Text
 import { IconInfoCircle } from '@tabler/icons-react';
 import { formatDistanceToNow } from 'date-fns';
 
+import type { TerminalSession } from '@/types/generated';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { formatTokens } from 'shared/lib/formatUsage';
 import { PERIOD_OPTIONS, UsageAnalytics, type Period } from 'shared/resources/usage/UsageAnalytics';
 import { type SharedProps } from 'shared/ui';
+import { AGENT_RUNTIMES, agentLabel, isAgentType } from 'shared/ui/agentRuntimes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { ProfileTabs } from './ProfileTabs';
-
-interface Session {
-  id: number;
-  sessionType: string;
-  agentType: string | null;
-  state: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  createdAt: string;
-  totalTokens: number;
-  costCents: number;
-  models: string[] | null;
-  projectName: string | null;
-}
 
 interface Props {
   period: Period;
   projectId?: string | null;
   viewerIsSelf: boolean;
   targetUser: { id: number; name: string | null; email: string };
-  sessions?: Session[];
+  sessions?: TerminalSession[];
 }
-
-const AGENT_LABELS: Record<string, { label: string; color: string }> = {
-  claude_code: { label: 'Claude Code', color: 'orange' },
-  cursor_cli: { label: 'Cursor CLI', color: 'violet' },
-  codex: { label: 'Codex', color: 'teal' },
-  gemini_cli: { label: 'Gemini CLI', color: 'blue' },
-  grok: { label: 'Grok', color: 'gray' },
-  kiro_cli: { label: 'Kiro CLI', color: 'grape' },
-};
 
 const STATE_CONFIG: Record<string, { label: string }> = {
   not_started: { label: 'Pending' },
@@ -97,7 +76,7 @@ function SessionsPanel() {
             </Table.Thead>
             <Table.Tbody>
               {sessions.map((s) => {
-                const agent = AGENT_LABELS[s.agentType ?? ''] ?? { label: s.agentType ?? '—', color: 'gray' };
+                const agentColor = isAgentType(s.agentType) ? AGENT_RUNTIMES[s.agentType].mantineColor : 'gray';
                 const stateConfig = STATE_CONFIG[s.state] ?? { label: s.state };
                 const typeLabel = SESSION_TYPE_LABELS[s.sessionType] ?? s.sessionType;
                 return (
@@ -108,8 +87,8 @@ function SessionsPanel() {
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={agent.color} size="sm" variant="filled">
-                        {agent.label}
+                      <Badge color={agentColor} size="sm" variant="filled">
+                        {agentLabel(s.agentType)}
                       </Badge>
                     </Table.Td>
                     <Table.Td>

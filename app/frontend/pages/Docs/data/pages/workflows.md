@@ -47,6 +47,11 @@ run begins. Steps with dependencies wait until *all* listed
 prerequisites complete successfully. Sibling steps that share no
 dependency relationship run **in parallel**, each in its own container.
 
+Dependencies cannot form a cycle: saving a step that would end up waiting on
+itself is rejected with the cycle spelled out. If a run is left with steps that
+can never start, it fails with `failure_reason: unsatisfiable_dependencies`
+instead of reporting completion.
+
 ```
        ┌── Step B (lint)  ─┐
 Step A ┤                   ├── Step D (merge)

@@ -11,7 +11,7 @@ class BoardColumnResource < ApplicationResource
     column.has_attribute?(:tasks_count) ? column[:tasks_count].to_i : column.board_tasks.active.count
   end
 
-  typelize "{ id: number; workflow_id: number; workflow_name: string | null; trigger_mode: \"auto\" | \"manual\"; cooldown_seconds: number } | null"
+  typelize "{ id: number; workflowId: number; workflowName: string | null; triggerMode: \"auto\" | \"manual\"; cooldownSeconds: number } | null"
   attribute :workflow_binding do |column|
     binding = column.column_workflow_binding
     if binding

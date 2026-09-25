@@ -15,22 +15,6 @@ const LOGOS: Record<string, string> = {
   antigravity_cli: geminiLogo,
 };
 
-export const AGENT_LABELS: Record<string, string> = {
-  claude_code: 'Claude Code',
-  cursor_cli: 'Cursor CLI',
-  codex: 'Codex',
-  gemini_cli: 'Gemini CLI',
-  antigravity_cli: 'Antigravity CLI',
-  grok: 'Grok',
-  kiro_cli: 'Kiro CLI',
-};
-
-/** `claude_code` → `Claude Code`; unknown runtimes fall back to the raw id. */
-export function agentLabel(agentType: string | null | undefined): string {
-  if (!agentType) return '—';
-  return AGENT_LABELS[agentType] ?? agentType;
-}
-
 interface AgentLogoProps {
   agentType: string | null | undefined;
   size?: number;

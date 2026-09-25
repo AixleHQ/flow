@@ -1,6 +1,11 @@
 # frozen_string_literal: true
 
 class SessionAdmissionReconciler
+  # A stop whose cancel never reached Temporal left the workflow — and its
+  # reservation — running until the day-long execution timeout. Past this, the
+  # cancel is sent again on every pass until the execution closes.
+  CANCEL_RETRY_AFTER = 2.minutes
+
   def self.run(limit: 100)
     # Durable run stop markers repair a crash during cancellation fan-out.
     WorkflowRun.where.not(stop_requested_at: nil).where(state: %w[running paused cancelled])
@@ -30,10 +35,10 @@ class SessionAdmissionReconciler
       .order(:updated_at).limit(limit).each do |admission|
       next unless TemporalService.enabled?
       admission.touch
-      next if execution_open?(admission.terminal_session.workflow_id)
+      next resend_cancel(admission) if execution_open?(admission.terminal_session.workflow_id)
 
       strand_in_flight_operations(admission)
-      Activities::Container::AdmittedPhaseActivity.new.run(Hashie::Mash.new(
+      Activities::Container::AdmittedPhaseActivity.new.run(TemporalInput.wrap(
         phase: "cleanup", admission_id: admission.id, error: cleanup_error(admission)
       ))
     rescue StandardError => e
@@ -57,6 +62,15 @@ class SessionAdmissionReconciler
     return "Container workflow ended" if session.started_at || admission.runtime_id.present?
 
     TerminalSession::LAUNCH_ABANDONED_ERROR
+  end
+
+  def self.resend_cancel(admission)
+    return if admission.stop_requested_at.nil? || admission.stop_requested_at > CANCEL_RETRY_AFTER.ago
+
+    result = TemporalService.cancel_workflow(admission.terminal_session.workflow_id)
+    return if result[:ok]
+
+    admission.update!(last_error: "Cancel not delivered: #{result[:error]}")
   end
 
   # Whether Temporal still has a running execution behind this reservation.
@@ -115,7 +129,7 @@ class SessionAdmissionReconciler
     now = Time.current
     queued = SessionAdmission.unreleased.where(admitted_at: nil, stop_requested_at: nil)
     lagging = SessionAdmission.occupied.joins(:terminal_session)
-                              .where(terminal_sessions: { state: %w[finished failed cancelled] })
+                              .where(terminal_sessions: { state: TerminalSession::TERMINAL_STATES })
     policy = SessionAdmissionPolicy.current
 
     {

@@ -143,7 +143,7 @@ module Agents
 
     test "session_command runs the CLI in always-approve mode" do
       assert_equal "grok --yolo", @adapter.session_command(mode: "interactive")
-      assert_equal "grok --yolo", @adapter.session_command(mode: "non_interactive", prompt: "do it")
+      assert_equal "grok --yolo", @adapter.session_command(mode: "non_interactive")
     end
 
     test "session_command shell-escapes the requested model" do

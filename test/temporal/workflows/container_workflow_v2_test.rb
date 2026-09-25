@@ -11,6 +11,7 @@ module Workflows
       attr_reader :phases
 
       def initialize
+        super
         @phases = []
       end
 
@@ -29,6 +30,7 @@ module Workflows
       attr_reader :phases
 
       def initialize
+        super
         @phases = []
       end
 

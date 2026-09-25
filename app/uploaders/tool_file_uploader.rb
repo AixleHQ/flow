@@ -15,10 +15,11 @@ class ToolFileUploader < Shrine
     validate_max_size 50 * 1024 * 1024
   end
 
+  # Unique per upload: tool + basename alone would make /workspace/a/config.json and
+  # /workspace/b/config.json one object, the later upload overwriting the other.
   def generate_location(io, record: nil, name: nil, **)
     return super unless record.is_a?(ToolFile)
 
-    basename = File.basename(record.path)
-    "tool_files/#{record.tool_id}/#{basename}"
+    "tool_files/#{record.tool_id}/#{generate_uid(io)}/#{File.basename(record.path)}"
   end
 end

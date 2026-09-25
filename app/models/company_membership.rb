@@ -43,6 +43,7 @@ class CompanyMembership < ApplicationRecord
   validate :selected_agents_valid
   validate :default_agent_credential_matches_scope
   validate :cannot_remove_last_admin, on: :update
+  before_destroy :refuse_to_remove_last_admin, unless: -> { destroyed_by_association&.active_record == Company }
   validate :owned_projects_have_an_heir, on: :update
 
   # Ransack (members search: by the member's name/email through :user)
@@ -67,6 +68,10 @@ class CompanyMembership < ApplicationRecord
   # A revoked member keeps no live company streams: kill their cable
   # connections so open sockets re-authenticate (and lose company channels).
   after_update_commit :disconnect_user_cables, if: -> { saved_change_to_state? && state == "revoked" }
+  # ...and no running session: each gate a container reaches re-checks the
+  # membership (TerminalSession#owner_entitled?), and the sessions themselves
+  # are stopped so nothing keeps working on the company's repositories.
+  after_update_commit :stop_company_sessions, if: -> { saved_change_to_state? && state == "revoked" }
 
   # In-transaction (not _commit): the transfer and the revocation must land
   # together, or a crash between them leaves projects owned by a non-member.
@@ -174,6 +179,18 @@ class CompanyMembership < ApplicationRecord
     end
   end
 
+  # The company's oldest active admin excluding a given user — the canonical
+  # heir-selection rule used when a project owner is revoked or permanently
+  # deleted. Shared so both paths always agree on whom to pick.
+  def self.heir_for(company, excluding_user:)
+    company.company_memberships
+           .active
+           .where(role: "admin")
+           .where.not(user_id: excluding_user.id)
+           .default_order
+           .first
+  end
+
   private
 
   # Fetch the model list for a credential, caching per-credential (not globally —
@@ -197,6 +214,9 @@ class CompanyMembership < ApplicationRecord
     end
 
     models
+  rescue Encryptable::DecryptionError => e
+    Rails.logger.error("[CompanyMembership] #{e.message}")
+    []
   end
 
   def set_onboarding_completed_at
@@ -223,18 +243,6 @@ class CompanyMembership < ApplicationRecord
 
   def becoming_revoked?
     state == "revoked" && attribute_was(:state) != "revoked"
-  end
-
-  # The company's oldest active admin excluding a given user — the canonical
-  # heir-selection rule used when a project owner is revoked or permanently
-  # deleted. Shared so both paths always agree on whom to pick.
-  def self.heir_for(company, excluding_user:)
-    company.company_memberships
-           .active
-           .where(role: "admin")
-           .where.not(user_id: excluding_user.id)
-           .default_order
-           .first
   end
 
   def heir_membership
@@ -295,6 +303,14 @@ class CompanyMembership < ApplicationRecord
     MembershipMailer.role_changed(self, previous_role).deliver_later
   end
 
+  def stop_company_sessions
+    TerminalSession.active.where(user_id: user_id, company_id: company_id).find_each do |session|
+      SessionService.fail_session(session: session, error_message: "Stopped: the owner's membership was revoked")
+    rescue StandardError => e
+      Rails.logger.warn("[CompanyMembership] Failed to stop session #{session.id} for revoked user #{user_id}: #{e.message}")
+    end
+  end
+
   def disconnect_user_cables
     ActionCable.server.remote_connections.where(current_user: user).disconnect
   rescue StandardError => e
@@ -309,13 +325,26 @@ class CompanyMembership < ApplicationRecord
 
     still_active_admin = role.to_s == "admin" && state == "active"
     return if still_active_admin
-
-    other_active_admins = company.company_memberships
-                                 .where(role: "admin", state: "active")
-                                 .where.not(id: id)
-    return if other_active_admins.exists?
+    return if other_active_admins?
 
     errors.add(:base, "Cannot demote or remove the last admin")
+  end
+
+  # Deleting the membership — the person's account going with it — is removing
+  # the admin as surely as demoting them. Deleting the company is not.
+  def refuse_to_remove_last_admin
+    return unless role.to_s == "admin" && state == "active"
+    return if other_active_admins?
+
+    errors.add(:base, "Cannot remove the last admin of #{company.name}")
+    throw :abort
+  end
+
+  # Takes the company row lock first: two admins demoting each other at once
+  # would otherwise each still see the other as an admin, and both commit.
+  def other_active_admins?
+    Company.lock.find(company_id)
+    company.company_memberships.where(role: "admin", state: "active").where.not(id: id).exists?
   end
 
   def set_accepted_at

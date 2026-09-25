@@ -104,6 +104,25 @@ describe('useInertiaCableStream', () => {
     expect(router.reload).toHaveBeenCalledTimes(1);
   });
 
+  // A refresh broadcast sent while the socket was down never arrives.
+  it('reloads after a reconnect, but not on the first connection', () => {
+    renderHook(() => useInertiaCableStream('signed-stream-xyz', { only: ['board'] }));
+    act(() => vi.advanceTimersByTime(50));
+
+    act(() => lastHandlers?.connected());
+    act(() => vi.advanceTimersByTime(150));
+    expect(router.reload).not.toHaveBeenCalled();
+
+    act(() => {
+      lastHandlers?.disconnected?.();
+      lastHandlers?.connected();
+    });
+    act(() => vi.advanceTimersByTime(150));
+
+    expect(router.reload).toHaveBeenCalledTimes(1);
+    expect(router.reload).toHaveBeenCalledWith({ only: ['board'] });
+  });
+
   it('ignores non-refresh broadcasts', () => {
     renderHook(() => useInertiaCableStream('signed-stream-xyz'));
     act(() => vi.advanceTimersByTime(50));

@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 interface CatalogWorkflow {
@@ -30,6 +31,7 @@ interface Props {
 
 const IndexPage = () => {
   const { workflows, projectOptions: projects } = usePage<{ props: Props }>().props as unknown as Props;
+  const canWrite = useCanWrite();
 
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
@@ -116,9 +118,11 @@ const IndexPage = () => {
                       &middot; {new Date(wf.publishedAt).toLocaleDateString()}
                     </Text>
                   </Group>
-                  <Button fullWidth variant="light" onClick={() => setDuplicateWorkflow(wf)}>
-                    Duplicate to project
-                  </Button>
+                  {canWrite && (
+                    <Button fullWidth variant="light" onClick={() => setDuplicateWorkflow(wf)}>
+                      Duplicate to project
+                    </Button>
+                  )}
                 </Stack>
               </Card>
             ))}

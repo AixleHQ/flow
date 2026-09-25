@@ -72,8 +72,8 @@ class SessionAdmissionBudget
 
   def resolve_companies(pool_keys)
     ids = @project_reservations.keys.to_set
-    @occupied_by_key.each_key { |key| (id = project_id_for(key)) && ids << id }
-    pool_keys.each { |key| (id = project_id_for(key)) && ids << id }
+    @occupied_by_key.each_key { |key| (id = project_id_for(key)) && (ids << id) }
+    pool_keys.each { |key| (id = project_id_for(key)) && (ids << id) }
     return {} if ids.empty?
 
     Project.where(id: ids.to_a).pluck(:id, :company_id).to_h

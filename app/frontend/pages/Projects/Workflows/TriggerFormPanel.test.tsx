@@ -13,13 +13,12 @@ import type { Trigger } from './types';
 // apiFetch() -> the global fetch() the test setup stubs. `defaultKind` seeds the create-mode kind and
 // `editing` puts the form into (kind-locked) edit mode, so each trigger kind and its per-kind branches
 // can be rendered directly without driving the kind Select. Tests that assert a request spy on fetch()
-// and dispatch by HTTP method, mirroring WorkflowTriggersDrawer.test.tsx.
+// and dispatch by HTTP method.
 
 type PanelProps = ComponentProps<typeof TriggerFormPanel>;
 
 // ColumnOption / StepOption / Trigger are local interfaces (no Typelizer type, so no factory exists);
-// these literals match those interfaces exactly, mirroring how WorkflowTriggersDrawer.test.tsx inlines
-// its Column/Trigger fixtures.
+// these literals match those interfaces exactly.
 const columns: PanelProps['columns'] = [
   { id: 1, name: 'Backlog' },
   { id: 2, name: 'In Progress', boundWorkflowName: 'Other Flow' },
@@ -315,8 +314,8 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook' })} />);
 
     // Verification + secret only appear on create (immutable after creation).
-    await pickOption('None', 'HMAC SHA-256');
-    await userEvent.type(screen.getByPlaceholderText('optional'), 'sek');
+    await pickOption('Shared token', 'HMAC SHA-256');
+    await userEvent.type(screen.getByPlaceholderText('generated if left blank'), 'sek');
     await userEvent.type(screen.getByPlaceholderText('ref'), 'branch');
     await userEvent.type(screen.getByPlaceholderText('refs/heads/main'), 'main');
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
@@ -332,7 +331,9 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     });
   });
 
-  it('posts a webhook trigger with no secret and an empty filter when the optional fields are blank', async () => {
+  // The server generates the secret when none is typed, so an untouched form
+  // still produces a webhook that the bare URL cannot fire.
+  it('defaults a webhook to shared-token verification and leaves the secret to the server', async () => {
     const fetchSpy = installFetch();
 
     renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook' })} />);
@@ -342,10 +343,22 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     expect(bodyOf(fetchSpy, 'POST').trigger).toEqual({
       kind: 'webhook',
-      verification_strategy: 'none',
+      verification_strategy: 'shared_token',
       filter_predicate: {},
       subject_policy: 'none',
     });
+  });
+
+  it('sends none only when the user picks the unauthenticated option', async () => {
+    const fetchSpy = installFetch();
+
+    renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook' })} />);
+
+    await pickOption('Shared token', /anyone with the URL/);
+    await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(bodyOf(fetchSpy, 'POST').trigger.verification_strategy).toBe('none');
   });
 
   it('reveals the webhook subject block when create_task is chosen', async () => {
@@ -392,7 +405,6 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     );
 
     renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook' })} />);
-    await pickOption('None', 'Shared token');
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
     expect(await screen.findByText('Webhook trigger created')).toBeInTheDocument();
@@ -412,7 +424,7 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     );
 
     renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'webhook' })} />);
-    await pickOption('None', 'HMAC SHA-256');
+    await pickOption('Shared token', 'HMAC SHA-256');
     await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
 
     expect(await screen.findByText(/Example request \(HMAC SHA-256\)/)).toBeInTheDocument();

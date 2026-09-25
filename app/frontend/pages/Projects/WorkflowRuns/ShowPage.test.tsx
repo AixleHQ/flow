@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildSharedPermissions } from 'test/factories/sharedProps';
 import { buildStepRun } from 'test/factories/stepRun';
 import { buildSubStepRun } from 'test/factories/subStepRun';
 import { buildWorkflowRun } from 'test/factories/workflowRun';
@@ -390,6 +391,43 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       'https://files.example.com/report.pdf',
     );
     expect(screen.getByRole('button', { name: /promote all to project/i })).toBeInTheDocument();
+  });
+
+  it('links a shared output to its public page and stops sharing it', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    const assets = [buildWorkflowRunAsset({ id: 33, name: 'summary.md', shareUrl: 'https://flow.test/share/abc' })];
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ state: 'completed' }), assets }) });
+
+    await userEvent.click(screen.getByRole('tab', { name: /^Assets/ }));
+
+    expect(screen.getByRole('link', { name: /Public link/ })).toHaveAttribute('href', 'https://flow.test/share/abc');
+    await userEvent.click(screen.getByRole('button', { name: /Stop sharing/ }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/workflow_runs/42/workflow_run_assets/33/share',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+    fetchSpy.mockRestore();
+  });
+
+  it('shows a viewer the public link but not the control to stop sharing', async () => {
+    const assets = [buildWorkflowRunAsset({ id: 33, name: 'summary.md', shareUrl: 'https://flow.test/share/abc' })];
+    renderAuthedPage(<ShowPage />, {
+      props: seed({
+        run: makeRun({ state: 'completed' }),
+        assets,
+        permissions: buildSharedPermissions({ isAdmin: false, canWrite: false }),
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: /^Assets/ }));
+
+    expect(screen.getByRole('link', { name: /Public link/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Stop sharing/ })).not.toBeInTheDocument();
   });
 
   it('promotes a single asset through the promote modal via apiFetch', async () => {

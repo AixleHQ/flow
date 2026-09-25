@@ -16,8 +16,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     last_used_at: Field::DateTime,
     created_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
     updated_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
-    # Virtual field for config data preview (read-only)
-    config_keys: Field::String.with_options(truncate: 200)
+    login_blocks: Field::String.with_options(truncate: 200)
   }.freeze
 
   COLLECTION_ATTRIBUTES = %i[
@@ -34,7 +33,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     user
     agent_type
     status
-    config_keys
+    login_blocks
     metadata
     expires_at
     last_used_at

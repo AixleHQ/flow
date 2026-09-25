@@ -13,6 +13,7 @@
 # scope: Project only (polymorphic, null for internal)
 class MCPServer < ApplicationRecord
   extend Enumerize
+  include Encryptable
 
   enumerize :kind, in: %i[internal custom], default: :custom, predicates: true
   enumerize :transport, in: %i[http sse stdio], default: :http
@@ -23,6 +24,27 @@ class MCPServer < ApplicationRecord
 
   # Polymorphic scope (Project, null for internal)
   belongs_to :scope, polymorphic: true, optional: true
+  include TenantColumns
+
+  # Header and env values carry the server's own credentials. They are encrypted
+  # at rest, and they belong to the destination they were entered for: when the
+  # origin (http/sse) or the launch line (stdio) changes, every value not supplied
+  # again in the same save is dropped, and so are the server's OAuth connections.
+  #
+  # The `headers`/`env` jsonb columns hold plaintext written before encryption,
+  # or by a process still on the old code during a rollout. Every write here
+  # empties them, so a non-empty one is the newest copy and wins; once nothing
+  # runs the old code, `bin/rails maintenance:purge_plaintext_mcp_secrets` encrypts
+  # and clears what is left.
+  SECRET_FIELDS = %i[headers env].freeze
+  CONFIG_ITEM_REFERENCE = /config_item:(\w+)/
+
+  encryption_key :config_items_key
+  encrypted_column :encrypted_headers, :encrypted_env
+
+  before_save :forget_secrets_for_new_destination, if: :destination_changed?
+  after_save :disconnect_from_old_destination, if: -> { @destination_moved }
+  after_save { @assigned_secret_fields = nil }
 
   # OAuth credentials attached to this server (auth_type:oauth). dependent: :destroy
   # so deleting the server cleans them up — the FK is RESTRICT, so without this a
@@ -58,6 +80,13 @@ class MCPServer < ApplicationRecord
   # (`--filter="a && b"`) is left alone.
   SHELL_OPERATORS = %w[| || & && ; > >> < << 2>&1].freeze
 
+  # A package runner installs the newest release at every session start unless the
+  # spec names one, so a publisher (or whoever takes over the package) changes what
+  # runs inside every agent container with the next release. `latest`, a range and a
+  # bare name are not pins.
+  PACKAGE_RUNNERS = %w[npx uvx pipx].freeze
+  EXACT_VERSION = /\A\d+(\.\d+){0,3}([-+][0-9A-Za-z.-]+)?\z/
+
   # A stdio launch line is stored split: the executable in `command`, its argv in
   # `args`. That is the shape .mcp.json wants, and the shape a catalog install
   # already arrives in (MCP::ConnectorAttributes). The install form takes one
@@ -78,6 +107,7 @@ class MCPServer < ApplicationRecord
   # Only when the launch line is being written, so a row that predates these rules
   # can still be edited for an unrelated reason (renamed, disabled).
   validate :launchable_command_line, if: -> { transport_stdio? && (command_changed? || args_changed?) }
+  validate :pinned_package, if: -> { transport_stdio? && (command_changed? || args_changed?) }
 
   # Scopes
   scope :internal_servers, -> { where(kind: "internal") }
@@ -94,6 +124,76 @@ class MCPServer < ApplicationRecord
 
   def transport_stdio?
     transport.to_s == "stdio"
+  end
+
+  def headers = secret_map(:headers)
+  def env = secret_map(:env)
+
+  def headers=(value)
+    assign_secret_map(:headers, value)
+  end
+
+  def env=(value)
+    assign_secret_map(:env, value)
+  end
+
+  # Where header and env values are sent: the origin for a network server, the
+  # launched command line for stdio. Stored values survive only while it holds.
+  def destination_changed?
+    return false if new_record?
+
+    self.class.destination(attribute_in_database(:transport), attribute_in_database(:url),
+                           attribute_in_database(:command), attribute_in_database(:args)) !=
+      self.class.destination(transport, url, command, args)
+  end
+
+  def self.destination(transport, url, command, args)
+    return [ "net", origin_of(url) ] unless transport.to_s == "stdio"
+
+    tokens = begin
+      Shellwords.split(command.to_s)
+    rescue ArgumentError
+      [ command.to_s ]
+    end
+    tokens = [ command.to_s, *Array(args).map(&:to_s) ] if tokens.size < 2
+    [ "stdio", *tokens ]
+  end
+
+  def self.origin_of(url)
+    uri = URI.parse(url.to_s.strip)
+    return url.to_s.strip.downcase if uri.host.blank?
+
+    port = uri.port && uri.port != uri.default_port ? ":#{uri.port}" : ""
+    "#{uri.scheme.to_s.downcase}://#{uri.host.downcase}#{port}"
+  rescue URI::InvalidURIError
+    url.to_s.strip.downcase
+  end
+
+  def masked_headers = headers.transform_values { "••••••" }
+  def masked_env = env.transform_values { "••••••" }
+
+  # Names of the config items this server's header and env values reference.
+  def config_item_refs
+    (headers.values + env.values).flat_map { |value| value.to_s.scan(CONFIG_ITEM_REFERENCE).flatten }.uniq.sort
+  end
+
+  def self.purge_plaintext_secrets!
+    purged = 0
+    find_each do |server|
+      legacy = SECRET_FIELDS.select { |field| server[field].present? }
+      next if legacy.empty?
+
+      legacy.each { |field| server.public_send(:"#{field}=", server[field]) }
+      server.save!(validate: false, touch: false)
+      purged += 1
+    end
+    purged
+  end
+
+  def reload(*)
+    @secret_maps = nil
+    @assigned_secret_fields = nil
+    super
   end
 
   # Convenience predicate for the delivery/UI layer.
@@ -206,6 +306,49 @@ class MCPServer < ApplicationRecord
 
   private
 
+  def secret_map(field)
+    @secret_maps ||= {}
+    @secret_maps[field] ||= begin
+      legacy = self[field]
+      cipher = self[:"encrypted_#{field}"]
+      if legacy.present? then legacy.to_h
+      elsif cipher.present? then JSON.parse(decrypt_secret(cipher, column: "encrypted_#{field}"))
+      else {}
+      end
+    end
+    @secret_maps[field].deep_dup
+  end
+
+  def assign_secret_map(field, value)
+    hash = value.respond_to?(:to_unsafe_h) ? value.to_unsafe_h : value.to_h
+    map = hash.each_with_object({}) { |(key, item), memo| memo[key.to_s] = item.to_s unless item.nil? }
+
+    (@assigned_secret_fields ||= Set.new) << field
+    @secret_maps&.delete(field)
+    self[:"encrypted_#{field}"] = map.empty? ? nil : encrypt_secret(map.to_json, column: "encrypted_#{field}")
+    self[field] = {}
+  end
+
+  def forget_secrets_for_new_destination
+    SECRET_FIELDS.each do |field|
+      next if @assigned_secret_fields&.include?(field)
+
+      self[:"encrypted_#{field}"] = nil
+      self[field] = {}
+      @secret_maps&.delete(field)
+    end
+    @destination_moved = true
+  end
+
+  # Tokens and a hand-registered client secret were issued for the old
+  # destination's authorization server; nothing about them carries over.
+  def disconnect_from_old_destination
+    @destination_moved = false
+    oauth_credentials.destroy_all
+    manual_oauth_client&.destroy
+    association(:manual_oauth_client).reset
+  end
+
   def url_safety
     UrlSafetyValidator.errors_for(url, require_https: auth_type_oauth?).each { |msg| errors.add(:url, msg) }
   end
@@ -243,6 +386,45 @@ class MCPServer < ApplicationRecord
     # either. See MCP::ConnectorManifest::UNAVAILABLE_RUNTIMES.
     unavailable = MCP::ConnectorManifest::UNAVAILABLE_RUNTIMES[command.to_s]
     errors.add(:command, unavailable) if unavailable
+  end
+
+  def pinned_package
+    runner = command.to_s
+    return unless PACKAGE_RUNNERS.include?(runner)
+
+    spec = package_spec(runner, Array(args).map(&:to_s))
+    return if spec.nil? || pinned_spec?(runner, spec)
+
+    errors.add(:command, "must pin #{spec.presence || 'the package'} to an exact version " \
+                      "(#{runner == 'npx' ? 'name@1.2.3' : 'name==1.2.3'}) — unpinned, every session installs whatever was released last")
+  end
+
+  # The registry package the runner will fetch, or nil when the line names something
+  # else — a local path or a URL, which is not a registry release. "" when there is
+  # no package at all.
+  def package_spec(runner, argv)
+    argv = argv.drop_while { |token| token != "run" }.drop(1) if runner == "pipx"
+    explicit = argv.each_with_index.find { |token, _| %w[-p --package --from --spec].include?(token) }
+    spec = explicit ? argv[explicit.last + 1] : argv.find { |token| !token.start_with?("-") }
+    spec ||= argv.find { |token| token.start_with?("--package=", "--from=", "--spec=") }&.split("=", 2)&.last
+    return "" if spec.nil?
+    return nil if spec.start_with?(".", "/", "~") || spec.include?("://") || spec.include?(":")
+
+    spec
+  end
+
+  def pinned_spec?(runner, spec)
+    # Every adapter rewrites this one to the version baked into the agent image
+    # (BaseAdapter#mcp_stdio_args), whatever the line says.
+    return true if runner == "npx" && spec.split(/(?<=.)@/, 2).first == Agents::BaseAdapter::PLAYWRIGHT_MCP_PACKAGE
+
+    version = if runner == "npx"
+      name_end = spec.start_with?("@") ? spec.index("@", 1) : spec.index("@")
+      name_end && spec[(name_end + 1)..]
+    else
+      spec.split(/==|@/, 2)[1]
+    end
+    version.to_s.match?(EXACT_VERSION)
   end
 
   def unbalanced_quotes?

@@ -2,9 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Tool } from '@/types/generated';
 import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
-import { ToolsContent, type Tool } from './ToolsContent';
+import { ToolsContent } from './ToolsContent';
 
 function makeTool(overrides: Partial<Tool> = {}): Tool {
   return {
@@ -19,9 +20,10 @@ function makeTool(overrides: Partial<Tool> = {}): Tool {
     command: 'python /app/run.py',
     requiredConfigItems: [],
     inputSchema: {},
+    tags: [],
     enabled: true,
     platformTool: false,
-    scopeIndicator: 'company',
+    scopeIndicator: 'project',
     toolFiles: [],
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
@@ -34,7 +36,7 @@ const baseProps = {
   basePath: '/company/tools',
   title: 'Company Tools',
   subtitle: 'Custom tools available to your company',
-  // editableScopeIndicator defaults to 'company', matching our fixtures' scopeIndicator.
+  editableScopeIndicator: 'project',
 };
 
 describe('ToolsContent', () => {

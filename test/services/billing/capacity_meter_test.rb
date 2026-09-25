@@ -11,6 +11,7 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
     def self.provider = "recording"
 
     def initialize(fail_times: 0)
+      super()
       @delivered = []
       @fail_times = fail_times
     end

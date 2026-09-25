@@ -14,18 +14,8 @@ new_config = db_config.configuration_hash.merge(pool: desired_pool)
 ActiveRecord::Base.establish_connection(new_config)
 
 if Settings.sentry.temporal_dsn.present? && !Rails.env.development?
-  Sentry.init do |config|
-    config.dsn = Settings.sentry.temporal_dsn
-    config.release = Settings.app.version
-    config.environment = Rails.env
-    config.send_default_pii = true
-    # sentry-ruby 7 removed `enable_logs` (logs are unconditionally on), and calling it
-    # raises NoMethodError from inside Sentry.init — which crashed this process on boot.
-    # See the same migration in config/initializers/sentry.rb; this second Sentry.init,
-    # which replaces that configuration for the worker, was missed by it.
-    config.traces_sample_rate = 1.0
-    config.profiles_sample_rate = 1.0
-  end
+  # Same configuration as the web app (config/initializers/sentry.rb), own DSN.
+  Sentry.init { |config| SentryConfiguration.apply(config, dsn: Settings.sentry.temporal_dsn) }
 end
 
 logger = Logger.new($stdout)

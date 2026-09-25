@@ -4,6 +4,8 @@
 # of their companies, including the current one. The policy is self-only;
 # removing OTHER members lives in Web::Company::MembersController#destroy.
 class Web::Company::MembershipsController < Web::Company::ApplicationController
+  allow_viewer_writes
+
   def destroy
     # Revoke is legal from invited/active/suspended — a SUSPENDED member must
     # still be able to leave (`.active.find` would 404 them forever).

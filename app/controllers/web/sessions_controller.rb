@@ -54,9 +54,11 @@ class Web::SessionsController < Web::ApplicationController
     redirect_to target
   end
 
+  # clear_history drops the key the browser's encrypted history entries were
+  # sealed with, so Back after signing out cannot show the pages of the session.
   def destroy
     sign_out
-    redirect_to login_path
+    redirect_to login_path, inertia: { clear_history: true }
   end
 
   def omniauth

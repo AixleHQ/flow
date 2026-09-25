@@ -34,7 +34,8 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
   end
 
   def create
-    server = current_project.mcp_servers.new(server_params)
+    server = current_project.mcp_servers.new
+    assign_server_params(server)
 
     if server.save
       sync_manual_oauth_client(server)
@@ -46,10 +47,13 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
 
   def update
     server = current_project.mcp_servers.find(params[:id])
+    assign_server_params(server)
+    moved = server.destination_changed?
 
-    if server.update(server_params(existing: server))
+    if server.save
       sync_manual_oauth_client(server)
-      redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server updated"
+      notice = moved ? "MCP server updated. Its address changed, so its stored header and env values and its OAuth connections were cleared — enter them again." : "MCP server updated"
+      redirect_to company_project_mcp_servers_path(current_project), notice: notice
     else
       redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
     end
@@ -156,15 +160,19 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
     [ [ :mcpServer, :env ], [ :mcpServer, :headers ], [ :values ] ]
   end
 
-  # @param existing [MCPServer, nil] the record being updated (nil on create)
-  def server_params(existing: nil)
-    permitted = params.require(:mcp_server).permit(
+  def server_params
+    params.require(:mcp_server).permit(
       :name, :url, :transport, :description, :enabled,
       :command, :auth_type, :credential_scope, headers: {}, env: {}
     ).merge(kind: :custom)
+  end
 
-    unmask_secrets!(permitted, existing)
-    permitted
+  # Destination first, so the server can tell whether its stored values still
+  # apply before the submitted ones are unmasked against them.
+  def assign_server_params(server)
+    permitted = server_params
+    server.assign_attributes(permitted.except(:headers, :env))
+    server.assign_attributes(unmasked_secrets(permitted, server))
   end
 
   # Credentials for an authorization server that will not let us register ourselves
@@ -188,18 +196,23 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
     client.save!
   end
 
-  # Restore untouched secrets on edit: the UI resubmits unchanged header/env
-  # values as the masking sentinel (it never sees the real secret), so swap each
-  # sentinel back to the currently-stored value. Keys the user removed in the UI
-  # are absent from the submission and stay removed; freshly-entered values pass
-  # through. Without this, a plain update! wipes every untouched secret.
-  def unmask_secrets!(permitted, existing)
-    %i[headers env].each do |field|
+  # The UI resubmits an untouched header/env value as the masking sentinel (it
+  # never sees the real secret), so each sentinel is swapped back for the stored
+  # value. Keys removed in the UI are absent and stay removed; freshly entered
+  # values pass through.
+  #
+  # Only while the server still points where the values were entered for: after
+  # a change of address a sentinel resolves to nothing, so re-pointing a server
+  # can never carry its credentials along to the new host.
+  def unmasked_secrets(permitted, server)
+    keep = server.persisted? && !server.destination_changed?
+
+    %i[headers env].each_with_object({}) do |field, secrets|
       submitted = permitted[field]
       next if submitted.nil?
 
-      stored = (existing&.public_send(field) || {})
-      permitted[field] = submitted.to_h.each_with_object({}) do |(key, value), memo|
+      stored = keep ? server.public_send(field) : {}
+      secrets[field] = submitted.to_h.each_with_object({}) do |(key, value), memo|
         resolved = value == SECRET_MASK ? stored[key.to_s] : value
         memo[key] = resolved unless resolved.nil?
       end

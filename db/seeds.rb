@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# Stop here in production environment
-if Rails.env.production?
-  puts "Skipping all seed data creation in production environment"
+# Demo users with a known password belong on a laptop, not in any deployed
+# environment — staging included.
+unless Rails.env.local?
+  puts "Skipping all seed data creation in #{Rails.env}"
   return
 end
 
@@ -11,7 +12,7 @@ puts "Creating super admin user..."
 super_admin_email = Settings.admin.email
 super_admin_password = Settings.admin.password
 
-super_admin = User.find_or_create_by!(email: super_admin_email) do |user|
+User.find_or_create_by!(email: super_admin_email) do |user|
   user.name = "Super Admin"
   user.password = super_admin_password
   user.password_confirmation = super_admin_password

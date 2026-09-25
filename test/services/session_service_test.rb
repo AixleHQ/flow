@@ -63,7 +63,7 @@ class SessionServiceTest < ActiveSupport::TestCase
     mock_temporal_start
 
     session = SessionService.create_and_start(
-      user: @user, session_type: "auth_setup", agent_type: "claude_code",
+      user: @user, company: @user.companies.first, session_type: "auth_setup", agent_type: "claude_code",
       params: { auth_kind: "design", mode: "interactive" }
     )
 
@@ -603,7 +603,7 @@ class SessionServiceTest < ActiveSupport::TestCase
       issuer: "https://provider.test2", authorization_endpoint: "https://provider.test2/a",
       token_endpoint: "https://provider.test2/t", client_id: "c2", source: "static"
     )
-    cred = OauthCredential.create!(owner: @user, oauth_client: client, mcp_server: server,
+    OauthCredential.create!(owner: @user, oauth_client: client, mcp_server: server,
                                    provider: "mcp:y", status: :active,
                                    access_token: "tok2", expires_at: 2.hours.from_now,
                                    refresh_token: "rt-xyz")

@@ -110,4 +110,32 @@ class Web::Company::Integrations::GithubSetupControllerTest < ActionDispatch::In
 
     assert_redirected_to company_project_integrations_path(@project)
   end
+  test "an installation another company already connected is refused" do
+    Github::TokenService.stubs(:new).returns(
+      FakeGithub::TokenService.new(installation: { account_login: "victim-org", account_type: "Organization",
+                                                   target_type: "Organization" })
+    )
+    victim_company = create(:company)
+    Github::IntegrationService.new(company: victim_company, connected_by: create(:user, :admin, company: victim_company))
+      .create(installation_id: "424242", via_setup: true)
+
+    assert_no_difference("Integration.count") do
+      get company_integrations_github_setup_path,
+          params: { state: signed_state(project: @project, user: @user), installation_id: "424242" }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "This GitHub installation is already connected to another workspace", flash[:alert]
+  end
+
+  test "records the installation's account so repository owners can be checked" do
+    Github::TokenService.stubs(:new).returns(
+      FakeGithub::TokenService.new(installation: { account_login: "octocat", account_type: "User", target_type: "User" })
+    )
+
+    get company_integrations_github_setup_path,
+        params: { state: signed_state(project: @project, user: @user), installation_id: "12345" }
+
+    assert_equal "octocat", Integration.last.github_account_login
+  end
 end

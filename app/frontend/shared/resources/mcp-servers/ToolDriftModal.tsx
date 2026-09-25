@@ -3,10 +3,10 @@ import { Alert, Button, Code, Group, List, Modal, Stack, Text } from '@mantine/c
 import { IconAlertTriangle } from '@tabler/icons-react';
 import { useState, type FC } from 'react';
 
-import type { McpServer } from './types';
+import type { MCPServer } from '@/types/generated';
 
 interface ToolDriftModalProps {
-  server: McpServer | null;
+  server: MCPServer | null;
   basePath: string;
   onClose: () => void;
 }
@@ -66,9 +66,9 @@ export const ToolDriftModal: FC<ToolDriftModalProps> = ({ server, basePath, onCl
           <Section title="Added" names={drift.added ?? []} hint="Capabilities that were not present at install." />
           <Section title="Removed" names={drift.removed ?? []} hint="Anything relying on these will stop working." />
 
-          {drift.detected_at && (
+          {drift.detectedAt && (
             <Text fz={12} c="dimmed">
-              Detected {new Date(drift.detected_at).toLocaleString()}
+              Detected {new Date(drift.detectedAt).toLocaleString()}
             </Text>
           )}
 

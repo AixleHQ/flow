@@ -92,6 +92,24 @@ module Api
           assert_response :forbidden
         end
 
+        # The SPA calls this API on the page's own session, so a multi-company user
+        # writes into the company on screen, not into their oldest membership.
+        test "uploads, moves and deletes act on the session's company, not the oldest membership" do
+          @user.company_memberships.find_by!(company: @company).update!(accepted_at: 3.days.ago)
+          other = create(:company)
+          create(:company_membership, user: @user, company: other, role: "admin", accepted_at: 1.day.ago)
+          session[:current_company_id] = other.id
+
+          post :create, params: { asset: { name: "doc.md", content_type: "text/markdown" } }
+
+          assert_response :created
+          assert_equal [ "Company", other.id ], Asset.find(response.parsed_body["id"]).then { |a| [ a.scope_type, a.scope_id ] }
+
+          oldest_company_asset = create(:asset, :with_company_scope, scope: @company, created_by: @user)
+          delete :destroy, params: { id: oldest_company_asset.id }
+          assert_response :not_found
+        end
+
         test "a user with no active membership gets 404 (no resolvable company)" do
           sign_in create(:user, :onboarding_completed)
 

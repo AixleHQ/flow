@@ -2,8 +2,8 @@
 
 module Oauth
   # On-demand OAuth access-token provisioning (RFC oauth-unification §4.5).
-  # Picks the applicable credential, refreshes it under `with_lock` when it is
-  # within REFRESH_SKEW of expiry, never clobbers a fresher concurrent token,
+  # Picks the applicable credential, refreshes it under its refresh lease when it
+  # is within REFRESH_SKEW of expiry, never clobbers a fresher concurrent token,
   # and returns a usable access token or raises Oauth::ReauthRequired.
   module TokenService
     REFRESH_SKEW = 10.minutes
@@ -12,6 +12,9 @@ module Oauth
     # the one-shot MCP token injection receives a token valid for the whole session run.
     # Distinct from REFRESH_SKEW, which governs on-demand per-request refreshes.
     PRE_START_SKEW = 1.hour
+    # A token endpoint is someone else's server; without a bound, one that never
+    # answers holds a refresh lease and a request thread for Net::HTTP's minute.
+    TOKEN_TIMEOUT = 15
 
     module_function
 
@@ -39,11 +42,10 @@ module Oauth
     # - owner/provider: newest active credential for that owner+provider (unchanged).
     def pick_credential(server:, owner:, provider:, user:)
       if server
-        scope = OauthCredential.for_mcp_server(server).where.not(status: :revoked)
         cred_owner = server.credential_scope_per_user? ? user : server.scope
         return nil if cred_owner.nil? # can't resolve an identity to act as
 
-        cred = scope.for_owner(cred_owner).order(updated_at: :desc).first
+        cred = OauthCredential.current_for(server: server, owner: cred_owner)
         raise Oauth::ReauthRequired.new(nil, "connect required") if cred.nil? && server.auth_type_oauth?
 
         cred
@@ -61,7 +63,7 @@ module Oauth
     # @return [Symbol] :refreshed | :not_needed | :error
     def refresh_credential(cred)
       before = cred.access_token
-      fresh(cred)
+      fresh(cred, wait: false)
       cred.access_token == before ? :not_needed : :refreshed
     rescue Oauth::ReauthRequired
       :error
@@ -71,9 +73,9 @@ module Oauth
     # Called before session start so the one-shot MCP token injection gets a fresh token
     # with a full TTL. Silently skips non-refreshable credentials (they are caught by the
     # usability preflight earlier).
-    # Concurrent calls on the same credential are safe: `fresh` acquires `with_lock`
-    # before refreshing, so a racing caller reloads and skips the HTTP call if the
-    # token was just refreshed — no stampede even with providers that rotate refresh tokens.
+    # Concurrent calls on the same credential are safe: `fresh` refreshes under the
+    # credential's refresh lease, so a racing caller waits for that refresh and uses
+    # its token — no stampede even with providers that rotate refresh tokens.
     def refresh_if_expiring_soon(cred, skew: PRE_START_SKEW)
       return unless cred.expired?(skew)
       return unless cred.refreshable?
@@ -85,8 +87,16 @@ module Oauth
       nil
     end
 
-    # Ensure `cred` yields a fresh token; refresh under lock if near expiry.
-    def fresh(cred, skew: REFRESH_SKEW)
+    # Ensure `cred` yields a fresh token, refreshing it when near expiry.
+    #
+    # One refresher at a time, and never inside a transaction (RefreshLease): the
+    # lease is taken, the provider is called, and the answer is persisted in a
+    # transaction of its own — a rolled-back write of a rotated refresh token would
+    # lose the only valid one. A caller that finds another refresh under way waits
+    # for it and uses its result.
+    # `wait: false` (the sweep) leaves a credential another refresher holds to that
+    # refresher instead of waiting on it.
+    def fresh(cred, skew: REFRESH_SKEW, wait: true)
       return cred.access_token unless cred.expired?(skew)
 
       # Nothing to refresh from. Record it like any other refresh failure so the
@@ -100,24 +110,38 @@ module Oauth
         raise ReauthRequired.new(cred)
       end
 
-      cred.with_lock do
-        cred.reload
-        # A concurrent request may have refreshed while we waited on the lock.
-        break unless cred.expired?(skew)
+      outcome = cred.with_refresh_lease do
+        # A concurrent request may have refreshed just before the lease was ours.
+        next unless cred.expired?(skew)
 
-        resp = perform_refresh!(cred)
-        # Never downgrade: only persist if the new expiry is >= the stored one.
-        new_exp = resp["expires_in"].present? ? Time.current + resp["expires_in"].to_i.seconds : nil
-        cred.apply_token_response!(resp) if new_exp.nil? || cred.expires_at.nil? || new_exp >= cred.expires_at
+        refresh_leased!(cred)
+      end
+      if outcome == :busy
+        return cred.access_token unless wait
+
+        cred.await_refresh
       end
 
       raise ReauthRequired.new(cred) if cred.access_token.blank? || cred.expired?(skew)
 
       cred.access_token
-    rescue ReauthRequired
-      raise
-    rescue StandardError => e
+    rescue Encryptable::DecryptionError => e
       cred.mark_refresh_error!(e.message)
+      raise ReauthRequired.new(cred, "stored tokens are unreadable")
+    end
+
+    def refresh_leased!(cred)
+      sent = cred.refresh_token
+      resp = perform_refresh!(cred)
+      cred.with_lock do
+        # Never downgrade: only persist if the new expiry is >= the stored one.
+        new_exp = resp["expires_in"].present? ? Time.current + resp["expires_in"].to_i.seconds : nil
+        cred.apply_token_response!(resp) if new_exp.nil? || cred.expires_at.nil? || new_exp >= cred.expires_at
+      end
+    rescue StandardError => e
+      # Only a rejection of the refresh token still stored is this credential's
+      # failure; one rotated meanwhile (the old token was sent) is not.
+      cred.mark_refresh_error!(e.message) if cred.reload.refresh_token == sent
       raise ReauthRequired.new(cred, "refresh failed")
     end
 
@@ -136,13 +160,11 @@ module Oauth
       uri_errs = UrlSafetyValidator.errors_for(client.token_endpoint, require_https: true)
       raise "unsafe token_endpoint" if uri_errs.any?
 
-      # RFC 8707 resource indicator — bind the refreshed token to the MCP resource.
-      # Derived from the credential's server (self-contained; nothing to persist).
-      body[:resource] = cred.mcp_server.url if cred.mcp_server_id.present?
+      # RFC 8707 resource indicator: the one the grant was issued for.
+      body[:resource] = cred.resource.presence || cred.mcp_server.url if cred.mcp_server_id.present?
 
       uri = URI.parse(client.token_endpoint)
-      http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl = (uri.scheme == "https")
+      http = SafeHttp.http_for(uri, open_timeout: TOKEN_TIMEOUT, read_timeout: TOKEN_TIMEOUT)
       req = Net::HTTP::Post.new(uri)
       req["Accept"] = "application/json"
       req.set_form_data(body)

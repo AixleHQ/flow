@@ -83,12 +83,73 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
     assert_nil @session.reload.usage_statistic
   end
 
+  # == Session keys ==
+  #
+  # The route token is in every terminal URL; only the key proves the batch came
+  # from the container the session launched.
+
+  test "a keyed session accepts a batch that carries its key" do
+    keyed!(@session)
+    payload = otlp_payload(otlp_resource_metric(token: @session.route_token, tokens: { input: 7 }, cost_usd: 0.01,
+                                                key: UsageStatistics::SessionKey.generate(@session.route_token)))
+
+    result = UsageStatisticsService.process(payload.to_json)
+
+    assert_equal :ok, result.status
+    assert_equal 7, @session.reload.usage_statistic.input_tokens
+  end
+
+  test "a keyed session refuses a batch that names it without the key, or with a wrong one" do
+    keyed!(@session)
+
+    [ nil, "0" * 64, UsageStatistics::SessionKey.generate("someone-else") ].each do |key|
+      payload = otlp_payload(otlp_resource_metric(token: @session.route_token, tokens: { input: 999 }, cost_usd: 50.0,
+                                                  key: key))
+
+      result = UsageStatisticsService.process(payload.to_json)
+
+      assert_equal :unauthorized, result.status
+    end
+    assert_nil @session.reload.usage_statistic
+  end
+
+  test "a batch keyed for one session cannot write into another" do
+    victim = create(:terminal_session, :running, user: @user, project: @project)
+    keyed!(@session)
+    keyed!(victim)
+    payload = otlp_payload(
+      otlp_resource_metric(token: @session.route_token, tokens: { input: 5 }, cost_usd: 0.01,
+                           key: UsageStatistics::SessionKey.generate(@session.route_token)),
+      otlp_resource_metric(token: victim.route_token, tokens: { input: 999 }, cost_usd: 50.0)
+    )
+
+    result = UsageStatisticsService.process(payload.to_json)
+
+    assert_equal :ok, result.status
+    assert_equal 5, @session.reload.usage_statistic.input_tokens
+    assert_nil victim.reload.usage_statistic
+  end
+
+  # Containers launched before keys existed keep reporting until they end.
+  test "a session launched before keys existed is still accepted by token alone" do
+    payload = otlp_payload(otlp_resource_metric(token: @session.route_token, tokens: { input: 3 }, cost_usd: 0.01))
+
+    result = UsageStatisticsService.process(payload.to_json)
+
+    assert_equal :ok, result.status
+    assert_equal 3, @session.reload.usage_statistic.input_tokens
+  end
+
   private
+
+  def keyed!(session)
+    session.update_column(:metadata, session.metadata.merge(UsageStatistics::SessionKey::LAUNCH_MARKER => 1))
+  end
 
   # Build one OTLP resourceMetrics entry carrying the terminal_session_token on
   # the resource, a claude_code.token.usage sum (one data point per token type),
   # and an optional claude_code.cost.usage sum.
-  def otlp_resource_metric(token:, tokens: {}, cost_usd: nil, model: "claude-sonnet-4-6")
+  def otlp_resource_metric(token:, tokens: {}, cost_usd: nil, model: "claude-sonnet-4-6", key: nil)
     data_points = tokens.map do |type, value|
       {
         "attributes" => [
@@ -108,12 +169,10 @@ class UsageStatisticsServiceTest < ActiveSupport::TestCase
       }
     end
 
-    {
-      "resource" => {
-        "attributes" => [ { "key" => "terminal_session_token", "value" => { "stringValue" => token } } ]
-      },
-      "scopeMetrics" => [ { "metrics" => metrics } ]
-    }
+    attributes = [ { "key" => "terminal_session_token", "value" => { "stringValue" => token } } ]
+    attributes << { "key" => "terminal_session_key", "value" => { "stringValue" => key } } if key
+
+    { "resource" => { "attributes" => attributes }, "scopeMetrics" => [ { "metrics" => metrics } ] }
   end
 
   def otlp_payload(*resource_metrics)

@@ -1,13 +1,10 @@
 import { Head, usePage } from '@inertiajs/react';
 
-import { AgentsContent, type Agent } from 'shared/resources/agents/AgentsContent';
+import type { Agent, Project } from '@/types/generated';
+
+import { AgentsContent } from 'shared/resources/agents/AgentsContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface Props {
   project: Project;

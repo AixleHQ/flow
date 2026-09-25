@@ -10,6 +10,9 @@ class User < ApplicationRecord
 
   has_secure_password validations: false
 
+  # A new password ends every browser signed in with the old one.
+  after_update_commit :end_sessions_after_password_change, if: :saved_change_to_password_digest?
+
   # ── Personal MCP token ──
   # One opt-in token per user for the global MCP server (MCPController):
   # grants exactly the user's own access level, enforced per tool through the
@@ -20,7 +23,7 @@ class User < ApplicationRecord
   def self.find_by_mcp_token(token)
     return nil unless token.is_a?(String) && token.start_with?(MCP_TOKEN_PREFIX)
 
-    find_by(mcp_token_digest: Digest::SHA256.hexdigest(token))
+    authenticatable.find_by(mcp_token_digest: Digest::SHA256.hexdigest(token))
   end
 
   def regenerate_mcp_token!
@@ -37,15 +40,30 @@ class User < ApplicationRecord
     mcp_token_digest.present?
   end
 
+  # "Last used" is shown to the minute at most; writing it on every MCP call
+  # made each tool call a row update on users.
+  MCP_TOKEN_USE_GRANULARITY = 5.minutes
+
+  def note_mcp_token_use!(now = Time.current)
+    return if mcp_token_last_used_at && mcp_token_last_used_at > now - MCP_TOKEN_USE_GRANULARITY
+
+    update_columns(mcp_token_last_used_at: now)
+  end
+
   # Associations
   has_many :company_memberships, dependent: :destroy
+  has_many :user_sessions, dependent: :delete_all
+  # Per-user OAuth connections: the account's, gone with it (and never refreshed after).
+  has_many :oauth_credentials, as: :owner, dependent: :destroy
   has_many :companies, through: :company_memberships
   has_many :project_collaborators, dependent: :destroy
   has_many :collaborated_projects, through: :project_collaborators, source: :project
   has_many :project_favorites, dependent: :destroy
   has_many :favorite_projects, through: :project_favorites, source: :project
   has_many :owned_projects, class_name: "Project", foreign_key: :owner_id, dependent: :restrict_with_error, inverse_of: :owner
-  has_many :terminal_sessions, dependent: :destroy
+  # The company's record of work done and spent: kept, owned by nobody, when the
+  # user is permanently deleted (Users::PermanentDeletionService).
+  has_many :terminal_sessions, dependent: :nullify
   # Personal saved board views — destroyed with the user on permanent deletion.
   has_many :board_view_presets, dependent: :destroy
   # Credentials belong to a (user, company) pair — the default for a company
@@ -81,6 +99,20 @@ class User < ApplicationRecord
   # `active` scope for the :active account state, which authentication relies on
   # (AuthConcern#current_user). `not_deleted` keeps the two concepts orthogonal.
   scope :not_deleted, -> { where(deleted_at: nil) }
+  # Who may authenticate at all. Every way in — the web session, the API, the
+  # personal MCP token, ActionCable, the container gates — uses this one scope,
+  # so a suspended or deleted account is shut out everywhere at once.
+  scope :authenticatable, -> { active.not_deleted }
+
+  # The record-level twin of `authenticatable`, for a user already loaded.
+  def authenticatable?
+    active? && !deleted?
+  end
+
+  # A cookie from before database sessions carries only the user id and has no
+  # session row to revoke, so it is taken only until the user's sessions are first
+  # ended everywhere (UserSession.revoke_all_for!).
+  def accepts_sessionless_cookie? = sessions_revoked_at.nil?
   scope :deleted, -> { where.not(deleted_at: nil) }
 
   # Soft delete — mirrors the deleted_at pattern used by Asset/Workflow/Tool.
@@ -98,6 +130,21 @@ class User < ApplicationRecord
   # sign in and appears nowhere, while restore! brings back exactly what existed.
   def soft_delete!
     update!(deleted_at: Time.current)
+    revoke_live_access!
+  end
+
+  # What outlives a sign-in: its browser sessions, the personal MCP token and open
+  # cable connections. Called when the account stops being authenticatable.
+  def revoke_live_access!
+    update_columns(mcp_token_digest: nil, mcp_token_last_used_at: nil) if mcp_token_digest.present?
+    UserSession.revoke_all_for!(self)
+    ActionCable.server.remote_connections.where(current_user: self).disconnect
+  rescue StandardError => e
+    Rails.logger.warn("[User] Failed to revoke live access for user #{id}: #{e.message}")
+  end
+
+  def end_sessions_after_password_change
+    UserSession.revoke_all_for!(self)
   end
 
   def restore!

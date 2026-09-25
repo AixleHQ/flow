@@ -1,4 +1,5 @@
-export { AgentLogo, agentLabel } from './AgentLogo';
+export { agentLabel } from '../agentRuntimes';
+export { AgentLogo } from './AgentLogo';
 export { ConsoleFrame } from './ConsoleFrame';
 export { DetailHeader, type Crumb, type HeaderStat } from './DetailHeader';
 export { ModeTag } from './ModeTag';

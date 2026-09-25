@@ -9,14 +9,18 @@ class InternalTools::ShareAssetTest < ActiveSupport::TestCase
     @project = create(:project, company: @company, owner: @user)
     @asset = create(:asset, scope: @project, created_by: @user, name: "diagram.html")
 
-    project = @project
-    @session = Object.new
-    @session.define_singleton_method(:project) { project }
-    @session.define_singleton_method(:step_run) { :present }
+    workflow = create(:workflow, scope: @project)
+    @run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+    @session = create(:terminal_session, session_type: "workflow_step", user: @user, project: @project)
+    create(:step_run, workflow_run: @run, step: create(:step, workflow: workflow), terminal_session: @session)
   end
 
   def run_tool(params)
     InternalTools::ShareAsset.new(params: params, session: @session).execute
+  end
+
+  def create_task(board)
+    create(:board_task, board: board, board_column: create(:board_column, board: board))
   end
 
   test "shares an asset by id and returns a stable link" do
@@ -29,6 +33,26 @@ class InternalTools::ShareAssetTest < ActiveSupport::TestCase
     assert @asset.public_token.present?
     assert payload["public"]
     assert_includes payload["share_url"], "/share/#{@asset.public_token}"
+  end
+
+  test "records the session and the person a share was made for" do
+    run_tool(asset_id: @asset.id)
+
+    @asset.reload
+    assert_equal @session.id, @asset.shared_in_session_id
+    assert_equal @user.id, @asset.shared_by_id
+    assert_not_nil @asset.shared_at
+  end
+
+  # Every project of the company sees a company asset; one step's session does
+  # not get to publish it.
+  test "a company asset cannot be shared from a project's session" do
+    company_asset = create(:asset, scope: @company, created_by: @user, name: "handbook.pdf")
+
+    result = run_tool(asset_id: company_asset.id)
+
+    assert_not_equal 0, result[:exit_code]
+    assert_not company_asset.reload.shared?
   end
 
   test "resolves an asset by name" do
@@ -61,6 +85,63 @@ class InternalTools::ShareAssetTest < ActiveSupport::TestCase
 
     assert_equal 1, result[:exit_code]
     assert_includes result[:stderr], "not found"
+  end
+
+  test "shares an output of this run" do
+    output = create(:workflow_run_asset, workflow_run: @run, name: "report.md")
+
+    payload = JSON.parse(run_tool(source: "run", name: "report.md")[:stdout])
+
+    assert_equal "run", payload["source"]
+    assert_includes payload["share_url"], "/share/#{output.reload.public_token}"
+    assert_equal @session.id, output.shared_in_session_id
+  end
+
+  test "an output of another run cannot be shared" do
+    other_run = create(:workflow_run, workflow: @run.workflow, project: @project, user: @user)
+    output = create(:workflow_run_asset, workflow_run: other_run)
+
+    result = run_tool(source: "run", asset_id: output.id)
+
+    assert_equal 1, result[:exit_code]
+    assert_not output.reload.shared?
+  end
+
+  test "shares a file attached to a task on this project's board" do
+    task = create_task(create(:board, project: @project))
+    attachment = create(:task_asset, board_task: task, name: "mockup.png")
+
+    payload = JSON.parse(run_tool(source: "task", task_id: task.id, name: "mockup.png")[:stdout])
+
+    assert_equal "task", payload["source"]
+    assert_equal @session.id, attachment.reload.shared_in_session_id
+  end
+
+  test "a task on another project's board is out of reach" do
+    create(:board, project: @project)
+    task = create_task(create(:board, project: create(:project, company: @company, owner: @user)))
+    attachment = create(:task_asset, board_task: task)
+
+    result = run_tool(source: "task", task_id: task.id, asset_id: attachment.id)
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "Task not found"
+    assert_not attachment.reload.shared?
+  end
+
+  test "a task attachment needs its task" do
+    result = run_tool(source: "task", name: "mockup.png")
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "task_id"
+  end
+
+  test "refuses an unknown source" do
+    result = run_tool(source: "company", asset_id: @asset.id)
+
+    assert_equal 1, result[:exit_code]
+    assert_includes result[:stderr], "source"
+    assert_not @asset.reload.shared?
   end
 
   test "raises outside workflow context" do

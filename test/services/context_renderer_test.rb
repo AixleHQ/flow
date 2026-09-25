@@ -113,7 +113,7 @@ class ContextRendererTest < ActiveSupport::TestCase
   end
 
   test "critical sections never compressed" do
-    critical_content = "Critical rules " + "y" * 20_000
+    critical_content = "Critical rules " + ("y" * 20_000)
     compressible_content = build_previous_steps_content("z" * 10_000)
     sections = [
       ContextSection.new(tag: "critical-rules", priority: :critical, content: critical_content),

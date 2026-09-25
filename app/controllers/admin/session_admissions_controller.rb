@@ -58,7 +58,7 @@ module Admin
         notice: drain ? "#{notice} Granted #{granted.size} queued request(s)." : notice
     end
 
-    def activation_notice(policy)
+    def activation_notice(_policy)
       "Admission enabled: one queue per project, #{SessionAdmissionPolicy.scope_default('Project')} " \
         "concurrent sessions each unless the project sets its own. " \
         "A project is bounded by its company's limit, set on the company's own page."

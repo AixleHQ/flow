@@ -107,20 +107,14 @@ module Api
           end
 
           def create_webhook_trigger
-            token = SecureRandom.hex(6)
-            event_type = "webhook.#{token}"
-            endpoint = WebhookEndpoint.create!(
-              slug: "wh-#{token}",
-              provider: :generic,
-              verification_strategy: params.dig(:trigger, :verification_strategy).presence || "none",
-              secret: params.dig(:trigger, :secret).presence,
-              config: { "event_type" => event_type },
-              project: current_project,
-              company: current_project.company,
-              created_by: current_user
+            endpoint = WebhookEndpoint.create_for_trigger!(
+              project: current_project, created_by: current_user,
+              verification_strategy: params.dig(:trigger, :verification_strategy),
+              secret: params.dig(:trigger, :secret)
             )
             binding = current_workflow.trigger_bindings.create!(
-              trigger_binding_params.merge(project: current_project, created_by: current_user, event_type: event_type)
+              trigger_binding_params.merge(project: current_project, created_by: current_user,
+                                           event_type: endpoint.config["event_type"])
             )
             serialize_binding(binding).merge(
               webhook_url: webhook_url(endpoint.slug),

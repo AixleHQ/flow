@@ -156,18 +156,18 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   # The failure this whole mechanism exists for: TemporalService.start_workflow
   # answers a failed RPC with { ok: false }, not an exception, so the old code
   # discarded it and reported a run that would never execute as started.
-  test "start raises and leaves the run enrolled in the outbox when Temporal refuses the start" do
+  # The run is committed and the relay WILL start it, so the caller is not told
+  # it failed; the outage is reported instead of raised at them.
+  test "start reports a refused start and leaves the run enrolled in the outbox" do
     TemporalService.stubs(:enabled?).returns(true)
     TemporalWorkflowRegistry.expects(:start_workflow_execution)
       .once.returns(ok: false, error: "storage is (re)initializing")
+    Sentry.expects(:capture_exception).with { |e| e.is_a?(WorkflowService::DispatchFailed) && e.message.include?("storage is") }
 
-    error = assert_raises(WorkflowService::DispatchFailed) do
-      WorkflowService.start(workflow: @workflow, project: @project, user: @user)
-    end
-
-    assert_match(/storage is \(re\)initializing/, error.message)
+    returned = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
 
     run = WorkflowRun.sole
+    assert_equal run, returned
     assert_equal "pending", run.relay_state
     assert_equal "pending", run.state
     assert_equal 1, run.relay_attempts
@@ -175,14 +175,13 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   end
 
   # A run that was never handed to Temporal is worth nothing without its steps
-  # being re-drivable too, so the row has to survive the raise.
+  # being re-drivable too, so the row has to survive the failed start.
   test "a run stranded by a failed dispatch keeps its step runs and becomes relay work" do
     TemporalService.stubs(:enabled?).returns(true)
     TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: false, error: "unavailable")
+    Sentry.stubs(:capture_exception)
 
-    assert_raises(WorkflowService::DispatchFailed) do
-      WorkflowService.start(workflow: @workflow, project: @project, user: @user)
-    end
+    WorkflowService.start(workflow: @workflow, project: @project, user: @user)
 
     run = WorkflowRun.sole
     assert_equal 2, run.step_runs.count
@@ -253,9 +252,11 @@ class WorkflowServiceTest < ActiveSupport::TestCase
   end
 
   test "retry_step starts a brand-new run reusing the original run's params when the workflow execution has already closed" do
+    asset = create(:asset, scope: @project)
+    repository = create(:repository, scope: @project, integration: create(:integration, company: @company))
     run = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user,
       mode: "interactive", step_overrides: { @step1.id.to_s => { "auto_run" => true } },
-      input_asset_ids: [ 7 ], repository_ids: [ 9 ], agent_runtime: "claude_code",
+      input_asset_ids: [ asset.id ], repository_ids: [ repository.id ], agent_runtime: "claude_code",
       shared_context: { "requested_model" => "opus" })
     step_run = create(:step_run, workflow_run: run, step: @step1, state: "failed", error_message: "Some error")
 
@@ -275,8 +276,8 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_equal @workflow.id, new_run.workflow_id
     assert_equal "interactive", new_run.mode
     assert_equal({ @step1.id.to_s => { "auto_run" => true } }, new_run.step_overrides)
-    assert_equal [ 7 ], new_run.input_asset_ids
-    assert_equal [ 9 ], new_run.repository_ids
+    assert_equal [ asset.id ], new_run.input_asset_ids
+    assert_equal [ repository.id ], new_run.repository_ids
     assert_equal "claude_code", new_run.agent_runtime
     assert_equal "opus", new_run.shared_context["requested_model"]
 
@@ -368,7 +369,28 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
     step_run = create(:step_run, workflow_run: run, step: @step1)
 
-    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", :container_finished, step_run.id).once
+    TemporalService.expects(:send_signal).with("workflow-execution-#{run.id}", :container_finished, step_run.id)
+                   .once.returns(ok: true)
+
+    WorkflowService.notify_container_finished(step_run: step_run)
+  end
+
+  test "a container_finished signal an open run never got is reported" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
+    step_run = create(:step_run, workflow_run: run, step: @step1)
+    TemporalService.stubs(:send_signal).returns(ok: false, error: "unavailable")
+    TemporalService.stubs(:execution_state).with("workflow-execution-#{run.id}").returns(:running)
+    Sentry.expects(:capture_exception).with { |e| e.is_a?(WorkflowService::SignalLost) && e.message.include?("step_run ##{step_run.id}") }
+
+    WorkflowService.notify_container_finished(step_run: step_run)
+  end
+
+  test "a container_finished signal to a run that has already ended is not reported" do
+    run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "running")
+    step_run = create(:step_run, workflow_run: run, step: @step1)
+    TemporalService.stubs(:send_signal).returns(ok: false, error: "workflow execution already completed")
+    TemporalService.stubs(:execution_state).returns(:closed)
+    Sentry.expects(:capture_exception).never
 
     WorkflowService.notify_container_finished(step_run: step_run)
   end

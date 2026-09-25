@@ -2,9 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Asset } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-
-import type { Asset } from 'shared/resources/assets/AssetsContent';
 
 import AssetsPage from './AssetsPage';
 
@@ -21,6 +20,7 @@ const asset = (overrides: Partial<Asset> = {}): Asset => ({
   scopeIndicator: 'project',
   status: 'active',
   createdById: 1,
+  stepRunId: null,
   createdByName: 'Author',
   versionsCount: 1,
   latestVersion: null,

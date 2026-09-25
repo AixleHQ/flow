@@ -80,8 +80,13 @@ module MCP
 
     private
 
+    # Connected to the address the URL was vetted against (SafeHttp), not to a
+    # second lookup of the name.
     def list_tools
-      transport = ::MCP::Client::HTTP.new(url: @server.url, headers: request_headers)
+      uri = URI.parse(@server.url)
+      transport = ::MCP::Client::HTTP.new(url: @server.url, headers: request_headers) do |faraday|
+        SafeHttp.pin_faraday!(faraday, uri)
+      end
       client = ::MCP::Client.new(transport: transport)
       client.tools
     end

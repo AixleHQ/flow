@@ -24,9 +24,12 @@ installation token used to clone, push, and watch checks.
    and create a new App. Or for the org-level App, go to your org's
    Apps settings.
 2. Required permissions: **Repository → Contents (Read & write)**,
-   **Pull requests (Read & write)**, **Checks (Read)**, **Metadata
-   (Read)**.
-3. Subscribe to webhook events: `push`, `pull_request`, `check_run`.
+   **Pull requests (Read & write)**, **Checks (Read)**, **Actions
+   (Read)**, **Metadata (Read)**.
+3. Subscribe to webhook events: `check_suite` and `workflow_run` — the
+   two that CI gates resolve on. A finished check suite makes the gate
+   ask GitHub for every suite on the pull request's current head, so a
+   quick suite finishing first does not pass the gate on its own.
 4. Webhook URL: `https://<your-host>/webhooks/github`.
 5. Set a webhook secret and copy it to `GITHUB_WEBHOOK_SECRET` in
    `.env.development`.
@@ -44,6 +47,12 @@ developer and just want to try it** in the connect dialog and paste a
 token instead; the connection goes active without `GITHUB_APP_ID`, a
 private key or an install callback, and you can then attach any
 repository the token reaches and clone it in an agent session.
+
+A personal access token cannot be narrowed per call the way an App's
+installation token is: every session and every tool that works on one of
+these repositories is handed the token itself, with everything it can
+reach. Prefer a fine-grained token limited to the repositories you
+connect.
 
 Scopes to give the token. A personal access token reaches exactly what
 it was granted, so a missing one makes that one capability fail — not
@@ -77,8 +86,8 @@ What the token path does *not* do, on purpose:
   when that person's access does. Use the App in production.
 - **No GitHub webhooks.** GitHub delivers installation webhooks to an
   App, not to a token, and a local deployment is usually unreachable
-  from github.com anyway. CI gates that wait on `push`, `pull_request`
-  or `check_run` therefore resolve by polling (the gate reconciler's
+  from github.com anyway. CI gates that wait on `check_suite` or
+  `workflow_run` therefore resolve by polling (the gate reconciler's
   sweep) rather than the moment a check finishes — and not at all if
   this deployment cannot reach api.github.com.
 - **Tokens expire.** GitHub expires personal access tokens, and an
@@ -100,7 +109,11 @@ the project level) and paste a token with `api` scope.
 - `GITLAB_ENDPOINT` — set this only for self-managed GitLab; it defaults
   to `https://gitlab.com/api/v4`.
 - Webhook endpoint: `https://<your-host>/webhooks/gitlab`, verified with
-  a per-repository secret.
+  a per-repository secret. Adding a GitLab repository registers the
+  project's pipeline hook with that secret, and removing it deletes the
+  hook; that needs a token with the Maintainer role on the project.
+  Without the hook, pipeline gates still resolve, by the gate
+  reconciler's polling, only later.
 
 ### Azure DevOps
 

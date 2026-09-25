@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::SessionsController < Web::Company::Projects::ApplicationController
+  ROWS_LIMIT = 100
+
   # The unified Sessions & Runs list. Standalone sessions and workflow runs are
   # one feed here; /workflow_runs redirects to this action.
   def index
@@ -20,8 +22,24 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
       user_options: feed.user_options,
       # Both create flows are drawers on this page now, so their option lists
       # live here — but only a user who actually opens a drawer pays for them.
-      create_options: InertiaRails.optional { create_options }
+      create_options: InertiaRails.optional { create_options },
+      cable_stream: inertia_cable_stream(current_project, :sessions_runs)
     }
+  end
+
+  # The entries a live list asks back for after an update signal: standalone
+  # sessions by id, and runs by id (a run entry carries its step sessions).
+  def rows
+    session_ids = Array(params[:session_ids]).map(&:to_i).uniq.first(ROWS_LIMIT)
+    run_ids = Array(params[:run_ids]).map(&:to_i).uniq.first(ROWS_LIMIT)
+    sessions = current_project.terminal_sessions.includes(:user)
+                              .where(id: session_ids, session_type: SessionsRunsFeed::TOP_LEVEL_SESSION_TYPES)
+    runs = current_project.workflow_runs.includes(:user, :workflow, step_runs: [ :step, { terminal_session: :user } ])
+                          .where(id: run_ids)
+    entries = sessions.map { |s| SessionsRunsFeed::Entry.new(kind: "session", record: s) } +
+              runs.map { |r| SessionsRunsFeed::Entry.new(kind: "run", record: r) }
+
+    render json: { entries: entries.map { |entry| serialize_entry(entry) } }
   end
 
   def new

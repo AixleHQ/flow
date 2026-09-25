@@ -50,8 +50,10 @@ module PersonalTools
                                            "\"Europe/Berlin\"}. ALWAYS pass timezone explicitly — an empty timezone " \
                                            "makes Temporal schedule in UTC, which drifts by an hour under DST."
       param :verification_strategy, type: :string, enum: WorkflowTriggerSupport::VERIFICATION_STRATEGIES,
-                                    description: "How the inbound webhook is authenticated (kind=webhook). Defaults to none."
-      param :secret, type: :string, description: "Shared secret for the webhook's verification strategy (kind=webhook)."
+                                    description: "How the inbound webhook is authenticated (kind=webhook). Defaults to " \
+                                                 "shared_token; none lets anyone who has the URL run the workflow."
+      param :secret, type: :string, description: "Shared secret for the webhook's verification strategy (kind=webhook). " \
+                                                 "Generated when omitted."
     end
 
     def execute
@@ -113,23 +115,14 @@ module PersonalTools
     end
 
     def create_webhook_trigger(project, workflow)
-      token = SecureRandom.hex(6)
-      event_type = "webhook.#{token}"
-
       # One transaction so a rejected binding (the auto-run rule rejects most
       # first attempts) doesn't leave an orphan endpoint behind on every retry.
       endpoint, trigger = ActiveRecord::Base.transaction do
-        created = WebhookEndpoint.create!(
-          slug: "wh-#{token}",
-          provider: :generic,
-          verification_strategy: params[:verification_strategy].presence || "none",
-          secret: params[:secret].presence,
-          config: { "event_type" => event_type },
-          project: project,
-          company: project.company,
-          created_by: user
+        created = WebhookEndpoint.create_for_trigger!(
+          project: project, created_by: user,
+          verification_strategy: params[:verification_strategy], secret: params[:secret]
         )
-        [ created, create_binding!(project, workflow, event_type) ]
+        [ created, create_binding!(project, workflow, created.config["event_type"]) ]
       end
 
       serialize_binding(trigger).merge(

@@ -3,8 +3,10 @@ import { ActionIcon, Box, Group, Text, Tooltip } from '@mantine/core';
 import { IconExternalLink, IconTerminal2 } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 
+import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
+
 import { NeutralStatusChip } from './NeutralStatusChip';
-import { runSessionId, type TaskWorkflowRun } from './taskRuns';
+import { runSessionId } from './taskRuns';
 
 // One run, rendered as a single compact row: state chip, a link to the run page, a
 // caller-supplied trailing slot, and the jump-into-the-session control. Shared by the

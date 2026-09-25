@@ -2,22 +2,21 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { MCPServer } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import McpServersPage from 'pages/Projects/McpServers/McpServersPage';
-
-import type { McpServer } from './types';
 
 // Drift surfacing is exercised through the real MCP servers page: the point of
 // the feature is that someone scanning their server list notices, so testing
 // the modal in isolation would skip the part that matters.
 
-const server = (overrides: Partial<McpServer> = {}): McpServer => ({
+const server = (overrides: Partial<MCPServer> = {}): MCPServer => ({
   id: 5,
   name: 'Linear',
   url: 'https://mcp.linear.app/mcp',
   transport: 'http',
-  headers: null,
+  headers: {},
   description: null,
   kind: 'custom',
   scopeType: 'Project',
@@ -26,7 +25,7 @@ const server = (overrides: Partial<McpServer> = {}): McpServer => ({
   enabled: true,
   internal: false,
   command: null,
-  env: null,
+  env: {},
   connectorName: 'app.linear/linear',
   connectorStatus: 'active',
   connectorVersion: '1.0.0',
@@ -34,12 +33,17 @@ const server = (overrides: Partial<McpServer> = {}): McpServer => ({
   connectorUpdateVersion: null,
   toolBaseline: true,
   toolDrift: null,
+  authType: 'none',
+  credentialScope: 'shared',
+  oauthClientId: null,
+  oauthClientSecretPresent: false,
+  oauthStatus: null,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
   ...overrides,
 });
 
-const pageProps = (mcpServers: McpServer[]) => ({
+const pageProps = (mcpServers: MCPServer[]) => ({
   project: { id: 7, name: 'Polaris' },
   mcpServers,
   configItemNames: [],
@@ -48,7 +52,7 @@ const pageProps = (mcpServers: McpServer[]) => ({
   catalogSyncedAt: null,
 });
 
-const render = (servers: McpServer[]) => renderAuthedPage(<McpServersPage />, { props: pageProps(servers) });
+const render = (servers: MCPServer[]) => renderAuthedPage(<McpServersPage />, { props: pageProps(servers) });
 
 describe('MCP server tool drift', () => {
   it('stays silent when nothing changed', () => {
@@ -88,6 +92,15 @@ describe('MCP server tool drift', () => {
     expect(within(dialog).getByText('search')).toBeInTheDocument();
     expect(within(dialog).getByText('run_shell')).toBeInTheDocument();
     expect(within(dialog).getByText('create')).toBeInTheDocument();
+  });
+
+  it('says when the change was detected, as the server sends it', async () => {
+    render([server({ toolDrift: { changed: ['search'], detectedAt: '2026-09-20T10:00:00Z' } })]);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Review' }));
+    const dialog = await screen.findByRole('dialog');
+
+    expect(within(dialog).getByText(/^Detected /)).toBeInTheDocument();
   });
 
   it('omits sections with nothing in them', async () => {

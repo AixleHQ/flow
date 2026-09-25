@@ -46,6 +46,7 @@ class Web::Company::UsersController < Web::Company::ApplicationController
       sessions: inertia_scroll(scope) { |records|
         records.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
       },
+      sessions_stream: inertia_cable_stream(current_company, membership.user, :sessions),
       # Fetched over HTTP from the runtime vendor, so deferred exactly as on the
       # owner's own Profile: a slow or dead provider must not blank the sessions
       # list. `?refresh=1` is the Refresh button, throttled by the service.
@@ -109,11 +110,9 @@ class Web::Company::UsersController < Web::Company::ApplicationController
   end
 
   # The window the charts cover. An unknown value would reach the services as a
-  # period they cannot answer, so only the four the picker offers are accepted.
-  PERIODS = %w[7d 30d 90d 1y].freeze
-
+  # period they cannot answer, so only the ones the picker offers are accepted.
   def period
-    @period ||= PERIODS.include?(params[:period]) ? params[:period] : "30d"
+    @period ||= AnalyticsPeriod::DAYS.key?(params[:period]) ? params[:period] : AnalyticsPeriod::DEFAULT
   end
 
   # The current company's projects this viewer may open a session in — the same

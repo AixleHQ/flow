@@ -82,10 +82,8 @@ module Tools
           "timestamp" => Time.current.iso8601
         }.compact
 
-        session.with_lock do
-          metadata = session.metadata || {}
-          metadata["builder_activities"] = (Array(metadata["builder_activities"]) << activity).last(100)
-          session.update!(metadata: metadata)
+        session.change_jsonb!(:metadata, callbacks: true) do |doc|
+          doc["builder_activities"] = (Array(doc["builder_activities"]) << activity).last(100)
         end
       rescue StandardError => e
         Rails.logger.warn("[BuilderToolset] activity not recorded for #{defn.name}: #{e.class} — #{e.message}")

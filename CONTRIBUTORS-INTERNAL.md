@@ -40,7 +40,10 @@ documentation. The public-facing reference lives under `docs/`.
 ## Database Dumps
 
 ```bash
-make db_dump            # dump local DB and upload to S3
-make db_restore_remote  # restore from S3 (uses DATABASE_* env vars)
-make restore-dump       # restore from local /db_dumps/latest.sql.gz
+make restore-dump       # replace the LOCAL dev database with docker/remote/db_dumps/latest.sql.gz
 ```
+
+Taking a dump of a deployed database is an operations task (the aixle-infra
+repository), not a Makefile target: the old `db_dump` put the database password on
+the command line and uploaded the dump — secrets' ciphertext included — to the
+user-upload bucket.

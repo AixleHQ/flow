@@ -2,6 +2,9 @@
 
 class Integration < ApplicationRecord
   include Encryptable
+
+  encryption_key :integrations_key
+  encrypted_column :credentials
   extend Enumerize
 
   enumerize :provider, in: %i[github gitlab linear coder slack azure_devops], predicates: true
@@ -17,11 +20,16 @@ class Integration < ApplicationRecord
   has_many :integration_data, class_name: "IntegrationData", dependent: :delete_all
   has_many :azure_devops_operations, dependent: :delete_all
   has_many :azure_devops_subscriptions, dependent: :destroy
+  # A removed Slack install stops claiming its workspace, so another company
+  # (or this one, later) can connect it.
+  after_destroy :release_slack_workspace, if: :slack?
 
   validates :name, presence: true
   validates :provider, presence: true
   validate :project_belongs_to_same_company, if: -> { project_id.present? }
   validate :azure_devops_connection_is_scoped, if: :azure_devops?
+  before_validation :record_github_installation_id, if: :github?
+  validate :github_installation_held_by_this_company, if: -> { github_installation_id.present? && active? }
 
   scope :for_company, ->(company) { where(company: company) }
   scope :company_wide, -> { where(project_id: nil) }
@@ -54,9 +62,7 @@ class Integration < ApplicationRecord
       company.integrations.build(provider: :github, connected_by: connected_by, project: project)
   end
 
-  # installation_id lives in encrypted credentials — match in Ruby after scope filter.
   def self.find_or_build_github_for_installation(company:, connected_by:, project:, installation_id:)
-    id_str = installation_id.to_s
     scoped =
       if project
         company.integrations.where(project_id: project.id, provider: :github)
@@ -64,21 +70,37 @@ class Integration < ApplicationRecord
         company.integrations.company_wide.where(provider: :github)
       end
 
-    scoped.find { |i| i.installation_id == id_str } ||
+    scoped.find_by(github_installation_id: installation_id.to_i) ||
       company.integrations.build(provider: :github, connected_by: connected_by, project: project)
   end
 
-  def credentials_data=(hash)
-    self.credentials = encryptor.encrypt_and_sign(hash.to_json)
+  # Whether this company already holds the installation (on any of its rows).
+  def self.github_installation_held_by?(company, installation_id)
+    company.integrations.where(provider: :github, github_installation_id: installation_id.to_i).exists?
   end
 
+  def credentials_data=(hash)
+    self.credentials = encrypt_secret(hash.to_json, column: "credentials")
+  end
+
+  # Raises Encryptable::DecryptionError when the stored credentials cannot be
+  # read, rather than passing for an integration that holds none.
   def credentials_data
     return {} if credentials.blank?
 
-    JSON.parse(encryptor.decrypt_and_verify(credentials))
-  rescue ActiveSupport::MessageVerifier::InvalidSignature,
-         ActiveSupport::MessageEncryptor::InvalidMessage,
-         JSON::ParserError
+    JSON.parse(decrypt_secret(credentials, column: "credentials"))
+  rescue JSON::ParserError
+    raise Encryptable::DecryptionError.new("Integration#credentials (id=#{id.inspect}) is not a credential",
+                                           model: "Integration", record_id: id)
+  end
+
+  # For showing a connection, never for using one: what the stored credentials
+  # say, or nothing (with the failure logged) when no configured key can read
+  # them — a page listing integrations must not fail on one unreadable row.
+  def credentials_data_for_display
+    credentials_data
+  rescue Encryptable::DecryptionError => e
+    Rails.logger.error("[Integration] #{e.message}")
     {}
   end
 
@@ -241,6 +263,28 @@ class Integration < ApplicationRecord
 
   private
 
+  # One installation belongs to one company unless the deployment proves who
+  # connects it. Every customer installs the same deployment-wide App, and the
+  # App's own JWT can read every installation, so "the installation exists"
+  # proves nothing about who installed it. With the App's user authorization
+  # (Github::InstallationOwnership) every new connection is made by someone
+  # GitHub lists as able to see the installation, so one GitHub organization
+  # may serve several companies.
+  def github_installation_held_by_this_company
+    return if Github::InstallationOwnership.enforced?
+    return unless new_record? || will_save_change_to_github_installation_id? || will_save_change_to_status?
+
+    # Only a verified (active) connection claims the installation, so a row left
+    # behind by a failed verification cannot squat on someone else's install.
+    taken = Integration.where(provider: :github, github_installation_id: github_installation_id, status: "active")
+                       .where.not(company_id: company_id)
+    errors.add(:base, "This GitHub installation is already connected to another workspace") if taken.exists?
+  end
+
+  def record_github_installation_id
+    self.github_installation_id = credentials_data["installation_id"].presence&.to_i
+  end
+
   def project_belongs_to_same_company
     return if project.blank? || company.blank?
     return if project.company_id == company_id
@@ -272,7 +316,11 @@ class Integration < ApplicationRecord
     end
   end
 
-  def encryption_key_setting
-    Settings.encryption.integrations_key
+
+  def release_slack_workspace
+    team_id = settings.to_h["team_id"]
+    return if team_id.blank?
+
+    WebhookEndpoint.where(slug: "slack-team-#{team_id}", company_id: company_id).update_all(enabled: false)
   end
 end

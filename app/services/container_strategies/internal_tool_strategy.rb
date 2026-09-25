@@ -14,7 +14,7 @@ module ContainerStrategies
         @name = name
         @opts = {
           timeout: 300, memory: 1.gigabyte, cpu_quota: 50_000,
-          working_dir: "/workspace", docker_socket: false,
+          working_dir: "/workspace",
           output_files: []
         }
       end
@@ -24,7 +24,6 @@ module ContainerStrategies
       def memory(v)        = tap { @opts[:memory] = v }
       def cpu_quota(v)     = tap { @opts[:cpu_quota] = v }
       def working_dir(v)   = tap { @opts[:working_dir] = v }
-      def docker_socket!   = tap { @opts[:docker_socket] = true }
       def output_files(v)  = tap { @opts[:output_files] = v }
 
       def cmd(&block)      = tap { @opts[:cmd] = block }
@@ -95,10 +94,6 @@ module ContainerStrategies
         "CpuPeriod" => 100_000, "CpuQuota" => cfg[:cpu_quota]
       )
       binds_val = resolve_callable(cfg[:binds]) || []
-      if cfg[:docker_socket]
-        binds_val << "/var/run/docker.sock:/var/run/docker.sock"
-        binds_val.uniq!
-      end
       hc["Binds"] = binds_val if binds_val.any?
       hc
     end

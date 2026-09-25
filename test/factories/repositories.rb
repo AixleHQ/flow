@@ -7,9 +7,10 @@ FactoryBot.define do
     clone_url { "https://github.com/#{full_name}.git" }
     is_private { false }
     description { "Repository #{full_name}" }
-    integration
-    # Repositories are Project-scoped only.
+    # Repositories are Project-scoped only, and their integration has to be one
+    # that project may use — so it is built in the project's own company.
     scope factory: %i[project standalone]
+    integration { association(:integration, company: scope.company) }
 
     trait :project_scope do
       scope factory: %i[project standalone]
@@ -36,6 +37,8 @@ FactoryBot.define do
       end
 
       integration factory: %i[integration azure_devops active]
+      # Azure connections are project-scoped: the repository lives in that project.
+      scope { integration.project }
       external_id { SecureRandom.uuid }
       external_organization_id { SecureRandom.uuid }
       clone_url { nil }

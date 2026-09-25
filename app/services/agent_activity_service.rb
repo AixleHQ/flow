@@ -3,13 +3,6 @@
 class AgentActivityService
   include TaskFilterable
 
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
-
   AgentBreakdown = Struct.new(:agent_type, :sessions, :cost_cents, :tokens, keyword_init: true)
   ActivityPoint = Struct.new(:date, :agent_type, :sessions, keyword_init: true)
 
@@ -19,7 +12,7 @@ class AgentActivityService
     @project = project
     @user = user
     @scope = scope.to_s
-    @since = PERIOD_DAYS.fetch(period.to_s, 30).days.ago
+    @since = AnalyticsPeriod.since(period.to_s)
     @period = period.to_s
     @tags = Array(tags).presence
     @task_type = task_type.presence
@@ -29,21 +22,26 @@ class AgentActivityService
   def call
     sessions = base_sessions
 
+    # Usage statistics, not the session's own totals: the project total reads them,
+    # and usage can keep arriving after a session's totals were frozen.
     sessions_by_agent = sessions
       .where.not(agent_type: nil)
+      .joins("LEFT JOIN usage_statistics ON usage_statistics.terminal_session_id = terminal_sessions.id")
       .group(:agent_type)
       .pluck(
         :agent_type,
         Arel.sql("COUNT(*)"),
-        Arel.sql("COALESCE(SUM(cost_cents), 0)"),
-        Arel.sql("COALESCE(SUM(total_tokens), 0)")
+        Arel.sql("COALESCE(SUM(usage_statistics.cost_cents), 0)"),
+        Arel.sql("COALESCE(NULLIF(SUM(usage_statistics.input_tokens + usage_statistics.output_tokens + " \
+                 "usage_statistics.cache_write_tokens + usage_statistics.cache_read_tokens), 0), " \
+                 "SUM(usage_statistics.tokens), 0)")
       )
       .map do |(agent_type, count, cost, tokens)|
         AgentBreakdown.new(
           agent_type: agent_type,
           sessions: count,
-          cost_cents: cost,
-          tokens: tokens
+          cost_cents: cost.to_i,
+          tokens: tokens.to_i
         )
       end
       .sort_by { |a| -a.sessions }
@@ -79,7 +77,7 @@ class AgentActivityService
   attr_reader :project, :user, :scope, :since, :tags, :task_type, :participant_id
 
   def base_sessions
-    s = scope_sessions.where(created_at: since..)
+    s = scope_sessions.where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
     s = s.where(user_id: participant_id) if participant_id
     apply_task_filters(s)
   end

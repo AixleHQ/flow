@@ -24,12 +24,7 @@ module PersonalTools
       unknown = ids.map(&:to_i) - steps_by_id.keys
       return error("Steps not in this workflow: #{unknown.join(', ')}") if unknown.any?
 
-      # Two-phase to dodge the (workflow_id, position) unique index: park at
-      # negative positions first, then assign the final 1..n.
-      ActiveRecord::Base.transaction do
-        ids.each_with_index { |id, idx| steps_by_id.fetch(id.to_i).update_column(:position, -(idx + 1)) }
-        ids.each_with_index { |id, idx| steps_by_id.fetch(id.to_i).update_column(:position, idx + 1) }
-      end
+      Positions.reorder!(workflow.steps, ids)
       success(workflow_id: workflow.id, new_order: ids)
     end
   end

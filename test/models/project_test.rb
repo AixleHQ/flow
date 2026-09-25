@@ -80,7 +80,7 @@ class ProjectTest < ActiveSupport::TestCase
   # Regression for PALAD-AI-RAILS-2T: project-scoped integrations must be
   # destroyed with the project, otherwise the FK on integrations.project_id blocks deletion.
   test "destroy! succeeds when the project has integrations" do
-    integration = create(:integration, company: @company, project: @project, connected_by: @project_owner)
+    create(:integration, company: @company, project: @project, connected_by: @project_owner)
 
     assert_difference -> { Project.count } => -1,
                       -> { Integration.count } => -1 do

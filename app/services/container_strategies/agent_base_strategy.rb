@@ -61,6 +61,7 @@ module ContainerStrategies
         env_vars: build_env_vars,
         labels: build_labels,
         host_config: build_host_config,
+        privilege_escalation: privilege_escalation?,
         exposed_ports: build_exposed_ports,
         cmd: build_cmd,
         working_dir: build_working_dir
@@ -96,7 +97,7 @@ module ContainerStrategies
     # `agents.images.<runtime>` remains a per-runtime escape hatch.
     def resolve_image
       agent_type = input[:agent_type].to_s
-      override = (Settings.agents&.images&.to_h || {}).transform_keys(&:to_s)[agent_type]
+      override = Settings.agents&.images.to_h.transform_keys(&:to_s)[agent_type]
       return override.to_s if override.present?
 
       name = "#{Settings.agents&.image_prefix}#{agent_type.tr('_', '-')}"
@@ -125,6 +126,7 @@ module ContainerStrategies
         "SESSION_TYPE" => session_type,
         "SESSION_ID" => input[:session_id].to_s,
         "TTYD_PORT" => "7681",
+        "VIEW_PORT" => "7682",
         "WATCHER_PORT" => "4040",
         "ROUTE_TOKEN" => input[:route_token],
         "VSCODE_TOKEN" => vscode_token,
@@ -141,6 +143,7 @@ module ContainerStrategies
       # adapter because every agent clones, fetches and pushes; only a session
       # that actually holds Azure repositories gets a key.
       env_vars.merge!(AzureDevops::SessionGitSetup.container_env(session))
+      env_vars.merge!(GitCredentials::SessionGitSetup.container_env(session))
 
       env_vars.merge!(agent_service.adapter.default_env_vars(session))
       env_vars.merge!(agent_service.adapter.env_vars_from_metadata(session.metadata)) if session.metadata.present?
@@ -161,7 +164,9 @@ module ContainerStrategies
       # whether this container runs on a stored credential or is creating one.
       return {} if session_type == "auth_setup"
 
-      paths = agent_service.adapter.auth_file_paths
+      paths = agent_service.adapter.writeback_file_paths
+      return {} if paths.empty?
+
       {
         "CREDENTIAL_SYNC_URL" => Settings.agents.credential_sync_url,
         "CREDENTIAL_SYNC_KEY" => Agents::SessionKey.generate(session),
@@ -195,12 +200,21 @@ module ContainerStrategies
       base_labels.merge(traefik_labels(route_token, router_name))
     end
 
+    # Bounded like tool containers are — memory, CPU and processes — on Docker as
+    # on Kubernetes.
+    # No raw sockets, and no setuid escalation unless the image's sudo needs it,
+    # as on Kubernetes.
     def build_host_config
-      base_host_config
+      host_config = limits_host_config(load_container_limits(:agent_session)).merge("CapDrop" => [ "NET_RAW" ])
+      privilege_escalation? ? host_config : host_config.merge("SecurityOpt" => [ "no-new-privileges" ])
+    end
+
+    def privilege_escalation?
+      AgentCredentialsService.for(input[:agent_type]).adapter.privilege_escalation?
     end
 
     def build_exposed_ports
-      { "7681/tcp" => {}, "4040/tcp" => {}, "8443/tcp" => {} }
+      { "7681/tcp" => {}, "4040/tcp" => {}, "8443/tcp" => {}, "7682/tcp" => {} }
     end
 
     protected
@@ -241,10 +255,10 @@ module ContainerStrategies
       end
     end
 
+    # The launch marker tells the usage ingest that this container was handed a
+    # usage key, so from here on a batch without one is refused for this session.
     def persist_vscode_token(session, token)
-      meta = session.metadata || {}
-      meta["vscode_token"] = token
-      session.update_column(:metadata, meta)
+      session.merge_jsonb!(:metadata, "vscode_token" => token, UsageStatistics::SessionKey::LAUNCH_MARKER => 1)
     end
 
     def base_labels
@@ -341,7 +355,13 @@ module ContainerStrategies
         "traefik.http.routers.#{router_name}-ide.rule" => "PathPrefix(`/t/#{route_token}/ide`)",
         "traefik.http.routers.#{router_name}-ide.middlewares" => "terminal-auth@file",
         "traefik.http.routers.#{router_name}-ide.service" => "#{router_name}-ide",
-        "traefik.http.services.#{router_name}-ide.loadbalancer.server.port" => "8443"
+        "traefik.http.services.#{router_name}-ide.loadbalancer.server.port" => "8443",
+        # The read-only terminal every viewer but the owner is routed to.
+        "traefik.http.routers.#{router_name}-view.rule" => "PathPrefix(`/t/#{route_token}/view`)",
+        "traefik.http.routers.#{router_name}-view.middlewares" => "terminal-auth@file,#{router_name}-view-strip",
+        "traefik.http.middlewares.#{router_name}-view-strip.stripprefix.prefixes" => "/t/#{route_token}/view",
+        "traefik.http.routers.#{router_name}-view.service" => "#{router_name}-view",
+        "traefik.http.services.#{router_name}-view.loadbalancer.server.port" => "7682"
       }
 
       labels

@@ -38,6 +38,15 @@ module Coder
   # failure mode that matters is a fault on our side reading as a dead pool, and
   # a cap turns "deleted everything" into "deleted a few, and said so".
   #
+  # A workspace whose last start or stop FAILED is a candidate too, through the
+  # same lock check, confirmation window and cap: a provider outage fails every
+  # build at once, and must not empty the pool in one sweep. One whose DELETE
+  # failed is reported and left for an operator — orphaning it would drop the
+  # record and keep paying for the machine. And only the integration's own
+  # workspaces under its machine prefix are ever looked at: with no prefix the
+  # reaper does nothing, and an admin token's view of other people's workspaces
+  # is never listed.
+  #
   # First sightings are recorded in `integration_data` as
   # `coder:workspace_dead:<workspace_name>` — same table, TTL semantics and
   # `(integration_id, key)` isolation as the lock and quarantine markers.
@@ -98,8 +107,9 @@ module Coder
       @failures = []
 
       return tally(enabled: false) unless enabled?
+      return tally(enabled: false) if prefix.blank?
 
-      workspaces = @workspace_service.list(prefix: prefix)
+      workspaces = @workspace_service.list(prefix: prefix, own: true)
       prune_orphan_markers(workspaces.map { |w| w["name"].to_s })
       workspaces.each { |ws| consider(ws) }
 
@@ -116,9 +126,7 @@ module Coder
 
       @checked += 1
 
-      if failed?(workspace)
-        return delete_failed_workspace(name: name, id: id)
-      end
+      return consider_failed(workspace, name: name, id: id) if failed?(workspace)
 
       # A workspace that is stopped, being deleted, or mid-build is not a
       # workspace with a dead agent — it is one that is doing what it was told.
@@ -158,31 +166,21 @@ module Coder
       workspace.dig("latest_build", "job", "status").to_s == "failed"
     end
 
-    # A failed provisioner build cannot recover by probing the agent, and a
-    # failed delete build must not leave the workspace stuck forever. Try the
-    # normal destroy first so Terraform can release its resources; if either
-    # creating or completing that build fails, orphan the workspace record.
-    def delete_failed_workspace(name:, id:)
-      build = @workspace_service.delete(id)
-      @workspace_service.await_build(build.fetch("id"))
-      record_failed_workspace_deletion(name, orphan: false)
-    rescue Coder::WorkspaceService::OperationError, KeyError => e
-      Rails.logger.warn("[Coder::DeadWorkspaceReaper] normal delete #{name} failed: #{e.message}; retrying orphaned")
-      begin
-        orphan_build = @workspace_service.delete(id, orphan: true)
-        @workspace_service.await_build(orphan_build.fetch("id"))
-        record_failed_workspace_deletion(name, orphan: true)
-      rescue Coder::WorkspaceService::OperationError, KeyError => orphan_error
-        @failures << "#{name} (normal delete: #{e.message}; orphan delete: #{orphan_error.message})"
-        Rails.logger.warn("[Coder::DeadWorkspaceReaper] orphan delete #{name} failed: #{orphan_error.message}")
+    # A failed start or stop cannot recover by probing an agent, so it goes
+    # straight to confirmation — held twice, apart, before it is deleted. A failed
+    # delete is not retried as an orphan: that would forget the machine, not stop it.
+    def consider_failed(workspace, name:, id:)
+      if workspace.dig("latest_build", "transition").to_s == "delete"
+        @skipped << "#{name} (its delete build failed — needs an operator)"
+        return
       end
-    end
 
-    def record_failed_workspace_deletion(name, orphan:)
-      clear_marker(name)
-      @quarantine_service.clear(workspace_name: name)
-      @deleted << name
-      Rails.logger.info("[Coder::DeadWorkspaceReaper] deleted failed workspace #{name}#{' (orphaned)' if orphan}")
+      if @lock_service.held?(workspace_name: name)
+        @skipped << "#{name} (held by a live session)"
+        return
+      end
+
+      confirm_or_delete(name: name, id: id, reason: "last #{workspace.dig('latest_build', 'transition')} build failed")
     end
 
     # First sighting only writes the marker. Deletion happens on a later sweep,

@@ -40,13 +40,13 @@ class Web::OauthController < Web::ApplicationController
     }
   end
 
-  # GET /oauth/:provider/authorize?owner_type=&owner_id=&mcp_server_id=&return_to=
+  # POST /oauth/:provider/authorize (owner_type, owner_id, mcp_server_id, return_to)
   def authorize
     provider = params[:provider].to_s
     return redirect_to(root_path, alert: "Unknown OAuth provider") unless Oauth::Providers.known?(provider)
 
     owner = resolve_owner(params[:owner_type], params[:owner_id])
-    return redirect_to(root_path, alert: "Not permitted") if owner.nil?
+    return redirect_to(root_path, alert: "Not permitted") unless owner && may_connect?(owner)
 
     client = Oauth::Providers.client_for(provider)
 
@@ -104,9 +104,10 @@ class Web::OauthController < Web::ApplicationController
     provider = payload["provider"].to_s
 
     # (5) owner authorization — even though state is signed, re-bind to a record
-    # the CURRENT user may act for.
+    # the CURRENT user may act for, with the right to connect it now.
     owner = resolve_owner(payload["owner_type"], payload["owner_id"])
-    return redirect_to(root_path, alert: "Not permitted") if owner.nil?
+    mcp_server = mcp_server_from(payload)
+    return redirect_to(root_path, alert: "Not permitted") unless owner && may_connect?(owner, mcp_server: mcp_server)
 
     # Derive the client. Static providers re-materialize from the trusted registry;
     # MCP (DCR) providers load the signed oauth_client_id — trusted because the state
@@ -127,6 +128,21 @@ class Web::OauthController < Web::ApplicationController
       client = Oauth::Providers.client_for(provider)
     end
 
+    # (9) RFC 9207: an authorization server that names itself in the response
+    # must be the one this flow started with; anything else is a mix-up.
+    unless issuer_matches?(client, params[:iss])
+      return redirect_to(return_to, alert: "The authorization came back from a different server. Connect again.")
+    end
+
+    if provider.start_with?("mcp:")
+      return redirect_to(return_to, alert: "Not permitted") if mcp_server.nil?
+      # The grant is for the address the connect started from. A server re-pointed
+      # in the meantime must not receive it.
+      if MCPServer.origin_of(payload["resource"]) != MCPServer.origin_of(mcp_server.url)
+        return redirect_to(return_to, alert: "This server's address changed while you were connecting. Connect again.")
+      end
+    end
+
     # (4) PKCE verifier supplied to the exchange (mandatory). The RFC 8707 resource
     # indicator (nil for static providers) is threaded through from the signed state.
     resp = exchange_code!(client, code: params[:code].to_s,
@@ -136,19 +152,32 @@ class Web::OauthController < Web::ApplicationController
       owner: owner,
       oauth_client: client,
       provider: provider,
-      mcp_server: mcp_server_from(payload),
+      mcp_server: mcp_server,
+      resource: payload["resource"],
+      connected_by: current_user,
       token_response: resp
     )
     redirect_to return_to, notice: "Connected"
-  rescue Oauth::TokenExchangeError => e
+  rescue Oauth::TokenExchangeError, Encryptable::DecryptionError => e
     # (7) never logs tokens or the code — only class name / HTTP status.
-    Rails.logger.warn("[Oauth] token exchange failed: #{e.message}")
+    Rails.logger.warn("[Oauth] token exchange failed: #{e.class}: #{e.message}")
     redirect_to safe_return_to(payload&.dig("return_to")), alert: "Failed to complete connection"
   rescue Oauth::MissingClientConfig
     redirect_to safe_return_to(payload&.dig("return_to")), alert: "This provider is not configured"
   end
 
-  # GET /oauth/mcp/:mcp_server_id/connect?return_to=
+  # GET /oauth/mcp/:mcp_server_id/connect — sends the person to the server's page,
+  # where Connect is one click. Connecting registers a client and starts a flow,
+  # so it happens only on POST, never from a link another site can make them follow.
+  def mcp_connect_page
+    server = MCPServer.find_by(id: params[:mcp_server_id])
+    project = server&.scope_type == "Project" && Project.for_user(current_user).find_by(id: server.scope_id)
+    return redirect_to(root_path, alert: "Not permitted") unless project
+
+    redirect_to company_project_mcp_servers_path(project), notice: "Press Connect next to #{server.name} to continue."
+  end
+
+  # POST /oauth/mcp/:mcp_server_id/connect (return_to)
   # MCP OAuth 2.1 connect (oauth-unification §5). Mirrors #authorize, but the client
   # is discovered + dynamically registered (DCR) via MCP::OauthDiscoveryService
   # instead of read from the static registry. The RFC 8707 resource indicator (the
@@ -157,9 +186,13 @@ class Web::OauthController < Web::ApplicationController
   # discovery service), so the security core stays in one place.
   def mcp_connect
     server = MCPServer.find_by(id: params[:mcp_server_id])
-    # Availability + owner authorization: the server must exist, be an OAuth server,
-    # and be one the CURRENT user may act for (reuses the Phase-1 owner guard).
-    unless server&.auth_type_oauth? && resolve_owner(server.scope_type, server.scope_id)
+    # credential_scope decides WHOSE identity connects: per_user => the acting user;
+    # shared => the server's scope owner (shared service identity for the tenant).
+    owner = server && (server.credential_scope_per_user? ? current_user : server.scope)
+    # The server must exist, be an OAuth server in a project the CURRENT user can
+    # reach, and the user must have the right to connect that identity.
+    unless server&.auth_type_oauth? && resolve_owner(server.scope_type, server.scope_id) &&
+           may_connect?(owner, mcp_server: server)
       return redirect_to(root_path, alert: "Not permitted")
     end
 
@@ -167,10 +200,6 @@ class Web::OauthController < Web::ApplicationController
     # the service; any failure (incl. an unsafe URL) raises MCP::DiscoveryError.
     result = MCP::OauthDiscoveryService.prepare(mcp_url: server.url,
                                                 manual_client: server.manual_oauth_client)
-
-    # credential_scope decides WHOSE identity connects: per_user => the acting user;
-    # shared => the server's scope owner (shared service identity for the tenant).
-    owner = server.credential_scope_per_user? ? current_user : server.scope
 
     # PKCE (RFC 7636, S256). The verifier stays server-side in the state cache.
     code_verifier = SecureRandom.urlsafe_base64(64)
@@ -301,6 +330,46 @@ class Web::OauthController < Web::ApplicationController
     end
   end
 
+  # Connecting sets the identity everyone holding the credential acts as. A
+  # shared one needs the right to manage what uses it — a company admin for the
+  # company's own, a project writer for a project's MCP server, an integrations
+  # manager for a project's provider connection — and a personal one needs only
+  # access to the server it is for.
+  def may_connect?(owner, mcp_server: nil)
+    case owner
+    when User
+      owner == current_user && (mcp_server.nil? || mcp_server_policy(mcp_server).index?)
+    when Project
+      if mcp_server
+        mcp_server_policy(mcp_server).update?
+      else
+        Web::Company::Projects::IntegrationsPolicy.new(ProjectContext.new(current_user, {}, project: owner), owner).create?
+      end
+    when Company
+      Web::Company::SettingsPolicy.new(BaseContext.new(current_user, {}, company: owner), owner).update?
+    else
+      false
+    end
+  end
+
+  def mcp_server_policy(server)
+    Web::Company::Projects::MCPServersPolicy.new(ProjectContext.new(current_user, {}, project: server.scope), server)
+  end
+
+  # RFC 9207. A response that carries `iss` must name this flow's issuer; one
+  # from a server that advertised the parameter must carry it.
+  def issuer_matches?(client, iss)
+    return normalized_issuer(iss) == normalized_issuer(client.issuer) if iss.present?
+
+    client.metadata.to_h.dig("asm", "authorization_response_iss_parameter_supported") != true
+  end
+
+  def normalized_issuer(value)
+    MCPServer.origin_of(value) + URI.parse(value.to_s).path.to_s.chomp("/")
+  rescue URI::InvalidURIError
+    value.to_s
+  end
+
   # Bind an MCP server reference ONLY when the current user may act for that
   # server's scope (Company/Project). The signed state is trusted for routing, but
   # an mcp_server_id from a phishing authorize link must never bind a credential to
@@ -338,8 +407,8 @@ class Web::OauthController < Web::ApplicationController
     body[:resource] = resource if resource.present?
 
     uri = URI.parse(client.token_endpoint)
-    http = Net::HTTP.new(uri.host, uri.port)
-    http.use_ssl = uri.scheme == "https"
+    http = SafeHttp.http_for(uri, open_timeout: Oauth::TokenService::TOKEN_TIMEOUT,
+                                  read_timeout: Oauth::TokenService::TOKEN_TIMEOUT)
     req = Net::HTTP::Post.new(uri)
     req["Accept"] = "application/json"
     req.set_form_data(body)
@@ -347,7 +416,7 @@ class Web::OauthController < Web::ApplicationController
     raise Oauth::TokenExchangeError, "status=#{res.code}" unless res.is_a?(Net::HTTPSuccess)
 
     JSON.parse(res.body)
-  rescue JSON::ParserError, SocketError, Net::OpenTimeout, Net::ReadTimeout => e
+  rescue JSON::ParserError, SocketError, Net::OpenTimeout, Net::ReadTimeout, SafeHttp::UnsafeUrl => e
     raise Oauth::TokenExchangeError, e.class.name
   end
 

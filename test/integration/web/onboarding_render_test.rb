@@ -40,15 +40,14 @@ class Web::OnboardingRenderTest < ActionDispatch::IntegrationTest
   # asks for `auth_sessions` alone after creating a session, and again on every
   # cable refresh). inertia_rails filters `only` against the prop names this
   # controller declares — snake_case — BEFORE the camelCase prop transformer runs
-  # (config/initializers/inertia.rb), so a client asking for "authSessions"
-  # matches nothing and silently gets a response without the prop. That is what
-  # left the Connect panel stuck on "Starting auth session..." until a full page
-  # reload. Pin both halves: the snake_case key resolves, the camelCase one does not.
-  test "the auth_sessions prop is served for a snake_case partial reload" do
+  # (config/initializers/inertia.rb), so a client asking for "authSessions" would
+  # match nothing and leave the Connect panel stuck on "Starting auth session...".
+  # Web::ApplicationController offers each requested key in both spellings.
+  test "the auth_sessions prop is served for a partial reload in either spelling" do
     create(:terminal_session, user: @user)
 
     assert_equal 1, partial_props("auth_sessions").fetch("authSessions").size
-    assert_not partial_props("authSessions").key?("authSessions")
+    assert_equal 1, partial_props("authSessions").fetch("authSessions").size
   end
 
   private

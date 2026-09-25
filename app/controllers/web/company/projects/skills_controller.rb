@@ -19,7 +19,8 @@ class Web::Company::Projects::SkillsController < Web::Company::Projects::Applica
     skill = SkillsRegistryService.install(
       params[:skill_id],
       scope: current_project,
-      installs: catalog_installs(params[:skill_id])
+      installs: catalog_installs(params[:skill_id]),
+      acknowledge_risk: ActiveModel::Type::Boolean.new.cast(params[:acknowledge_risk])
     )
     redirect_to company_project_skills_path(current_project), notice: "Skill '#{skill.name}' installed"
   rescue SkillsRegistryService::RegistryError => e

@@ -3,6 +3,8 @@ import { Alert, Box, Button, Card, Group, Progress, Stack, Text, Title, Tooltip 
 import { IconRefresh } from '@tabler/icons-react';
 import { useState } from 'react';
 
+import { AGENT_RUNTIMES, isAgentType } from 'shared/ui/agentRuntimes';
+
 /**
  * One rolling quota window as the vendor reports it. `utilization` is a percentage
  * (0-100). A vendor that meters in countable units (Kiro bills in credits) also sends
@@ -45,18 +47,6 @@ const WINDOW_LABELS: Record<string, string> = {
   kiro_credits: 'Credits this billing period',
 };
 
-const AGENT_LABELS: Record<string, string> = {
-  claude_code: 'Claude Code',
-  codex: 'OpenAI Codex',
-  kiro_cli: 'Kiro CLI',
-};
-
-const VENDOR_LABELS: Record<string, string> = {
-  claude_code: 'Anthropic',
-  codex: 'OpenAI',
-  kiro_cli: 'AWS',
-};
-
 /** Credits arrive fractional; whole numbers should not grow a ".00" tail. */
 function formatAmount(value: number): string {
   return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
@@ -68,8 +58,9 @@ function formatAmount(value: number): string {
 // tokens, OAuth URLs and vendor account email that would make it actionable are
 // exactly what must never appear here.
 function statusMessage(entry: UsageLimitsEntry, ownerName: string | null): string {
-  const vendor = VENDOR_LABELS[entry.agentType] ?? 'The provider';
-  const agent = AGENT_LABELS[entry.agentType] ?? entry.agentType;
+  const runtime = isAgentType(entry.agentType) ? AGENT_RUNTIMES[entry.agentType] : null;
+  const vendor = runtime?.vendor ?? 'The provider';
+  const agent = runtime?.productName ?? entry.agentType;
 
   if (entry.status === 'unauthorized') {
     return ownerName
@@ -259,7 +250,9 @@ export function UsageLimitsCard({
           <Box key={entry.agentType}>
             {entries.length > 1 && (
               <Text size="xs" fw={600} c="dimmed" tt="uppercase" mb={8}>
-                {AGENT_LABELS[entry.agentType] ?? entry.agentType.replace(/_/g, ' ')}
+                {isAgentType(entry.agentType)
+                  ? AGENT_RUNTIMES[entry.agentType].productName
+                  : entry.agentType.replace(/_/g, ' ')}
               </Text>
             )}
             <EntryBody entry={entry} ownerName={ownerName} />

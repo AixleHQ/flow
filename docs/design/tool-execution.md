@@ -256,7 +256,7 @@ module ContainerStrategies
         @name = name
         @opts = {
           timeout: 300, memory: 1.gigabyte, cpu_quota: 50_000,
-          working_dir: "/workspace", docker_socket: false,
+          working_dir: "/workspace",
           output_files: []
         }
       end
@@ -266,7 +266,6 @@ module ContainerStrategies
       def memory(v)        = tap { @opts[:memory] = v }
       def cpu_quota(v)     = tap { @opts[:cpu_quota] = v }
       def working_dir(v)   = tap { @opts[:working_dir] = v }
-      def docker_socket!   = tap { @opts[:docker_socket] = true }
       def output_files(v)  = tap { @opts[:output_files] = v }
 
       def cmd(&block)      = tap { @opts[:cmd] = block }
@@ -353,10 +352,6 @@ module ContainerStrategies
         "CpuPeriod" => 100_000, "CpuQuota" => cfg[:cpu_quota]
       )
       binds_val = resolve_callable(cfg[:binds]) || []
-      if cfg[:docker_socket]
-        binds_val << "/var/run/docker.sock:/var/run/docker.sock"
-        binds_val.uniq!
-      end
       hc["Binds"] = binds_val if binds_val.any?
       hc
     end
@@ -523,80 +518,36 @@ processing  →  completed    (exit_code == 0, no error)
                               error: "Exited with code 1"
                               error: "Container OOM killed"
 
-completed  →  expired       (cleanup job)
-failed     →  expired       (cleanup job)
+completed  →  expired       (cleanup activity)
+failed     →  expired       (cleanup activity)
 ```
 
 ### 3.5 Cleanup
 
-Configurable retention, no `expires_at` column:
+Configurable retention (`TOOL_RESULTS_RETENTION_DAYS`, default 30), no `expires_at`
+column. The `tool_result_cleanup_workflow` Temporal schedule runs
+`Activities::ToolResults::CleanupActivity` every hour. It:
 
-```ruby
-class ToolResultCleanupJob < ApplicationJob
-  RETENTION = -> { (Settings.tool_results&.retention_days || 30).days }
-
-  def perform
-    ToolResult.stale(RETENTION.call).find_each do |tr|
-      tr.stdout&.delete
-      tr.stderr&.delete
-      tr.result_data&.delete
-      tr.output&.delete
-      tr.update!(state: :expired, stdout_data: nil, stderr_data: nil,
-                 result_data_data: nil, output_data: nil)
-    end
-  end
-end
-```
+- deletes the stored stdout, stderr, result data and output files of completed and
+  failed results older than the retention, and marks them `expired`. The execution
+  id, exit code, duration and error stay. At most 5,000 results per run, so a
+  backlog drains over several runs.
+- marks results still `processing` after 60 minutes as `failed`.
 
 ---
 
-## 4. Serializer
+## 4. Resource
 
-```ruby
-class ToolResultSerializer < ApplicationSerializer
-  URL_TTL = 3600
+`ToolResultResource` (`app/resources/tool_result_resource.rb`) is the Alba resource an
+agent receives for a result. It keeps Ruby's snake_case keys (`transform_keys :none`) and
+returns `execution_id`, `state`, `exit_code`, `error`, `duration_ms`, `created_at`,
+`tool_name`, and, for each stored attachment (`stdout`, `stderr`, `result_data`,
+`output`), a presigned `*_url` valid for an hour plus its `*_size`. A `url_host` param
+rewrites the scheme, host, and port of those URLs, for callers that reach storage through
+a different host.
 
-  attributes :execution_id, :state, :exit_code, :error, :duration_ms, :created_at
-
-  attribute :tool_name do
-    object.tool.name
-  end
-
-  attribute :stdout_url do
-    object.stdout&.url(expires_in: URL_TTL)
-  end
-
-  attribute :stdout_size do
-    object.stdout&.metadata&.dig("size")
-  end
-
-  attribute :stderr_url do
-    object.stderr&.url(expires_in: URL_TTL)
-  end
-
-  attribute :stderr_size do
-    object.stderr&.metadata&.dig("size")
-  end
-
-  attribute :result_data_url do
-    object.result_data&.url(expires_in: URL_TTL)
-  end
-
-  attribute :result_data_size do
-    object.result_data&.metadata&.dig("size")
-  end
-
-  attribute :output_url do
-    object.output&.url(expires_in: URL_TTL)
-  end
-
-  attribute :output_size do
-    object.output&.metadata&.dig("size")
-  end
-end
-```
-
-Nil attachments produce nil attributes — serializer returns only what exists. Agent receives ~200-400 bytes through MCP.
+Nil attachments produce nil attributes — the resource returns only what exists. Agent
+receives ~200-400 bytes through MCP.
 
 ---
 
@@ -605,7 +556,7 @@ Nil attachments produce nil attributes — serializer returns only what exists. 
 ### 5.1 tools/call handler
 
 ```ruby
-# In action_mcp_dynamic_tools.rb
+# Tools::CallExecutor.execute — reached from MCPController through Tools::MCPRequestHandler
 
 def execute_tool(tool, arguments, session)
   if tool.execution_mode_app?
@@ -748,7 +699,7 @@ end
 
 | Aspect | Custom tools | Internal container tools |
 |--------|-------------|------------------------|
-| Docker socket | **Never** | Per-definition (`docker_socket!`) |
+| Docker socket | **Never** | **Never** (the `docker_socket!` option was removed: a tool holding the host socket is root on the host) |
 | Bind mounts | **None** | Per-definition (`binds` block) |
 | Network | aixle docker network | aixle docker network |
 | Memory/CPU | Settings-based limits | Per-definition (can override) |

@@ -38,6 +38,8 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
+import type { Integration } from '@/types/generated';
+
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
@@ -51,33 +53,6 @@ import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { GithubProps } from './GithubConnectModal';
-
-export interface Integration {
-  id: number;
-  name: string;
-  provider: string;
-  status: string;
-  scopeIndicator: string;
-  githubUrl: string | null;
-  githubAuthMode?: string | null;
-  githubTokenScopes?: string[];
-  installationId?: string;
-  coderUrl?: string | null;
-  coderDefaultTemplate?: string | null;
-  coderMachinePrefix?: string | null;
-  coderLockTtlMinutes?: number | null;
-  slackRequestUrl?: string | null;
-  azureAuthMode?: string | null;
-  azureOrganization?: string | null;
-  azureProjectName?: string | null;
-  azureProjectIds?: string[];
-  azureProjectDisplayNames?: string[];
-  azureIdentity?: string | null;
-  azureCapabilities?: string[];
-  azureUrl?: string | null;
-  connectedBy: { id: number; name: string };
-  createdAt: string;
-}
 
 interface IntegrationsContentProps {
   integrations: Integration[];
@@ -128,7 +103,7 @@ export const IntegrationsContent = ({
   azureDevops,
   github,
 }: IntegrationsContentProps) => {
-  const { canExecute } = useProjectPermissions();
+  const { canExecute, canManageCompany } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
   const [search, setSearch] = useState('');
   const [scopeFilter, setScopeFilter] = useState('all');
@@ -695,7 +670,7 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {canExecute && !readOnly && (
+                        {canExecute && (!readOnly || canManageCompany) && (
                           <Tooltip label="Remove">
                             <ActionIcon
                               aria-label="Remove"

@@ -76,4 +76,20 @@ class Web::Company::Projects::BoardsRenderTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_inertia_page "Projects/Board/BoardPage"
   end
+
+  test "a selected task's runs say what each one cost" do
+    board = create(:board, project: @project)
+    column = create(:board_column, board: board)
+    task = create(:board_task, board: board, board_column: column)
+    workflow = create(:workflow, scope: @project)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user, board_task: task)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    create(:step_run, workflow_run: run, step: create(:step, workflow: workflow), terminal_session: session)
+    UsageStatistic.create!(terminal_session: session, cost_cents: 250)
+
+    get company_project_board_path(@project, task: task.id)
+
+    assert_response :success
+    assert_equal [ 250 ], inertia.props[:taskWorkflowRuns].map { |r| r[:totalCostCents] }
+  end
 end

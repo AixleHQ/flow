@@ -34,7 +34,7 @@ One Step = one agent session = one container = one major deliverable.
 | `tool_ids`             | Tools available in this step (merged with workflow base).                |
 | `skill_ids`            | Skills injected (merged with workflow base).                             |
 | `mcp_server_ids`       | MCP servers connected (merged with workflow base).                       |
-| `mount_repositories`   | Mount the project's Git repos under `/workspace/repo/`.                  |
+| `repository_ids`       | Repos cloned under `/workspace/repo/` (merged with workflow base).       |
 | `depends_on_step_ids`  | DAG dependencies — enables parallel execution.                           |
 | `preferred_model`      | LLM model override for this step.                                        |
 | `input_asset_specs`    | Documented expected inputs (informational).                              |
@@ -46,6 +46,11 @@ A Step with `depends_on_step_ids: []` can start as soon as the workflow
 run begins. Steps with dependencies wait until *all* listed
 prerequisites complete successfully. Sibling steps that share no
 dependency relationship run **in parallel**, each in its own container.
+
+Dependencies cannot form a cycle: saving a step that would end up waiting on
+itself is rejected with the cycle spelled out. If a run is left with steps that
+can never start, it fails with `failure_reason: unsatisfiable_dependencies`
+instead of reporting completion.
 
 ```
        ┌── Step B (lint)  ─┐
@@ -82,7 +87,13 @@ A `WorkflowRun` can be triggered by:
 - a column binding (auto or manual),
 - the **Trigger workflow** button on a task,
 - the workflow's "Run" button outside the board,
-- the API (`POST /api/v1/projects/:id/workflow_runs`).
+- a schedule, a Slack message, or an inbound webhook,
+- the API (`POST /company/projects/:project_id/workflow_runs`).
+
+> All of these flow through one event pipeline, and each off-board trigger carries a
+> `subject_policy` deciding whether the run gets a board task. The in-app docs page
+> **Triggers and Gates** (`/docs/triggers-and-gates`) has the full model — including
+> why a CI **gate** is not a trigger.
 
 ## Approval gates and human-in-the-loop
 
@@ -120,9 +131,11 @@ links for you. Open it from the project sidebar (Workflows → "Build with AI").
 
 ## Gotchas
 
-- **A step that needs the codebase needs both** `mount_repositories: true`
-  *and* a project with at least one repository configured. The flag
-  alone does nothing if no repo is configured.
+- **A step gets code only if some level names a repository** — the step's
+  own `repository_ids`, the workflow's `base_repository_ids`, or the run's
+  one-off override. An explicit pick anywhere wins outright; the project's
+  full set is used only when nothing names one and the workflow has
+  `inherit_all_project_resources`. How the run started never matters.
 - **`if_outputs_exist`** skip policy compares asset filenames against
   `output_asset_specs`. Rename a spec and previously-skipped steps will
   re-run.

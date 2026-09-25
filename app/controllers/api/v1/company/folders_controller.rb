@@ -50,14 +50,11 @@ module Api
           BaseContext.new(current_user, params, company: current_company)
         end
 
-        # API calls carry no web-session company; company-level folder endpoints
-        # resolve the user's first active membership's company (mirrors
-        # Api::V1::Company::AssetsController).
+        # The company the page was rendered for: the SPA calls this API on the same
+        # cookie session, so AuthConcern's session-validated company applies — not
+        # the user's oldest membership, which for a multi-company user is another company.
         def current_company
-          @current_company ||= current_user.company_memberships.active
-                                           .default_order
-                                           .first&.company
-          @current_company || raise(ActiveRecord::RecordNotFound)
+          super || raise(ActiveRecord::RecordNotFound)
         end
       end
     end

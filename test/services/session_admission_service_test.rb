@@ -373,6 +373,46 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert admission.reload.released_at
   end
 
+  # A watchdog's verdict is a failure. Recording it as `cancelled` made the parent
+  # run cancel itself (WorkflowExecutionWorkflowV2), skipping on_failure.
+  test "a watchdog failing an admitted session records failed and still tears the runtime down" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    admission.reload.update!(launch_state: "claimed", claimed_at: Time.current)
+    session = admission.terminal_session
+    TemporalService.expects(:cancel_workflow).with(session.workflow_id).once
+
+    SessionService.fail_session(session: session, error_message: "No output for 30 minutes")
+
+    assert_equal "failed", session.reload.state
+    assert_equal "No output for 30 minutes", session.error_message
+    assert admission.reload.stop_requested_at
+    assert_nil admission.released_at, "confirmed cleanup, not the verdict, returns the slot"
+  end
+
+  test "a watchdog failing a session still in the queue closes its place as failed" do
+    admission = enqueue
+    TemporalService.expects(:cancel_workflow).never
+
+    SessionService.fail_session(session: admission.terminal_session, error_message: "Stale session")
+
+    assert_equal "failed", admission.terminal_session.reload.state
+    assert admission.reload.released_at
+  end
+
+  test "cancelling does not relabel a session that already ended" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    admission.reload.update!(launch_state: "acknowledged")
+    session = admission.terminal_session
+    session.update!(state: "finished", finished_at: Time.current)
+
+    SessionAdmissionService.cancel!(session)
+
+    assert_equal "finished", session.reload.state
+    assert admission.reload.stop_requested_at
+  end
+
   test "unreleased sessions cannot be deleted but cancelled queue entries can" do
     admission = enqueue
     session = admission.terminal_session

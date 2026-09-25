@@ -1,18 +1,17 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
 
+import type { MCPServer } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-
-import type { McpServer } from 'shared/resources/mcp-servers/McpServersContent';
 
 import McpServersPage from './McpServersPage';
 
-const server = (overrides: Partial<McpServer> = {}): McpServer => ({
+const server = (overrides: Partial<MCPServer> = {}): MCPServer => ({
   id: 1,
   name: 'playwright',
   url: 'https://mcp.example.com',
   transport: 'http',
-  headers: null,
+  headers: {},
   description: null,
   kind: 'custom',
   scopeType: 'Project',
@@ -21,7 +20,19 @@ const server = (overrides: Partial<McpServer> = {}): McpServer => ({
   enabled: true,
   internal: false,
   command: null,
-  env: null,
+  env: {},
+  connectorName: null,
+  connectorVersion: null,
+  connectorStatus: null,
+  connectorVersionPinned: true,
+  connectorUpdateVersion: null,
+  toolBaseline: false,
+  toolDrift: null,
+  authType: 'none',
+  credentialScope: 'shared',
+  oauthClientId: null,
+  oauthClientSecretPresent: false,
+  oauthStatus: null,
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
   ...overrides,

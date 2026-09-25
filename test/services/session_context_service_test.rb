@@ -117,7 +117,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "generate_mcp_config splits the command line of a hand-written stdio server" do
     server = create(:mcp_server, :custom, :stdio_transport, name: "local-mcp", scope: @project,
-                    command: "uvx local-mcp-server --verbose")
+                    command: "uvx local-mcp-server==1.4.0 --verbose")
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.mcp_servers << server
 
@@ -125,7 +125,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
               .dig("mcpServers", "local-mcp")
 
     assert_equal "uvx", entry["command"]
-    assert_equal [ "local-mcp-server", "--verbose" ], entry["args"]
+    assert_equal [ "local-mcp-server==1.4.0", "--verbose" ], entry["args"]
   end
 
   test "generate_mcp_config generates Cursor CLI format" do
@@ -240,6 +240,57 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "Bearer tvly-secret", config["mcpServers"]["tavily"]["headers"]["Authorization"]
   end
 
+  # A value that reaches the container through an MCP header is handed out as
+  # surely as one fetched with get_config_item: audited, and armed for the
+  # container's log filters before the file carrying it is written.
+  test "inject_mcp_config audits each referenced value and arms redaction before writing the config" do
+    item = create(:config_item, name: "TAVILY_API_KEY", value: "tvly-secret", item_type: :secret, scope: @project)
+    create(:config_item, name: "UNRELATED_KEY", value: "not-sent", item_type: :secret, scope: @project)
+    server = create(:mcp_server, :custom, name: "tavily", url: "https://tavily.com/mcp", transport: "sse",
+                                          scope: @project, headers: { "Authorization" => "Bearer config_item:TAVILY_API_KEY" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+
+    writes = []
+    @default_runtime_mock.stubs(:write_file).with { |_ctr, path, content, **| writes << [ path, content ]; true }.returns(true)
+
+    SessionContextService.inject_mcp_config("ctr-1", session)
+
+    access = ConfigItemAccess.find_by!(terminal_session: session)
+    assert_equal [ item.id, "mcp_config", "secret" ], [ access.config_item_id, access.channel, access.item_type ]
+    assert_equal 1, ConfigItemAccess.where(terminal_session: session).count
+
+    paths = writes.map(&:first)
+    registry = paths.index(Sessions::SecretRegistry::LIST_PATH)
+    config = paths.index("/workspace/.mcp.json")
+    assert registry && config && registry < config, "redaction list must be written before the MCP config: #{paths.inspect}"
+    assert_equal [ "tvly-secret" ], writes[registry].last.split("\n").map { |line| Base64.strict_decode64(line) }
+  end
+
+  test "inject_mcp_config writes no access row when no value is referenced" do
+    server = create(:mcp_server, :custom, name: "plain", url: "https://plain.example.com/mcp", transport: "sse",
+                                          scope: @project, headers: { "Authorization" => "Bearer literal-token" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+
+    SessionContextService.inject_mcp_config("ctr-1", session)
+
+    assert_not ConfigItemAccess.exists?(terminal_session: session)
+  end
+
+  test "a reference to another project's item stays unresolved" do
+    other = create(:project, company: @company, owner: @user)
+    create(:config_item, name: "OTHER_KEY", value: "other-project-secret", item_type: :secret, scope: other)
+    server = create(:mcp_server, :custom, name: "probe", url: "https://probe.example.com/mcp", transport: "sse",
+                                          scope: @project, headers: { "Authorization" => "Bearer config_item:OTHER_KEY" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << server
+
+    config = JSON.parse(SessionContextService.generate_mcp_config(session)["/workspace/.mcp.json"])
+
+    assert_equal "Bearer config_item:OTHER_KEY", config["mcpServers"]["probe"]["headers"]["Authorization"]
+  end
+
   test "generate_mcp_config skips disabled servers" do
     enabled = create(:mcp_server, :custom, name: "enabled-server", url: "https://a.com/mcp",
                      transport: "sse", scope: @project, enabled: true)
@@ -253,6 +304,21 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     config = JSON.parse(result["/workspace/.mcp.json"])
     assert config["mcpServers"].key?("enabled-server")
     assert_not config["mcpServers"].key?("disabled-server")
+  end
+
+  # The session validates attachments when it is created; this is the second
+  # line: a row attached some other way still never reaches the container.
+  test "generate_mcp_config skips an MCP server that belongs to another project" do
+    other_company = create(:company)
+    foreign_project = create(:project, company: other_company, owner: create(:user, company: other_company))
+    foreign = create(:mcp_server, :custom, name: "foreign-server", url: "https://c.com/mcp",
+                     transport: "sse", scope: foreign_project, headers: { "Authorization" => "Bearer theirs" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.mcp_servers << foreign
+
+    config = JSON.parse(SessionContextService.generate_mcp_config(session)["/workspace/.mcp.json"])
+
+    assert_not config["mcpServers"].key?("foreign-server")
   end
 
   test "generate_mcp_config always includes internal aixle-tools" do
@@ -483,6 +549,29 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal "ok", result["house-style"]
   end
 
+  # The release a person installed is what runs: nothing is fetched from upstream
+  # at session start, so a change upstream reaches no session until someone installs
+  # it again.
+  test "inject_skills writes a registry skill's stored files instead of fetching upstream" do
+    skill = create(:skill, scope: @project, name: "pdf", source: "anthropics/skills", package: "anthropics/skills@pdf",
+                           files: { "SKILL.md" => "---\nname: pdf\n---\n", "scripts/fill.py" => "print(1)" })
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.skills << skill
+
+    runtime_mock = mock("runtime")
+    Thread.current[:session_context_runtime] = nil
+    ContainerRuntime.stubs(:build).returns(runtime_mock)
+    runtime_mock.expects(:write_file)
+                .with("abc123", "/home/claude/.claude/skills/pdf/SKILL.md", "---\nname: pdf\n---\n", uid: 1001, gid: 1001)
+                .returns(true)
+    runtime_mock.expects(:write_file)
+                .with("abc123", "/home/claude/.claude/skills/pdf/scripts/fill.py", "print(1)", uid: 1001, gid: 1001)
+                .returns(true)
+    runtime_mock.expects(:exec).never
+
+    assert_equal "ok", SessionContextService.inject_skills("abc123", session)["anthropics/skills@pdf"]
+  end
+
   test "inject_skills reports a failed manual write instead of raising" do
     skill = create(:skill, scope: @project, origin: :manual, name: "house-style",
                    source: nil, package: nil, content: "---\nname: house-style\n---\n\nbody\n")
@@ -637,13 +726,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Claude adapter session_command returns claude for non_interactive mode" do
     adapter = Agents::ClaudeCodeAdapter.new
-    result = adapter.session_command(mode: "non_interactive", prompt: "Fix the bug")
+    result = adapter.session_command(mode: "non_interactive")
     assert_equal "claude", result
-  end
-
-  test "Claude adapter session_command returns claude when non_interactive but no prompt" do
-    adapter = Agents::ClaudeCodeAdapter.new
-    assert_equal "claude", adapter.session_command(mode: "non_interactive", prompt: nil)
   end
 
   test "Codex adapter session_command returns codex --yolo for interactive mode" do
@@ -654,7 +738,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Codex adapter session_command returns codex --yolo for non_interactive mode" do
     adapter = Agents::CodexAdapter.new
-    result = adapter.session_command(mode: "non_interactive", prompt: "Run tests")
+    result = adapter.session_command(mode: "non_interactive")
     assert_equal "codex --yolo -c projects./workspace.trust_level=trusted", result
   end
 
@@ -665,14 +749,14 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Gemini adapter session_command returns yolo command for non_interactive mode" do
     adapter = Agents::GeminiCliAdapter.new
-    result = adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
+    result = adapter.session_command(mode: "non_interactive")
     assert_equal "gemini --yolo", result
   end
 
   test "Grok adapter session_command returns grok --yolo for both modes" do
     adapter = Agents::GrokAdapter.new
     assert_equal "grok --yolo", adapter.session_command(mode: "interactive")
-    assert_equal "grok --yolo", adapter.session_command(mode: "non_interactive", prompt: "Deploy staging")
+    assert_equal "grok --yolo", adapter.session_command(mode: "non_interactive")
   end
 
   test "Cursor adapter session_command returns agent --force for interactive mode" do
@@ -682,7 +766,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
   test "Cursor adapter session_command returns agent --force for non_interactive mode" do
     adapter = Agents::CursorCliAdapter.new
-    result = adapter.session_command(mode: "non_interactive", prompt: "Refactor auth")
+    result = adapter.session_command(mode: "non_interactive")
     assert_equal "agent --force", result
   end
 
@@ -691,12 +775,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_raises(NotImplementedError) do
       adapter.session_command(mode: "interactive")
     end
-  end
-
-  test "session_command returns same command regardless of prompt content" do
-    adapter = Agents::ClaudeCodeAdapter.new
-    result = adapter.session_command(mode: "non_interactive", prompt: 'Fix the "bug" && deploy')
-    assert_equal "claude", result
   end
 
   # ====================================================================
@@ -899,132 +977,100 @@ class SessionContextServiceTest < ActiveSupport::TestCase
   # Story 14.3: inject_repositories
   # ====================================================================
 
-  test "inject_repositories clones repos via runtime.exec with correct command" do
+  # The token authenticates the clone through a header read from a deleted 0600
+  # file, and every later fetch/push goes through the helper: it is in no remote,
+  # no argv and no exec command (the Kubernetes exec API logs its command).
+  def github_session(*full_names)
     integration = create(:integration, company: @company, connected_by: @user, status: :active)
-    repo = create(:repository, full_name: "acme/my-app", source_branch: "main",
-                  integration: integration, scope: @project)
+    repos = full_names.map do |full_name|
+      create(:repository, full_name: full_name, source_branch: "main", integration: integration, scope: @project)
+    end
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    session.repositories << repos
+    [ session, repos ]
+  end
+
+  test "inject_repositories clones GitHub repositories without the token in any command or remote" do
+    session, (repo, *) = github_session("acme/my-app")
+    runtime = stub_container_runtime
+    Thread.current[:session_context_runtime] = nil
+    Github::TokenService.stubs(:new).returns(FakeGithub::TokenService.new(token: "ghs_test_token"))
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
+    clone = commands.find { |c| c.include?("clone") }
+    assert_includes clone, "git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --depth=1 --branch=main " \
+                           "https://github.com/acme/my-app.git /workspace/repo/my-app"
+    assert_includes clone, "credential.https://github.com/acme/my-app.git.helper /workspace/.aixle/git-credential-aixle"
+    assert_includes clone, "chown -R 1001:1001 /workspace/repo/my-app"
+    assert commands.none? { |c| c.include?("ghs_test_token") }, "the token must never be part of a command"
+
+    header_file = runtime.fs.keys.find { |path| path.start_with?("/tmp/.aixle-git-") }
+    assert_equal 0o600, runtime.file_attributes(header_file)[:mode]
+    assert_equal "Authorization: Basic #{Base64.strict_encode64('x-access-token:ghs_test_token')}", runtime.fs[header_file]
+    assert runtime.fs["/workspace/.aixle/git-credential-aixle"].present?
+    assert_not_nil repo.reload.last_fetched_at
+  end
+
+  test "inject_repositories mints a token narrowed to each repository" do
+    session, = github_session("acme/app", "acme/infra")
+    stub_container_runtime
+    Thread.current[:session_context_runtime] = nil
+    tokens = FakeGithub::TokenService.new(token: "ghs_scoped")
+    Github::TokenService.stubs(:new).returns(tokens)
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    assert_equal [ [ "app" ], [ "infra" ] ], tokens.calls_to(:generate_installation_token).map { |call| call[:repositories] }
+  end
+
+  test "inject_repositories records a failing clone and still clones the others, retrying once" do
+    session, (repo_bad, repo_ok) = github_session("acme/bad", "acme/good")
+    runtime = stub_container_runtime
+    Thread.current[:session_context_runtime] = nil
+    SessionContextService.stubs(:sleep)
+    Github::TokenService.stubs(:new).returns(FakeGithub::TokenService.new(token: "ghs_token"))
+    runtime.fail_exec("acme/bad.git", stderr: "fatal: Authentication failed", exit_code: 128)
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    assert_equal 2, runtime.execs.count { |cmd| Array(cmd).join(" ").include?("clone --depth=1 --branch=main https://github.com/acme/bad.git") }
+    failed = session.reload.metadata["failed_repos"]
+    assert_equal [ repo_bad.id ], failed.map { |f| f["id"] }
+    assert_match(/Authentication failed/, failed.first["error"])
+    assert_not_nil repo_ok.reload.last_fetched_at
+  end
+
+  test "inject_repositories fails only the repository the installation cannot reach" do
+    session, (repo_ok, _repo_bad) = github_session("acme/good", "acme/bad")
+    stub_container_runtime
+    Thread.current[:session_context_runtime] = nil
+    Github::TokenService.stubs(:new).returns(FakeGithub::TokenService.new(token: "ghs_scoped", unreachable: [ "bad" ]))
+
+    SessionContextService.send(:inject_repositories, "ctr1", session)
+
+    assert_not_nil repo_ok.reload.last_fetched_at
+    failed = session.reload.metadata["failed_repos"]
+    assert_equal [ "acme/bad" ], failed.map { |f| f["full_name"] }
+    assert_match(/Token generation failed/, failed.first["error"])
+  end
+
+  test "inject_repositories clones a self-managed GitLab repository from that GitLab's own host" do
+    Settings.gitlab.stubs(:endpoint).returns("https://gitlab.example.com/api/v4")
+    integration = create(:integration, company: @company, connected_by: @user, status: :active, provider: :gitlab)
+    integration.update!(credentials_data: { "personal_access_token" => "glpat-secret" })
+    repo = create(:repository, full_name: "team/service", source_branch: "main", integration: integration, scope: @project)
     session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
     session.repositories << repo
-
-    runtime_mock = mock("runtime")
+    runtime = stub_container_runtime
     Thread.current[:session_context_runtime] = nil
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
-
-    token_service_mock = mock("token_service")
-    token_service_mock.expects(:generate_installation_token).returns("ghs_test_token")
-    Github::TokenService.expects(:new).with(integration).returns(token_service_mock)
-
-    runtime_mock.expects(:exec).with do |ctr, cmd|
-      ctr == "ctr1" &&
-        cmd[0] == "sh" && cmd[1] == "-c" &&
-        cmd[2].include?("git clone --depth=1 --branch=main") &&
-        cmd[2].include?("x-access-token:ghs_test_token@github.com/acme/my-app.git") &&
-        cmd[2].include?("/workspace/repo/my-app") &&
-        cmd[2].include?("chown -R 1001:1001 /workspace/repo/my-app")
-    end.returns([ [], [], 0 ])
 
     SessionContextService.send(:inject_repositories, "ctr1", session)
 
-    repo.reload
-    assert_not_nil repo.last_fetched_at
-  end
-
-  test "inject_repositories reuses token for repos from same integration" do
-    integration = create(:integration, company: @company, connected_by: @user, status: :active)
-    repo1 = create(:repository, full_name: "acme/app", source_branch: "main",
-                   integration: integration, scope: @project)
-    repo2 = create(:repository, full_name: "acme/infra", source_branch: "develop",
-                   integration: integration, scope: @project)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.repositories << [ repo1, repo2 ]
-
-    runtime_mock = mock("runtime")
-    Thread.current[:session_context_runtime] = nil
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
-
-    token_service_mock = mock("token_service")
-    token_service_mock.expects(:generate_installation_token).once.returns("ghs_shared")
-    Github::TokenService.expects(:new).once.returns(token_service_mock)
-
-    runtime_mock.expects(:exec).with do |_ctr, cmd|
-      cmd[2].include?("acme/app.git")
-    end.returns([ [], [], 0 ])
-
-    runtime_mock.expects(:exec).with do |_ctr, cmd|
-      cmd[2].include?("acme/infra.git")
-    end.returns([ [], [], 0 ])
-
-    SessionContextService.send(:inject_repositories, "ctr1", session)
-  end
-
-  test "inject_repositories handles clone failure gracefully" do
-    integration = create(:integration, company: @company, connected_by: @user, status: :active)
-    repo_ok = create(:repository, full_name: "acme/good", source_branch: "main",
-                     integration: integration, scope: @project)
-    repo_fail = create(:repository, full_name: "acme/bad", source_branch: "main",
-                       integration: integration, scope: @project)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.repositories << [ repo_fail, repo_ok ]
-
-    runtime_mock = mock("runtime")
-    Thread.current[:session_context_runtime] = nil
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
-    SessionContextService.stubs(:sleep)
-
-    token_service_mock = mock("token_service")
-    token_service_mock.expects(:generate_installation_token).returns("ghs_token")
-    Github::TokenService.expects(:new).returns(token_service_mock)
-
-    Rails.logger.expects(:error).at_least_once
-
-    runtime_mock.expects(:exec).with do |_ctr, cmd|
-      cmd[2].include?("acme/bad.git")
-    end.returns([ [], [ "fatal: Authentication failed" ], 128 ])
-
-    runtime_mock.expects(:exec).with do |_ctr, cmd|
-      cmd[2].include?("acme/bad.git")
-    end.returns([ [], [ "fatal: Authentication failed" ], 128 ])
-
-    runtime_mock.expects(:exec).with do |_ctr, cmd|
-      cmd[2].include?("acme/good.git")
-    end.returns([ [], [], 0 ])
-
-    SessionContextService.send(:inject_repositories, "ctr1", session)
-
-    session.reload
-    failed = session.metadata["failed_repos"]
-    assert_equal 1, failed.size
-    assert_equal repo_fail.id, failed.first["id"]
-    assert_equal "acme/bad", failed.first["full_name"]
-
-    repo_ok.reload
-    assert_not_nil repo_ok.last_fetched_at
-  end
-
-  test "inject_repositories retries failed clone once after delay" do
-    integration = create(:integration, company: @company, connected_by: @user, status: :active)
-    repo = create(:repository, full_name: "acme/retry-me", source_branch: "main",
-                  integration: integration, scope: @project)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.repositories << repo
-
-    runtime_mock = mock("runtime")
-    Thread.current[:session_context_runtime] = nil
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
-    SessionContextService.stubs(:sleep)
-
-    token_service_mock = mock("token_service")
-    token_service_mock.expects(:generate_installation_token).returns("ghs_first")
-    Github::TokenService.expects(:new).with(integration).returns(token_service_mock)
-
-    runtime_mock.expects(:exec).twice.with do |_ctr, cmd|
-      cmd[2].include?("x-access-token:ghs_first@github.com/acme/retry-me.git")
-    end.returns([ [], [ "remote: Repository not found.\n" ], 128 ], [ [], [], 0 ])
-
-    SessionContextService.send(:inject_repositories, "ctr1", session)
-
-    repo.reload
-    assert_not_nil repo.last_fetched_at
+    commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
+    assert commands.any? { |c| c.include?("clone --depth=1 --branch=main https://gitlab.example.com/team/service.git") }
+    assert commands.none? { |c| c.include?("gitlab.com") || c.include?("glpat-secret") }
   end
 
   test "inject_repositories clones a public repository anonymously" do
@@ -1049,42 +1095,6 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     repo.reload
     assert_not_nil repo.last_fetched_at
     assert_nil session.reload.metadata["failed_repos"]
-  end
-
-  test "inject_repositories falls back to per-repository tokens when one repo poisons the group token" do
-    integration = create(:integration, company: @company, connected_by: @user, status: :active)
-    repo_ok = create(:repository, full_name: "acme/good", source_branch: "main",
-                     integration: integration, scope: @project)
-    repo_bad = create(:repository, full_name: "acme/bad", source_branch: "main",
-                      integration: integration, scope: @project)
-    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
-    session.repositories << [ repo_ok, repo_bad ]
-
-    runtime_mock = mock("runtime")
-    Thread.current[:session_context_runtime] = nil
-    ContainerRuntime.stubs(:build).returns(runtime_mock)
-
-    fake_tokens = FakeGithub::TokenService.new(token: "ghs_scoped", unreachable: [ "bad" ])
-    Github::TokenService.stubs(:new).returns(fake_tokens)
-
-    runtime_mock.expects(:exec).with do |_ctr, cmd|
-      cmd[2].include?("x-access-token:ghs_scoped@github.com/acme/good.git")
-    end.returns([ [], [], 0 ])
-
-    SessionContextService.send(:inject_repositories, "ctr1", session)
-
-    # The group call (good + bad) is rejected, then each repository is minted on
-    # its own: the good one clones, only the bad one is recorded as failed.
-    assert_equal [ %w[good bad], [ "good" ], [ "bad" ] ],
-                 fake_tokens.calls_to(:generate_installation_token).map { |call| call[:repositories] }
-
-    repo_ok.reload
-    assert_not_nil repo_ok.last_fetched_at
-
-    failed = session.reload.metadata["failed_repos"]
-    assert_equal 1, failed.size
-    assert_equal "acme/bad", failed.first["full_name"]
-    assert_match(/Token generation failed/, failed.first["error"])
   end
 
   test "inject_repositories skips inactive integration" do

@@ -60,9 +60,9 @@ This single command:
 - Installs Ruby gems (Bundler) and JS packages (Yarn) inside the web
   container.
 - Creates the database, runs migrations, and seeds defaults.
-- Builds the five agent runtime images
-  (`aixle/agent-base-core`, `aixle/claude-code`, `aixle/cursor-cli`,
-  `aixle/codex`, `aixle/gemini-cli`, `aixle/grok`).
+- Builds the shared `aixle/agent-base-core` base image plus the seven agent
+  runtime images (`aixle/claude-code`, `aixle/cursor-cli`, `aixle/codex`,
+  `aixle/gemini-cli`, `aixle/antigravity-cli`, `aixle/grok`, `aixle/kiro-cli`).
 
 ## 4. Run
 
@@ -105,9 +105,8 @@ Hand them back once, with nothing deleted:
 sudo chown -R "$(id -u):$(id -g)" .
 ```
 
-The Yarn `YN0060` / `YN0086` peer-dependency warnings (e.g. `react`
-vs `@emoji-mart/react`) and the `websocket-client-simple` gem notice are
-unrelated and do not fail setup.
+The Yarn `YN0060` / `YN0086` peer-dependency warnings and the
+`websocket-client-simple` gem notice are unrelated and do not fail setup.
 
 ## Common follow-ups
 
