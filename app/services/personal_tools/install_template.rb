@@ -42,7 +42,7 @@ module PersonalTools
       installer = Templates::Installer.new(
         catalog_template: template, user: user, target: target, idempotency_key: params[:idempotency_key],
         inputs: hash_param(:inputs), secrets: hash_param(:secrets), resolutions: hash_param(:resolutions),
-        expected: { version: params[:version], commit_sha: params[:commit_sha] }.compact
+        expected: { version: params[:version], commit_sha: params[:commit_sha] }.compact, actor: version_actor
       )
       plan = installer.plan
       return success(installed: false, plan: Templates::Presenter.plan(plan)) if params[:dry_run] || !plan.resolved?

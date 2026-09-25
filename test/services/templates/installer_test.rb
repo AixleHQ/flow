@@ -76,6 +76,19 @@ class Templates::InstallerTest < ActiveSupport::TestCase
     assert_equal false, workflow.inherit_all_project_resources # rubocop:disable Minitest/RefuteFalse
   end
 
+  test "everything an install creates starts its version history, attributed to the installer" do
+    project = installer.apply.project
+
+    workflow = project.workflows.sole
+    version = workflow.entity_versions.sole
+    assert_equal [ "created", @user, "ui" ], [ version.event.to_s, version.author, version.source.to_s ]
+    assert_equal workflow.steps.not_deleted.pluck(:name), version.snapshot["steps"].pluck("name")
+    [ project.agents.find_by!(name: "architect"), project.skills.find_by!(name: "house-style"),
+      project.tools.find_by!(name: "run_tests"), project.mcp_servers.find_by!(name: "Sentry") ].each do |record|
+      assert_equal 1, record.current_version_number, "#{record.class.name} #{record.id} has no version"
+    end
+  end
+
   test "every trigger is installed inactive and the checklist records how to activate it" do
     project = installer.apply.project
 

@@ -25,9 +25,10 @@ module Templates
     # @param idempotency_key [String] one per install attempt: a double click or a
     #   retried MCP call returns the first install instead of creating a second
     def initialize(catalog_template:, user:, target:, idempotency_key:, inputs: {}, secrets: {}, resolutions: {},
-                   expected: nil, confirmed_digest: nil)
+                   expected: nil, confirmed_digest: nil, actor: nil)
       @catalog_template = catalog_template
       @user = user
+      @actor = actor || Versions::Actor.ui(user)
       @target = target
       @inputs = inputs
       @secrets = secrets.to_h.transform_keys(&:to_s).compact_blank
@@ -68,7 +69,7 @@ module Templates
       @package = plan.package
       @ids = Hash.new { |h, k| h[k] = {} }
       @project = plan.project || create_project!
-      @builder = ProjectResources::Builder.new(@project)
+      @builder = ProjectResources::Builder.new(@project, actor: @actor)
 
       install = @project.template_installs.create!(
         installed_by: @user, namespace: @catalog_template.namespace, slug: @catalog_template.slug,
@@ -256,7 +257,8 @@ module Templates
       manifest = JSON.parse(@package.file(connector.dig("manifest", "path")))
       MCP::ConnectorInstaller.create_from_manifest(
         project: @project, manifest: manifest, target_id: connector["target"],
-        values: connector["values"].to_h.transform_values { |v| substitute(v) }, fallback_name: connector["name"]
+        values: connector["values"].to_h.transform_values { |v| substitute(v) }, fallback_name: connector["name"],
+        actor: @actor
       )
     end
 
@@ -278,7 +280,7 @@ module Templates
     def create_workflows
       @package.section("workflows").each do |entry|
         base = entry["base"].to_h
-        workflow = @project.workflows.create!(
+        workflow = @project.workflows.new(
           name: install_name("workflows", entry["key"]), description: substitute(entry["description"]),
           config: {
             "base_tool_ids" => ids("tools", base["tools"]), "base_skill_ids" => ids("skills", base["skills"]),
@@ -288,8 +290,11 @@ module Templates
             "base_repository_ids" => [], "inherit_all_project_resources" => false
           }
         )
+        Versions.save!(workflow, actor: @actor) do
+          workflow.save!
+          create_steps(workflow, entry["steps"])
+        end
         @ids["workflows"][entry["key"]] = workflow.id
-        create_steps(workflow, entry["steps"])
       end
     end
 

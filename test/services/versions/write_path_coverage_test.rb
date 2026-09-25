@@ -25,6 +25,17 @@ class Versions::WritePathCoverageTest < ActiveSupport::TestCase
     app/controllers/api/v1/projects/workflows_controller.rb
     app/controllers/api/v1/projects/workflows/steps_controller.rb
     app/controllers/api/v1/projects/workflows/aggregates_controller.rb
+    app/controllers/web/company/template_installs_controller.rb
+  ].freeze
+
+  SERVICES = %w[
+    app/services/project_resources/builder.rb
+    app/services/templates/installer.rb
+    app/services/mcp/connector_installer.rb
+    app/services/mcp/connector_updater.rb
+    app/services/skills_registry_service.rb
+    app/services/workflow_duplicator.rb
+    app/services/workflow_duplicator/dependency_copier.rb
   ].freeze
 
   test "every personal tool that writes a versioned entity records a version" do
@@ -35,6 +46,11 @@ class Versions::WritePathCoverageTest < ActiveSupport::TestCase
 
     missing = writers.reject { |path| File.read(path).match?(DELEGATES) }
     assert_empty missing.map { |p| p.delete_prefix("#{Rails.root}/") }, "these tools write without Versions"
+  end
+
+  test "every service that creates versioned entities records a version" do
+    missing = SERVICES.reject { |path| Rails.root.join(path).read.include?("Versions.save!") }
+    assert_empty missing, "these services write without Versions"
   end
 
   test "every controller that writes a versioned entity records a version" do
