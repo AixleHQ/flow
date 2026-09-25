@@ -27,6 +27,14 @@ class MembershipMailerTest < ActionMailer::TestCase
     assert_equal @membership, CompanyMembership.find_by_token_for(:invitation, CGI.unescape(token))
   end
 
+  test "invitation email writes the inviter's address as a styled link, not a bare one the client auto-links" do
+    html = Nokogiri::HTML(MembershipMailer.invitation(@membership).html_part.decoded)
+    link = html.at_css("a[href='mailto:#{@inviter.email}']")
+
+    assert link, "expected an explicit mailto link for the inviter"
+    assert_includes link["style"], "color:#d1cfcd"
+  end
+
   test "invitation_reminder carries a still-valid token link and the expiry date" do
     @membership.update!(invited_at: 6.days.ago)
     email = MembershipMailer.invitation_reminder(@membership)

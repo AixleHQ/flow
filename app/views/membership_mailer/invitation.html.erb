@@ -24,7 +24,7 @@
       <!-- Body -->
       <tr>
         <td style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; font-size:14px; line-height:22px; color:#9f9d9c; padding-bottom:28px;">
-          <strong style="color:#d1cfcd; font-weight:600;"><%= inviter_name %></strong><% if inviter_email.present? %> (<%= inviter_email %>)<% end %> invited you to join <strong style="color:#d1cfcd; font-weight:600;"><%= company_name %></strong> as <strong style="color:#d1cfcd; font-weight:600;"><%= role_label %></strong>. Aixle Flow is where <%= company_name %> builds and runs its AI workflows — every run logged, timed, and costed.
+          <strong style="color:#d1cfcd; font-weight:600;"><%= inviter_name %></strong><% if inviter_email.present? %> (<%= email_link(inviter_email) %>)<% end %> invited you to join <strong style="color:#d1cfcd; font-weight:600;"><%= company_name %></strong> as <strong style="color:#d1cfcd; font-weight:600;"><%= role_label %></strong>. Aixle Flow is where <%= company_name %> builds and runs its AI workflows — every run logged, timed, and costed.
         </td>
       </tr>
 
