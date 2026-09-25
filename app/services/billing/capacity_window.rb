@@ -94,15 +94,13 @@ module Billing
         .pluck(:company_id, :max_sessions, :occurred_at)
     end
 
-    # EVERY company, whatever its state. Admission does not look at company state
-    # — a suspended organisation's projects still get slots — so metering must
-    # not either, or suspending one becomes a way to keep the capacity and stop
-    # paying for it. Metering has to measure what admission honours.
-    #
-    # The day admission starts refusing a suspended company, this filters by the
-    # same rule, and the two stay in step.
+    # Active companies only, which is honest because admission refuses every other
+    # kind (SessionService#preflight_company_active!). The two rules have to agree:
+    # billing for capacity that cannot be occupied overcharges, and metering a
+    # company that can still run would make suspending one a way to keep the
+    # capacity and stop paying for it.
     def billable_company_ids
-      @billable_company_ids ||= Company.pluck(:id)
+      @billable_company_ids ||= Company.active.pluck(:id)
     end
   end
 end

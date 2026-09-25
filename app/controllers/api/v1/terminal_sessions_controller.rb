@@ -49,8 +49,11 @@ module Api
         # than starting a session doomed to fail during provisioning. Both errors carry
         # the same entry shape, so the client renders one list.
         render json: { error: e.message, reauth_required: e.connections }, status: :unprocessable_entity
-      rescue SessionService::UnsafeMcpUrlError, AgentCredential::PreflightError => e
+      rescue SessionService::UnsafeMcpUrlError, AgentCredential::PreflightError,
+             SessionAdmissionService::Stopped => e
         # UnsafeMcpUrlError (F34): a selected MCP server's URL failed the launch-time safety re-check.
+        # Stopped: the session cannot proceed at all — a suspended company, a run
+        # already cancelled. The message is the whole answer, so it is the body.
         render json: { error: e.message }, status: :unprocessable_entity
       end
 
