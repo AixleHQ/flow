@@ -203,6 +203,88 @@ module Agents
       assert_includes files.keys, "/home/kiro/.kiro/settings/mcp.json"
     end
 
+    # == Credential delivery ==
+
+    STATE_PATH = "/home/kiro/.local/share/kiro-cli/data.sqlite3"
+    HANDOFF_PATH = "/home/kiro/.local/share/kiro-cli/.aixle-token-handoff.json"
+
+    # A state database as a running container holds it: the login row plus a row the CLI
+    # wrote after launch, which a delivery must not take away.
+    def state_db(access_token:, expires_at:, key: "kirocli:social:token")
+      Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
+        db = SQLite3::Database.new(file.path)
+        db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
+        db.execute("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT)")
+        db.execute("INSERT INTO auth_kv VALUES (?, ?)", [ key, { "access_token" => access_token,
+                                                                 "refresh_token" => "rt-#{access_token}",
+                                                                 "expires_at" => expires_at }.to_json ])
+        db.execute("INSERT INTO state VALUES ('chat.lastConversation', 'since-launch')")
+        db.close
+        File.binread(file.path)
+      end
+    end
+
+    def credentials_from(blob) = { "state_b64" => Base64.strict_encode64(blob) }
+
+    def row_in(blob, sql)
+      Tempfile.create([ "kiro-read", ".sqlite3" ]) do |file|
+        File.binwrite(file.path, blob)
+        db = SQLite3::Database.new(file.path)
+        db.get_first_value(sql).tap { db.close }
+      end
+    end
+
+    def held_token(runtime)
+      JSON.parse(row_in(runtime.fs[STATE_PATH], "SELECT value FROM auth_kv"))
+    end
+
+    def kiro_runtime(container_token: "at-old", container_expiry: "2026-09-25T05:48:24.123456Z", key: "kirocli:social:token")
+      ContainerRuntime::FakeRuntime.new(agent_type: "kiro_cli").tap do |runtime|
+        runtime.fs[STATE_PATH] = state_db(access_token: container_token, expires_at: container_expiry, key: key)
+      end
+    end
+
+    # The file a delivery would write is the database the CLI holds open.
+    test "credential_files never hands over the state database" do
+      assert_empty @adapter.credential_files(real_state_credentials)
+    end
+
+    test "deliver_credential swaps the refreshed token into the container's database and keeps the rest" do
+      runtime = kiro_runtime
+      credentials = credentials_from(state_db(access_token: "at-new", expires_at: "2026-09-25T06:01:02Z"))
+
+      assert @adapter.deliver_credential(runtime, "ctr-1", credentials)
+
+      assert_equal "at-new", held_token(runtime)["access_token"]
+      assert_equal "rt-at-new", held_token(runtime)["refresh_token"]
+      assert_equal "since-launch", row_in(runtime.fs[STATE_PATH], "SELECT value FROM state")
+      refute runtime.fs.key?(HANDOFF_PATH), "the handoff file carries the token and must not outlive the swap"
+      assert_equal 0o600, runtime.file_attributes(HANDOFF_PATH)[:mode]
+    end
+
+    # The CLI renews on its own inside the container; ours is then the older token.
+    test "deliver_credential keeps a token the container has already renewed further" do
+      runtime = kiro_runtime(container_token: "at-container", container_expiry: "2026-09-25T07:00:00Z")
+      credentials = credentials_from(state_db(access_token: "at-new", expires_at: "2026-09-25T06:01:02Z"))
+
+      assert @adapter.deliver_credential(runtime, "ctr-1", credentials)
+      assert_equal "at-container", held_token(runtime)["access_token"]
+    end
+
+    test "deliver_credential fails rather than adding a login row the container does not have" do
+      runtime = kiro_runtime(key: "kirocli:odic:token")
+      credentials = credentials_from(state_db(access_token: "at-new", expires_at: "2026-09-25T06:01:02Z"))
+
+      assert_equal false, @adapter.deliver_credential(runtime, "ctr-1", credentials) # rubocop:disable Minitest/RefuteFalse
+      assert_equal "at-old", held_token(runtime)["access_token"]
+      refute runtime.fs.key?(HANDOFF_PATH)
+    end
+
+    test "a credential without a login has nothing to deliver" do
+      assert_equal false, @adapter.credential_deliverable?({}) # rubocop:disable Minitest/RefuteFalse
+      assert @adapter.credential_deliverable?(real_state_credentials)
+    end
+
     test "auth_setup_files seeds the shared Kiro settings before the login runs" do
       assert_includes @adapter.auth_setup_files.keys, "/home/kiro/.kiro/settings/mcp.json"
     end

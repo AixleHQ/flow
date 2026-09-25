@@ -203,6 +203,40 @@ module Agents
       "profileArn" => "profile_arn"
     }.freeze
 
+    # Run by python3 in the agent container (the base image ships it; there is no sqlite3
+    # CLI). argv: the state database, then the handoff file, which is removed whatever
+    # happens. A row the CLI has already renewed past the offered expiry is kept: the
+    # container rotated on its own, and ours is the older token.
+    TOKEN_SWAP_SCRIPT = <<~PYTHON
+      import json, os, sqlite3, sys
+
+      db_path, handoff_path = sys.argv[1], sys.argv[2]
+      try:
+          with open(handoff_path) as f:
+              offered = json.load(f)
+      finally:
+          os.unlink(handoff_path)
+
+      db = sqlite3.connect(db_path, timeout=10, isolation_level=None)
+      try:
+          db.execute("BEGIN IMMEDIATE")
+          row = db.execute("SELECT value FROM auth_kv WHERE key = ?", (offered["key"],)).fetchone()
+          if row is None:
+              db.execute("ROLLBACK")
+              sys.exit("no auth_kv row " + offered["key"])
+          held = json.loads(row[0]).get("expires_at")
+          fresh = json.loads(offered["value"]).get("expires_at")
+          if held and fresh and db.execute("SELECT julianday(?) > julianday(?)", (held, fresh)).fetchone()[0]:
+              db.execute("ROLLBACK")
+              print("kept")
+              sys.exit(0)
+          db.execute("UPDATE auth_kv SET value = ? WHERE key = ?", (offered["value"], offered["key"]))
+          db.execute("COMMIT")
+          print("swapped")
+      finally:
+          db.close()
+    PYTHON
+
     def self.default_config_paths
       [ "~/.kiro/settings/mcp.json", "~/.kiro/steering/" ]
     end
@@ -219,6 +253,7 @@ module Agents
     end
 
     def state_path        = "#{home_dir}/#{STATE_PATH}"
+    def token_handoff_path = "#{home_dir}/.local/share/kiro-cli/.aixle-token-handoff.json"
     def cli_settings_path = "#{home_dir}/.kiro/settings/cli.json"
     def permissions_path  = "#{home_dir}/.kiro/settings/permissions.yaml"
 
@@ -306,6 +341,40 @@ module Agents
       state = decoded_state(credentials)
       files[state_path] = state if state.present?
       files
+    end
+
+    # Never a file for this runtime: the only file carrying the token is the state
+    # database, and writing it over a running container replaces the store the CLI holds
+    # open — along with everything it recorded since launch. #deliver_credential edits
+    # the one row instead.
+    def credential_files(_credentials)
+      {}
+    end
+
+    def credential_deliverable?(credentials)
+      auth_rows(decoded_state(credentials))[:token].present?
+    end
+
+    # Swaps the refreshed token into the container's own database, in a transaction the
+    # CLI's locking respects, and leaves every other row alone. The token travels in a
+    # 0600 file rather than on the command line: on Kubernetes the exec command is part
+    # of the request URL the API server logs.
+    def deliver_credential(runtime, container_id, credentials)
+      rows = auth_rows(decoded_state(credentials))
+      return false if rows[:token].blank?
+
+      payload = { "key" => rows[:key], "value" => rows[:token].to_json }.to_json
+      return false unless runtime.write_file(container_id, token_handoff_path, payload,
+                                             mode: 0o600, uid: container_uid, gid: container_uid)
+
+      stdout, stderr, status = runtime.exec(
+        container_id, [ "python3", "-c", TOKEN_SWAP_SCRIPT, state_path, token_handoff_path ],
+        stdout: true, stderr: true
+      )
+      return true if status.to_i.zero?
+
+      Rails.logger.warn("[KiroCliAdapter] token swap failed (#{status}): #{Array(stderr).join.strip.presence || Array(stdout).join.strip}")
+      false
     end
 
     # Seeded before the login runs. The MCP config is not needed to sign in — it is

@@ -138,6 +138,25 @@ module Agents
       { config_path => generate_config(credentials).to_json }
     end
 
+    # Whether #deliver_credential has anything to hand a running container.
+    # @param credentials [Hash] decrypted credential data
+    def credential_deliverable?(credentials)
+      credential_files(credentials).present?
+    end
+
+    # Hands a refreshed token to a running container (Agents::CredentialDelivery). Runtimes
+    # whose token is a file of its own get #credential_files written over theirs; one whose
+    # token lives inside a store the CLI holds open overrides this to edit it in place.
+    #
+    # Written as the agent's own user, not as root: the CLI has to be able to rewrite the
+    # file when it rotates the token itself.
+    # @return [Boolean] whether the container took it
+    def deliver_credential(runtime, container_id, credentials)
+      credential_files(credentials).all? do |path, content|
+        runtime.write_file(container_id, path, content, uid: container_uid, gid: container_uid)
+      end
+    end
+
     # UID of the container user (used for file ownership in tar headers)
     # @return [Integer]
     def container_uid
