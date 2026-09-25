@@ -38,6 +38,16 @@ class SubStepTest < ActiveSupport::TestCase
     assert_equal %w[First Second], names
   end
 
+  test "destroy soft-deletes a sub-step that never ran" do
+    sub_step = create(:sub_step, step: @step, position: 1)
+
+    assert_no_difference "SubStep.count" do
+      sub_step.destroy
+    end
+    assert sub_step.reload.deleted?
+    assert_empty @step.sub_steps.active
+  end
+
   test "required defaults to true" do
     sub_step = create(:sub_step, step: @step, position: 1)
     assert sub_step.required

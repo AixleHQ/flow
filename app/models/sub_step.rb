@@ -17,12 +17,9 @@ class SubStep < ApplicationRecord
     deleted_at.present?
   end
 
+  # Always a soft delete, for the same reason as Step#destroy.
   def destroy
-    if sub_step_runs.exists?
-      soft_delete!
-      self
-    else
-      super
-    end
+    soft_delete!
+    self
   end
 end

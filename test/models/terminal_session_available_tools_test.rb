@@ -31,6 +31,16 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     refute_includes session.available_tools.map(&:name), "static_analyzer"
   end
 
+  test "an attached tool stops being served once it is archived" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+    session.tools << local_container_tool
+    assert_includes session.available_tools.map(&:name), "static_analyzer"
+
+    local_container_tool.soft_delete!
+
+    refute_includes session.reload.available_tools.map(&:name), "static_analyzer"
+  end
+
   # == Workflow tools: auto-injected for workflow_step sessions ==
 
   test "registry workflow tools are injected for workflow_step sessions without pre-seeded rows" do
