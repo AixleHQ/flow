@@ -49,6 +49,13 @@ module Deployment
     # installation meters itself to AWS, every company must carry a number.
     def requires_bounded_companies? = aws_marketplace?
 
+    # Whether capacity is charged for at all. A company admin may raise their own
+    # limit wherever it is, because raising it raises what they pay; they may
+    # never clear it, because an unbounded company is one nobody is invoiced for.
+    # Only a platform administrator may leave a company without a number, and
+    # only where AWS is not the one counting.
+    def bills_capacity? = !self_hosted?
+
     def misconfigured?
       raw = Settings.deployment&.mode.to_s.strip
       raw.present? && !MODES.include?(raw.downcase)

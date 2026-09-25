@@ -104,7 +104,7 @@ class Web::Company::SettingsControllerTest < ActionDispatch::IntegrationTest
     patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "" }
 
     assert_equal 12, limit_for(@company)&.max_sessions
-    assert_match(/AWS Marketplace/, Array(session["inertia_errors"][:capacity]).to_sentence)
+    assert_match(/cannot be left empty/, Array(session["inertia_errors"][:capacity]).to_sentence)
   end
 
   test "a marketplace admin may still change the limit" do
@@ -136,34 +136,45 @@ class Web::Company::SettingsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 12, limit_for(@company)&.max_sessions
   end
 
-  test "clearing the field removes the limit rather than setting it to zero" do
+  # Raising it raises what they are charged for, so the number costs them what it
+  # gives them — which is why this is theirs to set in every deployment.
+  test "a saas admin sets their own company's session limit" do
+    saas!
+
+    patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "12" }
+
+    assert_equal 12, limit_for(@company)&.max_sessions
+  end
+
+  # Clearing is the one move that lowers the bill without lowering the capacity,
+  # so it is ours to grant from the admin and not theirs to take.
+  test "a saas admin may not clear the limit" do
+    saas!
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
+
+    patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "" }
+
+    assert_equal 12, limit_for(@company)&.max_sessions
+    assert_match(/cannot be left empty/, Array(session["inertia_errors"][:capacity]).to_sentence)
+  end
+
+  test "a saas admin is offered the field" do
+    saas!
+
+    get company_settings_path
+
+    assert_inertia_props { |props| assert props[:capacity][:canManage] }
+  end
+
+  # Nothing is invoiced in a self-hosted installation, so an unbounded company
+  # there costs nobody anything and the operator may say so.
+  test "a self-hosted admin may clear the limit" do
     self_hosted!
     SessionConcurrencyLimit.set!(scope: @company, max_sessions: 12)
 
     patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "" }
 
     assert_nil limit_for(@company)
-  end
-
-  # The number the hosted product invoices for is not self-serve, whatever the
-  # membership role: only a platform administrator moves it.
-  test "a saas admin may not set the company's session limit" do
-    saas!
-
-    patch company_settings_path, params: { company: { display_name: "Acme" }, capacity: "12" }
-
-    assert_nil limit_for(@company)
-    assert_match(/installation's administrator/, Array(session["inertia_errors"][:capacity]).to_sentence)
-  end
-
-  test "a saas admin is told the limit is not theirs to move" do
-    saas!
-
-    get company_settings_path
-
-    assert_inertia_props do |props|
-      assert_equal false, props[:capacity][:canManage] # rubocop:disable Minitest/RefuteFalse
-    end
   end
 
   test "a refused capacity rolls back the rest of the save" do
