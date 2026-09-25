@@ -82,4 +82,30 @@ class Api::V1::Projects::Workflows::AggregatesTest < ActionDispatch::Integration
     assert_equal "Build", @build.reload.name
     assert_nil @workflow.steps.find_by(name: "New")
   end
+
+  test "the builder's camelCase payload is understood, draft keys and config included" do
+    put api_v1_project_workflow_aggregate_path(@project, @workflow),
+        params: {
+          baseVersion: @workflow.reload.current_version_number,
+          aggregate: {
+            name: "Release", description: "",
+            config: { base_tool_ids: [], inherit_all_project_resources: true },
+            steps: [
+              { id: @build.id, key: @build.id.to_s, name: "Build", allowNonInteractive: true,
+                outputAssetSpecs: [ { name: "report", assetType: "file", required: true, namePattern: "*.md" } ],
+                dependsOnStepIds: [], subSteps: [ { id: @lint.id, name: "lint", required: false } ] },
+              { id: nil, key: "new-1", name: "Ship", dependsOnStepIds: [ @build.id.to_s ], subSteps: [] }
+            ]
+          }
+        }, as: :json
+
+    assert_response :success
+    assert @build.reload.allow_non_interactive
+    assert_equal [ { "name" => "report", "asset_type" => "file", "required" => true, "name_pattern" => "*.md" } ],
+                 @build.output_asset_specs
+    assert_not @lint.reload.required
+    assert_equal [ @build.id ], @workflow.steps.not_deleted.find_by!(name: "Ship").depends_on_step_ids
+    assert @workflow.reload.inherit_all_project_resources
+    assert @test.reload.deleted?
+  end
 end

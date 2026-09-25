@@ -101,7 +101,16 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+// Absent, null, false, 0-length and '' all mean "not set": a snapshot taken
+// before a key existed must not read as a change to its default.
+function blank(value: unknown): boolean {
+  if (value === null || value === undefined || value === false || value === '') return true;
+  if (Array.isArray(value)) return value.length === 0;
+  return typeof value === 'object' && Object.keys(value).length === 0;
+}
+
 function same(a: unknown, b: unknown): boolean {
+  if (blank(a) && blank(b)) return true;
   return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 }
 
@@ -122,7 +131,8 @@ function diffField(spec: FieldSpec, before: unknown, after: unknown, ctx: Contex
     case 'text':
     case 'json': {
       const render = spec.kind === 'json' ? asJson : asText;
-      const [a, b] = [render(before), render(after)];
+      if (same(before, after)) return null;
+      const [a, b] = [render(blank(before) ? null : before), render(blank(after) ? null : after)];
       return a === b ? null : { kind: 'text', label: spec.label, lines: diffLines(a, b) };
     }
     case 'list': {
@@ -172,6 +182,8 @@ function diffField(spec: FieldSpec, before: unknown, after: unknown, ctx: Contex
   }
 }
 
+const SUBSTANTIVE = new Set<Change['kind']>(['text', 'refs', 'entries', 'collection']);
+
 function diffCollection(
   spec: Extract<FieldSpec, { kind: 'collection' }>,
   before: unknown,
@@ -192,7 +204,9 @@ function diffCollection(
     const key = keyOf(item);
     const previous = beforeByKey.get(key);
     if (previous === undefined) {
-      items.push({ label: labelOf(item), status: 'added', changes: diffFields(spec.fields, {}, item, ctx) });
+      // A new item's settings are its defaults: only what was written into it is worth listing.
+      const changes = diffFields(spec.fields, {}, item, ctx).filter((c) => SUBSTANTIVE.has(c.kind));
+      items.push({ label: labelOf(item), status: 'added', changes });
       continue;
     }
     const changes = diffFields(spec.fields, previous, item, ctx);

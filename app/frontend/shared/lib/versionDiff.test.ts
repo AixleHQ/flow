@@ -151,4 +151,37 @@ describe('diffSnapshots', () => {
     const snapshot = { name: 'x', steps: [{ id: 1, name: 'A', sub_steps: [] }] };
     expect(diffSnapshots(VERSION_SCHEMAS.Workflow, snapshot, structuredClone(snapshot))).toEqual([]);
   });
+
+  it('does not report a setting going from absent to its default', () => {
+    const changes = diffSnapshots(
+      VERSION_SCHEMAS.Workflow,
+      { name: 'x', config: {}, steps: [] },
+      { name: 'x', config: { inherit_all_project_resources: false, base_tool_ids: [] }, steps: [] },
+    );
+    expect(changes).toEqual([]);
+  });
+
+  it('lists only what was written into a new step, not its defaults', () => {
+    const step = {
+      id: 5,
+      name: 'Deploy',
+      instructions: 'ship it',
+      skip_policy: 'never',
+      max_retries: 0,
+      sub_steps: [],
+    };
+    const [steps] = diffSnapshots(VERSION_SCHEMAS.Workflow, { steps: [] }, { steps: [step] });
+
+    expect(steps).toEqual({
+      kind: 'collection',
+      label: 'Steps',
+      items: [
+        {
+          label: 'Deploy',
+          status: 'added',
+          changes: [{ kind: 'text', label: 'Instructions', lines: [{ type: 'added', text: 'ship it' }] }],
+        },
+      ],
+    });
+  });
 });
