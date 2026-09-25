@@ -30,6 +30,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'repositories', label: 'Repositories & Integrations' },
       { slug: 'ai-builder', label: 'AI Builder' },
       { slug: 'people-and-access', label: 'Team & access' },
+      { slug: 'signing-in', label: 'Signing in & SSO' },
       { slug: 'secrets', label: 'Secrets & Variables' },
       { slug: 'templates', label: 'Templates' },
       { slug: 'analytics', label: 'Analytics & cost' },
@@ -56,6 +57,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'integrations', label: 'Integrations' },
       { slug: 'azure-devops', label: 'Azure DevOps' },
       { slug: 'configuration', label: 'Configuration' },
+      { slug: 'configuring-sso', label: 'Configuring sign-in methods' },
     ],
   },
   {

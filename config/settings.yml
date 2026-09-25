@@ -29,6 +29,15 @@ google_oauth:
   client_id: <%= ENV['GOOGLE_CLIENT_ID'] %>
   client_secret: <%= ENV['GOOGLE_CLIENT_SECRET'] %>
 
+# Microsoft work/school accounts (Entra ID). A MULTI-TENANT app registration:
+# tenant_id stays `common` so any customer's directory can sign in, which is what
+# "log in with Microsoft" means in practice. Each customer's Global Administrator
+# still has to grant tenant-wide admin consent once.
+microsoft_oauth:
+  client_id: <%= ENV['MICROSOFT_CLIENT_ID'] %>
+  client_secret: <%= ENV['MICROSOFT_CLIENT_SECRET'] %>
+  tenant_id: <%= ENV['MICROSOFT_TENANT_ID'] || 'common' %>
+
 rails:
   # No `port:` here — the web server reads PORT directly (config/puma.rb), and
   # RAILS_PORT was a second name for it that nothing ever read.
@@ -54,6 +63,18 @@ sentry:
   # Share of requests traced (the OTLP ingest route is never traced). 1.0 keeps
   # the long-standing behaviour; lower it to cut volume.
   traces_sample_rate: <%= ENV['SENTRY_TRACES_SAMPLE_RATE'] || 1.0 %>
+
+# Which authentication methods this INSTALLATION offers at all (AD-4). This is
+# the ceiling every company's own policy sits under: a company can only disable
+# what is listed here, never enable something the deployment cannot complete.
+#
+# Empty (the default) means "every kind that has an adapter AND is configured" —
+# availability is derived from credentials by
+# Auth::DeploymentProviders.configured_kinds, so an installation with no
+# Microsoft credentials never offers Microsoft however this is set. Set it
+# explicitly only to offer LESS than what is configured.
+auth:
+  enabled_kinds: <%= ENV['AUTH_ENABLED_KINDS'] %>
 
 database:
   name: <%= ENV['DB_NAME'] %>

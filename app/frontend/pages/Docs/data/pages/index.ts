@@ -11,6 +11,7 @@ import cliRef from './cli-ref.md?raw';
 import companyWorkspace from './company-workspace.md?raw';
 import configSchema from './config-schema.md?raw';
 import configuration from './configuration.md?raw';
+import configuringSso from './configuring-sso.md?raw';
 import examples from './examples.md?raw';
 import gettingStarted from './getting-started.md?raw';
 import integrations from './integrations.md?raw';
@@ -26,6 +27,7 @@ import runtimes from './runtimes.md?raw';
 import secrets from './secrets.md?raw';
 import sessionQueues from './session-queues.md?raw';
 import sessionsAndRuns from './sessions-and-runs.md?raw';
+import signingIn from './signing-in.md?raw';
 import startingWork from './starting-work.md?raw';
 import tasks from './tasks.md?raw';
 import templates from './templates.md?raw';
@@ -158,6 +160,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     content: peopleAndAccess,
     toc: extractToc(peopleAndAccess),
   },
+  'signing-in': {
+    title: 'Signing in & SSO',
+    section: 'Using Flow',
+    content: signingIn,
+    toc: extractToc(signingIn),
+  },
   secrets: {
     title: 'Secrets & Variables',
     section: 'Using Flow',
@@ -277,6 +285,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'Reference',
     content: apiGuide,
     toc: extractToc(apiGuide),
+  },
+  'configuring-sso': {
+    title: 'Configuring sign-in methods',
+    section: 'User guide',
+    content: configuringSso,
+    toc: extractToc(configuringSso),
   },
   'config-schema': {
     title: 'Configuration reference',

@@ -25,6 +25,9 @@ class Company < ApplicationRecord
   has_many :oauth_credentials, as: :owner, dependent: :destroy
   # After :integrations — an installation refuses to go while integrations use it.
   has_many :azure_devops_installations, dependent: :destroy
+  # Auth policy rows and this company's own IdP connections die with it.
+  has_many :company_auth_policies, dependent: :destroy
+  has_many :identity_providers, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   # Workflows are owned by projects (company-level workflows were removed).
   # A company's workflows are the aggregate of its projects' workflows.
@@ -62,6 +65,9 @@ class Company < ApplicationRecord
 
   # Callbacks
   before_validation :generate_slug, on: :create
+  # An absent policy row means denied (AD-4), so every company gets an explicit,
+  # enabled row per deployment provider the moment it exists.
+  after_create :seed_auth_policies
   before_validation :downcase_email_domain
   after_save :apply_session_concurrency_limit
 
@@ -150,6 +156,10 @@ class Company < ApplicationRecord
     return if @session_concurrency_limit.match?(/\A[1-9]\d*\z/)
 
     errors.add(:session_concurrency_limit, "must be a positive whole number, or blank for no limit")
+  end
+
+  def seed_auth_policies
+    Auth::CompanyPolicySeeder.seed!(self)
   end
 
   def generate_slug

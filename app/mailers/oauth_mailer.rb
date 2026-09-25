@@ -9,8 +9,7 @@ class OauthMailer < ApplicationMailer
     @provider = credential.provider
     @connect_url =
       if credential.mcp_server_id
-        oauth_mcp_connect_url(mcp_server_id: credential.mcp_server_id,
-                              host: Settings.domain, protocol: Settings.protocol)
+        oauth_mcp_connect_url(mcp_server_id: credential.mcp_server_id)
       end
 
     mail(to: credential.owner.email, subject: "Action needed: reconnect #{@provider}")

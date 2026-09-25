@@ -1,18 +1,23 @@
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Button, Center, Checkbox, Divider, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
 import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
-import { loginPath } from 'shared/routes';
+import { loginPath, ssoDiscoveryPath } from 'shared/routes';
 import { Logo, PageShell } from 'shared/ui';
 
 import classes from './LoginPage.module.css';
+import { MicrosoftLoginButton } from './MicrosoftLoginButton';
+import { PasswordlessOptions } from './PasswordlessOptions';
 
 interface PageProps {
   error?: string;
   email?: string;
+  /** Redirect providers this installation offers. Absent means Google only. */
+  oauthProviders?: string[];
+  passwordlessMethods?: string[];
   [key: string]: unknown;
 }
 
@@ -23,6 +28,10 @@ const ERROR_MESSAGES: Record<string, string> = {
   account_deleted: 'This account has been deleted. Please contact your company administrator.',
   oauth_failed: 'Failed to authenticate with Google. Please try again.',
   oauth_error: 'An error occurred during authentication. Please try again.',
+  super_admin_password_only: 'Administrator accounts sign in with a password only.',
+  link_required:
+    'An account already exists for that address. Sign in the way you usually do, then add this method from your security settings.',
+  no_workspace: 'No workspace matches that email address. Please contact your administrator.',
 };
 
 function NoWorkspaceScreen() {
@@ -49,6 +58,45 @@ function NoWorkspaceScreen() {
   );
 }
 
+// Google and a passkey identify the person on their own: Google runs its own
+// account picker, and a passkey is discoverable, so the browser already knows
+// who is signing in. Company SSO and an emailed link cannot — one resolves the
+// workspace from the address's domain, the other has to send the mail
+// somewhere — so both stay inactive until an address is typed. Left unexplained
+// that reads as arbitrary, which is why the reason is spelled out rather than
+// hidden behind a hover.
+function SignInMethods({
+  providers,
+  passwordless,
+  email,
+  onSso,
+}: {
+  providers: string[];
+  passwordless: string[];
+  email: string;
+  onSso: () => void;
+}) {
+  const needsEmail = email.trim().length === 0;
+  const magicLinkOffered = passwordless.includes('magic_link');
+
+  return (
+    <Stack gap="sm">
+      {providers.includes('google') && <GoogleLoginButton />}
+      {providers.includes('microsoft') && <MicrosoftLoginButton />}
+      <Button variant="subtle" fullWidth onClick={onSso} disabled={needsEmail}>
+        Sign in with your company SSO
+      </Button>
+      <PasswordlessOptions email={email} methods={passwordless} />
+      {needsEmail && (
+        <Text size="xs" c="dimmed" ta="center">
+          {magicLinkOffered ? 'Company SSO and an emailed link start' : 'Company SSO starts'} from your address — enter
+          it below.
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
 const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Invalid email format'),
   password: z.string().min(1, 'Password is required'),
@@ -56,7 +104,15 @@ const loginSchema = z.object({
 });
 
 const LoginPage = () => {
-  const { error, email: prefillEmail } = usePage<PageProps>().props;
+  const { error, email: prefillEmail, oauthProviders } = usePage<PageProps>().props;
+  // Absent (an older server, or a page rendered without the prop) falls back to
+  // Google alone, which is what this app offered before Microsoft existed.
+  const providers = oauthProviders ?? ['google'];
+  // Enterprise SSO discovery: the company is resolved from the address's domain,
+  // because a member of an SSO-only company has no other way in before they are
+  // signed in (the step-up screen is only reachable afterwards).
+  const startSso = () => router.post(ssoDiscoveryPath(), { email: data.email });
+  const passwordless = (usePage<PageProps>().props.passwordlessMethods as string[] | undefined) ?? [];
   const errorShownRef = useRef(false);
   const [clientErrors, setClientErrors] = useState<Record<string, string | undefined>>({});
 
@@ -119,9 +175,11 @@ const LoginPage = () => {
             </span>
           </Center>
 
-          <GoogleLoginButton />
+          <SignInMethods providers={providers} passwordless={passwordless} email={data.email} onSso={startSso} />
 
-          <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
+          {providers.length > 0 && (
+            <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
+          )}
 
           <Text ta="center" size="sm" c="dimmed" mb="lg" className={classes.subtitle}>
             Enter your credentials to access your workspace
@@ -198,9 +256,11 @@ const LoginPage = () => {
             </span>
           </Center>
 
-          <GoogleLoginButton />
+          <SignInMethods providers={providers} passwordless={passwordless} email={data.email} onSso={startSso} />
 
-          <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
+          {providers.length > 0 && (
+            <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
+          )}
 
           <Text ta="center" size="sm" c="dimmed" mb="lg" className={classes.subtitle}>
             Enter your credentials to access your workspace

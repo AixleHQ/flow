@@ -2,6 +2,10 @@
 
 class User < ApplicationRecord
   extend Enumerize
+  include Encryptable
+
+  encryption_key :credentials_key
+  encrypted_column :encrypted_totp_secret
 
   DELETED_DISPLAY_NAME = "Deleted user"
 
@@ -19,6 +23,52 @@ class User < ApplicationRecord
   # same Pundit policies the UI uses. Digest-only storage; plaintext is
   # returned once from regenerate_mcp_token! and never persisted.
   MCP_TOKEN_PREFIX = "amcp_"
+
+  # A stable, opaque handle for WebAuthn's user id. Not the email (it changes,
+  # and a credential bound to it would outlive the address) and not the raw id
+  # (which leaks a record count to every authenticator the person uses).
+  def webauthn_handle
+    Digest::SHA256.hexdigest("webauthn-user:#{id}")
+  end
+
+  # ── TOTP (step-up only) ──
+  # The secret is encrypted at rest under the same key as every other credential
+  # this app holds. `totp_confirmed_at` is what makes it live: a secret that was
+  # generated but never verified must not start locking anyone out.
+  def totp_secret=(value)
+    self.encrypted_totp_secret = encrypt_secret(value.presence, column: :encrypted_totp_secret)
+  end
+
+  def totp_secret
+    return nil if encrypted_totp_secret.blank?
+
+    decrypt_secret(encrypted_totp_secret, column: :encrypted_totp_secret)
+  end
+
+  def totp_enabled?
+    encrypted_totp_secret.present? && totp_confirmed_at.present?
+  end
+
+  def totp_provisioning_uri(issuer:)
+    return nil if totp_secret.blank?
+
+    ROTP::TOTP.new(totp_secret, issuer: issuer).provisioning_uri(email)
+  end
+
+  def verify_totp(code, drift: 30)
+    return false if totp_secret.blank? || code.blank?
+
+    # `drift_behind`/`drift_ahead` rather than a bare match: a phone clock is
+    # never exactly ours, and rejecting a correct code over half a second of skew
+    # is how a second factor gets switched off by its users.
+    ROTP::TOTP.new(totp_secret).verify(code.to_s.strip, drift_behind: drift, drift_ahead: drift).present?
+  end
+
+  def link_password_identity
+    return if password_digest.blank?
+
+    Auth::LocalCredential.link!(self)
+  end
 
   def self.find_by_mcp_token(token)
     return nil unless token.is_a?(String) && token.start_with?(MCP_TOKEN_PREFIX)
@@ -76,6 +126,21 @@ class User < ApplicationRecord
   # CompanyMembership#credentials_scope, SessionCompany.agent_credentials_for(session),
   # or CloudAuth::CredentialLookup.
   has_many :agent_credentials, dependent: :destroy
+
+  # Every way this person can prove who they are (AD-3), and every live login
+  # session they hold (AD-6). "Does this user have credentials?" is
+  # `user_identities.any?` — never a password_digest check.
+  has_many :user_identities, dependent: :destroy
+  # A passkey belongs to the person, not to any company (AD-18).
+  has_many :webauthn_credentials, dependent: :destroy
+  has_many :magic_link_tokens, dependent: :destroy
+
+  # Setting a password IS acquiring a credential, so the identity row appears
+  # with it — whether the password came from the login form, an invitation
+  # signup, the admin panel, or seeds. Without this, "has credentials" and
+  # "has identities" disagree for every user whose password was written
+  # directly, and the policy guard (which reads identities) misjudges them.
+  after_save :link_password_identity, if: :saved_change_to_password_digest?
 
   # Validations
   validates :email, presence: true,
@@ -211,4 +276,8 @@ class User < ApplicationRecord
     reload_active_memberships
     super
   end
+
+  # Encryptable calls the first from a private context; the second is an
+  # after_save callback. Neither is anyone else's business.
+  private :link_password_identity
 end
