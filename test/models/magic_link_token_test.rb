@@ -25,7 +25,7 @@ class MagicLinkTokenTest < ActiveSupport::TestCase
   test "an expired token is refused" do
     _record, token = MagicLinkToken.issue!(@user)
 
-    travel (MagicLinkToken::TTL + 1.minute) do
+    travel(MagicLinkToken::TTL + 1.minute) do
       assert_nil MagicLinkToken.consume(token)
     end
   end

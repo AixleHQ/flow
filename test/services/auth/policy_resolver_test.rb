@@ -41,13 +41,21 @@ module Auth
     end
 
     test "a session is satisfied by a proof the company still accepts" do
-      user_session = Auth::SessionService.start(user: @user, provider: @password).user_session
+      user_session = begin
+        s = UserSession.start!(user: @user)
+        Auth::SessionService.record_proof(s, @password)
+        s
+      end
 
       assert Auth::PolicyResolver.satisfied?(company: @company, user_session: user_session, user: @user)
     end
 
     test "disabling a provider voids its proof on the next read" do
-      user_session = Auth::SessionService.start(user: @user, provider: @password).user_session
+      user_session = begin
+        s = UserSession.start!(user: @user)
+        Auth::SessionService.record_proof(s, @password)
+        s
+      end
       policy_for(@password).update!(enabled: false)
 
       refute Auth::PolicyResolver.satisfied?(company: @company, user_session: user_session, user: @user)
@@ -57,7 +65,11 @@ module Auth
       other = create(:company)
       connection = create(:identity_provider, company: other, kind: "oidc")
       create(:company_auth_policy, company: @company, identity_provider: connection, enabled: true)
-      user_session = Auth::SessionService.start(user: @user, provider: connection).user_session
+      user_session = begin
+        s = UserSession.start!(user: @user)
+        Auth::SessionService.record_proof(s, connection)
+        s
+      end
 
       # Even with an enabled policy row, a company-scoped provider owned by a
       # different company never satisfies entry here.
@@ -66,7 +78,11 @@ module Auth
 
     test "a super admin bypasses every company policy surface" do
       super_admin = create(:user, :super_admin)
-      user_session = Auth::SessionService.start(user: super_admin, provider: @password).user_session
+      user_session = begin
+        s = UserSession.start!(user: super_admin)
+        Auth::SessionService.record_proof(s, @password)
+        s
+      end
       policy_for(@password).update!(enabled: false)
       policy_for(@google).update!(enabled: false)
 

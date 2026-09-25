@@ -14,6 +14,9 @@ class IdentityProvider < ApplicationRecord
   extend Enumerize
   include Encryptable
 
+  encryption_key :oauth_key
+  encrypted_column :encrypted_secret
+
   DEPLOYMENT_KINDS = %i[password google microsoft passkey magic_link totp].freeze
   # Company-scoped kinds are the ones a customer can connect themselves. Entra
   # is deliberately NOT here: it runs through one deployment-wide OmniAuth
@@ -77,13 +80,13 @@ class IdentityProvider < ApplicationRecord
   # A customer's OIDC client secret. Same storage shape as OauthClient: encrypted
   # at rest under the oauth key, never a plaintext column.
   def client_secret=(value)
-    self.encrypted_secret = value.present? ? encryptor.encrypt_and_sign(value) : nil
+    self.encrypted_secret = encrypt_secret(value.presence, column: :encrypted_secret)
   end
 
   def client_secret
     return nil if encrypted_secret.blank?
 
-    encryptor.decrypt_and_verify(encrypted_secret)
+    decrypt_secret(encrypted_secret, column: :encrypted_secret)
   end
 
   def issuer = config["issuer"]
@@ -91,10 +94,6 @@ class IdentityProvider < ApplicationRecord
   def tenant_id = config["tenant_id"]
 
   private
-
-  def encryption_key_setting
-    Settings.encryption.oauth_key
-  end
 
   # Mirrors the database check constraint; the constraint is the enforcement,
   # this is the readable error.

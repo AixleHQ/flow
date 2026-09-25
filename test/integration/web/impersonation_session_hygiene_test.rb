@@ -41,11 +41,28 @@ class Web::ImpersonationSessionHygieneTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  test "revoking the operator's session ends the impersonation with it" do
+  test "revoking the impersonation session ends it" do
     sign_in_as(@operator)
     post impersonate_admin_user_path(@victim)
 
-    UserSession.live.find_by(user: @operator).revoke!
+    # Impersonating is a sign-in of its own: the live row belongs to the person
+    # being impersonated and names the operator behind it.
+    session_row = UserSession.live.sole
+    assert_equal @victim, session_row.user
+    assert_equal @operator, session_row.impersonator
+
+    session_row.revoke!
+
+    get admin_root_path
+
+    assert_redirected_to "/login"
+  end
+
+  test "suspending the operator mid-impersonation ends their admin access" do
+    sign_in_as(@operator)
+    post impersonate_admin_user_path(@victim)
+
+    @operator.soft_delete!
 
     get admin_root_path
 

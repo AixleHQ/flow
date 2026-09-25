@@ -113,8 +113,6 @@ class Web::SessionsController < Web::ApplicationController
   rescue Auth::IdentityResolver::SuperAdminProviderError
     # AD-19: the platform operator account authenticates by password only.
     redirect_to login_path(error: "super_admin_password_only")
-  rescue Auth::Registry::UnsupportedKind
-    redirect_to login_path(error: "oauth_failed")
   rescue StandardError
     redirect_to login_path(error: "oauth_failed")
   end

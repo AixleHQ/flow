@@ -4,6 +4,9 @@ class User < ApplicationRecord
   extend Enumerize
   include Encryptable
 
+  encryption_key :credentials_key
+  encrypted_column :encrypted_totp_secret
+
   DELETED_DISPLAY_NAME = "Deleted user"
 
   # State machine
@@ -33,13 +36,13 @@ class User < ApplicationRecord
   # this app holds. `totp_confirmed_at` is what makes it live: a secret that was
   # generated but never verified must not start locking anyone out.
   def totp_secret=(value)
-    self.encrypted_totp_secret = value.present? ? encryptor.encrypt_and_sign(value) : nil
+    self.encrypted_totp_secret = encrypt_secret(value.presence, column: :encrypted_totp_secret)
   end
 
   def totp_secret
     return nil if encrypted_totp_secret.blank?
 
-    encryptor.decrypt_and_verify(encrypted_totp_secret)
+    decrypt_secret(encrypted_totp_secret, column: :encrypted_totp_secret)
   end
 
   def totp_enabled?
@@ -59,10 +62,6 @@ class User < ApplicationRecord
     # never exactly ours, and rejecting a correct code over half a second of skew
     # is how a second factor gets switched off by its users.
     ROTP::TOTP.new(totp_secret).verify(code.to_s.strip, drift_behind: drift, drift_ahead: drift).present?
-  end
-
-  def encryption_key_setting
-    Settings.encryption.credentials_key
   end
 
   def link_password_identity
@@ -280,5 +279,5 @@ class User < ApplicationRecord
 
   # Encryptable calls the first from a private context; the second is an
   # after_save callback. Neither is anyone else's business.
-  private :encryption_key_setting, :link_password_identity
+  private :link_password_identity
 end

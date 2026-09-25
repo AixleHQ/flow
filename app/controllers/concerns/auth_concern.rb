@@ -54,22 +54,12 @@ module AuthConcern
     current_user_session
   end
 
-  # Signs in if this browser is not already this user, otherwise appends the
-  # proof to the session it has. A federated callback can be either.
-  def sign_in_or_prove(user, provider:)
-    if signed_in? && current_user_session&.user_id == user.id
-      prove_additional_method(provider)
-    else
-      sign_in(user, provider: provider)
-    end
-  end
-
   # Sign in, or — when the same person is already signed in — append this proof
   # to the session they already hold (AD-6). Every method that a signed-in person
   # can complete goes through here, so step-up works the same way whichever one
   # they use.
   def sign_in_or_prove(user, provider:)
-    if signed_in? && current_auth_session&.user_id == user.id
+    if signed_in? && current_user_session&.user_id == user.id
       prove_additional_method(provider)
     else
       sign_in(user, provider: provider)

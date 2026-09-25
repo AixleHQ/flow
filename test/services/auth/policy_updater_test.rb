@@ -76,7 +76,11 @@ module Auth
       other = create(:user, company: @company)
       create(:user_identity, user: other, identity_provider: @google, subject: "google-other")
       create(:user_identity, user: @admin, identity_provider: @google, subject: "google-admin")
-      user_session = Auth::SessionService.start(user: @admin, provider: @password).user_session
+      user_session = begin
+        s = UserSession.start!(user: @admin)
+        Auth::SessionService.record_proof(s, @password)
+        s
+      end
       updater = Auth::PolicyUpdater.new(company: @company, actor: @admin, user_session: user_session)
 
       error = assert_raises(Auth::PolicyUpdater::Refused) do
@@ -90,7 +94,11 @@ module Auth
       other = create(:user, company: @company)
       create(:user_identity, user: other, identity_provider: @google, subject: "google-other2")
       create(:user_identity, user: @admin, identity_provider: @google, subject: "google-admin2")
-      user_session = Auth::SessionService.start(user: @admin, provider: @password).user_session
+      user_session = begin
+        s = UserSession.start!(user: @admin)
+        Auth::SessionService.record_proof(s, @password)
+        s
+      end
       Auth::SessionService.record_proof(user_session, @google)
       updater = Auth::PolicyUpdater.new(company: @company, actor: @admin, user_session: user_session)
 
