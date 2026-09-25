@@ -1240,6 +1240,8 @@ export function companyMemberPath(id: ScalarType, options?: object): string {
 /** /company/settings(.:format) */
 export function companySettingsPath(options?: object): string {
   return "/" + "company" + "/" + "settings" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /company/auth_policies(.:format) */
 export function companyAuthPoliciesPath(options?: object): string {
   return "/" + "company" + "/" + "auth_policies" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
