@@ -81,7 +81,7 @@ Rails.application.configure do
   config.action_view.annotate_rendered_view_with_filenames = true
 
   # Action Cable WebSocket URL (standard Rails)
-  config.action_cable.url = ENV.fetch("ACTION_CABLE_URL", "ws://localhost:4000/cable")
+  config.action_cable.url = ENV.fetch("ACTION_CABLE_URL") { "ws://localhost:#{ENV.fetch("PORT", 4000)}/cable" }
   config.action_cable.allowed_request_origins = [ /http:\/\/.*/, /https:\/\/.*/ ]
   config.action_cable.disable_request_forgery_protection = true
 

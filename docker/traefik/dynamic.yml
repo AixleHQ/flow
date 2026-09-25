@@ -2,7 +2,10 @@ http:
   middlewares:
     terminal-auth:
       forwardAuth:
-        address: "http://web:4000/api/v1/internal/ws_auth"
+        # Traefik renders this file as a Go template; PORT comes from the
+        # traefik service's environment, so a worktree stack on another port
+        # authenticates against its own web.
+        address: 'http://web:{{ env "PORT" | default "4000" }}/api/v1/internal/ws_auth'
         # Cookie/Authorization are replaced by what ws_auth answers, so the
         # agent container never receives the viewer's Rails session cookie.
         authResponseHeadersRegex: "^(X-.*|Cookie|Authorization)$"
@@ -13,7 +16,7 @@ http:
     terminal-cors:
       headers:
         accessControlAllowOriginList:
-          - "http://localhost:4000"
+          - 'http://localhost:{{ env "PORT" | default "4000" }}'
           - "http://localhost"
         accessControlAllowMethods:
           - GET

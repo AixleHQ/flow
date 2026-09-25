@@ -192,6 +192,8 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./docker/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    environment:
+      PORT: ${PORT:-4000}
     networks: [ default, agents ]
     attach: false
 

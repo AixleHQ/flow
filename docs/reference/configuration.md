@@ -323,7 +323,7 @@ client id and one credential are present, or PAT mode is on.
 | `COVERAGE_MIN`              | no       | unset                      | Coverage floor for the run; set by the `make` check targets. |
 | `PARALLEL_WORKERS`          | no       | number of processors       | `1` forces a serial test run.                               |
 | `CHROMIUM_PATH`             | no       | `/usr/bin/chromium`        | Browser binary for system tests.                            |
-| `ACTION_CABLE_URL`          | no       | `ws://localhost:4000/cable` | Cable URL in development.                                   |
+| `ACTION_CABLE_URL`          | no       | `ws://localhost:$PORT/cable` | Cable URL in development (`PORT` defaults to 4000).        |
 | `VITE_RUBY_PORT`            | no       | `4001`                     | Port the Vite dev server binds to; Compose publishes the same one. |
 | `SEED_COMPANY_SLUG`         | no       | `demo`                     | Company slug `db/seeds.rb` creates (development and test only — deployed environments never seed). |
 | `SEED_COMPANY_NAME`         | no       | `Demo Company`             | Its display name.                                           |
