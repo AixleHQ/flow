@@ -46,7 +46,7 @@ module PersonalTools
     # reconciled since the last deploy can never serve stale metadata.
     def serialize(tool)
       defn = tool.definition
-      { id: tool.id,
+      row = { id: tool.id,
         name: tool.name,
         display_name: defn&.display_name.presence || tool.display_name,
         description: (defn&.description.presence || tool.description)&.truncate(200),
@@ -54,6 +54,8 @@ module PersonalTools
         tags: (defn&.tags || tool.tags).map(&:to_s),
         requires_integration: (defn&.requires_integration || tool.requires_integration)&.to_s,
         enabled: tool.enabled }
+      row[:current_version_number] = tool.current_version_number if tool.db_source?
+      row
     end
   end
 end

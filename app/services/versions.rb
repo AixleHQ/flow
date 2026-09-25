@@ -105,6 +105,20 @@ module Versions
   def prepare!(record, base_version)
     record.lock!
     raise StaleVersion, record.current_version_number if base_version && base_version.to_i != record.current_version_number
+
+    write_baseline!(record)
+  end
+
+  # The baseline alone, for a caller that only needs the entity to have a
+  # version (a launch recording what it ran), not to change it.
+  def ensure_baseline!(record)
+    transaction_for(record) do
+      record.lock!
+      write_baseline!(record)
+    end
+  end
+
+  def write_baseline!(record)
     return if record.current_version_number.positive?
 
     write!(record, "created", Snapshot.dump(record), Actor.system, metadata: { "baseline" => true })

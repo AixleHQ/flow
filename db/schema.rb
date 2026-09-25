@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_25_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_25_200100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1071,10 +1071,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_200000) do
     t.bigint "terminal_session_id"
     t.datetime "updated_at", null: false
     t.bigint "workflow_run_id", null: false
+    t.bigint "workflow_version_id"
     t.index ["step_id"], name: "index_step_runs_on_step_id"
     t.index ["terminal_session_id"], name: "index_step_runs_on_terminal_session_id"
     t.index ["workflow_run_id", "state"], name: "index_step_runs_on_workflow_run_id_and_state"
     t.index ["workflow_run_id"], name: "index_step_runs_on_workflow_run_id"
+    t.index ["workflow_version_id"], name: "index_step_runs_on_workflow_version_id", where: "(workflow_version_id IS NOT NULL)"
   end
 
   create_table "steps", force: :cascade do |t|
@@ -1234,6 +1236,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_200000) do
     t.bigint "total_tokens", default: 0, null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id"
+    t.jsonb "version_ids", default: {}, null: false
     t.index ["company_id"], name: "index_terminal_sessions_on_company_id"
     t.index ["configured_agent_id"], name: "index_terminal_sessions_on_configured_agent_id"
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
@@ -1648,6 +1651,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_200000) do
   add_foreign_key "solid_queue_ready_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_recurring_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_scheduled_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "step_runs", "entity_versions", column: "workflow_version_id", on_delete: :nullify
   add_foreign_key "step_runs", "steps", on_delete: :cascade
   add_foreign_key "step_runs", "terminal_sessions"
   add_foreign_key "step_runs", "workflow_runs", on_delete: :cascade

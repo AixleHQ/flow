@@ -4,6 +4,13 @@ class StepRunResource < ApplicationResource
   attributes :id, :step_id, :state, :step_note, :error_message, :error_category,
              :terminal_session_id, :started_at, :completed_at
 
+  # The workflow version this step launched with — null for a step that has not
+  # launched, or that launched before version history existed.
+  typelize "number | null"
+  attribute :workflow_version_number do |sr|
+    sr.workflow_version&.number
+  end
+
   typelize :string?
   attribute :step_name do |sr|
     sr.step&.name

@@ -7,7 +7,7 @@ module ContextBuilders
     end
 
     def build
-      agent = Agent.find_by(id: session.configured_agent_id)
+      agent = Agent.unarchived.find_by(id: session.configured_agent_id)
       return [] unless agent
 
       [ section(

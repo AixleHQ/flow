@@ -39,6 +39,7 @@ class SessionService
 
       return session unless session.save
 
+      Versions::LaunchRecord.record!(session)
       # The writer lock is taken around the queue write only — never around the
       # save, which touches half a dozen join tables.
       SessionAdmissionService.enqueue!(session)
@@ -188,6 +189,7 @@ class SessionService
       config = SessionConfigResolver.resolve(session)
       session.update!(agent_type: config[:agent_runtime], mode: config[:mode])
       attach_resolved_resources(session, config)
+      Versions::LaunchRecord.record!(session, step_run: step_run)
       session
     end
 
