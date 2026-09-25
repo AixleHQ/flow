@@ -287,4 +287,75 @@ class CompanyMembershipTest < ActiveSupport::TestCase
 
     assert_equal owner.id, elsewhere.reload.owner_id
   end
+
+  # === handover before revocation ===
+
+  test "revoke_with_handover gives each project to its chosen member and the rest to the heir" do
+    admin = create(:user, :admin, company: @company)
+    owner = create(:user, :employee, company: @company)
+    chosen = create(:user, :employee, company: @company)
+    handed = create(:project, company: @company, owner: owner)
+    left_out = create(:project, company: @company, owner: owner)
+    handed.add_collaborator(chosen)
+
+    membership = owner.company_memberships.sole
+    assert membership.revoke_with_handover(handed.id => chosen.id), membership.errors.full_messages.to_sentence
+
+    assert membership.reload.revoked?
+    assert_equal chosen, handed.reload.owner
+    assert_empty handed.collaborators, "neither the new owner nor the member who left stays a collaborator"
+    assert_equal admin, left_out.reload.owner
+  end
+
+  test "revoke_with_handover changes nothing when a chosen member cannot own the project" do
+    create(:user, :admin, company: @company)
+    owner = create(:user, :employee, company: @company)
+    viewer = create(:user, :viewer, company: @company, email: "client-#{SecureRandom.hex(3)}@external.com")
+    first = create(:project, company: @company, owner: owner, name: "First")
+    second = create(:project, company: @company, owner: owner, name: "Second")
+    employee = create(:user, :employee, company: @company)
+
+    membership = owner.company_memberships.sole
+    assert_equal false, membership.revoke_with_handover(first.id => employee.id, second.id => viewer.id) # rubocop:disable Minitest/RefuteFalse
+
+    assert_match(/Second/, membership.errors[:base].to_sentence)
+    assert membership.active?
+    assert membership.reload.active?
+    assert_equal owner, first.reload.owner, "the earlier handover is rolled back with the rest"
+    assert_equal owner, second.reload.owner
+  end
+
+  test "revoke_with_handover refuses a project the member does not own" do
+    create(:user, :admin, company: @company)
+    member = create(:user, :employee, company: @company)
+    someone_elses = create(:project, company: @company, owner: create(:user, :employee, company: @company))
+
+    membership = member.company_memberships.sole
+    assert_equal false, membership.revoke_with_handover(someone_elses.id => member.id) # rubocop:disable Minitest/RefuteFalse
+    assert membership.reload.active?
+  end
+
+  test "handing every project over lets an owner go even with no other admin to inherit" do
+    owner = create(:user, :employee, company: @company)
+    colleague = create(:user, :employee, company: @company)
+    project = create(:project, company: @company, owner: owner)
+
+    membership = owner.company_memberships.sole
+    assert membership.revoke_with_handover(project.id => colleague.id), membership.errors.full_messages.to_sentence
+    assert_equal colleague, project.reload.owner
+  end
+
+  test "the heir who was already a collaborator does not end up both owner and collaborator" do
+    admin = create(:user, :admin, company: @company)
+    owner = create(:user, :employee, company: @company)
+    project = create(:project, company: @company, owner: owner)
+    project.add_collaborator(admin)
+
+    membership = owner.company_memberships.sole
+    membership.aasm(:state).fire(:revoke)
+    assert membership.save, membership.errors.full_messages.to_sentence
+
+    assert_equal admin, project.reload.owner
+    assert_empty project.collaborators
+  end
 end

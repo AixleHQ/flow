@@ -114,6 +114,70 @@ class ProjectTest < ActiveSupport::TestCase
     assert_nil Workflow.unscoped.find_by(id: workflow.id)
   end
 
+  # == ownership transfer ==
+
+  test "transfer to a collaborator swaps the two: new owner loses the collaborator row, old owner gains one" do
+    collaborator = create(:user, :employee, company: @company)
+    @project.add_collaborator(collaborator)
+
+    assert @project.transfer_ownership_to(collaborator), @project.errors.full_messages.to_sentence
+
+    @project.reload
+    assert_equal collaborator, @project.owner
+    assert_equal [ @project_owner ], @project.collaborators.to_a
+    assert @project.accessible_by?(@project_owner)
+    assert_not @project.admin?(@project_owner)
+  end
+
+  test "transfer to a company member not on the project needs no collaborator step" do
+    newcomer = create(:user, :employee, company: @company)
+
+    assert @project.transfer_ownership_to(newcomer)
+
+    @project.reload
+    assert_equal newcomer, @project.owner
+    assert_equal [ @project_owner ], @project.collaborators.to_a
+  end
+
+  test "transfer to a company admin is allowed" do
+    admin = create(:user, :admin, company: @company)
+
+    assert @project.transfer_ownership_to(admin)
+    assert_equal admin, @project.reload.owner
+  end
+
+  test "transfer refuses a viewer, another company's user, a revoked member and the current owner" do
+    viewer = create(:user, :viewer, company: @company, email: "client-#{SecureRandom.hex(3)}@external.com")
+    @project.add_collaborator(viewer)
+    refused = {
+      viewer: viewer,
+      foreign: create(:user, :admin, company: create(:company)),
+      revoked: create(:user, :employee, company: @company, membership_state: "revoked"),
+      owner: @project_owner,
+      nobody: nil
+    }
+
+    refused.each do |label, user|
+      assert_equal false, @project.transfer_ownership_to(user), "#{label} must be refused" # rubocop:disable Minitest/RefuteFalse
+      assert_includes @project.errors.attribute_names, :owner, label.to_s
+      @project.errors.clear
+    end
+
+    @project.reload
+    assert_equal @project_owner, @project.owner
+    assert_equal [ viewer ], @project.collaborators.to_a
+  end
+
+  test "ownership_candidates are active non-viewer members other than the owner" do
+    employee = create(:user, :employee, company: @company)
+    admin = create(:user, :admin, company: @company)
+    create(:user, :viewer, company: @company, email: "client-#{SecureRandom.hex(3)}@external.com")
+    create(:user, :employee, company: @company, membership_state: "revoked")
+    create(:user, :employee, company: create(:company))
+
+    assert_equal [ admin, employee ].sort_by(&:id), @project.ownership_candidates.order(:id).to_a
+  end
+
   private
 
   def create_named_projects(*names)

@@ -179,6 +179,31 @@ class CompanyMembership < ApplicationRecord
     end
   end
 
+  # Revokes the membership after handing each owned project to the member
+  # chosen for it (`{ project_id => user_id }`). Projects left out still go to
+  # the heir. Nothing changes unless every handover and the revocation succeed.
+  def revoke_with_handover(heir_ids_by_project_id = {})
+    return false unless may_revoke?
+
+    revoked = false
+    transaction do
+      heir_ids_by_project_id.each do |project_id, heir_id|
+        project = company.projects.find_by(id: project_id, owner_id: user_id)
+        next if project&.transfer_ownership_to(User.find_by(id: heir_id), keep_previous_owner: false)
+
+        errors.add(:base, project ? "#{project.name}: #{project.errors.full_messages.to_sentence}" : "Project #{project_id} is not owned by this member")
+        raise ActiveRecord::Rollback
+      end
+
+      aasm(:state).fire(:revoke)
+      raise ActiveRecord::Rollback unless save
+
+      revoked = true
+    end
+    restore_attributes([ :state ]) unless revoked
+    revoked
+  end
+
   # The company's oldest active admin excluding a given user — the canonical
   # heir-selection rule used when a project owner is revoked or permanently
   # deleted. Shared so both paths always agree on whom to pick.
@@ -269,7 +294,9 @@ class CompanyMembership < ApplicationRecord
   # whenever there is anything to move.
   def reassign_owned_projects
     company.projects.where(owner_id: user_id).find_each do |project|
-      project.update!(owner_id: heir_membership.user_id)
+      next if project.transfer_ownership_to(heir_membership.user, keep_previous_owner: false)
+
+      raise ActiveRecord::RecordInvalid, project
     end
   end
 

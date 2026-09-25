@@ -131,6 +131,35 @@ describe('MembersContent', () => {
     );
   });
 
+  it('removing a member who owns projects asks who takes them over and sends the choices', async () => {
+    renderAuthedPage(
+      <MembersContent
+        {...baseProps([
+          makeUser({ id: 7, name: 'Ada Lovelace', role: 'employee', state: 'active' }),
+          makeUser({ id: 8, name: 'Grace Hopper', role: 'admin', state: 'active' }),
+        ])}
+        projectHandover={{
+          projects: [{ id: 10, name: 'Gateway', ownerId: 7 }],
+          candidates: [{ id: 8, name: 'Grace Hopper', email: 'grace@example.com', companyAdmin: true }],
+          heirIds: [8],
+        }}
+      />,
+    );
+
+    const adaRow = screen.getByText('Ada Lovelace').closest('tr') as HTMLElement;
+    await userEvent.click(within(adaRow).getByRole('button'));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /remove/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Gateway')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Transfer and remove' }));
+
+    expect(router.delete).toHaveBeenCalledWith(
+      '/company/members/7',
+      expect.objectContaining({ data: { handover: [{ projectId: 10, userId: 8 }] } }),
+    );
+  });
+
   it('the "Make Admin" menu action fires router.patch with the new role', async () => {
     renderAuthedPage(<MembersContent {...baseProps([makeUser({ id: 9, name: 'Ada Lovelace', role: 'employee' })])} />);
 

@@ -60,6 +60,44 @@ class Web::Company::MembersControllerTest < ActionDispatch::IntegrationTest
     assert project.valid?, "transferred project must satisfy owner_belongs_to_company"
   end
 
+  test "destroy hands each project to the member chosen for it before revoking" do
+    member = create(:user, company: @company)
+    colleague = create(:user, :employee, company: @company)
+    project = create(:project, company: @company, owner: member)
+
+    delete company_member_path(member), params: { handover: [ { project_id: project.id, user_id: colleague.id } ] }
+
+    assert_response :redirect
+    assert_equal "Member removed", flash[:notice]
+    assert_equal colleague, project.reload.owner
+    assert_equal "revoked", @company.company_memberships.find_by(user_id: member.id).state
+  end
+
+  test "destroy keeps the member when a chosen heir is refused" do
+    member = create(:user, company: @company)
+    viewer = create(:user, :viewer, company: @company, email: "client-#{SecureRandom.hex(3)}@external.com")
+    project = create(:project, company: @company, owner: member)
+
+    delete company_member_path(member), params: { handover: [ { project_id: project.id, user_id: viewer.id } ] }
+
+    assert_predicate session["inertia_errors"][:base], :present?
+    assert_equal member, project.reload.owner
+    assert_equal "active", @company.company_memberships.find_by(user_id: member.id).state
+  end
+
+  test "index gives an admin the projects and candidates the removal dialog needs" do
+    member = create(:user, :employee, company: @company)
+    project = create(:project, company: @company, owner: member)
+
+    get company_members_path
+
+    handover = inertia.props[:projectHandover]
+    row = handover[:projects].find { |p| p[:id] == project.id }
+    assert_equal member.id, row[:ownerId]
+    assert_includes handover[:candidates].pluck(:id), member.id
+    assert_equal [ @user.id ], handover[:heirIds]
+  end
+
   # The no-heir branch is NOT reachable here: destroy? requires an admin of this
   # company and not_self?, so the acting admin is always a valid heir. It is
   # covered at the model level (CompanyMembershipTest), which is where a company

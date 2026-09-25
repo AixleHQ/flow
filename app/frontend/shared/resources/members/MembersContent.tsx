@@ -40,6 +40,8 @@ import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/Resourc
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { InviteMemberDrawer } from './InviteMemberDrawer';
+import type { ProjectHandover } from './projectHandover';
+import { ProjectHandoverModal } from './ProjectHandoverModal';
 
 interface MembersContentProps {
   users: Member[];
@@ -47,6 +49,7 @@ interface MembersContentProps {
   title: string;
   subtitle?: string;
   showRoleActions?: boolean;
+  projectHandover?: ProjectHandover | null;
 }
 
 // Revoked members are never rendered (the index excludes them).
@@ -112,7 +115,14 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
 ];
 
-export const MembersContent = ({ users, basePath, title, subtitle, showRoleActions = true }: MembersContentProps) => {
+export const MembersContent = ({
+  users,
+  basePath,
+  title,
+  subtitle,
+  showRoleActions = true,
+  projectHandover = null,
+}: MembersContentProps) => {
   const { currentUser, permissions } = usePage<SharedProps>().props;
   // Every control this page offers mutates membership, so the whole action surface hangs off one
   // permission. `permissions` is optional on SharedProps — absent means "not permitted", matching
@@ -122,6 +132,8 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active');
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [handoverFor, setHandoverFor] = useState<Member | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const activeAdminCount = useMemo(
     () => users.filter((u) => u.role === 'admin' && u.state === 'active').length,
@@ -160,6 +172,11 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
   };
 
   const handleDelete = (userId: number, name: string) => {
+    const owner = users.find((u) => u.id === userId);
+    if (owner && projectHandover?.projects.some((p) => p.ownerId === userId)) {
+      setHandoverFor(owner);
+      return;
+    }
     modals.openConfirmModal({
       title: 'Remove member',
       children: (
@@ -408,6 +425,33 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
             </Table.Tbody>
           </Table>
         </ResourceTableShell>
+      )}
+
+      {handoverFor && projectHandover && (
+        <ProjectHandoverModal
+          title="Remove member"
+          intro={
+            <Text size="sm">
+              Remove <b>{handoverFor.name || handoverFor.email}</b> from this company? They lose access to every project
+              in it. This action cannot be undone.
+            </Text>
+          }
+          confirmLabel="Transfer and remove"
+          subject="They"
+          leavingUserId={handoverFor.id}
+          handover={projectHandover}
+          submitting={removing}
+          onClose={() => setHandoverFor(null)}
+          onConfirm={(handover) => {
+            setRemoving(true);
+            router.delete(`${basePath}/${handoverFor.id}`, {
+              data: { handover },
+              preserveScroll: true,
+              onSuccess: () => setHandoverFor(null),
+              onFinish: () => setRemoving(false),
+            });
+          }}
+        />
       )}
 
       {canManageMembers && (

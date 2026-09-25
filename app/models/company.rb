@@ -109,6 +109,13 @@ class Company < ApplicationRecord
     active.find_by(email_domain: domain)
   end
 
+
+  # A viewer is read-only and must never own a project, so only employees and
+  # admins qualify.
+  def ownership_candidates
+    users.where(company_memberships: { role: %w[employee admin] })
+  end
+
   private
 
   # Only when the form submitted the field, so saving a logo cannot silently

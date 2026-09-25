@@ -436,4 +436,29 @@ describe('Projects/Settings/SettingsPage', () => {
       expect(screen.getByText(/only a company admin can change this/)).toBeInTheDocument();
     });
   });
+
+  describe('ownership transfer', () => {
+    const ownership = {
+      canTransfer: true,
+      candidates: [{ id: 5, name: 'Eve Heir', email: 'eve@example.com', companyAdmin: false, collaborator: true }],
+    };
+
+    it('offers Transfer next to the owner to someone who may transfer, and opens the picker', async () => {
+      renderAuthedPage(<SettingsPage />, { props: { project, concurrency, ownership } });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Transfer' }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByRole('radio', { name: 'Eve Heir' })).toBeInTheDocument();
+    });
+
+    it('shows the owner without a Transfer action to everyone else', () => {
+      renderAuthedPage(<SettingsPage />, {
+        props: { project, concurrency, ownership: { canTransfer: false, candidates: [] } },
+      });
+
+      expect(screen.getByText('Dana Owner')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Transfer' })).not.toBeInTheDocument();
+    });
+  });
 });

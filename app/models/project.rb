@@ -126,6 +126,33 @@ class Project < ApplicationRecord
     owner_id == user.id
   end
 
+  def ownership_candidates
+    company.ownership_candidates.where.not(id: owner_id)
+  end
+
+  # Hands the project to another member. The previous owner stays on as a
+  # collaborator unless they are leaving the company; a collaborator row for
+  # the new owner goes, since ProjectCollaborator refuses a row for the
+  # project's own owner.
+  def transfer_ownership_to(new_owner, keep_previous_owner: true)
+    transaction do
+      lock!
+      unless new_owner && ownership_candidates.exists?(id: new_owner.id)
+        errors.add(:owner, "must be an active company member who is not a viewer or the current owner")
+        raise ActiveRecord::Rollback
+      end
+
+      previous_owner = owner
+      project_collaborators.where(user: new_owner).destroy_all
+      update!(owner: new_owner)
+      project_collaborators.create!(user: previous_owner) if keep_previous_owner
+    end
+    errors.empty?
+  rescue ActiveRecord::RecordInvalid => e
+    errors.add(:base, e.record.errors.full_messages.to_sentence)
+    false
+  end
+
   # Returns all member users (owner first, then collaborators)
   def member_users
     collaborator_ids = project_collaborators.pluck(:user_id)
