@@ -203,14 +203,6 @@ module ContainerStrategies
 
       result = credential.refresh_if_expiring!(excluding_session_id: session.id)
 
-      # What gets seeded into the container is this object's config_data, and the row it
-      # came from has moved: a refresh writes through a separate instance
-      # (BaseAdapter#persist_refreshed! → AgentCredential.from_artifacts), and the
-      # 5-minute sweep rotates rows that were loaded before it ran. Without this the
-      # container is handed the pre-rotation copy — measured on 2026-09-25, a Kiro
-      # container holding an expires_at 13 minutes behind its own credential record.
-      credential.reload
-
       # Deferring to the container that holds these tokens means this session starts
       # on whatever is stored, which may be little. Say so: the alternative is finding
       # out from a 401 halfway through a session and having nothing to correlate it to.
