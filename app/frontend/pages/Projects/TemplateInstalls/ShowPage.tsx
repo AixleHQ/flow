@@ -30,6 +30,7 @@ interface SetupItem {
 }
 
 interface Props {
+  [key: string]: unknown;
   project: { id: number; name: string };
   install: { id: number; name: string; version: number; setup: string | null };
   items: SetupItem[];
@@ -127,7 +128,7 @@ function ItemActions({ item, props }: { item: SetupItem; props: Props }) {
 }
 
 const ShowPage = () => {
-  const props = usePage().props as unknown as Props;
+  const props = usePage<Props>().props;
   const { install, items } = props;
   const finished = items.filter((i) => i.status === 'done' || i.status === 'dismissed').length;
 

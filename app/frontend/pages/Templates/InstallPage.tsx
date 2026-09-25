@@ -53,6 +53,7 @@ interface Plan {
 }
 
 interface Props {
+  [key: string]: unknown;
   template: TemplateDetail;
   idempotencyKey: string;
   companyName: string;
@@ -103,8 +104,7 @@ function InputField({
 }
 
 const InstallPage = () => {
-  const { template, idempotencyKey, companyName, projects, selection, plan, error } = usePage()
-    .props as unknown as Props;
+  const { template, idempotencyKey, companyName, projects, selection, plan, error } = usePage<Props>().props;
 
   const [inputs, setInputs] = useState<Record<string, string>>(() => ({
     ...Object.fromEntries(template.inputs.map((i) => [i.key, i.default === undefined ? '' : String(i.default)])),

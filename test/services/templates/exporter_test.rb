@@ -43,6 +43,18 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert_equal @source.agents.pluck(:name, :persona), copy.agents.pluck(:name, :persona)
   end
 
+  test "a skill's extra files travel with it" do
+    skill = @source.skills.find_by!(name: "house-style")
+    skill.update!(files: skill.files.merge("examples/good.rb" => "def small = 1\n"))
+
+    result = export
+    entry = result.package.section("skills").find { |s| s["path"] }
+
+    assert_equal [ "examples/good.rb" ], entry["files"].pluck("path")
+    copy = install(result.package).project.skills.find_by!(name: "house-style")
+    assert_equal "def small = 1\n", copy.files["examples/good.rb"]
+  end
+
   test "a literal MCP header value aborts the export and names the server" do
     @source.mcp_servers.find_by!(name: "Sentry").update!(headers: { "Authorization" => "Bearer sk-live-123" })
 

@@ -26,6 +26,7 @@ import { TemplatesShell } from './components/TemplatesShell';
 import type { TemplateDetail } from './types';
 
 interface Props {
+  [key: string]: unknown;
   template: TemplateDetail;
   installPath: string | null;
   signedIn: boolean;
@@ -152,7 +153,7 @@ function Requirements({ template }: { template: TemplateDetail }) {
 }
 
 const ShowPage = () => {
-  const { template, installPath, signedIn } = usePage().props as unknown as Props;
+  const { template, installPath, signedIn } = usePage<Props>().props;
 
   return (
     <TemplatesShell>

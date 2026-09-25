@@ -59,6 +59,14 @@ module Templates
       @provided_secrets = Array(provided_secrets).map(&:to_s)
     end
 
+    # A registry skill is named by its slug, as SkillsRegistryService names it;
+    # an authored one by its frontmatter.
+    def self.skill_name(package, entry)
+      return entry["registry"].to_s.split("@").last if entry["registry"]
+
+      Skills::SkillMarkdown.name(package.file(entry["path"]).to_s.dup.force_encoding(Encoding::UTF_8)) || entry["key"]
+    end
+
     def call
       check_installable!
       package = Validator.validate!(@catalog_template.to_package)
@@ -199,8 +207,7 @@ module Templates
     # project is matched on.
     def resource_name(package, section, entry)
       case section
-      when "agents", "tools" then entry["name"]
-      when "assets" then entry["name"]
+      when "agents", "tools", "assets" then entry["name"]
       when "skills" then Planner.skill_name(package, entry)
       when "mcp_servers" then entry.dig("custom", "name") || connector_manifest(package, entry)["title"].presence || entry.dig("connector", "name")
       end
@@ -310,14 +317,6 @@ module Templates
     end
 
     # ---- package helpers --------------------------------------------------
-
-    # A registry skill is named by its slug, as SkillsRegistryService names it;
-    # an authored one by its frontmatter.
-    def self.skill_name(package, entry)
-      return entry["registry"].to_s.split("@").last if entry["registry"]
-
-      Skills::SkillMarkdown.name(package.file(entry["path"]).to_s.dup.force_encoding(Encoding::UTF_8)) || entry["key"]
-    end
 
     def skill_markdown(package, entry)
       path = entry["path"] || entry.dig("snapshot", "path")

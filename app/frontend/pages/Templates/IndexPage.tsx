@@ -13,6 +13,7 @@ import { TemplatesShell } from './components/TemplatesShell';
 import { describeIncludes, KIND_LABELS, templatePath, type TemplateKind, type TemplateSummary } from './types';
 
 interface Props {
+  [key: string]: unknown;
   templates: TemplateSummary[];
   signedIn: boolean;
 }
@@ -32,7 +33,7 @@ function requirementLine(template: TemplateSummary): string {
 }
 
 const IndexPage = () => {
-  const { templates } = usePage().props as unknown as Props;
+  const { templates } = usePage<Props>().props;
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<string>('all');
   const [publisher, setPublisher] = useState<string | null>(null);

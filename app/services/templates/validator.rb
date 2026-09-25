@@ -55,6 +55,7 @@ module Templates
       check_inputs
       check_files
       check_authored_skills
+      check_connector_targets
       @errors
     end
 
@@ -201,6 +202,11 @@ module Templates
     # carry a name that model accepts — or the install fails after review.
     def check_authored_skills
       @package.section("skills").each do |skill|
+        Array(skill["files"]).each do |file|
+          next if Skill.safe_relative_path?(file["path"]) && file["path"] != "SKILL.md"
+
+          @errors << "skill #{skill['key']}: file path #{file['path'].inspect} must be relative, inside the skill, and not SKILL.md"
+        end
         next unless skill["path"] && @package.file(skill["path"])
 
         markdown = Skills::SkillMarkdown.parse(@package.file(skill["path"]).dup.force_encoding(Encoding::UTF_8))
@@ -211,12 +217,29 @@ module Templates
       end
     end
 
+    # A registry connector installs from its manifest snapshot without asking a
+    # registry, so the named target must be there and its package release pinned.
+    def check_connector_targets
+      @package.section("mcp_servers").each do |server|
+        connector = server["connector"] or next
+        manifest = JSON.parse(@package.file(connector.dig("manifest", "path")).to_s)
+        target = MCP::ConnectorManifest.find_target(manifest, connector["target"])
+        next @errors << "connector #{server['key']}: target #{connector['target']} is not in its manifest" unless target
+        next unless MCP::ConnectorAttributes.unpinned?(target)
+
+        @errors << "connector #{server['key']}: its package release is not pinned — export it from a project where it is installed"
+      rescue JSON::ParserError
+        @errors << "connector #{server['key']}: manifest snapshot is not valid JSON"
+      end
+    end
+
     # path → expected sha256 (nil when the file is authored, not a snapshot)
     def referenced_files
       refs = {}
       @package.section("skills").each do |skill|
         refs[skill["path"]] = nil if skill["path"]
         refs[skill.dig("snapshot", "path")] = skill.dig("snapshot", "sha256") if skill["snapshot"]
+        Array(skill["files"]).each { |file| refs[file["from"]] = nil }
       end
       @package.section("mcp_servers").each do |server|
         manifest = server.dig("connector", "manifest")

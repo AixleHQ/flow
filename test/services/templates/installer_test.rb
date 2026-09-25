@@ -49,6 +49,8 @@ class Templates::InstallerTest < ActiveSupport::TestCase
     registry_skill = project.skills.find_by!(name: "code-review")
     assert_equal "acme/skills@code-review", registry_skill.package
     assert_match(/Read the diff/, registry_skill.content)
+    assert_equal registry_skill.content, registry_skill.files["SKILL.md"],
+                 "the reviewed directory is installed, so a session never fetches the skill live"
 
     linear = project.mcp_servers.find_by!(connector_name: "app.linear/linear")
     assert_equal "https://mcp.linear.app/mcp", linear.url

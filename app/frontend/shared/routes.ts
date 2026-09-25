@@ -992,6 +992,16 @@ export function docsPagePath(slug: ScalarType[], options?: object): string {
   return "/" + "docs" + "/" + slug.map((part) => $encode(part)).join("/") + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["slug","format"]);
 }
 
+/** /templates(.:format) */
+export function templatesPath(options?: object): string {
+  return "/" + "templates" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /templates/:namespace/:slug(.:format) */
+export function templatePath(namespace: ScalarType, slug: ScalarType, options?: object): string {
+  return "/" + "templates" + "/" + namespace + "/" + slug + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["namespace","slug","format"]);
+}
+
 /** /login(.:format) */
 export function loginPath(options?: object): string {
   return "/" + "login" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1147,6 +1157,16 @@ export function companyIntegrationsGithubSetupPath(options?: object): string {
   return "/" + "company" + "/" + "integrations" + "/" + "github_setup" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /company/template_installs(.:format) */
+export function companyTemplateInstallsPath(options?: object): string {
+  return "/" + "company" + "/" + "template_installs" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/template_installs/new(.:format) */
+export function newCompanyTemplateInstallPath(options?: object): string {
+  return "/" + "company" + "/" + "template_installs" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /company/projects/:project_id/overview(.:format) */
 export function companyProjectOverviewIndexPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "overview" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
@@ -1160,6 +1180,16 @@ export function companyProjectFavoritePath(project_id: ScalarType, options?: obj
 /** /company/projects/:project_id/board(.:format) */
 export function companyProjectBoardPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "board" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/template_installs/:template_install_id/setup_items/:id(.:format) */
+export function companyProjectTemplateInstallSetupItemPath(project_id: ScalarType, template_install_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "template_installs" + "/" + template_install_id + "/" + "setup_items" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","template_install_id","id","format"]);
+}
+
+/** /company/projects/:project_id/template_installs/:id(.:format) */
+export function companyProjectTemplateInstallPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "template_installs" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
 }
 
 /** /company/projects/:project_id/sessions/rows(.:format) */

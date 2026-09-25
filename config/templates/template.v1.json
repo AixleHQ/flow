@@ -320,6 +320,30 @@
                 "type": "string",
                 "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$",
                 "maxLength": 255
+              },
+              "files": {
+                "type": "array",
+                "maxItems": 200,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$",
+                      "maxLength": 255
+                    },
+                    "from": {
+                      "type": "string",
+                      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$",
+                      "maxLength": 255
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "from"
+                  ]
+                }
               }
             },
             "required": [
@@ -359,6 +383,30 @@
                   "path",
                   "sha256"
                 ]
+              },
+              "files": {
+                "type": "array",
+                "maxItems": 200,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$",
+                      "maxLength": 255
+                    },
+                    "from": {
+                      "type": "string",
+                      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_./-]+$",
+                      "maxLength": 255
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "from"
+                  ]
+                }
               }
             },
             "required": [

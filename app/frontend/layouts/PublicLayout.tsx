@@ -17,7 +17,7 @@ interface PublicLayoutProps {
  * visitor knows where an install would land.
  */
 export function PublicLayout({ children }: PublicLayoutProps) {
-  const { flash, settings } = usePage().props as unknown as SharedProps & { settings?: { domain?: string } };
+  const { flash, settings } = usePage<Partial<SharedProps> & { [key: string]: unknown }>().props;
 
   const prevFlashRef = useRef<typeof flash | undefined>(undefined);
   useEffect(() => {

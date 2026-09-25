@@ -22,6 +22,7 @@ module Templates
     Result = Struct.new(:package, :template_yaml, :notes, keyword_init: true)
 
     CONFIG_ITEM_REF = /config_item:([A-Z][A-Z0-9_]*)/
+    STEP_SETTINGS = Installer::STEP_SETTINGS
 
     # @param workflow_ids [Array<Integer>, nil] nil exports every workflow, [] none
     # @param agent_ids / skill_ids [Array<Integer>] exported even when no workflow uses them —
@@ -132,8 +133,6 @@ module Templates
       end
     end
 
-    STEP_SETTINGS = Installer::STEP_SETTINGS
-
     def export_steps(workflow)
       steps = workflow.steps.not_deleted.order(:position).to_a
       step_keys = steps.to_h { |step| [ step.id, key_for("steps:#{workflow.id}", step.id, step.name) ] }
@@ -174,16 +173,19 @@ module Templates
     def skill_key(id, where)
       skill = @project.skills.find_by(id: id) or return unresolved("#{where}: skill #{id} is not in this project")
       key = key_for("skills", skill.id, skill.name)
-      @skills[skill.id] ||=
-        if skill.registry? && skill.package.present?
-          path = "snapshots/skills/#{key}.md"
-          @files[path] = skill.content.to_s
-          { "key" => key, "registry" => skill.package, "snapshot" => { "path" => path, "sha256" => sha(path) } }
-        else
-          path = "skills/#{key}/SKILL.md"
-          @files[path] = skill.content.to_s
-          { "key" => key, "path" => path }
+      @skills[skill.id] ||= begin
+        registry = skill.registry? && skill.package.present?
+        dir = registry ? "snapshots/skills/#{key}" : "skills/#{key}"
+        path = registry ? "#{dir}.md" : "#{dir}/SKILL.md"
+        @files[path] = skill.content.to_s
+        entry = registry ? { "key" => key, "registry" => skill.package, "snapshot" => { "path" => path, "sha256" => sha(path) } } : { "key" => key, "path" => path }
+        extra = skill.files.to_h.except("SKILL.md").sort.map do |relative, contents|
+          from = "#{dir}/#{relative}"
+          @files[from] = contents.to_s
+          { "path" => relative, "from" => from }
         end
+        extra.any? ? entry.merge("files" => extra) : entry
+      end
       key
     end
 
@@ -202,8 +204,11 @@ module Templates
     end
 
     def connector_entry(server, key)
-      manifest = server.connector_manifest.to_h.except("installed_target")
       target = server.connector_manifest.to_h["installed_target"].to_h
+      # The snapshot carries the target as it was installed — with the package
+      # release it was pinned to — so the template installs that exact release.
+      manifest = server.connector_manifest.to_h.except("installed_target")
+      manifest["targets"] = Array(manifest["targets"]).map { |t| t["id"] == target["id"] ? target : t }
       path = "snapshots/connectors/#{key}.json"
       @files[path] = "#{JSON.pretty_generate(manifest)}\n"
       values = templated_inputs(server, target)

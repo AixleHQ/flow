@@ -2,13 +2,11 @@
 
 module ProjectResources
   # Creates project-scoped agents, skills, tools and MCP servers from plain
-  # attribute hashes. The one creation path shared by WorkflowDuplicator (which
-  # reads the attributes off existing rows) and Templates::Installer (which
-  # reads them out of a template package), so both agree on which attributes a
-  # copied resource carries.
+  # attribute hashes, with an explicit allow-list of what each carries. Used by
+  # Templates::Installer, which reads the attributes out of a template package.
   class Builder
     AGENT_ATTRIBUTES = %i[name title icon persona communication_style principles source].freeze
-    SKILL_ATTRIBUTES = %i[name title description package source source_url content content_hash origin].freeze
+    SKILL_ATTRIBUTES = %i[name title description package source source_url content content_hash files origin].freeze
     TOOL_ATTRIBUTES = %i[name display_name description docker_image command execution_mode input_schema
                          required_config_items enabled requires_integration].freeze
     MCP_SERVER_ATTRIBUTES = %i[name url transport description command args enabled env headers auth_type
@@ -26,11 +24,17 @@ module ProjectResources
       Skill.create!(attributes.to_h.symbolize_keys.slice(*SKILL_ATTRIBUTES).merge(scope: @project, install_count: 0))
     end
 
-    # @param files [Array<Hash>] `{ path:, content: }` for text files, or
-    #   `{ path:, file_data: }` to reuse an already-stored Shrine attachment.
+    # @param files [Array<Hash>] `{ path:, content: }` for text files; add
+    #   `file:` (an uploaded file or IO) for a binary one, stored as a new object
+    #   of this tool's own.
     def tool!(attributes, files: [])
       tool = Tool.create!(attributes.to_h.symbolize_keys.slice(*TOOL_ATTRIBUTES).merge(scope: @project))
-      files.each { |file| tool.tool_files.create!(file.to_h.symbolize_keys.slice(:path, :content, :file_data)) }
+      files.each do |file|
+        file = file.to_h.symbolize_keys
+        copy = tool.tool_files.build(file.slice(:path, :content))
+        copy.file_attacher.attach(file[:file]) if file[:file]
+        copy.save!
+      end
       tool
     end
 

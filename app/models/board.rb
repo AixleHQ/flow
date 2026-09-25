@@ -30,7 +30,7 @@ class Board < ApplicationRecord
       board = create!(project: project, name: name)
       columns.each_with_index do |col_def, index|
         col_def = col_def.to_h.symbolize_keys
-        board.board_columns.create!(name: col_def[:name], position: col_def[:position] || index + 1, purpose: col_def[:purpose])
+        board.board_columns.create!(name: col_def[:name], position: col_def[:position] || (index + 1), purpose: col_def[:purpose])
       end
       board
     end

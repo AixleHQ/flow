@@ -124,6 +124,23 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert(errors_for(files: files.merge("skills/house-style/SKILL.md" => "no frontmatter")).any? { |e| e.include?("frontmatter") })
   end
 
+  test "a connector must name a target in its snapshot, with its package release pinned" do
+    files = Templates::Package.from_directory(FIXTURE).files
+    manifest = JSON.parse(files["snapshots/connectors/remote.json"])
+    manifest["targets"] << { "id" => "package:npm:x", "kind" => "package", "supported" => true, "version_pinned" => false }
+    unpinned = files.merge("snapshots/connectors/remote.json" => JSON.generate(manifest))
+    retarget = lambda do |target|
+      lambda do |d|
+        server = d["mcp_servers"].first["connector"]
+        server["target"] = target
+        server["manifest"]["sha256"] = Digest::SHA256.hexdigest(unpinned["snapshots/connectors/remote.json"])
+      end
+    end
+
+    assert_includes errors_for(files: unpinned, &retarget.call("nowhere")), "connector linear: target nowhere is not in its manifest"
+    assert(errors_for(files: unpinned, &retarget.call("package:npm:x")).any? { |e| e.include?("release is not pinned") })
+  end
+
   test "a referenced file missing from the package is refused" do
     files = Templates::Package.from_directory(FIXTURE).files.except("assets/coding-standards.md")
     assert_includes errors_for(files: files), "file assets/coding-standards.md is referenced but missing from the package"

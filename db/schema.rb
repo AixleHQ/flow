@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_25_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_25_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -295,6 +295,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_120000) do
     t.index ["state", "period_start"], name: "index_capacity_meter_reports_on_state_and_period_start"
   end
 
+  create_table "catalog_namespaces", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "display_name", null: false
+    t.string "name", null: false
+    t.string "owners", default: [], null: false, array: true
+    t.datetime "synced_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "url"
+    t.boolean "verified", default: false, null: false
+    t.index ["name"], name: "index_catalog_namespaces_on_name", unique: true
+  end
+
   create_table "catalog_search_queries", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "last_searched_at"
@@ -331,6 +343,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_120000) do
     t.index ["registry_synced_at"], name: "index_catalog_skills_on_registry_synced_at"
     t.index ["search_vector"], name: "index_catalog_skills_on_search_vector", using: :gin
     t.index ["source"], name: "index_catalog_skills_on_source"
+  end
+
+  create_table "catalog_templates", force: :cascade do |t|
+    t.string "categories", default: [], null: false, array: true
+    t.string "commit_sha", null: false
+    t.datetime "created_at", null: false
+    t.jsonb "definition", default: {}, null: false
+    t.jsonb "files", default: {}, null: false
+    t.integer "format_version", null: false
+    t.integer "install_count", default: 0, null: false
+    t.boolean "installable", default: true, null: false
+    t.string "kind", null: false
+    t.string "name", null: false
+    t.string "namespace", null: false
+    t.string "package_digest", null: false
+    t.text "readme"
+    t.text "revocation_reason"
+    t.datetime "revoked_at"
+    t.text "setup_markdown"
+    t.string "slug", null: false
+    t.text "summary"
+    t.datetime "synced_at", null: false
+    t.datetime "updated_at", null: false
+    t.integer "version", null: false
+    t.index ["kind"], name: "index_catalog_templates_on_kind"
+    t.index ["namespace", "slug"], name: "index_catalog_templates_on_namespace_and_slug", unique: true
   end
 
   create_table "column_transitions", force: :cascade do |t|
@@ -1102,6 +1140,36 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_120000) do
     t.index ["board_task_id"], name: "index_task_comments_on_board_task_id"
   end
 
+  create_table "template_installs", force: :cascade do |t|
+    t.string "commit_sha", null: false
+    t.datetime "created_at", null: false
+    t.string "idempotency_key", null: false
+    t.bigint "installed_by_id"
+    t.string "namespace", null: false
+    t.string "package_digest", null: false
+    t.bigint "project_id", null: false
+    t.string "slug", null: false
+    t.datetime "updated_at", null: false
+    t.integer "version", null: false
+    t.index ["installed_by_id", "idempotency_key"], name: "index_template_installs_on_installed_by_id_and_idempotency_key", unique: true
+    t.index ["installed_by_id"], name: "index_template_installs_on_installed_by_id"
+    t.index ["namespace", "slug"], name: "index_template_installs_on_namespace_and_slug"
+    t.index ["project_id"], name: "index_template_installs_on_project_id"
+  end
+
+  create_table "template_setup_items", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.jsonb "detail", default: {}, null: false
+    t.string "kind", null: false
+    t.integer "position", default: 0, null: false
+    t.string "ref", null: false
+    t.string "status", default: "pending", null: false
+    t.bigint "template_install_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["template_install_id", "ref"], name: "index_template_setup_items_on_template_install_id_and_ref", unique: true
+    t.index ["template_install_id"], name: "index_template_setup_items_on_template_install_id"
+  end
+
   create_table "terminal_sessions", force: :cascade do |t|
     t.string "agent_type"
     t.string "artifacts_path"
@@ -1560,6 +1628,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_120000) do
   add_foreign_key "task_assets", "users", column: "shared_by_id", on_delete: :nullify
   add_foreign_key "task_comments", "board_tasks", on_delete: :cascade
   add_foreign_key "task_comments", "users", column: "author_id", on_delete: :nullify
+  add_foreign_key "template_installs", "projects", on_delete: :cascade
+  add_foreign_key "template_installs", "users", column: "installed_by_id", on_delete: :nullify
+  add_foreign_key "template_setup_items", "template_installs", on_delete: :cascade
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "companies"
   add_foreign_key "terminal_sessions", "projects", on_delete: :nullify

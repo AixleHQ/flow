@@ -206,8 +206,12 @@ module Templates
         path = entry["path"] || entry.dig("snapshot", "path")
         content = @package.file(path).to_s.dup.force_encoding(Encoding::UTF_8)
         markdown = Skills::SkillMarkdown.parse(content)
+        # The skill directory as reviewed. A skill with no `files` would make the
+        # session run `npx skills add`, i.e. install whatever upstream holds today.
+        skill_files = { "SKILL.md" => markdown.content }
+        Array(entry["files"]).each { |file| skill_files[file["path"]] = @package.file(file["from"]).to_s.dup.force_encoding(Encoding::UTF_8) }
         attrs = { name: install_name("skills", entry["key"]), title: markdown.name || entry["key"],
-                  description: markdown.description, content: markdown.content }
+                  description: markdown.description, content: markdown.content, files: skill_files }
         if entry["registry"]
           source = entry["registry"].split("@").first
           attrs.merge!(origin: "registry", package: entry["registry"], source: source,
