@@ -294,6 +294,33 @@ describe('Profile/Show', () => {
     );
   });
 
+  it('leaving a company where you own projects asks who takes them over first', async () => {
+    const profile = buildProfile();
+    const props = {
+      ...baseProps(profile),
+      projectHandovers: [
+        {
+          membershipId: 5,
+          projects: [{ id: 10, name: 'Gateway', ownerId: profile.id }],
+          candidates: [{ id: 99, name: 'Grace Hopper', email: 'grace@example.com', companyAdmin: true }],
+          heirIds: [99],
+        },
+      ],
+    };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Leave Acme Robotics' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('You own 1 project here. Choose who takes it over first.')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Transfer and leave' }));
+
+    expect(router.delete).toHaveBeenCalledWith(
+      companyMembershipPath(5),
+      expect.objectContaining({ data: { handover: [{ projectId: 10, userId: 99 }] } }),
+    );
+  });
+
   it('does NOT leave a company when the confirm modal is cancelled', async () => {
     const profile = buildProfile();
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });

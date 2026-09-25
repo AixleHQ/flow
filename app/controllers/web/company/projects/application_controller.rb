@@ -64,11 +64,8 @@ class Web::Company::Projects::ApplicationController < Web::Company::ApplicationC
     return { can_transfer: false, candidates: [] } unless can_transfer
 
     collaborator_ids = current_project.project_collaborators.pluck(:user_id).to_set
-    candidates = current_project.ownership_candidates.order(:name)
-                                .pluck(:id, :name, :email, "company_memberships.role")
-                                .map do |id, name, email, role|
-      { id: id, name: name, email: email, company_admin: role == "admin", collaborator: collaborator_ids.include?(id) }
-    end
+    candidates = ProjectHandover.candidate_rows(current_project.ownership_candidates)
+                                .map { |c| c.merge(collaborator: collaborator_ids.include?(c[:id])) }
 
     { can_transfer: true, candidates: candidates }
   end

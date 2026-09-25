@@ -126,16 +126,15 @@ class Project < ApplicationRecord
     owner_id == user.id
   end
 
-  # A viewer is read-only and must never own a project, so only employees and
-  # admins qualify.
   def ownership_candidates
-    company.users.where(company_memberships: { role: %w[employee admin] }).where.not(id: owner_id)
+    company.ownership_candidates.where.not(id: owner_id)
   end
 
   # Hands the project to another member. The previous owner stays on as a
-  # collaborator; a collaborator row for the new owner goes, since
-  # ProjectCollaborator refuses a row for the project's own owner.
-  def transfer_ownership_to(new_owner)
+  # collaborator unless they are leaving the company; a collaborator row for
+  # the new owner goes, since ProjectCollaborator refuses a row for the
+  # project's own owner.
+  def transfer_ownership_to(new_owner, keep_previous_owner: true)
     transaction do
       lock!
       unless new_owner && ownership_candidates.exists?(id: new_owner.id)
@@ -146,7 +145,7 @@ class Project < ApplicationRecord
       previous_owner = owner
       project_collaborators.where(user: new_owner).destroy_all
       update!(owner: new_owner)
-      project_collaborators.create!(user: previous_owner)
+      project_collaborators.create!(user: previous_owner) if keep_previous_owner
     end
     errors.empty?
   rescue ActiveRecord::RecordInvalid => e

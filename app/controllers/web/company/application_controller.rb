@@ -49,6 +49,11 @@ class Web::Company::ApplicationController < Web::ApplicationController
     user_not_authorized if membership.nil? || membership.viewer?
   end
 
+  # `[{ project_id:, user_id: }]` from the handover dialog, as `{ project_id => user_id }`.
+  def handover_params
+    params.permit(handover: %i[project_id user_id]).fetch(:handover, []).to_h { |h| [ h[:project_id], h[:user_id] ] }
+  end
+
   def user_not_authorized
     redirect_back fallback_location: root_path, alert: "You are not authorized to perform this action."
   end

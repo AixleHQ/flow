@@ -39,6 +39,8 @@ import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
 import { AwsConnectionModal } from 'shared/resources/cloud-connections/AwsConnectionModal';
+import type { ProjectHandover } from 'shared/resources/members/projectHandover';
+import { ProjectHandoverModal } from 'shared/resources/members/ProjectHandoverModal';
 import { UsageLimitsCard, type UsageLimitsEntry } from 'shared/resources/usage/UsageLimitsCard';
 import {
   apiV1CloudAwsConnectionPath,
@@ -142,6 +144,8 @@ interface Props {
   // Memberships still in the `invited` state — profile.memberships is active-only.
   // Optional: only ProfileController#show sends it.
   pendingInvitations?: Membership[];
+  // Companies where leaving would orphan projects this user owns.
+  projectHandovers?: (ProjectHandover & { membershipId: number })[];
   languageOptions: string[];
   // Live browser sign-ins other than this one.
   otherSessionsCount?: number;
@@ -354,11 +358,25 @@ function SessionsSection({ otherSessionsCount }: { otherSessionsCount: number })
   );
 }
 
-function CompaniesSection({ profile, pendingInvitations }: { profile: CurrentUser; pendingInvitations: Membership[] }) {
+function CompaniesSection({
+  profile,
+  pendingInvitations,
+  projectHandovers,
+}: {
+  profile: CurrentUser;
+  pendingInvitations: Membership[];
+  projectHandovers: (ProjectHandover & { membershipId: number })[];
+}) {
   const memberships = profile.memberships ?? [];
   const [leavingId, setLeavingId] = useState<number | null>(null);
+  const [handoverFor, setHandoverFor] = useState<Membership | null>(null);
+  const handoverForCompany = handoverFor && projectHandovers.find((h) => h.membershipId === handoverFor.id);
 
   const leaveCompany = (membership: Membership) => {
+    if (projectHandovers.some((h) => h.membershipId === membership.id)) {
+      setHandoverFor(membership);
+      return;
+    }
     modals.openConfirmModal({
       title: 'Leave company',
       children: (
@@ -421,6 +439,33 @@ function CompaniesSection({ profile, pendingInvitations }: { profile: CurrentUse
             ))}
           </Stack>
         </>
+      )}
+
+      {handoverFor && handoverForCompany && (
+        <ProjectHandoverModal
+          title="Leave company"
+          intro={
+            <Text size="sm">
+              Leave {handoverFor.company.name}? You will lose access to its projects and data. You will need a new
+              invitation to rejoin.
+            </Text>
+          }
+          confirmLabel="Transfer and leave"
+          subject="You"
+          leavingUserId={profile.id}
+          handover={handoverForCompany}
+          submitting={leavingId === handoverFor.id}
+          onClose={() => setHandoverFor(null)}
+          onConfirm={(handover) => {
+            setLeavingId(handoverFor.id);
+            router.delete(companyMembershipPath(handoverFor.id), {
+              data: { handover },
+              preserveScroll: true,
+              onSuccess: () => setHandoverFor(null),
+              onFinish: () => setLeavingId(null),
+            });
+          }}
+        />
       )}
 
       <Stack gap="sm">
@@ -1078,6 +1123,7 @@ function AgentRuntimesSection({ profile }: { profile: CurrentUser }) {
 function ProfilePage({
   profile,
   pendingInvitations,
+  projectHandovers,
   otherSessionsCount,
   agentModels,
   cableStream,
@@ -1248,7 +1294,11 @@ function ProfilePage({
 
           {/* Side column: companies, agent defaults. */}
           <Box className={classes.colSide}>
-            <CompaniesSection profile={profile} pendingInvitations={pendingInvitations ?? []} />
+            <CompaniesSection
+              profile={profile}
+              pendingInvitations={pendingInvitations ?? []}
+              projectHandovers={projectHandovers ?? []}
+            />
             <AgentDefaultsSection profile={profile} agentModels={agentModels} />
             <SessionsSection otherSessionsCount={otherSessionsCount ?? 0} />
           </Box>

@@ -10,9 +10,8 @@ class Web::Company::MembershipsController < Web::Company::ApplicationController
     # Revoke is legal from invited/active/suspended — a SUSPENDED member must
     # still be able to leave (`.active.find` would 404 them forever).
     membership = current_user.company_memberships.where.not(state: "revoked").find(params[:id])
-    membership.aasm(:state).fire(:revoke) if membership.may_revoke?
 
-    if membership.revoked? && membership.save
+    if membership.revoke_with_handover(handover_params)
       reset_membership_memoization
       redirect_after_leave(membership)
     else

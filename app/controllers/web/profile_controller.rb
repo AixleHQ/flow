@@ -16,6 +16,7 @@ class Web::ProfileController < Web::ApplicationController
                                        .invited
                                        .includes(:company)
                                        .map { |m| MembershipResource.new(m).to_h },
+      project_handovers: project_handovers,
       language_options: CompanyMembership::AGENT_LANGUAGES,
       other_sessions_count: current_user.user_sessions.live.where.not(id: current_user_session&.id).count,
       agent_models: current_membership&.agent_models_for_props || [],
@@ -171,6 +172,15 @@ class Web::ProfileController < Web::ApplicationController
   end
 
   private
+
+  # Leaving a company you own projects in hands them over first.
+  def project_handovers
+    current_user.company_memberships.where.not(state: "revoked")
+                .where(company_id: current_user.owned_projects.select(:company_id))
+                .includes(:company).map do |m|
+      { membership_id: m.id, **ProjectHandover.for_company(m.company, owner: current_user) }
+    end
+  end
 
   def require_auth
     redirect_to login_path unless signed_in?
