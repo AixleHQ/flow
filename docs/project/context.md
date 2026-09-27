@@ -285,7 +285,7 @@ When adding a new strategy:
 When adding a new agent runtime:
 1. Create adapter in `app/services/agents/`
 2. Implement: `config_path`, `home_dir`, `auth_required_keys`, `generate_config`, `extract_credentials`
-3. Register it in `AgentCredentialsService::ADAPTERS`, `CompanyMembership::AVAILABLE_AGENTS`, and `ContainerStrategies::AgentBaseStrategy` (`VALID_AGENT_TYPES`, `AUTH_COMMANDS`, `SESSION_COMMANDS`)
+3. Register it in `AgentCredentialsService::ADAPTERS`, `CompanyMembership::AVAILABLE_AGENTS`, and `ContainerStrategies::AgentBaseStrategy` (`AUTH_COMMANDS`, `SESSION_COMMANDS`). `AVAILABLE_AGENTS` is the one list of runtimes — steps, sessions and the container strategy all validate against it
 4. Add its image: `docker/<runtime>/`, the `build-agents` target in the `Makefile`, `.github/workflows/images.yml`
 5. Document it in `docs/user-guide/runtimes.md` (and the portal copy) — `test/docs/documentation_drift_test.rb` fails until every runtime is there
 

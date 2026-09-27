@@ -9,8 +9,6 @@ module ContainerStrategies
   #   - ttyd_command  — command for the ttyd terminal
   #
   class AgentBaseStrategy < BaseStrategy
-    VALID_AGENT_TYPES = %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok kiro_cli].freeze
-
     AUTH_COMMANDS = {
       "claude_code" => "claude",
       "cursor_cli" => "agent login",
@@ -250,7 +248,7 @@ module ContainerStrategies
       raise ArgumentError, "session_id is required" unless input[:session_id].present?
       raise ArgumentError, "route_token is required" unless input[:route_token].present?
 
-      unless VALID_AGENT_TYPES.include?(input[:agent_type])
+      unless CompanyMembership::AVAILABLE_AGENTS.include?(input[:agent_type])
         raise ArgumentError, "Invalid agent_type: #{input[:agent_type]}"
       end
     end
