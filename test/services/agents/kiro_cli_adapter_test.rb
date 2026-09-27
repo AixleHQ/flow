@@ -31,7 +31,7 @@ module Agents
     # A real SQLite database in the CLI's own layout, for the paths that actually read
     # it (the bearer, the profile ARN, and the API calls both feed). The byte fixtures
     # above are enough for the format checks; this is not.
-    def real_state_credentials
+    def real_state_credentials(profile: true)
       Tempfile.create([ "kiro-fixture", ".sqlite3" ]) do |file|
         db = SQLite3::Database.new(file.path)
         db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
@@ -41,9 +41,11 @@ module Agents
         db.execute("INSERT INTO auth_kv VALUES (?, ?)", [ "kirocli:odic:token",
                                                           { "access_token" => "tok-abc",
                                                             "refresh_token" => "ref-abc" }.to_json ])
-        db.execute("INSERT INTO state VALUES (?, ?)", [ Agents::KiroCliAdapter::PROFILE_STATE_KEY,
-                                                        { "arn" => "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD",
-                                                          "profile_name" => "KiroProfile-us-east-1" }.to_json ])
+        if profile
+          db.execute("INSERT INTO state VALUES (?, ?)", [ Agents::KiroCliAdapter::PROFILE_STATE_KEY,
+                                                          { "arn" => "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD",
+                                                            "profile_name" => "KiroProfile-us-east-1" }.to_json ])
+        end
         db.close
 
         { "state_b64" => Base64.strict_encode64(File.binread(file.path)) }
@@ -680,6 +682,34 @@ module Agents
 
       assert_equal "tok-abc", record["access_token"]
       assert_equal "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD", record["profile_arn"]
+    end
+
+    def stub_available_profiles(*arns)
+      stub_request(:post, "https://management.us-east-1.kiro.dev/")
+        .with(headers: { "X-Amz-Target" => Agents::KiroCliAdapter::LIST_PROFILES_TARGET })
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { "profiles" => arns.map { |arn| { "arn" => arn, "profileName" => "KiroProfile" } } }.to_json)
+    end
+
+    test "a login that stored no profile reads usage with the one its account has" do
+      stub_available_profiles("arn:aws:codewhisperer:us-east-1:5678:profile/IDC")
+      stub_usage_limits(current_usage: 3503.2)
+
+      result = @adapter.fetch_subscription_usage(real_state_credentials(profile: false))
+
+      assert_equal "ok", result[:status]
+      assert_requested(:post, "https://management.us-east-1.kiro.dev/",
+                       headers: { "X-Amz-Target" => Agents::KiroCliAdapter::USAGE_LIMITS_TARGET }) do |request|
+        JSON.parse(request.body)["profileArn"] == "arn:aws:codewhisperer:us-east-1:5678:profile/IDC"
+      end
+    end
+
+    test "a login that stored no profile does not guess between several" do
+      stub_available_profiles("arn:aws:codewhisperer:us-east-1:1:profile/A", "arn:aws:codewhisperer:us-east-1:2:profile/B")
+      usage = stub_usage_limits(current_usage: 1.0)
+
+      assert_equal({ status: "unavailable" }, @adapter.fetch_subscription_usage(real_state_credentials(profile: false)))
+      assert_not_requested usage
     end
 
     # == Token refresh ==
