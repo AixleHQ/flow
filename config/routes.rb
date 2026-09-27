@@ -409,10 +409,15 @@ Rails.application.routes.draw do
         post :resend, on: :member
       end
       resource :settings, only: %i[show update], controller: "settings"
+      # The second tab of company settings: everything that decides how a person
+      # gets into this workspace. It reads as settings, so it lives under them —
+      # but its controls apply on the spot, which is why it is a page of its own
+      # rather than another card inside the settings form's single Save.
+      get "settings/access", to: "auth_policies#index", as: :settings_access
       # Which sign-in methods this company accepts (AD-4). The id is an
       # IdentityProvider id: a deployment-scoped provider or one of this
       # company's own connections.
-      resources :auth_policies, only: %i[index update]
+      resources :auth_policies, only: :update
       # A company's own OIDC connections. Created disabled; enabling them goes
       # through the prove-before-enforce guard on auth_policies#update.
       resources :identity_providers, only: %i[create update destroy]

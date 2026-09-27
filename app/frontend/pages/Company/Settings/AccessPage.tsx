@@ -1,5 +1,5 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { Alert, Badge, Button, Group, Paper, Stack, Switch, Text, TextInput, Title, Tooltip } from '@mantine/core';
+import { Alert, Badge, Box, Button, Group, Paper, Stack, Switch, Text, TextInput, Title, Tooltip } from '@mantine/core';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
@@ -8,8 +8,11 @@ import {
   companyIdentityProviderPath,
   companyIdentityProvidersPath,
   companyScimConfigurationPath,
+  companySettingsPath,
   oidcStartPath,
 } from 'shared/routes';
+
+import { SettingsTabs } from './SettingsTabs';
 
 interface Provider {
   id: number;
@@ -30,9 +33,16 @@ interface ScimState {
   endpoint?: string;
 }
 
+interface JoiningState {
+  emailDomain: string | null;
+  autoAcceptUsers: boolean;
+}
+
 interface PageProps {
   providers: Provider[];
   scim?: ScimState;
+  joining?: JoiningState;
+  company?: { name: string };
   scimToken?: string | null;
   permissions?: { isAdmin?: boolean };
   errors?: { base?: string };
@@ -102,26 +112,35 @@ function ConnectionForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-export default function AuthPoliciesIndex({ providers }: PageProps) {
+export default function AccessPage({ providers }: PageProps) {
   const page = usePage<PageProps>();
   const isAdmin = page.props.permissions?.isAdmin ?? false;
   const refusal = page.props.errors?.base;
+  const joining = page.props.joining;
 
   const toggle = (provider: Provider, enabled: boolean) => {
     router.put(companyAuthPolicyPath(provider.id), { enabled });
   };
 
+  // Saved on the spot, like every other control on this tab. The general tab's
+  // deferred Save does not reach here, and a lone Save button for one switch
+  // would be the only thing on the page that behaved differently.
+  const setAutoAccept = (enabled: boolean) => {
+    router.patch(companySettingsPath(), { company: { auto_accept_users: enabled } }, { preserveScroll: true });
+  };
+
   return (
     <AuthLayout>
-      <Stack gap="md">
-        <Head title="Sign-in methods" />
-        <Title order={2}>Sign-in methods</Title>
-        <Text size="sm" c="dimmed">
-          Which methods this workspace accepts. Turning one off never removes anyone&apos;s credential — it stops that
-          method letting someone into this workspace.
-        </Text>
+      <Head title="Access — company settings" />
+      <SettingsTabs active="access" companyName={page.props.company?.name ?? 'this workspace'}>
+        <Stack gap="md" maw={720}>
+          <Title order={4}>Sign-in methods</Title>
+          <Text size="sm" c="dimmed">
+            Which methods this workspace accepts. Turning one off never removes anyone&apos;s credential — it stops that
+            method letting someone into this workspace.
+          </Text>
 
-        {refusal && <Alert color="red">{refusal}</Alert>}
+          {refusal && <Alert color="red">{refusal}</Alert>}
 
         <Paper p="md" radius="md" withBorder>
           <Stack gap="sm">
@@ -230,7 +249,36 @@ export default function AuthPoliciesIndex({ providers }: PageProps) {
             </Stack>
           </Paper>
         )}
-      </Stack>
+
+        {joining && (
+          <Paper p="md" radius="md" withBorder>
+            <Stack gap="sm">
+              <Title order={4}>Joining</Title>
+              <Box>
+                <Text fz="sm" fw={500}>
+                  Email domain
+                </Text>
+                <Text fz="sm" c={joining.emailDomain ? undefined : 'dimmed'} mt={4}>
+                  {joining.emailDomain ?? 'Not set'}
+                </Text>
+              </Box>
+              <Switch
+                label="Accept new people automatically"
+                description={
+                  joining.emailDomain
+                    ? `Anyone signing in with an @${joining.emailDomain} address joins without an invitation.`
+                    : 'Needs an email domain — without one there is nothing to match a new person against, so everyone joins by invitation.'
+                }
+                disabled={!isAdmin || !joining.emailDomain}
+                checked={joining.autoAcceptUsers}
+                onChange={(event) => setAutoAccept(event.currentTarget.checked)}
+                aria-label="Accept new people automatically"
+              />
+            </Stack>
+          </Paper>
+        )}
+        </Stack>
+      </SettingsTabs>
     </AuthLayout>
   );
 }

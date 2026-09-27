@@ -33,7 +33,7 @@ given an account that belongs nowhere.
 
 ## How a workspace decides what it accepts
 
-**Sign-in methods** under Admin lists every method this workspace takes. Turning
+**Settings → Access** lists every method this workspace takes. Turning
 one off never deletes anyone's credential — a passkey belongs to the person, not
 to you — it only stops that method letting someone **into this workspace**.
 
@@ -48,7 +48,7 @@ Two guards make the screen safe to use:
 
 ## Connecting your own identity provider
 
-Admins can point a workspace at their own OIDC provider. **Sign-in methods →
+Admins can point a workspace at their own OIDC provider. **Settings → Access →
 Connect your own identity provider** wants four things:
 
 | Field | Where it comes from |
@@ -129,8 +129,8 @@ follow links before you do.
 
 ## Directory sync (SCIM)
 
-A workspace can let an identity provider add and remove its members. **Sign-in
-methods → Directory sync** generates a token, shown once, and names the endpoint
+A workspace can let an identity provider add and remove its members. **Settings
+→ Access → Directory sync** generates a token, shown once, and names the endpoint
 to point your directory at.
 
 What it does and does not do:

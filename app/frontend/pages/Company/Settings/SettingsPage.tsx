@@ -17,18 +17,19 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
-import { IconAdjustments, IconLock, IconPalette, IconUpload, IconUsers } from '@tabler/icons-react';
+import { IconAdjustments, IconLock, IconPalette, IconUpload } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useState } from 'react';
 import { z } from 'zod';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { SettingsTabs } from './SettingsTabs';
+
 const schema = z.object({
   displayName: z.string().max(100).optional(),
   primaryColor: z.string().max(32).optional(),
   secondaryColor: z.string().max(32).optional(),
-  autoAcceptUsers: z.boolean(),
   logo: z.instanceof(File).nullable(),
   removeLogo: z.boolean(),
   // Empty means no limit at all, which is also unbilled. The arithmetic behind a
@@ -42,11 +43,9 @@ const schema = z.object({
 interface CompanyProps {
   name: string;
   displayName: string | null;
-  emailDomain: string | null;
   logoUrl: string | null;
   primaryColor: string;
   secondaryColor: string;
-  autoAcceptUsers: boolean;
 }
 
 interface CapacityAllocation {
@@ -81,7 +80,6 @@ const SettingsPage = () => {
       displayName: company.displayName || '',
       primaryColor: company.primaryColor,
       secondaryColor: company.secondaryColor,
-      autoAcceptUsers: company.autoAcceptUsers,
       logo: null as File | null,
       removeLogo: false,
       capacity: capacity.maxSessions != null ? String(capacity.maxSessions) : '',
@@ -114,7 +112,6 @@ const SettingsPage = () => {
         displayName: values.displayName.trim(),
         primaryColor: values.primaryColor,
         secondaryColor: values.secondaryColor,
-        autoAcceptUsers: values.autoAcceptUsers,
         removeLogo: values.removeLogo,
       },
       // Sent only when this person may set it: the key's presence is what tells
@@ -142,14 +139,7 @@ const SettingsPage = () => {
   return (
     <AuthLayout>
       <Head title={`Settings — ${company.name}`} />
-      <Box px="lg" py="md">
-        <Text component="p" fz="xl" fw={600} m={0}>
-          Company Settings
-        </Text>
-        <Text component="p" c="dimmed" fz="sm" mt={4} mb="lg">
-          Branding, who joins {company.name}, and how much it may run at once.
-        </Text>
-
+      <SettingsTabs active="general" companyName={company.name}>
         <form onSubmit={form.onSubmit(handleSubmit)}>
           <Stack gap="lg" maw={720}>
             <Card withBorder padding="lg">
@@ -217,34 +207,6 @@ const SettingsPage = () => {
 
             <Card withBorder padding="lg">
               <Group gap="xs" mb="md">
-                <IconUsers size={18} />
-                <Text fw={600}>Joining</Text>
-              </Group>
-              <Stack gap="md">
-                <Box>
-                  <Text fz="sm" fw={500}>
-                    Email domain
-                  </Text>
-                  <Text fz="sm" c={company.emailDomain ? undefined : 'dimmed'} mt={4}>
-                    {company.emailDomain ?? 'Not set'}
-                  </Text>
-                </Box>
-                <Switch
-                  label="Accept new people automatically"
-                  description={
-                    company.emailDomain
-                      ? `Anyone signing in with an @${company.emailDomain} address joins without an invitation.`
-                      : 'Needs an email domain — without one there is nothing to match a new person against, so everyone joins by invitation.'
-                  }
-                  disabled={!canManage || !company.emailDomain}
-                  checked={form.values.autoAcceptUsers}
-                  onChange={(event) => form.setFieldValue('autoAcceptUsers', event.currentTarget.checked)}
-                />
-              </Stack>
-            </Card>
-
-            <Card withBorder padding="lg">
-              <Group gap="xs" mb="md">
                 <IconAdjustments size={18} />
                 <Text fw={600}>Session capacity</Text>
               </Group>
@@ -306,7 +268,7 @@ const SettingsPage = () => {
             )}
           </Stack>
         </form>
-      </Box>
+      </SettingsTabs>
     </AuthLayout>
   );
 };

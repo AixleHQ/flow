@@ -21,7 +21,6 @@ import {
   IconRobot,
   IconSettings,
   IconTemplate,
-  IconShieldLock,
   IconSparkles,
   IconStar,
   IconStarFilled,
@@ -39,7 +38,6 @@ import { CreateProjectModal } from 'shared/components/CreateProjectModal';
 import { getInitials } from 'shared/lib/getInitials';
 import {
   companyAssetsPath,
-  companyAuthPoliciesPath,
   companyMembersPath,
   companySettingsPath,
   companyProjectAgentsPath,
@@ -193,13 +191,8 @@ const companyNavGroups: NavGroup[] = [
     items: [
       { label: 'Assets', icon: <IconFiles size={18} />, path: companyAssetsPath(), adminOnly: true },
       { label: 'Members', icon: <IconUsers size={18} />, path: companyMembersPath() },
+      // Sign-in methods moved into Settings as its Access tab; one entry now.
       { label: 'Settings', icon: <IconSettings size={18} />, path: companySettingsPath() },
-      {
-        label: 'Sign-in methods',
-        icon: <IconShieldLock size={18} />,
-        path: companyAuthPoliciesPath(),
-        adminOnly: true,
-      },
     ],
   },
 ];
