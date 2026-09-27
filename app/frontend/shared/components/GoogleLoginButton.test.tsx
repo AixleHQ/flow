@@ -9,7 +9,7 @@ describe('GoogleLoginButton', () => {
   it('renders a POST form targeting the Google auth path (OmniAuth request phase must not accept GET, see CVE-2015-9284)', () => {
     renderPage(<GoogleLoginButton />);
 
-    const button = screen.getByRole('button', { name: 'Sign in with Google' });
+    const button = screen.getByRole('button', { name: 'Google' });
     expect(button).toHaveAttribute('type', 'submit');
     const form = button.closest('form');
     expect(form).toHaveAttribute('method', 'post');
@@ -19,21 +19,21 @@ describe('GoogleLoginButton', () => {
   it('forwards extra Button props (e.g. className) onto the rendered element', () => {
     renderPage(<GoogleLoginButton className="custom-google-cta" />);
 
-    const button = screen.getByRole('button', { name: 'Sign in with Google' });
+    const button = screen.getByRole('button', { name: 'Google' });
     expect(button).toHaveClass('custom-google-cta');
   });
 
   it('shows the loading state when the loading prop is forwarded', () => {
     renderPage(<GoogleLoginButton loading />);
 
-    const button = screen.getByRole('button', { name: 'Sign in with Google' });
+    const button = screen.getByRole('button', { name: 'Google' });
     expect(button).toHaveAttribute('data-loading', 'true');
   });
 
   it('honours a disabled prop forwarded to the underlying Button', () => {
     renderPage(<GoogleLoginButton disabled />);
 
-    const button = screen.getByRole('button', { name: 'Sign in with Google' });
+    const button = screen.getByRole('button', { name: 'Google' });
     expect(button).toHaveAttribute('data-disabled', 'true');
   });
 });

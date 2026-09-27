@@ -1,14 +1,13 @@
 import { router } from '@inertiajs/react';
-import { Button, Stack } from '@mantine/core';
+import { Stack } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { IconKey, IconMail } from '@tabler/icons-react';
 import { useState } from 'react';
 
+import { AuthMethodButton } from 'shared/components/AuthMethodButton';
+import { getCsrfToken } from 'shared/lib/apiFetch';
 import { getCredential, isSupported } from 'shared/lib/webauthn';
 import { passkeyLoginOptionsPath, passkeyLoginPath, requestMagicLinkPath } from 'shared/routes';
-
-function getCsrfToken(): string {
-  return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
-}
 
 async function postJson(url: string, body: unknown) {
   const response = await fetch(url, {
@@ -55,19 +54,18 @@ export const PasswordlessOptions = ({ email, methods }: Props) => {
   return (
     <Stack gap="sm">
       {passkeyOffered && (
-        <Button variant="default" fullWidth loading={busy} onClick={signInWithPasskey}>
-          Sign in with a passkey
-        </Button>
+        <AuthMethodButton icon={<IconKey size={18} />} loading={busy} onClick={signInWithPasskey}>
+          Passkey
+        </AuthMethodButton>
       )}
       {magicLinkOffered && (
-        <Button
-          variant="subtle"
-          fullWidth
+        <AuthMethodButton
+          icon={<IconMail size={18} />}
           disabled={!email}
           onClick={() => router.post(requestMagicLinkPath(), { email })}
         >
-          Email me a sign-in link
-        </Button>
+          Email me a link
+        </AuthMethodButton>
       )}
     </Stack>
   );

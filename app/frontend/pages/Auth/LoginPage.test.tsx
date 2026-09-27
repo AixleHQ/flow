@@ -137,33 +137,33 @@ describe('LoginPage', () => {
       const form = makeFormStub({ email: '', password: '', rememberMe: false });
       renderPage(<LoginPage />, { props: methodProps, form });
 
-      expect(screen.getByRole('button', { name: 'Sign in with your company SSO' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Email me a sign-in link' })).toBeDisabled();
-      expect(screen.getByText(/start from your address/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Company SSO' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Email me a link' })).toBeDisabled();
+      expect(screen.getByText(/use the address above/)).toBeInTheDocument();
     });
 
     it('leaves Google alone — it runs its own account picker', () => {
       const form = makeFormStub({ email: '', password: '', rememberMe: false });
       renderPage(<LoginPage />, { props: methodProps, form });
 
-      expect(screen.getByRole('button', { name: /Sign in with Google/ })).toBeEnabled();
+      expect(screen.getByRole('button', { name: /Google/ })).toBeEnabled();
     });
 
     it('activates them and drops the explanation once an address is present', () => {
       const form = makeFormStub({ email: 'person@client.test', password: '', rememberMe: false });
       renderPage(<LoginPage />, { props: methodProps, form });
 
-      expect(screen.getByRole('button', { name: 'Sign in with your company SSO' })).toBeEnabled();
-      expect(screen.getByRole('button', { name: 'Email me a sign-in link' })).toBeEnabled();
-      expect(screen.queryByText(/start from your address/)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Company SSO' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Email me a link' })).toBeEnabled();
+      expect(screen.queryByText(/use the address above/)).not.toBeInTheDocument();
     });
 
     it('names only company SSO when this installation offers no emailed link', () => {
       const form = makeFormStub({ email: '', password: '', rememberMe: false });
       renderPage(<LoginPage />, { props: { oauthProviders: ['google'], passwordlessMethods: ['passkey'] }, form });
 
-      expect(screen.getByText(/Company SSO starts from your address/)).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Email me a sign-in link' })).not.toBeInTheDocument();
+      expect(screen.getByText(/Company SSO uses the address above/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Email me a link' })).not.toBeInTheDocument();
     });
   });
 
