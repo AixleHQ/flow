@@ -18,7 +18,7 @@ class AixleSystemReferenceTest < ActiveSupport::TestCase
 
   test "documents every workflow config key, runtime, gate type, trigger kind, preset and integration" do
     facts = Workflow::ALLOWED_CONFIG_KEYS +
-            ContainerStrategies::AgentBaseStrategy::VALID_AGENT_TYPES +
+            CompanyMembership::AVAILABLE_AGENTS +
             Step::SUPPORTED_AGENT_RUNTIMES +
             Gate.gate_type.values +
             PersonalTools::WorkflowTriggerSupport::KINDS +

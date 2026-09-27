@@ -85,6 +85,21 @@ class StepTest < ActiveSupport::TestCase
     assert step.valid?
   end
 
+  test "a step can be pinned to every runtime a user can connect" do
+    CompanyMembership::AVAILABLE_AGENTS.each do |runtime|
+      step = build(:step, workflow: @workflow, position: 1, required_agent_runtime: runtime)
+
+      assert step.valid?, "#{runtime}: #{step.errors.full_messages.to_sentence}"
+    end
+  end
+
+  test "an unknown runtime is rejected" do
+    step = build(:step, workflow: @workflow, position: 1, required_agent_runtime: "vim")
+
+    assert_not step.valid?
+    assert step.errors.added?(:required_agent_runtime, :inclusion, value: "vim")
+  end
+
   test "nested sub_steps via accepts_nested_attributes" do
     step = create(:step, workflow: @workflow, position: 1, sub_steps_attributes: [
       { name: "Sub 1", position: 1 },

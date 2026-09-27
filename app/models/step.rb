@@ -4,7 +4,7 @@ class Step < ApplicationRecord
   extend Enumerize
   include ProjectOwnedReferences
 
-  SUPPORTED_AGENT_RUNTIMES = %w[claude_code cursor_cli codex gemini_cli antigravity_cli].freeze
+  SUPPORTED_AGENT_RUNTIMES = CompanyMembership::AVAILABLE_AGENTS
 
   belongs_to :workflow
   belongs_to :agent, optional: true

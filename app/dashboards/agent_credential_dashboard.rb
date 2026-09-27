@@ -8,7 +8,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     user: Field::BelongsTo.with_options(searchable: true, searchable_fields: %w[email name]),
     agent_type: Field::Select.with_options(
       include_blank: false,
-      collection: %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok kiro_cli]
+      collection: CompanyMembership::AVAILABLE_AGENTS
     ),
     status: Field::String,
     metadata: Field::String.with_options(truncate: 100, searchable: false),
