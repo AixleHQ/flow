@@ -167,10 +167,25 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
     assert_redirected_to login_path(error: "oauth_failed")
   end
 
-  test "SSO discovery routes an address straight to its company's only connection" do
+  # Asserting the redirect TARGET was what hid the bug: /auth/oidc/:id/start is
+  # POST only, a redirect is followed with GET, and the browser landed on a
+  # routing error. What matters is that discovery reaches the provider.
+  test "SSO discovery sends an address straight to its company's only connection" do
     post sso_discovery_path, params: { email: "someone@oidc-acme.test" }
 
-    assert_redirected_to oidc_start_path(id: @provider.id)
+    assert_response :redirect
+    assert_match ISSUER, response.location
+    assert_match(/state=/, response.location)
+  end
+
+  # The shape of the old bug: discovery answered with a path of our own that
+  # only accepts POST, and the browser followed it with GET. Leaving for the
+  # provider is the only correct answer here.
+  test "discovery leaves this app rather than pointing at one of its own routes" do
+    post sso_discovery_path, params: { email: "someone@oidc-acme.test" }
+
+    assert_match %r{\Ahttps://}, response.location
+    assert_not_equal URI.parse(response.location).host, URI.parse(root_url).host
   end
 
   test "SSO discovery offers a choice when a company has several connections" do

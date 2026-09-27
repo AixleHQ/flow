@@ -25,7 +25,12 @@ class Web::OidcSessionsController < Web::ApplicationController
 
     case connections.size
     when 0 then redirect_to login_path(error: "no_sso_connection", email: params[:email])
-    when 1 then redirect_to oidc_start_path(id: connections.first.id), status: :see_other
+      # Begun right here rather than redirected to #start: that route is POST
+      # only (CVE-2015-9284) and a redirect is followed with GET, so handing it
+      # the single connection answered with a routing error instead of a
+      # sign-in. This request is already the person's own POST, carrying their
+      # CSRF token, so there is nothing a second hop would add.
+    when 1 then begin_authorization(connections.first)
     else
       # More than one: let them choose rather than guessing on their behalf.
       render inertia: "Auth/SsoChoicePage", props: {
@@ -42,23 +47,7 @@ class Web::OidcSessionsController < Web::ApplicationController
     provider = connectable_provider
     return redirect_to(login_path(error: "oauth_failed")) if provider.nil?
 
-    code_verifier = SecureRandom.urlsafe_base64(64)
-    oidc_nonce = SecureRandom.uuid
-    state = Auth::State.encode(
-      identity_provider_id: provider.id,
-      return_to: return_to_for(provider),
-      code_verifier: code_verifier,
-      oidc_nonce: oidc_nonce
-    )
-
-    redirect_to Auth::Registry.for(provider).authorize_url(
-      redirect_uri: callback_url,
-      state: state,
-      code_challenge: pkce_challenge(code_verifier),
-      nonce: oidc_nonce
-    ), allow_other_host: true
-  rescue Auth::Method::Failure, Auth::Registry::UnsupportedKind
-    redirect_to login_path(error: "oauth_failed")
+    begin_authorization(provider)
   end
 
   # GET /auth/oidc/callback — one deployment-wide callback for every connection;
@@ -96,6 +85,28 @@ class Web::OidcSessionsController < Web::ApplicationController
   end
 
   private
+
+  # Sends the browser to the provider. Shared by #start and #discover so the two
+  # ways of reaching a connection cannot drift apart.
+  def begin_authorization(provider)
+    code_verifier = SecureRandom.urlsafe_base64(64)
+    oidc_nonce = SecureRandom.uuid
+    state = Auth::State.encode(
+      identity_provider_id: provider.id,
+      return_to: return_to_for(provider),
+      code_verifier: code_verifier,
+      oidc_nonce: oidc_nonce
+    )
+
+    redirect_to Auth::Registry.for(provider).authorize_url(
+      redirect_uri: callback_url,
+      state: state,
+      code_challenge: pkce_challenge(code_verifier),
+      nonce: oidc_nonce
+    ), allow_other_host: true
+  rescue Auth::Method::Failure, Auth::Registry::UnsupportedKind
+    redirect_to login_path(error: "oauth_failed")
+  end
 
   def startable_connections(company)
     allowed = Auth::PolicyResolver.allowed_provider_ids(company)
