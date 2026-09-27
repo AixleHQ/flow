@@ -6,76 +6,144 @@ import { act, makeFormStub, renderPage, screen, userEvent } from 'test/renderPag
 
 import LoginPage from './LoginPage';
 
+// Step two is what the server renders once an address has resolved to a
+// workspace: it carries the address, the workspace's name, and exactly the
+// methods that workspace accepts.
+const stepTwo = (methods = ['password'], over = {}) => ({
+  step: 'credentials',
+  email: 'person@acme.test',
+  companyName: 'Acme',
+  methods,
+  ...over,
+});
+
 describe('LoginPage', () => {
-  it('shows validation errors and does NOT submit when fields are empty', async () => {
-    const form = makeFormStub({ email: '', password: '', rememberMe: false });
-    renderPage(<LoginPage />, { form });
+  describe('step one — the address', () => {
+    it('asks for an address and nothing else', () => {
+      renderPage(<LoginPage />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+      expect(screen.getByRole('textbox', { name: 'Email' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+    });
 
-    expect(await screen.findByText('Email is required')).toBeInTheDocument();
-    expect(screen.getByText('Password is required')).toBeInTheDocument();
-    expect(form.post).not.toHaveBeenCalled();
+    // Nothing is offered before it can work, so there is no control to explain
+    // away — which is what the old screen needed a line of small print for.
+    it('offers no disabled control and no apology for one', () => {
+      renderPage(<LoginPage />, { props: { oauthProviders: ['google', 'microsoft'] } });
+
+      for (const button of screen.getAllByRole('button')) expect(button).toBeEnabled();
+      expect(screen.queryByText(/the address above/)).not.toBeInTheDocument();
+    });
+
+    it('refuses an empty address', async () => {
+      const form = makeFormStub({ email: '', password: '', rememberMe: false });
+      renderPage(<LoginPage />, { form });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(await screen.findByText('Email is required')).toBeInTheDocument();
+    });
+
+    it('refuses an address that is not one', async () => {
+      const form = makeFormStub({ email: 'notanemail', password: '', rememberMe: false });
+      renderPage(<LoginPage />, { form });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(await screen.findByText('Invalid email format')).toBeInTheDocument();
+    });
+
+    it('clears the message once the address is edited', async () => {
+      const form = makeFormStub({ email: '', password: '', rememberMe: false });
+      renderPage(<LoginPage />, { form });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      expect(await screen.findByText('Email is required')).toBeInTheDocument();
+
+      await userEvent.type(screen.getByRole('textbox', { name: 'Email' }), 'a');
+
+      expect(screen.queryByText('Email is required')).not.toBeInTheDocument();
+    });
   });
 
-  it('posts to /login when data is valid (pre-seeded — the useForm stub is non-reactive)', async () => {
-    const form = makeFormStub({ email: 'a@b.com', password: 'secret', rememberMe: false });
-    renderPage(<LoginPage />, { form });
+  describe('step two — what this workspace accepts', () => {
+    // Passkey is left out of these: PasswordlessOptions only draws it where the
+    // browser supports WebAuthn, which jsdom does not — that gate belongs to
+    // that component's own tests.
+    it('draws only the methods the workspace takes', () => {
+      renderPage(<LoginPage />, { props: stepTwo(['password', 'magic_link']) });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+      expect(screen.getByLabelText('Password')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Email me a link' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Google' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Microsoft' })).not.toBeInTheDocument();
+    });
 
-    expect(form.post).toHaveBeenCalledWith('/login', expect.objectContaining({ onSuccess: expect.any(Function) }));
-  });
+    it("draws the workspace's redirect providers when it takes them", () => {
+      renderPage(<LoginPage />, { props: stepTwo(['google', 'microsoft']) });
 
-  it('shows "Invalid email format" and does NOT submit when the email is malformed', async () => {
-    const form = makeFormStub({ email: 'notanemail', password: 'secret', rememberMe: false });
-    renderPage(<LoginPage />, { form });
+      expect(screen.getByRole('button', { name: 'Google' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Microsoft' })).toBeInTheDocument();
+      expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+    });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    it('offers no password box to a workspace that does not accept one', () => {
+      renderPage(<LoginPage />, { props: stepTwo(['magic_link']) });
 
-    // min(1) passes so the "required" branch is skipped; the .email() refinement fails instead.
-    expect(await screen.findByText('Invalid email format')).toBeInTheDocument();
-    expect(form.post).not.toHaveBeenCalled();
-  });
+      expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Email me a link' })).toBeInTheDocument();
+    });
 
-  it('clears a field validation error once the user edits that field', async () => {
-    const form = makeFormStub({ email: '', password: '', rememberMe: false });
-    renderPage(<LoginPage />, { form });
+    it('carries the address back to step one', () => {
+      renderPage(<LoginPage />, { props: stepTwo() });
 
-    // First trip the client-side validation branch so both messages are on screen.
-    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect(await screen.findByText('Email is required')).toBeInTheDocument();
-    expect(screen.getByText('Password is required')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'person@acme.test' })).toBeInTheDocument();
+    });
 
-    // Editing each field runs its onChange "clear this field's error" branch. The useForm stub is
-    // non-reactive so the displayed value stays empty, but setClientErrors re-renders and drops the
-    // message — that state update is what we assert.
-    await userEvent.type(screen.getByRole('textbox', { name: 'Email' }), 'a');
-    await userEvent.type(screen.getByLabelText('Password'), 'x');
+    it('says so plainly when a workspace accepts nothing at all', () => {
+      renderPage(<LoginPage />, { props: stepTwo([], { dead_end: true }) });
 
-    expect(screen.queryByText('Email is required')).not.toBeInTheDocument();
-    expect(screen.queryByText('Password is required')).not.toBeInTheDocument();
-  });
+      expect(screen.getByText(/accepts no sign-in method/)).toBeInTheDocument();
+      expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+    });
 
-  it('toggles the password field between hidden and visible', async () => {
-    renderPage(<LoginPage />);
+    it('refuses an empty password', async () => {
+      const form = makeFormStub({ email: 'person@acme.test', password: '', rememberMe: false });
+      renderPage(<LoginPage />, { props: stepTwo(), form });
 
-    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
+      await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Toggle password visibility' }));
-    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text');
+      expect(await screen.findByText('Password is required')).toBeInTheDocument();
+      expect(form.post).not.toHaveBeenCalled();
+    });
 
-    await userEvent.click(screen.getByRole('button', { name: 'Toggle password visibility' }));
-    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
-  });
+    it('posts to /login once a password is given', async () => {
+      const form = makeFormStub({ email: 'person@acme.test', password: 'secret', rememberMe: false });
+      renderPage(<LoginPage />, { props: stepTwo(), form });
 
-  it('updates the "rememberMe" form value when the checkbox is toggled', async () => {
-    const form = makeFormStub({ email: '', password: '', rememberMe: false });
-    renderPage(<LoginPage />, { form });
+      await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
-    await userEvent.click(screen.getByRole('checkbox', { name: 'Remember me' }));
+      expect(form.post).toHaveBeenCalledWith('/login', expect.objectContaining({ onSuccess: expect.any(Function) }));
+    });
 
-    expect(form.setData).toHaveBeenCalledWith('rememberMe', true);
+    it('toggles the password field between hidden and visible', async () => {
+      renderPage(<LoginPage />, { props: stepTwo() });
+
+      expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Toggle password visibility' }));
+      expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'text');
+    });
+
+    it('updates the "rememberMe" form value when the checkbox is toggled', async () => {
+      const form = makeFormStub({ email: 'person@acme.test', password: '', rememberMe: false });
+      renderPage(<LoginPage />, { props: stepTwo(), form });
+
+      await userEvent.click(screen.getByRole('checkbox', { name: 'Remember me' }));
+
+      expect(form.setData).toHaveBeenCalledWith('rememberMe', true);
+    });
   });
 
   describe('server-driven and success notifications', () => {
@@ -112,13 +180,12 @@ describe('LoginPage', () => {
         screen.getByText("Your email domain isn't linked to a workspace. Contact your admin or use your work email."),
       ).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /Back to login/ })).toBeInTheDocument();
-      // The main sign-in form is not shown
-      expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
     });
 
     it('shows a "Welcome back!" notification after a successful login', async () => {
-      const form = makeFormStub({ email: 'a@b.com', password: 'secret', rememberMe: false });
-      renderPage(<LoginPage />, { form });
+      const form = makeFormStub({ email: 'person@acme.test', password: 'secret', rememberMe: false });
+      renderPage(<LoginPage />, { props: stepTwo(), form });
 
       await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
@@ -127,43 +194,6 @@ describe('LoginPage', () => {
       act(() => options.onSuccess?.());
 
       expect(await screen.findByText('Welcome back!')).toBeInTheDocument();
-    });
-  });
-
-  describe('methods that need an address', () => {
-    const methodProps = { oauthProviders: ['google'], passwordlessMethods: ['magic_link', 'passkey'] };
-
-    it('holds company SSO and the emailed link inactive until an address is typed, and says why', () => {
-      const form = makeFormStub({ email: '', password: '', rememberMe: false });
-      renderPage(<LoginPage />, { props: methodProps, form });
-
-      expect(screen.getByRole('button', { name: 'Company SSO' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Email me a link' })).toBeDisabled();
-      expect(screen.getByText(/use the address above/)).toBeInTheDocument();
-    });
-
-    it('leaves Google alone — it runs its own account picker', () => {
-      const form = makeFormStub({ email: '', password: '', rememberMe: false });
-      renderPage(<LoginPage />, { props: methodProps, form });
-
-      expect(screen.getByRole('button', { name: /Google/ })).toBeEnabled();
-    });
-
-    it('activates them and drops the explanation once an address is present', () => {
-      const form = makeFormStub({ email: 'person@client.test', password: '', rememberMe: false });
-      renderPage(<LoginPage />, { props: methodProps, form });
-
-      expect(screen.getByRole('button', { name: 'Company SSO' })).toBeEnabled();
-      expect(screen.getByRole('button', { name: 'Email me a link' })).toBeEnabled();
-      expect(screen.queryByText(/use the address above/)).not.toBeInTheDocument();
-    });
-
-    it('names only company SSO when this installation offers no emailed link', () => {
-      const form = makeFormStub({ email: '', password: '', rememberMe: false });
-      renderPage(<LoginPage />, { props: { oauthProviders: ['google'], passwordlessMethods: ['passkey'] }, form });
-
-      expect(screen.getByText(/Company SSO uses the address above/)).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Email me a link' })).not.toBeInTheDocument();
     });
   });
 

@@ -170,8 +170,8 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
   # Asserting the redirect TARGET was what hid the bug: /auth/oidc/:id/start is
   # POST only, a redirect is followed with GET, and the browser landed on a
   # routing error. What matters is that discovery reaches the provider.
-  test "SSO discovery sends an address straight to its company's only connection" do
-    post sso_discovery_path, params: { email: "someone@oidc-acme.test" }
+  test "an address resolves straight to its company's only connection" do
+    post login_identify_path, params: { email: "someone@oidc-acme.test" }
 
     assert_response :redirect
     assert_match ISSUER, response.location
@@ -181,37 +181,72 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
   # The shape of the old bug: discovery answered with a path of our own that
   # only accepts POST, and the browser followed it with GET. Leaving for the
   # provider is the only correct answer here.
-  test "discovery leaves this app rather than pointing at one of its own routes" do
-    post sso_discovery_path, params: { email: "someone@oidc-acme.test" }
+  test "resolving leaves this app rather than pointing at one of its own routes" do
+    post login_identify_path, params: { email: "someone@oidc-acme.test" }
 
     assert_match %r{\Ahttps://}, response.location
     assert_not_equal URI.parse(response.location).host, URI.parse(root_url).host
   end
 
-  test "SSO discovery offers a choice when a company has several connections" do
+  test "an address offers a choice when its company has several connections" do
     second = create(:identity_provider, company: @company, kind: "oidc", name: "Acme Legacy SSO",
                                         config: { "issuer" => "https://old.example.test", "client_id" => "c2" })
     create(:company_auth_policy, company: @company, identity_provider: second, enabled: true)
 
-    post sso_discovery_path, params: { email: "someone@oidc-acme.test" }
+    post login_identify_path, params: { email: "someone@oidc-acme.test" }
 
     assert_response :success
     assert_match "Acme Legacy SSO", response.body
   end
 
-  test "SSO discovery for a domain with no connection says so instead of guessing" do
-    post sso_discovery_path, params: { email: "someone@unknown-domain-#{SecureRandom.hex(3)}.test" }
+  test "an address no workspace claims is told so, rather than shown a password box" do
+    post login_identify_path, params: { email: "someone@unknown-domain-#{SecureRandom.hex(3)}.test" }
 
     assert_response :redirect
-    assert_match(/no_sso_connection/, response.location)
+    assert_match(/no_workspace/, response.location)
   end
 
-  test "a disabled connection is not offered by discovery" do
+  test "a disabled connection is not offered, and the workspace's other methods are" do
     CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
 
-    post sso_discovery_path, params: { email: "someone@oidc-acme.test" }
+    post login_identify_path, params: { email: "someone@oidc-acme.test" }
 
-    assert_match(/no_sso_connection/, response.location)
+    assert_response :success
+    assert_equal "credentials", inertia.props[:step]
+    assert_not_includes inertia.props[:methods], "oidc"
+  end
+
+  # The whole point of branching on the domain. An address nobody has ever used
+  # must answer exactly as a known one does — otherwise this screen tells a
+  # stranger which addresses are registered.
+  test "an unknown address at a known domain answers exactly as a known one" do
+    CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
+
+    post login_identify_path, params: { email: "definitely-nobody-#{SecureRandom.hex(4)}@oidc-acme.test" }
+    stranger = [ response.status, inertia.props[:step], inertia.props[:methods], inertia.props[:companyName] ]
+
+    post login_identify_path, params: { email: "someone@oidc-acme.test" }
+    known = [ response.status, inertia.props[:step], inertia.props[:methods], inertia.props[:companyName] ]
+
+    assert_equal known, stranger
+  end
+
+  test "authentication codes are never offered as a way in" do
+    CompanyAuthPolicy.find_by!(company: @company, identity_provider: @provider).update!(enabled: false)
+    totp = IdentityProvider.deployment!("totp")
+    CompanyAuthPolicy.find_or_create_by!(company: @company, identity_provider: totp) { |p| p.enabled = true }
+
+    post login_identify_path, params: { email: "someone@oidc-acme.test" }
+
+    assert_not_includes inertia.props[:methods], "totp",
+      "a six-digit code confirms a session; there is nobody to look up from it"
+  end
+
+  test "an address that is not an address goes back rather than resolving" do
+    post login_identify_path, params: { email: "not-an-address" }
+
+    assert_response :redirect
+    assert_match(/invalid_email/, response.location)
   end
 
   test "an OIDC sign-in appends its proof to a live session instead of replacing it" do

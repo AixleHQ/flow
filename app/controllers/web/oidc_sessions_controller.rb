@@ -14,28 +14,33 @@ class Web::OidcSessionsController < Web::ApplicationController
   skip_before_action :enforce_onboarding
   skip_before_action :redirect_super_admin_to_admin_panel
 
-  # POST /login/sso — enterprise SSO discovery from the login screen. The user
-  # types the address they would sign in with; the company is resolved from its
-  # domain (already unique per company), and its single enabled connection starts
-  # immediately. This is the only way in for a member of an SSO-only company who
-  # is not signed in yet and therefore never reaches the step-up screen.
-  def discover
-    company = Company.find_by_email_domain(params[:email].to_s)
-    connections = company ? startable_connections(company) : []
+  # POST /login/identify — step one of signing in. The person gives an address
+  # and nothing else; what comes back is decided by the address's DOMAIN, which
+  # already resolves to exactly one company.
+  #
+  # Never by whether an account exists: an unknown address at a known domain
+  # must answer exactly as a known one does, or the screen becomes an oracle
+  # for which addresses are registered.
+  def identify
+    email = params[:email].to_s.strip
+    return redirect_to(login_path(error: "invalid_email")) unless email.match?(URI::MailTo::EMAIL_REGEXP)
 
-    case connections.size
-    when 0 then redirect_to login_path(error: "no_sso_connection", email: params[:email])
+    options = Auth::SignInOptions.for(email)
+    return redirect_to(login_path(error: "no_workspace")) if options.nil?
+
+    case options.connections.size
       # Begun right here rather than redirected to #start: that route is POST
       # only (CVE-2015-9284) and a redirect is followed with GET, so handing it
       # the single connection answered with a routing error instead of a
       # sign-in. This request is already the person's own POST, carrying their
       # CSRF token, so there is nothing a second hop would add.
-    when 1 then begin_authorization(connections.first)
+    when 1 then begin_authorization(options.connections.first, company: options.company)
+    when 0 then render_credentials_step(email, options)
     else
       # More than one: let them choose rather than guessing on their behalf.
       render inertia: "Auth/SsoChoicePage", props: {
-        company_name: company.branded_name,
-        connections: connections.map { |c| { id: c.id, name: c.display_name } }
+        company_name: options.company.branded_name,
+        connections: options.connections.map { |c| { id: c.id, name: c.display_name } }
       }
     end
   end
@@ -47,7 +52,7 @@ class Web::OidcSessionsController < Web::ApplicationController
     provider = connectable_provider
     return redirect_to(login_path(error: "oauth_failed")) if provider.nil?
 
-    begin_authorization(provider)
+    begin_authorization(provider, company: provider.company)
   end
 
   # GET /auth/oidc/callback — one deployment-wide callback for every connection;
@@ -86,14 +91,29 @@ class Web::OidcSessionsController < Web::ApplicationController
 
   private
 
-  # Sends the browser to the provider. Shared by #start and #discover so the two
+  # Step two, for a workspace that does not sign in through a provider: the same
+  # login screen, told which address it is for and which methods this workspace
+  # actually accepts. Nothing it cannot complete is ever drawn.
+  def render_credentials_step(email, options)
+    render inertia: "Auth/LoginPage", props: {
+      step: "credentials",
+      email: email,
+      company_name: options.company.branded_name,
+      # Intersected with what this INSTALLATION offers, so a company policy can
+      # never conjure a method the deployment has no credentials for (AD-4).
+      methods: options.kinds & Auth::PolicyResolver.deployment_allowlist_kinds,
+      dead_end: options.dead_end?
+    }
+  end
+
+  # Sends the browser to the provider. Shared by #start and #identify so the two
   # ways of reaching a connection cannot drift apart.
-  def begin_authorization(provider)
+  def begin_authorization(provider, company:)
     code_verifier = SecureRandom.urlsafe_base64(64)
     oidc_nonce = SecureRandom.uuid
     state = Auth::State.encode(
       identity_provider_id: provider.id,
-      return_to: return_to_for(provider),
+      return_to: return_to_for(provider, company),
       code_verifier: code_verifier,
       oidc_nonce: oidc_nonce
     )
@@ -106,11 +126,6 @@ class Web::OidcSessionsController < Web::ApplicationController
     ), allow_other_host: true
   rescue Auth::Method::Failure, Auth::Registry::UnsupportedKind
     redirect_to login_path(error: "oauth_failed")
-  end
-
-  def startable_connections(company)
-    allowed = Auth::PolicyResolver.allowed_provider_ids(company)
-    company.identity_providers.where(scope: "company", kind: "oidc", id: allowed).order(:id)
   end
 
   # A connection is startable when its owning company has it enabled — a
@@ -136,8 +151,11 @@ class Web::OidcSessionsController < Web::ApplicationController
   # method, so the entry gate turns the resulting session away exactly as before.
   # A verification lands back on the screen that asked for it, where the
   # connection can now be switched on.
-  def return_to_for(provider)
-    return company_settings_access_path unless Auth::PolicyResolver.accepts?(company: provider.company, provider: provider)
+  # Takes the company rather than reading provider.company: in #identify the
+  # provider comes out of a multi-row fetch, and loading its company there is
+  # the N+1 Bullet refuses.
+  def return_to_for(provider, company)
+    return company_settings_access_path unless Auth::PolicyResolver.accepts?(company: company, provider: provider)
 
     params[:return_to].presence
   end
