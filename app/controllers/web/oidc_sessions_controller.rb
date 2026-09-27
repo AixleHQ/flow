@@ -7,6 +7,8 @@
 # state, the PKCE verifier and the OIDC nonce are held server-side by
 # Auth::State — never in the URL.
 class Web::OidcSessionsController < Web::ApplicationController
+  include CredentialsStepConcern
+
   layout "inertia"
 
   skip_before_action :verify_authenticity_token, only: :callback
@@ -90,21 +92,6 @@ class Web::OidcSessionsController < Web::ApplicationController
   end
 
   private
-
-  # Step two, for a workspace that does not sign in through a provider: the same
-  # login screen, told which address it is for and which methods this workspace
-  # actually accepts. Nothing it cannot complete is ever drawn.
-  def render_credentials_step(email, options)
-    render inertia: "Auth/LoginPage", props: {
-      step: "credentials",
-      email: email,
-      company_name: options.company.branded_name,
-      # Intersected with what this INSTALLATION offers, so a company policy can
-      # never conjure a method the deployment has no credentials for (AD-4).
-      methods: options.kinds & Auth::PolicyResolver.deployment_allowlist_kinds,
-      dead_end: options.dead_end?
-    }
-  end
 
   # Sends the browser to the provider. Shared by #start and #identify so the two
   # ways of reaching a connection cannot drift apart.
