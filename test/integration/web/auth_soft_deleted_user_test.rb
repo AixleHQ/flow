@@ -44,7 +44,13 @@ class Web::AuthSoftDeletedUserTest < ActionDispatch::IntegrationTest
 
     post login_path, params: { user: { email: @user.email, password: AuthHelper::TEST_PASSWORD } }
 
-    assert_redirected_to login_path
+    # Refused the same way a wrong password is — back on the credentials step
+    # with the message, telling a deleted account apart from a mistyped one
+    # no more than it did before.
+    assert_response :success
+    assert_equal "credentials", inertia.props[:step]
+
+    # What actually matters: no session came out of it.
     get onboarding_path
     assert_redirected_to login_path
   end
