@@ -1,15 +1,19 @@
 # frozen_string_literal: true
 
-# Which sign-in methods this company accepts (AD-4, AD-7).
+# How a person gets into this company (AD-4, AD-7) — the Access tab of company
+# settings. Which methods are accepted, the company's own OIDC connection, its
+# directory sync, and who may join without an invitation.
 #
 # Every refusal comes from Auth::PolicyUpdater, which holds the company row lock
 # while it checks: a policy edit that would strand any active member, or would
 # switch on a connection nobody has proved, never reaches the database.
 class Web::Company::AuthPoliciesController < Web::Company::ApplicationController
   def index
-    render inertia: "Company/AuthPolicies/Index", props: {
+    render inertia: "Company/Settings/AccessPage", props: {
       providers: available_providers.map { |provider| serialize(provider) },
       scim: scim_state,
+      joining: joining_state,
+      company: { name: current_company.name },
       # Shown once, straight after generation, and never read back from storage
       # — carried in the flash so it never reaches the URL or the access log.
       scim_token: flash[:scim_token]
@@ -19,12 +23,22 @@ class Web::Company::AuthPoliciesController < Web::Company::ApplicationController
   def update
     provider = find_provider!
     updater.set(provider, enabled: enabled_param)
-    redirect_to company_auth_policies_path, notice: "#{provider.display_name} updated."
+    redirect_to company_settings_access_path, notice: "#{provider.display_name} updated."
   rescue Auth::PolicyUpdater::Refused => e
-    redirect_to company_auth_policies_path, inertia: { errors: { base: refusal_message(e) } }
+    redirect_to company_settings_access_path, inertia: { errors: { base: refusal_message(e) } }
   end
 
   private
+
+  # Domain auto-join sits here rather than on the general tab because it answers
+  # the same question as every control around it: who gets in. The domain itself
+  # is read-only — it is what SSO discovery resolves a workspace by.
+  def joining_state
+    {
+      email_domain: current_company.email_domain,
+      auto_accept_users: current_company.auto_accept_users
+    }
+  end
 
   def scim_state
     configuration = ScimConfiguration.find_by(company: current_company)

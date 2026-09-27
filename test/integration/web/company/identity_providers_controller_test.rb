@@ -40,7 +40,7 @@ class Web::Company::IdentityProvidersControllerTest < ActionDispatch::Integratio
     sign_in_as(@admin)
     post company_identity_providers_path, params: connection_params
 
-    get company_auth_policies_path
+    get company_settings_access_path
 
     assert_response :success
     refute_match "acme-secret", response.body

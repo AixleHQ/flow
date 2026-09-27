@@ -1262,9 +1262,9 @@ export function companySettingsPath(options?: object): string {
   return "/" + "company" + "/" + "settings" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /company/auth_policies(.:format) */
-export function companyAuthPoliciesPath(options?: object): string {
-  return "/" + "company" + "/" + "auth_policies" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+/** /company/settings/access(.:format) */
+export function companySettingsAccessPath(options?: object): string {
+  return "/" + "company" + "/" + "settings" + "/" + "access" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/auth_policies/:id(.:format) */

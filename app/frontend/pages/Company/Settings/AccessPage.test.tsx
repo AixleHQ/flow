@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { renderAuthedPage, screen } from 'test/renderPage';
 
-import AuthPoliciesIndex from './Index';
+import AccessPage from './AccessPage';
 
 const deployment = (over = {}) => ({
   id: 1,
@@ -28,12 +28,20 @@ const connection = (over = {}) => ({
   ...over,
 });
 
-const renderPage = (providers: unknown[], isAdmin = true) =>
-  renderAuthedPage(<AuthPoliciesIndex providers={providers as never} />, {
-    props: { providers, permissions: { isAdmin }, scim: { enabled: false, endpoint: '/scim' } },
+const joining = (over = {}) => ({ emailDomain: 'acme.com', autoAcceptUsers: false, ...over });
+
+const renderPage = (providers: unknown[], isAdmin = true, joiningState: unknown = joining()) =>
+  renderAuthedPage(<AccessPage providers={providers as never} />, {
+    props: {
+      providers,
+      joining: joiningState,
+      company: { name: 'Acme' },
+      permissions: { isAdmin },
+      scim: { enabled: false, endpoint: '/scim' },
+    },
   });
 
-describe('Company sign-in methods', () => {
+describe('Company settings — Access', () => {
   it('verifies through a real form submission, not an Inertia visit', () => {
     // Verifying redirects to the customer's identity provider. An Inertia XHR
     // cannot follow a cross-origin redirect — the browser refuses it as CORS and
@@ -62,11 +70,30 @@ describe('Company sign-in methods', () => {
     expect(screen.getByRole('switch', { name: 'Acme Okta enabled' })).toBeEnabled();
   });
 
-  it('gives a member no way to change anything', () => {
+  it('shows a member what the workspace accepts, with nothing to change', () => {
+    // Read-only on purpose: knowing which methods are accepted is how a member
+    // understands a step-up prompt, and the page is reachable to them now that
+    // it lives under Settings.
     renderPage([deployment(), connection()], false);
 
+    expect(screen.getByRole('switch', { name: 'Password enabled' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Password enabled' })).toBeDisabled();
+    expect(screen.queryByText('Connect your own identity provider')).not.toBeInTheDocument();
+  });
+
+  it('keeps auto-join on this tab, next to the methods it belongs with', () => {
+    renderPage([deployment()]);
+
+    const autoAccept = screen.getByRole('switch', { name: 'Accept new people automatically' });
+    expect(autoAccept).toBeEnabled();
+    expect(screen.getByText('acme.com')).toBeInTheDocument();
+  });
+
+  it('cannot auto-join without a domain to match against', () => {
+    renderPage([deployment()], true, joining({ emailDomain: null }));
+
+    expect(screen.getByRole('switch', { name: 'Accept new people automatically' })).toBeDisabled();
+    expect(screen.getByText('Not set')).toBeInTheDocument();
   });
 });

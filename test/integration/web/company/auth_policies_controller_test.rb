@@ -21,7 +21,7 @@ class Web::Company::AuthPoliciesControllerTest < ActionDispatch::IntegrationTest
   test "an admin can see which methods the company accepts" do
     sign_in_as(@admin)
 
-    get company_auth_policies_path
+    get company_settings_access_path
 
     assert_response :success
     assert_match "Google", response.body
@@ -32,7 +32,7 @@ class Web::Company::AuthPoliciesControllerTest < ActionDispatch::IntegrationTest
     # whoever can read it which one to go at. Members have no use for it.
     sign_in_as(@member)
 
-    get company_auth_policies_path
+    get company_settings_access_path
 
     assert_redirected_to root_path
   end
@@ -42,7 +42,7 @@ class Web::Company::AuthPoliciesControllerTest < ActionDispatch::IntegrationTest
 
     put company_auth_policy_path(@google), params: { enabled: false }
 
-    assert_redirected_to company_auth_policies_path
+    assert_redirected_to company_settings_access_path
     refute CompanyAuthPolicy.find_by(company: @company, identity_provider: @google).enabled
   end
 
@@ -59,7 +59,7 @@ class Web::Company::AuthPoliciesControllerTest < ActionDispatch::IntegrationTest
 
     put company_auth_policy_path(@password), params: { enabled: false }
 
-    assert_redirected_to company_auth_policies_path
+    assert_redirected_to company_settings_access_path
     # Nothing written, and the refusal carries who would have been locked out.
     assert CompanyAuthPolicy.find_by(company: @company, identity_provider: @password).enabled
     follow_redirect!

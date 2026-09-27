@@ -22,10 +22,10 @@ class Web::Company::IdentityProvidersController < Web::Company::ApplicationContr
       CompanyAuthPolicy.find_or_create_by!(company: current_company, identity_provider: provider) do |policy|
         policy.enabled = false
       end
-      redirect_to company_auth_policies_path,
+      redirect_to company_settings_access_path,
                   notice: "#{provider.display_name} added. Sign in through it once to enable it."
     else
-      redirect_to company_auth_policies_path, inertia: { errors: provider.errors }
+      redirect_to company_settings_access_path, inertia: { errors: provider.errors }
     end
   end
 
@@ -40,18 +40,18 @@ class Web::Company::IdentityProvidersController < Web::Company::ApplicationContr
     provider.client_secret = provider_params[:client_secret] if provider_params[:client_secret].present?
 
     if provider.save
-      redirect_to company_auth_policies_path, notice: "#{provider.display_name} updated."
+      redirect_to company_settings_access_path, notice: "#{provider.display_name} updated."
     else
-      redirect_to company_auth_policies_path, inertia: { errors: provider.errors }
+      redirect_to company_settings_access_path, inertia: { errors: provider.errors }
     end
   end
 
   def destroy
     provider = company_connection!
     updater.remove(provider)
-    redirect_to company_auth_policies_path, notice: "Connection removed."
+    redirect_to company_settings_access_path, notice: "Connection removed."
   rescue Auth::PolicyUpdater::Refused => e
-    redirect_to company_auth_policies_path, inertia: { errors: { base: e.message } }
+    redirect_to company_settings_access_path, inertia: { errors: { base: e.message } }
   end
 
   private
