@@ -134,7 +134,7 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
 
     get oidc_callback_path(code: "the-code", state: state)
 
-    assert_redirected_to company_auth_policies_path
+    assert_redirected_to company_settings_access_path
   end
 
   test "a member who is not an admin cannot start a connection that is not enabled" do

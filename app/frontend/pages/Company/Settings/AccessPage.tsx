@@ -142,141 +142,141 @@ export default function AccessPage({ providers }: PageProps) {
 
           {refusal && <Alert color="red">{refusal}</Alert>}
 
-        <Paper p="md" radius="md" withBorder>
-          <Stack gap="sm">
-            {providers.map((provider) => (
-              <Group key={provider.id} justify="space-between">
-                <Group gap="xs">
-                  <Text fw={500}>{provider.name}</Text>
-                  {provider.scope === 'company' && <Badge size="sm">This workspace</Badge>}
-                  {provider.issuer && (
-                    <Text size="xs" c="dimmed">
-                      {provider.issuer}
-                    </Text>
-                  )}
-                </Group>
-                <Group gap="xs">
-                  {!provider.proved && !provider.enabled && (
-                    <Tooltip label="Verify signs you in through this connection once; until that works it cannot be enabled">
-                      <Badge size="sm" color="yellow">
-                        Not verified yet
-                      </Badge>
-                    </Tooltip>
-                  )}
-                  {provider.scope === 'company' && !provider.proved && isAdmin && (
-                    <VerifyConnectionButton providerId={provider.id} />
-                  )}
-                  <Switch
-                    checked={provider.enabled}
-                    disabled={!isAdmin || (provider.scope === 'company' && !provider.proved)}
-                    onChange={(event) => toggle(provider, event.currentTarget.checked)}
-                    aria-label={`${provider.name} enabled`}
-                  />
-                  {provider.scope === 'company' && isAdmin && (
-                    <Button
-                      variant="subtle"
-                      color="red"
-                      size="compact-sm"
-                      onClick={() => router.delete(companyIdentityProviderPath(provider.id))}
-                    >
-                      Remove
-                    </Button>
-                  )}
-                </Group>
-              </Group>
-            ))}
-          </Stack>
-        </Paper>
-
-        {isAdmin && (
           <Paper p="md" radius="md" withBorder>
             <Stack gap="sm">
-              <Group justify="space-between">
-                <Title order={4}>Directory sync (SCIM)</Title>
-                {page.props.scim?.enabled ? (
+              {providers.map((provider) => (
+                <Group key={provider.id} justify="space-between">
                   <Group gap="xs">
-                    <Badge color="green">On</Badge>
-                    <Button
-                      size="compact-sm"
-                      variant="subtle"
-                      color="red"
-                      onClick={() => router.delete(companyScimConfigurationPath())}
-                    >
-                      Turn off
-                    </Button>
+                    <Text fw={500}>{provider.name}</Text>
+                    {provider.scope === 'company' && <Badge size="sm">This workspace</Badge>}
+                    {provider.issuer && (
+                      <Text size="xs" c="dimmed">
+                        {provider.issuer}
+                      </Text>
+                    )}
                   </Group>
-                ) : (
-                  <Button size="compact-sm" onClick={() => router.post(companyScimConfigurationPath())}>
-                    Generate token
-                  </Button>
+                  <Group gap="xs">
+                    {!provider.proved && !provider.enabled && (
+                      <Tooltip label="Verify signs you in through this connection once; until that works it cannot be enabled">
+                        <Badge size="sm" color="yellow">
+                          Not verified yet
+                        </Badge>
+                      </Tooltip>
+                    )}
+                    {provider.scope === 'company' && !provider.proved && isAdmin && (
+                      <VerifyConnectionButton providerId={provider.id} />
+                    )}
+                    <Switch
+                      checked={provider.enabled}
+                      disabled={!isAdmin || (provider.scope === 'company' && !provider.proved)}
+                      onChange={(event) => toggle(provider, event.currentTarget.checked)}
+                      aria-label={`${provider.name} enabled`}
+                    />
+                    {provider.scope === 'company' && isAdmin && (
+                      <Button
+                        variant="subtle"
+                        color="red"
+                        size="compact-sm"
+                        onClick={() => router.delete(companyIdentityProviderPath(provider.id))}
+                      >
+                        Remove
+                      </Button>
+                    )}
+                  </Group>
+                </Group>
+              ))}
+            </Stack>
+          </Paper>
+
+          {isAdmin && (
+            <Paper p="md" radius="md" withBorder>
+              <Stack gap="sm">
+                <Group justify="space-between">
+                  <Title order={4}>Directory sync (SCIM)</Title>
+                  {page.props.scim?.enabled ? (
+                    <Group gap="xs">
+                      <Badge color="green">On</Badge>
+                      <Button
+                        size="compact-sm"
+                        variant="subtle"
+                        color="red"
+                        onClick={() => router.delete(companyScimConfigurationPath())}
+                      >
+                        Turn off
+                      </Button>
+                    </Group>
+                  ) : (
+                    <Button size="compact-sm" onClick={() => router.post(companyScimConfigurationPath())}>
+                      Generate token
+                    </Button>
+                  )}
+                </Group>
+                <Text size="sm" c="dimmed">
+                  Point your identity provider at{' '}
+                  <Text span ff="monospace">
+                    {page.props.scim?.endpoint}
+                  </Text>{' '}
+                  to add and remove members automatically. Removing someone there removes their access here.
+                </Text>
+                {page.props.scimToken && (
+                  <Alert color="yellow">
+                    <Stack gap="xs">
+                      <Text size="sm">Copy this token now — it is not shown again.</Text>
+                      <Text ff="monospace" size="sm">
+                        {page.props.scimToken}
+                      </Text>
+                    </Stack>
+                  </Alert>
                 )}
-              </Group>
-              <Text size="sm" c="dimmed">
-                Point your identity provider at{' '}
-                <Text span ff="monospace">
-                  {page.props.scim?.endpoint}
-                </Text>{' '}
-                to add and remove members automatically. Removing someone there removes their access here.
-              </Text>
-              {page.props.scimToken && (
-                <Alert color="yellow">
-                  <Stack gap="xs">
-                    <Text size="sm">Copy this token now — it is not shown again.</Text>
-                    <Text ff="monospace" size="sm">
-                      {page.props.scimToken}
-                    </Text>
-                  </Stack>
-                </Alert>
-              )}
-              {page.props.scim?.enabled && page.props.scim?.lastSeenAt && (
-                <Text size="xs" c="dimmed">
-                  Last contacted {new Date(page.props.scim.lastSeenAt).toLocaleString()}
-                </Text>
-              )}
-            </Stack>
-          </Paper>
-        )}
+                {page.props.scim?.enabled && page.props.scim?.lastSeenAt && (
+                  <Text size="xs" c="dimmed">
+                    Last contacted {new Date(page.props.scim.lastSeenAt).toLocaleString()}
+                  </Text>
+                )}
+              </Stack>
+            </Paper>
+          )}
 
-        {isAdmin && (
-          <Paper p="md" radius="md" withBorder>
-            <Stack gap="sm">
-              <Title order={4}>Connect your own identity provider</Title>
-              <Text size="sm" c="dimmed">
-                A new connection arrives switched off. Verify it — that signs you in through it once — and only then can
-                it be enabled, so a misconfigured connection can never lock your workspace out.
-              </Text>
-              <ConnectionForm onDone={() => router.reload()} />
-            </Stack>
-          </Paper>
-        )}
+          {isAdmin && (
+            <Paper p="md" radius="md" withBorder>
+              <Stack gap="sm">
+                <Title order={4}>Connect your own identity provider</Title>
+                <Text size="sm" c="dimmed">
+                  A new connection arrives switched off. Verify it — that signs you in through it once — and only then
+                  can it be enabled, so a misconfigured connection can never lock your workspace out.
+                </Text>
+                <ConnectionForm onDone={() => router.reload()} />
+              </Stack>
+            </Paper>
+          )}
 
-        {joining && (
-          <Paper p="md" radius="md" withBorder>
-            <Stack gap="sm">
-              <Title order={4}>Joining</Title>
-              <Box>
-                <Text fz="sm" fw={500}>
-                  Email domain
-                </Text>
-                <Text fz="sm" c={joining.emailDomain ? undefined : 'dimmed'} mt={4}>
-                  {joining.emailDomain ?? 'Not set'}
-                </Text>
-              </Box>
-              <Switch
-                label="Accept new people automatically"
-                description={
-                  joining.emailDomain
-                    ? `Anyone signing in with an @${joining.emailDomain} address joins without an invitation.`
-                    : 'Needs an email domain — without one there is nothing to match a new person against, so everyone joins by invitation.'
-                }
-                disabled={!isAdmin || !joining.emailDomain}
-                checked={joining.autoAcceptUsers}
-                onChange={(event) => setAutoAccept(event.currentTarget.checked)}
-                aria-label="Accept new people automatically"
-              />
-            </Stack>
-          </Paper>
-        )}
+          {joining && (
+            <Paper p="md" radius="md" withBorder>
+              <Stack gap="sm">
+                <Title order={4}>Joining</Title>
+                <Box>
+                  <Text fz="sm" fw={500}>
+                    Email domain
+                  </Text>
+                  <Text fz="sm" c={joining.emailDomain ? undefined : 'dimmed'} mt={4}>
+                    {joining.emailDomain ?? 'Not set'}
+                  </Text>
+                </Box>
+                <Switch
+                  label="Accept new people automatically"
+                  description={
+                    joining.emailDomain
+                      ? `Anyone signing in with an @${joining.emailDomain} address joins without an invitation.`
+                      : 'Needs an email domain — without one there is nothing to match a new person against, so everyone joins by invitation.'
+                  }
+                  disabled={!isAdmin || !joining.emailDomain}
+                  checked={joining.autoAcceptUsers}
+                  onChange={(event) => setAutoAccept(event.currentTarget.checked)}
+                  aria-label="Accept new people automatically"
+                />
+              </Stack>
+            </Paper>
+          )}
         </Stack>
       </SettingsTabs>
     </AuthLayout>

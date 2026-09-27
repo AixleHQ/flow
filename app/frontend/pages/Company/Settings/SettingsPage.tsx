@@ -11,7 +11,6 @@ import {
   Image,
   NumberInput,
   Stack,
-  Switch,
   Text,
   TextInput,
 } from '@mantine/core';

@@ -137,7 +137,7 @@ class Web::OidcSessionsController < Web::ApplicationController
   # A verification lands back on the screen that asked for it, where the
   # connection can now be switched on.
   def return_to_for(provider)
-    return company_auth_policies_path unless Auth::PolicyResolver.accepts?(company: provider.company, provider: provider)
+    return company_settings_access_path unless Auth::PolicyResolver.accepts?(company: provider.company, provider: provider)
 
     params[:return_to].presence
   end

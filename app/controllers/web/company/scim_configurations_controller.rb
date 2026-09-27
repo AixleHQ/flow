@@ -17,12 +17,12 @@ class Web::Company::ScimConfigurationsController < Web::Company::ApplicationCont
     # history, server access logs and any Referer sent onward. The flash is
     # one-shot and stays in the session cookie.
     flash[:scim_token] = token
-    redirect_to company_auth_policies_path,
+    redirect_to company_settings_access_path,
                 notice: "Directory sync token generated. Copy it now — it is not shown again."
   end
 
   def destroy
     ScimConfiguration.find_by(company: current_company)&.update!(enabled: false)
-    redirect_to company_auth_policies_path, notice: "Directory sync turned off."
+    redirect_to company_settings_access_path, notice: "Directory sync turned off."
   end
 end
