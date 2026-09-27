@@ -124,6 +124,7 @@ module Agents
     API_CONTENT_TYPE = "application/x-amz-json-1.0"
     LIST_MODELS_TARGET = "KiroControlPlaneBearerService.ListAvailableModels"
     USAGE_LIMITS_TARGET = "KiroControlPlaneBearerService.GetUsageLimits"
+    LIST_PROFILES_TARGET = "KiroControlPlaneBearerService.ListAvailableProfiles"
 
     # Both operations reject a bare {} body: they want the calling surface and the
     # profile the token is scoped to. `AI_EDITOR` is what the CLI itself sends.
@@ -177,6 +178,11 @@ module Agents
     # the login. Its ARN is required on every API call and carries the region they go
     # to, which is NOT the identity-centre region also stored there (`auth.idc.region`
     # was us-west-2 on an account whose profile lives in us-east-1).
+    #
+    # An IAM Identity Center login does not write it: two production IdC credentials
+    # carried no such row while their tokens were live (2026-09-27), so every call was
+    # skipped and the usage card read "unavailable". Those fall back to asking the
+    # control plane (#discovered_profile_arn).
     PROFILE_STATE_KEY = "api.codewhisperer.profile"
 
     # Refreshing the login, per login family. Both endpoints and every field name below
@@ -919,15 +925,34 @@ module Agents
     def api_call(credentials, target)
       record = auth_record(decoded_state(credentials))
       token = record["access_token"]
-      profile_arn = record["profile_arn"]
-      return nil if token.blank? || profile_arn.blank?
+      return nil if token.blank?
 
-      uri = URI(format(API_HOST_TEMPLATE, region: region_from(profile_arn)))
+      profile_arn = record["profile_arn"].presence || discovered_profile_arn(token)
+      return nil if profile_arn.blank?
+
+      control_plane_post(token, target, { origin: API_ORIGIN, profileArn: profile_arn },
+                         region: region_from(profile_arn))
+    end
+
+    # The profile a login without a stored one is scoped to. Only an account with
+    # exactly one profile is answered: with several, the CLI makes the user pick, and
+    # guessing would read another profile's credits.
+    def discovered_profile_arn(token)
+      profiles = Array(control_plane_post(token, LIST_PROFILES_TARGET, { origin: API_ORIGIN })&.dig("profiles"))
+      arns = profiles.filter_map { |profile| profile["arn"].presence if profile.is_a?(Hash) }
+      return arns.first if arns.one?
+
+      Rails.logger.warn("[KiroCliAdapter] no stored profile and #{arns.size} available, not guessing") if arns.many?
+      nil
+    end
+
+    def control_plane_post(token, target, payload, region: DEFAULT_REGION)
+      uri = URI(format(API_HOST_TEMPLATE, region: region))
       request = Net::HTTP::Post.new(uri)
       request["Content-Type"] = API_CONTENT_TYPE
       request["X-Amz-Target"] = target
       request["Authorization"] = "Bearer #{token}"
-      request.body = { origin: API_ORIGIN, profileArn: profile_arn }.to_json
+      request.body = payload.to_json
 
       response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 15) do |http|
         http.request(request)
