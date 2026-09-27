@@ -232,19 +232,14 @@ export function scimScimitarScimSchemasPath(options?: object): string {
   return "/" + "scim" + "/" + "Schemas" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /scim/users/:id/patch(.:format) */
-export function patchScimUserPath(id: ScalarType, options?: object): string {
-  return "/" + "scim" + "/" + "users" + "/" + id + "/" + "patch" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
-}
-
-/** /scim/users(.:format) */
+/** /scim/Users(.:format) */
 export function scimUsersPath(options?: object): string {
-  return "/" + "scim" + "/" + "users" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+  return "/" + "scim" + "/" + "Users" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
-/** /scim/users/:id(.:format) */
+/** /scim/Users/:id(.:format) */
 export function scimUserPath(id: ScalarType, options?: object): string {
-  return "/" + "scim" + "/" + "users" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+  return "/" + "scim" + "/" + "Users" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
 }
 
 /** /api/v1/assets/presign(.:format) */
@@ -377,6 +372,26 @@ export function apiV1ProjectFoldersRelocatePath(project_id: ScalarType, options?
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "folders" + "/" + "relocate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
+/** /api/v1/projects/:project_id/entity_versions/:id/revert(.:format) */
+export function revertApiV1ProjectEntityVersionPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "entity_versions" + "/" + id + "/" + "revert" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
+/** /api/v1/projects/:project_id/entity_versions/restore(.:format) */
+export function restoreApiV1ProjectEntityVersionsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "entity_versions" + "/" + "restore" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/projects/:project_id/entity_versions(.:format) */
+export function apiV1ProjectEntityVersionsPath(project_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "entity_versions" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /api/v1/projects/:project_id/entity_versions/:id(.:format) */
+export function apiV1ProjectEntityVersionPath(project_id: ScalarType, id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "entity_versions" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","id","format"]);
+}
+
 /** /api/v1/projects/:project_id/workflows/:workflow_id/steps/reorder(.:format) */
 export function reorderApiV1ProjectWorkflowStepsPath(project_id: ScalarType, workflow_id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "steps" + "/" + "reorder" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","format"]);
@@ -400,6 +415,11 @@ export function apiV1ProjectWorkflowTriggersPath(project_id: ScalarType, workflo
 /** /api/v1/projects/:project_id/workflows/:workflow_id/triggers/:id(.:format) */
 export function apiV1ProjectWorkflowTriggerPath(project_id: ScalarType, workflow_id: ScalarType, id: ScalarType, options?: object): string {
   return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "triggers" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","id","format"]);
+}
+
+/** /api/v1/projects/:project_id/workflows/:workflow_id/aggregate(.:format) */
+export function apiV1ProjectWorkflowAggregatePath(project_id: ScalarType, workflow_id: ScalarType, options?: object): string {
+  return "/" + "api" + "/" + "v1" + "/" + "projects" + "/" + project_id + "/" + "workflows" + "/" + workflow_id + "/" + "aggregate" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","workflow_id","format"]);
 }
 
 /** /api/v1/projects/:project_id/workflows/:id(.:format) */

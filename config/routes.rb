@@ -109,12 +109,16 @@ Rails.application.routes.draw do
   namespace :scim do
     mount Scimitar::Engine, at: "/"
 
-    get    "Users",     to: "users#index"
-    post   "Users",     to: "users#create"
-    get    "Users/:id", to: "users#show", as: :user
-    put    "Users/:id", to: "users#replace"
-    patch  "Users/:id", to: "users#update"
-    delete "Users/:id", to: "users#destroy"
+    # Named explicitly, and suppressed where a name would be meaningless. Left
+    # to itself Rails derives one from the literal segment — "scim_Users", with
+    # the capital, and then a bare "scim" for the next route on the same path,
+    # which reads as the engine root rather than a member.
+    get    "Users",     to: "users#index",   as: :users
+    post   "Users",     to: "users#create",  as: nil
+    get    "Users/:id", to: "users#show",    as: :user
+    put    "Users/:id", to: "users#replace", as: nil
+    patch  "Users/:id", to: "users#update",  as: nil
+    delete "Users/:id", to: "users#destroy", as: nil
   end
 
   namespace :api, defaults: { format: :json } do
