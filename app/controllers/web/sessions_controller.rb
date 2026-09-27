@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Web::SessionsController < Web::ApplicationController
+  include CredentialsStepConcern
+
   layout "inertia"
 
   skip_before_action :enforce_onboarding
@@ -44,7 +46,7 @@ class Web::SessionsController < Web::ApplicationController
 
   def create
     user_form = UserSignInForm.new(session_params)
-    return redirect_to(login_path, inertia: { errors: user_form.errors }) unless user_form.valid?
+    return refuse_credentials(user_form.errors) unless user_form.valid?
 
     user = user_form.user
     # A parked invitation (login-continuation) is accepted before the gate below
@@ -155,6 +157,17 @@ class Web::SessionsController < Web::ApplicationController
     else
       params.permit(:email, :password)
     end
+  end
+
+  # Back to the step the password was typed on, not to the address step: a
+  # refusal that redirected to /login would make the person retype an address
+  # they had already given.
+  def refuse_credentials(errors)
+    email = session_params[:email].to_s.strip
+    options = email.present? ? Auth::SignInOptions.for(email) : nil
+    return redirect_to(login_path, inertia: { errors: errors }) if options.nil?
+
+    render_credentials_step(email, options, errors: errors)
   end
 
   def safe_email_param

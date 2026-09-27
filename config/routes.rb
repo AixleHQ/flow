@@ -66,7 +66,10 @@ Rails.application.routes.draw do
 
   # Per-company OIDC sign-in (CAP-3). One deployment-wide callback; which
   # connection issued the code is carried in the SIGNED state, never in the path.
-  post "login/sso", to: "web/oidc_sessions#discover", as: :sso_discovery
+  # Step one of signing in: an address, and nothing else. What comes back is
+  # decided by its DOMAIN — never by whether an account exists, which would make
+  # this an oracle for which addresses are registered.
+  post "login/identify", to: "web/oidc_sessions#identify", as: :login_identify
   # Emailed single-use sign-in links (CAP-4). The GET only CONFIRMS; the POST
   # consumes. Mail scanners fetch every URL in a message, and a link that signed
   # people in on GET would be burned before its owner ever clicked it.

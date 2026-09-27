@@ -132,9 +132,9 @@ export function publicAssetRawPath(token: ScalarType, options?: object): string 
   return "/" + "share" + "/" + token + "/" + "raw" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["token","format"]);
 }
 
-/** /login/sso(.:format) */
-export function ssoDiscoveryPath(options?: object): string {
-  return "/" + "login" + "/" + "sso" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+/** /login/identify(.:format) */
+export function loginIdentifyPath(options?: object): string {
+  return "/" + "login" + "/" + "identify" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /totp(.:format) */
