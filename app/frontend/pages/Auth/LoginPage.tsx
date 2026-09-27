@@ -1,9 +1,11 @@
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Button, Center, Checkbox, Divider, Paper, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { IconShieldLock } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
 
+import { AuthMethodButton } from 'shared/components/AuthMethodButton';
 import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
 import { loginPath, ssoDiscoveryPath } from 'shared/routes';
 import { Logo, PageShell } from 'shared/ui';
@@ -58,13 +60,13 @@ function NoWorkspaceScreen() {
   );
 }
 
-// Google and a passkey identify the person on their own: Google runs its own
-// account picker, and a passkey is discoverable, so the browser already knows
-// who is signing in. Company SSO and an emailed link cannot — one resolves the
-// workspace from the address's domain, the other has to send the mail
-// somewhere — so both stay inactive until an address is typed. Left unexplained
-// that reads as arbitrary, which is why the reason is spelled out rather than
-// hidden behind a hover.
+// Google, Microsoft and a passkey identify the person on their own: each runs
+// its own account picker, and a passkey is discoverable, so the browser already
+// knows who is signing in. Company SSO and an emailed link cannot — one resolves
+// the workspace from the address's domain, the other has to send the mail
+// somewhere — so both wait on the field above and sit together at the bottom.
+// Left unexplained that reads as arbitrary, which is why the reason is spelled
+// out rather than hidden behind a hover.
 function SignInMethods({
   providers,
   passwordless,
@@ -83,14 +85,13 @@ function SignInMethods({
     <Stack gap="sm">
       {providers.includes('google') && <GoogleLoginButton />}
       {providers.includes('microsoft') && <MicrosoftLoginButton />}
-      <Button variant="subtle" fullWidth onClick={onSso} disabled={needsEmail}>
-        Sign in with your company SSO
-      </Button>
       <PasswordlessOptions email={email} methods={passwordless} />
+      <AuthMethodButton icon={<IconShieldLock size={18} />} onClick={onSso} disabled={needsEmail}>
+        Company SSO
+      </AuthMethodButton>
       {needsEmail && (
         <Text size="xs" c="dimmed" ta="center">
-          {magicLinkOffered ? 'Company SSO and an emailed link start' : 'Company SSO starts'} from your address — enter
-          it below.
+          {magicLinkOffered ? 'Company SSO and an emailed link use' : 'Company SSO uses'} the address above.
         </Text>
       )}
     </Stack>
@@ -157,87 +158,6 @@ const LoginPage = () => {
       <Head title="Sign in — Aixle Flow" />
       {error === 'no_workspace' ? (
         <NoWorkspaceScreen />
-      ) : error ? (
-        <Paper
-          className={classes.formCard}
-          p="xl"
-          radius="md"
-          w="100%"
-          maw={420}
-          shadow="0 8px 32px rgba(0, 0, 0, 0.4)"
-        >
-          <Center mb={32}>
-            <span className={classes.brand}>
-              {/* No colorScheme override: pinning it to "dark" inverts the mark to
-                  white, which disappears on the light-scheme login card. */}
-              <Logo width={96} />
-              <span className={classes.brandFlow}>Flow</span>
-            </span>
-          </Center>
-
-          <SignInMethods providers={providers} passwordless={passwordless} email={data.email} onSso={startSso} />
-
-          {providers.length > 0 && (
-            <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
-          )}
-
-          <Text ta="center" size="sm" c="dimmed" mb="lg" className={classes.subtitle}>
-            Enter your credentials to access your workspace
-          </Text>
-
-          <form onSubmit={handleSubmit}>
-            <Stack gap="md">
-              <TextInput
-                label="Email"
-                value={data.email}
-                onChange={(e) => {
-                  setData('email', e.currentTarget.value);
-                  if (clientErrors.email) setClientErrors((prev) => ({ ...prev, email: undefined }));
-                }}
-                placeholder="you@company.com"
-                error={clientErrors.email || errors.email}
-                autoComplete="username"
-                classNames={{ input: classes.input, label: classes.label }}
-              />
-
-              <PasswordInput
-                label="Password"
-                value={data.password}
-                onChange={(e) => {
-                  setData('password', e.currentTarget.value);
-                  if (clientErrors.password) setClientErrors((prev) => ({ ...prev, password: undefined }));
-                }}
-                placeholder="••••••••"
-                error={clientErrors.password || errors.password}
-                autoComplete="current-password"
-                classNames={{ input: classes.input, label: classes.label, visibilityToggle: classes.visibilityToggle }}
-                visibilityToggleButtonProps={{ 'aria-label': 'Toggle password visibility' }}
-              />
-
-              <Checkbox
-                label="Remember me"
-                size="sm"
-                checked={data.rememberMe}
-                onChange={(e) => setData('rememberMe', e.currentTarget.checked)}
-              />
-
-              <Button
-                type="submit"
-                fullWidth
-                size="lg"
-                loading={processing}
-                mt="sm"
-                classNames={{ root: classes.submitButton }}
-              >
-                {processing ? 'Signing in...' : 'Sign in'}
-              </Button>
-            </Stack>
-          </form>
-
-          <Text ta="center" size="xs" c="dimmed" mt="lg" className={classes.subtitle}>
-            AI Agent Orchestration Platform
-          </Text>
-        </Paper>
       ) : (
         <Paper
           className={classes.formCard}
@@ -256,16 +176,6 @@ const LoginPage = () => {
             </span>
           </Center>
 
-          <SignInMethods providers={providers} passwordless={passwordless} email={data.email} onSso={startSso} />
-
-          {providers.length > 0 && (
-            <Divider label="OR" labelPosition="center" my="lg" color="var(--app-border-default)" />
-          )}
-
-          <Text ta="center" size="sm" c="dimmed" mb="lg" className={classes.subtitle}>
-            Enter your credentials to access your workspace
-          </Text>
-
           <form onSubmit={handleSubmit}>
             <Stack gap="md">
               <TextInput
@@ -314,6 +224,10 @@ const LoginPage = () => {
               </Button>
             </Stack>
           </form>
+
+          <Divider label="or continue with" labelPosition="center" my="lg" color="var(--app-border-default)" />
+
+          <SignInMethods providers={providers} passwordless={passwordless} email={data.email} onSso={startSso} />
 
           <Text ta="center" size="xs" c="dimmed" mt="lg" className={classes.subtitle}>
             AI Agent Orchestration Platform
