@@ -14,7 +14,7 @@ class Web::SessionsController < Web::ApplicationController
   # we host: elsewhere a workspace is made in the admin, so a person with nothing
   # to join is a refusal.
   def may_sign_up_a_workspace?(user)
-    return false unless Deployment.saas?
+    return false unless Deployment.self_serve_signup?
     return false if user.nil? || user.super_admin? || user.deleted?
 
     user.company_memberships.none?

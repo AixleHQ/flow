@@ -586,3 +586,10 @@ context:
 # not have to be rebuilt to say so.
 pricing:
   queue_hourly_rate: <%= (ENV['PRICING_QUEUE_HOURLY_RATE'] || 5).to_f %>
+
+# Whether strangers may sign their own company up (the public /workspace/new and
+# the /how-it-works page that leads to it). Hosted deployments only; off until
+# an operator turns it on, so the screens can ship before the product is ready
+# to take them.
+registration:
+  enabled: <%= ENV.fetch('REGISTRATION_ENABLED', 'false') == 'true' %>

@@ -29,6 +29,6 @@ class Web::HowItWorksController < Web::ApplicationController
   private
 
   def require_self_serve_signup
-    redirect_to root_path unless Deployment.saas?
+    redirect_to root_path unless Deployment.self_serve_signup?
   end
 end

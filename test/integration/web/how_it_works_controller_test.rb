@@ -5,8 +5,11 @@ require "test_helper"
 class Web::HowItWorksControllerTest < ActionDispatch::IntegrationTest
   setup { with_mode(Deployment::SAAS) }
 
-  def with_mode(mode)
+  # Registration is off by default, so a suite about signing up says so rather
+  # than inheriting whatever the environment left in the settings file.
+  def with_mode(mode, registration: true)
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))
+    Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: registration))
   end
 
   test "a stranger can read it" do
@@ -32,6 +35,16 @@ class Web::HowItWorksControllerTest < ActionDispatch::IntegrationTest
     get how_it_works_path
 
     assert_inertia_page "HowItWorks/ShowPage"
+  end
+
+  # The page sells a signup. While that is switched off it is selling something
+  # nobody can buy.
+  test "it is gone while registration is off" do
+    with_mode(Deployment::SAAS, registration: false)
+
+    get how_it_works_path
+
+    assert_redirected_to root_path
   end
 
   # It sells a workspace a stranger can create and a price we invoice. Neither

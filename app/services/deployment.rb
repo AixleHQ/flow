@@ -36,6 +36,13 @@ module Deployment
       SAAS
     end
 
+    # Whether a stranger may sign a company up here, which also decides whether
+    # the page that sells it exists. Hosted only — elsewhere a workspace is made
+    # by the operator or bought through AWS — and off until an operator says
+    # otherwise, because the screens ship before the product is ready to take
+    # strangers and a half-open door is worse than a closed one.
+    def self_serve_signup? = saas? && Settings.registration&.enabled == true
+
     def self_hosted? = mode == SELF_HOSTED
     def saas? = mode == SAAS
     def aws_marketplace? = mode == AWS_MARKETPLACE

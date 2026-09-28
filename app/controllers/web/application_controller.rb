@@ -37,7 +37,7 @@ class Web::ApplicationController < ApplicationController
         sentry_traces_sample_rate: Settings.sentry.traces_sample_rate.to_f,
         # Whether a stranger may sign a company up here, which is also what
         # decides that /how-it-works — the page that sells it — exists at all.
-        self_serve_signup: Deployment.saas?
+        self_serve_signup: Deployment.self_serve_signup?
       }
     }
 
@@ -141,7 +141,7 @@ class Web::ApplicationController < ApplicationController
   # workspace is made in the admin, and someone with no membership is a refusal
   # rather than a signup.
   def enforce_workspace
-    return unless Deployment.saas?
+    return unless Deployment.self_serve_signup?
     return unless signed_in?
     return if current_user.super_admin?
     # Already resolved for this request, so the common case — a person who

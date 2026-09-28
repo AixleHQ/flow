@@ -9,8 +9,11 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     sign_in_as(@user)
   end
 
-  def with_mode(mode)
+  # Registration is off by default, so a suite about signing up says so rather
+  # than inheriting whatever the environment left in the settings file.
+  def with_mode(mode, registration: true)
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: mode))
+    Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: registration))
   end
 
   def valid_params
@@ -69,6 +72,25 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :redirect
     assert_not_equal new_workspace_path, response.location
+  end
+
+  # The screens ship before the product is ready to take strangers, so they are
+  # behind a flag an operator turns on — and a half-open door is worse than a
+  # closed one, so it closes the form, not just the link to it.
+  test "the form is closed while registration is off" do
+    with_mode(Deployment::SAAS, registration: false)
+
+    get new_workspace_path
+
+    assert_redirected_to login_path(error: "no_workspace")
+  end
+
+  test "nothing can be created while registration is off" do
+    with_mode(Deployment::SAAS, registration: false)
+
+    post workspace_path, params: valid_params
+
+    assert_nil Company.find_by(email_domain: "acme-robotics.example")
   end
 
   # Signing yourself up is the hosted product only: elsewhere a workspace is made

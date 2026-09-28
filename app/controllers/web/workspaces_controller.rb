@@ -58,7 +58,7 @@ class Web::WorkspacesController < Web::ApplicationController
   end
 
   def require_self_serve_signup
-    redirect_to login_path(error: "no_workspace") unless Deployment.saas?
+    redirect_to login_path(error: "no_workspace") unless Deployment.self_serve_signup?
   end
 
   # Someone who already belongs somewhere has no business here, and a super admin
