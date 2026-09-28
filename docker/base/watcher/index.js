@@ -42,6 +42,7 @@ const chokidar = { watch: (...args) => require('chokidar').watch(...args) };
 const PORT = parseInt(process.env.WATCHER_PORT || '4040', 10);
 const WATCH_DIR = process.env.WATCH_DIR || '/workspace';
 const UPLOAD_PORT = parseInt(process.env.UPLOAD_PORT || '4041', 10);
+const VSCODE_SETTINGS_PATH = process.env.VSCODE_SETTINGS_PATH || '/opt/openvscode-server/default-settings.json';
 const UPLOAD_DIR = process.env.UPLOAD_DIR || '/tmp/aixle-uploads';
 const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
 const UPLOAD_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
@@ -277,6 +278,145 @@ function safePreloadTarget(to, requestHost) {
   return target.href;
 }
 
+const VSCODE_THEMES = { light: 'Default Light Modern', dark: 'Default Dark Modern' };
+
+/**
+ * The image's VS Code settings with the theme for `scheme`, or null without them.
+ */
+function vscodeUserSettings(scheme, settingsPath = VSCODE_SETTINGS_PATH) {
+  try {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    settings['workbench.colorTheme'] = VSCODE_THEMES[scheme] || VSCODE_THEMES.dark;
+    return JSON.stringify(settings, null, 2);
+  } catch (e) {
+    log.warn(`No VS Code settings at ${settingsPath}: ${e.message}`);
+    return null;
+  }
+}
+
+function sendHtml(res, title, script) {
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>${title}</title>
+<style>body{margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;color:#ccc;font-family:sans-serif;font-size:14px}</style>
+</head>
+<body>
+<span>${title}</span>
+<script>${script}</script>
+</body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.writeHead(200);
+  res.end(html);
+}
+
+const inlineJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
+
+/**
+ * Browser-side script of /preload (reset, then open VS Code) and /theme (settings only).
+ *
+ * VS Code in the browser keeps USER settings in IndexedDB, not in the server's
+ * data dir, and ignores application-scoped keys (theme, startup editor) in the
+ * Machine settings it does read. Its per-workspace state lives in a database
+ * named after the folder URI, whose authority is location.host — port included.
+ * Every session reuses that same URI, so without a reset it reopens the editors
+ * of an earlier session, files that may not exist in this one.
+ */
+function vscodeStateScript({ settings, redirectTo }) {
+  const resetWorkspace = redirectTo !== null;
+  const emptyEditorState = JSON.stringify({
+    'editorpart.state': {
+      serializedGrid: {
+        root: {
+          type: 'branch',
+          data: [{ type: 'leaf', data: { id: 0, editors: [], mru: [], preview: -1 }, size: 863 }],
+          size: 883,
+        },
+        orientation: 0,
+        width: 883,
+        height: 863,
+      },
+      activeGroup: 0,
+      mostRecentActiveGroups: [0],
+    },
+  });
+
+  return `
+(async () => {
+  const emptyEditorState = ${inlineJson(emptyEditorState)};
+  const userSettings = ${inlineJson(settings)};
+  const resetWorkspace = ${resetWorkspace};
+  const redirectTo = ${inlineJson(redirectTo)};
+
+  const done = (req) => new Promise((resolve) => { req.onsuccess = () => resolve(req.result); req.onerror = () => resolve(null); req.onblocked = () => resolve(null); });
+
+  const patchState = async (name) => {
+    const req = indexedDB.open(name, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('ItemTable'); };
+    const db = await done(req);
+    if (!db) return;
+    const store = db.objectStoreNames.contains('ItemTable') ? 'ItemTable' : db.objectStoreNames[0];
+    if (!store) { db.close(); return; }
+    const tx = db.transaction(store, 'readwrite');
+    const s = tx.objectStore(store);
+    s.put(emptyEditorState, 'memento/workbench.parts.editor');
+    s.put('true', 'workbench.auxiliaryBar.hidden');
+    s.put('true', 'workbench.auxiliaryBar.empty');
+    s.put('true', 'workbench.activityBar.hidden');
+    s.put(JSON.stringify([{id:'workbench.panel.chat',pinned:true,visible:false,order:1},{id:'workbench.viewContainer.agentSessions',pinned:true,visible:false,order:6}]), 'workbench.auxiliarybar.pinnedPanels');
+    s.put(JSON.stringify([{id:'workbench.panel.chat',visible:false},{id:'workbench.viewContainer.agentSessions',visible:false}]), 'workbench.auxiliarybar.viewContainersWorkspaceState');
+    await new Promise((resolve) => { tx.oncomplete = resolve; tx.onerror = resolve; });
+    db.close();
+  };
+
+  // Store names are the ones VS Code 1.106 creates at version 3; a database made
+  // here must already hold all three.
+  const writeUserSettings = async () => {
+    if (!userSettings) return;
+    const req = indexedDB.open('vscode-web-db', 3);
+    req.onupgradeneeded = () => {
+      for (const name of ['vscode-userdata-store', 'vscode-logs-store', 'vscode-filehandles-store']) {
+        if (!req.result.objectStoreNames.contains(name)) req.result.createObjectStore(name);
+      }
+    };
+    const db = await done(req);
+    if (!db) return;
+    if (db.objectStoreNames.contains('vscode-userdata-store')) {
+      const tx = db.transaction('vscode-userdata-store', 'readwrite');
+      tx.objectStore('vscode-userdata-store').put(new TextEncoder().encode(userSettings), '/User/settings.json');
+      await new Promise((resolve) => { tx.oncomplete = resolve; tx.onerror = resolve; });
+    }
+    db.close();
+    // What VS Code's own IndexedDB file provider posts, so an open editor reloads its settings.
+    try {
+      const channel = new BroadcastChannel('vscode.indexedDB.vscode-userdata.changes');
+      channel.postMessage([{ type: 0, resource: { scheme: 'vscode-userdata', authority: '', path: '/User/settings.json', query: '', fragment: '' } }]);
+      channel.close();
+    } catch (e) {}
+  };
+
+  try {
+    // VS Code's own hash of the folder URI (stringHash in base/common/hash.ts).
+    function numberHash(val, h) { return (((h << 5) - h) + val) | 0; }
+    function stringHash(s, h) {
+      h = numberHash(149417, h);
+      for (let i = 0; i < s.length; i++) h = numberHash(s.charCodeAt(i), h);
+      return h;
+    }
+    const workspaceDbName = 'vscode-web-state-db-' + stringHash('vscode-remote://' + location.host + '/workspace', 0).toString(16);
+
+    if (resetWorkspace) {
+      await done(indexedDB.deleteDatabase(workspaceDbName));
+      await Promise.all([patchState('vscode-web-state-db-global'), patchState(workspaceDbName)]);
+    }
+    await writeUserSettings();
+  } catch (e) {}
+
+  if (redirectTo) window.location.replace(redirectTo);
+})();
+`;
+}
+
 /**
  * HTTP request handler
  */
@@ -382,7 +522,7 @@ function handleRequest(req, res) {
     return;
   }
 
-  // Preload page: patches VS Code IndexedDB then redirects to VS Code.
+  // Preload page: resets VS Code's browser state, then redirects to VS Code.
   // Served at the same traefik origin as VS Code so IndexedDB is shared.
   if (url.pathname === '/preload') {
     const to = safePreloadTarget(url.searchParams.get('to'), req.headers.host);
@@ -391,79 +531,15 @@ function handleRequest(req, res) {
       res.end('Missing or invalid ?to= parameter');
       return;
     }
+    sendHtml(res, 'Loading editor...', vscodeStateScript({ settings: vscodeUserSettings(url.searchParams.get('scheme')), redirectTo: to }));
+    return;
+  }
 
-    const emptyEditorState = JSON.stringify({
-      'editorpart.state': {
-        serializedGrid: {
-          root: {
-            type: 'branch',
-            data: [{ type: 'leaf', data: { id: 0, editors: [], mru: [], preview: -1 }, size: 863 }],
-            size: 883,
-          },
-          orientation: 0,
-          width: 883,
-          height: 863,
-        },
-        activeGroup: 0,
-        mostRecentActiveGroups: [0],
-      },
-    });
-
-    const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Loading editor...</title>
-<style>body{margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;color:#ccc;font-family:sans-serif;font-size:14px}</style>
-</head>
-<body>
-<span>Loading editor...</span>
-<script>
-(async () => {
-  const emptyEditorState = ${JSON.stringify(emptyEditorState)};
-  const patch = (name) => new Promise((resolve) => {
-    const req = indexedDB.open(name, 1);
-    req.onupgradeneeded = () => { req.result.createObjectStore('ItemTable'); };
-    req.onsuccess = () => {
-      const db = req.result;
-      const store = db.objectStoreNames.contains('ItemTable') ? 'ItemTable' : db.objectStoreNames[0];
-      if (!store) { db.close(); resolve(); return; }
-      const tx = db.transaction(store, 'readwrite');
-      const s = tx.objectStore(store);
-      s.put(emptyEditorState, 'memento/workbench.parts.editor');
-      s.put('true', 'workbench.auxiliaryBar.hidden');
-      s.put('true', 'workbench.auxiliaryBar.empty');
-      s.put('true', 'workbench.activityBar.hidden');
-      s.put(JSON.stringify([{id:'workbench.panel.chat',pinned:true,visible:false,order:1},{id:'workbench.viewContainer.agentSessions',pinned:true,visible:false,order:6}]), 'workbench.auxiliarybar.pinnedPanels');
-      s.put(JSON.stringify([{id:'workbench.panel.chat',visible:false},{id:'workbench.viewContainer.agentSessions',visible:false}]), 'workbench.auxiliarybar.viewContainersWorkspaceState');
-      tx.oncomplete = () => { db.close(); resolve(); };
-      tx.onerror = () => { db.close(); resolve(); };
-    };
-    req.onerror = () => resolve();
-  });
-
-  try {
-    // Compute the workspace-specific DB name using VS Code's own hash algorithm:
-    // hash = stringHash("vscode-remote://{hostname}/workspace", 0).toString(16)
-    function numberHash(val, h) { return (((h << 5) - h) + val) | 0; }
-    function stringHash(s, h) {
-      h = numberHash(149417, h);
-      for (let i = 0; i < s.length; i++) h = numberHash(s.charCodeAt(i), h);
-      return h;
-    }
-    const folderUri = 'vscode-remote://' + window.location.hostname + '/workspace';
-    const workspaceDbName = 'vscode-web-state-db-' + stringHash(folderUri, 0).toString(16);
-
-    await Promise.all(['vscode-web-state-db-global', workspaceDbName].map(patch));
-  } catch(e) {}
-
-  window.location.replace(${JSON.stringify(to)});
-})();
-</script>
-</body>
-</html>`;
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.writeHead(200);
-    res.end(html);
+  // Switches an open VS Code between light and dark. The session page loads it in a
+  // hidden frame when the app changes theme; VS Code reloads its settings on the
+  // change notification, so the editor is not reopened and unsaved work survives.
+  if (url.pathname === '/theme') {
+    sendHtml(res, 'Theme', vscodeStateScript({ settings: vscodeUserSettings(url.searchParams.get('scheme')), redirectTo: null }));
     return;
   }
 
@@ -925,4 +1001,4 @@ if (require.main === module) {
   startCredentialSync();
 }
 
-module.exports = { resolveInside, safePreloadTarget, uploadFileName };
+module.exports = { resolveInside, safePreloadTarget, uploadFileName, vscodeUserSettings };

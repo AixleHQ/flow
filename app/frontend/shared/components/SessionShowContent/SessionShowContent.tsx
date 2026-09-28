@@ -1,5 +1,17 @@
 import { router } from '@inertiajs/react';
-import { ActionIcon, Badge, Box, Button, Center, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Center,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  Tooltip,
+  useComputedColorScheme,
+} from '@mantine/core';
 import { type HotkeyItem, useClipboard, useHotkeys } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import {
@@ -22,6 +34,7 @@ import { apiMutate } from 'shared/lib/apiFetch';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { ideThemeUrl, ideUrlWithScheme } from 'shared/lib/ideTheme';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
@@ -103,6 +116,15 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   // is just a broken editor — and Finish is hidden, because the API scopes that
   // action to the owner anyway.
   const isOwner = s.ownedByViewer;
+  const colorScheme = useComputedColorScheme('dark', { getInitialValueInEffect: false });
+  // The IDE opens in the theme of the moment. A later change is applied in place by
+  // a hidden theme page: a new src would reopen the editor and drop unsaved work.
+  const [openedInScheme] = useState(colorScheme);
+  const [ideThemeChanged, setIdeThemeChanged] = useState(false);
+  useEffect(() => {
+    if (colorScheme !== openedInScheme) setIdeThemeChanged(true);
+  }, [colorScheme, openedInScheme]);
+  const themeUrl = ideThemeChanged && s.ideUrl ? ideThemeUrl(s.ideUrl, colorScheme) : null;
   const hasIde = !!s.ideUrl && isOwner;
   // Full screen is for the agent's terminal alone; the editor comes back with
   // the split it had once the console is restored.
@@ -376,11 +398,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
           <div className={`${classes.panelFrame} ${classes.editorFrame}`}>
             {!ideLoaded && renderLoadingOverlay('Loading editor…')}
             <ContainerFrame
-              src={s.ideUrl!}
+              src={ideUrlWithScheme(s.ideUrl!, openedInScheme)}
               title="VS Code Editor"
               allow="clipboard-read; clipboard-write"
               onLoad={() => setIdeLoaded(true)}
             />
+            {themeUrl && <iframe key={colorScheme} src={themeUrl} title="VS Code theme" hidden />}
           </div>
         </Panel>
         <PanelResizeHandle className={classes.resizeHandle} onDoubleClick={toggleEditor}>

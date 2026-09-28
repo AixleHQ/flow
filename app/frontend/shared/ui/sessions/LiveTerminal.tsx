@@ -1,7 +1,7 @@
 import { Button, Group, Loader, Text, useComputedColorScheme } from '@mantine/core';
 import { type HotkeyItem, getHotkeyHandler } from '@mantine/hooks';
 import type { Terminal } from '@xterm/xterm';
-import { type ClipboardEvent, type DragEvent, useEffect, useRef, useState } from 'react';
+import { type ClipboardEvent, type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 
 import { clipboardKeyAction, isMacPlatform } from 'shared/lib/clipboardKeys';
 import { stripContainerTicket } from 'shared/lib/containerTicket';
@@ -111,6 +111,21 @@ export function LiveTerminal({ url, readOnly = false, label = 'Terminal', hotkey
     uploadUrlRef.current = uploadUrl;
   });
 
+  const repaintTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const scheduleRepaint = useCallback(() => {
+    repaintTimers.current.forEach(clearTimeout);
+    const nudge = setTimeout(() => {
+      const term = termRef.current;
+      if (!term) return;
+      connectionRef.current?.resize(term.cols - 1, term.rows);
+      const restore = setTimeout(() => connectionRef.current?.resize(term.cols, term.rows), RESIZE_BACK_MS);
+      repaintTimers.current.push(restore);
+    }, THEME_REPAINT_DELAY_MS);
+    repaintTimers.current = [nudge];
+  }, []);
+
+  useEffect(() => () => repaintTimers.current.forEach(clearTimeout), []);
+
   useEffect(() => {
     schemeRef.current = scheme;
     const term = termRef.current;
@@ -120,18 +135,8 @@ export function LiveTerminal({ url, readOnly = false, label = 'Terminal', hotkey
     // learns the new theme before passing it on to the CLI.
     if (!reportsThemeRef.current || readOnly) return;
     connectionRef.current?.input(themeReport(scheme));
-
-    let restore: ReturnType<typeof setTimeout> | undefined;
-    const nudge = setTimeout(() => {
-      const { cols, rows } = term;
-      connectionRef.current?.resize(cols - 1, rows);
-      restore = setTimeout(() => connectionRef.current?.resize(term.cols, term.rows), RESIZE_BACK_MS);
-    }, THEME_REPAINT_DELAY_MS);
-    return () => {
-      clearTimeout(nudge);
-      clearTimeout(restore);
-    };
-  }, [scheme, readOnly]);
+    scheduleRepaint();
+  }, [scheme, readOnly, scheduleRepaint]);
 
   // Each serialization of the page mints the URL a fresh pass; only a new route
   // is a different terminal. The latest URL is read at every (re)connect.
@@ -249,7 +254,11 @@ export function LiveTerminal({ url, readOnly = false, label = 'Terminal', hotkey
       track(
         term.parser.registerCsiHandler({ prefix: '?', final: 'n' }, (params) => {
           if (params[0] !== THEME_QUERY) return false;
-          if (!readOnly) connection.input(themeReport(schemeRef.current));
+          if (readOnly) return true;
+          connection.input(themeReport(schemeRef.current));
+          // tmux asks when a client attaches: the CLI learns the theme now, and
+          // may have started without one.
+          scheduleRepaint();
           return true;
         }),
       );
@@ -286,7 +295,7 @@ export function LiveTerminal({ url, readOnly = false, label = 'Terminal', hotkey
       disposed = true;
       cleanups.reverse().forEach((cleanup) => cleanup());
     };
-  }, [route, readOnly]);
+  }, [route, readOnly, scheduleRepaint]);
 
   async function pasteImages(images: File[]) {
     const target = uploadUrlRef.current;

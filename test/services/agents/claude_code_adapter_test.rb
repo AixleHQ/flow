@@ -68,12 +68,13 @@ module Agents
     # Code's Bedrock wizard lists profiles from ~/.aws/config, and it executes their
     # credential_process during verification. That execution is how we learn the user chose
     # Bedrock inside the TUI, before anything is written to disk.
-    test "the default auth kind seeds the platform AWS profile and no credential" do
+    test "the default auth kind seeds the platform AWS profile, the theme and no credential" do
       files = @adapter.auth_setup_files_for("agent", { "claudeAiOauth" => {} })
 
-      assert_equal [ "/home/claude/.aws/config" ], files.keys
-      assert_includes files.values.first, "[profile aixle-bedrock]"
-      assert_includes files.values.first, "credential_process = /usr/local/bin/aixle-aws-creds"
+      assert_equal [ "/home/claude/.aws/config", "/home/claude/.claude/settings.json" ], files.keys.sort
+      assert_includes files["/home/claude/.aws/config"], "[profile aixle-bedrock]"
+      assert_includes files["/home/claude/.aws/config"], "credential_process = /usr/local/bin/aixle-aws-creds"
+      assert_equal({ "theme" => "auto" }, JSON.parse(files["/home/claude/.claude/settings.json"]))
     end
 
     test "design kind watches only for the designOauth block" do
@@ -346,6 +347,13 @@ module Agents
       # user clicks through the warning; without it, bypassPermissions still blocks.
       assert_equal true, settings["skipDangerousModePermissionPrompt"] # rubocop:disable Minitest/AssertTruthy
       assert_equal true, settings["bypassPermissionsWarningAccepted"] # rubocop:disable Minitest/AssertTruthy
+    end
+
+    test "settings let Claude Code follow the terminal's light or dark theme" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "interactive" })
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+
+      assert_equal "auto", settings["theme"]
     end
 
     test "config_files defaults to bypassPermissions when mode is absent" do

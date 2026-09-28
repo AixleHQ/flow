@@ -146,6 +146,24 @@ describe('LiveTerminal', () => {
       await waitFor(() => expect(typed(socket)).toContain('\x1b[?997;1n'));
     });
 
+    it('makes the CLI repaint once tmux has asked for the theme on attach', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        renderPage(<LiveTerminal url={URL_WITH_PASS} />);
+        const socket = await connected();
+        await fromTmux(socket, '\x1b[?996n');
+        await waitFor(() => expect(typed(socket)).toContain('\x1b[?997;1n'));
+        const resizes = () => socket.sent.filter((f) => f.startsWith('1'));
+        const before = resizes().length;
+
+        act(() => vi.advanceTimersByTime(2600));
+
+        expect(resizes().length).toBe(before + 2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('makes the CLI repaint by resizing once the theme has settled', async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       try {
