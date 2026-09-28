@@ -34,7 +34,10 @@ class Web::ApplicationController < ApplicationController
         # at build — so it stays runtime-configurable via ENV. Real abuse defense
         # is Sentry-side allowed-domains + spike protection, not hiding the DSN.
         sentry_frontend_dsn: Settings.sentry.frontend_dsn,
-        sentry_traces_sample_rate: Settings.sentry.traces_sample_rate.to_f
+        sentry_traces_sample_rate: Settings.sentry.traces_sample_rate.to_f,
+        # Whether a stranger may sign a company up here, which is also what
+        # decides that /how-it-works — the page that sells it — exists at all.
+        self_serve_signup: Deployment.saas?
       }
     }
 
@@ -141,6 +144,10 @@ class Web::ApplicationController < ApplicationController
     return unless Deployment.saas?
     return unless signed_in?
     return if current_user.super_admin?
+    # Already resolved for this request, so the common case — a person who
+    # belongs somewhere — costs nothing. The count below runs only for the few
+    # who have no current membership, rather than once per request for everyone.
+    return if current_membership
     return if current_user.company_memberships.exists?
     return if request.path == new_workspace_path
 

@@ -1092,6 +1092,11 @@ export function docsPagePath(slug: ScalarType[], options?: object): string {
   return "/" + "docs" + "/" + slug.map((part) => $encode(part)).join("/") + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["slug","format"]);
 }
 
+/** /how-it-works(.:format) */
+export function howItWorksPath(options?: object): string {
+  return "/" + "how-it-works" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /templates(.:format) */
 export function templatesPath(options?: object): string {
   return "/" + "templates" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

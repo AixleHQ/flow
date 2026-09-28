@@ -7,7 +7,7 @@ import { z } from 'zod';
 
 import { GoogleLoginButton } from 'shared/components/GoogleLoginButton';
 import { loginIdentifyPath, loginPath } from 'shared/routes';
-import { Logo, PageShell } from 'shared/ui';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 import classes from './LoginPage.module.css';
 import { MicrosoftLoginButton } from './MicrosoftLoginButton';
@@ -45,12 +45,7 @@ function NoWorkspaceScreen() {
   return (
     <Paper className={classes.formCard} p="xl" radius="md" w="100%" maw={420} shadow="0 8px 32px rgba(0, 0, 0, 0.4)">
       <Center mb={32}>
-        <span className={classes.brand}>
-          {/* No colorScheme override: pinning it to "dark" inverts the mark to
-                  white, which disappears on the light-scheme login card. */}
-          <Logo width={96} />
-          <span className={classes.brandFlow}>Flow</span>
-        </span>
+        <BrandLockup />
       </Center>
       <Title order={3} ta="center" mb="sm" className={classes.noWorkspaceHeading}>
         No workspace for your domain
@@ -143,12 +138,7 @@ const LoginPage = () => {
 
   const brand = (
     <Center mb={32}>
-      <span className={classes.brand}>
-        {/* No colorScheme override: pinning it to "dark" inverts the mark to
-            white, which disappears on the light-scheme login card. */}
-        <Logo width={96} />
-        <span className={classes.brandFlow}>Flow</span>
-      </span>
+      <BrandLockup />
     </Center>
   );
 

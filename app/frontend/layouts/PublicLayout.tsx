@@ -4,7 +4,8 @@ import { notifications } from '@mantine/notifications';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
-import { Logo, type SharedProps } from 'shared/ui';
+import { howItWorksPath, loginPath, templatesPath } from 'shared/routes';
+import { BrandLockup, type SharedProps } from 'shared/ui';
 
 interface PublicLayoutProps {
   children: ReactNode;
@@ -17,7 +18,13 @@ interface PublicLayoutProps {
  * visitor knows where an install would land.
  */
 export function PublicLayout({ children }: PublicLayoutProps) {
-  const { flash, settings } = usePage<Partial<SharedProps> & { [key: string]: unknown }>().props;
+  const { flash, settings, currentUser } = usePage<Partial<SharedProps> & { [key: string]: unknown }>().props;
+
+  // /how-it-works sells a workspace you can create and a price we invoice, so it
+  // exists only where we host. Linking to it elsewhere would be a link to a
+  // redirect.
+  const sellsItself = settings?.selfServeSignup === true;
+  const home = sellsItself ? howItWorksPath() : templatesPath();
 
   const prevFlashRef = useRef<typeof flash | undefined>(undefined);
   useEffect(() => {
@@ -33,11 +40,16 @@ export function PublicLayout({ children }: PublicLayoutProps) {
         <Container size="xl" py="sm">
           <Group justify="space-between">
             <Group gap="xl">
-              <Anchor component={Link} href="/templates" aria-label="Aixle Flow templates">
-                <Logo width={96} />
+              <Anchor component={Link} href={home} aria-label="Aixle Flow">
+                <BrandLockup size="sm" />
               </Anchor>
               <Group gap="lg">
-                <Anchor component={Link} href="/templates" c="var(--app-text-primary)" size="sm">
+                {sellsItself && (
+                  <Anchor component={Link} href={howItWorksPath()} c="var(--app-text-secondary)" size="sm">
+                    How it works
+                  </Anchor>
+                )}
+                <Anchor component={Link} href={templatesPath()} c="var(--app-text-secondary)" size="sm">
                   Templates
                 </Anchor>
                 <Anchor href="/docs" c="var(--app-text-secondary)" size="sm">
@@ -51,8 +63,8 @@ export function PublicLayout({ children }: PublicLayoutProps) {
                   {settings.domain}
                 </Text>
               )}
-              <Button component="a" href="/login" size="xs">
-                Sign in
+              <Button component="a" href={currentUser ? '/' : loginPath()} size="xs">
+                {currentUser ? 'Open Flow' : 'Sign in'}
               </Button>
             </Group>
           </Group>

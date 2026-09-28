@@ -335,6 +335,11 @@ Rails.application.routes.draw do
     get "docs", to: "docs#show", as: :docs
     get "docs/*slug", to: "docs#show", as: :docs_page, constraints: { slug: /[^\/]+/ }
 
+    # What Flow does, what a queue costs and the ROI model the sales team
+    # quotes. Public: the signup form links to it, and its reader has no
+    # account yet.
+    get "how-it-works", to: "how_it_works#show", as: :how_it_works
+
     # The template catalog is public (design D16): anyone can browse it; an
     # install goes through company/template_installs and needs a sign-in.
     get "templates", to: "templates#index", as: :templates

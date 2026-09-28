@@ -1,4 +1,5 @@
 export { Logo } from './Logo';
+export { BrandLockup } from './BrandLockup';
 export { FullPageLoader } from './Loader';
 export { AppSidebar } from './AppSidebar';
 export { InertiaRouteIndicator } from './InertiaRouteIndicator';
