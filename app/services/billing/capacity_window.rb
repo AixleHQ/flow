@@ -24,7 +24,7 @@ module Billing
   # counted separately so a deployment that must not have any can say so.
   class CapacityWindow
     Result = Struct.new(:period_start, :quantity_seconds, :peak_concurrent, :per_company,
-                        :unbounded_companies, keyword_init: true) do
+                        :offered_per_company, :unbounded_companies, keyword_init: true) do
       def quantity_minutes = (BigDecimal(quantity_seconds) / 60).round(4)
     end
 
@@ -43,23 +43,27 @@ module Billing
     def call
       limits = opening_limits
       seconds = Hash.new(0)
-      peak = limits.values.sum
+      peak = offered_total(limits)
       cursor = period_start
 
       changes_during_window.each do |company_id, max_sessions, occurred_at|
         accrue(seconds, limits, from: cursor, to: occurred_at)
         cursor = occurred_at
         limits[company_id] = max_sessions.to_i
-        total = limits.values.sum
+        total = offered_total(limits)
         peak = total if total > peak
       end
       accrue(seconds, limits, from: cursor, to: period_end)
 
+      offered = seconds.reject { |_, value| value.zero? }
+      billed = offered.slice(*billable_company_ids)
+
       Result.new(
         period_start: period_start,
-        quantity_seconds: seconds.values.sum,
+        quantity_seconds: billed.values.sum,
         peak_concurrent: peak,
-        per_company: seconds.reject { |_, value| value.zero? },
+        per_company: billed,
+        offered_per_company: offered,
         unbounded_companies: limits.count { |_, value| value.to_i.zero? }
       )
     end
@@ -70,7 +74,26 @@ module Billing
       elapsed = (to - from).round
       return if elapsed <= 0
 
-      limits.each { |company_id, limit| seconds[company_id] += limit.to_i * elapsed }
+      limits.each { |company_id, limit| seconds[company_id] += offered(company_id, limit) * elapsed }
+    end
+
+    def offered_total(limits)
+      limits.sum { |company_id, limit| offered(company_id, limit) }
+    end
+
+    # What the company could actually run, which is what it may be charged for.
+    # A zero here is a company offered nothing — blocked, or unbounded and
+    # therefore unbillable — and the two are told apart by `ceilings`, not by the
+    # number.
+    def offered(company_id, configured)
+      ceiling = ceilings[company_id]
+      return configured.to_i if ceiling.nil?
+
+      configured.to_i.zero? ? ceiling : [ configured.to_i, ceiling ].min
+    end
+
+    def ceilings
+      @ceilings ||= Billing::EffectiveCapacity.ceilings
     end
 
     # What every company's limit was as the hour opened. The log is the source
@@ -81,7 +104,7 @@ module Billing
       logged = CompanyCapacityChange.state_at(period_start)
       live = SessionConcurrencyLimit.for_companies.pluck(:scope_id, :max_sessions).to_h
 
-      billable_company_ids.index_with do |company_id|
+      measured_company_ids.index_with do |company_id|
         logged.key?(company_id) ? logged[company_id].to_i : live[company_id].to_i
       end
     end
@@ -89,7 +112,7 @@ module Billing
     def changes_during_window
       CompanyCapacityChange
         .during(period_start...period_end)
-        .where(company_id: billable_company_ids)
+        .where(company_id: measured_company_ids)
         .order(:occurred_at, :id)
         .pluck(:company_id, :max_sessions, :occurred_at)
     end
@@ -100,7 +123,20 @@ module Billing
     # company that can still run would make suspending one a way to keep the
     # capacity and stop paying for it.
     def billable_company_ids
-      @billable_company_ids ||= Company.active.pluck(:id)
+      @billable_company_ids ||= begin
+        scope = Company.active
+        # A company spending its free allowance, or stopped for having spent it,
+        # is offered capacity and invoiced for none of it. The usage is still
+        # recorded — that is what the allowance is counted from — but it is not
+        # what a provider is sent.
+        scope = scope.billing_billable if Deployment.saas?
+        scope.pluck(:id)
+      end
+    end
+
+    # Everyone whose capacity is measured, billable or not.
+    def measured_company_ids
+      @measured_company_ids ||= Company.active.pluck(:id)
     end
   end
 end

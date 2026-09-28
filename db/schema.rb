@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_27_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_29_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -403,6 +403,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_27_120000) do
 
   create_table "companies", force: :cascade do |t|
     t.boolean "auto_accept_users", default: false, null: false
+    t.string "billing_state", default: "trialing", null: false
     t.datetime "created_at", null: false
     t.string "display_name"
     t.string "email_domain", null: false
@@ -415,6 +416,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_27_120000) do
     t.string "slug", null: false
     t.string "state", null: false
     t.datetime "updated_at", null: false
+    t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
@@ -440,6 +442,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_27_120000) do
     t.index ["company_id", "occurred_at"], name: "index_company_capacity_changes_on_company_id_and_occurred_at"
     t.index ["company_id"], name: "index_company_capacity_changes_on_company_id"
     t.index ["occurred_at"], name: "index_company_capacity_changes_on_occurred_at"
+  end
+
+  create_table "company_capacity_usages", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "period_start", null: false
+    t.integer "quantity_seconds", default: 0, null: false
+    t.index ["company_id", "period_start"], name: "index_company_capacity_usages_on_company_id_and_period_start", unique: true
+    t.index ["company_id"], name: "index_company_capacity_usages_on_company_id"
+    t.index ["period_start"], name: "index_company_capacity_usages_on_period_start"
   end
 
   create_table "company_memberships", force: :cascade do |t|
@@ -1677,6 +1689,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_27_120000) do
   add_foreign_key "company_auth_policies", "companies"
   add_foreign_key "company_auth_policies", "identity_providers"
   add_foreign_key "company_capacity_changes", "companies", on_delete: :cascade
+  add_foreign_key "company_capacity_usages", "companies", on_delete: :cascade
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
   add_foreign_key "company_memberships", "companies"
   add_foreign_key "company_memberships", "users"

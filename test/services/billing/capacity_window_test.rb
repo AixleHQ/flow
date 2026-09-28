@@ -150,4 +150,60 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
 
     assert_minutes 600, window
   end
+
+  # ── The free allowance ────────────────────────────────────────────────────
+  #
+  # One number, two consumers: what the drain will hand out is what the meter
+  # measures. A company capped to one session must be measured at one, or its
+  # first invoice is for capacity it never had.
+
+  class WithTrial < Billing::CapacityWindowTest
+    setup { Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS)) }
+
+    test "a trialing company is measured at the cap, not at the limit it asked for" do
+      @acme.update!(billing_state: "trialing")
+      change(@acme, 10, @hour - 2.hours)
+
+      assert_equal 60 * Billing::Trial::MAX_SESSIONS, window.offered_per_company[@acme.id] / 60
+    end
+
+    # Its hours are ours to count and nobody's to invoice: the allowance is spent
+    # from the same measurement a paying company is billed from.
+    test "a trialing company is measured but not billed" do
+      @acme.update!(billing_state: "trialing")
+      change(@acme, 10, @hour - 2.hours)
+      change(@globex, 5, @hour - 2.hours)
+
+      result = window
+
+      assert_includes result.offered_per_company, @acme.id
+      assert_not_includes result.per_company, @acme.id
+      assert_minutes 300, result, "only the paying company reaches the provider"
+    end
+
+    test "a blocked company is offered nothing at all" do
+      @acme.update!(billing_state: "blocked")
+      change(@acme, 10, @hour - 2.hours)
+
+      assert_not_includes window.offered_per_company, @acme.id
+      assert_minutes 0, window
+    end
+
+    # "No limit set" is unbounded and unbillable for a paying company, and one
+    # session for a company on the allowance — the cap is a ceiling, not a
+    # multiplier.
+    test "an unbounded trialing company is measured at the cap" do
+      @acme.update!(billing_state: "trialing")
+
+      assert_equal 60 * Billing::Trial::MAX_SESSIONS, window.offered_per_company[@acme.id] / 60
+    end
+
+    test "a raise during the hour is capped for every part of it" do
+      @acme.update!(billing_state: "trialing")
+      change(@acme, 2, @hour - 2.hours)
+      change(@acme, 40, @hour + 30.minutes)
+
+      assert_equal 60 * Billing::Trial::MAX_SESSIONS, window.offered_per_company[@acme.id] / 60
+    end
+  end
 end

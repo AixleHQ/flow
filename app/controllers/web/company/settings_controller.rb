@@ -104,7 +104,23 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
       reserved: allocation.allocated,
       allocations: allocation.breakdown,
       project_default: SessionAdmissionPolicy.scope_default("Project"),
-      can_manage: settings_policy.manage_capacity?
+      can_manage: settings_policy.manage_capacity?,
+      trial: trial_props
+    }
+  end
+
+  # Nil where nobody is on a free allowance, which is every deployment but ours.
+  # Present, an admin can see why their limit is not the number they set — and,
+  # once it runs out, why nothing starts.
+  def trial_props
+    return nil unless Deployment.saas?
+    return nil if current_company.billing_active?
+
+    {
+      state: current_company.billing_state,
+      allowance_hours: Billing::Trial.queue_hours,
+      remaining_hours: Billing::Trial.remaining_hours(current_company).to_f,
+      max_sessions: Billing::Trial::MAX_SESSIONS
     }
   end
 end

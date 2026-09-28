@@ -32,6 +32,10 @@ module Billing
     # inside the replay window — including the hour just recorded.
     def call
       measure!(now.beginning_of_hour - 1.hour)
+      # After the hour is recorded and before anything is sent: the hour that
+      # spends the last of a company's free allowance is the hour that stops it,
+      # and this is the only moment the answer can change.
+      Trial.enforce!(now: now)
       deliver_pending
     end
 
@@ -39,6 +43,11 @@ module Billing
     # separate from sending so a provider outage never loses the measurement.
     def measure!(period_start)
       window = CapacityWindow.for_hour(period_start)
+      # Ours, and written for everyone — including the companies no provider is
+      # sent. It is what the free allowance is counted from and what anyone asks
+      # when they want to know what a single company had.
+      record_usage(window)
+
       report = CapacityMeterReport.find_or_initialize_by(provider: adapter.provider, period_start: window.period_start)
       return report if report.persisted?
 
@@ -52,6 +61,14 @@ module Billing
       report
     rescue ActiveRecord::RecordNotUnique
       CapacityMeterReport.find_by!(provider: adapter.provider, period_start: window.period_start)
+    end
+
+    def record_usage(window)
+      window.offered_per_company.each do |company_id, quantity_seconds|
+        CompanyCapacityUsage.record!(
+          company_id: company_id, period_start: window.period_start, quantity_seconds: quantity_seconds
+        )
+      end
     end
 
     def deliver_pending
