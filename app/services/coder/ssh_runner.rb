@@ -442,7 +442,7 @@ module Coder
           aixle_meta "reason=$2"
           if [ -n "$3" ]; then aixle_meta "signal=$3"; fi
           aixle_meta "exit_code=$1"
-          printf '%s\n' "$1" > "$BASE.exit"
+          printf '%s\n' "$1" > "$BASE.exit.tmp" && mv "$BASE.exit.tmp" "$BASE.exit"
         }
 
         aixle_on_signal() {
@@ -554,7 +554,7 @@ module Coder
         trap 'aixle_on_signal HUP 129' HUP
         trap 'aixle_on_signal QUIT 131' QUIT
 
-        printf '%s\n' "$$" > "$BASE.pid"
+        printf '%s\n' "$$" > "$BASE.pid.tmp" && mv "$BASE.pid.tmp" "$BASE.pid"
         aixle_meta "pid=$$"
         AIXLE_PGID=$(aixle_pgid_of $$)
         aixle_meta "pgid=${AIXLE_PGID}"
@@ -688,7 +688,10 @@ module Coder
         if [ -z "$BASE" ]; then echo "#{JOB_MARKER} state=unknown exit_code="; exit 0; fi
         STATE=running
         CODE=""
-        if [ -f "$BASE.exit" ]; then
+        # `-s`, not `-f`: the wrapper publishes the exit file by rename, but one
+        # launched before that change still truncates it first, and a poll that
+        # lands in between must not report a finished job with no exit code.
+        if [ -s "$BASE.exit" ]; then
           STATE=exited
           CODE=$(cat "$BASE.exit" 2>/dev/null)
         elif [ -f "$BASE.pid" ]; then
