@@ -86,7 +86,7 @@ const ShowPage = () => {
               or not a session is running in it.
             </p>
           </div>
-          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg">
+          <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="lg" component="section" aria-label="What it costs">
             <div className={classes.priceCard}>
               <div className={classes.price}>
                 <span className={classes.priceFigure}>{formatMoney(queueHourlyRate, 2)}</span>
@@ -126,9 +126,9 @@ const ShowPage = () => {
           </div>
           <RoiCalculator queueHourlyRate={queueHourlyRate} />
           <p className={classes.footnote}>
-            Total ROI is the saving over the period divided by what Flow costs across it. &ldquo;Annualized ROI&rdquo;
-            is reported the way our ROI spreadsheet computes it, so the two agree. Figures are an estimate from the
-            numbers you entered, not a quote.
+            ROI is the saving over the period divided by what Flow costs across it. IRR is the internal rate of return
+            on the cash flows — the setup in year zero, then each year&apos;s saving — which is the figure a capital
+            project is normally judged by. Both are an estimate from the numbers you entered, not a quote.
           </p>
         </Stack>
 

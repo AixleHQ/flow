@@ -9,6 +9,8 @@ import {
   formatMonths,
   formatPercent,
   HOURS_PER_QUEUE_MONTH,
+  IRR_BENCHMARK,
+  MAX_YEARS,
   monthlyCostPerQueue,
   type RoiInputs,
   suggestedQueues,
@@ -44,7 +46,7 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
 
   const roi = useMemo(() => calculateRoi(inputs), [inputs]);
   const queues = useMemo(() => suggestedQueues(inputs), [inputs]);
-  const monthlyBill = queues * monthlyCostPerQueue(inputs.queueHourlyRate);
+  const hourlyBill = queues * inputs.queueHourlyRate;
 
   const field = (label: string, key: keyof RoiInputs, props: FieldProps = {}) => (
     <NumberInput
@@ -81,7 +83,8 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
               prefix: '$',
             })}
             {field('How many times faster Flow runs it', 'acceleratorMultiple', {
-              description: 'Agents work in parallel and do not wait overnight. Conservative is 10×.',
+              description:
+                'At 1× a queue-hour simply replaces an hour of labour. Raise it if agents working in parallel, overnight, get the work done sooner.',
               suffix: '×',
               min: 1,
             })}
@@ -90,7 +93,7 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
               prefix: '$',
               step: 1000,
             })}
-            {field('Years to look at', 'years', { min: 1, max: 10 })}
+            {field('Years to look at', 'years', { min: 1, max: MAX_YEARS })}
           </Stack>
 
           <Text size="xs" c="var(--app-text-tertiary)">
@@ -109,10 +112,10 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
 
         <Group gap="xs" mt="sm" mb="lg">
           <Badge variant="light" size="lg">
-            {formatPercent(roi.totalRoi)} total ROI
+            {formatPercent(roi.roi)} ROI
           </Badge>
           <Badge variant="default" size="lg">
-            Pays back in {formatMonths(roi.breakevenMonths)}
+            Pays back in {formatMonths(roi.paybackMonths)}
           </Badge>
         </Group>
 
@@ -120,9 +123,14 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
           <Row label="The same work, done by people" value={formatMoney(roi.humanCost)} />
           <Row label="The same work, run on Flow" value={formatMoney(roi.aixleCost)} />
           <Row label="Effective cost of an hour on Flow" value={formatMoney(roi.effectiveCostPerHour, 2)} />
-          <Row label="Total ROI" value={formatPercent(roi.totalRoi)} strong />
-          <Row label="Annualized ROI" value={formatPercent(roi.annualizedRoi)} />
+          <Row label="ROI" value={formatPercent(roi.roi)} strong />
+          <Row label="IRR" value={formatPercent(roi.irr)} />
         </div>
+
+        <Text size="xs" c="var(--app-text-tertiary)" mt={8}>
+          An internal rate of return of {formatPercent(IRR_BENCHMARK.low)} to {formatPercent(IRR_BENCHMARK.high)} is
+          what a capital project is normally expected to clear.
+        </Text>
 
         <Box className={classes.plan}>
           <Text size="xs" tt="uppercase" fw={600} c="var(--app-text-tertiary)" style={{ letterSpacing: '0.06em' }}>
@@ -133,7 +141,7 @@ export const RoiCalculator = ({ queueHourlyRate }: RoiCalculatorProps) => {
               {queues} {queues === 1 ? 'queue' : 'queues'}
             </span>
             <Text fw={600} ff="var(--app-font-mono)">
-              {formatMoney(monthlyBill)}/mo
+              {formatMoney(hourlyBill, 2)}/hour
             </Text>
           </Group>
           <Text size="xs" c="var(--app-text-tertiary)" mt={6}>

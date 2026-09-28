@@ -23,7 +23,7 @@ export interface RoiResult {
   /** B10 — hours of saving needed to pay the setup back. */
   breakevenHours: number;
   /** B11 — the same, in months. Infinite when Flow costs more than the people. */
-  breakevenMonths: number;
+  paybackMonths: number;
   /** B14 — setup plus queue time over the whole period. */
   aixleCost: number;
   /** B15 — what the same work costs in people over the whole period. */
@@ -31,30 +31,55 @@ export interface RoiResult {
   /** Money left over. Not a spreadsheet cell; the page leads with it. */
   savings: number;
   /** B16 — return over the whole period. */
-  totalRoi: number;
-  /** B17 — see the note on annualizedRoi() below. */
-  annualizedRoi: number;
+  roi: number;
+  /** B17 — IRR of the cash flows below. Null when they never turn positive. */
+  irr: number | null;
+  /** B21:B31 — year 0 is the setup, then one entry per year of the period. */
+  cashFlows: number[];
 }
 
 /** A queue is a reserved slot, billed for every hour of the month it exists. */
 export const HOURS_PER_QUEUE_MONTH = 720;
+
+/** B21:B31 — the sheet's cash-flow table is ten years long. */
+export const MAX_YEARS = 10;
+
+/** D17 — the band the sheet tells a customer to judge the IRR against. */
+export const IRR_BENCHMARK = { low: 0.15, high: 0.25 };
 
 export const DEFAULT_ROI_INPUTS: RoiInputs = {
   hoursSavedPerYear: 1800,
   laborCostPerHour: 50,
   setupCost: 50_000,
   queueHourlyRate: 5,
-  acceleratorMultiple: 10,
-  years: 3,
+  acceleratorMultiple: 1,
+  years: 4,
 };
 
-// B17 is `POWER(totalRoi, 1/years)`, which is not an annualised return — that
-// would be `(1 + totalRoi) ^ (1/years) - 1`, and on the default inputs the two
-// differ by more than double (160% against 72%). The spreadsheet's figure is
-// already in circulation with customers, so it is reproduced exactly rather than
-// quietly corrected here; correcting it is a sales decision, not a code one.
-const annualizedRoi = (totalRoi: number, years: number): number =>
-  totalRoi <= 0 || years <= 0 ? 0 : Math.pow(totalRoi, 1 / years);
+/**
+ * Excel's IRR by bisection: the rate at which the flows discount to nothing.
+ *
+ * Newton's method is what a spreadsheet uses and what it is criticised for — it
+ * walks off a flat region and reports #NUM on inputs that plainly have an
+ * answer. These series are one negative followed by equal positives, where the
+ * function is monotonic and bracketing always converges.
+ */
+export function irr(cashFlows: number[]): number | null {
+  const npv = (rate: number) => cashFlows.reduce((sum, flow, year) => sum + flow / Math.pow(1 + rate, year), 0);
+
+  // Just above -100%, where the later years are discounted into meaninglessness
+  // and only year 0 is left, up to a rate no real deal reaches.
+  let low = -0.999999;
+  let high = 1e6;
+  if (npv(low) <= 0 || npv(high) >= 0) return null;
+
+  for (let i = 0; i < 200; i += 1) {
+    const mid = (low + high) / 2;
+    if (npv(mid) > 0) low = mid;
+    else high = mid;
+  }
+  return (low + high) / 2;
+}
 
 export function calculateRoi(inputs: RoiInputs): RoiResult {
   const { hoursSavedPerYear, laborCostPerHour, setupCost, queueHourlyRate, acceleratorMultiple, years } = inputs;
@@ -65,23 +90,28 @@ export function calculateRoi(inputs: RoiInputs): RoiResult {
   // Flow costing more per hour than the people it replaces never pays the setup
   // back, however long you wait.
   const breakevenHours = savedPerHour > 0 ? setupCost / savedPerHour : Infinity;
-  const breakevenMonths = hoursSavedPerYear > 0 ? (breakevenHours / hoursSavedPerYear) * 12 : Infinity;
+  const paybackMonths = hoursSavedPerYear > 0 ? (breakevenHours / hoursSavedPerYear) * 12 : Infinity;
 
   const aixleCost = setupCost + effectiveCostPerHour * hoursSavedPerYear * years;
   const humanCost = laborCostPerHour * hoursSavedPerYear * years;
   // A zero speed-up puts an infinite cost on both sides of the division, which
   // is NaN rather than the total loss it plainly is.
-  const totalRoi = Number.isFinite(aixleCost) && aixleCost > 0 ? (humanCost - aixleCost) / aixleCost : -1;
+  const roi = Number.isFinite(aixleCost) && aixleCost > 0 ? (humanCost - aixleCost) / aixleCost : -1;
+
+  const periods = Math.max(0, Math.min(Math.floor(years), MAX_YEARS));
+  const annualSaving = Number.isFinite(savedPerHour) ? hoursSavedPerYear * savedPerHour : 0;
+  const cashFlows = [-setupCost, ...Array.from({ length: periods }, () => annualSaving)];
 
   return {
     effectiveCostPerHour,
     breakevenHours,
-    breakevenMonths,
+    paybackMonths,
     aixleCost,
     humanCost,
     savings: humanCost - aixleCost,
-    totalRoi,
-    annualizedRoi: annualizedRoi(totalRoi, years),
+    roi,
+    irr: irr(cashFlows),
+    cashFlows,
   };
 }
 
@@ -117,7 +147,8 @@ const money = (fractionDigits: number) =>
 export const formatMoney = (value: number, fractionDigits = 0): string =>
   Number.isFinite(value) ? money(fractionDigits).format(value) : '—';
 
-export const formatPercent = (ratio: number): string => (Number.isFinite(ratio) ? `${(ratio * 100).toFixed(2)}%` : '—');
+export const formatPercent = (ratio: number | null): string =>
+  ratio != null && Number.isFinite(ratio) ? `${(ratio * 100).toFixed(2)}%` : '—';
 
 export const formatMonths = (value: number): string =>
   Number.isFinite(value) ? `${value.toFixed(1)} months` : 'never';

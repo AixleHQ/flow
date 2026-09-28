@@ -6,6 +6,7 @@ import {
   formatMoney,
   formatMonths,
   formatPercent,
+  irr,
   monthlyCostPerQueue,
   suggestedQueues,
 } from './roi';
@@ -17,44 +18,69 @@ describe('calculateRoi', () => {
   it('reproduces the spreadsheet at its own inputs', () => {
     const roi = calculateRoi(DEFAULT_ROI_INPUTS);
 
-    expect(roi.effectiveCostPerHour).toBeCloseTo(0.5, 10);
-    expect(roi.breakevenHours).toBeCloseTo(1010.10101, 4);
-    expect(roi.breakevenMonths).toBeCloseTo(6.734006734, 6);
-    expect(roi.aixleCost).toBe(52_700);
-    expect(roi.humanCost).toBe(270_000);
-    expect(roi.savings).toBe(217_300);
-    expect(roi.totalRoi).toBeCloseTo(4.123339658, 8);
-    expect(roi.annualizedRoi).toBeCloseTo(1.60355196, 7);
+    expect(roi.effectiveCostPerHour).toBeCloseTo(5, 10);
+    expect(roi.breakevenHours).toBeCloseTo(1111.111111, 4);
+    expect(roi.paybackMonths).toBeCloseTo(7.407407407, 6);
+    expect(roi.aixleCost).toBe(86_000);
+    expect(roi.humanCost).toBe(360_000);
+    expect(roi.savings).toBe(274_000);
+    expect(roi.roi).toBeCloseTo(3.186046512, 8);
+    expect(roi.irr).toBeCloseTo(1.58364327, 7);
+  });
+
+  // B21:B31 — year 0 is the setup, then hours saved x (labour rate - effective
+  // rate) for each year of the period.
+  it('lays the cash flows out the way the sheet does', () => {
+    expect(calculateRoi(DEFAULT_ROI_INPUTS).cashFlows).toEqual([-50_000, 81_000, 81_000, 81_000, 81_000]);
   });
 
   it('scales cost with the period and leaves setup alone', () => {
     const roi = calculateRoi({ ...DEFAULT_ROI_INPUTS, years: 1 });
 
-    expect(roi.aixleCost).toBe(50_900);
+    expect(roi.aixleCost).toBe(59_000);
     expect(roi.humanCost).toBe(90_000);
+    expect(roi.cashFlows).toEqual([-50_000, 81_000]);
   });
 
-  it('charges more per hour as the speed-up falls', () => {
-    const slow = calculateRoi({ ...DEFAULT_ROI_INPUTS, acceleratorMultiple: 2 });
+  it('charges less per hour as the speed-up rises', () => {
+    const fast = calculateRoi({ ...DEFAULT_ROI_INPUTS, acceleratorMultiple: 10 });
 
-    expect(slow.effectiveCostPerHour).toBeCloseTo(2.5, 10);
-    expect(slow.aixleCost).toBe(50_000 + 2.5 * 1800 * 3);
+    expect(fast.effectiveCostPerHour).toBeCloseTo(0.5, 10);
+    expect(fast.aixleCost).toBe(50_000 + 0.5 * 1800 * 4);
+  });
+
+  // The sheet's own table stops at ten years, so a longer period would be
+  // discounting flows it has no row for.
+  it('never runs the cash flows past the tenth year', () => {
+    expect(calculateRoi({ ...DEFAULT_ROI_INPUTS, years: 25 }).cashFlows).toHaveLength(11);
   });
 
   // The page has free-text inputs, so a visitor can describe a deal that never
   // pays for itself. It has to say so rather than render NaN.
   it('never breaks even when a queue-hour costs more than an hour of labour', () => {
-    const roi = calculateRoi({ ...DEFAULT_ROI_INPUTS, laborCostPerHour: 0.25 });
+    const roi = calculateRoi({ ...DEFAULT_ROI_INPUTS, laborCostPerHour: 2 });
 
     expect(roi.breakevenHours).toBe(Infinity);
-    expect(roi.breakevenMonths).toBe(Infinity);
-    expect(roi.totalRoi).toBeLessThan(0);
-    expect(roi.annualizedRoi).toBe(0);
+    expect(roi.paybackMonths).toBe(Infinity);
+    expect(roi.roi).toBeLessThan(0);
+    expect(roi.irr).toBeNull();
   });
 
   it('survives a zero speed-up and a zero period', () => {
-    expect(calculateRoi({ ...DEFAULT_ROI_INPUTS, acceleratorMultiple: 0 }).annualizedRoi).toBe(0);
-    expect(calculateRoi({ ...DEFAULT_ROI_INPUTS, years: 0 }).annualizedRoi).toBe(0);
+    expect(calculateRoi({ ...DEFAULT_ROI_INPUTS, acceleratorMultiple: 0 }).irr).toBeNull();
+    expect(calculateRoi({ ...DEFAULT_ROI_INPUTS, years: 0 }).irr).toBeNull();
+  });
+});
+
+describe('irr', () => {
+  it('finds the rate that discounts the flows to nothing', () => {
+    expect(irr([-100, 110])).toBeCloseTo(0.1, 10);
+    expect(irr([-1000, 500, 500, 500])).toBeCloseTo(0.23375, 5);
+  });
+
+  it('has no answer for flows that never turn positive', () => {
+    expect(irr([-100, -100])).toBeNull();
+    expect(irr([-100])).toBeNull();
   });
 });
 
@@ -68,20 +94,21 @@ describe('queue sizing', () => {
   });
 
   it('adds queues as the workload outgrows them', () => {
-    expect(suggestedQueues({ hoursSavedPerYear: 180_000, acceleratorMultiple: 10 })).toBe(9);
+    expect(suggestedQueues({ hoursSavedPerYear: 18_000, acceleratorMultiple: 1 })).toBe(9);
   });
 });
 
 describe('formatting', () => {
   it('writes money, percentages and months the way the sheet does', () => {
-    expect(formatMoney(52_700)).toBe('$52,700');
+    expect(formatMoney(86_000)).toBe('$86,000');
     expect(formatMoney(0.5, 2)).toBe('$0.50');
-    expect(formatPercent(4.123339658)).toBe('412.33%');
-    expect(formatMonths(6.734006734)).toBe('6.7 months');
+    expect(formatPercent(3.186046512)).toBe('318.60%');
+    expect(formatMonths(7.407407407)).toBe('7.4 months');
   });
 
   it('says so plainly when there is no number to show', () => {
     expect(formatMoney(Infinity)).toBe('—');
     expect(formatMonths(Infinity)).toBe('never');
+    expect(formatPercent(null)).toBe('—');
   });
 });
