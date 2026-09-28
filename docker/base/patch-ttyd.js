@@ -32,6 +32,24 @@ const replacement = `        terminal.loadAddon(clipboardAddon);
         terminal.open(parent);
         fitAddon.fit();
 
+        // [aixle] Ctrl+V / Cmd+V paste. xterm.js sends Ctrl+V to the PTY as ^V
+        // (readline quoted-insert); only Shift+Insert fires a browser paste.
+        // Returning false skips xterm's handler so the browser paste event reaches
+        // the textarea, which xterm already turns into bracketed paste. KeyV is the
+        // physical key, so this still pastes under a non-Latin layout.
+        terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+            if (
+                event.type === 'keydown' &&
+                event.code === 'KeyV' &&
+                !event.altKey &&
+                !event.shiftKey &&
+                (event.ctrlKey || event.metaKey)
+            ) {
+                return false;
+            }
+            return true;
+        });
+
         // [aixle] Copy the FULL url on click, rejoining hard-wrapped rows.
         // Works around xterm.js #5412 (WebLinksAddon only stitches isWrapped rows;
         // tmux/Claude emit hard newlines). A "URL piece" row is non-empty with no
