@@ -595,9 +595,10 @@ registration:
   enabled: <%= ENV.fetch('REGISTRATION_ENABLED', 'false') == 'true' %>
 
 # The free capacity a company that signs itself up may spend before anyone has
-# paid, in queue-hours. Hosted deployments only. It is a quantity rather than a
-# period on purpose: capacity is billed by the hour it is offered, so a trial
-# measured in days would be priced by whoever set the limit. While it lasts the
-# company runs one session at a time, so a hundred hours is about four days.
+# paid, in queue-hours. Hosted deployments only. A quantity rather than a period
+# on purpose: capacity is billed by the hour it is offered, so the company spends
+# the allowance at whatever rate it runs — ten sessions at once uses ten
+# queue-hours an hour, and the same hundred hours that last one workspace four
+# days last that one ten.
 trial:
   queue_hours: <%= (ENV['TRIAL_QUEUE_HOURS'] || 100).to_i %>

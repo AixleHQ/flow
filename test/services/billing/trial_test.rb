@@ -91,10 +91,24 @@ class Billing::TrialTest < ActiveSupport::TestCase
     assert @company.reload.billing_trialing?
   end
 
-  test "it caps a trialing company and stops a blocked one" do
-    assert_equal Billing::Trial::MAX_SESSIONS, Billing::Trial.ceiling_for("trialing")
+  test "only a company that has spent the allowance is stopped" do
     assert_equal 0, Billing::Trial.ceiling_for("blocked")
+    assert_nil Billing::Trial.ceiling_for("trialing")
     assert_nil Billing::Trial.ceiling_for("active")
+  end
+
+  # What is left is a quantity; what an admin wants to know is how long it lasts
+  # at the rate they are running.
+  test "it says how long what is left lasts at the current rate" do
+    used!(60)
+
+    assert_in_delta 40.0, Billing::Trial.hours_left_at(@company, 1)
+    assert_in_delta 4.0, Billing::Trial.hours_left_at(@company, 10)
+  end
+
+  test "there is no rate to divide by when no limit is set" do
+    assert_nil Billing::Trial.hours_left_at(@company, nil)
+    assert_nil Billing::Trial.hours_left_at(@company, 0)
   end
 
   test "applies only where we host" do

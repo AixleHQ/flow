@@ -160,11 +160,13 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
   class WithTrial < Billing::CapacityWindowTest
     setup { Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS)) }
 
-    test "a trialing company is measured at the cap, not at the limit it asked for" do
+    # The allowance does not shrink the workspace; it is spent at whatever rate
+    # the workspace runs.
+    test "a trialing company is measured at the limit it asked for" do
       @acme.update!(billing_state: "trialing")
       change(@acme, 10, @hour - 2.hours)
 
-      assert_equal 60 * Billing::Trial::MAX_SESSIONS, window.offered_per_company[@acme.id] / 60
+      assert_equal 600, window.offered_per_company[@acme.id] / 60
     end
 
     # Its hours are ours to count and nobody's to invoice: the allowance is spent
@@ -189,21 +191,23 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
       assert_minutes 0, window
     end
 
-    # "No limit set" is unbounded and unbillable for a paying company, and one
-    # session for a company on the allowance — the cap is a ceiling, not a
-    # multiplier.
-    test "an unbounded trialing company is measured at the cap" do
+    # An unbounded company is unbillable whoever it is, so there is nothing to
+    # spend the allowance on either.
+    test "an unbounded trialing company is measured at nothing" do
       @acme.update!(billing_state: "trialing")
 
-      assert_equal 60 * Billing::Trial::MAX_SESSIONS, window.offered_per_company[@acme.id] / 60
+      assert_not_includes window.offered_per_company, @acme.id
     end
 
-    test "a raise during the hour is capped for every part of it" do
+    # Raising the limit mid-hour spends the allowance faster from that moment,
+    # which is the whole of the deal.
+    test "a raise during the hour is measured for the part of it that followed" do
       @acme.update!(billing_state: "trialing")
       change(@acme, 2, @hour - 2.hours)
       change(@acme, 40, @hour + 30.minutes)
 
-      assert_equal 60 * Billing::Trial::MAX_SESSIONS, window.offered_per_company[@acme.id] / 60
+      assert_equal 60 + 1200, window.offered_per_company[@acme.id] / 60,
+                   "half an hour at two and half at forty"
     end
   end
 end

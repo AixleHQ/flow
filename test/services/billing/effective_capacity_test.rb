@@ -26,28 +26,19 @@ class Billing::EffectiveCapacityTest < ActiveSupport::TestCase
     assert_not_includes Billing::EffectiveCapacity.for_companies, company.id
   end
 
-  # The limit is what they asked for; the cap is what they get until someone
-  # pays. Refusing the higher number outright would throw away the plan they
-  # chose at signup.
-  test "a trialing company is capped below the limit it asked for" do
+  # The free allowance is a quantity, not a smaller workspace: a company on it
+  # runs what its admin chose and simply spends the hours faster.
+  test "a trialing company runs the limit it asked for" do
     company = create(:company, :trialing)
     limit!(company, 12)
 
-    assert_equal Billing::Trial::MAX_SESSIONS, Billing::EffectiveCapacity.for_companies[company.id]
+    assert_equal 12, Billing::EffectiveCapacity.for_companies[company.id]
   end
 
-  test "a trialing company that asked for less keeps the smaller number" do
-    company = create(:company, :trialing)
-    limit!(company, 1)
-
-    assert_equal 1, Billing::EffectiveCapacity.for_companies[company.id]
-  end
-
-  # "No limit set" is not a way past the cap.
-  test "an unbounded trialing company is bounded by the cap" do
+  test "an unbounded trialing company is bounded by nothing either" do
     company = create(:company, :trialing)
 
-    assert_equal Billing::Trial::MAX_SESSIONS, Billing::EffectiveCapacity.for_companies[company.id]
+    assert_not_includes Billing::EffectiveCapacity.for_companies, company.id
   end
 
   test "a blocked company runs nothing" do

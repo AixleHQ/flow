@@ -24,13 +24,13 @@ class SessionAdmissionBillingTest < ActiveSupport::TestCase
     assert_equal admissions.map(&:id), SessionAdmissionService.drain!
   end
 
-  test "a company on the free allowance runs one at a time" do
+  # The allowance is a quantity, not a smaller workspace: a company on it runs
+  # what its admin chose and spends the hours faster for it.
+  test "a company on the free allowance runs what it asked for" do
     @company.update!(billing_state: "trialing")
-    first = enqueue
-    second = enqueue
+    admissions = 3.times.map { enqueue }
 
-    assert_equal [ first.id ], SessionAdmissionService.drain!
-    assert_nil second.reload.admitted_at
+    assert_equal admissions.map(&:id), SessionAdmissionService.drain!
   end
 
   # Nothing kills what is already running — only nothing new starts.

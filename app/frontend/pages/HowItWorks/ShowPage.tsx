@@ -113,8 +113,9 @@ const ShowPage = () => {
                 <Text c="var(--app-text-secondary)">queue-hours free</Text>
               </div>
               <Text size="sm" c="var(--app-text-secondary)" mt="sm">
-                Every new workspace starts with them. One session at a time until you add a card, and capacity is
-                metered by the hour, so raising or lowering your limit takes effect immediately rather than next month.
+                Every new workspace starts with them, spent at whatever rate it runs — four queues at once uses four
+                queue-hours an hour. Capacity is metered hourly, so raising or lowering your limit takes effect
+                immediately rather than next month.
               </Text>
             </div>
           </SimpleGrid>

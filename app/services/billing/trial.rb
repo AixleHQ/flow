@@ -6,11 +6,17 @@ module Billing
   # stops.
   #
   # THE ALLOWANCE IS A QUANTITY, NOT A PERIOD, and the customer sets the rate at
-  # which it burns. That is why the cap exists: capacity is billed by the hour it
-  # is offered, so a trial measured in days would be priced by whoever set the
-  # limit — ten queues for a fortnight is $16,800 of free capacity, chosen by the
-  # person receiving it. Capped at one session, the allowance is the same gift to
-  # everyone, and a hundred hours of it lasts about four days.
+  # which it burns. Capacity is billed by the hour it is offered, so a workspace
+  # running ten sessions at once spends ten queue-hours an hour and the same
+  # hundred hours that would last one workspace four days last that one ten. That
+  # is the deal on purpose: the limit is the admin's to choose, and choosing a
+  # big one buys a short trial rather than a large gift.
+  #
+  # The consequence is that the overshoot is bounded only by the metering
+  # interval. Nothing is checked between hourly runs, so a workspace that sets a
+  # very high limit can spend well past the allowance before the next run stops
+  # it. Capping what a trialing workspace may set is the lever if that ever
+  # matters; today it is deliberately not capped.
   #
   # THE SPEND IS A SUM, NOT A COUNTER. CompanyCapacityUsage already records every
   # hour a company was offered anything, so what it has used is a question, not a
@@ -20,11 +26,6 @@ module Billing
   # Hosted only: a self-hosted operator pays nobody, and a Marketplace customer
   # bought their capacity from AWS before they ever reached us.
   module Trial
-    # One session at a time while the allowance lasts. Not a setting: it is what
-    # makes the allowance the same gift to everyone rather than a length of time
-    # the recipient chooses.
-    MAX_SESSIONS = 1
-
     module_function
 
     def queue_hours = Settings.trial&.queue_hours.to_i
@@ -43,6 +44,10 @@ module Billing
       [ seconds - used_seconds(company), 0 ].max
     end
 
+    def used_hours(company)
+      (BigDecimal(used_seconds(company)) / 3600).round(1)
+    end
+
     def remaining_hours(company)
       (BigDecimal(remaining_seconds(company)) / 3600).round(1)
     end
@@ -55,11 +60,22 @@ module Billing
     # clamps it. Read by both admission and the meter, which have to agree: a
     # ceiling one honours and the other does not either bills for capacity that
     # cannot be used, or lets capacity run that nobody is billed for.
+    #
+    # Only a company that has spent the allowance has one. While it lasts the
+    # limit is whatever the admin set — the allowance is spent faster, not the
+    # workspace made smaller.
     def ceiling_for(billing_state)
-      case billing_state
-      when "blocked" then 0
-      when "trialing" then MAX_SESSIONS
-      end
+      0 if billing_state == "blocked"
+    end
+
+    # How long what is left lasts at the rate the workspace is running, which is
+    # the number an admin actually wants: "40 queue-hours" means four days at one
+    # session and four hours at ten. Nil where the rate is unknown, which is a
+    # workspace with no limit set at all.
+    def hours_left_at(company, max_sessions)
+      return nil if max_sessions.nil? || max_sessions.to_i <= 0
+
+      (remaining_hours(company) / max_sessions.to_i).round(1)
     end
 
     # Run after an hour is measured, which is the only moment the answer can

@@ -206,8 +206,8 @@ const NewWorkspacePage = () => {
                 </Button>
                 <p className={classes.footnote}>
                   You become its first administrator and can invite the rest of the team straight away. The first{' '}
-                  {freeQueueHours} queue-hours are free — one session at a time until you add a card, and nothing is
-                  charged before then.
+                  {freeQueueHours} queue-hours are free, and they are spent at whatever rate you run: four sessions at
+                  once uses four queue-hours an hour.
                 </p>
               </Stack>
             </form>
