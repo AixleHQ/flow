@@ -1,0 +1,54 @@
+.root {
+  border-bottom: 1px solid var(--app-border-default);
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--app-action-selected);
+}
+
+.blocked {
+  background: var(--app-danger-bg);
+  border-bottom-color: var(--app-danger-border);
+}
+
+.text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--app-text-primary);
+  flex: 1 1 320px;
+}
+
+.blocked .text {
+  color: var(--app-danger-fg);
+}
+
+.figure {
+  font-family: var(--app-font-mono, ui-monospace, monospace);
+  font-weight: 600;
+}
+
+/* A spent allowance is not a progress bar anybody wants animated at them. */
+.meter {
+  flex: 0 0 160px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--app-border-default);
+  overflow: hidden;
+}
+
+.meterFill {
+  height: 100%;
+  background: var(--app-primary);
+}
+
+.blocked .meterFill {
+  background: var(--app-danger-fg);
+}
+
+@media (max-width: 640px) {
+  .meter {
+    display: none;
+  }
+}

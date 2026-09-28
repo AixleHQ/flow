@@ -4,7 +4,7 @@ import { notifications } from '@mantine/notifications';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
-import { AppSidebar, FullPageLoader, Logo, type SharedProps } from 'shared/ui';
+import { AppSidebar, FullPageLoader, Logo, type SharedProps, TrialBanner } from 'shared/ui';
 
 import classes from './AuthLayout.module.css';
 
@@ -78,6 +78,10 @@ export function AuthLayout({ children, projectId: propProjectId, noPadding }: Au
         <a href="#app-main" className="app-skip-link">
           Skip to content
         </a>
+        {/* Above the content rather than inside a page: a workspace that has
+            spent its free capacity looks, from every other screen, like sessions
+            that silently never start. */}
+        <TrialBanner />
         <Box component="main" id="app-main" tabIndex={-1} className={noPadding ? classes.mainNoPadding : classes.main}>
           {children}
         </Box>

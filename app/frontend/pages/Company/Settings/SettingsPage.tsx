@@ -1,7 +1,6 @@
 import type { FormDataConvertible } from '@inertiajs/core';
 import { Head, router, usePage } from '@inertiajs/react';
 import {
-  Alert,
   Box,
   Button,
   Card,
@@ -53,13 +52,6 @@ interface CapacityAllocation {
   maxSessions: number;
 }
 
-interface Trial {
-  state: 'trialing' | 'blocked';
-  allowanceHours: number;
-  remainingHours: number;
-  maxSessions: number;
-}
-
 interface Capacity {
   /** What the company may run at once, or null when it has no limit. */
   maxSessions: number | null;
@@ -70,8 +62,6 @@ interface Capacity {
   projectDefault: number;
   /** False in the hosted product: the number we invoice for is not self-serve. */
   canManage: boolean;
-  /** Present only while a free allowance is capping what the limit above buys. */
-  trial: Trial | null;
 }
 
 interface Props {
@@ -220,22 +210,6 @@ const SettingsPage = () => {
                 <Text fw={600}>Session capacity</Text>
               </Group>
               <Stack gap="md">
-                {capacity.trial && (
-                  <Alert
-                    color={capacity.trial.state === 'blocked' ? 'red' : 'blue'}
-                    variant="light"
-                    title={
-                      capacity.trial.state === 'blocked'
-                        ? 'Your free capacity is used up'
-                        : `${capacity.trial.remainingHours} of ${capacity.trial.allowanceHours} free queue-hours left`
-                    }
-                  >
-                    {capacity.trial.state === 'blocked'
-                      ? `You have used all ${capacity.trial.allowanceHours} free queue-hours, so no new sessions start. Talk to us to carry on — anything already running finishes.`
-                      : `Until then this workspace runs ${capacity.trial.maxSessions} session at a time, whatever the number below says, and nothing is charged for.`}
-                  </Alert>
-                )}
-
                 {capacity.canManage ? (
                   <NumberInput
                     label="Concurrent sessions"
