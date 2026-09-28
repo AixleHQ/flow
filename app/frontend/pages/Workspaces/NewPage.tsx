@@ -23,6 +23,10 @@ const NewWorkspacePage = () => {
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
+    // Nested under `workspace`, as every other form here posts and as the
+    // controller's strong parameters expect. `wrap_parameters` is off, so a flat
+    // body arrives flat and the controller reads an empty hash.
+    form.transform((data) => ({ workspace: data }));
     form.post(workspacePath());
   };
 
