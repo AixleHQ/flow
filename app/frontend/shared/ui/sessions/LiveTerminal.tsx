@@ -3,10 +3,10 @@ import { type HotkeyItem, getHotkeyHandler } from '@mantine/hooks';
 import type { Terminal } from '@xterm/xterm';
 import { type ClipboardEvent, type DragEvent, useCallback, useEffect, useRef, useState } from 'react';
 
-import { clipboardKeyAction, isMacPlatform } from 'shared/lib/clipboardKeys';
 import { stripContainerTicket } from 'shared/lib/containerTicket';
 import { findHardWrappedLink } from 'shared/lib/hardWrappedLink';
 import { pastedImages, uploadImage } from 'shared/lib/imagePaste';
+import { isMacPlatform, terminalKeyAction } from 'shared/lib/terminalKeys';
 import { TtydConnection, type TtydStatus } from 'shared/lib/ttydConnection';
 import {
   THEME_QUERY,
@@ -193,8 +193,13 @@ export function LiveTerminal({ url, readOnly = false, label = 'Terminal', hotkey
       );
       const isMac = isMacPlatform();
       term.attachCustomKeyEventHandler((event) => {
-        const clipboard = clipboardKeyAction(event, { isMac, hasSelection: term.hasSelection() });
-        if (clipboard === 'copy') {
+        const action = terminalKeyAction(event, { isMac, hasSelection: term.hasSelection() });
+        if (action?.type === 'send') {
+          event.preventDefault();
+          if (event.type === 'keydown' && !readOnly) connectionRef.current?.input(action.data);
+          return false;
+        }
+        if (action?.type === 'copy') {
           // Also keeps Ctrl+Shift+C from opening the browser's devtools.
           event.preventDefault();
           if (event.type === 'keydown' && term.hasSelection()) {
@@ -204,7 +209,7 @@ export function LiveTerminal({ url, readOnly = false, label = 'Terminal', hotkey
           return false;
         }
         // Not handled and not prevented: the browser pastes, and xterm (or the image upload) takes it from there.
-        if (clipboard === 'paste') return false;
+        if (action?.type === 'paste') return false;
 
         const bindings = hotkeysRef.current;
         if (!bindings?.length || event.type !== 'keydown') return true;
