@@ -7,6 +7,7 @@ import ShowPage from './ShowPage';
 
 const props = {
   queueHourlyRate: 5,
+  freeQueueHours: 100,
   signedIn: false,
 };
 
@@ -21,6 +22,13 @@ describe('How it works page', () => {
 
     expect(within(prices()).getByText('$5.00')).toBeInTheDocument();
     expect(within(prices()).getByText('$3,600')).toBeInTheDocument();
+  });
+
+  it('says how much capacity a new workspace gets free', () => {
+    renderPage(<ShowPage />, { props });
+
+    expect(within(prices()).getByText('100')).toBeInTheDocument();
+    expect(within(prices()).getByText('queue-hours free')).toBeInTheDocument();
   });
 
   it('follows the installation to a different list price', () => {

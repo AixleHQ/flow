@@ -37,6 +37,14 @@ class Web::HowItWorksControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_page "HowItWorks/ShowPage"
   end
 
+  test "it says how much capacity a new workspace gets free" do
+    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 250))
+
+    get how_it_works_path
+
+    assert_inertia_props { |props| assert_equal 250, props[:freeQueueHours] }
+  end
+
   # The page sells a signup. While that is switched off it is selling something
   # nobody can buy.
   test "it is gone while registration is off" do

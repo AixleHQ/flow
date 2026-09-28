@@ -17,6 +17,8 @@ interface PageProps {
   suggestedEmail: string | null;
   /** A stranger names the address they will own the workspace with; a signed-in person has proved theirs. */
   needsEmail: boolean;
+  /** Queue-hours the workspace may spend before anyone asks it for a card. */
+  freeQueueHours: number;
   /**
    * Server-side refusals. The keys arrive camelCased — the Inertia
    * prop_transformer runs over every prop, errors included — while the form's
@@ -96,8 +98,16 @@ const SentScreen = ({ address }: { address: string }) => (
 );
 
 const NewWorkspacePage = () => {
-  const { suggestedDomain, suggestedName, defaultMaxSessions, sentTo, needsEmail, suggestedEmail, errors } =
-    usePage<PageProps>().props;
+  const {
+    suggestedDomain,
+    suggestedName,
+    defaultMaxSessions,
+    sentTo,
+    needsEmail,
+    suggestedEmail,
+    freeQueueHours,
+    errors,
+  } = usePage<PageProps>().props;
 
   const form = useForm({
     name: suggestedName ?? nameFromEmail(suggestedEmail),
@@ -195,7 +205,9 @@ const NewWorkspacePage = () => {
                   {needsEmail ? 'Email me the link' : 'Create workspace'}
                 </Button>
                 <p className={classes.footnote}>
-                  You become its first administrator and can invite the rest of the team straight away.
+                  You become its first administrator and can invite the rest of the team straight away. The first{' '}
+                  {freeQueueHours} queue-hours are free — one session at a time until you add a card, and nothing is
+                  charged before then.
                 </p>
               </Stack>
             </form>
