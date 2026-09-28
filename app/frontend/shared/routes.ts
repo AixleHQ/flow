@@ -1092,6 +1092,11 @@ export function docsPagePath(slug: ScalarType[], options?: object): string {
   return "/" + "docs" + "/" + slug.map((part) => $encode(part)).join("/") + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["slug","format"]);
 }
 
+/** /how-it-works(.:format) */
+export function howItWorksPath(options?: object): string {
+  return "/" + "how-it-works" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /templates(.:format) */
 export function templatesPath(options?: object): string {
   return "/" + "templates" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1195,6 +1200,16 @@ export function securityProfilePath(options?: object): string {
 /** /profile(.:format) */
 export function profilePath(options?: object): string {
   return "/" + "profile" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /workspace/new(.:format) */
+export function newWorkspacePath(options?: object): string {
+  return "/" + "workspace" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /workspace(.:format) */
+export function workspacePath(options?: object): string {
+  return "/" + "workspace" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /onboarding(.:format) */
@@ -1575,6 +1590,11 @@ export function companyProjectMemberPath(project_id: ScalarType, id: ScalarType,
 /** /company/projects/:project_id/settings(.:format) */
 export function companyProjectSettingsPath(project_id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "settings" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
+}
+
+/** /company/projects/:project_id/ownership(.:format) */
+export function companyProjectOwnershipPath(project_id: ScalarType, options?: object): string {
+  return "/" + "company" + "/" + "projects" + "/" + project_id + "/" + "ownership" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["project_id","format"]);
 }
 
 /** /company/projects(.:format) */

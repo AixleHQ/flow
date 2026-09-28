@@ -9,6 +9,9 @@ class Web::ApplicationController < ApplicationController
   before_action :negotiate_format
   before_action :match_partial_keys_in_either_case
   before_action :redirect_super_admin_to_admin_panel
+  # Before the auth policy: a person with no company at all has no policy to
+  # satisfy, and one screen to be on until they do.
+  before_action :enforce_workspace
   # AD-5: a company stays current only while this session satisfies its
   # effective auth set. Runs before onboarding — entering the company at all is
   # the more fundamental question.
@@ -31,7 +34,10 @@ class Web::ApplicationController < ApplicationController
         # at build — so it stays runtime-configurable via ENV. Real abuse defense
         # is Sentry-side allowed-domains + spike protection, not hiding the DSN.
         sentry_frontend_dsn: Settings.sentry.frontend_dsn,
-        sentry_traces_sample_rate: Settings.sentry.traces_sample_rate.to_f
+        sentry_traces_sample_rate: Settings.sentry.traces_sample_rate.to_f,
+        # Whether a stranger may sign a company up here, which is also what
+        # decides that /how-it-works — the page that sells it — exists at all.
+        self_serve_signup: Deployment.self_serve_signup?
       }
     }
 
@@ -128,6 +134,24 @@ class Web::ApplicationController < ApplicationController
     else
       redirect_to admin_root_path
     end
+  end
+
+  # A signed-in person with no company anywhere has one thing to do, and every
+  # other screen would render empty for them. Only where we host: elsewhere a
+  # workspace is made in the admin, and someone with no membership is a refusal
+  # rather than a signup.
+  def enforce_workspace
+    return unless Deployment.self_serve_signup?
+    return unless signed_in?
+    return if current_user.super_admin?
+    # Already resolved for this request, so the common case — a person who
+    # belongs somewhere — costs nothing. The count below runs only for the few
+    # who have no current membership, rather than once per request for everyone.
+    return if current_membership
+    return if current_user.company_memberships.exists?
+    return if request.path == new_workspace_path
+
+    redirect_to new_workspace_path
   end
 
   def enforce_onboarding

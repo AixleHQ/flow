@@ -26,6 +26,8 @@ export interface SharedSettings {
   appVersion: string | null;
   sentryFrontendDsn: string | null;
   sentryTracesSampleRate?: number;
+  /** Optional: a page served by an older pod does not send it. */
+  selfServeSignup?: boolean;
 }
 
 export interface SharedPermissions {

@@ -36,6 +36,13 @@ module Deployment
       SAAS
     end
 
+    # Whether a stranger may sign a company up here, which also decides whether
+    # the page that sells it exists. Hosted only — elsewhere a workspace is made
+    # by the operator or bought through AWS — and off until an operator says
+    # otherwise, because the screens ship before the product is ready to take
+    # strangers and a half-open door is worse than a closed one.
+    def self_serve_signup? = saas? && Settings.registration&.enabled == true
+
     def self_hosted? = mode == SELF_HOSTED
     def saas? = mode == SAAS
     def aws_marketplace? = mode == AWS_MARKETPLACE
@@ -48,6 +55,13 @@ module Deployment
     # metering record — AWS Marketplace takes a quantity or nothing. So where the
     # installation meters itself to AWS, every company must carry a number.
     def requires_bounded_companies? = aws_marketplace?
+
+    # Whether capacity is charged for at all. A company admin may raise their own
+    # limit wherever it is, because raising it raises what they pay; they may
+    # never clear it, because an unbounded company is one nobody is invoiced for.
+    # Only a platform administrator may leave a company without a number, and
+    # only where AWS is not the one counting.
+    def bills_capacity? = !self_hosted?
 
     def misconfigured?
       raw = Settings.deployment&.mode.to_s.strip
