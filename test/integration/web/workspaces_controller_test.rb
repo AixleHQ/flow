@@ -33,6 +33,21 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_equal 5, SessionConcurrencyLimit.for_company(company.id)
   end
 
+  # The /how-it-works calculator works out a queue count and links here with it.
+  test "the form opens on the queue count the calculator sent" do
+    get new_workspace_path(sessions: 9)
+
+    assert_inertia_props { |props| assert_equal 9, props[:defaultMaxSessions] }
+  end
+
+  test "a nonsense queue count falls back to the installation default" do
+    get new_workspace_path(sessions: "lots")
+
+    assert_inertia_props do |props|
+      assert_equal SessionAdmissionPolicy.scope_default("Project"), props[:defaultMaxSessions]
+    end
+  end
+
   test "a workspace cannot be signed up without a limit" do
     post workspace_path, params: { workspace: { name: "Acme", email_domain: "acme-robotics.example" } }
 

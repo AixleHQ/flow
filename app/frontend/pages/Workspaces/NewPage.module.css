@@ -1,0 +1,138 @@
+.page {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  background: var(--app-bg-default);
+}
+
+@media (max-width: 900px) {
+  .page {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── Left: what they are signing up to ──────────── */
+
+.pitch {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px;
+  padding: 64px clamp(24px, 6vw, 88px);
+  border-right: 1px solid var(--app-border-default);
+  background:
+    radial-gradient(ellipse 90% 70% at 10% 0%, var(--app-action-selected) 0%, transparent 62%),
+    var(--app-bg-card);
+}
+
+@media (max-width: 900px) {
+  .pitch {
+    border-right: none;
+    border-bottom: 1px solid var(--app-border-default);
+    padding: 40px 24px;
+    gap: 20px;
+  }
+}
+
+.title {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 4vw, 2.9rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  color: var(--app-text-primary);
+  margin: 0;
+  max-width: 16ch;
+  text-wrap: balance;
+}
+
+.lead {
+  font-size: 1.02rem;
+  line-height: 1.6;
+  color: var(--app-text-secondary);
+  max-width: 46ch;
+  margin: 0;
+}
+
+.points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 46ch;
+}
+
+.point {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  font-size: 0.94rem;
+  line-height: 1.5;
+  color: var(--app-text-secondary);
+}
+
+.pointIcon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--app-primary-strong);
+}
+
+.point b {
+  color: var(--app-text-primary);
+  font-weight: 600;
+}
+
+/* ── Right: the form ────────────────────────────── */
+
+.formSide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px clamp(20px, 5vw, 64px);
+}
+
+@media (max-width: 900px) {
+  .formSide {
+    padding: 40px 20px 64px;
+  }
+}
+
+.form {
+  width: 100%;
+  max-width: 420px;
+}
+
+.formTitle {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+  color: var(--app-text-primary);
+  margin: 0 0 6px;
+}
+
+.domainNote {
+  /* A block, not a flex row: the domain sits inside a sentence and has to wrap
+     with it rather than become a column of its own. */
+  display: block;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--app-action-selected);
+  border: 1px solid var(--app-accent-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--app-primary-strong);
+}
+
+.domain {
+  font-family: var(--app-font-mono, ui-monospace, monospace);
+  font-weight: 600;
+}
+
+.footnote {
+  font-size: 12px;
+  color: var(--app-text-tertiary);
+  text-align: center;
+}

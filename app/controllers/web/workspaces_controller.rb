@@ -37,8 +37,16 @@ class Web::WorkspacesController < Web::ApplicationController
     {
       suggested_domain: form.email_domain,
       suggested_name: form.email_domain.to_s.split(".").first&.capitalize,
-      default_max_sessions: SessionAdmissionPolicy.scope_default("Project")
+      default_max_sessions: requested_sessions || SessionAdmissionPolicy.scope_default("Project")
     }
+  end
+
+  # The /how-it-works calculator works out how many queues a workload needs and
+  # sends the visitor here with that number, so the form opens on the figure they
+  # were just shown rather than on the installation default.
+  def requested_sessions
+    count = params[:sessions].to_i
+    count.positive? ? count : nil
   end
 
   def workspace_params
