@@ -1,14 +1,14 @@
-import { Button, type ButtonProps } from '@mantine/core';
+import type { ButtonProps } from '@mantine/core';
 import type { ReactNode } from 'react';
 
 import { GOOGLE_BRAND } from 'shared/theme/vendorColors';
 
-import classes from './GoogleLoginButton.module.css';
+import { AuthMethodButton } from './AuthMethodButton';
 
 const GOOGLE_AUTH_PATH = '/auth/google';
 
 const GoogleIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" style={{ marginRight: 8 }}>
+  <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
     <path
       fill={GOOGLE_BRAND.blue}
       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -28,29 +28,12 @@ const GoogleIcon = () => (
   </svg>
 );
 
-function getCsrfToken(): string {
-  return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? '';
-}
-
-// POST + CSRF token, never a plain GET link: a GET /auth/google can be triggered
-// on a victim's session from an external page (see config/initializers/omniauth.rb).
 // `children` lets the invitation page relabel it ("Continue with Google").
 export const GoogleLoginButton = ({
-  children = 'Sign in with Google',
+  children = 'Google',
   ...props
-}: Omit<ButtonProps, 'component'> & { children?: ReactNode }) => (
-  <form method="post" action={GOOGLE_AUTH_PATH}>
-    <input type="hidden" name="authenticity_token" value={getCsrfToken()} />
-    <Button
-      type="submit"
-      variant="default"
-      fullWidth
-      size="lg"
-      leftSection={<GoogleIcon />}
-      classNames={{ root: classes.googleButton }}
-      {...props}
-    >
-      {children}
-    </Button>
-  </form>
+}: Omit<ButtonProps, 'component' | 'leftSection'> & { children?: ReactNode }) => (
+  <AuthMethodButton icon={<GoogleIcon />} action={GOOGLE_AUTH_PATH} {...props}>
+    {children}
+  </AuthMethodButton>
 );

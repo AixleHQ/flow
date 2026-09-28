@@ -81,8 +81,12 @@ class Web::Company::Projects::AixleBuilderControllerTest < ActionDispatch::Integ
     #
     # 21 -> 22 with sidebar favorites: ApplicationController's shared `projects`
     # prop plucks `project_favorites` once so the switcher can mark stars.
-    # Constant per request, not per session — the list `includes` are unchanged.
-    assert_operator query_count, :<=, 22, "Expected bounded content query count, got #{query_count}"
+    # 22 -> 23 with the company-entry auth gate (AD-5): one EXISTS query joining
+    # this session's proofs to the company's enabled policies, rather than
+    # plucking both sides and intersecting in Ruby. Memoized per (request,
+    # company), so it is constant per request, not per session listed — which is
+    # what this guard protects.
+    assert_operator query_count, :<=, 23, "Expected bounded content query count, got #{query_count}"
   end
 
   # ── start ─────────────────────────────────────────

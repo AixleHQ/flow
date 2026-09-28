@@ -64,9 +64,25 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
   end
 
-  test "create redirects back to login on invalid credentials" do
+  # A refusal stays on the step the password was typed on. Redirecting to /login
+  # would land on the ADDRESS step and make the person retype what they had
+  # already given.
+  test "a refused password keeps the address and the workspace's methods on screen" do
     post login_path, params: {
       user: { email: @user.email, password: "wrong_password" }
+    }
+
+    assert_response :success
+    assert_inertia_component "Auth/LoginPage"
+    assert_equal "credentials", inertia.props[:step]
+    assert_equal @user.email, inertia.props[:email]
+    assert_includes inertia.props[:methods], "password"
+    assert inertia.props[:errors].present?, "the refusal has to say something"
+  end
+
+  test "a refused password for an address no workspace claims goes back to the start" do
+    post login_path, params: {
+      user: { email: "nobody@unclaimed-#{SecureRandom.hex(3)}.test", password: "wrong_password" }
     }
 
     assert_redirected_to login_path
@@ -160,7 +176,7 @@ class Web::SessionsControllerTest < ActionDispatch::IntegrationTest
     unknown_domain = "unknowndomain#{SecureRandom.hex(4)}.xyz"
     unknown_email = "test@#{unknown_domain}"
 
-    # No company exists with this domain — GoogleOmniAuthService will raise NoWorkspaceError
+    # No company exists with this domain — Auth::IdentityResolver raises NoWorkspaceError
     assert_nil Company.find_by(email_domain: unknown_domain)
 
     auth_hash = OmniAuth::AuthHash.new(

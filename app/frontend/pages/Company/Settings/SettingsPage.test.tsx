@@ -71,21 +71,14 @@ describe('Company settings page', () => {
     expect(patch.mock.calls[0][1]).not.toHaveProperty('capacity');
   });
 
-  it('shows the email domain when the company has one', () => {
+  // Joining lives on the Access tab now, and must not come back here: two
+  // controls for one field would fight, and this page's deferred Save would
+  // send a stale copy over whatever Access had just set.
+  it('leaves who may join to the Access tab', () => {
     renderAuthedPage(<SettingsPage />, { props: { company, capacity, canManage: true } });
 
-    expect(screen.getByText('acme-robotics.example')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: /Accept new people automatically/ })).toBeEnabled();
-  });
-
-  // Auto-accept matches on the domain, so without one there is nothing to offer.
-  it('says the domain is not set, and cannot auto-accept without it', () => {
-    renderAuthedPage(<SettingsPage />, {
-      props: { company: { ...company, emailDomain: null }, capacity, canManage: true },
-    });
-
-    expect(screen.getByText('Not set')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: /Accept new people automatically/ })).toBeDisabled();
+    expect(screen.queryByRole('switch', { name: /Accept new people automatically/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('acme-robotics.example')).not.toBeInTheDocument();
   });
 
   it('hides the save button from someone who may not write', () => {

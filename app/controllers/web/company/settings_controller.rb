@@ -23,7 +23,9 @@ class Web::Company::SettingsController < Web::Company::ApplicationController
     if errors.any?
       redirect_back fallback_location: company_settings_path, inertia: { errors: errors }
     else
-      redirect_to company_settings_path, notice: "Company settings updated"
+      # Back to the tab the edit came from: auto-join is saved from Access, the
+      # rest from General, and landing on the other one reads as a lost change.
+      redirect_back fallback_location: company_settings_path, notice: "Company settings updated"
     end
   end
 

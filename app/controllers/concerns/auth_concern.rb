@@ -30,7 +30,7 @@ module AuthConcern
 
   # A new session for every sign-in: the old one (and its CSRF token) is reset,
   # and the sign-in is a UserSession row the server can end.
-  def sign_in(user, impersonator: nil)
+  def sign_in(user, provider: nil, impersonator: nil)
     carried = session.to_hash.slice(*CARRIED_ACROSS_SIGN_IN)
     current_user_session&.revoke!
     reset_session
@@ -40,6 +40,30 @@ module AuthConcern
     session[:user_session_id] = user_session.id
     session[:user_id] = user.id
     remember_user_session(user_session, user)
+    Auth::SessionService.record_proof(user_session, provider) if provider
+    user_session
+  end
+
+  # A second method proved inside a live session (AD-6). Proofs append: proving
+  # one never invalidates another, which is what lets a session satisfy several
+  # companies with different policies at once.
+  def prove_additional_method(provider)
+    return nil unless current_user_session
+
+    Auth::SessionService.record_proof(current_user_session, provider)
+    current_user_session
+  end
+
+  # Sign in, or — when the same person is already signed in — append this proof
+  # to the session they already hold (AD-6). Every method that a signed-in person
+  # can complete goes through here, so step-up works the same way whichever one
+  # they use.
+  def sign_in_or_prove(user, provider:)
+    if signed_in? && current_user_session&.user_id == user.id
+      prove_additional_method(provider)
+    else
+      sign_in(user, provider: provider)
+    end
   end
 
   def sign_out
@@ -127,6 +151,23 @@ module AuthConcern
 
   def impersonated?
     current_user_session&.impersonator_id.present?
+  end
+
+  # AD-5: a company stays current only while this session satisfies its
+  # effective set. Callers redirect to step-up on false — never a sign-out, and
+  # never an unscoped page.
+  #
+  # An impersonated request passes: the operator's own authentication backs it,
+  # and AD-19 already restricts operators to a password.
+  def company_auth_policy_satisfied?(company = current_company)
+    return true if company.nil? || impersonated?
+
+    @company_auth_policy_satisfied ||= {}
+    @company_auth_policy_satisfied.fetch(company.id) do
+      @company_auth_policy_satisfied[company.id] = Auth::PolicyResolver.satisfied?(
+        company: company, user_session: current_user_session, user: current_user
+      )
+    end
   end
 
   # Invitation continuation: an invite token parked before login (see

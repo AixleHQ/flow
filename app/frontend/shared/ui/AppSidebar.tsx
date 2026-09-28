@@ -191,6 +191,7 @@ const companyNavGroups: NavGroup[] = [
     items: [
       { label: 'Assets', icon: <IconFiles size={18} />, path: companyAssetsPath(), adminOnly: true },
       { label: 'Members', icon: <IconUsers size={18} />, path: companyMembersPath() },
+      // Sign-in methods moved into Settings as its Access tab; one entry now.
       { label: 'Settings', icon: <IconSettings size={18} />, path: companySettingsPath() },
     ],
   },

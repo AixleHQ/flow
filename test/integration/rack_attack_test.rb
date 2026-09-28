@@ -35,6 +35,26 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     assert_not_equal 429, response.status
   end
 
+  test "guessing a SCIM token from one address is cut off" do
+    # A deployment that publishes /scim puts a company's membership list behind
+    # one bearer token and nothing else.
+    60.times { |i| get "/scim/Users", headers: { "Authorization" => "Bearer ascim_guess#{i}" } }
+    assert_not_equal 429, response.status
+
+    get "/scim/Users", headers: { "Authorization" => "Bearer ascim_one-more" }
+
+    assert_response :too_many_requests
+  end
+
+  test "SCIM is counted per credential, and the count never keys on the raw token" do
+    request = rack_request({ "HTTP_AUTHORIZATION" => "Bearer ascim_secret-value" })
+
+    key = Rack::Attack.scim_credential(request)
+
+    assert_equal 32, key.length
+    refute_includes key, "ascim_secret-value"
+  end
+
   test "MCP calls are counted per credential, and the count never keys on the raw credential" do
     one = rack_request({ "HTTP_X_SESSION_KEY" => "123.abc" })
     same_as_bearer = rack_request({ "HTTP_AUTHORIZATION" => "Bearer 123.abc" })

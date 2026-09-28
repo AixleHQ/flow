@@ -1,9 +1,12 @@
 # frozen_string_literal: true
 
 class Web::SessionsController < Web::ApplicationController
+  include CredentialsStepConcern
+
   layout "inertia"
 
   skip_before_action :enforce_onboarding
+  skip_before_action :enforce_company_auth_policy
   skip_before_action :redirect_super_admin_to_admin_panel, only: %i[omniauth failure]
 
   def new
@@ -29,13 +32,21 @@ class Web::SessionsController < Web::ApplicationController
       error: params[:error],
       # Pre-fill support for the invitation flow (/login?email=...). Echoed
       # back only when it actually looks like an email address.
-      email: safe_email_param
+      email: safe_email_param,
+      # Only the redirect providers this INSTALLATION can actually complete
+      # (AD-4). A self-hoster without Microsoft credentials never sees a
+      # Microsoft button that would dead-end on a broken consent screen.
+      oauth_providers: Auth::PolicyResolver.deployment_allowlist_kinds & %w[google microsoft],
+      # Passwordless methods this installation offers. Passkey and magic link
+      # need no credentials, so they are on unless an operator narrows the
+      # allowlist.
+      passwordless_methods: Auth::PolicyResolver.deployment_allowlist_kinds & %w[passkey magic_link]
     }
   end
 
   def create
     user_form = UserSignInForm.new(session_params)
-    return redirect_to(login_path, inertia: { errors: user_form.errors }) unless user_form.valid?
+    return refuse_credentials(user_form.errors) unless user_form.valid?
 
     user = user_form.user
     # A parked invitation (login-continuation) is accepted before the gate below
@@ -49,7 +60,11 @@ class Web::SessionsController < Web::ApplicationController
     # and only then signed out at the first company-scoped page.
     return redirect_to login_path(error: "pending_approval") if no_active_membership?(user)
 
-    sign_in(user)
+    # The password credential gets its identity row here, not only in the
+    # backfill migration — otherwise a password set after the migration leaves
+    # the user with no identities at all (see Auth::LocalCredential).
+    provider = Auth::LocalCredential.link!(user)
+    sign_in(user, provider: provider)
     target = onboarding_done?(user) ? (take_pending_template_install_path || company_projects_path) : onboarding_path
     redirect_to target
   end
@@ -62,8 +77,11 @@ class Web::SessionsController < Web::ApplicationController
   end
 
   def omniauth
-    auth_service = GoogleOmniAuthService.new(request.env["omniauth.auth"])
-    user = auth_service.authenticate
+    # One port, one adapter per kind (AD-2): the callback resolves a provider row
+    # and asks the registry, instead of naming a service class.
+    provider = Auth::Registry.provider_for_omniauth(params[:provider].presence || "google")
+    assertion = Auth::Registry.for(provider).complete(auth_hash: request.env["omniauth.auth"])
+    user = Auth::IdentityResolver.new(assertion).resolve
 
     # An invitation being accepted always wins over the pending gate below:
     # accepting turns the invited membership active BEFORE we check for active
@@ -84,11 +102,19 @@ class Web::SessionsController < Web::ApplicationController
       return
     end
 
-    sign_in(user)
+    # Step-up through a redirect provider lands here too; the proof appends to a
+    # live session rather than replacing it (AD-6).
+    sign_in_or_prove(user, provider: provider)
+
     target = user.super_admin? ? admin_root_path : onboarding_path
     redirect_to target
-  rescue GoogleOmniAuthService::NoWorkspaceError
+  rescue Auth::IdentityResolver::NoWorkspaceError
     redirect_to login_path(error: "no_workspace")
+  rescue Auth::IdentityResolver::LinkRequiredError
+    redirect_to login_path(error: "link_required")
+  rescue Auth::IdentityResolver::SuperAdminProviderError
+    # AD-19: the platform operator account authenticates by password only.
+    redirect_to login_path(error: "super_admin_password_only")
   rescue StandardError
     redirect_to login_path(error: "oauth_failed")
   end
@@ -131,6 +157,17 @@ class Web::SessionsController < Web::ApplicationController
     else
       params.permit(:email, :password)
     end
+  end
+
+  # Back to the step the password was typed on, not to the address step: a
+  # refusal that redirected to /login would make the person retype an address
+  # they had already given.
+  def refuse_credentials(errors)
+    email = session_params[:email].to_s.strip
+    options = email.present? ? Auth::SignInOptions.for(email) : nil
+    return redirect_to(login_path, inertia: { errors: errors }) if options.nil?
+
+    render_credentials_step(email, options, errors: errors)
   end
 
   def safe_email_param

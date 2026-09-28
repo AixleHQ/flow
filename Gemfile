@@ -25,6 +25,20 @@ gem "bcrypt", "~> 3.1.22"
 gem "omniauth"
 gem "omniauth-google-oauth2"
 gem "omniauth-rails_csrf_protection"
+# Microsoft work/school accounts. The successor to omniauth-azure-activedirectory-v2;
+# multi-tenant by default, and it folds the Entra `tid` into the UID.
+gem "omniauth-entra-id", "~> 3.1"
+# Generic per-company OIDC connections. NOT an OmniAuth strategy: a customer's
+# issuer and client credentials are a database row, and OmniAuth strategies are
+# boot-time initializer constants (AD-4).
+gem "openid_connect", "~> 2.5"
+# Passkeys. Owns the WebAuthn ceremonies and attestation verification; this app
+# still owns credential storage, the UI and account recovery.
+gem "webauthn", "~> 3.4"
+# SCIM 2.0 as a service provider: a customer's directory pushes joiners and
+# leavers to us. The filter-query grammar is genuinely hard ABNF work, which is
+# what justifies the dependency over hand-rolling.
+gem "scimitar", "~> 2.15"
 
 gem "aasm"
 
@@ -160,9 +174,6 @@ group :test do
   gem "minitest-mock"
   gem "minitest-power_assert"
   gem "mocha"
-  # One-time-password secrets for test fixtures only.
-  gem "rotp", "~> 6.3"
-
   # Coverage and mocking
   gem "simplecov", require: false
   gem "webmock"
@@ -202,6 +213,14 @@ gem "lograge", "~> 0.15.0"
 # file to lift the bearer token and profile ARN its API calls need. Every other runtime
 # hands us JSON and needs nothing here.
 gem "sqlite3", "~> 2.9"
+
+# Time-based one-time codes: a step-up method in production, not just a test
+# fixture — User#totp_secret and Auth::Methods::Totp both run on it.
+gem "rotp", "~> 6.3"
+
+# Renders the otpauth:// URI as the QR an authenticator app scans. Server-side so
+# the enrolment payload stays one response and no QR library reaches the bundle.
+gem "rqrcode", "~> 3.1"
 
 # Docker API for container management
 gem "docker-api", "~> 2.3"

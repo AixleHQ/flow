@@ -41,6 +41,14 @@ export const GOOGLE_BRAND = {
   red: '#EA4335',
 } as const;
 
+/** Microsoft's four-square mark, for the "Sign in with Microsoft" button. */
+export const MICROSOFT_BRAND = {
+  orange: '#F35325',
+  green: '#81BC06',
+  blue: '#05A6F0',
+  yellow: '#FFBA08',
+} as const;
+
 /**
  * Terminal surfaces render an xterm.js canvas that is black by contract, not a
  * themed surface — the agent's own ANSI colors are drawn against it.

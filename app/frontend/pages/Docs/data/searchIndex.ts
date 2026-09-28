@@ -91,6 +91,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Admin, employee and viewer roles, company members, project collaborators, and what each role can see.',
   },
   {
+    slug: 'signing-in',
+    title: 'Signing in & SSO',
+    section: 'Using Flow',
+    desc: 'Every way to prove who you are, which methods a workspace accepts, connecting your own OpenID Connect provider, passkeys and authentication codes, and directory sync.',
+  },
+  {
     slug: 'secrets',
     title: 'Secrets & Variables',
     section: 'Using Flow',
@@ -209,6 +215,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     title: 'API',
     section: 'Reference',
     desc: 'REST API under /api/v1 — workflows, workflow runs, board, tasks, assets, and webhooks.',
+  },
+  {
+    slug: 'configuring-sso',
+    title: 'Configuring sign-in methods',
+    section: 'User guide',
+    desc: 'For operators: how availability is derived from credentials, registering Google and Microsoft, what per-company OIDC needs from the installation, and the claim that identifies a person.',
   },
   {
     slug: 'config-schema',
