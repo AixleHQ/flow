@@ -17,9 +17,8 @@ import type { BoardColumn, Project, TerminalSession, Workflow } from '@/types/ge
 
 import { formatTime, parseDate } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
-import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
 import { agentLabel, isAgentType } from 'shared/ui/agentRuntimes';
-import { ContainerFrame } from 'shared/ui/ContainerFrame';
+import { LiveTerminal } from 'shared/ui/sessions';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -108,7 +107,6 @@ const SessionPage = () => {
   const isTerminal = ['finished', 'failed', 'cancelled'].includes(s.state);
   const [finishRequested, setFinishRequested] = useState(false);
   const [tab, setTab] = useState<string | null>('activity');
-  const [termLoaded, setTermLoaded] = useState(false);
 
   const basePath = `/company/projects/${project.id}`;
 
@@ -119,12 +117,7 @@ const SessionPage = () => {
 
   const allActivities = useMemo(() => builderActivities ?? [], [builderActivities]);
 
-  const ttydUrl = useMemo(
-    () => terminalPageUrl({ terminalUrl: s.terminalUrl, websocketUrl: s.websocketUrl }),
-    [s.terminalUrl, s.websocketUrl],
-  );
-
-  const canShowTerminal = !!ttydUrl && s.state === 'ready';
+  const canShowTerminal = !!s.websocketUrl && s.state === 'ready';
   const runtimeLabel = agentLabel(s.agentType);
 
   const handleFinish = useCallback(() => {
@@ -176,20 +169,7 @@ const SessionPage = () => {
     return (
       <div className={classes.mainPanel}>
         <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>
-          {!termLoaded && (
-            <div className={classes.loadingOverlay}>
-              <Loader size="md" />
-              <Text size="sm" c="dimmed">
-                Connecting to terminal...
-              </Text>
-            </div>
-          )}
-          <ContainerFrame
-            src={ttydUrl!}
-            title="Terminal"
-            allow="clipboard-read; clipboard-write"
-            onLoad={() => setTermLoaded(true)}
-          />
+          <LiveTerminal url={s.websocketUrl!} />
         </div>
       </div>
     );

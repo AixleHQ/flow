@@ -89,11 +89,9 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     own = TerminalSessionResource.new(session, params: { viewer: @user }).to_h
 
     assert_match %r{/t/#{session.route_token}/view/ws\z}, shared["websocketUrl"]
-    assert_match %r{/t/#{session.route_token}/view\z}, shared["terminalUrl"]
     assert_nil shared["ideUrl"]
     assert_not shared.to_json.include?("tkn-secret")
     assert_match %r{/t/#{session.route_token}/tty/ws\z}, own["websocketUrl"]
-    assert_match %r{/t/#{session.route_token}/tty\z}, own["terminalUrl"]
     assert_includes own["ideUrl"], "tkn-secret"
   end
 
@@ -118,18 +116,5 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
 
     assert_equal [ { "path" => "/workspace/.aixle/references/guide.md", "content" => "# Guide" } ],
                  props.dig("sessionConfig", "configFiles")
-  end
-
-  # The iframe URL comes from the server rather than from rewriting the websocket
-  # URL, where cutting the first "/ws" breaks a host whose name starts with "ws".
-  test "the terminal page is served from the http base, whatever the host is called" do
-    Settings.stubs(:domain).returns("flow.example.com")
-    Settings.traefik.stubs(:http_base).returns("https://ws.sandbox.example.com")
-    Settings.traefik.stubs(:ws_base).returns("wss://ws.sandbox.example.com")
-    session = create(:terminal_session, :agent_session, user: @user, project: @project, state: "ready")
-
-    url = TerminalSessionResource.new(session, params: { viewer: @user }).to_h["terminalUrl"]
-
-    assert url.start_with?("https://ws.sandbox.example.com/t/#{session.route_token}/tty?#{ContainerTicket::PARAM}=")
   end
 end

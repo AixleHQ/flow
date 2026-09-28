@@ -1,12 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildSharedPermissions } from 'test/factories/sharedProps';
 import { buildStepRun } from 'test/factories/stepRun';
 import { buildSubStepRun } from 'test/factories/subStepRun';
 import { buildWorkflowRun } from 'test/factories/workflowRun';
 import { buildWorkflowRunAsset } from 'test/factories/workflowRunAsset';
+import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type WorkflowRun from 'types/generated/WorkflowRun';
 
@@ -38,6 +39,10 @@ function seed(props: Record<string, unknown> = {}) {
 }
 
 describe('Projects/WorkflowRuns/ShowPage', () => {
+  beforeEach(() => {
+    installFakeWebSocket();
+  });
+
   it('names the workflow version each session ran, and warns when it changed mid-run', () => {
     const run = makeRun({
       workflowVersionNumbers: [7, 8],
@@ -319,21 +324,20 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
-  it('shows the live console beside the session list while a session is running', () => {
+  it('shows the live console beside the session list while a session is running', async () => {
     const running = buildStepRun({
       id: 701,
       stepName: 'Collect data',
       stepPosition: 1,
       state: 'running',
-      terminalUrl: 'https://host.test/t/abc/tty',
+      websocketUrl: 'wss://host.test/t/abc/tty/ws',
     });
     renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ stepRuns: [running] }) }) });
 
     expect(screen.getByText('Live')).toBeInTheDocument();
     expect(screen.getByText('Session 1 · Collect data')).toBeInTheDocument();
-    expect((screen.getByTitle('Terminal') as HTMLIFrameElement).getAttribute('src')).toBe(
-      'https://host.test/t/abc/tty',
-    );
+    expect(screen.getByRole('group', { name: 'Terminal' })).toBeInTheDocument();
+    await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://host.test/t/abc/tty/ws'));
   });
 
   it('shows a console and action bar for every concurrently active step in a parallel run', async () => {
@@ -342,7 +346,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       stepName: 'Collect data',
       stepPosition: 1,
       state: 'running',
-      terminalUrl: 'https://host.test/t/a/tty',
+      websocketUrl: 'wss://host.test/t/a/tty/ws',
       terminalSessionId: 91,
       allowNonInteractive: false,
     });
@@ -351,18 +355,20 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       stepName: 'Review draft',
       stepPosition: 2,
       state: 'waiting_input',
-      terminalUrl: 'https://host.test/t/b/tty',
+      websocketUrl: 'wss://host.test/t/b/tty/ws',
     });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ mode: 'interactive', stepRuns: [runningA, waitingB] }) }),
     });
 
     // Both steps get their own console.
-    const terminals = screen.getAllByTitle('Terminal') as HTMLIFrameElement[];
-    expect(terminals.map((t) => t.getAttribute('src')).sort()).toEqual([
-      'https://host.test/t/a/tty',
-      'https://host.test/t/b/tty',
-    ]);
+    expect(screen.getAllByRole('group', { name: 'Terminal' })).toHaveLength(2);
+    await waitFor(() =>
+      expect(FakeWebSocket.instances.map((socket) => socket.url).sort()).toEqual([
+        'wss://host.test/t/a/tty/ws',
+        'wss://host.test/t/b/tty/ws',
+      ]),
+    );
 
     // Both steps get their own action bar — the running one can be finished,
     // the waiting one can be approved, and each targets its own step_run_id.
@@ -384,13 +390,13 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       stepName: 'Collect data',
       stepPosition: 1,
       state: 'running',
-      terminalUrl: 'https://host.test/t/abc/tty',
+      websocketUrl: 'wss://host.test/t/abc/tty/ws',
     });
     renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ stepRuns: [running] }) }) });
 
     await userEvent.click(screen.getByRole('tab', { name: /^Assets/ }));
 
-    expect(screen.queryByTitle('Terminal')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Terminal' })).not.toBeInTheDocument();
   });
 
   it('lists assets with download and promote controls', async () => {

@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
 
@@ -73,6 +74,10 @@ const ctx: SessionShowContext = {
 };
 
 describe('SessionShowContent', () => {
+  beforeEach(() => {
+    installFakeWebSocket();
+  });
+
   it('shows queue waiting and cancellation without mounting a terminal', () => {
     renderPage(
       <SessionShowContent
@@ -83,7 +88,7 @@ describe('SessionShowContent', () => {
     );
     expect(screen.getByText('Waiting for a free session slot')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel session' })).toBeInTheDocument();
-    expect(screen.queryByTitle('Terminal')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Terminal' })).not.toBeInTheDocument();
   });
 
   // A session sits in `queued` right through dispatch, so this state on its own
@@ -134,7 +139,7 @@ describe('SessionShowContent', () => {
     );
     expect(screen.getByText('Cancelled')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Finish session' })).not.toBeInTheDocument();
-    expect(screen.queryByTitle('Terminal')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Terminal' })).not.toBeInTheDocument();
   });
   it('renders the shared detail header: breadcrumb, title, status, id and runtime', () => {
     renderPage(
@@ -273,7 +278,7 @@ describe('SessionShowContent', () => {
 
     expect(screen.getByText(/read-only/)).toBeInTheDocument();
     // No live terminal for a terminal session.
-    expect(screen.queryByTitle('Terminal')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Terminal' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
   });
 
@@ -344,7 +349,7 @@ describe('SessionShowContent', () => {
     expect(screen.queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
   });
 
-  it('renders a terminal iframe when ready and a websocket url is present', () => {
+  it("connects the live terminal to the session's websocket when ready", async () => {
     renderPage(
       <SessionShowContent
         session={makeSession({ state: 'ready', websocketUrl: 'wss://host.test/sess/ws' })}
@@ -353,9 +358,8 @@ describe('SessionShowContent', () => {
       />,
     );
 
-    const iframe = screen.getByTitle('Terminal') as HTMLIFrameElement;
-    // ttydUrl rewrites the wss:// ws endpoint to an https:// base, stripping the trailing /ws.
-    expect(iframe.getAttribute('src')).toBe('https://host.test/sess');
+    expect(screen.getByRole('group', { name: 'Terminal' })).toBeInTheDocument();
+    await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://host.test/sess/ws'));
   });
 
   it("presents someone else's shared session as watch-only", () => {
@@ -373,10 +377,8 @@ describe('SessionShowContent', () => {
       />,
     );
 
-    // The terminal is still shown — watching is the point — but behind a shield
-    // that takes the clicks, so the iframe never gets focus.
-    expect(screen.getByTitle('Terminal')).toBeInTheDocument();
-    expect(screen.getByLabelText("Read-only view of another user's session")).toBeInTheDocument();
+    // The terminal is still shown — watching is the point — but takes no keystrokes.
+    expect(screen.getByRole('group', { name: "Read-only view of another user's session" })).toBeInTheDocument();
     expect(screen.getByText('View only')).toBeInTheDocument();
     // No editor: an overlay on VS Code is just a broken editor.
     expect(screen.queryByTitle('VS Code Editor')).not.toBeInTheDocument();
@@ -393,6 +395,7 @@ describe('SessionShowContent', () => {
       />,
     );
 
+    expect(screen.getByRole('group', { name: 'Terminal' })).toBeInTheDocument();
     expect(screen.queryByLabelText("Read-only view of another user's session")).not.toBeInTheDocument();
     expect(screen.queryByText('View only')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /finish session/i })).toBeInTheDocument();
@@ -405,7 +408,7 @@ describe('SessionShowContent', () => {
     it('pins the live console over the page and restores it on Esc without reloading the terminal', async () => {
       renderPage(<SessionShowContent session={liveSession()} cableStream="signed-stream" context={ctx} />);
 
-      const terminal = screen.getByTitle('Terminal');
+      const terminal = screen.getByRole('group', { name: 'Terminal' });
       const frame = screen.getByRole('region', { name: 'Console' });
       expect(frame).not.toHaveAttribute('data-maximized');
 
@@ -416,14 +419,14 @@ describe('SessionShowContent', () => {
       // The header is covered, so Finish and Copy link move onto the console bar.
       expect(within(frame).getByRole('button', { name: /finish session/i })).toBeInTheDocument();
       expect(within(frame).getByRole('button', { name: /copy session link/i })).toBeInTheDocument();
-      // Same iframe node: remounting it would drop the ttyd websocket.
-      expect(screen.getByTitle('Terminal')).toBe(terminal);
+      // Same node: remounting it would drop the ttyd websocket.
+      expect(screen.getByRole('group', { name: 'Terminal' })).toBe(terminal);
 
       await userEvent.keyboard('{Escape}');
 
       expect(frame).not.toHaveAttribute('data-maximized');
       expect(within(frame).queryByRole('button', { name: /finish session/i })).not.toBeInTheDocument();
-      expect(screen.getByTitle('Terminal')).toBe(terminal);
+      expect(screen.getByRole('group', { name: 'Terminal' })).toBe(terminal);
     });
 
     it('puts the console frame into browser fullscreen and follows the browser out of it', async () => {
@@ -475,13 +478,13 @@ describe('SessionShowContent', () => {
       await userEvent.click(screen.getByRole('button', { name: /full screen/i }));
 
       expect(screen.queryByTitle('VS Code Editor')).not.toBeInTheDocument();
-      expect(screen.getByTitle('Terminal')).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'Terminal' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /show editor/i })).not.toBeInTheDocument();
 
       await userEvent.keyboard('{Escape}');
 
       expect(screen.getByTitle('VS Code Editor')).toBeInTheDocument();
-      expect(screen.getByTitle('Terminal')).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'Terminal' })).toBeInTheDocument();
     });
 
     it('toggles with the keyboard shortcut', async () => {
@@ -493,6 +496,18 @@ describe('SessionShowContent', () => {
 
       await userEvent.keyboard('{Control>}{Shift>}F{/Shift}{/Control}');
       expect(frame).not.toHaveAttribute('data-maximized');
+    });
+
+    it('takes the shortcut from inside the terminal but leaves Esc there to the CLI', async () => {
+      renderPage(<SessionShowContent session={liveSession()} cableStream="signed-stream" context={ctx} />);
+      const frame = screen.getByRole('region', { name: 'Console' });
+      await userEvent.click(await screen.findByRole('textbox', { name: 'Terminal input' }));
+
+      await userEvent.keyboard('{Control>}{Shift>}F{/Shift}{/Control}');
+      expect(frame).toHaveAttribute('data-maximized');
+
+      await userEvent.keyboard('{Escape}');
+      expect(frame).toHaveAttribute('data-maximized');
     });
 
     it('lets a viewer go full screen while the terminal stays read-only', async () => {
