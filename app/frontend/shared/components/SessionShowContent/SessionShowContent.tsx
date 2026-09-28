@@ -308,7 +308,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   );
 
   const renderTerminalFrame = () => (
-    <LiveTerminal url={s.websocketUrl!} readOnly={!isOwner} hotkeys={terminalHotkeys} />
+    <LiveTerminal url={s.websocketUrl!} readOnly={!isOwner} hotkeys={terminalHotkeys} uploadUrl={s.uploadUrl} />
   );
 
   const renderWorkspace = () => {

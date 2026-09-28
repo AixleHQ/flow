@@ -169,7 +169,7 @@ const SessionPage = () => {
     return (
       <div className={classes.mainPanel}>
         <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>
-          <LiveTerminal url={s.websocketUrl!} />
+          <LiveTerminal url={s.websocketUrl!} uploadUrl={s.uploadUrl} />
         </div>
       </div>
     );

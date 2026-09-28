@@ -212,7 +212,7 @@ module ContainerStrategies
     end
 
     def build_exposed_ports
-      { "7681/tcp" => {}, "4040/tcp" => {}, "8443/tcp" => {}, "7682/tcp" => {} }
+      { "7681/tcp" => {}, "4040/tcp" => {}, "4041/tcp" => {}, "8443/tcp" => {}, "7682/tcp" => {} }
     end
 
     protected
@@ -359,7 +359,13 @@ module ContainerStrategies
         "traefik.http.routers.#{router_name}-view.middlewares" => "terminal-auth@file,#{router_name}-view-strip",
         "traefik.http.middlewares.#{router_name}-view-strip.stripprefix.prefixes" => "/t/#{route_token}/view",
         "traefik.http.routers.#{router_name}-view.service" => "#{router_name}-view",
-        "traefik.http.services.#{router_name}-view.loadbalancer.server.port" => "7682"
+        "traefik.http.services.#{router_name}-view.loadbalancer.server.port" => "7682",
+        # Images pasted into the owner's terminal; see docker/base/watcher.
+        "traefik.http.routers.#{router_name}-upload.rule" => "PathPrefix(`/t/#{route_token}/upload`)",
+        "traefik.http.routers.#{router_name}-upload.middlewares" => "terminal-cors@file,terminal-auth@file,#{router_name}-upload-strip",
+        "traefik.http.middlewares.#{router_name}-upload-strip.stripprefix.prefixes" => "/t/#{route_token}/upload",
+        "traefik.http.routers.#{router_name}-upload.service" => "#{router_name}-upload",
+        "traefik.http.services.#{router_name}-upload.loadbalancer.server.port" => "4041"
       }
 
       labels

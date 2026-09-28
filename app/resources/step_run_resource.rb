@@ -79,6 +79,16 @@ class StepRunResource < ApplicationResource
   end
 
   typelize :string?
+  attribute :upload_url do |sr|
+    ts = sr.terminal_session
+    next nil unless ts&.route_token.present? && ts.ready?
+    next nil unless owned_by_viewer?(ts)
+
+    ContainerTicket.append("#{params.dig(:traefik, :http_base)}/t/#{ts.route_token}/upload",
+                           user: ticket_user(ts), session: ts)
+  end
+
+  typelize :string?
   attribute :ide_url do |sr|
     ts = sr.terminal_session
     next nil unless ts&.route_token.present? && ts.ready?

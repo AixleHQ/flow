@@ -278,13 +278,14 @@ module ContainerRuntime
         runtime-default-deny
         runtime-allow-traefik-ingress
         runtime-allow-traefik-view-ingress
+        runtime-allow-traefik-upload-ingress
         runtime-allow-dns-egress
         runtime-allow-aixle-service-egress
         runtime-allow-public-internet-egress
       ].each do |name|
         networking_mock.expects(:get_entity).with("networkpolicies", name, "aixle-project-77").raises(StandardError)
       end
-      6.times do
+      7.times do
         networking_mock.expects(:create_entity).with do |kind, resource_type, resource|
           kind == "NetworkPolicy" &&
             resource_type == "networkpolicies" &&
@@ -579,7 +580,7 @@ module ContainerRuntime
           ingress.kind == "IngressRoute" &&
           (metadata[:namespace] || metadata["namespace"]) == "default" &&
           (metadata.dig(:labels, :"aixle.com/runtime-origin") || metadata.dig("labels", "aixle.com/runtime-origin")) == "aixle" &&
-          routes.size == 4 &&
+          routes.size == 5 &&
           ide_route.present? &&
           normalized_middlewares == [ { name: "terminal-auth" } ] &&
           normalized_services == [ { name: "my-pod", namespace: "default", port: 8443 } ]
@@ -679,7 +680,7 @@ module ContainerRuntime
       traefik_mock = mock("traefik_client")
       # Auth middleware already present in the namespace -> no create for it.
       traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "default").returns(current_terminal_auth_middleware)
-      traefik_mock.expects(:create_entity).times(4).with do |kind, resource_type, resource|
+      traefik_mock.expects(:create_entity).times(5).with do |kind, resource_type, resource|
         created_entities << [ kind, resource_type, resource ]
         true
       end.returns(true)
@@ -696,12 +697,16 @@ module ContainerRuntime
       assert_equal [ 7681, 4040 ], ports.map { |port| port[:port] || port["port"] }
       assert_equal [ 7681, 4040 ], ports.map { |port| port[:targetPort] || port["targetPort"] }
 
-      assert_equal [ "Middleware", "Middleware", "Middleware", "IngressRoute" ], created_entities.map(&:first)
-      assert_equal %w[middlewares middlewares middlewares ingressroutes], created_entities.map { |entity| entity[1] }
+      assert_equal [ "Middleware", "Middleware", "Middleware", "Middleware", "IngressRoute" ], created_entities.map(&:first)
+      assert_equal %w[middlewares middlewares middlewares middlewares ingressroutes], created_entities.map { |entity| entity[1] }
       # The read-only terminal everyone but the owner is sent to.
       view = created_entities.last.last.spec.routes.find { |route| route[:match].to_s.include?("/t/abc123/view") }
       assert_equal 7682, view[:services].first[:port]
       assert_equal [ "terminal-auth", "my-pod-view-strip" ], view[:middlewares].map { |mw| mw[:name] }
+      # Pasted images, on a port of their own so the shared file server cannot reach it.
+      upload = created_entities.last.last.spec.routes.find { |route| route[:match].to_s.include?("/t/abc123/upload") }
+      assert_equal 4041, upload[:services].first[:port]
+      assert_equal [ "terminal-auth", "my-pod-upload-strip" ], upload[:middlewares].map { |mw| mw[:name] }
     end
 
     test "remove_container tears down ingressroute, middlewares, service, and pod" do
@@ -831,7 +836,7 @@ module ContainerRuntime
       core_mock.expects(:create_service).with { |service| created << service }.returns(true)
       traefik_mock = mock("traefik_client")
       traefik_mock.expects(:get_entity).with("middlewares", "terminal-auth", "aixle-project-7").returns(current_terminal_auth_middleware)
-      traefik_mock.expects(:create_entity).times(4).with { |_kind, _plural, resource| created << resource }.returns(true)
+      traefik_mock.expects(:create_entity).times(5).with { |_kind, _plural, resource| created << resource }.returns(true)
 
       @runtime.stubs(:core_client).returns(core_mock)
       @runtime.stubs(:traefik_client).returns(traefik_mock)
@@ -839,7 +844,7 @@ module ContainerRuntime
       @runtime.start_container(handle)
       created << @runtime.send(:build_pod, { image: "alpine", env_vars: [] }, handle)
 
-      assert_equal 6, created.size
+      assert_equal 7, created.size
       created.each do |resource|
         labels = labels_of(resource)
         assert_equal "aixle-runtime", labels["app"],

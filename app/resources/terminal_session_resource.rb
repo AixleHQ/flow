@@ -95,6 +95,16 @@ class TerminalSessionResource < ApplicationResource
     with_ticket("#{Settings.traefik.ws_base}/t/#{session.route_token}/#{surface}/ws", session)
   end
 
+  # Where the owner's terminal uploads a pasted image; nobody else may write
+  # into the container.
+  typelize "string | null"
+  attribute :upload_url do |session|
+    next nil if session.queued? || session.cancelled?
+    next nil unless session.route_token.present? && owned_by_viewer?(session)
+
+    with_ticket("#{Settings.traefik.http_base}/t/#{session.route_token}/upload", session)
+  end
+
   # Endpoint that streams the captured terminal log so a finished session can be
   # replayed in the browser. Gated on terminal state only (a column read, so no
   # per-session query / N+1 when lists are serialized); the endpoint returns 404

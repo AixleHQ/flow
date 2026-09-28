@@ -93,6 +93,9 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     assert_not shared.to_json.include?("tkn-secret")
     assert_match %r{/t/#{session.route_token}/tty/ws\z}, own["websocketUrl"]
     assert_includes own["ideUrl"], "tkn-secret"
+    # Only the owner may paste an image into the container.
+    assert_nil shared["uploadUrl"]
+    assert_match %r{/t/#{session.route_token}/upload\z}, own["uploadUrl"]
   end
 
   test "served from a host of their own, container URLs carry the viewer's ticket" do

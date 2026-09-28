@@ -46,6 +46,7 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     collectedAt: null,
     updatedAt: '2026-06-26T10:00:00Z',
     websocketUrl: 'wss://example.test/ttyd/abc/ws',
+    uploadUrl: null,
     terminalLogUrl: null,
     watcherUrl: null,
     ideUrl: null,

@@ -17,6 +17,8 @@ module ContainerRuntime
     # The read-only terminal (a second ttyd, `-R`, on a read-only tmux client)
     # that everyone but the session's owner is routed to.
     VIEW_PORT = 7682
+    # Images pasted into the owner's terminal (docker/base/watcher).
+    UPLOAD_PORT = 4041
     DEFAULT_CONTAINER_NAME = "main"
     DEFAULT_WORKSPACE_DIR = "/workspace"
     DEFAULT_TRAEFIK_PORTS = [ 7681, 4040, 8443 ].freeze
@@ -517,7 +519,7 @@ module ContainerRuntime
         container_name: DEFAULT_CONTAINER_NAME,
         service_name: pod_name,
         ingress_name: "#{pod_name}-ingress",
-        middleware_names: [ "#{pod_name}-tty-strip", "#{pod_name}-fs-strip", "#{pod_name}-view-strip" ],
+        middleware_names: [ "#{pod_name}-tty-strip", "#{pod_name}-fs-strip", "#{pod_name}-view-strip", "#{pod_name}-upload-strip" ],
         route_token: route_token,
         service_ports: service_ports
       )
@@ -617,7 +619,7 @@ module ContainerRuntime
     def create_middlewares(handle)
       return if handle.route_token.blank?
 
-      %w[tty fs view].each do |surface|
+      %w[tty fs view upload].each do |surface|
         strip = build_strip_middleware(handle, surface, "/t/#{handle.route_token}/#{surface}")
         create_or_verify(traefik_client, "Middleware", "middlewares", strip)
       end
@@ -639,7 +641,8 @@ module ContainerRuntime
             build_route(handle, "tty", 7681, [ traefik_auth_middleware, "#{handle.pod_name}-tty-strip" ]),
             build_route(handle, "fs", 4040, [ traefik_auth_middleware, "#{handle.pod_name}-fs-strip" ]),
             build_route(handle, "ide", 8443, [ traefik_auth_middleware ]),
-            build_route(handle, "view", VIEW_PORT, [ traefik_auth_middleware, "#{handle.pod_name}-view-strip" ])
+            build_route(handle, "view", VIEW_PORT, [ traefik_auth_middleware, "#{handle.pod_name}-view-strip" ]),
+            build_route(handle, "upload", UPLOAD_PORT, [ traefik_auth_middleware, "#{handle.pod_name}-upload-strip" ])
           ]
         }
       )
@@ -1527,6 +1530,7 @@ module ContainerRuntime
         build_default_deny_network_policy(namespace),
         build_traefik_ingress_network_policy(namespace),
         build_traefik_ingress_network_policy(namespace, name: "runtime-allow-traefik-view-ingress", ports: [ VIEW_PORT ]),
+        build_traefik_ingress_network_policy(namespace, name: "runtime-allow-traefik-upload-ingress", ports: [ UPLOAD_PORT ]),
         build_dns_egress_network_policy(namespace),
         build_aixle_service_egress_network_policy(namespace),
         build_public_internet_egress_network_policy(namespace)

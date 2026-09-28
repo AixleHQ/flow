@@ -93,7 +93,7 @@ function StepConsole({ step, label }: { step: StepRun; label: string }) {
   return (
     <ConsoleFrame className={classes.console} label={label} live>
       {step.websocketUrl ? (
-        <LiveTerminal url={step.websocketUrl} />
+        <LiveTerminal url={step.websocketUrl} uploadUrl={step.uploadUrl} />
       ) : (
         <div className={classes.terminalLoading}>
           <Loader size="md" />

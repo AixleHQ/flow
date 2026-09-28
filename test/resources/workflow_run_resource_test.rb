@@ -20,6 +20,8 @@ class WorkflowRunResourceTest < ActiveSupport::TestCase
 
     assert own["websocketUrl"].start_with?("#{Settings.traefik.ws_base}/t/#{@session.route_token}/tty/ws")
     assert shared["websocketUrl"].start_with?("#{Settings.traefik.ws_base}/t/#{@session.route_token}/view/ws")
+    assert own["uploadUrl"].start_with?("#{Settings.traefik.http_base}/t/#{@session.route_token}/upload")
+    assert_nil shared["uploadUrl"]
   end
 
   test "a step whose container is not up yet has no terminal socket" do

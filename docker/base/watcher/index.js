@@ -20,6 +20,11 @@
  *   - GET /file?path=... - Returns file content
  *   - GET /health - Health check
  *   - GET /auth - Check authentication status (for auth_setup sessions)
+ *
+ * Upload server (UPLOAD_PORT, 4041): a POST stores an image pasted into the
+ * browser terminal and answers with its path, which the page then types into the
+ * CLI. A port of its own because Traefik routes it only for the session's owner;
+ * the file server above is open to everyone the session is shared with.
  */
 
 const { isUtf8 } = require('buffer');
@@ -36,6 +41,10 @@ const chokidar = { watch: (...args) => require('chokidar').watch(...args) };
 // Configuration
 const PORT = parseInt(process.env.WATCHER_PORT || '4040', 10);
 const WATCH_DIR = process.env.WATCH_DIR || '/workspace';
+const UPLOAD_PORT = parseInt(process.env.UPLOAD_PORT || '4041', 10);
+const UPLOAD_DIR = process.env.UPLOAD_DIR || '/tmp/aixle-uploads';
+const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const UPLOAD_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 
 // Auth watcher configuration (from ContainerService)
 // Only used for auth_setup session type
@@ -713,10 +722,66 @@ function startCredentialSync() {
 }
 
 /**
+ * Name for an uploaded image, or null for a type an agent CLI cannot attach.
+ */
+function uploadFileName(contentType, now = new Date(), random = Math.random) {
+  const ext = UPLOAD_TYPES[String(contentType || '').split(';')[0].trim().toLowerCase()];
+  if (!ext) return null;
+  const stamp = now.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+  const suffix = Math.floor(random() * 0x10000).toString(16).padStart(4, '0');
+  return `paste-${stamp}-${suffix}.${ext}`;
+}
+
+function handleUpload(req, res) {
+  const reply = (status, body) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.writeHead(status);
+    res.end(JSON.stringify(body));
+  };
+  if (req.method !== 'POST') return reply(405, { error: 'Method not allowed' });
+
+  const name = uploadFileName(req.headers['content-type']);
+  if (!name) return reply(415, { error: 'Only PNG, JPEG, GIF and WebP images can be pasted' });
+  if (Number(req.headers['content-length']) > UPLOAD_MAX_BYTES) {
+    return reply(413, { error: `Images are limited to ${formatFileSize(UPLOAD_MAX_BYTES)}` });
+  }
+
+  const chunks = [];
+  let size = 0;
+  let refused = false;
+  req.on('data', (chunk) => {
+    if (refused) return;
+    size += chunk.length;
+    if (size > UPLOAD_MAX_BYTES) {
+      refused = true;
+      reply(413, { error: `Images are limited to ${formatFileSize(UPLOAD_MAX_BYTES)}` });
+      req.destroy();
+      return;
+    }
+    chunks.push(chunk);
+  });
+  req.on('end', () => {
+    if (refused) return;
+    if (size === 0) return reply(400, { error: 'Empty upload' });
+    try {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true, mode: 0o755 });
+      const target = path.join(UPLOAD_DIR, name);
+      // 0644: the watcher runs as root, the agent CLI that reads the file does not.
+      fs.writeFileSync(target, Buffer.concat(chunks), { mode: 0o644 });
+      log.info(`Stored pasted image ${target} (${formatFileSize(size)})`);
+      reply(201, { path: target });
+    } catch (err) {
+      reply(500, { error: err.message });
+    }
+  });
+}
+
+/**
  * Main server setup
  */
 function startServer() {
   startMcpForwarder();
+  http.createServer(handleUpload).listen(UPLOAD_PORT, () => log.info(`Upload server on port ${UPLOAD_PORT}`));
   const server = http.createServer(handleRequest);
   const { WebSocketServer } = require('ws');
   const wss = new WebSocketServer({ server });
@@ -860,4 +925,4 @@ if (require.main === module) {
   startCredentialSync();
 }
 
-module.exports = { resolveInside, safePreloadTarget };
+module.exports = { resolveInside, safePreloadTarget, uploadFileName };
