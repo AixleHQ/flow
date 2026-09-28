@@ -1049,6 +1049,28 @@ module Coder
       end
     end
 
+    # The shape a poll saw when the wrapper still wrote the exit file with a
+    # plain `>`: the file exists but is empty for a moment, and reading it as
+    # finished published a job with no exit code. A live wrapper there is still
+    # finishing; a dead one never got to publish.
+    test "job status does not report an empty exit file as a finished job" do
+      in_local_shell_workspace do |runner, job_dir|
+        dead_pid = Process.spawn("true").tap { |pid| Process.wait(pid) }
+        { "halfwritten-live" => Process.pid, "halfwritten-dead" => dead_pid }.each do |job_id, pid|
+          File.write(File.join(job_dir, "#{job_id}.meta"), "job_id=#{job_id}\npid=#{pid}\n")
+          File.write(File.join(job_dir, "#{job_id}.pid"), "#{pid}\n")
+          File.write(File.join(job_dir, "#{job_id}.exit"), "")
+        end
+
+        live = runner.job_status(workspace_name: "ws-1", job_id: "halfwritten-live")
+        dead = runner.job_status(workspace_name: "ws-1", job_id: "halfwritten-dead")
+
+        assert_equal "running", live[:state], describe_status(live)
+        assert_nil live[:exit_code]
+        assert_equal "died", dead[:state], describe_status(dead)
+      end
+    end
+
     # Termination before the normal exit-file write: the wrapper is signalled
     # while the command is running, which used to leave the job with no exit
     # code, no end time and no reason.
@@ -1350,7 +1372,7 @@ module Coder
       }
 
       Open3.stub(:popen3, local_shell) do
-        yield Coder::SshRunner.new(@integration)
+        yield Coder::SshRunner.new(@integration), job_dir
       end
     ensure
       FileUtils.remove_entry(job_dir) if job_dir && File.directory?(job_dir)
