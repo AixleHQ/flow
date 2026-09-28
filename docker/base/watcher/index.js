@@ -350,7 +350,7 @@ function vscodeStateScript({ settings, redirectTo }) {
 
   const done = (req) => new Promise((resolve) => { req.onsuccess = () => resolve(req.result); req.onerror = () => resolve(null); req.onblocked = () => resolve(null); });
 
-  const patchState = async (name) => {
+  const patchState = async (name, clear) => {
     const req = indexedDB.open(name, 1);
     req.onupgradeneeded = () => { req.result.createObjectStore('ItemTable'); };
     const db = await done(req);
@@ -359,6 +359,7 @@ function vscodeStateScript({ settings, redirectTo }) {
     if (!store) { db.close(); return; }
     const tx = db.transaction(store, 'readwrite');
     const s = tx.objectStore(store);
+    if (clear) s.clear();
     s.put(emptyEditorState, 'memento/workbench.parts.editor');
     s.put('true', 'workbench.auxiliaryBar.hidden');
     s.put('true', 'workbench.auxiliaryBar.empty');
@@ -405,11 +406,16 @@ function vscodeStateScript({ settings, redirectTo }) {
     }
     const workspaceDbName = 'vscode-web-state-db-' + stringHash('vscode-remote://' + location.host + '/workspace', 0).toString(16);
 
-    if (resetWorkspace) {
-      await done(indexedDB.deleteDatabase(workspaceDbName));
-      await Promise.all([patchState('vscode-web-state-db-global'), patchState(workspaceDbName)]);
-    }
-    await writeUserSettings();
+    // Cleared, not deleted: every session's editor is on the same origin and folder
+    // URI, so another tab's VS Code may hold this database open — a delete would
+    // wait for it (and hang this page) and then cut that editor off.
+    const work = Promise.all([
+      resetWorkspace ? patchState('vscode-web-state-db-global', false) : null,
+      resetWorkspace ? patchState(workspaceDbName, true) : null,
+      writeUserSettings(),
+    ]);
+    // Never keep the editor from opening over a database that does not answer.
+    await Promise.race([work, new Promise((resolve) => setTimeout(resolve, 3000))]);
   } catch (e) {}
 
   if (redirectTo) window.location.replace(redirectTo);
