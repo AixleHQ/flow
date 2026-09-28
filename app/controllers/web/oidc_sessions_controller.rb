@@ -28,7 +28,14 @@ class Web::OidcSessionsController < Web::ApplicationController
     return redirect_to(login_path(error: "invalid_email")) unless email.match?(URI::MailTo::EMAIL_REGEXP)
 
     options = Auth::SignInOptions.for(email)
-    return redirect_to(login_path(error: "no_workspace")) if options.nil?
+    if options.nil?
+      # Where anyone may sign a company up, an address at a domain nobody has
+      # claimed is not a refusal — it is the first field of a signup, and
+      # answering it with "contact your admin" turns the one door away.
+      return redirect_to(new_workspace_path(email: email)) if Deployment.self_serve_signup?
+
+      return redirect_to(login_path(error: "no_workspace"))
+    end
 
     case options.connections.size
       # Begun right here rather than redirected to #start: that route is POST

@@ -199,11 +199,40 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
     assert_match "Acme Legacy SSO", response.body
   end
 
+  # The mode is pinned rather than inherited: config/settings/test.yml reads
+  # DEPLOYMENT_MODE from the environment, so a developer who set it for a local
+  # stack would otherwise get a different answer here than CI does.
+  # Registration off is the other half of the same gate: with it closed, a hosted
+  # installation answers exactly as a self-hosted one does.
+  test "an unclaimed domain is a refusal again once registration is off" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: false))
+
+    post login_identify_path, params: { email: "someone@unknown-domain-#{SecureRandom.hex(3)}.test" }
+
+    assert_redirected_to login_path(error: "no_workspace")
+  end
+
   test "an address no workspace claims is told so, rather than shown a password box" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SELF_HOSTED))
+
     post login_identify_path, params: { email: "someone@unknown-domain-#{SecureRandom.hex(3)}.test" }
 
     assert_response :redirect
     assert_match(/no_workspace/, response.location)
+  end
+
+  # Where anyone may sign a company up, that same address is not a refusal: it is
+  # the first field of a signup. Answering it with "contact your admin" turned
+  # the one door away from the product.
+  test "where we host, an unclaimed domain starts a signup instead" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: true))
+    email = "someone@unknown-domain-#{SecureRandom.hex(3)}.test"
+
+    post login_identify_path, params: { email: email }
+
+    assert_redirected_to new_workspace_path(email: email)
   end
 
   test "a disabled connection is not offered, and the workspace's other methods are" do

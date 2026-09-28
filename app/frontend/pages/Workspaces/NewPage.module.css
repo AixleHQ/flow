@@ -136,3 +136,8 @@
   color: var(--app-text-tertiary);
   text-align: center;
 }
+
+.sentIcon {
+  color: var(--app-primary-strong);
+  margin-bottom: 12px;
+}
