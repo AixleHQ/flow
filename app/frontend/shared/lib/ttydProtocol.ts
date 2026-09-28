@@ -1,6 +1,6 @@
 /**
  * The wire protocol of ttyd's `/ws` endpoint, as spoken by its own bundled client
- * (html/src/components/terminal/xterm/index.ts at the TTYD_REF pinned in
+ * (html/src/components/terminal/xterm/index.ts at the TTYD_VERSION pinned in
  * docker/base/Dockerfile). Every frame is binary; its first byte names the command.
  */
 

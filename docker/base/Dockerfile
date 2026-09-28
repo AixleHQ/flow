@@ -5,33 +5,22 @@ ARG UV_VERSION=0.9.29
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 
 # =============================================================================
-# ttyd builder — build from main (pinned SHA), NOT the 1.7.7 release.
-#
-# The 1.7.7 release bundles xterm.js 5.4 with NO clipboard addon, so the web
-# terminal silently ignores OSC 52 and the browser clipboard never receives
-# "c to copy" — which breaks copying the long Claude Code OAuth login URL.
-# The xterm clipboard addon was merged to ttyd main on 2024-11-26 but has never
-# been released. We pin a commit for reproducibility. (Also requires the iframe
-# to carry allow="clipboard-write" and tmux `allow-passthrough on`.)
+# tmux builder — 3.6+ for mode 2031 (light/dark theme reporting). Debian bookworm
+# ships 3.3a, which neither asks the browser terminal for its background nor tells
+# the agent CLI when the app switches theme.
 # =============================================================================
-FROM node:24-slim AS ttyd-builder
-ARG TTYD_REF=647d55ad865f5ad85ad89ba5e1b28d9b6ac8fd55
+FROM node:24-slim AS tmux-builder
+ARG TMUX_VERSION=3.7c
+ARG TMUX_SHA256=7c60cae9a0e25288e2e24750aafc9e8800fc7fd4555e447e1b29ee4201cfb3bf
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git ca-certificates build-essential cmake \
-        libjson-c-dev libwebsockets-dev libuv1-dev zlib1g-dev libssl-dev && \
+        ca-certificates curl build-essential pkg-config bison libevent-dev libncurses-dev && \
     rm -rf /var/lib/apt/lists/*
-RUN git clone https://github.com/tsl0922/ttyd.git /ttyd-src && \
-    cd /ttyd-src && git checkout ${TTYD_REF}
-# Patch the xterm client: copy the FULL url on click, rejoining hard-wrapped rows
-# (xterm.js bug #5412 — WebLinksAddon only stitches soft-wraps; tmux/Claude emit
-# hard newlines). Lets the user just click the login URL to copy it whole.
-COPY patch-ttyd.js /tmp/patch-ttyd.js
-RUN cd /ttyd-src && node /tmp/patch-ttyd.js
-RUN cd /ttyd-src && corepack enable && \
-    (cd html && yarn install --immutable && yarn run build) && \
-    cmake -B build -S . && \
-    cmake --build build -j"$(nproc)" && \
-    strip build/ttyd
+RUN curl -fsSL -o /tmp/tmux.tar.gz \
+        https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz && \
+    echo "${TMUX_SHA256}  /tmp/tmux.tar.gz" | sha256sum -c - && \
+    tar xzf /tmp/tmux.tar.gz -C /tmp && \
+    cd /tmp/tmux-${TMUX_VERSION} && ./configure --prefix=/usr/local && \
+    make -j"$(nproc)" && strip tmux && install -m 0755 tmux /usr/local/bin/tmux
 
 # =============================================================================
 # Core Base Image for AI Coding Agents
@@ -61,7 +50,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # Terminal & shell
     bash \
     bash-completion \
-    tmux \
     # Development tools
     git \
     ripgrep \
@@ -94,14 +82,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     # purging the toolchain in a later layer would save nothing.
     make \
     g++ \
-    # ttyd runtime libs (binary built from main in the ttyd-builder stage).
-    # ttyd uses the libuv event loop, which libwebsockets loads at runtime via a
-    # separate plugin package (libwebsockets-evlib-uv) — without it ttyd dies with
-    # "unable to load evlib plugin evlib_uv / libwebsockets context creation failed".
-    libjson-c5 \
-    libuv1 \
-    libwebsockets17 \
-    libwebsockets-evlib-uv \
+    # tmux runtime lib (tmux itself is built in the tmux-builder stage).
+    libevent-core-2.1-7 \
     && rm -rf /var/lib/apt/lists/*
 
 # -----------------------------------------------------------------------------
@@ -143,11 +125,26 @@ RUN chmod 0666 /etc/ssl/certs/ca-certificates.crt
 RUN ln -sf /usr/bin/fdfind /usr/bin/fd || true
 
 # -----------------------------------------------------------------------------
-# ttyd — copy the binary built from main in the ttyd-builder stage above.
-# (main, not the 1.7.7 release, for the xterm clipboard addon → OSC 52 copy.)
+# ttyd — the static release binary. Only its websocket server is used: the app
+# renders the terminal itself with xterm.js (app/frontend/shared/ui/sessions/
+# LiveTerminal.tsx), so ttyd's bundled web client never loads.
 # -----------------------------------------------------------------------------
-COPY --from=ttyd-builder /ttyd-src/build/ttyd /usr/local/bin/ttyd
-RUN chmod +x /usr/local/bin/ttyd && ttyd --version
+ARG TTYD_VERSION=1.7.7
+ARG TTYD_SHA256_X86_64=8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55
+ARG TTYD_SHA256_AARCH64=b38acadd89d1d396a0f5649aa52c539edbad07f4bc7348b27b4f4b7219dd4165
+ARG TARGETARCH
+RUN case "${TARGETARCH:-$(dpkg --print-architecture)}" in \
+        amd64) arch=x86_64;  sum="${TTYD_SHA256_X86_64}" ;; \
+        arm64) arch=aarch64; sum="${TTYD_SHA256_AARCH64}" ;; \
+        *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSL -o /usr/local/bin/ttyd \
+        "https://github.com/tsl0922/ttyd/releases/download/${TTYD_VERSION}/ttyd.${arch}" && \
+    echo "${sum}  /usr/local/bin/ttyd" | sha256sum -c - && \
+    chmod +x /usr/local/bin/ttyd && ttyd --version
+
+COPY --from=tmux-builder /usr/local/bin/tmux /usr/local/bin/tmux
+RUN tmux -V
 
 # Helper used by tmux copy bindings (see docker/base/tmux-osc52): forwards a
 # copy-mode selection to the browser clipboard via DCS-passthrough-wrapped OSC 52,
@@ -301,5 +298,6 @@ ENV LANG=C.UTF-8
 #   7681 - ttyd web terminal (the session's owner)
 #   7682 - read-only ttyd (everyone else)
 #   4040 - file watcher WebSocket + HTTP API / auth-check
+#   4041 - pasted-image upload (owner only)
 #   8443 - OpenVSCode Server (IDE)
-EXPOSE 7681 7682 4040 8443
+EXPOSE 7681 7682 4040 4041 8443
