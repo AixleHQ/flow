@@ -143,6 +143,27 @@ class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
     end
   end
 
+  # Claiming a domain takes it from everyone else at it, and at a public service
+  # that is everyone. The first Gmail signup would own Gmail.
+  test "a public mail service cannot be claimed" do
+    built = stranger(email: "dana@gmail.com")
+
+    assert_not built.valid?
+    assert_includes built.errors[:email_domain].to_sentence, "public email service"
+  end
+
+  test "the same goes for someone already signed in" do
+    user = create(:user, email: "dana@yandex.ru")
+    built = WorkspaceOnboardingForm.new(user: user, name: "Acme", max_sessions: 5)
+
+    assert_not built.valid?
+    assert_includes built.errors[:email_domain].to_sentence, "public email service"
+  end
+
+  test "an organisation's own domain is not a public mail service" do
+    assert stranger(email: "dana@northwind.example").valid?
+  end
+
   test "it names the account from the address" do
     assert_equal "Dana", stranger.name_from_email
     assert_equal "Dana Scully", stranger(email: "dana.scully@northwind.example").name_from_email

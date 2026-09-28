@@ -30,6 +30,7 @@ class WorkspaceOnboardingForm
   validates :email_domain, presence: true
   validates :max_sessions, numericality: { only_integer: true, greater_than: 0 }
   validate :domain_is_free, if: -> { email_domain.present? }
+  validate :domain_is_not_a_public_mailbox, if: -> { email_domain.present? }
   validate :domain_belongs_to_the_address, if: -> { email_domain.present? && email.present? }
 
   # `user:` is the person already signed in, whose address is not theirs to
@@ -76,6 +77,20 @@ class WorkspaceOnboardingForm
     return unless Company.exists?(email_domain: email_domain)
 
     errors.add(:email_domain, "already has a workspace — ask someone there to invite you")
+  end
+
+  # Claiming a domain here takes it from everyone else at it, which is a bargain
+  # only an organisation's own domain can keep. At a public mail service the
+  # first person to sign up would take the service. Deliberately not a rule on
+  # Company: an operator creating a workspace from the admin has reasons we do
+  # not, and this is about what a stranger may claim unasked.
+  def domain_is_not_a_public_mailbox
+    return unless PublicEmailDomains.include?(email_domain)
+
+    errors.add(
+      :email_domain,
+      "is a public email service — sign up with an address at your organisation's own domain"
+    )
   end
 
   # Otherwise anyone could claim a domain they have no address at, and every

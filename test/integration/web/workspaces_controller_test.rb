@@ -65,6 +65,16 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # Refused before the mail goes out, so a squatter cannot even make us send to
+  # an address at a service they do not own.
+  test "a public mail service never reaches the inbox" do
+    assert_enqueued_emails 0 do
+      post workspace_path, params: valid_params(email: "dana@gmail.com")
+    end
+
+    assert_nil Company.find_by(email_domain: "gmail.com")
+  end
+
   test "a domain that already has a workspace never reaches the inbox" do
     create(:company, email_domain: "acme-robotics.example")
 
