@@ -97,6 +97,15 @@ module Agents
     # only sees an opaque `kind`; everything design-specific lives in these overrides.
     DESIGN_KIND = "design"
 
+    # Follow the browser terminal, which reports the app's light/dark theme
+    # (LiveTerminal.tsx); a fixed theme stays dark on a light terminal. Set for the
+    # login container too, so its first-run wizard starts in the right colours.
+    THEME_SETTINGS = { "theme" => "auto" }.freeze
+
+    def auth_setup_files
+      { "#{home_dir}/.claude/settings.json" => THEME_SETTINGS.to_json }
+    end
+
     # Seed the user's existing base login (minus any designOauth) so the CLI starts
     # authenticated; the session then only adds the fresh designOauth block. Stripping
     # designOauth matters on RECONNECT — otherwise the token the watcher waits for is
@@ -1241,6 +1250,7 @@ module Agents
         # bypassPermissionsWarningAccepted alone does NOT suppress the prompt.
         "bypassPermissionsWarningAccepted" => true,
         "skipDangerousModePermissionPrompt" => true,
+        **THEME_SETTINGS,
         "enableAllProjectMcpServers" => true,
         "env" => {
           "MCP_TIMEOUT" => Settings.agents.mcp.startup_timeout_ms.to_s,

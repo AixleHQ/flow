@@ -50,12 +50,6 @@ export const MICROSOFT_BRAND = {
 } as const;
 
 /**
- * Terminal surfaces render an xterm.js canvas that is black by contract, not a
- * themed surface — the agent's own ANSI colors are drawn against it.
- */
-export const TERMINAL_BG = '#000';
-
-/**
  * Backgrounds the vendor logo tiles need to stay legible: the Codex mark is dark
  * ink and wants white behind it, the Gemini mark is light and wants near-black.
  * Fixed by the artwork, not by our scheme.

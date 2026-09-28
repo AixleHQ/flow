@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { CurrentUser } from '@/types/generated';
 import { buildSharedUser } from 'test/factories/sharedProps';
+import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
 import { answerFetch } from 'test/fetchStub';
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
@@ -50,6 +51,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   collectedAt: null,
   updatedAt: '2026-01-01T00:00:00Z',
   websocketUrl: null,
+  uploadUrl: null,
   terminalLogUrl: null,
   watcherUrl: null,
   ideUrl: null,
@@ -389,7 +391,8 @@ describe('Onboarding/OnboardingPage', () => {
     await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['auth_sessions'] }));
   });
 
-  it('renders the ttyd terminal iframe for a ready auth session after clicking Connect', async () => {
+  it("connects the auth session's terminal once it is ready and Connect is clicked", async () => {
+    installFakeWebSocket();
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
@@ -406,7 +409,8 @@ describe('Onboarding/OnboardingPage', () => {
     // Expand terminal by clicking Connect button
     await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]);
 
-    expect(await screen.findByTitle('Agent Authentication Terminal')).toBeInTheDocument();
+    expect(await screen.findByRole('group', { name: 'Agent Authentication Terminal' })).toBeInTheDocument();
+    await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://term.example/ws'));
     expect(screen.getByText('Complete authentication in the terminal above')).toBeInTheDocument();
   });
 

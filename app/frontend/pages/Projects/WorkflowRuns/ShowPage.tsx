@@ -21,15 +21,20 @@ import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { costColor, formatCost, formatDuration, formatFileSize, formatTokens } from 'shared/lib/sessionFormat';
-import { stripContainerTicket } from 'shared/lib/terminalPageUrl';
 import {
   exportAllApiV1ProjectWorkflowRunWorkflowRunAssetsPath,
   exportApiV1ProjectWorkflowRunWorkflowRunAssetPath,
   finishApiV1TerminalSessionPath,
   shareApiV1ProjectWorkflowRunWorkflowRunAssetPath,
 } from 'shared/routes';
-import { ContainerFrame } from 'shared/ui/ContainerFrame';
-import { ConsoleFrame, DetailHeader, SessionCard, TabBar, type SessionCardData } from 'shared/ui/sessions';
+import {
+  ConsoleFrame,
+  DetailHeader,
+  LiveTerminal,
+  SessionCard,
+  TabBar,
+  type SessionCardData,
+} from 'shared/ui/sessions';
 
 import { persistentProjectLayoutNoPadding, setPageLayout } from '../ProjectLayout';
 
@@ -83,30 +88,12 @@ function toCardData(stepRun: StepRun, index: number): SessionCardData {
   };
 }
 
-/** One live step's terminal — tracks its own "connecting…" state so several can load independently. */
+/** One live step's terminal; it shows its own "connecting…" state, so several load independently. */
 function StepConsole({ step, label }: { step: StepRun; label: string }) {
-  const [termLoaded, setTermLoaded] = useState(false);
-
   return (
     <ConsoleFrame className={classes.console} label={label} live>
-      {step.terminalUrl ? (
-        <>
-          {!termLoaded && (
-            <div className={classes.terminalLoading}>
-              <Loader size="md" />
-              <Text size="sm" c="dimmed">
-                Connecting to terminal…
-              </Text>
-            </div>
-          )}
-          <ContainerFrame
-            key={stripContainerTicket(step.terminalUrl)}
-            src={step.terminalUrl}
-            title="Terminal"
-            allow="clipboard-read; clipboard-write"
-            onLoad={() => setTermLoaded(true)}
-          />
-        </>
+      {step.websocketUrl ? (
+        <LiveTerminal url={step.websocketUrl} uploadUrl={step.uploadUrl} />
       ) : (
         <div className={classes.terminalLoading}>
           <Loader size="md" />

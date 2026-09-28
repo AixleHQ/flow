@@ -21,7 +21,7 @@ interface ConsoleFrameProps {
 }
 
 /**
- * The unified console/workspace frame. Callers supply the body (a ttyd iframe,
+ * The unified console/workspace frame. Callers supply the body (a live terminal,
  * a replay, or the three-column workspace) and nothing else about the chrome.
  */
 export function ConsoleFrame({

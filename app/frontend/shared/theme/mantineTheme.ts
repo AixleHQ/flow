@@ -124,10 +124,6 @@ export const mantineTheme = createTheme({
  */
 export const cssVariablesResolver: CSSVariablesResolver = () => ({
   variables: {
-    /* Terminal surfaces are black in both schemes — xterm draws the agent's own
-       ANSI palette against them. */
-    '--app-terminal-bg': '#000000',
-
     /* Aixle typography — body Figtree, headings Hanken Grotesk, code JetBrains Mono,
        small decorative mono labels Spline Sans Mono. */
     '--app-font-body': 'Figtree, sans-serif',
@@ -137,6 +133,8 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
   },
 
   light: {
+    /* Matches terminalTheme('light'), the palette xterm draws the agent's output with. */
+    '--app-terminal-bg': '#ffffff',
     /* App semantic tokens — GitHub-like light */
     '--app-bg-default': '#ffffff',
     '--app-bg-paper': '#ffffff',
@@ -242,6 +240,7 @@ export const cssVariablesResolver: CSSVariablesResolver = () => ({
   },
 
   dark: {
+    '--app-terminal-bg': '#000000',
     /* App semantic tokens — Aixle warm near-black */
     '--app-bg-default': '#0a0908',
     '--app-bg-paper': '#191817',

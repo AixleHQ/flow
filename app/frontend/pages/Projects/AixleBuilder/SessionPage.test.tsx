@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import SessionPage from './SessionPage';
@@ -159,6 +160,23 @@ describe('Projects/AixleBuilder/SessionPage', () => {
 
     expect(screen.getByText('Live')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Finish Session' })).toBeInTheDocument();
+  });
+
+  it("connects the builder's terminal once the session is ready", async () => {
+    installFakeWebSocket();
+    renderAuthedPage(<SessionPage />, {
+      props: {
+        project,
+        session: { ...baseSession, websocketUrl: 'wss://host.test/t/abc/tty/ws' },
+        cableStream: 'signed-stream',
+        builderActivities: [],
+        workflows: [],
+        boardColumns: [],
+      },
+    });
+
+    expect(screen.getByRole('group', { name: 'Terminal' })).toBeInTheDocument();
+    await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://host.test/t/abc/tty/ws'));
   });
 
   it('shows the starting-container loader and the current state badge while active without a terminal', () => {

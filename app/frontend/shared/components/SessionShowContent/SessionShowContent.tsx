@@ -1,6 +1,18 @@
 import { router } from '@inertiajs/react';
-import { ActionIcon, Badge, Box, Button, Center, Group, Loader, Stack, Text, Tooltip } from '@mantine/core';
-import { useClipboard, useHotkeys } from '@mantine/hooks';
+import {
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Center,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  Tooltip,
+  useComputedColorScheme,
+} from '@mantine/core';
+import { type HotkeyItem, useClipboard, useHotkeys } from '@mantine/hooks';
 import { notifications } from '@mantine/notifications';
 import {
   IconCheck,
@@ -22,12 +34,12 @@ import { apiMutate } from 'shared/lib/apiFetch';
 import { useElapsedTimer } from 'shared/lib/hooks/useElapsedTimer';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { ideThemeUrl, ideUrlWithScheme } from 'shared/lib/ideTheme';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { costColor, formatCost, formatDuration, formatTokens, shortModelName } from 'shared/lib/sessionFormat';
-import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
 import { finishApiV1TerminalSessionPath } from 'shared/routes';
 import { ContainerFrame } from 'shared/ui/ContainerFrame';
-import { ConsoleFrame, DetailHeader, StatusTag, type Crumb, type HeaderStat } from 'shared/ui/sessions';
+import { ConsoleFrame, DetailHeader, LiveTerminal, StatusTag, type Crumb, type HeaderStat } from 'shared/ui/sessions';
 
 import classes from './SessionShowContent.module.css';
 import { SessionTerminalReplay } from './SessionTerminalReplay';
@@ -88,7 +100,6 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   const isActive = isReady || s.state === 'running';
 
   const [ideLoaded, setIdeLoaded] = useState(false);
-  const [termLoaded, setTermLoaded] = useState(false);
   const [finishRequested, setFinishRequested] = useState(false);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [maximized, setMaximized] = useState(false);
@@ -99,25 +110,26 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
 
   useInertiaCableStream(cableStream, { only: ['session'], enabled: !isTerminal });
 
-  const ttydUrl = useMemo(
-    () => terminalPageUrl({ terminalUrl: s.terminalUrl, websocketUrl: s.websocketUrl }),
-    [s.terminalUrl, s.websocketUrl],
-  );
-
   // Someone else's session, shared with this viewer. They get to watch: the
-  // terminal renders behind a shield that swallows clicks (so the iframe never
-  // takes focus and keystrokes go nowhere), the editor is not offered at all —
-  // an overlay on VS Code is just a broken editor — and Finish is hidden,
-  // because the API scopes that action to the owner anyway.
-  //
-  // This is presentation, not enforcement: ttyd runs writable and the viewer
-  // has the route token, so opening it directly still yields a live shell.
+  // terminal takes no keystrokes (the server hands them ttyd's read-only `view`
+  // surface anyway), the editor is not offered at all — an overlay on VS Code
+  // is just a broken editor — and Finish is hidden, because the API scopes that
+  // action to the owner anyway.
   const isOwner = s.ownedByViewer;
+  const colorScheme = useComputedColorScheme('dark', { getInitialValueInEffect: false });
+  // The IDE opens in the theme of the moment. A later change is applied in place by
+  // a hidden theme page: a new src would reopen the editor and drop unsaved work.
+  const [openedInScheme] = useState(colorScheme);
+  const [ideThemeChanged, setIdeThemeChanged] = useState(false);
+  useEffect(() => {
+    if (colorScheme !== openedInScheme) setIdeThemeChanged(true);
+  }, [colorScheme, openedInScheme]);
+  const themeUrl = ideThemeChanged && s.ideUrl ? ideThemeUrl(s.ideUrl, colorScheme) : null;
   const hasIde = !!s.ideUrl && isOwner;
   // Full screen is for the agent's terminal alone; the editor comes back with
   // the split it had once the console is restored.
   const canShowEditor = hasIde && !editorCollapsed && !maximized;
-  const canShowTerminal = !!ttydUrl;
+  const canShowTerminal = !!s.websocketUrl;
 
   const exitMaximized = useCallback(() => {
     setMaximized(false);
@@ -167,20 +179,23 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
     if (hasIde) setEditorCollapsed((prev) => !prev);
   }, [hasIde]);
 
-  // Keys typed inside the ttyd/VS Code iframes never reach this document, so
-  // these only fire while focus is on the page itself — Esc in the CLI stays
-  // the CLI's.
+  // These skip the terminal's input (a textarea) and the VS Code iframe, so
+  // Ctrl+B there stays tmux's prefix; the terminal passes on the one
+  // combination it takes back itself (terminalHotkeys).
   useHotkeys([
     ['mod+b', toggleEditor],
     ['mod+shift+F', toggleMaximized],
   ]);
+  const terminalHotkeys = useMemo<HotkeyItem[]>(() => [['mod+shift+F', toggleMaximized]], [toggleMaximized]);
 
   // Capture phase: an open Mantine tooltip (the one on the button just
   // clicked) stops Escape's propagation, which would take two presses to exit.
   useEffect(() => {
     if (!maximized) return undefined;
+    // Esc typed into the terminal is the CLI's (it interrupts Claude Code).
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMaximized(false);
+      const inTerminal = event.target instanceof Element && event.target.closest('.xterm');
+      if (event.key === 'Escape' && !inTerminal) setMaximized(false);
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
@@ -315,16 +330,7 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
   );
 
   const renderTerminalFrame = () => (
-    <>
-      {!termLoaded && renderLoadingOverlay('Connecting to terminal…')}
-      {!isOwner && <div className={classes.viewOnlyShield} aria-label="Read-only view of another user's session" />}
-      <ContainerFrame
-        src={ttydUrl!}
-        title="Terminal"
-        allow="clipboard-read; clipboard-write"
-        onLoad={() => setTermLoaded(true)}
-      />
-    </>
+    <LiveTerminal url={s.websocketUrl!} readOnly={!isOwner} hotkeys={terminalHotkeys} uploadUrl={s.uploadUrl} />
   );
 
   const renderWorkspace = () => {
@@ -392,11 +398,12 @@ export function SessionShowContent({ session: s, cableStream, context: ctx, work
           <div className={`${classes.panelFrame} ${classes.editorFrame}`}>
             {!ideLoaded && renderLoadingOverlay('Loading editor…')}
             <ContainerFrame
-              src={s.ideUrl!}
+              src={ideUrlWithScheme(s.ideUrl!, openedInScheme)}
               title="VS Code Editor"
               allow="clipboard-read; clipboard-write"
               onLoad={() => setIdeLoaded(true)}
             />
+            {themeUrl && <iframe key={colorScheme} src={themeUrl} title="VS Code theme" hidden />}
           </div>
         </Panel>
         <PanelResizeHandle className={classes.resizeHandle} onDoubleClick={toggleEditor}>

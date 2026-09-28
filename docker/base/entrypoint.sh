@@ -84,7 +84,9 @@ SERVER_BASE_PATH="/t/${ROUTE_TOKEN}/ide"
 
 VSCODE_DATA_DIR="$HOME/.openvscode-server/data"
 mkdir -p "$VSCODE_DATA_DIR/Machine" "$VSCODE_DATA_DIR/User"
-cp /opt/openvscode-server/default-settings.json "$VSCODE_DATA_DIR/Machine/settings.json"
+# Remote-machine settings outrank the browser's user settings, where the session
+# page sets the theme (watcher /preload), so the theme must not be pinned here.
+jq 'del(."workbench.colorTheme")' /opt/openvscode-server/default-settings.json > "$VSCODE_DATA_DIR/Machine/settings.json"
 cp /opt/openvscode-server/default-settings.json "$VSCODE_DATA_DIR/User/settings.json"
 
 /opt/openvscode-server/bin/openvscode-server \
@@ -93,6 +95,7 @@ cp /opt/openvscode-server/default-settings.json "$VSCODE_DATA_DIR/User/settings.
     --server-base-path "$SERVER_BASE_PATH" \
     --connection-token "$VSCODE_TOKEN" \
     --default-folder /workspace \
+    --disable-workspace-trust \
     > /dev/null 2>&1 &
 VSCODE_PID=$!
 

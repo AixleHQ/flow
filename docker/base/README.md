@@ -1,14 +1,16 @@
 # Base Agent Container Image
 
-Base Docker image for AI coding agent containers. Provides ttyd (web terminal), OpenVSCode Server (browser IDE), MITM proxy (request logging), and auth-check service.
+Base Docker image for AI coding agent containers. Provides ttyd and tmux (the web terminal's session), OpenVSCode Server (browser IDE), MITM proxy (request logging), and auth-check service.
 
 ## Components
 
 | Component | Port | Session Type | Purpose |
 |-----------|------|-------------|---------|
-| ttyd | 7681 | all | Web terminal with tmux persistence |
+| ttyd | 7681 | all | Websocket onto the tmux session for the session's owner (release binary; the page renders the terminal itself) |
+| ttyd (read-only) | 7682 | all | The same session for everyone else, input refused |
 | OpenVSCode Server | 8443 | agent_session | Browser IDE (file tree, editor, search) |
-| Auth-check | 4040 | auth_setup | Lightweight `/auth` endpoint |
+| Watcher / auth-check | 4040 | all | File tree and file reads; `/auth` for auth_setup |
+| Image upload | 4041 | all | Images pasted into the owner's terminal, stored under `/tmp/aixle-uploads` |
 | MITM proxy | 8888 | all | API request/response logging |
 
 ## Resource Limits

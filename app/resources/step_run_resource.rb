@@ -65,16 +65,26 @@ class StepRunResource < ApplicationResource
   end
 
   typelize :string?
-  attribute :terminal_url do |sr|
+  attribute :websocket_url do |sr|
     ts = sr.terminal_session
     # Gated on `ready?`, not the looser `active?` — the container only registers
     # its traefik route inside `exec`, which is what flips the session to
     # "ready". Handing out the URL any earlier (e.g. "not_started"/"running")
-    # points the iframe at a route that doesn't exist yet and it 404s.
+    # points the terminal at a route that doesn't exist yet and it 404s.
     next nil unless ts&.route_token.present? && ts.ready?
 
     surface = owned_by_viewer?(ts) ? "tty" : "view"
-    ContainerTicket.append("#{params.dig(:traefik, :http_base)}/t/#{ts.route_token}/#{surface}",
+    ContainerTicket.append("#{params.dig(:traefik, :ws_base)}/t/#{ts.route_token}/#{surface}/ws",
+                           user: ticket_user(ts), session: ts)
+  end
+
+  typelize :string?
+  attribute :upload_url do |sr|
+    ts = sr.terminal_session
+    next nil unless ts&.route_token.present? && ts.ready?
+    next nil unless owned_by_viewer?(ts)
+
+    ContainerTicket.append("#{params.dig(:traefik, :http_base)}/t/#{ts.route_token}/upload",
                            user: ticket_user(ts), session: ts)
   end
 

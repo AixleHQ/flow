@@ -36,9 +36,10 @@ module Api
 
         # What only the session's owner may open: the writable terminal and the
         # IDE are both a shell in a container that holds the owner's agent login,
-        # git token and vending keys. Everyone else the session is shared with
-        # gets the read-only terminal (`view`) and the read-only file server.
-        OWNER_ONLY_SURFACES = %w[tty ide].freeze
+        # git token and vending keys. `upload` writes pasted images into that
+        # container. Everyone else the session is shared with gets the read-only
+        # terminal (`view`) and the read-only file server.
+        OWNER_ONLY_SURFACES = %w[tty ide upload].freeze
 
         def show
           route_token, surface = extract_route
@@ -143,7 +144,7 @@ module Api
           return [ nil, nil ] unless match
 
           surface = match[2]
-          [ match[1], surface.in?(%w[tty ide fs view]) ? surface : "tty" ]
+          [ match[1], surface.in?(%w[tty ide fs view upload]) ? surface : "tty" ]
         end
       end
     end

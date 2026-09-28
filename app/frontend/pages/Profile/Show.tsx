@@ -37,7 +37,6 @@ import { formatDateMedium } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
-import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
 import { AwsConnectionModal } from 'shared/resources/cloud-connections/AwsConnectionModal';
 import type { ProjectHandover } from 'shared/resources/members/projectHandover';
 import { ProjectHandoverModal } from 'shared/resources/members/ProjectHandoverModal';
@@ -50,10 +49,10 @@ import {
   finishApiV1TerminalSessionPath,
   healthApiV1CloudAwsConnectionPath,
 } from 'shared/routes';
-import { AGENT_BRAND_COLORS, TERMINAL_BG } from 'shared/theme/vendorColors';
+import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
 import { type AgentType, type UserRole } from 'shared/ui';
 import { AGENT_RUNTIMES, AGENT_TYPES } from 'shared/ui/agentRuntimes';
-import { ContainerFrame } from 'shared/ui/ContainerFrame';
+import { LiveTerminal } from 'shared/ui/sessions';
 import { StatusBadge, type StatusTone } from 'shared/ui/StatusBadge';
 
 import { ProfileTabs } from './ProfileTabs';
@@ -523,7 +522,7 @@ function AgentAuthModal({
   const isDesign = authKind === 'design';
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [sessionState, setSessionState] = useState<AuthSessionState>('idle');
-  const [ttydUrl, setTtydUrl] = useState<string | null>(null);
+  const [terminalSocketUrl, setTerminalSocketUrl] = useState<string | null>(null);
   const [watcherUrl, setWatcherUrl] = useState<string | null>(null);
   const [cableStream, setCableStream] = useState<string | null>(null);
   const [launchPhase, setLaunchPhase] = useState<string | null>(null);
@@ -549,11 +548,8 @@ function AgentAuthModal({
     setSessionState(state);
     setLaunchPhase((s.launchPhase as string) ?? null);
     setLaunchError((s.launchError as string) ?? null);
-    const pageUrl = terminalPageUrl({
-      terminalUrl: s.terminalUrl as string | null,
-      websocketUrl: s.websocketUrl as string | null,
-    });
-    if (state === 'ready' && pageUrl) setTtydUrl(pageUrl);
+    const socketUrl = s.websocketUrl as string | null;
+    if (state === 'ready' && socketUrl) setTerminalSocketUrl(socketUrl);
     if (s.watcherUrl) setWatcherUrl(s.watcherUrl as string);
     // Set once the in-container credential helper reported no cloud connection, which only
     // happens because Claude Code's own Bedrock wizard asked it for credentials.
@@ -588,7 +584,7 @@ function AgentAuthModal({
   const startAuth = useCallback(async () => {
     cleanup();
     setSessionState('starting');
-    setTtydUrl(null);
+    setTerminalSocketUrl(null);
     setWatcherUrl(null);
     setCableStream(null);
     setAuthDetected(false);
@@ -796,16 +792,11 @@ function AgentAuthModal({
       );
     }
 
-    if (sessionState === 'ready' && ttydUrl) {
+    if (sessionState === 'ready' && terminalSocketUrl) {
       return (
         <Box style={{ display: 'flex', flexDirection: 'column', height: 500 }}>
-          <Box style={{ flex: 1, overflow: 'hidden' }}>
-            <ContainerFrame
-              src={ttydUrl}
-              title={`Authenticate ${agentInfo.name}`}
-              allow="clipboard-read; clipboard-write"
-              style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, backgroundColor: TERMINAL_BG }}
-            />
+          <Box style={{ flex: 1, overflow: 'hidden', borderRadius: 8 }}>
+            <LiveTerminal url={terminalSocketUrl} label={`Authenticate ${agentInfo.name}`} />
           </Box>
           <Group justify="space-between" p="sm" style={{ borderTop: '1px solid var(--app-border-default)' }}>
             {authDetected && finishError ? (

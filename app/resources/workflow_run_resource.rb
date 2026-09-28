@@ -81,7 +81,7 @@ class WorkflowRunResource < ApplicationResource
   typelize "StepRun[]"
   attribute :step_runs do |run|
     step_name_map = run.workflow.steps.each_with_object({}) { |s, h| h[s.id] = s.name }
-    traefik = { http_base: Settings.traefik.http_base }
+    traefik = { http_base: Settings.traefik.http_base, ws_base: Settings.traefik.ws_base }
 
     run.step_runs.sort_by(&:created_at).map do |sr|
       step_params = { step_name_map: step_name_map, traefik: traefik }

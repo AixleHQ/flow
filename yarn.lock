@@ -2920,6 +2920,36 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@xterm/addon-clipboard@npm:^0.2.0":
+  version: 0.2.0
+  resolution: "@xterm/addon-clipboard@npm:0.2.0"
+  dependencies:
+    js-base64: "npm:^3.7.5"
+  checksum: 10c0/8ba5974ec2d2f5129b9d0ce77ef5f0462f893e0ea178d74a79b9fa803dde058bc34807833f34baa7cdd579f1656eab16db3ca4d5a908cc119ad5e61381ee0710
+  languageName: node
+  linkType: hard
+
+"@xterm/addon-fit@npm:^0.11.0":
+  version: 0.11.0
+  resolution: "@xterm/addon-fit@npm:0.11.0"
+  checksum: 10c0/c0ce94f7e877d07e7197d15d041cc629ce2e853016400aadddc9810838ea8a26e836f87f325eba36df88c03feb72d9f13cd8c3bb41ee31e701f1058edb8553c3
+  languageName: node
+  linkType: hard
+
+"@xterm/addon-unicode11@npm:^0.9.0":
+  version: 0.9.0
+  resolution: "@xterm/addon-unicode11@npm:0.9.0"
+  checksum: 10c0/6a1e34d081f5467ebb356159c0ee38319a30ea920fd948b8f56bbbb965b84ad5f0bdafcd8b75b2fab15f59376cc133abaa8615621d4ba839345922e7d869209c
+  languageName: node
+  linkType: hard
+
+"@xterm/addon-webgl@npm:^0.19.0":
+  version: 0.19.0
+  resolution: "@xterm/addon-webgl@npm:0.19.0"
+  checksum: 10c0/238f9af3745bc027c78a6ec6ed155721f82f2f0934bc65adffc0ae997c23ad053b18f04fceb121a38945d2fc31bf0e4baa01714c4c2916781bb27873d9d5cd8b
+  languageName: node
+  linkType: hard
+
 "@xterm/xterm@npm:^6.0.0":
   version: 6.0.0
   resolution: "@xterm/xterm@npm:6.0.0"
@@ -5594,6 +5624,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"js-base64@npm:^3.7.5":
+  version: 3.9.4
+  resolution: "js-base64@npm:3.9.4"
+  checksum: 10c0/c1a76236bb2531fa321863b87eceabb90f070ef196f3a97028d6f710c941bdfc453eb8c75bc2412453db163fe4ac5c748a40a63547a264420ce0e67b871b228d
+  languageName: node
+  linkType: hard
+
 "js-tokens@npm:^10.0.0":
   version: 10.0.0
   resolution: "js-tokens@npm:10.0.0"
@@ -8074,6 +8111,10 @@ __metadata:
     "@uppy/core": "npm:^6.0.1"
     "@vitejs/plugin-react-swc": "npm:^4.3.3"
     "@vitest/coverage-v8": "npm:5.0.1"
+    "@xterm/addon-clipboard": "npm:^0.2.0"
+    "@xterm/addon-fit": "npm:^0.11.0"
+    "@xterm/addon-unicode11": "npm:^0.9.0"
+    "@xterm/addon-webgl": "npm:^0.19.0"
     "@xterm/xterm": "npm:^6.0.0"
     cronstrue: "npm:^3.27.0"
     date-fns: "npm:^4.4.0"

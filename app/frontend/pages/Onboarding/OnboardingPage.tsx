@@ -41,12 +41,11 @@ import type TerminalSession from 'types/generated/TerminalSession';
 
 import { apiFetch, apiRequest } from 'shared/lib/apiFetch';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
-import { terminalPageUrl } from 'shared/lib/terminalPageUrl';
 import { apiV1TerminalSessionsPath, finishApiV1TerminalSessionPath } from 'shared/routes';
-import { AGENT_BRAND_COLORS, TERMINAL_BG } from 'shared/theme/vendorColors';
+import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
 import { PageShell, type AgentType, type SharedProps } from 'shared/ui';
 import { AGENT_RUNTIMES, AGENT_TYPES } from 'shared/ui/agentRuntimes';
-import { ContainerFrame } from 'shared/ui/ContainerFrame';
+import { LiveTerminal } from 'shared/ui/sessions';
 
 import classes from './OnboardingPage.module.css';
 
@@ -128,7 +127,7 @@ function AgentAuthTerminal({
   if (session) creatingRef.current = false;
   const sessionState = session?.state ?? (creatingRef.current ? 'starting' : 'idle');
   const isTerminal = ['finished', 'failed', 'cancelled'].includes(sessionState);
-  const ttydUrl = session?.state === 'ready' ? terminalPageUrl(session) : null;
+  const terminalSocketUrl = session?.state === 'ready' ? session.websocketUrl : null;
 
   useInertiaCableStream(session?.cableStream, {
     only: ['auth_sessions'],
@@ -242,16 +241,11 @@ function AgentAuthTerminal({
     );
   }
 
-  if (session?.state === 'ready' && ttydUrl) {
+  if (session?.state === 'ready' && terminalSocketUrl) {
     return (
       <Box style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Box style={{ flex: 1, overflow: 'hidden' }}>
-          <ContainerFrame
-            src={ttydUrl}
-            title="Agent Authentication Terminal"
-            allow="clipboard-read; clipboard-write"
-            style={{ width: '100%', height: '100%', border: 'none', backgroundColor: TERMINAL_BG }}
-          />
+          <LiveTerminal url={terminalSocketUrl} label="Agent Authentication Terminal" />
         </Box>
         <Group
           justify="space-between"

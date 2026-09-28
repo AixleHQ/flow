@@ -45,6 +45,10 @@ module Api
 
           get_ws_auth(@session, suffix: "ide/")
           assert_response :forbidden
+
+          # Uploading writes a pasted image into that same container.
+          get_ws_auth(@session, suffix: "upload")
+          assert_response :forbidden
         end
 
         test "a workflow step's container is read-only to everyone but the person who ran it" do
@@ -88,6 +92,9 @@ module Api
           assert_response :ok
 
           get_ws_auth(@session, suffix: "ide/")
+          assert_response :ok
+
+          get_ws_auth(@session, suffix: "upload")
           assert_response :ok
         end
 

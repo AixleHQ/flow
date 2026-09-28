@@ -95,16 +95,14 @@ class TerminalSessionResource < ApplicationResource
     with_ticket("#{Settings.traefik.ws_base}/t/#{session.route_token}/#{surface}/ws", session)
   end
 
-  # The page a terminal iframe loads, on the origin the CSP's frame-src allows;
-  # its ttyd client opens the websocket above from there. Optional in the type:
-  # a pod still on the previous release does not send it (see terminalPageUrl).
-  typelize "string | null", optional: true
-  attribute :terminal_url do |session|
+  # Where the owner's terminal uploads a pasted image; nobody else may write
+  # into the container.
+  typelize "string | null"
+  attribute :upload_url do |session|
     next nil if session.queued? || session.cancelled?
-    next nil unless session.route_token.present?
+    next nil unless session.route_token.present? && owned_by_viewer?(session)
 
-    surface = owned_by_viewer?(session) ? "tty" : "view"
-    with_ticket("#{Settings.traefik.http_base}/t/#{session.route_token}/#{surface}", session)
+    with_ticket("#{Settings.traefik.http_base}/t/#{session.route_token}/upload", session)
   end
 
   # Endpoint that streams the captured terminal log so a finished session can be

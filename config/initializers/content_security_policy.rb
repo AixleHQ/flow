@@ -73,8 +73,10 @@ Rails.application.configure do
     # Sentry's session replay compresses in a worker it starts from a blob: URL.
     policy.worker_src  :self, :blob
     policy.connect_src :self, :https, "wss://#{Settings.domain}"
-    # The onboarding agent-auth terminal and workspace IDE/terminal panels embed
-    # ttyd cross-origin (Traefik host), so frame_src must allow that origin.
+    # The workspace IDE panel embeds VS Code cross-origin (Traefik host), so
+    # frame_src must allow that origin. Terminals are not framed: they open
+    # ttyd's websocket from the page, which connect_src's `https:` covers
+    # (CSP3 matches wss: against it).
     policy.frame_src   :self, Settings.traefik.http_base, *StoredFileSources.hosts
     policy.media_src   :self, *StoredFileSources.hosts
     policy.report_uri  csp_report_uri
