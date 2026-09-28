@@ -709,6 +709,14 @@ module Agents
       # No-op by default. Override in adapters with usage tracking.
     end
 
+    # Complete a stored login the CLI would refuse to run on, before a session is
+    # launched on it (AgentSessionStrategy#before_exec). Returns true when the
+    # credential was changed. Never raises: a login that cannot be completed launches
+    # as it is. Default: nothing to complete.
+    def repair_credential!(_credential)
+      false
+    end
+
     # =================================================================
     # Launch-time Credential Preflight
     # =================================================================

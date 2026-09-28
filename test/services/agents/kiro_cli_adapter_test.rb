@@ -712,6 +712,59 @@ module Agents
       assert_not_requested usage
     end
 
+    # == Completing a login captured before the CLI stored its profile ==
+
+    def stored_profile_row(credential)
+      Tempfile.create([ "kiro-read", ".sqlite3" ]) do |file|
+        file.binmode
+        file.write(Base64.strict_decode64(credential.reload.config_data["state_b64"]))
+        file.flush
+        db = SQLite3::Database.new(file.path)
+        value = db.get_first_value("SELECT value FROM state WHERE key = ?", [ Agents::KiroCliAdapter::PROFILE_STATE_KEY ])
+        db.close
+        value && JSON.parse(value)
+      end
+    end
+
+    test "a login that stored no profile gets the one its account has, in the CLI's own shape" do
+      stub_available_profiles("arn:aws:codewhisperer:us-east-1:5678:profile/IDC")
+      credential = credential_for(real_state_credentials(profile: false))
+
+      assert @adapter.repair_credential!(credential)
+
+      assert_equal({ "arn" => "arn:aws:codewhisperer:us-east-1:5678:profile/IDC", "profile_name" => "KiroProfile" },
+                   stored_profile_row(credential))
+      assert_equal "tok-abc", stored_token(credential)["access_token"]
+    end
+
+    test "a login that stored its profile is left alone" do
+      profiles = stub_available_profiles("arn:aws:codewhisperer:us-east-1:5678:profile/IDC")
+      credential = credential_for(real_state_credentials)
+
+      assert_not @adapter.repair_credential!(credential)
+
+      assert_equal "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD", stored_profile_row(credential)["arn"]
+      assert_not_requested profiles
+    end
+
+    test "a login is not completed with a guess between several profiles" do
+      stub_available_profiles("arn:aws:codewhisperer:us-east-1:1:profile/A", "arn:aws:codewhisperer:us-east-1:2:profile/B")
+      credential = credential_for(real_state_credentials(profile: false))
+
+      assert_not @adapter.repair_credential!(credential)
+
+      assert_nil stored_profile_row(credential)
+    end
+
+    test "a login stays as it is when the control plane does not answer" do
+      stub_request(:post, "https://management.us-east-1.kiro.dev/").to_return(status: 500, body: "{}")
+      credential = credential_for(real_state_credentials(profile: false))
+
+      assert_not @adapter.repair_credential!(credential)
+
+      assert_nil stored_profile_row(credential)
+    end
+
     # == Token refresh ==
 
     # A credential in the CLI's own layout for the refresh paths: a token that is about

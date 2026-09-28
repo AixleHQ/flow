@@ -586,6 +586,36 @@ module Agents
       { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
     end
 
+    # An IAM Identity Center login can be captured before the CLI has written the
+    # profile it selects at the very end of the login (the watcher closes the auth
+    # terminal on the token alone). V3 then refuses to hand its agent a token at all —
+    # "Auth refresh callback failed: … Failed to verify authentication. Please log in
+    # again" on every prompt, with a perfectly valid token — until that `state` row
+    # exists. Measured on CLI 2.24.0: writing the row into a running container fixes
+    # it within seconds, so the launch writes it into the stored login instead.
+    def repair_credential!(credential)
+      token = auth_record(decoded_state(credential.config_data))
+      return false if token["access_token"].blank? || token["profile_arn"].present?
+
+      profile = discovered_profile(token["access_token"])
+      return false if profile.blank?
+
+      credential.with_lock do
+        blob = decoded_state(credential.config_data)
+        next false if auth_record(blob)["profile_arn"].present?
+
+        repaired = blob_with_profile(blob, profile)
+        next false if repaired.blank?
+
+        credential.update!(config_data: credential.config_data.merge("state_b64" => Base64.strict_encode64(repaired)))
+        Rails.logger.info("[KiroCliAdapter] stored the profile the login did not on credential #{credential.id}")
+        true
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[KiroCliAdapter] could not store the login's profile: #{e.class}: #{e.message}")
+      false
+    end
+
     # =================================================================
     # Usage / cost
     # =================================================================
@@ -875,6 +905,21 @@ module Agents
       nil
     end
 
+    # The row in the shape the CLI writes it: snake_case, unlike the API's answer.
+    def blob_with_profile(blob, profile)
+      value = { "arn" => profile["arn"], "profile_name" => profile["profileName"] }.compact.to_json
+      with_state_database(blob, readonly: false) do |db, path|
+        if db.get_first_value("SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'state'").to_i.positive?
+          raise UntrustedState, "state carries triggers"
+        end
+
+        db.execute("INSERT OR IGNORE INTO state (key, value) VALUES (?, ?)", [ PROFILE_STATE_KEY, value ])
+        db.close
+        return File.binread(path)
+      end
+      nil
+    end
+
     # The database comes back from the container, which is the thing that may be
     # compromised, so it is opened as a hostile file: it must be a SQLite database of a
     # plausible size, pass quick_check, and its schema is not trusted — views and
@@ -937,12 +982,14 @@ module Agents
     # The profile a login without a stored one is scoped to. Only an account with
     # exactly one profile is answered: with several, the CLI makes the user pick, and
     # guessing would read another profile's credits.
-    def discovered_profile_arn(token)
-      profiles = Array(control_plane_post(token, LIST_PROFILES_TARGET, { origin: API_ORIGIN })&.dig("profiles"))
-      arns = profiles.filter_map { |profile| profile["arn"].presence if profile.is_a?(Hash) }
-      return arns.first if arns.one?
+    def discovered_profile_arn(token) = discovered_profile(token)&.dig("arn")
 
-      Rails.logger.warn("[KiroCliAdapter] no stored profile and #{arns.size} available, not guessing") if arns.many?
+    def discovered_profile(token)
+      profiles = Array(control_plane_post(token, LIST_PROFILES_TARGET, { origin: API_ORIGIN })&.dig("profiles"))
+      profiles = profiles.select { |profile| profile.is_a?(Hash) && profile["arn"].present? }
+      return profiles.first if profiles.one?
+
+      Rails.logger.warn("[KiroCliAdapter] no stored profile and #{profiles.size} available, not guessing") if profiles.many?
       nil
     end
 

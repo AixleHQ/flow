@@ -101,6 +101,7 @@ module ContainerStrategies
       # Read before anything reaches the container: an unreadable login stops here.
       credential&.config_data
       refresh_expiring_credential!(credential, session)
+      adapter.repair_credential!(credential) if credential
       initial_write_error = nil
       begin
         SessionContextService.assemble_session_context(container, session, credential: credential)

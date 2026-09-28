@@ -257,6 +257,27 @@ module ContainerStrategies
       assert_raises(AgentCredential::PreflightError) { run_before_exec(build_strategy) }
     end
 
+    # Kiro's V3 engine answers every prompt with "log in again" while its login has no
+    # profile selected, so a login captured without one is completed before launch.
+    test "before_exec launches a Kiro login on the profile it did not store" do
+      @session.update!(agent_type: "kiro_cli")
+      credential = create(:agent_credential, :kiro_cli, user: @user, config_data: kiro_login_without_profile)
+      stub_request(:post, "https://management.us-east-1.kiro.dev/")
+        .with(headers: { "X-Amz-Target" => Agents::KiroCliAdapter::LIST_PROFILES_TARGET })
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { "profiles" => [ { "arn" => "arn:aws:codewhisperer:us-east-1:5678:profile/IDC",
+                                             "profileName" => "KiroProfile" } ] }.to_json)
+      launched = nil
+      SessionContextService.stubs(:assemble_session_context).with { |*args, **kwargs|
+        launched = (kwargs[:credential] || args.last[:credential]).config_data
+      }
+
+      run_before_exec(build_strategy(agent_type: "kiro_cli", credential: credential))
+
+      assert_equal "arn:aws:codewhisperer:us-east-1:5678:profile/IDC", kiro_profile_arn(launched)
+      assert_equal "arn:aws:codewhisperer:us-east-1:5678:profile/IDC", kiro_profile_arn(credential.reload.config_data)
+    end
+
     test "before_exec rejects a nil credential before assembling context" do
       strategy = AgentSessionStrategy.new(
         user_id: @user.id,
@@ -937,6 +958,23 @@ module ContainerStrategies
       strategy.stubs(:run_credential_preflight!)
 
       strategy.before_exec(container_id: "container_ref")
+    end
+
+    def kiro_login_without_profile
+      Tempfile.create([ "kiro-login", ".sqlite3" ]) do |file|
+        db = SQLite3::Database.new(file.path)
+        db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
+        db.execute("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT)")
+        db.execute("INSERT INTO auth_kv VALUES (?, ?)", [ "kirocli:odic:token", {
+          "access_token" => "tok", "refresh_token" => "ref", "expires_at" => 2.hours.from_now.utc.iso8601
+        }.to_json ])
+        db.close
+        { "state_b64" => Base64.strict_encode64(File.binread(file.path)) }
+      end
+    end
+
+    def kiro_profile_arn(config_data)
+      Agents::KiroCliAdapter.new.credential_identity(config_data)
     end
 
     def build_codex_preflight_strategy(auth_content)
