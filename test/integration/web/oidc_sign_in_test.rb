@@ -202,6 +202,17 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
   # The mode is pinned rather than inherited: config/settings/test.yml reads
   # DEPLOYMENT_MODE from the environment, so a developer who set it for a local
   # stack would otherwise get a different answer here than CI does.
+  # Registration off is the other half of the same gate: with it closed, a hosted
+  # installation answers exactly as a self-hosted one does.
+  test "an unclaimed domain is a refusal again once registration is off" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: false))
+
+    post login_identify_path, params: { email: "someone@unknown-domain-#{SecureRandom.hex(3)}.test" }
+
+    assert_redirected_to login_path(error: "no_workspace")
+  end
+
   test "an address no workspace claims is told so, rather than shown a password box" do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SELF_HOSTED))
 
@@ -216,6 +227,7 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
   # the one door away from the product.
   test "where we host, an unclaimed domain starts a signup instead" do
     Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    Settings.stubs(:registration).returns(Hashie::Mash.new(enabled: true))
     email = "someone@unknown-domain-#{SecureRandom.hex(3)}.test"
 
     post login_identify_path, params: { email: email }

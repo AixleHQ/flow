@@ -32,7 +32,7 @@ class Web::OidcSessionsController < Web::ApplicationController
       # Where anyone may sign a company up, an address at a domain nobody has
       # claimed is not a refusal — it is the first field of a signup, and
       # answering it with "contact your admin" turns the one door away.
-      return redirect_to(new_workspace_path(email: email)) if Deployment.saas?
+      return redirect_to(new_workspace_path(email: email)) if Deployment.self_serve_signup?
 
       return redirect_to(login_path(error: "no_workspace"))
     end
