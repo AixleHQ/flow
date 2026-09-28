@@ -380,7 +380,11 @@ Rails.application.routes.draw do
       # surface (CAP-4, AD-18).
       get :security, on: :member
     end
-    resource :workspace, only: %i[new create], controller: "workspaces"
+    # The confirmation link a stranger is emailed: opening it is the proof of
+    # the address, and the only thing that writes the company.
+    resource :workspace, only: %i[new create], controller: "workspaces" do
+      get :confirm, on: :member
+    end
     resource :onboarding, only: %i[show update], controller: "onboarding"
 
     # The organization-visible member profile. Company-scoped like everything
