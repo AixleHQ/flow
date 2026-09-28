@@ -86,6 +86,45 @@ module Github
       assert_match(/1\/2 check suites still running/, result.detail)
     end
 
+    test "ignores an app's suite that never reports a check run" do
+      stub_pull_request("abc1234def")
+      stub_check_suites("abc1234def", [
+        { status: "queued", conclusion: nil, runs: 0 },
+        { status: "completed", conclusion: "success", runs: 14 }
+      ])
+
+      result = @service.pull_request_checks("org/app", 42)
+
+      assert result.completed?
+      assert_equal "success", result.conclusion
+    end
+
+    test "still fails a pull request whose reporting suite failed next to an empty one" do
+      stub_pull_request("abc1234def")
+      stub_check_suites("abc1234def", [
+        { status: "queued", conclusion: nil, runs: 0 },
+        { status: "completed", conclusion: "failure", runs: 3 }
+      ])
+
+      result = @service.pull_request_checks("org/app", 42)
+
+      assert result.completed?
+      assert_equal "failure", result.conclusion
+    end
+
+    test "reports a pull request whose suites have no check runs yet as in_progress" do
+      stub_pull_request("abc1234def")
+      stub_check_suites("abc1234def", [
+        { status: "queued", conclusion: nil, runs: 0 },
+        { status: "queued", conclusion: nil, runs: 0 }
+      ])
+
+      result = @service.pull_request_checks("org/app", 42)
+
+      assert result.in_progress?
+      assert_match(/no check runs reported yet/, result.detail)
+    end
+
     test "reports a pull request with no check suites as unresolvable" do
       stub_pull_request("abc1234def")
       stub_check_suites("abc1234def", [])
@@ -174,7 +213,10 @@ module Github
       body = {
         total_count: suites.size,
         check_suites: suites.each_with_index.map do |suite, i|
-          { id: 100 + i, head_sha: head_sha, status: suite[:status], conclusion: suite[:conclusion] }
+          {
+            id: 100 + i, head_sha: head_sha, status: suite[:status], conclusion: suite[:conclusion],
+            latest_check_runs_count: suite.fetch(:runs, 1)
+          }
         end
       }
 
