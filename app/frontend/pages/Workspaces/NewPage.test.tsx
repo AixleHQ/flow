@@ -6,6 +6,7 @@ import { makeFormStub, renderPage, screen, userEvent } from 'test/renderPage';
 import NewWorkspacePage from './NewPage';
 
 const stranger = {
+  freeQueueHours: 100,
   suggestedDomain: null,
   suggestedName: null,
   suggestedEmail: null,
@@ -117,6 +118,14 @@ describe('New workspace page', () => {
   // The keys are camelCase because Inertia's prop_transformer runs over every
   // prop, errors included, while the form posts snake_case. Reading the wrong
   // spelling here swallows the refusal and the form just sits there.
+  // The form asks for a number of sessions without ever having said what they
+  // cost or what is free, which is the question anyone filling it in has.
+  it('says what the workspace gets before anyone asks for a card', () => {
+    renderPage(<NewWorkspacePage />, { props: stranger });
+
+    expect(screen.getByText(/queue-hours are free/)).toHaveTextContent('The first 100 queue-hours are free');
+  });
+
   it('shows what the server refused', () => {
     renderPage(<NewWorkspacePage />, {
       props: { ...stranger, errors: { emailDomain: 'already has a workspace — ask someone there to invite you' } },

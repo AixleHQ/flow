@@ -14,6 +14,8 @@ import classes from './ShowPage.module.css';
 interface Props {
   [key: string]: unknown;
   queueHourlyRate: number;
+  /** Queue-hours a new workspace may spend before anyone asks it for a card. */
+  freeQueueHours: number;
   signedIn: boolean;
 }
 
@@ -36,7 +38,7 @@ const STEPS = [
 ];
 
 const ShowPage = () => {
-  const { queueHourlyRate, signedIn } = usePage<Props>().props;
+  const { queueHourlyRate, freeQueueHours, signedIn } = usePage<Props>().props;
 
   return (
     <PublicLayout>
@@ -107,11 +109,13 @@ const ShowPage = () => {
             </div>
             <div className={classes.priceCard}>
               <div className={classes.price}>
-                <span className={classes.priceFigure}>Hourly</span>
+                <span className={classes.priceFigure}>{freeQueueHours}</span>
+                <Text c="var(--app-text-secondary)">queue-hours free</Text>
               </div>
               <Text size="sm" c="var(--app-text-secondary)" mt="sm">
-                Capacity is metered every hour and charged for the part of the hour it existed, so raising or lowering
-                your limit takes effect immediately rather than next month.
+                Every new workspace starts with them, spent at whatever rate it runs — four queues at once uses four
+                queue-hours an hour. Capacity is metered hourly, so raising or lowering your limit takes effect
+                immediately rather than next month.
               </Text>
             </div>
           </SimpleGrid>

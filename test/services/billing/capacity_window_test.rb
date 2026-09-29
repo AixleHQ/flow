@@ -150,4 +150,64 @@ class Billing::CapacityWindowTest < ActiveSupport::TestCase
 
     assert_minutes 600, window
   end
+
+  # ── The free allowance ────────────────────────────────────────────────────
+  #
+  # One number, two consumers: what the drain will hand out is what the meter
+  # measures. A company capped to one session must be measured at one, or its
+  # first invoice is for capacity it never had.
+
+  class WithTrial < Billing::CapacityWindowTest
+    setup { Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS)) }
+
+    # The allowance does not shrink the workspace; it is spent at whatever rate
+    # the workspace runs.
+    test "a trialing company is measured at the limit it asked for" do
+      @acme.update!(billing_state: "trialing")
+      change(@acme, 10, @hour - 2.hours)
+
+      assert_equal 600, window.offered_per_company[@acme.id] / 60
+    end
+
+    # Its hours are ours to count and nobody's to invoice: the allowance is spent
+    # from the same measurement a paying company is billed from.
+    test "a trialing company is measured but not billed" do
+      @acme.update!(billing_state: "trialing")
+      change(@acme, 10, @hour - 2.hours)
+      change(@globex, 5, @hour - 2.hours)
+
+      result = window
+
+      assert_includes result.offered_per_company, @acme.id
+      assert_not_includes result.per_company, @acme.id
+      assert_minutes 300, result, "only the paying company reaches the provider"
+    end
+
+    test "a blocked company is offered nothing at all" do
+      @acme.update!(billing_state: "blocked")
+      change(@acme, 10, @hour - 2.hours)
+
+      assert_not_includes window.offered_per_company, @acme.id
+      assert_minutes 0, window
+    end
+
+    # An unbounded company is unbillable whoever it is, so there is nothing to
+    # spend the allowance on either.
+    test "an unbounded trialing company is measured at nothing" do
+      @acme.update!(billing_state: "trialing")
+
+      assert_not_includes window.offered_per_company, @acme.id
+    end
+
+    # Raising the limit mid-hour spends the allowance faster from that moment,
+    # which is the whole of the deal.
+    test "a raise during the hour is measured for the part of it that followed" do
+      @acme.update!(billing_state: "trialing")
+      change(@acme, 2, @hour - 2.hours)
+      change(@acme, 40, @hour + 30.minutes)
+
+      assert_equal 60 + 1200, window.offered_per_company[@acme.id] / 60,
+                   "half an hour at two and half at forty"
+    end
+  end
 end

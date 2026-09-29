@@ -104,7 +104,10 @@ class Web::WorkspacesController < Web::ApplicationController
       suggested_email: safe_email_param,
       # A stranger types the address they will own the workspace with; someone
       # signed in has already proved theirs and is not asked again.
-      needs_email: !signed_in?
+      needs_email: !signed_in?,
+      # What they get before anyone asks them for a card, which is the part of
+      # the bargain the form was silent about.
+      free_queue_hours: Billing::Trial.queue_hours
     }
   end
 

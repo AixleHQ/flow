@@ -593,3 +593,12 @@ pricing:
 # to take them.
 registration:
   enabled: <%= ENV.fetch('REGISTRATION_ENABLED', 'false') == 'true' %>
+
+# The free capacity a company that signs itself up may spend before anyone has
+# paid, in queue-hours. Hosted deployments only. A quantity rather than a period
+# on purpose: capacity is billed by the hour it is offered, so the company spends
+# the allowance at whatever rate it runs — ten sessions at once uses ten
+# queue-hours an hour, and the same hundred hours that last one workspace four
+# days last that one ten.
+trial:
+  queue_hours: <%= (ENV['TRIAL_QUEUE_HOURS'] || 100).to_i %>

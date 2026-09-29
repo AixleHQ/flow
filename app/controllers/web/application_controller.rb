@@ -65,7 +65,10 @@ class Web::ApplicationController < ApplicationController
                .map do |id, name, slug, state|
                  { id: id, name: name, slug: slug, state: state, favorite: favorite_project_ids.include?(id) }
                end
-        }
+        },
+        # Present only while a free allowance is running or spent, so every screen
+        # can say so rather than leaving a person to work out why nothing starts.
+        trial: InertiaRails.always { trial_share }
       )
     else
       shared
@@ -73,6 +76,25 @@ class Web::ApplicationController < ApplicationController
   end
 
   private
+
+  # Nil everywhere but the hosted product, and nil there for a company somebody
+  # is paying for.
+  def trial_share
+    return nil unless Deployment.saas?
+    return nil if current_company.nil? || current_company.billing_active?
+
+    max_sessions = SessionConcurrencyLimit.for_company(current_company.id)
+    {
+      state: current_company.billing_state,
+      allowance_hours: ::Billing::Trial.queue_hours,
+      used_hours: ::Billing::Trial.used_hours(current_company).to_f,
+      remaining_hours: ::Billing::Trial.remaining_hours(current_company).to_f,
+      max_sessions: max_sessions,
+      # How long what is left lasts at the rate they are running, which is the
+      # number they actually want. Nil when no limit is set, and so no rate.
+      hours_left_at_current_rate: ::Billing::Trial.hours_left_at(current_company, max_sessions)&.to_f
+    }
+  end
 
   # Inertia picks a partial reload's props by the server's own key names, before
   # config/initializers/inertia.rb camelizes them on the way out. Most server

@@ -197,6 +197,51 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
     assert_instance_of Billing::Meter::AwsMarketplace, Billing::CapacityMeter.adapter_for(Deployment::AWS_MARKETPLACE)
   end
 
+  # ── Our own ledger ────────────────────────────────────────────────────────
+  #
+  # The meter reports exist to be sent somewhere and hold the per-company split
+  # as a jsonb blob inside an installation-wide row. These exist to be read.
+
+  test "every measured company's hour is recorded for us, whoever is billed" do
+    meter.call
+
+    closed_hour = Time.utc(2026, 9, 23, 10)
+    usage = CompanyCapacityUsage.find_by(company_id: @company.id, period_start: closed_hour)
+    assert_equal 12 * 3600, usage.quantity_seconds
+    assert_equal BigDecimal("720"), usage.quantity_minutes
+  end
+
+  # The hour is claimed once and only once, so a second pass over it must not
+  # raise on the unique index or double the figure.
+  test "measuring the same hour twice keeps one row with one answer" do
+    meter.call
+    meter.call
+
+    assert_equal 1, CompanyCapacityUsage.where(company_id: @company.id).count
+    assert_equal 12 * 3600, CompanyCapacityUsage.total_seconds_for(@company.id)
+  end
+
+  test "the allowance is spent from those rows, and spending it stops the company" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 1))
+    @company.update!(billing_state: "trialing")
+
+    meter.call
+
+    assert @company.reload.billing_blocked?,
+           "one queue-hour of allowance is spent by an hour at the cap"
+  end
+
+  test "a company still inside its allowance keeps running" do
+    Settings.stubs(:deployment).returns(Hashie::Mash.new(mode: Deployment::SAAS))
+    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 100))
+    @company.update!(billing_state: "trialing")
+
+    meter.call
+
+    assert @company.reload.billing_trialing?
+  end
+
   # Both real adapters are stubs today, so the contract they have to keep is
   # narrow: answer with an identifier, never swallow a rejection silently.
   test "the shipped adapters answer with an identifier for the hour" do

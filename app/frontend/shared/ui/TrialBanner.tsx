@@ -1,0 +1,51 @@
+import { usePage } from '@inertiajs/react';
+
+import classes from './TrialBanner.module.css';
+import type { SharedProps } from './types';
+
+/**
+ * What a workspace on free capacity has spent, on every screen.
+ *
+ * The allowance is a quantity and the workspace sets the rate it burns at, so
+ * "40 hours left" means four days at one session and four hours at ten. Both
+ * numbers are shown, because only the second one answers "when do I need to do
+ * something about this".
+ *
+ * Absent for everyone else: the prop is only sent while an allowance is running
+ * or spent.
+ */
+export const TrialBanner = () => {
+  const { trial } = usePage<Partial<SharedProps> & { [key: string]: unknown }>().props;
+  if (!trial) return null;
+
+  const blocked = trial.state === 'blocked';
+  const spent = Math.min(100, Math.round((trial.usedHours / Math.max(trial.allowanceHours, 1)) * 100));
+
+  return (
+    <div className={`${classes.root} ${blocked ? classes.blocked : ''}`} role="status">
+      <p className={classes.text}>
+        {blocked ? (
+          <>
+            You have used all <span className={classes.figure}>{trial.allowanceHours}</span> of your free queue-hours,
+            so no new sessions start. Anything already running finishes. Talk to us to carry on.
+          </>
+        ) : (
+          <>
+            You are on free capacity: <span className={classes.figure}>{trial.usedHours}</span> of{' '}
+            <span className={classes.figure}>{trial.allowanceHours}</span> queue-hours used.
+            {trial.hoursLeftAtCurrentRate != null && (
+              <>
+                {' '}
+                At {trial.maxSessions} session{trial.maxSessions === 1 ? '' : 's'} at once that is about{' '}
+                <span className={classes.figure}>{trial.hoursLeftAtCurrentRate}</span> hours left.
+              </>
+            )}
+          </>
+        )}
+      </p>
+      <div className={classes.meter} aria-hidden>
+        <div className={classes.meterFill} style={{ width: `${spent}%` }} />
+      </div>
+    </div>
+  );
+};

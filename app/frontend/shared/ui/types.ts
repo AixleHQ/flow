@@ -38,6 +38,18 @@ export interface SharedPermissions {
   canWrite?: boolean;
 }
 
+/** Sent only while a workspace is on free capacity, or has spent it. */
+export interface SharedTrial {
+  state: 'trialing' | 'blocked';
+  allowanceHours: number;
+  usedHours: number;
+  remainingHours: number;
+  /** The workspace's own limit, or null when it has set none. */
+  maxSessions: number | null;
+  /** What is left, in wall-clock hours at that limit. Null without one. */
+  hoursLeftAtCurrentRate: number | null;
+}
+
 export interface SharedProps {
   currentUser: CurrentUser | null;
   // Most flash entries are strings (notice/alert). `needs_setup` is a list of
@@ -46,5 +58,6 @@ export interface SharedProps {
   projects?: SharedProject[];
   permissions?: SharedPermissions;
   settings: SharedSettings;
+  trial?: SharedTrial | null;
   [key: string]: unknown;
 }

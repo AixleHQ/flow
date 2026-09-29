@@ -47,6 +47,19 @@ class Company < ApplicationRecord
   # Virtual attributes for initial admin creation (used in admin form)
   attr_accessor :initial_admin_email, :initial_admin_password
 
+  # Where we host, a company that signs itself up runs on a free allowance of
+  # capacity before anyone has paid for anything (Billing::Trial).
+  #
+  #   trialing  spending the allowance, capped to one session at a time,
+  #             invoiced for nothing
+  #   active    someone is paying; the company's own limit is the only bound
+  #   blocked   the allowance is spent and there is no card, so it runs nothing
+  #
+  # Meaningless outside the hosted product: a self-hosted operator pays nobody
+  # and a Marketplace customer already bought their capacity from AWS. Every
+  # company that existed before this shipped is `active`.
+  BILLING_STATES = %w[trialing active blocked].freeze
+
   # Constants
   RESERVED_DOMAINS = %w[
     admin.com api.com www.com app.com mail.com ftp.com
@@ -58,6 +71,7 @@ class Company < ApplicationRecord
   validates :name, presence: true, uniqueness: true
   validates :slug, presence: true, uniqueness: true,
                    format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }
+  validates :billing_state, inclusion: { in: BILLING_STATES }
   validates :email_domain, presence: true, uniqueness: { case_sensitive: false },
                            format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, aixle.com)" }
   validate :email_domain_not_reserved
@@ -70,6 +84,12 @@ class Company < ApplicationRecord
   after_create :seed_auth_policies
   before_validation :downcase_email_domain
   after_save :apply_session_concurrency_limit
+
+  scope :billing_billable, -> { where(billing_state: "active") }
+
+  def billing_trialing? = billing_state == "trialing"
+  def billing_active? = billing_state == "active"
+  def billing_blocked? = billing_state == "blocked"
 
   # Backed by a SessionConcurrencyLimit row, not a column, so the drain reads
   # both tiers from one table. Nil means unbounded and unbilled.

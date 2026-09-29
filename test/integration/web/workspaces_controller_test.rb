@@ -35,6 +35,16 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_inertia_props { |props| assert props[:needsEmail] }
   end
 
+  # The form asks for a number of sessions; this is what it costs to run them, and
+  # what it does not.
+  test "the form says how much capacity is free" do
+    Settings.stubs(:trial).returns(Hashie::Mash.new(queue_hours: 250))
+
+    get new_workspace_path
+
+    assert_inertia_props { |props| assert_equal 250, props[:freeQueueHours] }
+  end
+
   # Nothing is written on their say-so: the address is unproved until the link
   # sent to it comes back.
   test "a stranger's answers are emailed, not written" do
