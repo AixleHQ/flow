@@ -206,6 +206,11 @@ gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.r
 
 gem "faraday-retry", "~> 2.3"
 
+# Metered billing for the hosted product. The official client rather than our own
+# HTTP: webhook signature verification is the one part of this that must not be
+# hand-rolled, and idempotency keys on retried writes come with it.
+gem "stripe", "~> 19.6"
+
 gem "lograge", "~> 0.15.0"
 
 # Reads ONE credential format, not an application database. Kiro CLI keeps its login in

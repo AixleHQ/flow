@@ -602,3 +602,16 @@ registration:
 # days last that one ten.
 trial:
   queue_hours: <%= (ENV['TRIAL_QUEUE_HOURS'] || 100).to_i %>
+
+# Stripe, for the hosted product's metered capacity. Absent everywhere else, and
+# absent here until an operator sets it — nothing calls Stripe without all three,
+# and the metering ledger keeps recording either way.
+stripe:
+  secret_key: <%= ENV['STRIPE_SECRET_KEY'] %>
+  # The metered price capacity is billed against. Its unit is a queue-MINUTE, so
+  # it is PRICING_QUEUE_HOURLY_RATE / 60 — the two are copies of one number.
+  price_id: <%= ENV['STRIPE_PRICE_ID'] %>
+  # Shown once when the webhook endpoint is created. Without it every delivery is
+  # refused, which is the right default: an unverified webhook is an open door to
+  # anyone who can guess the URL.
+  webhook_secret: <%= ENV['STRIPE_WEBHOOK_SECRET'] %>
