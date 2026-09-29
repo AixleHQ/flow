@@ -214,6 +214,14 @@ describe('Profile/Show', () => {
     expect(screen.getByRole('button', { name: 'Connect Design' })).toBeInTheDocument();
   });
 
+  it('offers Connect Design for a Claude Platform login', () => {
+    const credential = buildCredential({ agentType: 'claude_code', configKeys: ['platformOauth', 'platformProfile'] });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByRole('button', { name: 'Connect Design' })).toBeInTheDocument();
+  });
+
   it('hides the design button for a Claude credential with no base login at all', () => {
     const credential = buildCredential({ agentType: 'claude_code', configKeys: [] });
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });

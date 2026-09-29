@@ -1070,12 +1070,13 @@ function AgentRuntimesSection({ profile }: { profile: CurrentUser }) {
                     {isConfigured ? 'Re-authenticate' : 'Authenticate'}
                   </Button>
                   {/* Design login layers a `designOauth` block onto an existing Claude login. It works
-                      on either base (claude.ai OR the Console managed key), so offer it once any base
-                      login exists. */}
+                      on any base (claude.ai, the Claude Platform profile or the Console managed key), so
+                      offer it once any base login exists. */}
                   {isConfigured &&
                     credential &&
                     agent.type === 'claude_code' &&
                     (credential.configKeys.includes('claudeAiOauth') ||
+                      credential.configKeys.includes('platformOauth') ||
                       credential.configKeys.includes('primaryApiKey')) && (
                       <Button variant="light" size="xs" onClick={() => handleAuth(agent.type, 'design')}>
                         {credential.configKeys.includes('designOauth') ? 'Reconnect Design' : 'Connect Design'}

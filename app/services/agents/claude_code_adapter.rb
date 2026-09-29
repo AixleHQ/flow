@@ -27,12 +27,46 @@ module Agents
         "#{home_dir}/.claude/.credentials.json",
         # Bedrock writes no token anywhere — the wizard records the choice here instead, so
         # this is the only file that can tell us a Bedrock login finished.
-        "#{home_dir}/.claude/settings.json"
+        "#{home_dir}/.claude/settings.json",
+        platform_credentials_path,
+        platform_config_path
       ]
     end
 
-    # Watch both auth files — primaryApiKey lands in .claude.json (API key path),
-    # claudeAiOauth lands in .claude/.credentials.json (claude.ai OAuth path).
+    # == Claude Platform login ==
+    #
+    # The CLI's Claude Platform (Console) login no longer mints a primaryApiKey. It writes the
+    # Anthropic profile the SDKs share: a user-OAuth token pair in credentials/<profile>.json,
+    # and the organization, workspace and OAuth client in configs/<profile>.json. The CLI
+    # needs both — with the credentials file alone `claude auth status` reports logged out
+    # (measured on 2.1.281).
+    PLATFORM_OAUTH_KEY = "platformOauth"
+    PLATFORM_PROFILE_KEY = "platformProfile"
+    PLATFORM_PROFILE_DIR = ".config/anthropic"
+    PLATFORM_PROFILE_NAME = "default"
+    # The CLI's own client for this login, as written into configs/default.json.
+    PLATFORM_OAUTH_CLIENT_ID = "41077d10-94b8-4194-be48-d251e9eb21b4"
+    # Where the CLI refreshes this login: the API host, JSON body, oauth beta header — not the
+    # form-encoded platform.claude.com endpoint the claude.ai login uses. Fixed here rather
+    # than read from the profile's base_url, so a refresh token never goes to a host a
+    # container wrote down.
+    PLATFORM_OAUTH_TOKEN_URL = "https://api.anthropic.com/v1/oauth/token"
+    PLATFORM_TOKEN_FIELDS = %w[access_token refresh_token expires_at scope].freeze
+
+    def platform_credentials_path
+      "#{home_dir}/#{PLATFORM_PROFILE_DIR}/credentials/#{PLATFORM_PROFILE_NAME}.json"
+    end
+
+    def platform_config_path
+      "#{home_dir}/#{PLATFORM_PROFILE_DIR}/configs/#{PLATFORM_PROFILE_NAME}.json"
+    end
+
+    # The CLI will not load a credentials file other users can read ("Credentials file at …
+    # is group/world-readable").
+    def private_file_paths = [ platform_credentials_path, platform_config_path ]
+
+    # primaryApiKey lands in .claude.json (legacy API key path), claudeAiOauth in
+    # .claude/.credentials.json (claude.ai), a Claude Platform login in ~/.config/anthropic.
     def auth_watch_path
       auth_file_paths.join(",")
     end
@@ -72,21 +106,23 @@ module Agents
     end
 
     # Keys that indicate auth is complete (watcher uses dot-notation for nested).
-    # Two real-token sources, depending on login method:
-    #   - primaryApiKey                — written to ~/.claude.json after platform.claude.com (API key)
-    #   - claudeAiOauth.accessToken    — written to ~/.claude/.credentials.json after claude.ai (OAuth)
+    # Real-token sources, depending on login method:
+    #   - primaryApiKey                — ~/.claude.json, the Console API key older CLIs minted
+    #   - claudeAiOauth.accessToken    — ~/.claude/.credentials.json after claude.ai (OAuth)
+    #   - access_token                 — ~/.config/anthropic/credentials/default.json (Claude Platform)
     # We wait specifically for these because oauthAccount alone is just metadata
     # and lands before the token, causing a race.
     # The watcher checks these against every watched path, any-match, so the Bedrock marker
-    # simply becomes a third way to be finished. No watcher change needed.
+    # simply becomes another way to be finished. No watcher change needed.
     def auth_required_keys
-      %w[primaryApiKey claudeAiOauth.accessToken env.CLAUDE_CODE_USE_BEDROCK]
+      %w[primaryApiKey claudeAiOauth.accessToken access_token env.CLAUDE_CODE_USE_BEDROCK]
     end
 
     def auth_complete?(config_content)
       config = parse_json(config_content)
       config["primaryApiKey"].present? ||
         config.dig("claudeAiOauth", "accessToken").present? ||
+        platform_credentials_file?(config) ||
         # Bedrock produces no token to wait for. The wizard writing this marker into
         # settings.json is the completion signal.
         config.dig("env", "CLAUDE_CODE_USE_BEDROCK").present?
@@ -176,7 +212,9 @@ module Agents
     def keep_single_inference(config, active)
       return config if active.blank?
 
-      config.except(*(INFERENCE_KEYS - [ active ]))
+      dropped = INFERENCE_KEYS - [ active ]
+      dropped << PLATFORM_PROFILE_KEY unless active == PLATFORM_OAUTH_KEY
+      config.except(*dropped)
     end
 
     # What the given config says inference runs on. A Bedrock block means Claude Code's own
@@ -185,6 +223,7 @@ module Agents
       return nil if config.blank?
       return BEDROCK_KEY if config[BEDROCK_KEY].present?
       return "claudeAiOauth" if config.dig("claudeAiOauth", "accessToken").present?
+      return PLATFORM_OAUTH_KEY if config.dig(PLATFORM_OAUTH_KEY, "accessToken").present?
       return "primaryApiKey" if config["primaryApiKey"].present?
 
       nil
@@ -222,18 +261,19 @@ module Agents
     # runs fine without, and a credential authenticating by primaryApiKey or Bedrock
     # carries no base expiry at all — both read as nil here, never as "expired".
     def base_token_expires_at(credentials)
-      exp = credentials.dig(BASE_OAUTH_BLOCK, "expiresAt").to_i
+      exp = BASE_OAUTH_BLOCKS.filter_map { |b| credentials.dig(b, "expiresAt") }.map(&:to_i).min.to_i
       exp.positive? ? exp : nil
     end
 
-    # Claude stores two independently-rotating OAuth blocks: claudeAiOauth (base login)
-    # and designOauth (/design-login). Merge each block on its own expiry so that
-    # (a) adding designOauth isn't skipped just because claudeAiOauth didn't change, and
+    # Claude stores independently-rotating OAuth blocks: a base login (claudeAiOauth or
+    # platformOauth) and designOauth (/design-login). Merge each block on its own expiry so
+    # that (a) adding designOauth isn't skipped just because the base didn't change, and
     # (b) a session without design access never wipes a stored designOauth.
-    OAUTH_BLOCKS = %w[claudeAiOauth designOauth].freeze
+    OAUTH_BLOCKS = %w[claudeAiOauth platformOauth designOauth].freeze
     # The base login. Every other block is an add-on layered onto it, so only this
     # one going bad makes the whole credential unusable.
     BASE_OAUTH_BLOCK = "claudeAiOauth"
+    BASE_OAUTH_BLOCKS = [ BASE_OAUTH_BLOCK, PLATFORM_OAUTH_KEY ].freeze
 
     # Proactive server-side token refresh (Temporal sweep).
     REFRESH_MARGIN_MS = 15 * 60 * 1000 # refresh a block if it expires within 15 min (or already expired)
@@ -241,12 +281,13 @@ module Agents
     # Base (claude.ai) login client_id. Prefer Settings; fall back to the known public client id.
     BASE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
 
-    # A session container rotates the claude.ai logins and nothing else. settings.json
-    # (where ANTHROPIC_BASE_URL or a Bedrock bearer token would go) and .claude.json
-    # (primaryApiKey) are never written back from a running session.
+    # A session container rotates the OAuth logins and nothing else. settings.json
+    # (where ANTHROPIC_BASE_URL or a Bedrock bearer token would go), .claude.json
+    # (primaryApiKey) and the platform profile's config are never written back from a
+    # running session.
     def rotatable_credential_keys = OAUTH_BLOCKS
 
-    def writeback_file_paths = [ "#{home_dir}/.claude/.credentials.json" ]
+    def writeback_file_paths = [ "#{home_dir}/.claude/.credentials.json", platform_credentials_path ]
 
     def merge_refreshed_credentials(current, incoming)
       merged = current.merge(incoming) # incoming wins for scalar keys (userID, oauthAccount, primaryApiKey, ...)
@@ -303,7 +344,7 @@ module Agents
         # refresh if expired or within the margin
         next unless exp.positive? && (exp - now_ms) <= margin_ms
 
-        client_id = block_name == "designOauth" ? block["clientId"] : base_oauth_client_id
+        client_id = oauth_client_id(block_name, block, current)
         new_block = request_oauth_refresh(client_id: client_id, refresh_token: block["refreshToken"],
                                           previous: block, now_ms: now_ms,
                                           block_name: block_name, credential_id: credential.id)
@@ -350,9 +391,9 @@ module Agents
       invalidated_blocks.each_key { |block_name| error ||= "#{block_name} invalid_grant — reconnection required" }
 
       # Only a rejected BASE login makes the credential unusable, and only that may
-      # flip it to `error`: a session runs on claudeAiOauth alone, so a dead
+      # flip it to `error`: a session runs on the base login alone, so a dead
       # designOauth must not take the user's whole Claude login down with it.
-      permanent = invalidated_blocks.key?(BASE_OAUTH_BLOCK)
+      permanent = invalidated_blocks.keys.intersect?(BASE_OAUTH_BLOCKS)
 
       return { status: :not_needed, detail: nil, permanent: false, persisted: written } if refreshed_blocks.empty? && invalidated_blocks.empty? && error.nil?
       # A rejected base login is a failure even when an add-on block rotated fine in
@@ -369,6 +410,9 @@ module Agents
     # Extract only the credentials we need to persist
     def extract_credentials(config_content)
       config = parse_json(config_content)
+      return { PLATFORM_OAUTH_KEY => platform_oauth_block(config) } if platform_credentials_file?(config)
+      return { PLATFORM_PROFILE_KEY => config } if platform_config_file?(config)
+
       config.slice(
         "oauthAccount",          # OAuth account metadata (.claude.json)
         "primaryApiKey",         # API key (.claude.json, platform.claude.com path)
@@ -380,15 +424,15 @@ module Agents
     end
 
     # Generate ~/.claude.json content. Excludes claudeAiOauth + designOauth
-    # (both live in .credentials.json, never in .claude.json) and the Bedrock
-    # connection: Claude Code takes Bedrock from settings.json env and its keys
-    # from the credential_process helper, while the stored block holds the
-    # Identity Center registration secret and refresh token — login material
-    # that must never enter a container.
+    # (both live in .credentials.json, never in .claude.json), the platform profile
+    # (~/.config/anthropic) and the Bedrock connection: Claude Code takes Bedrock
+    # from settings.json env and its keys from the credential_process helper, while
+    # the stored block holds the Identity Center registration secret and refresh
+    # token — login material that must never enter a container.
     def generate_config(credentials, workflow_config = {})
       {
         # Credentials from database (API-key path fields, OAuth account metadata, userID, etc.)
-        **credentials.except("claudeAiOauth", "designOauth", BEDROCK_KEY),
+        **credentials.except("claudeAiOauth", "designOauth", PLATFORM_OAUTH_KEY, PLATFORM_PROFILE_KEY, BEDROCK_KEY),
 
         # Fixed values (skip onboarding, etc.)
         "installMethod" => "global",
@@ -431,22 +475,78 @@ module Agents
       files
     end
 
-    # Only .credentials.json: it is where the rotating tokens live, and the one file a
-    # mid-session delivery may replace. .claude.json holds the API-key path and the
-    # per-project configuration, which a delivery has no workflow_config to re-render.
+    # Only the token files: where the rotating tokens live, and the ones a mid-session
+    # delivery may replace. .claude.json holds the API-key path and the per-project
+    # configuration, which a delivery has no workflow_config to re-render.
     #
-    # It carries the claude.ai OAuth token and, if the user has run /design-login, the
-    # separate designOauth token (user:design:read/write) — both in one file, mirroring
-    # Claude Code's own layout.
+    # .credentials.json carries the claude.ai OAuth token and, if the user has run
+    # /design-login, the separate designOauth token (user:design:read/write) — both in one
+    # file, mirroring Claude Code's own layout. A Claude Platform login is the profile pair
+    # under ~/.config/anthropic instead.
     def credential_files(credentials)
+      files = {}
       creds_file = {}
       oauth = credentials["claudeAiOauth"]
       creds_file["claudeAiOauth"] = oauth if oauth.is_a?(Hash) && oauth["accessToken"].present?
       design = credentials["designOauth"]
       creds_file["designOauth"] = design if design.is_a?(Hash) && design["accessToken"].present?
-      return {} if creds_file.empty?
+      files["#{home_dir}/.claude/.credentials.json"] = creds_file.to_json if creds_file.any?
 
-      { "#{home_dir}/.claude/.credentials.json" => creds_file.to_json }
+      platform = credentials[PLATFORM_OAUTH_KEY]
+      if platform.is_a?(Hash) && platform["accessToken"].present?
+        files[platform_credentials_path] = platform_credentials_file(platform).to_json
+        files[platform_config_path] = platform_profile_config(credentials).to_json
+      end
+
+      files
+    end
+
+    # The two profile files are told apart by shape: CredentialCapture hands the adapter a
+    # file's content, not its path, and both are named default.json.
+    def platform_credentials_file?(file)
+      file["type"] == "oauth_token" && file["access_token"].present?
+    end
+
+    def platform_config_file?(file)
+      file["authentication"].is_a?(Hash) && file["authentication"]["type"].present?
+    end
+
+    # Stored in the same shape as claudeAiOauth, so expiry, freshest-copy merging and the
+    # refresh sweep treat both logins alike. Whatever else the file says (organization,
+    # workspace, account) is kept verbatim for rendering it back.
+    def platform_oauth_block(file)
+      {
+        "accessToken" => file["access_token"],
+        "refreshToken" => file["refresh_token"],
+        "expiresAt" => file["expires_at"].presence && (file["expires_at"].to_i * 1000),
+        "scopes" => file["scope"].presence&.split,
+        "account" => file.except(*PLATFORM_TOKEN_FIELDS)
+      }.compact
+    end
+
+    def platform_credentials_file(block)
+      { "version" => "1.0" }.merge(block["account"] || {}).merge(
+        "type" => "oauth_token",
+        "access_token" => block["accessToken"],
+        "refresh_token" => block["refreshToken"],
+        "expires_at" => block["expiresAt"].presence && (block["expiresAt"].to_i / 1000),
+        "scope" => Array(block["scopes"]).join(" ").presence
+      ).compact
+    end
+
+    # Rebuilt from the token block when the config was never captured: without it the CLI
+    # treats the credentials file as absent.
+    def platform_profile_config(credentials)
+      stored = credentials[PLATFORM_PROFILE_KEY]
+      return stored if stored.is_a?(Hash) && stored["authentication"].is_a?(Hash)
+
+      account = credentials.dig(PLATFORM_OAUTH_KEY, "account") || {}
+      {
+        "version" => "1.0",
+        "organization_id" => account["organization_uuid"],
+        "workspace_id" => account["workspace_id"],
+        "authentication" => { "type" => "user_oauth", "client_id" => PLATFORM_OAUTH_CLIENT_ID }
+      }.compact
     end
 
     # == Amazon Bedrock (bring-your-own cloud account) ==
@@ -467,7 +567,7 @@ module Agents
     # Code picks its provider from env, so a second one would sit there doing nothing while
     # the UI could not say which is live. Ordered by which wins at runtime — the Bedrock env
     # beats any Anthropic-side token.
-    INFERENCE_KEYS = [ BEDROCK_KEY, "claudeAiOauth", "primaryApiKey" ].freeze
+    INFERENCE_KEYS = [ BEDROCK_KEY, "claudeAiOauth", PLATFORM_OAUTH_KEY, "primaryApiKey" ].freeze
 
     # Design has its own authorization and is orthogonal to where inference is billed, so it
     # survives a change of inference credential.
@@ -769,7 +869,7 @@ module Agents
 
     # Fetch the model list using whichever auth the credential carries:
     #   - primaryApiKey            → x-api-key (platform.claude.com API key path)
-    #   - claudeAiOauth.accessToken → Authorization: Bearer + oauth beta header (claude.ai OAuth path)
+    #   - claudeAiOauth / platformOauth accessToken → Authorization: Bearer + oauth beta header
     # OAuth support matters because claude.ai logins have no API key, so without
     # it those users would always fall back to the hardcoded (stale) list.
     def fetch_available_models_with_source(credentials, credential: nil)
@@ -783,7 +883,7 @@ module Agents
       end
 
       api_key = credentials["primaryApiKey"]
-      oauth_token = credentials.dig("claudeAiOauth", "accessToken")
+      oauth_token = credentials.dig("claudeAiOauth", "accessToken") || credentials.dig(PLATFORM_OAUTH_KEY, "accessToken")
 
       models =
         if api_key.present?
@@ -950,25 +1050,44 @@ module Agents
       BASE_OAUTH_CLIENT_ID
     end
 
+    def oauth_client_id(block_name, block, credentials)
+      case block_name
+      when "designOauth" then block["clientId"]
+      when PLATFORM_OAUTH_KEY
+        credentials.dig(PLATFORM_PROFILE_KEY, "authentication", "client_id").presence || PLATFORM_OAUTH_CLIENT_ID
+      else base_oauth_client_id
+      end
+    end
+
+    def oauth_refresh_request(block_name, params)
+      if block_name == PLATFORM_OAUTH_KEY
+        uri = URI(PLATFORM_OAUTH_TOKEN_URL)
+        req = Net::HTTP::Post.new(uri)
+        req["Content-Type"] = "application/json"
+        req["anthropic-beta"] = OAUTH_BETA_HEADER
+        req.body = params.to_json
+      else
+        uri = URI(OAUTH_TOKEN_URL)
+        req = Net::HTTP::Post.new(uri)
+        req["Content-Type"] = "application/x-www-form-urlencoded"
+        req.body = URI.encode_www_form(params)
+      end
+      [ uri, req ]
+    end
+
     # Exchange a refresh token for a fresh OAuth block via the token endpoint.
     # Returns the rebuilt block (accessToken/refreshToken/expiresAt/scopes/clientId),
     # or nil on any network / non-2xx / parse failure (logged). Preserves the block's
     # refreshToken when the server omits a rotated one, and its clientId (designOauth
     # carries its own; claudeAiOauth's is typically nil and dropped by .compact).
-    # `block_name` and `credential_id` exist for the log line alone: a refresh failure
+    # `block_name` also picks the endpoint (a platformOauth login refreshes against the API
+    # host); with `credential_id` it makes the log line: a refresh failure
     # is only diagnosable if it says WHICH block of WHICH credential died and how old
     # the grant was. "invalid_grant" on a block still minutes from its own expiry means
     # something else rotated the grant out from under us (a container holding the same
     # token); on a long-stale block it means the grant simply aged out.
     def request_oauth_refresh(client_id:, refresh_token:, previous:, now_ms:, block_name: nil, credential_id: nil)
-      uri = URI(OAUTH_TOKEN_URL)
-      req = Net::HTTP::Post.new(uri)
-      req["Content-Type"] = "application/x-www-form-urlencoded"
-      req.body = URI.encode_www_form(
-        grant_type:    "refresh_token",
-        client_id:     client_id,
-        refresh_token: refresh_token
-      )
+      uri, req = oauth_refresh_request(block_name, { grant_type: "refresh_token", client_id: client_id, refresh_token: refresh_token })
       response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 10) { |h| h.request(req) }
       unless response.is_a?(Net::HTTPSuccess)
         body = response.body.to_s
@@ -986,7 +1105,8 @@ module Agents
         "refreshToken" => data["refresh_token"].presence || refresh_token, # rotation: keep old if server omits
         "expiresAt"    => now_ms + (data["expires_in"].to_i * 1000),
         "scopes"       => (data["scope"].present? ? data["scope"].split(" ") : previous["scopes"]),
-        "clientId"     => previous["clientId"] # preserve (designOauth carries its own; claudeAiOauth may be nil → compacted)
+        "clientId"     => previous["clientId"], # preserve (designOauth carries its own; claudeAiOauth may be nil → compacted)
+        "account"      => previous["account"] # platformOauth: the profile fields rendered back beside the tokens
       }.compact
     rescue StandardError => e
       Rails.logger.warn("[ClaudeCodeAdapter] Token refresh error: #{e.class}: #{e.message} " \

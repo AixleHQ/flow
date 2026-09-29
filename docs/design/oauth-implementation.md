@@ -172,7 +172,8 @@ scrapes the auth files and saves a sliced `AgentCredential`.
 | Method | Auth | Stored | Refreshes? |
 |---|---|---|---|
 | **claude.ai OAuth** (subscription) | Bearer + oauth beta header | `claudeAiOauth` in `.credentials.json` | yes (`platform.claude.com/v1/oauth/token`) |
-| **platform.claude.com** (Console API key) | `x-api-key` | `primaryApiKey` in `.claude.json` | no (long-lived key) |
+| **Claude Platform** (Console login, CLI ≥ 2.1.281) | Bearer + oauth beta header | `platformOauth` (tokens) + `platformProfile` (org/workspace/client) — rendered to `~/.config/anthropic/{credentials,configs}/default.json`, both **0600** and agent-owned (the CLI refuses a group/world-readable credentials file) | yes (`api.anthropic.com/v1/oauth/token`, JSON body, profile's `client_id`) |
+| **platform.claude.com** (Console API key, older CLIs) | `x-api-key` | `primaryApiKey` in `.claude.json` | no (long-lived key) |
 | **`/design-login`** | OAuth, *layered on* claude.ai | `designOauth` in `.credentials.json` | yes (own `clientId`) |
 | **Bedrock / Vertex** | AWS SSO / GCP ADC via **env** | **not modeled** (deferred) | — |
 
@@ -181,7 +182,7 @@ inside Claude Code's own TUI), so the profile's **Authenticate** button simply l
 NOT present our own method chooser. The login method (and, in Claude's native menu, the 3rd-party/Bedrock
 option) is picked inside the terminal.
 
-Only the OAuth blocks (`claudeAiOauth`, `designOauth`) expire and refresh — `token_expires_at` reads only
+Only the OAuth blocks (`claudeAiOauth`, `platformOauth`, `designOauth`) expire and refresh — `token_expires_at` reads only
 those, so API-key credentials get `expires_at = nil` (always active, never swept) and Bedrock has no stored
 credential at all. `AgentCredentialResource#connection_status` (active/expiring/expired, expiry-derived)
 drives the badge on the profile page.
@@ -190,8 +191,8 @@ Codex/Cursor tokens are JWTs — `token_expires_at` decodes their `exp` (`BaseAd
 selects them; their `refresh!` persists under `BaseAdapter#persist_refreshed!` (lock + rotation guard).
 
 ### `/design-login` (design auth)
-The **"Connect Design"** button on the Claude profile card (shown only when the credential has a
-`claudeAiOauth` block — API-key/Bedrock users can't design-login) opens the auth modal in `authKind: "design"`
+The **"Connect Design"** button on the Claude profile card (shown when the credential has a base
+login — `claudeAiOauth`, `platformOauth` or `primaryApiKey`; Bedrock users can't design-login) opens the auth modal in `authKind: "design"`
 mode. Backend (`AgentAuthStrategy`, keyed on `session.metadata["auth_kind"] == "design"`):
 1. `before_exec` **injects the user's existing base credential** (minus `designOauth`) so the CLI starts
    logged in. Because the base auth container's entrypoint launches `TTYD_CMD` at container start (before

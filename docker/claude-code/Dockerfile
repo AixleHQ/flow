@@ -75,7 +75,13 @@ RUN set -eux; \
 # `install -d` creates just these two dirs with the right owner. A `chown -R` over
 # /home/claude would be a no-op (the CLI above was installed AS claude) that still
 # copied up the whole 272 MB install into this layer.
-RUN install -d -o claude -g claude /home/claude/.claude /home/claude/.aws
+#
+# ~/.config/anthropic is where a Claude Platform login lives. The platform writes into it
+# with a single tar entry, which would leave any missing parent root-owned — and the CLI
+# rewrites the token there on every refresh.
+RUN install -d -o claude -g claude /home/claude/.claude /home/claude/.aws /home/claude/.config \
+    && install -d -o claude -g claude -m 0700 /home/claude/.config/anthropic \
+       /home/claude/.config/anthropic/credentials /home/claude/.config/anthropic/configs
 
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)
