@@ -11,7 +11,8 @@
 
 Aixle runs business processes as **workflows**: ordered **steps**, each executed
 by an AI agent in its own container, launched by hand or by a **trigger** (a card
-entering a board column, a Slack message, a schedule, a webhook, a custom event).
+entering a board column, a Slack message, a YouTrack issue or mention, a
+schedule, a webhook, a custom event).
 
 ```
 Company
@@ -124,6 +125,10 @@ a pending gate or an active run.
 | `webhook` | an inbound HTTP call; the response carries the URL and a secret shown once |
 | `event` | a custom platform event |
 
+YouTrack triggers (`youtrack.issue.created`, `youtrack.comment.mentioned`) are a
+further kind, configured in the browser only: each one is bound to a `youtrack`
+integration, which `create_workflow_trigger` cannot name.
+
 Fields: `name`, `event_type`, `filter_predicate` (JSON the event must contain;
 supports `{"op", "value"}` operators and dot-paths), `subject_policy` (`none`,
 `existing_task`, `create_task`) with `subject_column_id` and
@@ -181,8 +186,10 @@ Azure DevOps through an integration, or a public URL cloned read-only. Fields:
 **Config items**: `secret` (stored encrypted) or `variable`. Values are entered
 by users in the UI and never returned by any tool.
 
-**Integrations**: `github`, `gitlab`, `slack`, `azure_devops`, `coder`, `linear`.
-Users connect them in the browser (`get_integration_setup_url`).
+**Integrations**: `github`, `gitlab`, `slack`, `azure_devops`, `coder`, `linear`,
+`youtrack`. Users connect them in the browser (`get_integration_setup_url`). A
+`youtrack` connection is company- or project-scoped, holds one YouTrack project,
+and is what the `youtrack_*` tools and the YouTrack triggers run against.
 
 **Assets**: project or company files. Board-task attachments are separate
 files that live on the task.
@@ -211,7 +218,7 @@ repository. How the run started never changes this.
 **Tools, skills, MCP servers**: workflow base + step (+ every project resource
 with `inherit_all_project_resources`). The internal `aixle-tools` MCP server is
 always connected: session lifecycle, sub-steps, board tools, and integration
-tools (Slack, Azure DevOps, Coder) when connected.
+tools (Slack, Azure DevOps, Coder, YouTrack) when connected.
 
 **Secrets**: the step reads its config items with `get_config_item`; MCP
 credentials are resolved from config items at launch.
@@ -241,4 +248,5 @@ task, so tagged comments carry structured hand-offs.
 - Files: `promote_asset`, `share_asset`
 - Secrets: `get_config_item`
 - Async tools: `read_tool_result`
-- When connected: `slack_*`, `azure_devops_*`, `coder_*`, `refresh_github_token`
+- When connected: `slack_*`, `azure_devops_*`, `coder_*`, `youtrack_*`,
+  `refresh_github_token`
