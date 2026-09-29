@@ -64,6 +64,26 @@ class Billing::StripeClientContractTest < ActiveSupport::TestCase
     assert_equal "checkout.session.completed", event.type
   end
 
+  # Left on, Stripe converts the checkout page into the visitor's local currency
+  # from their IP — a customer in Jakarta was quoted rupiah at Stripe's own rate.
+  # That is a second price nobody here set and nobody here can reconcile against
+  # the queue-minutes we metered.
+  test "a checkout is opened in the price's own currency, never the visitor's" do
+    Settings.stubs(:stripe).returns(Hashie::Mash.new(secret_key: "sk_test", price_id: "price_test"))
+    captured = nil
+    stub_request(:post, "https://api.stripe.com/v1/checkout/sessions")
+      .with { |request| captured = request.body }
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                 body: { id: "cs_test", object: "checkout.session", url: "https://checkout.test" }.to_json)
+
+    Billing::StripeClient.new.create_checkout_session(
+      company: create(:company), customer_id: "cus_1",
+      success_url: "https://example.test/ok", cancel_url: "https://example.test/no"
+    )
+
+    assert_includes CGI.unescape(captured.to_s), "adaptive_pricing[enabled]=false"
+  end
+
   private
 
   def stripe_signature(payload, secret:, timestamp: Time.current.to_i)

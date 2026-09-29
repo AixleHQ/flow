@@ -36,6 +36,14 @@ module Billing
     # Stripe-hosted card entry. A subscription on the metered price rather than a
     # one-off charge: capacity is continuous, and the price is what turns the
     # meter's queue-minutes into money.
+    #
+    # ADAPTIVE PRICING OFF. Left on, Stripe converts the page into the visitor's
+    # local currency from their IP — a customer in Jakarta was quoted rupiah at
+    # Stripe's own rate, which is a second price nobody here set and nobody here
+    # can reconcile against the queue-minutes we metered. Everyone is billed in
+    # the currency the price is denominated in. Set here rather than in the
+    # dashboard so it is version-controlled and survives a setting somebody
+    # changes.
     def create_checkout_session(company:, customer_id:, success_url:, cancel_url:)
       api do
         ::Stripe::Checkout::Session.create(
@@ -43,6 +51,7 @@ module Billing
             mode: "subscription",
             customer: customer_id,
             line_items: [ { price: settings.price_id } ],
+            adaptive_pricing: { enabled: false },
             success_url: success_url,
             cancel_url: cancel_url,
             metadata: { company_id: company.id.to_s }
