@@ -431,6 +431,9 @@ Rails.application.routes.draw do
       # IdentityProvider id: a deployment-scoped provider or one of this
       # company's own connections.
       resources :auth_policies, only: :update
+      # Checking the DNS record. A POST because it is what switches domain
+      # auto-join on, not a question about the current state.
+      resource :domain_verification, only: :create, controller: "domain_verifications"
       # A company's own OIDC connections. Created disabled; enabling them goes
       # through the prove-before-enforce guard on auth_policies#update.
       resources :identity_providers, only: %i[create update destroy]

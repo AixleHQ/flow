@@ -91,6 +91,18 @@ class Company < ApplicationRecord
   def billing_active? = billing_state == "active"
   def billing_blocked? = billing_state == "blocked"
 
+  scope :domain_verified, -> { where.not(domain_verified_at: nil) }
+
+  # A claimed domain and a proved one are different things. Claiming happens at
+  # signup and proves a mailbox; proving happens in DNS, and it is what auto-join
+  # rests on.
+  def domain_verified? = domain_verified_at.present?
+
+  def regenerate_domain_verification_token!
+    update_column(:domain_verification_token, SecureRandom.hex(16))
+    domain_verification_token
+  end
+
   # Backed by a SessionConcurrencyLimit row, not a column, so the drain reads
   # both tiers from one table. Nil means unbounded and unbilled.
   def session_concurrency_limit

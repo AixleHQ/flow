@@ -31,7 +31,8 @@ class Web::DocsController < Web::ApplicationController
   # rather than a missing line. DocsControllerTest compares the two and fails
   # when they drift.
   PAGES = %w[using-flow getting-started project-home tasks running-workflows starting-work
-             sessions-and-runs session-queues assets personas agent-capabilities repositories ai-builder
+             sessions-and-runs session-queues plans-and-limits aws-marketplace-billing assets personas
+             agent-capabilities repositories ai-builder
              people-and-access signing-in secrets templates analytics company-workspace examples
              user-guide quick-start agents runtimes tools mcp board workflows
              triggers-and-gates integrations azure-devops configuration configuring-sso reference cli-ref

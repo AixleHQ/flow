@@ -4,6 +4,7 @@ import aiBuilder from './ai-builder.md?raw';
 import analytics from './analytics.md?raw';
 import apiGuide from './api-guide.md?raw';
 import assets from './assets.md?raw';
+import awsMarketplaceBilling from './aws-marketplace-billing.md?raw';
 import azureDevops from './azure-devops.md?raw';
 import board from './board.md?raw';
 import changelogProductAreas from './changelog-product-areas.md?raw';
@@ -18,6 +19,7 @@ import integrations from './integrations.md?raw';
 import mcp from './mcp.md?raw';
 import peopleAndAccess from './people-and-access.md?raw';
 import personas from './personas.md?raw';
+import plansAndLimits from './plans-and-limits.md?raw';
 import projectHome from './project-home.md?raw';
 import quickStart from './quick-start.md?raw';
 import reference from './reference.md?raw';
@@ -117,6 +119,18 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'Using Flow',
     content: sessionQueues,
     toc: extractToc(sessionQueues),
+  },
+  'plans-and-limits': {
+    title: 'Plans & limits',
+    section: 'Using Flow',
+    content: plansAndLimits,
+    toc: extractToc(plansAndLimits),
+  },
+  'aws-marketplace-billing': {
+    title: 'AWS Marketplace billing',
+    section: 'Using Flow',
+    content: awsMarketplaceBilling,
+    toc: extractToc(awsMarketplaceBilling),
   },
   'sessions-and-runs': {
     title: 'Sessions & Runs',

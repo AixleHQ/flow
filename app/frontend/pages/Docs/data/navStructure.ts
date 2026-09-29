@@ -24,6 +24,8 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'starting-work', label: 'Triggers & gates' },
       { slug: 'sessions-and-runs', label: 'Sessions & Runs' },
       { slug: 'session-queues', label: 'Session queues' },
+      { slug: 'plans-and-limits', label: 'Plans & limits' },
+      { slug: 'aws-marketplace-billing', label: 'AWS Marketplace billing' },
       { slug: 'assets', label: 'Assets' },
       { slug: 'personas', label: 'Agent personas' },
       { slug: 'agent-capabilities', label: 'Wrappers, Skills & Connectors' },
