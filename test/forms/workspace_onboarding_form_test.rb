@@ -110,6 +110,21 @@ class WorkspaceOnboardingFormTest < ActiveSupport::TestCase
     assert_includes built.errors[:email].to_sentence, "is not an email address"
   end
 
+  # The free allowance belongs to this path alone. A company made in the admin is
+  # somebody deciding, and one that stopped after a hundred queue-hours because a
+  # column defaulted that way would be a surprise nobody would connect to this.
+  test "a company that signs itself up starts on the free allowance" do
+    built = stranger
+    built.save(built.owner_for(nil))
+
+    assert built.company.billing_trialing?
+  end
+
+  test "a company made any other way does not" do
+    assert create(:company).billing_active?
+    assert Company.new.billing_active?, "the column default is what an operator means"
+  end
+
   test "it creates the account along with the workspace" do
     built = stranger
 
