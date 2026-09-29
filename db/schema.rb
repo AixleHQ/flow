@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_29_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_29_190000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -417,12 +417,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_29_160000) do
     t.jsonb "settings", default: {}, null: false
     t.string "slug", null: false
     t.string "state", null: false
+    t.string "stripe_customer_id"
+    t.string "stripe_subscription_id"
     t.datetime "updated_at", null: false
     t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
     t.index ["state"], name: "index_companies_on_state"
+    t.index ["stripe_customer_id"], name: "index_companies_on_stripe_customer_id", unique: true, where: "(stripe_customer_id IS NOT NULL)"
   end
 
   create_table "company_auth_policies", force: :cascade do |t|

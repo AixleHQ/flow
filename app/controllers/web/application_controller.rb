@@ -92,7 +92,10 @@ class Web::ApplicationController < ApplicationController
       max_sessions: max_sessions,
       # How long what is left lasts at the rate they are running, which is the
       # number they actually want. Nil when no limit is set, and so no rate.
-      hours_left_at_current_rate: ::Billing::Trial.hours_left_at(current_company, max_sessions)&.to_f
+      hours_left_at_current_rate: ::Billing::Trial.hours_left_at(current_company, max_sessions)&.to_f,
+      # Whether there is a card to add at all. An installation with no Stripe
+      # credentials must offer a button that leads somewhere, so it offers none.
+      can_pay: ::Billing::StripeClient.new.configured?
     }
   end
 

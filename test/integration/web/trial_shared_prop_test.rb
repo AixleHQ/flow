@@ -71,6 +71,21 @@ class Web::TrialSharedPropTest < ActionDispatch::IntegrationTest
     assert_nil trial_prop[:hoursLeftAtCurrentRate]
   end
 
+  # The banner must not offer a card where there is nowhere to pay.
+  test "it says whether there is a payment provider at all" do
+    @company.update!(billing_state: "trialing")
+    Settings.stubs(:stripe).returns(Hashie::Mash.new(secret_key: nil, price_id: nil))
+
+    assert_not trial_prop[:canPay]
+  end
+
+  test "and says so when there is" do
+    @company.update!(billing_state: "trialing")
+    Settings.stubs(:stripe).returns(Hashie::Mash.new(secret_key: "sk_test", price_id: "price_test"))
+
+    assert trial_prop[:canPay]
+  end
+
   test "a workspace that has spent it says so" do
     @company.update!(billing_state: "blocked")
 

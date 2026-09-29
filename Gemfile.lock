@@ -712,6 +712,9 @@ GEM
     sqlite3 (2.9.6-x86_64-linux-gnu)
     sqlite3 (2.9.6-x86_64-linux-musl)
     stackprof (0.2.28)
+    stripe (19.6.2)
+      bigdecimal
+      logger
     swd (2.0.3)
       activesupport (>= 3)
       attr_required (>= 0.0.5)
@@ -908,6 +911,7 @@ DEPENDENCIES
   solid_queue (~> 1.7)
   sqlite3 (~> 2.9)
   stackprof (~> 0.2.28)
+  stripe (~> 19.6)
   temporalio
   thruster
   ts_routes

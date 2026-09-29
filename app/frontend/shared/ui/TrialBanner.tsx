@@ -1,4 +1,8 @@
-import { usePage } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
+import { Button } from '@mantine/core';
+import { useState } from 'react';
+
+import { companyBillingCheckoutPath } from 'shared/routes';
 
 import classes from './TrialBanner.module.css';
 import type { SharedProps } from './types';
@@ -15,7 +19,8 @@ import type { SharedProps } from './types';
  * or spent.
  */
 export const TrialBanner = () => {
-  const { trial } = usePage<Partial<SharedProps> & { [key: string]: unknown }>().props;
+  const { trial, permissions } = usePage<Partial<SharedProps> & { [key: string]: unknown }>().props;
+  const [starting, setStarting] = useState(false);
   if (!trial) return null;
 
   const blocked = trial.state === 'blocked';
@@ -43,9 +48,23 @@ export const TrialBanner = () => {
           </>
         )}
       </p>
-      <div className={classes.meter} aria-hidden>
-        <div className={classes.meterFill} style={{ width: `${spent}%` }} />
-      </div>
+      {trial.canPay && permissions?.isAdmin ? (
+        <Button
+          size="xs"
+          variant={blocked ? 'filled' : 'default'}
+          loading={starting}
+          onClick={() => {
+            setStarting(true);
+            router.post(companyBillingCheckoutPath(), {}, { onFinish: () => setStarting(false) });
+          }}
+        >
+          Add a card
+        </Button>
+      ) : (
+        <div className={classes.meter} aria-hidden>
+          <div className={classes.meterFill} style={{ width: `${spent}%` }} />
+        </div>
+      )}
     </div>
   );
 };
