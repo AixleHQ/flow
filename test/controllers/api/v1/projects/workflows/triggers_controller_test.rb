@@ -45,6 +45,29 @@ module Api
             assert_equal [ project_connection.id, company_connection.id ], json["youtrack_integrations"].pluck("id")
           end
 
+          # A youtrack trigger names its own event type and is only meaningful bound to the
+          # connection it listens on, so both have to survive the trip through
+          # WorkflowTriggers::Creator — a dropped integration_id would leave a trigger that
+          # never fires.
+          test "create youtrack trigger keeps its event type and its integration" do
+            integration = create(:integration, :active, provider: :youtrack, company: @company, project: @project,
+                                                       connected_by: @user)
+
+            assert_difference -> { TriggerBinding.count }, 1 do
+              post :create, params: {
+                project_id: @project.id, workflow_id: @workflow.id,
+                trigger: { kind: "youtrack", event_type: "youtrack.issue.created", integration_id: integration.id,
+                           subject_policy: "create_task", subject_column_id: @column.id }
+              }
+            end
+
+            assert_response :created
+            assert_equal "youtrack.issue.created", json["event_type"]
+            assert_equal "youtrack", json["kind"]
+            assert_equal integration.id, json["integration_id"]
+            assert_equal integration.id, TriggerBinding.find(json["id"]).integration_id
+          end
+
           test "create slack trigger persists a TriggerBinding" do
             assert_difference -> { TriggerBinding.count }, 1 do
               post :create, params: {
