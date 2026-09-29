@@ -60,7 +60,6 @@ module Billing
       def customer_ids_for(report)
         ::Company.where(id: report.breakdown_minutes.keys).pluck(:id, :stripe_customer_id).to_h
       end
-
     end
   end
 end
