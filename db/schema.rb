@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_29_190000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_090000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -403,7 +403,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_29_190000) do
 
   create_table "companies", force: :cascade do |t|
     t.boolean "auto_accept_users", default: false, null: false
-    t.string "billing_state", default: "trialing", null: false
+    t.string "billing_state", default: "active", null: false
     t.datetime "created_at", null: false
     t.string "display_name"
     t.string "domain_verification_token"

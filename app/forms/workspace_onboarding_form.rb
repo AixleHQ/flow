@@ -47,7 +47,12 @@ class WorkspaceOnboardingForm
     return false unless valid?
 
     ActiveRecord::Base.transaction do
-      @company = Company.create!(name: name.strip, email_domain: email_domain, state: "active")
+      # Said out loud rather than left to the column default: the free allowance
+      # belongs to this path alone, and a company made any other way is somebody
+      # deciding rather than somebody trying.
+      @company = Company.create!(
+        name: name.strip, email_domain: email_domain, state: "active", billing_state: "trialing"
+      )
       owner.save! if owner.new_record?
       owner.company_memberships.create!(company: @company, role: "admin", state: "active", accepted_at: Time.current)
       SessionConcurrencyLimit.set!(scope: @company, max_sessions: max_sessions)

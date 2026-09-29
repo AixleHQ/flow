@@ -166,9 +166,11 @@ and the one place a decision is already being made.
 | `active` | Somebody is paying | Its own limit | Everything it is offered |
 | `blocked` | Allowance spent, no card | Nothing new | Nothing |
 
-Every company that existed before the allowance shipped is `active` — ours, every
-self-hosted installation's, and anything an operator made from the admin. Only a
-company that signs itself up starts out `trialing`.
+`active` is the default, and **only a company that signs itself up starts out
+`trialing`** — the signup form says so explicitly. A company an operator makes in
+the admin is somebody deciding rather than somebody trying, and one that stopped
+after a hundred queue-hours because a column defaulted that way would be a
+surprise nobody would connect to this page.
 
 ---
 
