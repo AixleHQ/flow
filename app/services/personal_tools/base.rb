@@ -119,10 +119,13 @@ module PersonalTools
       )
     end
 
+    # Same reachability as the UI's Project.for_user, narrowed to the companies this
+    # MCP token was issued for (for_user alone spans every membership). One query:
+    # accessible_by? per row re-reads the membership and the collaborator row for every project.
     def accessible_projects
-      scope = Project.where(company_id: membership_company_ids)
+      scope = Project.for_user(user).where(company_id: membership_company_ids)
       scope = scope.where(id: pinned_project.id) if pinned_project
-      scope.select { |p| p.accessible_by?(user) }
+      scope
     end
 
     # A session the user may look at: reachable (their own, or in a project they

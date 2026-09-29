@@ -123,6 +123,41 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     assert_equal [ @project.id ], projects.map { |p| p["id"] }
   end
 
+  # An employee who is not the owner and not a company admin used to pay
+  # Project#accessible_by? per row: one membership lookup and one collaborator
+  # exists? for every project in the company (Sentry N+1 on MCPController#handle).
+  test "list_projects does not re-check access per project" do
+    colleague = create(:user, :employee, company: @company)
+    create_list(:project, 8, company: @company, owner: colleague)
+    shared = create(:project, company: @company, owner: colleague)
+    shared.add_collaborator(@user)
+
+    per_row = 0
+    counter = lambda do |_name, _start, _finish, _id, payload|
+      sql = payload[:sql].to_s
+      per_row += 1 if sql.include?('SELECT 1 AS one FROM "project_collaborators"')
+      per_row += 1 if sql.include?('SELECT "company_memberships".* FROM "company_memberships"')
+    end
+
+    body = nil
+    ActiveSupport::Notifications.subscribed(counter, "sql.active_record") do
+      body = rpc("tools/call", { name: "list_projects", arguments: {} })
+    end
+
+    projects = JSON.parse(body.dig("result", "content").first["text"])["projects"]
+    assert_equal [ @project.id, shared.id ].sort, projects.map { |p| p["id"] }.sort
+    assert_equal 0, per_row
+  end
+
+  test "list_projects includes every project in a company the caller administers" do
+    admin = create(:user, :admin, company: @company)
+    other = create(:project, company: @company, owner: @user)
+
+    body = rpc("tools/call", { name: "list_projects", arguments: {} }, token: admin.regenerate_mcp_token!)
+    projects = JSON.parse(body.dig("result", "content").first["text"])["projects"]
+    assert_equal [ @project.id, other.id ].sort, projects.map { |p| p["id"] }.sort
+  end
+
   test "the guidance prompts are served" do
     names = rpc("prompts/list").dig("result", "prompts").map { |p| p["name"] }
     assert_equal %w[author_step build_workflow publish_template setup_project tool_catalog], names.sort
