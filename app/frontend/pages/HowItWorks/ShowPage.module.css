@@ -1,0 +1,124 @@
+.hero {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--app-border-default);
+  border-radius: 18px;
+  padding: 56px 48px;
+  background:
+    radial-gradient(ellipse 80% 120% at 8% 0%, var(--app-action-selected) 0%, transparent 60%),
+    var(--app-bg-card);
+}
+
+@media (max-width: 700px) {
+  .hero {
+    padding: 32px 20px;
+  }
+}
+
+.heroTitle {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  color: var(--app-text-primary);
+  max-width: 18ch;
+  margin: 20px 0 0;
+  text-wrap: balance;
+}
+
+.heroLead {
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: var(--app-text-secondary);
+  max-width: 56ch;
+  margin: 16px 0 0;
+}
+
+.sectionTitle {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  letter-spacing: -0.025em;
+  color: var(--app-text-primary);
+  margin: 0;
+}
+
+.sectionLead {
+  color: var(--app-text-secondary);
+  max-width: 62ch;
+  margin: 8px 0 0;
+}
+
+.step {
+  position: relative;
+  background: var(--app-bg-card);
+  border: 1px solid var(--app-border-default);
+  border-radius: 14px;
+  padding: 24px;
+  height: 100%;
+}
+
+.stepNumber {
+  font-family: var(--app-font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--app-primary-strong);
+}
+
+.stepTitle {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  letter-spacing: -0.015em;
+  color: var(--app-text-primary);
+  margin: 10px 0 8px;
+}
+
+.price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.priceFigure {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--app-text-primary);
+}
+
+.priceCard {
+  background: var(--app-bg-card);
+  border: 1px solid var(--app-border-default);
+  border-radius: 14px;
+  padding: 24px;
+  height: 100%;
+}
+
+.cta {
+  border: 1px solid var(--app-accent-muted);
+  border-radius: 18px;
+  padding: 40px;
+  text-align: center;
+  background:
+    radial-gradient(ellipse 60% 140% at 50% 0%, var(--app-action-selected) 0%, transparent 65%),
+    var(--app-bg-card);
+}
+
+@media (max-width: 700px) {
+  .cta {
+    padding: 28px 20px;
+  }
+}
+
+.footnote {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--app-text-tertiary);
+  max-width: 78ch;
+}

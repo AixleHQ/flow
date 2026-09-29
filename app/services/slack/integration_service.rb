@@ -69,18 +69,21 @@ module Slack
     # Slack events (one shared Request URL) route to the right project +
     # integration via Webhooks::ProcessEventJob. Verification is central (the app
     # signing secret), so no per-endpoint secret is stored.
-    # True if another company already owns this workspace's events endpoint.
+    # True if another company holds this workspace's events endpoint. A disabled
+    # endpoint — the app was uninstalled from Slack, or the install removed here —
+    # holds nothing, or a workspace once connected would be claimed forever.
     def foreign_company_owns_workspace?(team_id)
-      endpoint = WebhookEndpoint.find_by(slug: "slack-team-#{team_id}")
-      endpoint.present? && endpoint.company_id.present? && endpoint.company_id != @company.id
+      foreign_owner?(WebhookEndpoint.find_by(slug: "slack-team-#{team_id}"))
+    end
+
+    def foreign_owner?(endpoint)
+      endpoint.present? && endpoint.enabled? && endpoint.company_id.present? && endpoint.company_id != @company.id
     end
 
     def provision_endpoint(integration, team_id)
       endpoint = WebhookEndpoint.find_or_initialize_by(slug: "slack-team-#{team_id}")
-      # Race-safe re-check: never reassign an endpoint owned by another company.
-      if endpoint.persisted? && endpoint.company_id.present? && endpoint.company_id != @company.id
-        raise ActiveRecord::RecordNotUnique, "Slack workspace owned by another company"
-      end
+      # Race-safe re-check: never take over an endpoint another company holds.
+      raise ActiveRecord::RecordNotUnique, "Slack workspace owned by another company" if endpoint.persisted? && foreign_owner?(endpoint)
 
       endpoint.assign_attributes(
         provider: :slack,

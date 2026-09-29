@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 ENV["RAILS_ENV"] = "test"
 
 require "simplecov"
@@ -30,17 +32,24 @@ SimpleCov.minimum_coverage Float(ENV["COVERAGE_MIN"]) if COVERAGE_ENABLED && !EN
 require_relative "../config/environment"
 require "rails/test_help"
 require "minitest/autorun"
+require "minitest/mock"
 require "minitest/power_assert"
 require "webmock/minitest"
 require "mocha/minitest"
 require "inertia_rails/minitest"
 
 # Load shared test helpers and support files
-Dir[File.expand_path("../helpers/**/*.rb", __FILE__)].sort.each { |file| require file }
-Dir[File.expand_path("../support/**/*.rb", __FILE__)].sort.each { |file| require file }
+Dir[File.expand_path("../helpers/**/*.rb", __FILE__)].each { |file| require file }
+Dir[File.expand_path("../support/**/*.rb", __FILE__)].each { |file| require file }
 
 # Disable external web requests in tests
 WebMock.disable_net_connect!(allow_localhost: true, allow: "localhost")
+
+# Every Temporal call in the suite goes to a local test server, never a real one.
+require "temporalio/testing/workflow_environment"
+TemporalService.connection = lambda do |&block|
+  Temporalio::Testing::WorkflowEnvironment.start_local(data_converter: TemporalService.data_converter) { |env| block.call(env.client) }
+end
 
 # Configure gitlab-ruby gem so the default client has a valid endpoint.
 # Without this, any code path that invokes Gitlab.client() without explicit
@@ -50,8 +59,8 @@ Gitlab.configure do |c|
 end
 
 class ActiveSupport::TestCase
-  setup do
-  end
+  # Minted GitHub installation tokens are cached per process; one test's stub must not answer the next.
+  setup { Github::TokenService::TOKENS.clear }
 
   # Parallel test execution (task #288). The unit suite (~2.8k cases) dominated the
   # CI backend job single-threaded, leaving a CPU core idle for the whole run. Rails

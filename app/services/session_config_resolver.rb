@@ -40,7 +40,7 @@ class SessionConfigResolver
       tools: build_resource_breakdown(:tool_ids),
       skills: build_resource_breakdown(:skill_ids),
       mcp_servers: build_resource_breakdown(:mcp_server_ids),
-      config_items: build_resource_breakdown(:config_item_ids),
+      config_items: config_item_breakdown,
       input_assets: build_input_asset_breakdown,
       repositories: build_repository_breakdown,
       mode: resolve_mode,
@@ -66,8 +66,30 @@ class SessionConfigResolver
   # walking `session.config_items` (empty for a workflow step).
   #
   # Public because the tool layer calls it directly.
+  #
+  # An attached MCP server that names a config item in a header or env value
+  # (`config_item:NAME`) attaches that item too: its value reaches the session
+  # through the server, so it is audited, redacted and listed like any other.
   def resolve_config_item_ids
-    return session.config_item_ids if standalone_session?
+    (attached_config_item_ids + mcp_referenced_config_item_ids).uniq
+  end
+
+  def mcp_referenced_config_item_ids
+    return [] unless project.present?
+
+    ids = resolve_mcp_server_ids
+    return [] if ids.blank?
+
+    names = MCPServer.visible_for_project(project).where(id: ids).flat_map(&:config_item_refs).uniq
+    return [] if names.empty?
+
+    ConfigItem.visible_for_project(project).where(name: names).pluck(:id)
+  end
+
+  private
+
+  def attached_config_item_ids
+    return Array(session.config_item_ids) if standalone_session?
 
     ids = []
     ids += project_config_item_ids if workflow&.inherit_all_project_resources
@@ -76,7 +98,11 @@ class SessionConfigResolver
     ids.uniq
   end
 
-  private
+  def config_item_breakdown
+    breakdown = build_resource_breakdown(:config_item_ids)
+    referenced = mcp_referenced_config_item_ids
+    breakdown.merge(from_mcp_servers: referenced, resolved: (breakdown[:resolved] + referenced).uniq)
+  end
 
   # --- Session navigation ---
 

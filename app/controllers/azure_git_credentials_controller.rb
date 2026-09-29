@@ -20,6 +20,7 @@ class AzureGitCredentialsController < ActionController::API
     session = TerminalSession.find_by(id: request.headers["X-Session-Id"])
     return unauthorized unless session&.active?
     return unauthorized unless AzureDevops::GitSessionKey.valid?(session, request.headers["X-Azure-Git-Key"])
+    return unauthorized unless session.owner_entitled?
 
     vended = AzureDevops::GitCredentialService.new(session).vend!(
       repository_id: params[:repository_id],

@@ -10,6 +10,8 @@ module Api
       # inline. They must therefore be excluded from the user-facing Pundit
       # machinery enabled on Api::V1::ApplicationController.
       class ApplicationController < Api::V1::ApplicationController
+        # No browser session: OTLP ingest and Traefik ForwardAuth carry no CSRF token.
+        skip_before_action :verify_authenticity_token, raise: false
         skip_before_action :authenticate_user!, raise: false
         skip_before_action :dynamic_authorize!, raise: false
         skip_before_action :deny_read_only_mutation!, raise: false

@@ -2,6 +2,7 @@ import { Deferred, Head, router } from '@inertiajs/react';
 import { Avatar, Badge, Box, Card, Group, Select, Skeleton, Stack, Text, Title } from '@mantine/core';
 import { useCallback, useMemo } from 'react';
 
+import type { Member } from '@/types/generated';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { formatDateMedium } from 'shared/lib/formatDate';
@@ -11,28 +12,16 @@ import { SessionFeedTable, type SessionFeedRow } from 'shared/resources/sessions
 import { PERIOD_OPTIONS, UsageAnalytics, type Period } from 'shared/resources/usage/UsageAnalytics';
 import { UsageLimitsCard, type UsageLimitsEntry } from 'shared/resources/usage/UsageLimitsCard';
 import { companyProjectSessionPath, companySessionPath, userPath } from 'shared/routes';
-import type { UserRole } from 'shared/ui';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import classes from './Show.module.css';
-
-interface Member {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  state: string;
-  position?: string | null;
-  invitedAt: string | null;
-  acceptedAt: string | null;
-  createdAt: string;
-}
 
 export interface UserShowProps {
   member: Member;
   viewerIsSelf: boolean;
   total: number;
   sessions: SessionFeedRow[];
+  sessionsStream?: string;
   /** The company-wide session page is admin-only; admins can open any row. */
   viewerIsAdmin: boolean;
   /** Projects this viewer may open a session in (owner / collaborator). */
@@ -57,6 +46,7 @@ function UserShow({
   viewerIsSelf,
   total,
   sessions,
+  sessionsStream,
   viewerIsAdmin,
   accessibleProjectIds,
   usageLimits,
@@ -113,7 +103,7 @@ function UserShow({
               {member.email}
             </Text>
             <Group gap={8} mt={10}>
-              <RoleTag role={member.role as UserRole} />
+              <RoleTag role={member.role} />
               <StatusBadge state={member.state} size="sm" />
               {member.position && (
                 <Badge size="sm" variant="default">
@@ -169,6 +159,7 @@ function UserShow({
         </Group>
         <SessionFeedTable
           sessions={sessions}
+          cableStream={sessionsStream}
           showUser={false}
           sessionHref={sessionHref}
           emptyLabel={`${displayName} hasn't run anything in this company yet`}

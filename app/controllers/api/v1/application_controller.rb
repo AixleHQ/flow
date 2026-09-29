@@ -8,10 +8,11 @@ module Api
       include AuthorizationConcern
       include PaginationConcern
 
-      self.responder = JsonResponder
-      respond_to :json
-
-      skip_before_action :verify_authenticity_token
+      # Cookie-authenticated, so CSRF-protected like the web tree: SameSite=Lax
+      # leaves same-site origins (sibling subdomains, anything served under the
+      # app's host) able to post a form here. apiFetch sends X-CSRF-Token on
+      # every call. Machine endpoints opt out in Api::V1::Internal.
+      protect_from_forgery with: :exception
       before_action :authenticate_user!
       # Authorize-by-default: every action in the api/v1 tree is Pundit-checked.
       before_action :dynamic_authorize!
@@ -32,6 +33,9 @@ module Api
       # A failed validation is the client's problem, not a server fault: without this, every
       # `save!`/`create!` in the tree answers 500 with no hint of which field was rejected.
       rescue_from ActiveRecord::RecordInvalid, with: :record_invalid
+      rescue_from ActionController::InvalidAuthenticityToken, with: :invalid_authenticity_token
+      rescue_from Versions::StaleVersion, with: :stale_version
+      rescue_from Versions::InUse, with: :entity_in_use
 
       private
 
@@ -71,8 +75,20 @@ module Api
         render json: { error: "Not authorized" }, status: :forbidden
       end
 
+      def stale_version(error)
+        render json: { error: error.message, currentVersionNumber: error.current_number }, status: :conflict
+      end
+
+      def entity_in_use(error)
+        render json: { error: error.message, usages: error.usages }, status: :unprocessable_entity
+      end
+
       def record_not_found
         render json: { error: "Record not found" }, status: :not_found
+      end
+
+      def invalid_authenticity_token
+        render json: { error: "Invalid or missing CSRF token" }, status: :unprocessable_entity
       end
 
       def record_invalid(exception)

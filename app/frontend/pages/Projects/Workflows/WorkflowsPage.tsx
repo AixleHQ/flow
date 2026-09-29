@@ -12,56 +12,27 @@ import {
   IconPlayerPlay,
   IconPlus,
   IconSearch,
+  IconArchive,
   IconStack2,
-  IconTrash,
 } from '@tabler/icons-react';
 import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useMemo, useState } from 'react';
 import { z } from 'zod';
 
+import type { Picker, Project, Step, Workflow } from '@/types/generated';
+
+import type { AssetPickerItem } from 'shared/components/AssetPicker';
 import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
+import { ArchivedList } from 'shared/components/versions/ArchivedList';
+import { ArchiveSwitch, type ArchiveView } from 'shared/components/versions/ArchiveSwitch';
+import { HistoryButton } from 'shared/components/versions/HistoryButton';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { builderCompanyProjectWorkflowPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
 
-interface NamedItem {
-  id: number;
-  name: string;
-}
-
-interface WorkflowStep {
-  id: number;
-  name: string;
-  position: number;
-  allowNonInteractive: boolean;
-  dependsOnStepIds: number[];
-}
-
-interface Workflow {
-  id: number;
-  name: string;
-  description: string | null;
-  scopeType: string;
-  scopeId: number;
-  scopeIndicator: 'company' | 'project' | 'overrides_company';
-  stepsCount: number;
-  runsCount: number;
-  lastRunAt: string | null;
-  lastRunStatus: string | null;
-  hasActiveRuns: boolean;
-  descriptionExcerpt: string | null;
-  publishedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  steps: WorkflowStep[];
-}
-
-interface Project {
-  id: number;
-  name: string;
-}
+type WorkflowWithSteps = Workflow & { steps: Step[] };
 
 interface AgentModelsEntry {
   agentType: string;
@@ -70,9 +41,10 @@ interface AgentModelsEntry {
 
 interface Props {
   project: Project;
-  workflows: Workflow[];
-  assets?: NamedItem[];
-  repositories?: NamedItem[];
+  workflows: WorkflowWithSteps[];
+  archivedWorkflows?: { id: number; name: string; archivedAt: string | null }[];
+  assets?: AssetPickerItem[];
+  repositories?: Picker[];
   configuredAgents: string[];
   defaultAgentRuntime?: string | null;
   agentModels?: AgentModelsEntry[];
@@ -89,6 +61,7 @@ const WorkflowsPage = () => {
   const {
     project,
     workflows,
+    archivedWorkflows = [],
     assets: rawAssets,
     repositories: rawRepositories,
     configuredAgents,
@@ -100,12 +73,13 @@ const WorkflowsPage = () => {
   const repositories = rawRepositories ?? [];
   const basePath = `/company/projects/${project.id}/workflows`;
 
+  const [view, setView] = useState<ArchiveView>('active');
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
   const [createOpen, setCreateOpen] = useState(false);
-  const [editWorkflow, setEditWorkflow] = useState<Workflow | null>(null);
-  const [deleteWorkflow, setDeleteWorkflow] = useState<Workflow | null>(null);
-  const [runWorkflow, setRunWorkflow] = useState<Workflow | null>(null);
+  const [editWorkflow, setEditWorkflow] = useState<WorkflowWithSteps | null>(null);
+  const [deleteWorkflow, setDeleteWorkflow] = useState<WorkflowWithSteps | null>(null);
+  const [runWorkflow, setRunWorkflow] = useState<WorkflowWithSteps | null>(null);
   const [loading, setLoading] = useState(false);
 
   const filtered = useMemo(() => {
@@ -162,7 +136,7 @@ const WorkflowsPage = () => {
     setLoading(true);
     router.patch(
       `${basePath}/${editWorkflow.id}`,
-      { workflow: values },
+      { workflow: values, baseVersion: editWorkflow.currentVersionNumber },
       {
         preserveScroll: true,
         onFinish: () => setLoading(false),
@@ -187,7 +161,7 @@ const WorkflowsPage = () => {
     });
   };
 
-  const handleCopyAndConfigure = (wf: Workflow) => {
+  const handleCopyAndConfigure = (wf: WorkflowWithSteps) => {
     setLoading(true);
     router.post(
       basePath,
@@ -199,7 +173,7 @@ const WorkflowsPage = () => {
     );
   };
 
-  const openEdit = (wf: Workflow) => {
+  const openEdit = (wf: WorkflowWithSteps) => {
     editForm.setValues({ name: wf.name, description: wf.description ?? '' });
     setEditWorkflow(wf);
   };
@@ -281,6 +255,12 @@ const WorkflowsPage = () => {
             onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--app-border-default)')}
           />
         </div>
+        <ArchiveSwitch
+          value={view}
+          onChange={setView}
+          activeCount={workflows.length}
+          archivedCount={archivedWorkflows.length}
+        />
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           <button
             type="button"
@@ -319,7 +299,15 @@ const WorkflowsPage = () => {
       </div>
 
       {/* Card grid / empty state */}
-      {filtered.length === 0 ? (
+      {view === 'archived' ? (
+        <ArchivedList
+          projectId={project.id}
+          versionableType="Workflow"
+          noun="workflows"
+          canRestore={canExecute}
+          items={archivedWorkflows}
+        />
+      ) : filtered.length === 0 ? (
         <Box py={60} ta="center" style={{ border: '1px solid var(--app-border-default)', borderRadius: 8 }}>
           <Text size="xl">&#128736;</Text>
           <Text c="dimmed" mt="sm">
@@ -424,6 +412,15 @@ const WorkflowsPage = () => {
                     </button>
                   </div>
                   <div className="wf-foot-right">
+                    {!isInherited && (
+                      <HistoryButton
+                        projectId={project.id}
+                        versionableType="Workflow"
+                        versionableId={wf.id}
+                        title={wf.name}
+                        canRevert={canExecute}
+                      />
+                    )}
                     {canExecute &&
                       (isInherited ? (
                         <Tooltip label="Copy & Configure">
@@ -470,14 +467,14 @@ const WorkflowsPage = () => {
                               <IconEdit size={14} />
                             </button>
                           </Tooltip>
-                          <Tooltip label="Delete workflow">
+                          <Tooltip label="Archive workflow">
                             <button
                               type="button"
                               className="wf-icon-btn wf-icon-btn-danger"
-                              aria-label="Delete workflow"
+                              aria-label="Archive workflow"
                               onClick={() => setDeleteWorkflow(wf)}
                             >
-                              <IconTrash size={14} />
+                              <IconArchive size={14} />
                             </button>
                           </Tooltip>
                         </>
@@ -527,9 +524,10 @@ const WorkflowsPage = () => {
       </Modal>
 
       {/* Delete Confirmation */}
-      <Modal opened={!!deleteWorkflow} onClose={() => setDeleteWorkflow(null)} title="Delete Workflow" centered>
+      <Modal opened={!!deleteWorkflow} onClose={() => setDeleteWorkflow(null)} title="Archive Workflow" centered>
         <Text size="sm" mb="md">
-          Are you sure you want to delete <strong>{deleteWorkflow?.name}</strong>?
+          Archive <strong>{deleteWorkflow?.name}</strong>? Its triggers are switched off and it leaves the list; its
+          runs and history stay, and you can restore it from the Archived view.
           {deleteWorkflow?.hasActiveRuns && (
             <Text c="var(--app-danger-fg)" size="sm" mt="xs">
               This workflow has active runs. Stop them first.
@@ -541,7 +539,7 @@ const WorkflowsPage = () => {
             Cancel
           </Button>
           <Button color="red" onClick={handleDelete} loading={loading} disabled={deleteWorkflow?.hasActiveRuns}>
-            Delete
+            Archive
           </Button>
         </Group>
       </Modal>

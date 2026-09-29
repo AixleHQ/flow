@@ -148,6 +148,16 @@ module CloudAuth
       raise translate(e)
     end
 
+    # The ARN these role credentials act as. For an Identity Center role the session
+    # name (the last segment) is the user name the approver signed in with.
+    def caller_arn(role_credentials:, region:)
+      credentials = ::Aws::Credentials.new(role_credentials.access_key_id, role_credentials.secret_access_key,
+                                           role_credentials.session_token)
+      ::Aws::STS::Client.new(region: region, credentials: credentials).get_caller_identity.arn
+    rescue ::Aws::STS::Errors::ServiceError, ::Seahorse::Client::NetworkingError => e
+      raise translate(e)
+    end
+
     private
 
     # Walks `next_token` to the end, bounded. A hit bound is logged rather than swallowed:

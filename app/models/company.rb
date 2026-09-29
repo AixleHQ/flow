@@ -22,17 +22,43 @@ class Company < ApplicationRecord
   has_many :assets, as: :scope, dependent: :destroy
   has_many :folders, as: :scope, dependent: :destroy
   has_many :integrations, dependent: :destroy
+  has_many :oauth_credentials, as: :owner, dependent: :destroy
+  # After :integrations — an installation refuses to go while integrations use it.
+  has_many :azure_devops_installations, dependent: :destroy
+  # Auth policy rows and this company's own IdP connections die with it.
+  has_many :company_auth_policies, dependent: :destroy
+  has_many :identity_providers, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   # Workflows are owned by projects (company-level workflows were removed).
   # A company's workflows are the aggregate of its projects' workflows.
   # Cascade on destroy is handled by projects' own `dependent: :destroy`.
   has_many :workflows, through: :projects
-  # Sessions belong to the company through its PROJECTS (not through users —
-  # a multi-company user's sessions in another company must never leak in).
-  has_many :terminal_sessions, through: :projects
+  # Every session records the company it acts for (project-less logins
+  # included). After :projects, whose destroy detaches their sessions.
+  has_many :terminal_sessions, dependent: :destroy
+  has_many :agent_credentials, dependent: :destroy
+  has_many :trigger_events, dependent: :destroy
+
+  # A session whose runtime is still being torn down holds a reservation, and
+  # destroying it would free a slot that is not free (TerminalSession refuses).
+  # Refused up front, with a reason, instead of failing halfway on a foreign key.
+  before_destroy :refuse_while_runtimes_remain, prepend: true
 
   # Virtual attributes for initial admin creation (used in admin form)
   attr_accessor :initial_admin_email, :initial_admin_password
+
+  # Where we host, a company that signs itself up runs on a free allowance of
+  # capacity before anyone has paid for anything (Billing::Trial).
+  #
+  #   trialing  spending the allowance, capped to one session at a time,
+  #             invoiced for nothing
+  #   active    someone is paying; the company's own limit is the only bound
+  #   blocked   the allowance is spent and there is no card, so it runs nothing
+  #
+  # Meaningless outside the hosted product: a self-hosted operator pays nobody
+  # and a Marketplace customer already bought their capacity from AWS. Every
+  # company that existed before this shipped is `active`.
+  BILLING_STATES = %w[trialing active blocked].freeze
 
   # Constants
   RESERVED_DOMAINS = %w[
@@ -45,13 +71,57 @@ class Company < ApplicationRecord
   validates :name, presence: true, uniqueness: true
   validates :slug, presence: true, uniqueness: true,
                    format: { with: /\A[a-z0-9-]+\z/, message: "only allows lowercase letters, numbers, and hyphens" }
+  validates :billing_state, inclusion: { in: BILLING_STATES }
   validates :email_domain, presence: true, uniqueness: { case_sensitive: false },
                            format: { with: /\A[a-z0-9-]+(\.[a-z0-9-]+)+\z/, message: "must be a valid domain (e.g., acme.com, aixle.com)" }
   validate :email_domain_not_reserved
+  validate :session_concurrency_limit_is_a_positive_integer
 
   # Callbacks
   before_validation :generate_slug, on: :create
+  # An absent policy row means denied (AD-4), so every company gets an explicit,
+  # enabled row per deployment provider the moment it exists.
+  after_create :seed_auth_policies
   before_validation :downcase_email_domain
+  after_save :apply_session_concurrency_limit
+
+  scope :billing_billable, -> { where(billing_state: "active") }
+
+  def billing_trialing? = billing_state == "trialing"
+  def billing_active? = billing_state == "active"
+  def billing_blocked? = billing_state == "blocked"
+
+  scope :domain_verified, -> { where.not(domain_verified_at: nil) }
+
+  # A claimed domain and a proved one are different things. Claiming happens at
+  # signup and proves a mailbox; proving happens in DNS, and it is what auto-join
+  # rests on.
+  def domain_verified? = domain_verified_at.present?
+
+  def regenerate_domain_verification_token!
+    update_column(:domain_verification_token, SecureRandom.hex(16))
+    domain_verification_token
+  end
+
+  # Backed by a SessionConcurrencyLimit row, not a column, so the drain reads
+  # both tiers from one table. Nil means unbounded and unbilled.
+  def session_concurrency_limit
+    return @session_concurrency_limit if defined?(@session_concurrency_limit)
+
+    SessionConcurrencyLimit.for_company(id)
+  end
+
+  def session_concurrency_limit=(value)
+    @session_concurrency_limit = value.to_s.strip.presence
+    @session_concurrency_limit_assigned = true
+  end
+
+  def refuse_while_runtimes_remain
+    return unless SessionAdmission.unreleased.joins(:terminal_session).where(terminal_sessions: { company_id: id }).exists?
+
+    errors.add(:base, "This company still has sessions whose runtime is being cleaned up; stop them and try again")
+    throw :abort
+  end
 
   # White label / branding helpers
   def branded_name
@@ -77,7 +147,52 @@ class Company < ApplicationRecord
     active.find_by(email_domain: domain)
   end
 
+
+  # A viewer is read-only and must never own a project, so only employees and
+  # admins qualify.
+  def ownership_candidates
+    users.where(company_memberships: { role: %w[employee admin] })
+  end
+
   private
+
+  # Only when the form submitted the field, so saving a logo cannot silently
+  # exempt a customer from billing.
+  def apply_session_concurrency_limit
+    return unless @session_concurrency_limit_assigned
+
+    @session_concurrency_limit_assigned = false
+    row = SessionConcurrencyLimit.find_by(scope_type: "Company", scope_id: id)
+
+    if @session_concurrency_limit.blank?
+      row&.destroy
+    else
+      record = row || SessionConcurrencyLimit.new(scope_type: "Company", scope_id: id)
+      record.update!(max_sessions: @session_concurrency_limit)
+    end
+  end
+
+  # Here rather than on the row, so the admin form reports it instead of the
+  # after_save callback raising.
+  def session_concurrency_limit_is_a_positive_integer
+    return unless @session_concurrency_limit_assigned
+
+    if @session_concurrency_limit.blank?
+      return unless Deployment.requires_bounded_companies?
+
+      return errors.add(:session_concurrency_limit,
+                        "is required: this installation meters its capacity to AWS Marketplace, " \
+                        "where unlimited cannot be expressed")
+    end
+
+    return if @session_concurrency_limit.match?(/\A[1-9]\d*\z/)
+
+    errors.add(:session_concurrency_limit, "must be a positive whole number, or blank for no limit")
+  end
+
+  def seed_auth_policies
+    Auth::CompanyPolicySeeder.seed!(self)
+  end
 
   def generate_slug
     return if slug.present?

@@ -3,13 +3,11 @@ import { IconChevronDown, IconFile, IconFolder, IconHome } from '@tabler/icons-r
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 
+import type AssetPickerItem from 'types/generated/AssetPicker';
+
 import { assetFolder, derivedFolderPaths, descendantAssetIds } from 'shared/resources/assets/folderTree';
 
-export interface AssetPickerItem {
-  id: number;
-  name: string;
-  folder?: string | null;
-}
+export type { AssetPickerItem };
 
 interface AssetPickerProps {
   assets: AssetPickerItem[];

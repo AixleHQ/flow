@@ -4,34 +4,14 @@ import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconChevronLeft, IconDeviceFloppy, IconDownload, IconFile, IconX } from '@tabler/icons-react';
 import { useCallback, useState } from 'react';
 
+import type { Project, SessionArtifact, TerminalSession } from '@/types/generated';
+
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface Session {
-  id: number;
-  state: string;
-  projectId: number;
-}
-
-interface Artifact {
-  id: number;
-  name: string;
-  folder: string | null;
-  status: string;
-  fileSize: number | null;
-  contentType: string | null;
-  downloadUrl: string | null;
-  createdAt: string;
-}
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface Props {
   project: Project;
-  session: Session;
-  artifacts: Artifact[];
+  session: TerminalSession;
+  artifacts: SessionArtifact[];
   alreadyReviewed: boolean;
 }
 

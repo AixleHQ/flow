@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "active_support/core_ext/integer/time"
 
 Rails.application.configure do
@@ -28,9 +30,6 @@ Rails.application.configure do
   # as an ENV, so a build without that arg carries it as "" — present as far as
   # the process is concerned, blank as far as anyone means it.
   config.asset_host = Settings.asset_host if Settings.asset_host.present?
-
-  # Store uploaded files on the local file system (see config/storage.yml for options).
-  config.active_storage.service = :local
 
   # Assume all access to the app is happening through a SSL-terminating reverse proxy.
   config.assume_ssl = true
@@ -75,12 +74,11 @@ Rails.application.configure do
   # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [ :id ]
 
-  # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  #
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  # DNS rebinding and Host header protection, once the deployment names its hosts
+  # (ALLOWED_HOSTS, see config/settings.yml). /up stays open for the kubelet, which
+  # probes by pod IP.
+  if Settings.app.allowed_hosts.present?
+    config.hosts.concat(Settings.app.allowed_hosts)
+    config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
+  end
 end

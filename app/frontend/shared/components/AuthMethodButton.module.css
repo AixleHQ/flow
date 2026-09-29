@@ -1,0 +1,48 @@
+/* One shape for every way into the app.
+ *
+ * The methods were built by three components with five different recipes —
+ * two sizes, two variants, and one class name that the stylesheet it was
+ * imported from never defined — so they stacked at different heights with
+ * their labels starting at four different x positions. */
+
+.method {
+  height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  justify-content: flex-start;
+  background-color: var(--app-bg-elevated);
+  border: 1px solid var(--app-border-default);
+  color: var(--app-text-primary);
+  font-family: var(--app-font-body, 'Figtree', sans-serif);
+  font-size: 14px;
+  font-weight: 500;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.method:hover:not(:disabled) {
+  background-color: var(--app-bg-elevated);
+  border-color: var(--app-border-strong);
+}
+
+.method:disabled {
+  opacity: 0.55;
+}
+
+/* A fixed column, held even when a method has no icon: it is what makes every
+ * label start at the same x rather than at whatever the icon before it was. */
+.icon {
+  width: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--app-text-secondary);
+}
+
+.form {
+  display: contents;
+}

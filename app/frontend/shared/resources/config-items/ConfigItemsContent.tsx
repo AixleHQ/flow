@@ -17,20 +17,11 @@ import { modals } from '@mantine/modals';
 import { IconCheck, IconCopy, IconDotsVertical, IconEdit, IconPlus, IconSearch, IconTrash } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import type { ConfigItem } from '@/types/generated';
+
 import { PageHeader } from 'shared/ui/PageHeader';
 
 import { ConfigItemFormModal } from './ConfigItemFormModal';
-
-export interface ConfigItem {
-  id: number;
-  name: string;
-  value: string;
-  description: string | null;
-  itemType: string;
-  scopeType: string;
-  scopeIndicator: string;
-  createdAt: string;
-}
 
 interface ConfigItemsContentProps {
   configItems: ConfigItem[];

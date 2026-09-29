@@ -17,7 +17,7 @@ module Api
 
           def create
             step = current_workflow.steps.new(step_params)
-            step.save!
+            versioned { step.save! }
             render json: StepResource.new(step).to_h, status: :created
           rescue ActiveRecord::RecordInvalid => e
             render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
@@ -25,7 +25,7 @@ module Api
 
           def update
             step = current_workflow.steps.not_deleted.find(params[:id])
-            step.update!(step_params)
+            versioned { step.update!(step_params) }
             render json: StepResource.new(step).to_h
           rescue ActiveRecord::RecordInvalid => e
             render json: { errors: e.record.errors.full_messages }, status: :unprocessable_entity
@@ -33,7 +33,7 @@ module Api
 
           def destroy
             step = current_workflow.steps.not_deleted.find(params[:id])
-            step.destroy
+            versioned { step.destroy }
             head :no_content
           end
 
@@ -43,12 +43,8 @@ module Api
             positions = params.require(:positions).permit(*step_ids).to_h
             positions = positions.select { |k, v| k.match?(/\A\d+\z/) && v.to_s.match?(/\A\d+\z/) }
 
-            ActiveRecord::Base.transaction do
-              current_workflow.steps.update_all("position = position + 10000")
-              positions.each do |step_id, new_position|
-                current_workflow.steps.not_deleted.find(step_id).update_column(:position, new_position.to_i)
-              end
-            end
+            ordered = positions.sort_by { |step_id, position| [ position.to_i, step_id.to_i ] }.map(&:first)
+            versioned { Positions.reorder!(current_workflow.steps, ordered) }
             head :ok
           end
         end

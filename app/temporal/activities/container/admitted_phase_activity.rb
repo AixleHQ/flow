@@ -193,7 +193,8 @@ module Activities
         held = ((now - since) / 60).round
         pins.update_all(
           state: SessionRuntimeOperation::ABANDONED, absent_since: nil, updated_at: now,
-          error: "No workload existed for this reservation from #{since.utc.iso8601} to #{now.utc.iso8601}; "                  "the outcome of the operation itself was never learned"
+          error: "No workload existed for this reservation from #{since.utc.iso8601} to #{now.utc.iso8601}; " \
+                 "the outcome of the operation itself was never learned"
         )
         Rails.logger.warn(
           "[SessionAdmission] admission #{admission.id}: releasing a pinned reservation after #{held} minute(s) of proven absence"
@@ -225,6 +226,10 @@ module Activities
       # how long the runtime takes to disappear. The parent workflow reads
       # "unreleased + terminal" as `finishing`, so it still waits for capacity
       # to come back before starting the next step.
+      #
+      # Written directly, not through an event: the outcome can be a move the
+      # state machine does not offer (finished → failed when output collection
+      # failed, running → finished when the agent simply exited).
       def finalize_session(session, state)
         ActiveRecord::Base.transaction do
           session.reload

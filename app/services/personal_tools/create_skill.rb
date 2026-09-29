@@ -28,13 +28,14 @@ module PersonalTools
       result = ::Skills::SkillMarkdown.parse(params[:content])
       return error("Invalid SKILL.md: #{result.error_sentence}") unless result.valid?
 
-      skill = project.skills.create!(
+      skill = project.skills.new(
         name: result.name,
         title: result.frontmatter["title"].presence || result.name,
         description: result.description,
         content: result.content,
         origin: :manual
       )
+      Versions.save!(skill, actor: version_actor) { skill.save! }
       success(id: skill.id, name: skill.name, title: skill.title, origin: skill.origin.to_s)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create skill: #{e.record.errors.full_messages.join(', ')}")

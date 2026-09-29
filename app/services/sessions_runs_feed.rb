@@ -135,8 +135,8 @@ class SessionsRunsFeed
   IN_FLIGHT_STATES = %w[not_started queued running ready finishing].freeze
 
   def viewer_visible_scope
-    TerminalSession.joins(:user).where(user_id: viewer.id).or(
-      TerminalSession.joins(:user).where(
+    TerminalSession.left_joins(:user).where(user_id: viewer.id).or(
+      TerminalSession.left_joins(:user).where(
         "(terminal_sessions.state IN (:in_flight) AND users.share_active_sessions = TRUE) " \
         "OR (terminal_sessions.state NOT IN (:in_flight) AND users.share_completed_sessions = TRUE)",
         in_flight: IN_FLIGHT_STATES

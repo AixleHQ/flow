@@ -4,11 +4,12 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
   def show
     render inertia: "Projects/Settings/SettingsPage", props: {
       project: settings_project_props,
-      concurrency: concurrency_props
+      concurrency: concurrency_props,
+      ownership: ownership_props
     }
   end
 
-  # One save, all or nothing. A limit that does not fit the installation budget
+  # One save, all or nothing. A limit that does not fit the company budget
   # must not leave the name change committed behind it: the person is told the
   # settings were not saved, and that has to be true of all of them.
   def update
@@ -51,7 +52,7 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
     requested = params[:concurrency].to_s.strip
 
     # Cleared field means "no reservation of my own" — the project falls back to
-    # the installation default and stops holding part of the budget.
+    # the deployment default and stops holding part of its company's budget.
     if requested.empty?
       concurrency_limit_record&.destroy
       return {}
@@ -66,17 +67,18 @@ class Web::Company::Projects::SettingsController < Web::Company::Projects::Appli
   end
 
   def concurrency_props
-    budget = SessionConcurrencyAllocation.new(excluding: concurrency_limit_record&.id)
+    budget = SessionConcurrencyAllocation.new(
+      company_id: current_project.company_id, excluding: concurrency_limit_record&.id
+    )
     headroom = budget.available
 
     {
       max_sessions: concurrency_limit_record&.max_sessions,
       default: SessionAdmissionPolicy.scope_default("Project"),
-      installation_limit: budget.installation_limit,
-      # What this project could be raised to right now. Nil means no ceiling.
+      company_limit: budget.company_limit,
+      # What this project could be raised to right now. Nil means no limit.
       available: headroom,
-      allocations: budget.breakdown_for(current_project.company_id),
-      queue_enabled: SessionAdmissionPolicy.enabled?,
+      allocations: budget.breakdown,
       can_manage: settings_policy.manage_concurrency?
     }
   end

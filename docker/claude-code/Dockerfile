@@ -23,20 +23,24 @@ WORKDIR /home/claude
 # Download THEN run, and verify the binary — never `curl … | bash`. In a pipe, a failed
 # curl still leaves bash reading empty stdin and exiting 0, so a network blip produced an
 # image with no Claude CLI at all and the build reported success (seen 2026-08-05).
+# Pinned: the registry build cache keys this layer on the Dockerfile text, so an unpinned
+# install kept shipping whichever release first filled the cache. The installer takes
+# the release as its argument; the weekly canary builds the newest one instead.
+ARG CLAUDE_CODE_VERSION=2.1.281
 RUN curl -fsSL https://claude.ai/install.sh -o /tmp/claude-install.sh \
-    && bash /tmp/claude-install.sh \
+    && bash /tmp/claude-install.sh "${CLAUDE_CODE_VERSION}" \
     && rm -f /tmp/claude-install.sh \
     && test -x /home/claude/.local/bin/claude \
-    && /home/claude/.local/bin/claude --version
+    && /home/claude/.local/bin/claude --version | grep -q "^${CLAUDE_CODE_VERSION} "
 
 ENV PATH="/home/claude/.local/bin:${PATH}"
 
 USER root
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
-# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
-# Dockerfile are not the same image and nothing else says which one a container is running.
+# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
+# installers that install only the latest release, and the canary builds the newest
+# release of the pinned ones, so the version is not always the one this file names.
 RUN /home/claude/.local/bin/claude --version > /etc/aixle-cli-version
 
 # -----------------------------------------------------------------------------
@@ -71,7 +75,13 @@ RUN set -eux; \
 # `install -d` creates just these two dirs with the right owner. A `chown -R` over
 # /home/claude would be a no-op (the CLI above was installed AS claude) that still
 # copied up the whole 272 MB install into this layer.
-RUN install -d -o claude -g claude /home/claude/.claude /home/claude/.aws
+#
+# ~/.config/anthropic is where a Claude Platform login lives. The platform writes into it
+# with a single tar entry, which would leave any missing parent root-owned — and the CLI
+# rewrites the token there on every refresh.
+RUN install -d -o claude -g claude /home/claude/.claude /home/claude/.aws /home/claude/.config \
+    && install -d -o claude -g claude -m 0700 /home/claude/.config/anthropic \
+       /home/claude/.config/anthropic/credentials /home/claude/.config/anthropic/configs
 
 # =============================================================================
 # Shared scripts — ordered by stability (most stable first, entrypoint last)
@@ -96,17 +106,20 @@ RUN chmod +x /opt/mitm/*.sh
 COPY base/entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh
 
-RUN printf '%s\n' \
-        '# Full passwordless sudo for the agent user (trusted environments only).' \
-        'claude ALL=(root) NOPASSWD: ALL' \
-        > /etc/sudoers.d/claude-agent \
+# Passwordless sudo, so an agent can install system packages. It also reaches the
+# platform's processes in this container (watcher, usage logger, git helper);
+# the runtime keeps setuid escalation on for this image only (privilege_escalation?).
+RUN printf '%s\n' 'claude ALL=(root) NOPASSWD: ALL' > /etc/sudoers.d/claude-agent \
     && chmod 440 /etc/sudoers.d/claude-agent \
     && visudo -cf /etc/sudoers.d/claude-agent
+
+# The system CA bundle stays appendable by the agent user: logger/start-mitm.sh
+# adds this container's own interception CA to it at start (see docker/base).
+RUN chmod 0666 /etc/ssl/certs/ca-certificates.crt
 
 # =============================================================================
 # Final setup
 # =============================================================================
-RUN chown -R claude:claude /opt/watcher
 
 WORKDIR /workspace
 ENV HOME=/home/claude \

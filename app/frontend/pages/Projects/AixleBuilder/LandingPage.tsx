@@ -18,24 +18,14 @@ import { IconAlertCircle, IconExternalLink, IconSparkles, IconWand } from '@tabl
 import { formatDistanceToNow } from 'date-fns';
 import { useCallback, useMemo, useState } from 'react';
 
+import type { Project, TerminalSession } from '@/types/generated';
+
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
+import { AGENT_RUNTIMES, AGENT_SELECT_OPTIONS, isAgentType } from 'shared/ui/agentRuntimes';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface Project {
-  id: number;
-  name: string;
-}
-interface Session {
-  id: number;
-  state: string;
-  agentType: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-}
 
 interface AgentModel {
   modelId: string;
@@ -50,23 +40,13 @@ interface AgentModelsEntry {
 
 interface Props {
   project: Project;
-  sessions: Session[];
+  sessions: TerminalSession[];
   activeSessionId: number | null;
   configuredAgents: string[];
   defaultAgentRuntime?: string | null;
   assets: AssetPickerItem[];
   agentModels?: AgentModelsEntry[];
 }
-
-const AGENT_OPTIONS = [
-  { value: 'claude_code', label: 'Claude Code', color: 'orange' },
-  { value: 'cursor_cli', label: 'Cursor CLI', color: 'violet' },
-  { value: 'codex', label: 'Codex', color: 'teal' },
-  { value: 'gemini_cli', label: 'Gemini CLI', color: 'blue' },
-  { value: 'antigravity_cli', label: 'Antigravity CLI', color: 'indigo' },
-  { value: 'grok', label: 'Grok', color: 'gray' },
-  { value: 'kiro_cli', label: 'Kiro CLI', color: 'grape' },
-];
 
 const LandingPage = () => {
   const {
@@ -157,11 +137,7 @@ const LandingPage = () => {
             <Group gap="sm" grow>
               <Select
                 label="Agent Runtime"
-                data={AGENT_OPTIONS.map((a) => ({
-                  value: a.value,
-                  label: a.label,
-                  disabled: !configuredAgents.includes(a.value),
-                }))}
+                data={AGENT_SELECT_OPTIONS.map((a) => ({ ...a, disabled: !configuredAgents.includes(a.value) }))}
                 value={runtime}
                 onChange={setRuntime}
                 size="sm"
@@ -236,7 +212,7 @@ const LandingPage = () => {
             </Table.Thead>
             <Table.Tbody>
               {sessions.map((s) => {
-                const agent = AGENT_OPTIONS.find((a) => a.value === s.agentType);
+                const agent = isAgentType(s.agentType) ? AGENT_RUNTIMES[s.agentType] : null;
                 return (
                   <Table.Tr key={s.id}>
                     <Table.Td>
@@ -249,7 +225,7 @@ const LandingPage = () => {
                     </Table.Td>
                     <Table.Td>
                       {agent && (
-                        <Badge color={agent.color} size="sm" variant="filled">
+                        <Badge color={agent.mantineColor} size="sm" variant="filled">
                           {agent.label}
                         </Badge>
                       )}

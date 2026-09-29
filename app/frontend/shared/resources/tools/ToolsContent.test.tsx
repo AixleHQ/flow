@@ -2,9 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Tool } from '@/types/generated';
 import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
-import { ToolsContent, type Tool } from './ToolsContent';
+import { ToolsContent } from './ToolsContent';
 
 function makeTool(overrides: Partial<Tool> = {}): Tool {
   return {
@@ -19,22 +20,26 @@ function makeTool(overrides: Partial<Tool> = {}): Tool {
     command: 'python /app/run.py',
     requiredConfigItems: [],
     inputSchema: {},
+    tags: [],
     enabled: true,
     platformTool: false,
-    scopeIndicator: 'company',
+    scopeIndicator: 'project',
     toolFiles: [],
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
+    currentVersionNumber: 1,
+    archivedAt: null,
     ...overrides,
   };
 }
 
 const baseProps = {
   configItemNames: ['API_KEY'],
+  projectId: 1,
   basePath: '/company/tools',
   title: 'Company Tools',
   subtitle: 'Custom tools available to your company',
-  // editableScopeIndicator defaults to 'company', matching our fixtures' scopeIndicator.
+  editableScopeIndicator: 'project',
 };
 
 describe('ToolsContent', () => {
@@ -129,17 +134,17 @@ describe('ToolsContent', () => {
     expect(within(dialog).getByText('Edit Tool')).toBeInTheDocument();
   });
 
-  it('confirming the delete modal fires router.delete to the tool path', async () => {
+  it('confirming the archive modal fires router.delete to the tool path', async () => {
     const { container } = renderPage(
       <ToolsContent {...baseProps} tools={[makeTool({ id: 42, displayName: 'PDF Reader' })]} />,
     );
 
-    await clickIconButton(container, 'tabler-icon-trash');
+    await clickIconButton(container, 'tabler-icon-archive');
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText('Delete Tool')).toBeInTheDocument();
+    expect(within(dialog).getByText('Archive Tool')).toBeInTheDocument();
 
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
 
     expect(router.delete).toHaveBeenCalledWith('/company/tools/42', expect.objectContaining({ preserveScroll: true }));
   });

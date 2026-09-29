@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "active_support/core_ext/integer/time"
 require "dotenv"
 
@@ -41,17 +43,18 @@ Rails.application.configure do
   # Change to :null_store to avoid any caching.
   config.cache_store = :redis_cache_store, { url: Settings.redis.url, namespace: "aixle_cache", expires_in: 1.day }
 
-  # Store uploaded files on the local file system (see config/storage.yml for options).
-  config.active_storage.service = :local
-
   # Don't care if the mailer can't send.
   config.action_mailer.raise_delivery_errors = false
 
   # Make template changes take effect immediately.
   config.action_mailer.perform_caching = false
 
-  # Set localhost to be used by links generated in mailer templates.
-  config.action_mailer.default_url_options = { host: "localhost", port: ENV.fetch("PORT", 4000).to_i }
+  # Mailer links deliberately inherit application.rb's default_url_options,
+  # which derive from Settings.domain/Settings.protocol and so honour DOMAIN.
+  # Overriding them here with a hardcoded host and the container-internal PORT
+  # sent every emailed link to the port the app listens on rather than the one
+  # the browser reaches it at — the two differ whenever the app is published
+  # under a different port, which is the normal self-hosted case.
 
   config.action_mailer.delivery_method = :letter_opener_web
   config.action_mailer.perform_deliveries = true
@@ -82,7 +85,7 @@ Rails.application.configure do
   config.action_view.annotate_rendered_view_with_filenames = true
 
   # Action Cable WebSocket URL (standard Rails)
-  config.action_cable.url = ENV.fetch("ACTION_CABLE_URL", "ws://localhost:4000/cable")
+  config.action_cable.url = ENV.fetch("ACTION_CABLE_URL") { "ws://localhost:#{ENV.fetch("PORT", 4000)}/cable" }
   config.action_cable.allowed_request_origins = [ /http:\/\/.*/, /https:\/\/.*/ ]
   config.action_cable.disable_request_forgery_protection = true
 

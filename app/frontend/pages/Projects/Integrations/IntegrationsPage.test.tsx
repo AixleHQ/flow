@@ -2,25 +2,26 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Integration } from '@/types/generated';
+import { buildIntegration } from 'test/factories/integration';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-
-import type { Integration } from 'shared/resources/integrations/IntegrationsContent';
 
 import IntegrationsPage from './IntegrationsPage';
 
 const project = { id: 7, name: 'Aixle Core' };
 
-const integration = (overrides: Partial<Integration> = {}): Integration => ({
-  id: 1,
-  name: 'octo-org',
-  provider: 'github',
-  status: 'active',
-  scopeIndicator: 'project',
-  githubUrl: null,
-  connectedBy: { id: 1, name: 'Dana Scully' },
-  createdAt: '2026-01-01T00:00:00Z',
-  ...overrides,
-});
+const integration = (overrides: Partial<Integration> = {}): Integration =>
+  buildIntegration({
+    id: 1,
+    name: 'octo-org',
+    provider: 'github',
+    status: 'active',
+    scopeIndicator: 'project',
+    githubUrl: null,
+    connectedBy: { id: 1, name: 'Dana Scully' },
+    createdAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  });
 
 describe('Projects/Integrations/IntegrationsPage', () => {
   it('renders the empty state with connect CTAs when there are no integrations', () => {
@@ -63,6 +64,27 @@ describe('Projects/Integrations/IntegrationsPage', () => {
     // Empty PAT keeps the submit disabled and never hits the backend.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
     expect(router.post).not.toHaveBeenCalled();
+  });
+
+  // A company-wide install (Slack) has no page of its own: a company admin
+  // removes it from any project, and nobody else sees the control.
+  it('offers removal of a company-wide integration only to a company admin', () => {
+    const slack = integration({ id: 9, name: 'acme-slack', provider: 'slack', scopeIndicator: 'company' });
+
+    const { unmount } = renderAuthedPage(<IntegrationsPage />, {
+      props: { project, integrations: [slack], projectPermissions: { canExecute: true, canManage: true } },
+    });
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    unmount();
+
+    renderAuthedPage(<IntegrationsPage />, {
+      props: {
+        project,
+        integrations: [slack],
+        projectPermissions: { canExecute: true, canManage: true, canManageCompany: true },
+      },
+    });
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
   });
 
   it('confirms removal of a project integration and fires router.delete', async () => {

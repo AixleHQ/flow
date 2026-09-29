@@ -48,10 +48,10 @@ module Codex
 
     # `client_version` gates the catalog: each model carries a
     # `minimal_client_version` and the endpoint hides the models a client that old
-    # cannot run (the gpt-5.6 family needs >= 0.144.0). Keep this at the Codex CLI
-    # version baked into docker/codex/Dockerfile, or the model picker and the
-    # migration map both go stale against the CLI the session actually runs.
-    CLIENT_VERSION = "0.147.0"
+    # cannot run (the gpt-6 family needs >= 0.155.0). Must equal CODEX_VERSION in
+    # docker/codex/Dockerfile — Codex::ApiTest enforces it — or the model picker
+    # and the migration map both go stale against the CLI the session runs.
+    CLIENT_VERSION = "0.156.1"
 
     HTTP_TIMEOUTS = { open: 5, read: 10 }.freeze
 

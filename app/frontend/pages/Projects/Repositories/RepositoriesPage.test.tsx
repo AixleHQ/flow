@@ -2,27 +2,29 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Repository } from '@/types/generated';
+import { buildIntegration } from 'test/factories/integration';
+import { buildRepository } from 'test/factories/repository';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-
-import type { Repository } from 'shared/resources/repositories/RepositoriesContent';
 
 import RepositoriesPage from './RepositoriesPage';
 
 const project = { id: 42, name: 'Falcon Project' };
 
-const repo = (overrides: Partial<Repository> = {}): Repository => ({
-  id: 1,
-  fullName: 'octo/hangar',
-  cloneUrl: 'https://github.com/octo/hangar.git',
-  sourceBranch: 'main',
-  isPrivate: true,
-  description: null,
-  purpose: null,
-  scopeIndicator: 'project',
-  integration: { id: 9, name: 'GitHub Org', provider: 'github' },
-  createdAt: '2026-01-01T00:00:00Z',
-  ...overrides,
-});
+const repo = (overrides: Partial<Repository> = {}): Repository =>
+  buildRepository({
+    id: 1,
+    fullName: 'octo/hangar',
+    cloneUrl: 'https://github.com/octo/hangar.git',
+    sourceBranch: 'main',
+    isPrivate: true,
+    description: null,
+    purpose: null,
+    scopeIndicator: 'project',
+    integration: buildIntegration({ id: 9, name: 'GitHub Org', provider: 'github' }),
+    createdAt: '2026-01-01T00:00:00Z',
+    ...overrides,
+  });
 
 describe('Projects/Repositories/RepositoriesPage', () => {
   it('renders the empty state with an add CTA when there are no repositories', () => {

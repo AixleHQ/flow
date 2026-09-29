@@ -9,6 +9,10 @@ class SessionLaunchRelay
   # launches; anything past it is fair to take over, because the process that
   # held it is gone.
   CLAIM_LEASE = 2.minutes
+  # A launch still failing after this many claims (~20 minutes at the lease
+  # cadence) is failed with its last error, which frees its slot; retrying it
+  # forever held the slot forever.
+  MAX_LAUNCH_ATTEMPTS = 10
 
   def self.drain(limit: 100)
     SessionAdmissionService.drain!(limit: limit)
@@ -22,6 +26,7 @@ class SessionLaunchRelay
     claim = SecureRandom.uuid
     session = nil
     start_attempted = false
+    exhausted = false
     SessionAdmissionService.transaction do
       admission.reload.lock!
       return if admission.released_at || admission.stop_requested_at
@@ -29,8 +34,13 @@ class SessionLaunchRelay
       return if admission.claimed_at && admission.claimed_at > CLAIM_LEASE.ago
       session = admission.terminal_session
       SessionAdmissionService.ensure_run_active!(session)
-      admission.update!(launch_state: "claimed", claimed_at: Time.current, claim_token: claim)
+      exhausted = admission.launch_attempts >= MAX_LAUNCH_ATTEMPTS
+      unless exhausted
+        admission.update!(launch_state: "claimed", claimed_at: Time.current, claim_token: claim,
+                          launch_attempts: admission.launch_attempts + 1)
+      end
     end
+    return abandon(admission, session) if exhausted
 
     SessionService.revalidate_admission!(session, refresh_tokens: true)
     start_attempted = true
@@ -69,5 +79,14 @@ class SessionLaunchRelay
   rescue StandardError => e
     admission.update!(last_error: "#{e.class}: #{e.message}")
     Rails.logger.warn("[SessionLaunchRelay] Admission #{admission.id}: #{e.message}")
+  end
+
+  # Fails the session with the reason it could not start; its slot is released
+  # the way any stopped launch's is (SessionAdmissionReconciler, once the claim
+  # lease is past and no execution exists).
+  def self.abandon(admission, session)
+    reason = "Could not start after #{MAX_LAUNCH_ATTEMPTS} attempts: #{admission.last_error.presence || 'no error recorded'}"
+    SessionService.fail_session(session: session, error_message: reason)
+    Rails.logger.error("[SessionLaunchRelay] Admission #{admission.id} abandoned: #{reason}")
   end
 end

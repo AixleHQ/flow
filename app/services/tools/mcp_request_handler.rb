@@ -66,7 +66,37 @@ module Tools
 
     def tool_classes
       available = entitled_tools.select { |t| t.available?(ctx) && digest_intact?(t) }.sort_by(&:name)
-      available.filter_map { |row| publishable(row) }
+      available.filter_map { |row| publishable(row) } + builder_tool_classes(available.map(&:name))
+    end
+
+    # A session tool of the same name wins: the builder set only adds.
+    def builder_tool_classes(taken_names)
+      return [] unless BuilderToolset.serves?(session)
+
+      BuilderToolset.definitions
+                    .reject { |defn| taken_names.include?(defn.name.to_s) }
+                    .filter_map { |defn| publishable_builder_tool(defn) }
+    end
+
+    def publishable_builder_tool(defn)
+      current_session = session
+
+      MCP::Tool.define(
+        name: defn.name,
+        description: defn.description,
+        input_schema: BuilderToolset.input_schema(defn),
+        annotations: mcp_annotations(defn),
+        meta: defn.tags.any? ? { "ai.aixle/tags" => defn.tags.map(&:to_s) } : nil
+      ) do |server_context:, **arguments|
+        result = BuilderToolset.execute(defn, arguments, current_session)
+        MCP::Tool::Response.new(CallExecutor.response_content(result), error: result[:exit_code] != 0)
+      rescue StandardError => e
+        Rails.logger.error("[MCP] Builder tool #{defn.name} failed: #{e.class}: #{e.message}")
+        MCP::Tool::Response.new([ { type: "text", text: "Tool execution failed: #{e.message}" } ], error: true)
+      end
+    rescue StandardError => e
+      Rails.logger.error("[MCP] Builder tool #{defn.name} could not be published: #{e.class}: #{e.message}")
+      nil
     end
 
     # One unusable definition must not take the endpoint down with it. Schema

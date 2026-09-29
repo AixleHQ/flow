@@ -81,6 +81,17 @@ module Activities
         assert_equal [ active_step.id ], step_ids
         assert_not_includes step_ids, deleted_step.id
       end
+
+      test "a dependency on a step deleted since is dropped, so its dependent can still start" do
+        kept = create(:step, workflow: @workflow, position: 1)
+        removed = create(:step, workflow: @workflow, position: 2)
+        dependent = create(:step, workflow: @workflow, position: 3, depends_on_step_ids: [ kept.id, removed.id ])
+        removed.soft_delete!
+
+        result = run_activity(PrepareStepListActivity, { "workflow_run_id" => @run.id })
+
+        assert_equal [ kept.id ], result.find { |entry| entry["step_id"] == dependent.id }["depends_on_step_ids"]
+      end
     end
   end
 end

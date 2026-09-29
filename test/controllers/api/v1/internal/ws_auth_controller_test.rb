@@ -149,6 +149,35 @@ module Api
           assert_response :ok
           assert_equal @session.id.to_s, response.headers["X-Session-Id"]
         end
+
+        # == Credential forwarding ==
+        #
+        # Traefik replaces the proxied request's Cookie header with the one this
+        # answer carries, so the answer decides what the agent container sees.
+
+        test "forwards only the container's own cookies, never the Rails session" do
+          sign_in @user
+          cookies["_aixle_session"] = "session-cookie-value"
+          cookies["vscode-tkn"] = "ide-token"
+          cookies["other"] = "x"
+          request.headers["X-Forwarded-Uri"] = "/t/#{@session.route_token}/ide/"
+
+          get :show
+
+          assert_response :ok
+          assert_equal "vscode-tkn=ide-token", response.headers["Cookie"]
+        end
+
+        test "answers without a Cookie header when the browser sent no container cookie" do
+          sign_in @user
+          cookies["_aixle_session"] = "session-cookie-value"
+          request.headers["X-Forwarded-Uri"] = "/t/#{@session.route_token}/tty/ws"
+
+          get :show
+
+          assert_response :ok
+          assert_nil response.headers["Cookie"]
+        end
       end
     end
   end

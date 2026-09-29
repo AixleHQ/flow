@@ -7,6 +7,9 @@
 class OauthClient < ApplicationRecord
   include Encryptable
 
+  encryption_key :oauth_key
+  encrypted_column :encrypted_client_secret
+
   # Sources produced by MCP OAuth discovery (attacker-influenced endpoints — the
   # callback constrains signed client ids to these so a static client can't be
   # smuggled through the mcp: branch).
@@ -39,30 +42,15 @@ class OauthClient < ApplicationRecord
 
   # Encrypted client secret (nil for public/PKCE-only clients).
   def client_secret=(val)
-    self.encrypted_client_secret = val.present? ? encryptor.encrypt_and_sign(val) : nil
+    self.encrypted_client_secret = val.present? ? encrypt_secret(val, column: "encrypted_client_secret") : nil
   end
 
   def client_secret
-    return nil if encrypted_client_secret.blank?
-
-    encryptor.decrypt_and_verify(encrypted_client_secret)
-  # AES-GCM (this app's cipher) raises InvalidMessage on wrong-key/tampered
-  # ciphertext; InvalidSignature is the CBC/HMAC-era name. Rescue both so a
-  # rotated or corrupt key decrypts to nil instead of crashing (mirrors
-  # Integration#credentials_data).
-  rescue ActiveSupport::MessageVerifier::InvalidSignature,
-         ActiveSupport::MessageEncryptor::InvalidMessage
-    nil
+    decrypt_secret(encrypted_client_secret, column: "encrypted_client_secret")
   end
 
   # True when the token endpoint needs client_secret (confidential client).
   def confidential?
     encrypted_client_secret.present?
-  end
-
-  private
-
-  def encryption_key_setting
-    Settings.encryption.oauth_key
   end
 end

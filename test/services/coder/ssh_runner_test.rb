@@ -283,14 +283,17 @@ module Coder
       assert_match(%r{TMPDIR:-/tmp}, script, "expected a fallback job dir when /var/lib is not writable")
     end
 
-    # A secret belongs in the launcher, which travels over SSH and is never
-    # written down — not in the `<job_id>.cmd` file, which stays on a workspace
-    # that outlives the session.
-    test "detached start exports env in the launcher, never into the command file" do
+    # A secret travels on stdin: not in the `<job_id>.cmd` file, which stays on a
+    # workspace that outlives the session, and not in the command, which is argv —
+    # visible in `ps` on the worker and on the shared workspace.
+    test "detached start hands env over on stdin, never in the command" do
       captured_args = nil
-      stub = popen3_stub(out: "aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs\n") do |_env, argv|
+      stdin = StringIO.new
+      stub = lambda { |_env, *argv, **_opts, &blk|
         captured_args = argv
-      end
+        blk.call(stdin, StringIO.new("aixle_job job_id=j1 job_dir=/var/lib/aixle-jobs\n"), StringIO.new,
+                 StubWaitThr.new(exitstatus: 0))
+      }
 
       Open3.stub(:popen3, stub) do
         Coder::SshRunner.new(@integration).exec_detached(
@@ -302,10 +305,15 @@ module Coder
       end
 
       script = captured_args.last
-      launcher, _, command_file = script.partition("cat > \"$BASE.cmd\"")
+      assert_no_match(/ghs_secret/, script)
+      assert_match(/IFS= read -r AIXLE_GH_TOKEN \|\| true; export AIXLE_GH_TOKEN/, script)
+      assert_equal "ghs_secret\n", stdin.string
+    end
 
-      assert_match(/AIXLE_GH_TOKEN='ghs_secret'; export AIXLE_GH_TOKEN/, launcher)
-      assert_no_match(/ghs_secret/, command_file, "the secret must not reach the job's command file")
+    test "detached start refuses a multi-line env value" do
+      assert_raises(Coder::SshRunner::CommandError) do
+        Coder::SshRunner.new(@integration).exec_detached(workspace_name: "ws-1", command: "true", env: { "T" => "a\nb" })
+      end
     end
 
     test "detached start rejects an env name that is not a shell identifier" do
@@ -1041,6 +1049,28 @@ module Coder
       end
     end
 
+    # The shape a poll saw when the wrapper still wrote the exit file with a
+    # plain `>`: the file exists but is empty for a moment, and reading it as
+    # finished published a job with no exit code. A live wrapper there is still
+    # finishing; a dead one never got to publish.
+    test "job status does not report an empty exit file as a finished job" do
+      in_local_shell_workspace do |runner, job_dir|
+        dead_pid = Process.spawn("true").tap { |pid| Process.wait(pid) }
+        { "halfwritten-live" => Process.pid, "halfwritten-dead" => dead_pid }.each do |job_id, pid|
+          File.write(File.join(job_dir, "#{job_id}.meta"), "job_id=#{job_id}\npid=#{pid}\n")
+          File.write(File.join(job_dir, "#{job_id}.pid"), "#{pid}\n")
+          File.write(File.join(job_dir, "#{job_id}.exit"), "")
+        end
+
+        live = runner.job_status(workspace_name: "ws-1", job_id: "halfwritten-live")
+        dead = runner.job_status(workspace_name: "ws-1", job_id: "halfwritten-dead")
+
+        assert_equal "running", live[:state], describe_status(live)
+        assert_nil live[:exit_code]
+        assert_equal "died", dead[:state], describe_status(dead)
+      end
+    end
+
     # Termination before the normal exit-file write: the wrapper is signalled
     # while the command is running, which used to leave the job with no exit
     # code, no end time and no reason.
@@ -1342,7 +1372,7 @@ module Coder
       }
 
       Open3.stub(:popen3, local_shell) do
-        yield Coder::SshRunner.new(@integration)
+        yield Coder::SshRunner.new(@integration), job_dir
       end
     ensure
       FileUtils.remove_entry(job_dir) if job_dir && File.directory?(job_dir)

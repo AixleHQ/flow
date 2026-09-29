@@ -9,6 +9,7 @@ require "test_helper"
 #   index   (read)  => project_accessible?
 #   create  (write) => project_writable?
 #   destroy (write) => project_writable?
+#   unshare (write) => project_writable?
 #     project_writable? == project_accessible? && !current_user.read_only?
 # Inaccessible project (stranger / foreign admin) => 404 (current_project is
 # resolved via a user-scoped `.find`, which raises RecordNotFound before the
@@ -35,6 +36,15 @@ class Api::V1::Projects::Board::Task::AssetsAuthorizationTest < ActionDispatch::
     assert_project_write(transport: :api) do
       post api_v1_project_task_assets_path(@project, @task),
            params: { task_asset: { name: "Authz asset" } }, as: :json
+    end
+  end
+
+  test "unshare is a project write" do
+    asset = create(:task_asset, board_task: @task, author: @owner)
+    asset.share!
+
+    assert_project_write(transport: :api) do
+      delete share_api_v1_project_task_asset_path(@project, @task, asset), as: :json
     end
   end
 

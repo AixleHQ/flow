@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class CreateAgentCredentials < ActiveRecord::Migration[8.0]
   def change
     create_table :agent_credentials do |t|

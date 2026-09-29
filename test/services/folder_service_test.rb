@@ -204,6 +204,31 @@ class FolderServiceTest < ActiveSupport::TestCase
     assert { Folder.for_project(@project).count.zero? }
   end
 
+  # LIKE's wildcards in a folder name are literal: `_` matches only `_`.
+  test "destroy! with recursive: true stops sharing what it deletes" do
+    @service.create!("dashboard")
+    asset = create(:asset, name: "report.html", folder: "dashboard", scope: @project, created_by: @owner)
+    token = asset.share!
+
+    @service.destroy!(path: "dashboard", recursive: true)
+
+    assert_nil Asset.publicly_shared.find_by(public_token: token)
+    assert_nil asset.reload.public_token
+  end
+
+  test "destroy! with recursive: true leaves a sibling whose name only matches as a wildcard" do
+    @service.create!("q1_2026")
+    @service.create!("q1-2026")
+    @service.create!("q1-2026/specs")
+    sibling_asset = create(:asset, name: "keep.md", folder: "q1-2026/specs", scope: @project, created_by: @owner)
+
+    result = @service.destroy!(path: "q1_2026", recursive: true)
+
+    assert { result[:deleted_folders] == 1 }
+    assert { sibling_asset.reload.deleted_at.nil? }
+    assert { Folder.for_project(@project).exists?(path: "q1-2026/specs") }
+  end
+
   test "destroy! with recursive: true is blocked in project scope when a company asset is nested" do
     @service.create!("dashboard")
     create(:asset, name: "kickoff.md", folder: "dashboard", scope: @company, created_by: @owner)

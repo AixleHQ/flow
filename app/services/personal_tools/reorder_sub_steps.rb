@@ -13,12 +13,14 @@ module PersonalTools
       param :step_id, type: :integer, description: "Step id.", required: true
       param :sub_step_ids, type: :array, description: "Sub-step ids in the new order.", required: true,
             items: { type: "integer" }
+      param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
     def execute
       project = find_project!
       authorize!(project, :update?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
-      step = find_step!(find_workflow!(project))
+      workflow = find_workflow!(project)
+      step = find_step!(workflow)
 
       ids = params[:sub_step_ids]
       return error("sub_step_ids must be a non-empty array") unless ids.is_a?(Array) && ids.any?
@@ -31,7 +33,7 @@ module PersonalTools
       missing = by_id.keys - ids
       return error("Missing sub-step ids — pass every sub-step of the step: #{missing.join(', ')}") if missing.any?
 
-      ActiveRecord::Base.transaction do
+      Versions.save!(workflow, actor: version_actor, base_version: base_version) do
         ids.each_with_index { |id, idx| by_id.fetch(id).update_column(:position, idx + 1) }
       end
       success(step_id: step.id, new_order: ids)

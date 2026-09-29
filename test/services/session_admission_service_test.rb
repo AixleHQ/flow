@@ -5,18 +5,18 @@ require "test_helper"
 class SessionAdmissionServiceTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
-    @project = create(:project, owner: @user, company: @user.companies.first)
-    with_ceiling(1)
+    @company = @user.companies.first
+    @project = create(:project, owner: @user, company: @company)
+    with_scope_defaults(project: 1)
   end
 
-  # Every queued session belongs to a project — that is what the queue is for.
-  # Pass `project: nil` only to exercise the sessions that are exempt from it.
+  # Pass `project: nil` for an agent login, which queues per user.
   def enqueue(user: @user, project: @project)
     session = create(:terminal_session, user: user, project: project)
     SessionAdmissionService.enqueue!(session)
   end
 
-  test "installation capacity reserves one slot and admits FIFO after cancellation" do
+  test "a full queue reserves one slot and admits FIFO after cancellation" do
     first = enqueue
     second = enqueue
     assert_equal [ first.id ], SessionAdmissionService.drain!
@@ -154,19 +154,19 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "lowering capacity does not evict existing reservations" do
-    with_ceiling(2)
+    with_company_limit(@company, 2)
     first = enqueue
     second = enqueue
     third = enqueue
     assert_equal [ first.id, second.id ], SessionAdmissionService.drain!
-    with_ceiling(1)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 1)
     assert_empty SessionAdmissionService.drain!
     assert_equal 2, SessionAdmission.occupied.count
     assert_nil third.reload.admitted_at
   end
 
-  test "unset installation cap gives each project its own independent queue" do
-    with_ceiling(nil, project: 1)
+  test "with no company limit each project has its own independent queue" do
+    with_scope_defaults(project: 1)
     other_project = create(:project, owner: @user, company: @user.companies.first)
     mine_first = enqueue
     mine_second = enqueue
@@ -176,35 +176,36 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_nil mine_second.reload.admitted_at, "one project filling up must not hold up another"
   end
 
-  # The queue is a project feature: a slot is allocated to a project, waited for
-  # in one and shown in one's settings. A session with no project — in practice an
-  # agent login — has no queue to join and launches without a reservation.
-  test "a session with no project is not queued at all" do
-    with_ceiling(1)
+  test "agent logins queue per user, two at a time" do
+    first = enqueue(project: nil)
+    second = enqueue(project: nil)
+    third = enqueue(project: nil)
+    other = enqueue(user: create(:user, :with_company), project: nil)
 
-    assert_nil enqueue(project: nil)
-    assert_equal 0, SessionAdmission.count
+    assert_equal [ first.id, second.id, other.id ].sort, SessionAdmissionService.drain!.sort
+    assert_nil third.reload.admitted_at
+    assert_equal "user:#{@user.id}", first.session_admission_pool.key
   end
 
-  test "an exempt session does not consume the installation ceiling" do
-    with_ceiling(1)
-    enqueue(project: nil)
+  test "an agent login does not consume the company's capacity" do
+    with_company_limit(@company, 1)
+    login = enqueue(project: nil)
     queued = enqueue
 
-    assert_equal [ queued.id ], SessionAdmissionService.drain!
+    assert_equal [ login.id, queued.id ].sort, SessionAdmissionService.drain!.sort
   end
 
-  # The point of the change: the installation limit and a project's own limit used
-  # to be alternatives — setting one switched the other off. Both apply now.
-  test "a project's own limit and the installation ceiling both apply" do
-    with_ceiling(3, project: 2)
-    other_project = create(:project, owner: @user, company: @user.companies.first)
+  # Both tiers apply at once: the company bounds the total, the project bounds
+  # its own share of it.
+  test "a project's own limit and its company's limit both apply" do
+    with_company_limit(@company, 3, project: 2)
+    other_project = create(:project, owner: @user, company: @company)
     3.times { enqueue }
     3.times { enqueue(project: other_project) }
 
     granted = SessionAdmissionService.drain!
 
-    assert_equal 3, granted.size, "the ceiling bounds the installation"
+    assert_equal 3, granted.size, "the company bounds the total"
     mine = SessionAdmission.occupied.joins(:session_admission_pool)
                            .where(session_admission_pools: { key: "project:#{@project.id}" }).count
     assert_equal 2, mine, "and each project is still bounded by its own limit"
@@ -213,8 +214,8 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   # The point of a reservation: it is capacity the project can count on, not a
   # number on a screen. An idle reservation is NOT lent to whoever asks first.
   test "a reserved project reaches its limit even after the shared pool is full" do
-    with_ceiling(4, project: 10)
-    reserved_project = create(:project, owner: @user, company: @user.companies.first)
+    with_company_limit(@company, 4, project: 10)
+    reserved_project = create(:project, owner: @user, company: @company)
     SessionConcurrencyLimit.set!(scope: reserved_project, max_sessions: 1)
 
     # @project has no limit of its own, so it shares the 3 nobody reserved.
@@ -226,12 +227,12 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     mine = enqueue(project: reserved_project)
 
     assert_equal [ mine.id ], SessionAdmissionService.drain!, "the reservation was still there for its owner"
-    assert_equal 4, SessionAdmission.occupied.count, "and the ceiling is still the ceiling"
+    assert_equal 4, SessionAdmission.occupied.count, "and the company limit is still the bound"
   end
 
   test "unreserved projects share only what the reservations leave" do
-    with_ceiling(5, project: 10)
-    reserved_project = create(:project, owner: @user, company: @user.companies.first)
+    with_company_limit(@company, 5, project: 10)
+    reserved_project = create(:project, owner: @user, company: @company)
     SessionConcurrencyLimit.set!(scope: reserved_project, max_sessions: 3)
     5.times { enqueue }
 
@@ -240,9 +241,9 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
 
   # Clearing a project's limit hands its capacity back to everyone else.
   test "a project without a limit of its own draws on the shared pool" do
-    with_ceiling(3, project: 10)
+    with_company_limit(@company, 3, project: 10)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 2)
-    other_project = create(:project, owner: @user, company: @user.companies.first)
+    other_project = create(:project, owner: @user, company: @company)
     3.times { enqueue(project: other_project) }
     assert_equal 1, SessionAdmissionService.drain!.size, "only 1 of 3 is unreserved"
 
@@ -254,46 +255,48 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_equal 3, SessionAdmission.occupied.count, "giving the reservation back releases it to the pool"
   end
 
-  # A reservation is validated against the ceiling when it is saved, but the
-  # ceiling is deployment configuration read live — so it can be lowered
-  # underneath one, and nothing in the application can refuse that. The ceiling
-  # then wins: a reservation is honoured only as far as it fits, rather than the
-  # ceiling quietly becoming advisory. QueueHealthCheck reports the state.
-  test "a ceiling lowered below the reservations still bounds the installation" do
-    with_ceiling(5, project: 10)
+  # A reservation is validated against its company when it is saved, but the
+  # company may be lowered underneath it afterwards — a downgrade must not be
+  # blocked by how the customer divided their capacity. The company then wins: a
+  # reservation is honoured only as far as it fits, rather than the company limit
+  # quietly becoming advisory. QueueHealthCheck reports the state.
+  test "a company lowered below its reservations still bounds its projects" do
+    with_company_limit(@company, 5, project: 10)
     SessionConcurrencyLimit.set!(scope: @project, max_sessions: 4)
-    with_scope_defaults(project: 10, installation_limit: 3)
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 3)
     4.times { enqueue }
 
-    assert_equal 3, SessionAdmissionService.drain!.size, "the ceiling is never advisory"
+    assert_equal 3, SessionAdmissionService.drain!.size, "the company limit is never advisory"
   end
 
-  test "the installation ceiling stops a project short of its own limit" do
-    with_ceiling(2, project: 5)
+  test "the company limit stops a project short of its own limit" do
+    with_company_limit(@company, 2, project: 5)
     3.times { enqueue }
 
     assert_equal 2, SessionAdmissionService.drain!.size
   end
 
-  test "raising the installation ceiling no longer requires a drain" do
-    # Pinned so the ceiling is the binding constraint: left to the ambient
+  test "raising a company limit takes effect without a cutover" do
+    # Pinned so the company is the binding constraint: left to the ambient
     # default, the project's own pool fills first and the test proves nothing
-    # about the ceiling.
-    with_ceiling(1, project: 5)
+    # about the company tier.
+    with_company_limit(@company, 1, project: 5)
     first = enqueue
     second = enqueue
     SessionAdmissionService.drain!
     assert_nil second.reload.admitted_at
 
-    # It used to re-home every live session, so it was refused while any ran.
-    with_ceiling(2)
+    # Writing the row wakes the queue itself (publish_change), so the raise is
+    # already spent by the time this returns — asserting on a later drain would
+    # find nothing and prove the opposite of what it looks like.
+    SessionConcurrencyLimit.set!(scope: @company, max_sessions: 2)
 
-    assert_equal [ second.id ], SessionAdmissionService.drain!
-    assert first.reload.admitted_at, "a moved ceiling must not disturb what is already running"
+    assert second.reload.admitted_at, "the raise admitted what was waiting"
+    assert first.reload.admitted_at, "and must not disturb what is already running"
   end
 
   test "a changed scope default takes effect without writing policy" do
-    with_ceiling(nil, project: 1)
+    with_scope_defaults(project: 1)
     project = create(:project, owner: @user, company: @user.companies.first)
     first = enqueue(project: project)
     second = enqueue(project: project)
@@ -315,7 +318,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "a scope override beats the deployment default, which beats nothing" do
-    with_ceiling(nil, project: 1)
+    with_scope_defaults(project: 1)
     project = create(:project, owner: @user, company: @user.companies.first)
     SessionConcurrencyLimit.set!(scope: project, max_sessions: 2)
 
@@ -329,7 +332,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "a session in a project draws on the project pool, not its launcher's" do
-    with_ceiling(nil, project: 1)
+    with_scope_defaults(project: 1)
     project = create(:project, owner: @user, company: @user.companies.first)
     other = create(:user, :with_company)
     create(:company_membership, user: other, company: project.company, state: :active)
@@ -343,7 +346,7 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
   end
 
   test "raising a scope limit admits the queue without waiting for reconciliation" do
-    with_ceiling(nil, project: 1)
+    with_scope_defaults(project: 1)
     project = create(:project, owner: @user, company: @user.companies.first)
     first = enqueue(project: project)
     second = enqueue(project: project)
@@ -356,18 +359,52 @@ class SessionAdmissionServiceTest < ActiveSupport::TestCase
     assert_equal [ first.id, second.id ], SessionAdmission.occupied.order(:id).pluck(:id)
   end
 
-  test "disabling admission with queued work is rejected" do
-    enqueue
-    assert_raises(ArgumentError) { SessionAdmissionPolicy.sync!(enabled: false) }
-    assert SessionAdmissionPolicy.current.enabled?
-  end
-
   test "queued session finish cancels without sending runtime commands" do
     admission = enqueue
     TemporalService.expects(:cancel_workflow).never
     SessionService.finish(session: admission.terminal_session)
     assert_equal "cancelled", admission.terminal_session.reload.state
     assert admission.reload.released_at
+  end
+
+  # A watchdog's verdict is a failure. Recording it as `cancelled` made the parent
+  # run cancel itself (WorkflowExecutionWorkflowV2), skipping on_failure.
+  test "a watchdog failing an admitted session records failed and still tears the runtime down" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    admission.reload.update!(launch_state: "claimed", claimed_at: Time.current)
+    session = admission.terminal_session
+    TemporalService.expects(:cancel_workflow).with(session.workflow_id).once
+
+    SessionService.fail_session(session: session, error_message: "No output for 30 minutes")
+
+    assert_equal "failed", session.reload.state
+    assert_equal "No output for 30 minutes", session.error_message
+    assert admission.reload.stop_requested_at
+    assert_nil admission.released_at, "confirmed cleanup, not the verdict, returns the slot"
+  end
+
+  test "a watchdog failing a session still in the queue closes its place as failed" do
+    admission = enqueue
+    TemporalService.expects(:cancel_workflow).never
+
+    SessionService.fail_session(session: admission.terminal_session, error_message: "Stale session")
+
+    assert_equal "failed", admission.terminal_session.reload.state
+    assert admission.reload.released_at
+  end
+
+  test "cancelling does not relabel a session that already ended" do
+    admission = enqueue
+    SessionAdmissionService.drain!
+    admission.reload.update!(launch_state: "acknowledged")
+    session = admission.terminal_session
+    session.update!(state: "finished", finished_at: Time.current)
+
+    SessionAdmissionService.cancel!(session)
+
+    assert_equal "finished", session.reload.state
+    assert admission.reload.stop_requested_at
   end
 
   test "unreleased sessions cannot be deleted but cancelled queue entries can" do

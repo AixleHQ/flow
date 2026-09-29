@@ -38,7 +38,16 @@ class WorkflowRun < ApplicationRecord
 
   enumerize :mode, in: %i[interactive non_interactive mixed], default: :interactive, predicates: true
 
+  def execution_workflow_id
+    "workflow-execution-#{id}"
+  end
+
   validates :mode, presence: true
+  # Run assets are copied into every step container and run repositories are
+  # cloned with their integration's token, so the ids — posted by a user or
+  # carried in by a webhook — must be this project's.
+  validates :input_asset_ids, tenant_ids: { model: Asset }, if: -> { new_record? || will_save_change_to_input_asset_ids? }
+  validates :repository_ids, tenant_ids: { model: Repository }, if: -> { new_record? || will_save_change_to_repository_ids? }
 
   broadcasts_to ->(run) { run }, on: :update
   after_commit :broadcast_run_list_update, on: :update
@@ -71,10 +80,21 @@ class WorkflowRun < ApplicationRecord
     where(relay_state: "pending", state: "pending", stop_requested_at: nil)
       .where(relay_attempts: ...RELAY_MAX_ATTEMPTS)
       .where(created_at: ..(now - RELAY_GRACE))
+      .where("relay_claimed_at IS NULL OR relay_claimed_at <= ?", now - RELAY_GRACE)
       .order(:id)
   }
 
   scope :active, -> { where(state: %w[pending running paused]) }
+  # What the run cost: the usage of every session its step runs ran in. A session
+  # shared by several step runs is counted once, which a JOIN would not do.
+  scope :with_total_cost_cents, -> {
+    select(arel_table[Arel.star], <<~SQL.squish)
+      (SELECT COALESCE(SUM(usage_statistics.cost_cents), 0)::bigint FROM usage_statistics
+       WHERE usage_statistics.terminal_session_id IN
+         (SELECT step_runs.terminal_session_id FROM step_runs WHERE step_runs.workflow_run_id = workflow_runs.id))
+      AS total_cost_cents
+    SQL
+  }
   scope :for_project_in_period, ->(project, since) { where(project: project, created_at: since..) }
   scope :for_user_in_project, ->(project, user, since) { where(project: project, user: user, created_at: since..) }
   scope :for_user_in_period, ->(user, since) { where(user: user, created_at: since..) }
@@ -129,23 +149,13 @@ class WorkflowRun < ApplicationRecord
 
   private
 
+  # Id only, like TerminalSession#broadcast_session_list_update: the page
+  # fetches the row back through its own authorized endpoint.
   def broadcast_run_list_update
-    return unless project_id.present?
+    return unless project
 
-    ActionCable.server.broadcast("workflow_run_list:project:#{project_id}", {
-      type: "run_update",
-      run: {
-        id: id,
-        workflowId: workflow_id,
-        workflowName: workflow&.name,
-        state: state,
-        mode: mode.to_s,
-        stepsCompleted: step_runs.where(state: :completed).count,
-        stepsTotal: step_runs_count,
-        startedAt: started_at&.iso8601,
-        completedAt: completed_at&.iso8601,
-        createdAt: created_at.iso8601
-      }
-    })
+    InertiaCable.broadcast([ project, :sessions_runs ], { type: "run_update", id: id })
+  rescue StandardError => e
+    Rails.logger.warn("[WorkflowRun] Run-list update for #{id} not sent: #{e.class}: #{e.message}")
   end
 end

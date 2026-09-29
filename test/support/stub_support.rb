@@ -4,29 +4,25 @@ module StubSupport
   # ===========================================================================
   # Session concurrency defaults
   #
-  # The queue's deployment inputs are read from Settings, which loads them from
-  # the environment at boot — so a test that wants a small cap replaces the
-  # settings block rather than mutating the process environment. `nil` stands
-  # for an unset variable, and a non-numeric value for a ConfigMap typo.
+  # The only deployment input left is the per-project default, read from Settings
+  # which loads it from the environment at boot — so a test that wants a small
+  # default replaces the settings block rather than mutating the process
+  # environment. Capacity itself is a SessionConcurrencyLimit row.
   # ===========================================================================
 
-  def with_scope_defaults(project: 1, installation_limit: nil)
+  def with_scope_defaults(project: 1)
     Settings.stubs(:session_admission).returns(
-      Hashie::Mash.new(
-        project_default: project,
-        installation_limit: installation_limit
-      )
+      Hashie::Mash.new(project_default: project)
     )
   end
 
-  # Admission on, with a ceiling, the way a deployment gets one: the ceiling is
-  # read live from the configuration, so there is nothing to write to the policy
-  # — `sync!` only performs the cutover. `project:` defaults to the built-in
-  # fallback so a test that only cares about the ceiling keeps the pool caps it
-  # had before this stopped being a policy column.
-  def with_ceiling(limit, project: 4)
-    with_scope_defaults(project: project, installation_limit: limit)
-    SessionAdmissionPolicy.sync!
+  # A company that has bought `limit` concurrent sessions. Capacity is a
+  # database row, not a deployment variable, so this writes one. `project:`
+  # defaults to the built-in fallback so a test that only cares about the company
+  # keeps the pool caps it would have had otherwise.
+  def with_company_limit(company, limit, project: 4)
+    with_scope_defaults(project: project)
+    SessionConcurrencyLimit.set!(scope: company, max_sessions: limit)
   end
 
   # ===========================================================================

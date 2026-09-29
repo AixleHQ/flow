@@ -36,6 +36,16 @@ copying the whole page. This keeps us in sync with future Administrate updates.
         class: "button"
       ) %>
     <% end %>
+    <% unless page.resource.deleted? || current_user.id == page.resource.id %>
+      <%= button_to(
+        "Sign out everywhere",
+        sign_out_everywhere_admin_user_path(page.resource),
+        method: :delete,
+        class: "button button--danger",
+        style: "margin-left: 0.5rem;",
+        data: { turbo_confirm: "End every browser session of #{page.resource.email}?" }
+      ) %>
+    <% end %>
   <% end %>
 <% end %>
 

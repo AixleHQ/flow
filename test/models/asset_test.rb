@@ -318,6 +318,36 @@ class AssetTest < ActiveSupport::TestCase
 
   # ====== Sharing ======
 
+  test "deleting a shared asset kills its link for good" do
+    asset = create(:asset, scope: @project, created_by: @owner)
+    token = asset.share!
+
+    asset.soft_delete!
+    asset.restore!
+
+    assert_not asset.reload.shared?
+    assert_nil Asset.publicly_shared.find_by(public_token: token)
+  end
+
+  test "stopping a share rotates the link" do
+    asset = create(:asset, scope: @project, created_by: @owner)
+    first = asset.share!
+
+    asset.unshare!
+    second = asset.share!
+
+    assert_not_equal first, second
+    assert_nil Asset.publicly_shared.find_by(public_token: first)
+  end
+
+  test "a deleted asset is never served, even if a token was left behind" do
+    asset = create(:asset, scope: @project, created_by: @owner)
+    token = asset.share!
+    asset.update_columns(deleted_at: Time.current)
+
+    assert_nil Asset.publicly_shared.find_by(public_token: token)
+  end
+
   test "#share_url returns nil until shared" do
     asset = create(:asset, scope: @project, created_by: @owner)
     assert { asset.share_url.nil? }

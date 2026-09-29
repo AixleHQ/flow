@@ -2,9 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Tool } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-
-import type { Tool } from 'shared/resources/tools/ToolsContent';
 
 import ToolsPage from './ToolsPage';
 
@@ -22,12 +21,15 @@ const makeTool = (overrides: Partial<Tool> = {}): Tool => ({
   command: 'python extract.py',
   requiredConfigItems: [],
   inputSchema: {},
+  tags: [],
   enabled: true,
   platformTool: false,
   scopeIndicator: 'project',
   toolFiles: [],
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  currentVersionNumber: 1,
+  archivedAt: null,
   ...overrides,
 });
 
@@ -39,7 +41,18 @@ const tools: Tool[] = [
     name: 'image_resizer',
     displayName: 'Image Resizer',
     dockerImage: null,
-    toolFiles: [{ path: 'a.txt', content: 'x', binary: false, fileName: null, fileUrl: null }],
+    toolFiles: [
+      {
+        id: 1,
+        path: 'a.txt',
+        content: 'x',
+        binary: false,
+        fileName: null,
+        fileUrl: null,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    ],
   }),
 ];
 
@@ -83,16 +96,13 @@ describe('Projects/Tools/ToolsPage', () => {
     expect(screen.queryByText('No wrappers yet')).not.toBeInTheDocument();
   });
 
-  it('deletes an editable project tool via the row action after confirmation', async () => {
+  it('archives an editable project tool via the row action after confirmation', async () => {
     renderAuthedPage(<ToolsPage />, { props: { project, tools, configItemNames: [] } });
 
     const firstRow = screen.getByText('PDF Extractor').closest('tr') as HTMLElement;
-    // Editable project tool exposes Edit + Delete action icons; click Delete (the red one is last).
-    const actionButtons = within(firstRow).getAllByRole('button');
-    await userEvent.click(actionButtons[actionButtons.length - 1]);
+    await userEvent.click(within(firstRow).getByRole('button', { name: 'Archive' }));
 
-    // Confirm in the DeleteToolModal (its confirm button is labelled "Delete").
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Archive' }));
 
     expect(router.delete).toHaveBeenCalledWith(
       '/company/projects/7/tools/1',

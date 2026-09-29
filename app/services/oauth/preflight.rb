@@ -20,7 +20,7 @@ module Oauth
         {
           mcp_server_id: server.id,
           name: server.name,
-          connect_url: "/oauth/mcp/#{server.id}/connect"
+          connect_url: "/oauth/mcp/#{server.id}/connect", connect_method: "post"
         }
       end
     end
@@ -37,9 +37,8 @@ module Oauth
       owner = server.credential_scope_per_user? ? user : server.scope
       return false if owner.nil?
 
-      cred = OauthCredential.for_mcp_server(server).for_owner(owner)
-                            .where.not(status: :revoked).order(updated_at: :desc).first
-      return false if cred.nil? || cred.error?
+      cred = OauthCredential.current_for(server: server, owner: owner)
+      return false if cred.nil? || cred.error? || !cred.tokens_readable?
 
       cred.access_token.present? && (!cred.expired? || cred.refreshable?)
     end

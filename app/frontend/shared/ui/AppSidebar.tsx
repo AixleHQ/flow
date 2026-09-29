@@ -20,7 +20,10 @@ import {
   IconPlugConnected,
   IconRobot,
   IconSettings,
+  IconTemplate,
   IconSparkles,
+  IconStar,
+  IconStarFilled,
   IconTerminal2,
   IconTool,
   IconUser,
@@ -29,17 +32,21 @@ import {
 } from '@tabler/icons-react';
 import { Fragment, useCallback, useMemo, useState } from 'react';
 
-import { CreateProjectModal } from 'pages/Projects/CreateProjectModal';
+import type { Membership } from '@/types/generated';
+
+import { CreateProjectModal } from 'shared/components/CreateProjectModal';
 import { getInitials } from 'shared/lib/getInitials';
 import {
   companyAssetsPath,
   companyMembersPath,
+  companySettingsPath,
   companyProjectAgentsPath,
   companyProjectAixleBuilderPath,
   companyProjectAnalyticsPath,
   companyProjectAssetsPath,
   companyProjectBoardPath,
   companyProjectConfigItemsPath,
+  companyProjectFavoritePath,
   companyProjectIntegrationsPath,
   companyProjectMCPServersPath,
   companyProjectMembersPath,
@@ -56,11 +63,12 @@ import {
   companySwitchPath,
   companyWorkflowCatalogIndexPath,
   profilePath,
+  templatesPath,
 } from 'shared/routes';
 
 import classes from './AppSidebar.module.css';
 import { ColorSchemeToggle } from './ColorSchemeToggle';
-import type { SharedMembership, SharedPermissions, SharedProject, SharedProps } from './types';
+import type { SharedPermissions, SharedProject, SharedProps } from './types';
 
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED_WIDTH = 60;
@@ -173,13 +181,18 @@ const companyNavGroups: NavGroup[] = [
   },
   {
     label: 'Library',
-    items: [{ label: 'Workflow Catalog', icon: <IconGitMerge size={18} />, path: companyWorkflowCatalogIndexPath() }],
+    items: [
+      { label: 'Templates', icon: <IconTemplate size={18} />, path: templatesPath() },
+      { label: 'Workflow Catalog', icon: <IconGitMerge size={18} />, path: companyWorkflowCatalogIndexPath() },
+    ],
   },
   {
     label: 'Admin',
     items: [
       { label: 'Assets', icon: <IconFiles size={18} />, path: companyAssetsPath(), adminOnly: true },
       { label: 'Members', icon: <IconUsers size={18} />, path: companyMembersPath() },
+      // Sign-in methods moved into Settings as its Access tab; one entry now.
+      { label: 'Settings', icon: <IconSettings size={18} />, path: companySettingsPath() },
     ],
   },
 ];
@@ -195,7 +208,7 @@ function CompanyRail({
   memberships,
   currentCompanyId,
 }: {
-  memberships: SharedMembership[];
+  memberships: Membership[];
   currentCompanyId: number | null;
 }) {
   const switchTo = (companyId: number) => {
@@ -392,7 +405,7 @@ function SidebarNav({ groups, collapsed, isAdmin, collapsedGroups, toggleGroup, 
 
 // ─── SidebarWorkspaceSwitcher ─────────────────────────────────────────────────
 
-const MEMBERSHIP_ROLE_LABELS: Record<SharedMembership['role'], string> = {
+const MEMBERSHIP_ROLE_LABELS: Record<Membership['role'], string> = {
   admin: 'Admin',
   employee: 'Employee',
   viewer: 'Viewer',
@@ -404,6 +417,7 @@ interface SidebarWorkspaceSwitcherProps {
   currentProjectId: string | null;
   companyName: string;
   context: 'project' | 'company';
+  canCreateProject: boolean;
   onExpand: () => void;
 }
 
@@ -413,6 +427,7 @@ function SidebarWorkspaceSwitcher({
   currentProjectId,
   companyName,
   context,
+  canCreateProject,
   onExpand,
 }: SidebarWorkspaceSwitcherProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -421,13 +436,22 @@ function SidebarWorkspaceSwitcher({
 
   const currentProject = currentProjectId ? (projects.find((p) => String(p.id) === currentProjectId) ?? null) : null;
 
-  const filteredProjects = useMemo(
-    () =>
-      search.trim()
-        ? projects.filter((p) => p.name.toLocaleLowerCase().includes(search.toLocaleLowerCase()))
-        : projects,
-    [search, projects],
-  );
+  // Active-only + favorites first: IndexPage overwrites shared `projects` with
+  // every state, and the switcher's contract is the everyday active set. Client
+  // sort matches the projects grid so a star toggle reorders even when the
+  // incoming array order is stale relative to `favorite` flags.
+  const filteredProjects = useMemo(() => {
+    const ordered = projects
+      .filter((p) => p.state === 'active')
+      .sort(
+        (a, b) =>
+          Number(b.favorite) - Number(a.favorite) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+      );
+
+    if (!search.trim()) return ordered;
+    const query = search.toLocaleLowerCase();
+    return ordered.filter((p) => p.name.toLocaleLowerCase().includes(query));
+  }, [search, projects]);
 
   const handleSwitcherClick = () => {
     if (collapsed) {
@@ -448,6 +472,17 @@ function SidebarWorkspaceSwitcher({
   const handleAllProjectsClick = () => {
     setPopoverOpen(false);
     router.visit(companyProjectsPath());
+  };
+
+  const handleToggleFavorite = (project: SharedProject) => {
+    const path = companyProjectFavoritePath(project.id);
+    const options = { preserveScroll: true, preserveState: true };
+
+    if (project.favorite) {
+      router.delete(path, options);
+    } else {
+      router.post(path, {}, options);
+    }
   };
 
   const handleNewProject = () => {
@@ -516,23 +551,46 @@ function SidebarWorkspaceSwitcher({
           <div className={classes.swProjectsSection}>
             <span className={classes.dpLabel}>PROJECTS</span>
             <div className={classes.swProjectsList}>
-              {filteredProjects.map((project) => {
+              {filteredProjects.map((project, index) => {
                 const isActive = String(project.id) === currentProjectId;
+                const prev = filteredProjects[index - 1];
+                const showDivider = Boolean(prev?.favorite && !project.favorite);
+                const favoriteLabel = project.favorite
+                  ? `Remove ${project.name} from favorites`
+                  : `Add ${project.name} to favorites`;
+
                 return (
-                  <UnstyledButton
-                    key={project.id}
-                    component={Link}
-                    href={companyProjectPath(String(project.id))}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`${classes.dpItem} ${isActive ? classes.dpItemActive : ''}`}
-                    onClick={handleProjectClick}
-                  >
-                    <div className={classes.dpIco}>
-                      <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
+                  <Fragment key={project.id}>
+                    {showDivider && <div className={classes.dpSplit} role="separator" />}
+                    <div className={`${classes.dpProjectRow} ${isActive ? classes.dpItemActive : ''}`}>
+                      <Link
+                        href={companyProjectPath(String(project.id))}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={classes.dpItemLink}
+                        onClick={handleProjectClick}
+                      >
+                        <div className={classes.dpIco}>
+                          <span className={classes.dpIcoLetter}>{(project.name?.[0] ?? 'P').toUpperCase()}</span>
+                        </div>
+                        <span className={classes.dpName}>{project.name}</span>
+                        {isActive && <IconCheck size={12} className={classes.dpCheck} />}
+                      </Link>
+                      <button
+                        type="button"
+                        className={`${classes.dpStar} ${project.favorite ? classes.dpStarOn : ''}`}
+                        aria-label={favoriteLabel}
+                        aria-pressed={project.favorite}
+                        title={favoriteLabel}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          handleToggleFavorite(project);
+                        }}
+                      >
+                        {project.favorite ? <IconStarFilled size={13} /> : <IconStar size={13} />}
+                      </button>
                     </div>
-                    <span className={classes.dpName}>{project.name}</span>
-                    {isActive && <IconCheck size={12} className={classes.dpCheck} />}
-                  </UnstyledButton>
+                  </Fragment>
                 );
               })}
             </div>
@@ -552,16 +610,18 @@ function SidebarWorkspaceSwitcher({
             </UnstyledButton>
           </div>
 
-          <div className={classes.dpFooter}>
-            <button
-              type="button"
-              className={classes.dpNewProject}
-              onClick={handleNewProject}
-              aria-label="Create new project"
-            >
-              + New project
-            </button>
-          </div>
+          {canCreateProject && (
+            <div className={classes.dpFooter}>
+              <button
+                type="button"
+                className={classes.dpNewProject}
+                onClick={handleNewProject}
+                aria-label="Create new project"
+              >
+                + New project
+              </button>
+            </div>
+          )}
         </Popover.Dropdown>
       </Popover>
 
@@ -669,6 +729,7 @@ function SidebarContent({
         currentProjectId={currentProjectId}
         companyName={companyName}
         context={context}
+        canCreateProject={permissions?.canWrite ?? true}
         onExpand={onExpand}
       />
 

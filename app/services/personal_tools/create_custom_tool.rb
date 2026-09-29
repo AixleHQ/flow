@@ -21,7 +21,8 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :create?, policy: Web::Company::Projects::ToolsPolicy, project: project)
-      tool = project.tools.create!(params.slice(*ATTRS).compact)
+      tool = project.tools.new(params.slice(*ATTRS).compact)
+      Versions.save!(tool, actor: version_actor) { tool.save! }
       success(id: tool.id, name: tool.name, display_name: tool.display_name, source: tool.source)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create tool: #{e.message}")

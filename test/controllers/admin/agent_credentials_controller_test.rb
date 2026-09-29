@@ -41,6 +41,18 @@ module Admin
       assert_response :success
     end
 
+    test "the show page names the login blocks, and still renders one this server cannot read" do
+      @credential.update!(config_data: { "claudeAiOauth" => {}, "designOauth" => {} })
+      get :show, params: { id: @credential.id }
+      assert_includes response.body, "claudeAiOauth, designOauth"
+
+      @credential.update_columns(encrypted_config_data: "not-a-ciphertext",
+                                 metadata: @credential.metadata.except("config_keys"))
+      get :show, params: { id: @credential.id }
+      assert_response :success
+      assert_includes response.body, "Unable to decrypt"
+    end
+
     test "should get edit" do
       get :edit, params: { id: @credential.id }
       assert_response :success

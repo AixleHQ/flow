@@ -29,7 +29,7 @@ module Webhooks
       }
       rw = received(payload)
 
-      WorkflowService.expects(:start).with(
+      WorkflowService.expects(:enqueue).with(
         has_entries(workflow: @workflow, user: @user, mode: :non_interactive)
       ).once.returns(build(:workflow_run))
 
@@ -53,7 +53,7 @@ module Webhooks
       rw = received(payload, key: "EvFan")
 
       # Both projects' triggers fire from the one workspace event.
-      WorkflowService.expects(:start).twice.returns(build(:workflow_run))
+      WorkflowService.expects(:enqueue).twice.returns(build(:workflow_run))
 
       Webhooks::ProcessEventJob.perform_now(rw.id)
 
@@ -67,7 +67,7 @@ module Webhooks
       }
       rw = received(payload, key: "EvMsg")
 
-      WorkflowService.expects(:start).never
+      WorkflowService.expects(:enqueue).never
 
       Webhooks::ProcessEventJob.perform_now(rw.id)
 
@@ -79,7 +79,7 @@ module Webhooks
       payload = { "event" => { "type" => "app_mention", "channel" => "C1", "bot_id" => "B1" } }
       rw = received(payload, key: "Ev2")
 
-      WorkflowService.expects(:start).never
+      WorkflowService.expects(:enqueue).never
 
       Webhooks::ProcessEventJob.perform_now(rw.id)
 
@@ -104,7 +104,7 @@ module Webhooks
       }
       rw = received(payload, key: "EvF")
 
-      WorkflowService.expects(:start).with(
+      WorkflowService.expects(:enqueue).with(
         has_entries(
           workflow: @workflow,
           shared_context: has_entries(
@@ -134,7 +134,7 @@ module Webhooks
       }
       rw = received(payload, key: "EvThread")
 
-      WorkflowService.expects(:start).with(
+      WorkflowService.expects(:enqueue).with(
         has_entries(
           shared_context: has_entries(
             "slack" => has_entries("ts" => "222.333", "thread_ts" => "111.222")
@@ -156,7 +156,7 @@ module Webhooks
       fake_slack = stub_slack_client!
       fake_slack.file_body = "BYTES"
       captured = nil
-      WorkflowService.expects(:start).with { |kw| captured = kw; true }.returns(build(:workflow_run))
+      WorkflowService.expects(:enqueue).with { |kw| captured = kw; true }.returns(build(:workflow_run))
 
       payload = {
         "type" => "event_callback", "event_id" => "EvFiles", "team_id" => "T1",
@@ -184,11 +184,66 @@ module Webhooks
       payload = { "event_id" => "Ev3", "event" => { "type" => "app_mention", "channel" => "OTHER" } }
       rw = received(payload, key: "Ev3")
 
+      WorkflowService.expects(:enqueue).never
+
+      Webhooks::ProcessEventJob.perform_now(rw.id)
+
+      assert_equal "processed", rw.reload.status
+    end
+
+    test "replies with help on a bare mention when no text predicate matches" do
+      @binding.update!(filter_predicate: { "channel" => "C1", "text" => { "op" => "contains", "value" => "ship" } })
+      integration = Integration.create!(
+        provider: :slack, company: @user.companies.first, project: nil, connected_by: @user,
+        name: "Acme", status: :active
+      )
+      integration.update!(credentials_data: { "bot_token" => "xoxb-help" })
+      @endpoint.update!(config: { "integration_id" => integration.id })
+      stub_slack_client!
+
+      payload = {
+        "type" => "event_callback", "event_id" => "EvBare", "team_id" => "T1",
+        "event" => { "type" => "app_mention", "channel" => "C1", "user" => "U1",
+                     "text" => "<@B0T>", "ts" => "10.1" }
+      }
+      rw = received(payload, key: "EvBare")
+
       WorkflowService.expects(:start).never
 
       Webhooks::ProcessEventJob.perform_now(rw.id)
 
       assert_equal "processed", rw.reload.status
+      msg = fake_slack.last_posted_message
+      assert_equal "C1", msg[:channel]
+      assert_equal "10.1", msg[:thread_ts]
+      assert_match(/Available commands|No Slack triggers/, msg[:text])
+    end
+
+    test "replies with help when the mention text is /help" do
+      integration = Integration.create!(
+        provider: :slack, company: @user.companies.first, project: nil, connected_by: @user,
+        name: "Acme", status: :active
+      )
+      integration.update!(credentials_data: { "bot_token" => "xoxb-help" })
+      @endpoint.update!(config: { "integration_id" => integration.id })
+      stub_slack_client!
+
+      payload = {
+        "type" => "event_callback", "event_id" => "EvHelp", "team_id" => "T1",
+        "event" => { "type" => "app_mention", "channel" => "C1", "user" => "U1",
+                     "text" => "<@B0T> /help", "ts" => "20.2" }
+      }
+      rw = received(payload, key: "EvHelp")
+
+      WorkflowService.expects(:start).never
+
+      Webhooks::ProcessEventJob.perform_now(rw.id)
+
+      assert_equal "processed", rw.reload.status
+      msg = fake_slack.last_posted_message
+      assert_equal "C1", msg[:channel]
+      assert_match(/Available commands/, msg[:text])
+      assert_equal 0, TriggerDispatch.count
     end
   end
 end

@@ -92,7 +92,7 @@ class Web::Company::Projects::BoardsController < Web::Company::Projects::Applica
         next [] unless task
         # step_runs: :step because the resource renders a row per step run; without the
         # preload a task with a run history costs two queries per run.
-        task.workflow_runs.includes(:workflow, step_runs: :step).order(created_at: :desc)
+        task.workflow_runs.with_total_cost_cents.includes(:workflow, step_runs: :step).order(created_at: :desc)
             .map { |r| TaskWorkflowRunResource.new(r).to_h }
       },
       task_statistics: -> {

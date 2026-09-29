@@ -85,6 +85,21 @@ class StepTest < ActiveSupport::TestCase
     assert step.valid?
   end
 
+  test "a step can be pinned to every runtime a user can connect" do
+    CompanyMembership::AVAILABLE_AGENTS.each do |runtime|
+      step = build(:step, workflow: @workflow, position: 1, required_agent_runtime: runtime)
+
+      assert step.valid?, "#{runtime}: #{step.errors.full_messages.to_sentence}"
+    end
+  end
+
+  test "an unknown runtime is rejected" do
+    step = build(:step, workflow: @workflow, position: 1, required_agent_runtime: "vim")
+
+    assert_not step.valid?
+    assert step.errors.added?(:required_agent_runtime, :inclusion, value: "vim")
+  end
+
   test "nested sub_steps via accepts_nested_attributes" do
     step = create(:step, workflow: @workflow, position: 1, sub_steps_attributes: [
       { name: "Sub 1", position: 1 },
@@ -93,12 +108,41 @@ class StepTest < ActiveSupport::TestCase
     assert_equal 2, step.sub_steps.count
   end
 
-  test "destroying step destroys sub_steps" do
+  test "destroy soft-deletes a step that never ran, keeping its id and sub-steps" do
     step = create(:step, workflow: @workflow, position: 1)
-    create(:sub_step, step: step, position: 1)
-    assert_difference "SubStep.count", -1 do
+    sub = create(:sub_step, step: step, position: 1)
+
+    assert_no_difference [ "Step.count", "SubStep.count" ] do
       step.destroy
     end
+    assert step.reload.deleted?
+    assert_equal step, sub.reload.step
+  end
+
+  test "steps that would wait on each other are rejected, naming the cycle" do
+    build_step = create(:step, workflow: @workflow, name: "Build", position: 1)
+    test_step = create(:step, workflow: @workflow, name: "Test", position: 2, depends_on_step_ids: [ build_step.id ])
+
+    assert_not build_step.update(depends_on_step_ids: [ test_step.id ])
+    assert_includes build_step.errors[:depends_on_step_ids], "would create a cycle: Build → Test → Build"
+  end
+
+  test "a longer cycle is rejected too" do
+    first = create(:step, workflow: @workflow, name: "First", position: 1)
+    second = create(:step, workflow: @workflow, name: "Second", position: 2, depends_on_step_ids: [ first.id ])
+    third = create(:step, workflow: @workflow, name: "Third", position: 3, depends_on_step_ids: [ second.id ])
+
+    assert_not first.update(depends_on_step_ids: [ third.id ])
+    assert_includes first.errors[:depends_on_step_ids], "would create a cycle: First → Third → Second → First"
+  end
+
+  test "a diamond is not a cycle" do
+    root = create(:step, workflow: @workflow, name: "Root", position: 1)
+    left = create(:step, workflow: @workflow, name: "Left", position: 2, depends_on_step_ids: [ root.id ])
+    right = create(:step, workflow: @workflow, name: "Right", position: 3, depends_on_step_ids: [ root.id ])
+
+    assert create(:step, workflow: @workflow, name: "Join", position: 4, depends_on_step_ids: [ left.id, right.id ]).valid?
+    assert right.update(depends_on_step_ids: [ root.id, left.id ])
   end
 
   test "destroy returns false when another active step depends on it" do
@@ -116,8 +160,36 @@ class StepTest < ActiveSupport::TestCase
     step_b = create(:step, workflow: @workflow, position: 2, depends_on_step_ids: [ step_a.id ])
     step_b.soft_delete!
 
-    assert_difference "Step.count", -1 do
-      step_a.destroy
-    end
+    step_a.destroy
+    assert step_a.reload.deleted?
+  end
+
+  test "rejects agents, tools, MCP servers and repositories of another project" do
+    other = create(:project, :standalone)
+    step = build(:step, workflow: @workflow,
+                        agent: create(:agent, scope: other),
+                        tool_ids: [ create(:tool, scope: other).id ],
+                        mcp_server_ids: [ create(:mcp_server, scope: other).id ],
+                        repository_ids: [ create(:repository, scope: other).id ])
+
+    assert_not step.valid?
+    assert_equal %i[agent_id mcp_server_ids repository_ids tool_ids], step.errors.attribute_names.sort
+  end
+
+  test "accepts own resources and platform tools" do
+    platform_tool = create(:tool, :system)
+    step = build(:step, workflow: @workflow,
+                        agent: create(:agent, scope: @project),
+                        tool_ids: [ create(:tool, scope: @project).id, platform_tool.id ],
+                        asset_ids: [ create(:asset, scope: @company).id ])
+
+    assert step.valid?, step.errors.full_messages.to_sentence
+  end
+
+  test "a stale foreign id already on the step does not block unrelated edits" do
+    step = create(:step, workflow: @workflow)
+    step.update_column(:mcp_server_ids, [ create(:mcp_server, scope: create(:project, :standalone)).id ])
+
+    assert step.reload.update(name: "Renamed"), step.errors.full_messages.to_sentence
   end
 end

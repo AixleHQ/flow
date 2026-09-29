@@ -37,13 +37,119 @@ class CompanyMembership < ApplicationRecord
   enumerize :role, in: %i[employee admin viewer], default: :employee, predicates: true, scope: true
   enumerize :position, in: POSITIONS, predicates: true
 
+  # ── SCIM (CAP-6) ──
+  # A customer's directory sees a membership as a User: the person exists
+  # globally, but the directory only owns their presence in ITS company.
+  def self.scim_resource_type = Scimitar::Resources::User
+
+  def self.scim_attributes_map
+    {
+      id: :id,
+      externalId: :scim_external_id,
+      userName: :scim_user_name,
+      name: { givenName: :scim_given_name, familyName: :scim_family_name },
+      emails: [ { match: "type", with: "work", using: { value: :scim_user_name, primary: false } } ],
+      active: :scim_active
+    }
+  end
+
+  # `userName` is deliberately NOT mutable. A directory owns its members'
+  # presence in its own company, not who they are: letting it PATCH userName
+  # would let it repoint an existing membership — with whatever role that row
+  # held — at an unrelated global account, and detach the original holder. The
+  # address is set once, at provisioning; changing it is an account-level act
+  # that belongs to the person, not to a directory.
+  def self.scim_mutable_attributes = %i[scim_given_name scim_family_name scim_active]
+
+  def self.scim_queryable_attributes
+    { "userName" => { column: User.arel_table[:email], associations: [ :user ] } }
+  end
+
+  def self.scim_timestamps_map = { created: :created_at, lastModified: :updated_at }
+
+  # Included AFTER the maps above: the mixin reads them at include time and
+  # raises "You must define ::scim_resource_type" if they are not there yet.
+  include Scimitar::Resources::Mixin
+
+  # The directory's own identifier for this person. Kept so a rename on their
+  # side does not look like a new person on ours.
+  def scim_external_id = user&.id&.to_s
+
+  def scim_user_name = user&.email
+
+  # Provisioning creates the global User if this is the first company to know
+  # them, and always creates the membership. It never creates an identity: the
+  # first real sign-in does that (AD-10).
+  #
+  # On an EXISTING membership this renames the person already on the row. It must
+  # never repoint the row at a different account: a directory that sent
+  # `userName: someone-else@elsewhere.com` in a PATCH would otherwise hand that
+  # stranger whatever role the row already held — including admin — in a company
+  # they have no relationship with, and detach the original holder from their own
+  # membership. The directory owns its members' presence here, not who they are.
+  def scim_user_name=(value)
+    email = value.to_s.strip.downcase
+    return if email.blank?
+
+    if persisted? && user.present?
+      return if user.email.casecmp?(email)
+
+      if User.where(email: email).where.not(id: user_id).exists?
+        raise Scimitar::ResourceInvalidError,
+              "userName #{email} already belongs to another account; it cannot be moved onto this one"
+      end
+
+      user.update!(email: email)
+      return
+    end
+
+    self.user = User.find_or_initialize_by(email: email).tap do |u|
+      u.name = u.name.presence || email.split("@").first
+      u.save!
+    end
+    self.company ||= ScimCurrent.company
+  end
+
+  def scim_given_name = user&.name.to_s.split(" ").first
+  def scim_family_name = user&.name.to_s.split(" ")[1..]&.join(" ")
+
+  def scim_given_name=(value)
+    @scim_given = value
+    apply_scim_name
+  end
+
+  def scim_family_name=(value)
+    @scim_family = value
+    apply_scim_name
+  end
+
+  # `active` is the whole deprovisioning story: a directory flips it to false
+  # when someone leaves, and that must be the SAME transition a human removal
+  # makes, not a parallel path into the same row.
+  def scim_active = active?
+
+  def scim_active=(value)
+    wanted = ActiveModel::Type::Boolean.new.cast(value)
+    @scim_active_target = wanted
+  end
+
+  # Applied after save so the state machine runs on a persisted row.
+  after_save :apply_scim_active_target, if: -> { defined?(@scim_active_target) && !@scim_active_target.nil? }
+
   # Validations
   validates :user_id, uniqueness: { scope: :company_id, message: "already has a membership in this company" }
   validates :preferred_agent_language, inclusion: { in: AGENT_LANGUAGES }, allow_nil: true
   validate :selected_agents_valid
   validate :default_agent_credential_matches_scope
   validate :cannot_remove_last_admin, on: :update
+  before_destroy :refuse_to_remove_last_admin, unless: -> { destroyed_by_association&.active_record == Company }
   validate :owned_projects_have_an_heir, on: :update
+  validate :viewer_promotion_allowed, on: :update
+
+  # A viewer finished onboarding without the agent step. Promotion reopens it
+  # even when credentials already exist here, so write access never arrives
+  # without the member passing that step.
+  before_update :reopen_onboarding_after_promotion, if: :promoted_from_viewer?
 
   # Ransack (members search: by the member's name/email through :user)
   def self.ransackable_attributes(_auth_object = nil)
@@ -67,6 +173,10 @@ class CompanyMembership < ApplicationRecord
   # A revoked member keeps no live company streams: kill their cable
   # connections so open sockets re-authenticate (and lose company channels).
   after_update_commit :disconnect_user_cables, if: -> { saved_change_to_state? && state == "revoked" }
+  # ...and no running session: each gate a container reaches re-checks the
+  # membership (TerminalSession#owner_entitled?), and the sessions themselves
+  # are stopped so nothing keeps working on the company's repositories.
+  after_update_commit :stop_company_sessions, if: -> { saved_change_to_state? && state == "revoked" }
 
   # In-transaction (not _commit): the transfer and the revocation must land
   # together, or a crash between them leaves projects owned by a non-member.
@@ -158,6 +268,10 @@ class CompanyMembership < ApplicationRecord
     true
   end
 
+  def promoted_from_viewer?
+    role_changed? && attribute_was(:role) == "viewer" && !viewer?
+  end
+
   def agent_models_by_type
     credentials.each_with_object({}) do |cred, hash|
       models = fetch_or_cache_agent_models(cred)
@@ -174,7 +288,79 @@ class CompanyMembership < ApplicationRecord
     end
   end
 
+  # Revokes the membership after handing each owned project to the member
+  # chosen for it (`{ project_id => user_id }`). Projects left out still go to
+  # the heir. Nothing changes unless every handover and the revocation succeed.
+  def revoke_with_handover(heir_ids_by_project_id = {})
+    return false unless may_revoke?
+
+    revoked = false
+    transaction do
+      heir_ids_by_project_id.each do |project_id, heir_id|
+        project = company.projects.find_by(id: project_id, owner_id: user_id)
+        next if project&.transfer_ownership_to(User.find_by(id: heir_id), keep_previous_owner: false)
+
+        errors.add(:base, project ? "#{project.name}: #{project.errors.full_messages.to_sentence}" : "Project #{project_id} is not owned by this member")
+        raise ActiveRecord::Rollback
+      end
+
+      aasm(:state).fire(:revoke)
+      raise ActiveRecord::Rollback unless save
+
+      revoked = true
+    end
+    restore_attributes([ :state ]) unless revoked
+    revoked
+  end
+
+  # The company's oldest active admin excluding a given user — the canonical
+  # heir-selection rule used when a project owner is revoked or permanently
+  # deleted. Shared so both paths always agree on whom to pick.
+  def self.heir_for(company, excluding_user:)
+    company.company_memberships
+           .active
+           .where(role: "admin")
+           .where.not(user_id: excluding_user.id)
+           .default_order
+           .first
+  end
+
   private
+
+  def apply_scim_name
+    return if user.nil?
+
+    full = [ @scim_given, @scim_family ].compact_blank.join(" ")
+    user.update!(name: full) if full.present?
+  end
+
+  def apply_scim_active_target
+    target = @scim_active_target
+    @scim_active_target = nil
+
+    with_lock do
+      if target
+        # Auto-acceptance is only safe inside the domain this company
+        # demonstrably owns (the AD-17 trust anchor). Anyone else is left
+        # `invited` and has to accept, exactly as a hand-written invitation
+        # requires — a directory must not be able to conscript an arbitrary
+        # existing account into its company.
+        if scim_domain_owned_by_company?
+          accept! if may_accept?
+          reactivate! if may_reactivate?
+        elsif may_reactivate?
+          reactivate!
+        end
+      elsif may_revoke?
+        revoke!
+      end
+    end
+  end
+
+  def scim_domain_owned_by_company?
+    domain = user&.email.to_s.split("@").last
+    domain.present? && company&.email_domain.to_s.casecmp?(domain)
+  end
 
   # Fetch the model list for a credential, caching per-credential (not globally —
   # the old key collided across users, so one user's fallback poisoned everyone).
@@ -197,10 +383,32 @@ class CompanyMembership < ApplicationRecord
     end
 
     models
+  rescue Encryptable::DecryptionError => e
+    Rails.logger.error("[CompanyMembership] #{e.message}")
+    []
   end
 
   def set_onboarding_completed_at
     self.onboarding_completed_at = Time.current
+  end
+
+  def clear_onboarding_completed_at
+    self.onboarding_completed_at = nil
+  end
+
+  def reopen_onboarding_after_promotion
+    aasm(:onboarding_state).fire(:reopen) if onboarding_completed?
+  end
+
+  # Product rule (flow-dev #2025): a viewer becomes Employee first, never Admin
+  # in one step. A re-invite of a revoked viewer is a fresh invitation in the
+  # new role, so neither rule applies to it.
+  def viewer_promotion_allowed
+    return unless promoted_from_viewer?
+    return if attribute_was(:state) == "revoked"
+
+    errors.add(:role, "of a viewer can only change to Employee") unless employee?
+    errors.add(:base, "Only an active viewer can be promoted") unless attribute_was(:state) == "active" && active?
   end
 
   def selected_agents_valid
@@ -223,18 +431,6 @@ class CompanyMembership < ApplicationRecord
 
   def becoming_revoked?
     state == "revoked" && attribute_was(:state) != "revoked"
-  end
-
-  # The company's oldest active admin excluding a given user — the canonical
-  # heir-selection rule used when a project owner is revoked or permanently
-  # deleted. Shared so both paths always agree on whom to pick.
-  def self.heir_for(company, excluding_user:)
-    company.company_memberships
-           .active
-           .where(role: "admin")
-           .where.not(user_id: excluding_user.id)
-           .default_order
-           .first
   end
 
   def heir_membership
@@ -261,7 +457,9 @@ class CompanyMembership < ApplicationRecord
   # whenever there is anything to move.
   def reassign_owned_projects
     company.projects.where(owner_id: user_id).find_each do |project|
-      project.update!(owner_id: heir_membership.user_id)
+      next if project.transfer_ownership_to(heir_membership.user, keep_previous_owner: false)
+
+      raise ActiveRecord::RecordInvalid, project
     end
   end
 
@@ -295,6 +493,14 @@ class CompanyMembership < ApplicationRecord
     MembershipMailer.role_changed(self, previous_role).deliver_later
   end
 
+  def stop_company_sessions
+    TerminalSession.active.where(user_id: user_id, company_id: company_id).find_each do |session|
+      SessionService.fail_session(session: session, error_message: "Stopped: the owner's membership was revoked")
+    rescue StandardError => e
+      Rails.logger.warn("[CompanyMembership] Failed to stop session #{session.id} for revoked user #{user_id}: #{e.message}")
+    end
+  end
+
   def disconnect_user_cables
     ActionCable.server.remote_connections.where(current_user: user).disconnect
   rescue StandardError => e
@@ -309,13 +515,26 @@ class CompanyMembership < ApplicationRecord
 
     still_active_admin = role.to_s == "admin" && state == "active"
     return if still_active_admin
-
-    other_active_admins = company.company_memberships
-                                 .where(role: "admin", state: "active")
-                                 .where.not(id: id)
-    return if other_active_admins.exists?
+    return if other_active_admins?
 
     errors.add(:base, "Cannot demote or remove the last admin")
+  end
+
+  # Deleting the membership — the person's account going with it — is removing
+  # the admin as surely as demoting them. Deleting the company is not.
+  def refuse_to_remove_last_admin
+    return unless role.to_s == "admin" && state == "active"
+    return if other_active_admins?
+
+    errors.add(:base, "Cannot remove the last admin of #{company.name}")
+    throw :abort
+  end
+
+  # Takes the company row lock first: two admins demoting each other at once
+  # would otherwise each still see the other as an admin, and both commit.
+  def other_active_admins?
+    Company.lock.find(company_id)
+    company.company_memberships.where(role: "admin", state: "active").where.not(id: id).exists?
   end
 
   def set_accepted_at

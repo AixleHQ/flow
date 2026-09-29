@@ -68,11 +68,11 @@ class OauthClientTest < ActiveSupport::TestCase
     assert OauthClient.create!(valid_attrs(client_secret: "s3cr3t")).confidential?
   end
 
-  test "client_secret returns nil when the ciphertext is tampered" do
+  test "a tampered client secret raises instead of reading as absent" do
     client = OauthClient.create!(valid_attrs)
     client.update_column(:encrypted_client_secret, "not-a-valid-ciphertext")
 
-    assert_nil client.reload.client_secret
+    assert_raises(Encryptable::DecryptionError) { client.reload.client_secret }
   end
 
   # --- association ---

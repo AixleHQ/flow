@@ -1,13 +1,6 @@
 # frozen_string_literal: true
 
 class CompanySessionSourceBreakdownService
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
-
   SOURCE_LABEL = {
     "agent_session" => "Standalone",
     "workflow_step" => "From Workflows",
@@ -22,7 +15,7 @@ class CompanySessionSourceBreakdownService
     @company = company
     @user    = user
     @scope   = scope.to_s
-    @since   = PERIOD_DAYS.fetch(period.to_s, 30).days.ago
+    @since   = AnalyticsPeriod.since(period.to_s)
   end
 
   def call

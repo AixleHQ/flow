@@ -71,13 +71,22 @@ class WorkflowRunResource < ApplicationResource
     run.step_runs.sum { |sr| sr.terminal_session&.cost_cents.to_i }
   end
 
+  # Distinct workflow versions the launched steps ran, oldest first. More than
+  # one means someone saved the workflow while this run was in progress.
+  typelize "number[]"
+  attribute :workflow_version_numbers do |run|
+    run.step_runs.filter_map { |sr| sr.workflow_version&.number }.uniq.sort
+  end
+
   typelize "StepRun[]"
   attribute :step_runs do |run|
     step_name_map = run.workflow.steps.each_with_object({}) { |s, h| h[s.id] = s.name }
-    traefik = { ws_base: Settings.traefik.ws_base, http_base: Settings.traefik.http_base }
+    traefik = { http_base: Settings.traefik.http_base, ws_base: Settings.traefik.ws_base }
 
     run.step_runs.sort_by(&:created_at).map do |sr|
-      StepRunResource.new(sr, params: { step_name_map: step_name_map, traefik: traefik }).to_h
+      step_params = { step_name_map: step_name_map, traefik: traefik }
+      step_params[:viewer] = params[:viewer] if params.key?(:viewer)
+      StepRunResource.new(sr, params: step_params).to_h
     end
   end
 end

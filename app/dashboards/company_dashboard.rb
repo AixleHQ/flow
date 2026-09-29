@@ -28,7 +28,17 @@ class CompanyDashboard < Administrate::BaseDashboard
       collection: ->(field) { available_events_collection(field, :state) }
     ),
     settings: Field::JSONB,
-    initial_admin_email: Field::String,
+    # The stand-in for a card until Stripe is wired up: moving a company to
+    # `active` is what "someone is paying" means today, and it is the only way a
+    # company that has spent its free allowance runs again.
+    billing_state: Field::Select.with_options(
+      include_blank: false,
+      collection: Company::BILLING_STATES
+    ),
+    # Virtual, so never searchable: Administrate would build a LIKE against a
+    # column that is not there.
+    session_concurrency_limit: CompanyCapacityField.with_options(searchable: false),
+    initial_admin_email: Field::String.with_options(searchable: false),
     initial_admin_password: Field::Password,
     users: Field::HasMany,
     projects: Field::HasMany,
@@ -40,8 +50,9 @@ class CompanyDashboard < Administrate::BaseDashboard
     id
     name
     email_domain
-    auto_accept_users
     state
+    billing_state
+    session_concurrency_limit
     users
     created_at
   ].freeze
@@ -58,7 +69,9 @@ class CompanyDashboard < Administrate::BaseDashboard
     primary_color
     secondary_color
     state
+    billing_state
     settings
+    session_concurrency_limit
     users
     projects
     created_at
@@ -74,7 +87,9 @@ class CompanyDashboard < Administrate::BaseDashboard
     primary_color
     secondary_color
     state_event
+    billing_state
     settings
+    session_concurrency_limit
   ].freeze
 
   FORM_ATTRIBUTES_NEW = %i[
@@ -92,7 +107,9 @@ class CompanyDashboard < Administrate::BaseDashboard
   COLLECTION_FILTERS = {
     active: ->(resources) { resources.active },
     suspended: ->(resources) { resources.suspended },
-    archived: ->(resources) { resources.archived }
+    archived: ->(resources) { resources.archived },
+    trialing: ->(resources) { resources.where(billing_state: "trialing") },
+    billing_blocked: ->(resources) { resources.where(billing_state: "blocked") }
   }.freeze
 
   def display_resource(company)

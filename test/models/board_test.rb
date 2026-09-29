@@ -82,6 +82,18 @@ class BoardTest < ActiveSupport::TestCase
     assert_equal 3, board.board_columns.count
   end
 
+  test "create_from_columns creates the columns in list order with their purposes" do
+    board = Board.create_from_columns(project: @project, name: "Delivery", columns: [
+      { name: "Backlog", purpose: "Waiting." },
+      { "name" => "Review", "purpose" => "Being reviewed." }
+    ])
+
+    assert_equal "Delivery", board.name
+    assert_nil board.preset_origin
+    assert_equal [ [ "Backlog", 1, "Waiting." ], [ "Review", 2, "Being reviewed." ] ],
+                 board.board_columns.map { |c| [ c.name, c.position, c.purpose ] }
+  end
+
   test "create_from_preset raises for invalid preset" do
     assert_raises(ActiveRecord::RecordNotFound) do
       Board.create_from_preset(project: @project, preset_key: :nonexistent)

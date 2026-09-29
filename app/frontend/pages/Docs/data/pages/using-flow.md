@@ -56,7 +56,7 @@ use, each in an isolated container:
 An agent runs under a credential *a person connected*, which is why
 [getting started](/docs/getting-started) begins with connecting one. A persona
 you define (see [Agent personas](/docs/personas)) is not tied to a product —
-the same persona can run on any of the five.
+the same persona can run on any of them.
 
 ## Where things live
 

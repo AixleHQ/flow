@@ -24,6 +24,13 @@ module Api
           render json: { id: asset.id }, status: :ok
         end
 
+        # @summary Stop sharing an asset publicly: its link stops working, and sharing again makes a new one
+        def unshare
+          asset = current_company.assets.find(params[:id])
+          asset.unshare!
+          render json: AssetResource.new(asset).to_h
+        end
+
         # @summary Move an asset to a different folder
         def update
           asset = current_company.assets.active.find(params[:id])
@@ -73,14 +80,11 @@ module Api
           BaseContext.new(current_user, params, company: current_company)
         end
 
-        # API calls carry no web-session company; company-level asset endpoints
-        # resolve the user's first active membership's company (agents of
-        # multi-company users should prefer project-scoped asset endpoints).
+        # The company the page was rendered for: the SPA calls this API on the same
+        # cookie session, so AuthConcern's session-validated company applies — not
+        # the user's oldest membership, which for a multi-company user is another company.
         def current_company
-          @current_company ||= current_user.company_memberships.active
-                                           .default_order
-                                           .first&.company
-          @current_company || raise(ActiveRecord::RecordNotFound)
+          super || raise(ActiveRecord::RecordNotFound)
         end
 
         # Uniqueness is per (scope, folder): the lookup must key on both, or an upload into a

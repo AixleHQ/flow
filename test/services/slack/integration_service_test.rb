@@ -82,6 +82,32 @@ module Slack
       assert_match(/another organization/, integration.settings["error"])
     end
 
+    # Once uninstalled from Slack, or removed from Aixle, the other company's
+    # endpoint is disabled — and a disabled endpoint claims nothing.
+    test "a workspace another company no longer has connected can be connected here" do
+      other = create(:user, :with_company)
+      endpoint = create(:webhook_endpoint, slug: "slack-team-T123", provider: :slack, enabled: false,
+                                           verification_strategy: :slack_v0, company: other.companies.first,
+                                           created_by: other, config: { "team_id" => "T123" })
+      stub_slack_oauth(team_id: "T123")
+
+      integration = service.create_from_oauth(code: "c")
+
+      assert integration.active?, integration.settings["error"]
+      assert_equal @company.id, endpoint.reload.company_id
+      assert endpoint.enabled?
+    end
+
+    test "removing the install releases the workspace" do
+      stub_slack_oauth(team_id: "T777")
+      integration = service.create_from_oauth(code: "c")
+      endpoint = WebhookEndpoint.find_by!(slug: "slack-team-T777")
+
+      integration.destroy!
+
+      assert_not endpoint.reload.enabled?
+    end
+
     test "reconnecting the same workspace updates the existing install instead of duplicating" do
       fake = stub_slack_oauth(team_id: "T1", team_name: "Acme")
 

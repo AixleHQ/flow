@@ -19,7 +19,11 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useCallback, useEffect, useRef, useState, type FC } from 'react';
 import { z } from 'zod';
 
+import type { Tool, ToolFile } from '@/types/generated';
+
+import { UNSAVED_CHANGES_PROMPT } from 'shared/lib/hooks/useUnsavedChangesGuard';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
+import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 import { ToolFileEditor } from './ToolFileEditor';
 
@@ -36,27 +40,21 @@ const toolSchema = z.object({
   requiredConfigItems: z.array(z.string()).optional(),
 });
 
-interface ToolFile {
-  id?: number;
-  path: string;
-  content: string;
-  binary: boolean;
-  fileName: string | null;
-  fileUrl: string | null;
-}
-
-interface Tool {
-  id: number;
-  name: string;
-  displayName: string;
-  description: string | null;
-  dockerImage: string | null;
-  command: string | null;
-  requiredConfigItems: string[];
-  inputSchema: Record<string, unknown>;
-  scopeType: string | null;
-  toolFiles: ToolFile[];
-}
+type EditableTool = Pick<
+  Tool,
+  | 'id'
+  | 'name'
+  | 'displayName'
+  | 'description'
+  | 'dockerImage'
+  | 'command'
+  | 'requiredConfigItems'
+  | 'inputSchema'
+  | 'scopeType'
+> &
+  Partial<Pick<Tool, 'currentVersionNumber'>> & {
+    toolFiles: Pick<ToolFile, 'id' | 'path' | 'content' | 'binary' | 'fileName' | 'fileUrl'>[];
+  };
 
 type FileMode = 'text' | 'upload';
 
@@ -80,7 +78,7 @@ function formatFileSize(bytes: number): string {
 interface ToolFormModalProps {
   opened: boolean;
   onClose: () => void;
-  editTool?: Tool | null;
+  editTool?: EditableTool | null;
   configItemNames: string[];
   basePath: string;
 }
@@ -90,6 +88,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
   const [activeTab, setActiveTab] = useState<string | null>('basic');
   const [files, setFiles] = useState<FileEntry[]>([]);
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const initialFiles = useRef('[]');
   const isEditMode = !!editTool;
 
   const form = useForm({
@@ -108,24 +107,26 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
     if (opened) {
       setActiveTab('basic');
       if (editTool) {
-        form.setValues({
+        const values = {
           name: editTool.name,
           displayName: editTool.displayName,
           description: editTool.description || '',
           dockerImage: editTool.dockerImage || '',
           command: editTool.command || '',
           requiredConfigItems: editTool.requiredConfigItems || [],
-        });
-        setFiles(
-          editTool.toolFiles.map((f) => ({
-            id: f.id,
-            path: f.path,
-            content: f.content || '',
-            mode: (f.binary ? 'upload' : 'text') as FileMode,
-            existingFileName: f.fileName,
-            existingFileUrl: f.fileUrl,
-          })),
-        );
+        };
+        form.setValues(values);
+        form.resetDirty(values);
+        const loaded = editTool.toolFiles.map((f) => ({
+          id: f.id,
+          path: f.path,
+          content: f.content || '',
+          mode: (f.binary ? 'upload' : 'text') as FileMode,
+          existingFileName: f.fileName,
+          existingFileUrl: f.fileUrl,
+        }));
+        initialFiles.current = JSON.stringify(loaded);
+        setFiles(loaded);
       } else {
         form.reset();
         setFiles([]);
@@ -142,6 +143,8 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
     (values: typeof form.values): FormData => {
       const fd = new FormData();
 
+      if (editTool?.currentVersionNumber !== undefined)
+        fd.append('base_version', String(editTool.currentVersionNumber));
       fd.append('tool[name]', values.name);
       fd.append('tool[display_name]', values.displayName);
       fd.append('tool[description]', values.description || '');
@@ -179,7 +182,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
 
       return fd;
     },
-    [files],
+    [files, editTool],
   );
 
   const handleSubmit = (values: typeof form.values) => {
@@ -242,6 +245,7 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
           ...values,
           toolFilesAttributes,
         },
+        baseVersion: editTool?.currentVersionNumber,
       } as Record<string, unknown>;
 
       if (isEditMode && editTool) {
@@ -289,15 +293,24 @@ export const ToolFormModal: FC<ToolFormModalProps> = ({ opened, onClose, editToo
 
   const visibleFiles = files.filter((f) => !f._destroy);
 
+  const unsaved = isEditMode && (form.isDirty() || JSON.stringify(files) !== initialFiles.current);
+  const handleClose = () => {
+    if (unsaved && !window.confirm(UNSAVED_CHANGES_PROMPT)) return;
+    onClose();
+  };
+
   return (
     <ResourceDrawer
       opened={opened}
-      onClose={onClose}
+      onClose={handleClose}
       title={isEditMode ? 'Edit Tool' : 'Create Tool'}
       footer={
-        <Button type="submit" form="tool-form" fullWidth loading={submitting}>
-          {isEditMode ? 'Save' : 'Create'}
-        </Button>
+        <Stack gap="xs">
+          <UnsavedChangesNotice visible={unsaved} />
+          <Button type="submit" form="tool-form" fullWidth loading={submitting}>
+            {isEditMode ? 'Save' : 'Create'}
+          </Button>
+        </Stack>
       }
     >
       <form id="tool-form" onSubmit={form.onSubmit(handleSubmit)}>

@@ -3,6 +3,7 @@
 class TaskAsset < ApplicationRecord
   extend Enumerize
   include TaskAssetUploader::Attachment(:file)
+  include PubliclyShareable
 
   belongs_to :board_task, touch: true
   belongs_to :author, class_name: "User", optional: true
@@ -12,6 +13,10 @@ class TaskAsset < ApplicationRecord
   validates :name, presence: true
 
   scope :with_tag, ->(tag) { where("? = ANY(tags)", tag) }
+  scope :publicly_shared, -> { where.not(public_token: nil) }
+
+  def shared_file = file
+  def shared_content_type = file&.mime_type
 
   def self.ransackable_attributes(_auth_object = nil)
     %w[name author_id author_type created_at updated_at]

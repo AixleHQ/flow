@@ -2,8 +2,9 @@ import '@testing-library/jest-dom/vitest';
 
 import { cleanup } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi } from 'vitest';
 
+import { unansweredFetch, unansweredFetches } from './fetchStub';
 import { resetUppyMock } from './uppyMock';
 
 interface DeferredStubProps {
@@ -58,17 +59,33 @@ Range.prototype.getBoundingClientRect = () =>
 // API URLs (e.g. /api/v1/projects/…/steps/…). jsdom runs on Node's undici fetch, which rejects relative
 // URLs ("Failed to parse URL"); a debounced call that fires after its test finished then throws an
 // unhandled rejection that contaminates whichever test is running next (a shared-worker, timing-driven
-// flake). Default fetch to an inert resolved Response so stray/late calls are harmless; tests that need
-// to assert specific requests override this via vi.spyOn(globalThis, 'fetch').
-globalThis.fetch = vi.fn(
-  async () => new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
-) as typeof fetch;
+// flake). So the default still resolves — but a request the test did not answer fails that test once
+// it ends: an unexpected call (a save nobody asserted, a URL built wrong) must be a red test, not a
+// silent 200. Answer the requests a test expects with answerFetch() from ./fetchStub, or with
+// vi.spyOn(globalThis, 'fetch').mockImplementation(…) / mockResolvedValueOnce(…).
+const defaultFetch = vi.fn(unansweredFetch);
+globalThis.fetch = defaultFetch as typeof fetch;
+
+beforeEach(() => {
+  unansweredFetches.length = 0;
+});
 
 afterEach(() => {
+  // Unmounting flushes pending debounced saves, so they count against the test that caused them.
   cleanup();
   // Each mounted component registers its Uppy listeners on a fresh instance; drop them so one
   // test's handlers can never be driven by the next.
   resetUppyMock();
+  vi.unstubAllGlobals();
+  globalThis.fetch = defaultFetch as typeof fetch;
+  defaultFetch.mockReset();
+  const unanswered = unansweredFetches.splice(0);
+  if (unanswered.length > 0) {
+    throw new Error(
+      `fetch() called with no answer from the test: ${unanswered.join(', ')}. ` +
+        'Answer it with answerFetch() from test/fetchStub, or vi.spyOn(globalThis, "fetch").mockImplementation(…).',
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -155,6 +172,7 @@ vi.mock('@inertiajs/react', async (importOriginal) => {
       delete: vi.fn(),
       reload: vi.fn(),
       replace: vi.fn(),
+      replaceProp: vi.fn(),
       cancel: vi.fn(),
       on: vi.fn(() => () => {}), // must return an unsubscribe fn (InertiaRouteIndicator)
     },

@@ -8,9 +8,7 @@
 # scope), and build_project_breakdowns groups over the same join, so
 # sum(project_breakdowns.{sessions,cost_cents,tokens}) equals the summary totals.
 class UserAnalyticsService
-  PERIOD_DAYS = { "7d" => 7, "30d" => 30, "90d" => 90, "1y" => 365 }.freeze
   # Session types that represent real, billable usage (exclude auth_setup / tool_setup).
-  USAGE_SESSION_TYPES = %w[agent_session workflow_step].freeze
 
   ProjectBreakdown = Struct.new(:project_id, :project_name, :sessions, :cost_cents, :tokens, keyword_init: true)
 
@@ -24,7 +22,7 @@ class UserAnalyticsService
     @user       = user
     @company    = company
     @period     = period.to_s
-    @since      = PERIOD_DAYS.fetch(@period, 30).days.ago
+    @since      = AnalyticsPeriod.since(@period)
     @project_id = project_id.presence
   end
 
@@ -54,7 +52,7 @@ class UserAnalyticsService
     scope = user.terminal_sessions
                 .joins(:project)
                 .where(projects: { company_id: company.id })
-                .where(created_at: since.., session_type: USAGE_SESSION_TYPES)
+                .where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
     project_id ? scope.where(project_id:) : scope
   end
 

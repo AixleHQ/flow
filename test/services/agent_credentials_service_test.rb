@@ -195,6 +195,24 @@ class AgentCredentialsServiceTest < ActiveSupport::TestCase
     assert runtime.fs.key?(service.config_path)
   end
 
+  # Claude Code refuses a Claude Platform credentials file others can read, and the file
+  # must stay the agent's own so the CLI can rewrite it on refresh.
+  test "write_to_container writes a Claude Platform profile owner-only, as the agent" do
+    service = AgentCredentialsService.new("claude_code")
+    runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code")
+    service.instance_variable_set(:@runtime, runtime)
+    adapter = service.adapter
+
+    service.write_to_container("container123", {
+      "platformOauth" => { "accessToken" => "sk-ant-oat01-x", "refreshToken" => "sk-ant-ort01-x", "expiresAt" => 1_790_679_907_000 }
+    })
+
+    [ adapter.platform_credentials_path, adapter.platform_config_path ].each do |path|
+      assert_equal({ mode: 0o600, uid: 1001, gid: 1001 }, runtime.file_attributes(path), path)
+    end
+    assert_equal 0o644, runtime.file_attributes(service.config_path)[:mode]
+  end
+
   test "write_to_container raises on runtime error" do
     service = AgentCredentialsService.new("claude_code")
 

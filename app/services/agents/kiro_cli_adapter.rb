@@ -105,6 +105,12 @@ module Agents
     # escape rather than a literal NUL so this file stays text.
     SQLITE_MAGIC = "SQLite format 3\u0000"
 
+    # Far above any login database the CLI writes; a blob this large is refused unread.
+    MAX_STATE_BYTES = 32 * 1024 * 1024
+
+    # A state database this process will not open or write.
+    class UntrustedState < SQLite3::Exception; end
+
     # Kiro's control plane, read off the CLI's own traffic through the MITM proxy: a
     # private AWS-JSON 1.0 service, operation in X-Amz-Target, bearer token. Undocumented
     # and not anonymous.
@@ -118,6 +124,7 @@ module Agents
     API_CONTENT_TYPE = "application/x-amz-json-1.0"
     LIST_MODELS_TARGET = "KiroControlPlaneBearerService.ListAvailableModels"
     USAGE_LIMITS_TARGET = "KiroControlPlaneBearerService.GetUsageLimits"
+    LIST_PROFILES_TARGET = "KiroControlPlaneBearerService.ListAvailableProfiles"
 
     # Both operations reject a bare {} body: they want the calling surface and the
     # profile the token is scoped to. `AI_EDITOR` is what the CLI itself sends.
@@ -171,6 +178,11 @@ module Agents
     # the login. Its ARN is required on every API call and carries the region they go
     # to, which is NOT the identity-centre region also stored there (`auth.idc.region`
     # was us-west-2 on an account whose profile lives in us-east-1).
+    #
+    # An IAM Identity Center login does not write it: two production IdC credentials
+    # carried no such row while their tokens were live (2026-09-27), so every call was
+    # skipped and the usage card read "unavailable". Those fall back to asking the
+    # control plane (#discovered_profile_arn).
     PROFILE_STATE_KEY = "api.codewhisperer.profile"
 
     # Refreshing the login, per login family. Both endpoints and every field name below
@@ -197,6 +209,40 @@ module Agents
       "profileArn" => "profile_arn"
     }.freeze
 
+    # Run by python3 in the agent container (the base image ships it; there is no sqlite3
+    # CLI). argv: the state database, then the handoff file, which is removed whatever
+    # happens. A row the CLI has already renewed past the offered expiry is kept: the
+    # container rotated on its own, and ours is the older token.
+    TOKEN_SWAP_SCRIPT = <<~PYTHON
+      import json, os, sqlite3, sys
+
+      db_path, handoff_path = sys.argv[1], sys.argv[2]
+      try:
+          with open(handoff_path) as f:
+              offered = json.load(f)
+      finally:
+          os.unlink(handoff_path)
+
+      db = sqlite3.connect(db_path, timeout=10, isolation_level=None)
+      try:
+          db.execute("BEGIN IMMEDIATE")
+          row = db.execute("SELECT value FROM auth_kv WHERE key = ?", (offered["key"],)).fetchone()
+          if row is None:
+              db.execute("ROLLBACK")
+              sys.exit("no auth_kv row " + offered["key"])
+          held = json.loads(row[0]).get("expires_at")
+          fresh = json.loads(offered["value"]).get("expires_at")
+          if held and fresh and db.execute("SELECT julianday(?) > julianday(?)", (held, fresh)).fetchone()[0]:
+              db.execute("ROLLBACK")
+              print("kept")
+              sys.exit(0)
+          db.execute("UPDATE auth_kv SET value = ? WHERE key = ?", (offered["value"], offered["key"]))
+          db.execute("COMMIT")
+          print("swapped")
+      finally:
+          db.close()
+    PYTHON
+
     def self.default_config_paths
       [ "~/.kiro/settings/mcp.json", "~/.kiro/steering/" ]
     end
@@ -213,6 +259,7 @@ module Agents
     end
 
     def state_path        = "#{home_dir}/#{STATE_PATH}"
+    def token_handoff_path = "#{home_dir}/.local/share/kiro-cli/.aixle-token-handoff.json"
     def cli_settings_path = "#{home_dir}/.kiro/settings/cli.json"
     def permissions_path  = "#{home_dir}/.kiro/settings/permissions.yaml"
 
@@ -282,7 +329,7 @@ module Agents
 
     # Not meaningful for this runtime: the credential is a binary blob, not a document
     # the CLI merges. #config_files is what actually writes the container's state.
-    def generate_config(credentials, workflow_config = {})
+    def generate_config(credentials, _workflow_config = {})
       credentials
     end
 
@@ -290,7 +337,7 @@ module Agents
     # at the path the CLI reads, and an MCP config for SessionContextService to merge
     # into. User scope (~/.kiro/settings/mcp.json) is loaded for every session, so no
     # custom agent definition is needed to pick the servers up.
-    def config_files(credentials, workflow_config = {})
+    def config_files(credentials, _workflow_config = {})
       files = {
         mcp_config_path => { "mcpServers" => {} }.to_json,
         cli_settings_path => CLI_SETTINGS.to_json,
@@ -300,6 +347,40 @@ module Agents
       state = decoded_state(credentials)
       files[state_path] = state if state.present?
       files
+    end
+
+    # Never a file for this runtime: the only file carrying the token is the state
+    # database, and writing it over a running container replaces the store the CLI holds
+    # open — along with everything it recorded since launch. #deliver_credential edits
+    # the one row instead.
+    def credential_files(_credentials)
+      {}
+    end
+
+    def credential_deliverable?(credentials)
+      auth_rows(decoded_state(credentials))[:token].present?
+    end
+
+    # Swaps the refreshed token into the container's own database, in a transaction the
+    # CLI's locking respects, and leaves every other row alone. The token travels in a
+    # 0600 file rather than on the command line: on Kubernetes the exec command is part
+    # of the request URL the API server logs.
+    def deliver_credential(runtime, container_id, credentials)
+      rows = auth_rows(decoded_state(credentials))
+      return false if rows[:token].blank?
+
+      payload = { "key" => rows[:key], "value" => rows[:token].to_json }.to_json
+      return false unless runtime.write_file(container_id, token_handoff_path, payload,
+                                             mode: 0o600, uid: container_uid, gid: container_uid)
+
+      stdout, stderr, status = runtime.exec(
+        container_id, [ "python3", "-c", TOKEN_SWAP_SCRIPT, state_path, token_handoff_path ],
+        stdout: true, stderr: true
+      )
+      return true if status.to_i.zero?
+
+      Rails.logger.warn("[KiroCliAdapter] token swap failed (#{status}): #{Array(stderr).join.strip.presence || Array(stdout).join.strip}")
+      false
     end
 
     # Seeded before the login runs. The MCP config is not needed to sign in — it is
@@ -318,8 +399,8 @@ module Agents
     # that is not a preference — it is the only mode in which the prompt arrives.
     #
     # `chat --help` documents a positional `[INPUT]` ("the first question to ask"), and
-    # every other runtime here is driven that way: AgentSessionStrategy appends
-    # "$AGENT_PROMPT" to the launch command. On V3 the interactive TUI **ignores** it.
+    # every other runtime here is driven that way: AgentSessionStrategy appends the
+    # prompt to the launch command. On V3 the interactive TUI **ignores** it.
     # Measured on 2.21.3 in a real tmux pane, with the trust confirmation pre-answered
     # so nothing else could swallow it: `kiro-cli --v3 chat --trust-all-tools "…"`
     # comes up at an empty "ask a question or describe a task" prompt and waits. A
@@ -333,7 +414,7 @@ module Agents
     #
     # `--trust-all-tools` is what makes the container the sandbox, as it is for every
     # other runtime here; its startup confirmation is pre-answered in CLI_SETTINGS.
-    def session_command(mode:, prompt: nil, model: nil)
+    def session_command(mode:, model: nil)
       flags = [ "--trust-all-tools" ]
       flags << "--model #{Shellwords.shellescape(model)}" if model.present?
       flags << "--no-interactive" if mode.to_s == "non_interactive"
@@ -467,10 +548,20 @@ module Agents
       expiry_ms(auth_record(decoded_state(credentials))["expires_at"])
     end
 
+    # The state database is the whole credential, so it is what rotates; the profile it
+    # is signed in to must stay the same.
+    def rotatable_credential_keys = %w[state_b64]
+
+    def binary_writeback_path?(path) = path == state_path
+
+    def credential_identity(credentials)
+      auth_record(decoded_state(credentials))["profile_arn"].presence
+    end
+
     # Renew the login without a container. The credential is the CLI's SQLite database,
     # so the refreshed token is written back into the row it came from and the whole
     # database is re-stored — the CLI must find it exactly where it left it.
-    def refresh!(credential, margin_ms: nil)
+    def perform_refresh!(credential, margin_ms: nil)
       blob = decoded_state(credential.config_data)
       rows = auth_rows(blob)
       token = rows[:token]
@@ -489,10 +580,40 @@ module Agents
       return { status: :error, detail: "could not write the refreshed token back", permanent: false } if blob.blank?
 
       persist_refreshed!(credential, { "state_b64" => Base64.strict_encode64(blob) })
-      { status: :refreshed, detail: nil, permanent: false }
+      { status: :refreshed, detail: nil, permanent: false, persisted: true }
     rescue StandardError => e
       Rails.logger.warn("[KiroCliAdapter] refresh failed: #{e.class}: #{e.message}")
       { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
+    end
+
+    # An IAM Identity Center login can be captured before the CLI has written the
+    # profile it selects at the very end of the login (the watcher closes the auth
+    # terminal on the token alone). V3 then refuses to hand its agent a token at all —
+    # "Auth refresh callback failed: … Failed to verify authentication. Please log in
+    # again" on every prompt, with a perfectly valid token — until that `state` row
+    # exists. Measured on CLI 2.24.0: writing the row into a running container fixes
+    # it within seconds, so the launch writes it into the stored login instead.
+    def repair_credential!(credential)
+      token = auth_record(decoded_state(credential.config_data))
+      return false if token["access_token"].blank? || token["profile_arn"].present?
+
+      profile = discovered_profile(token["access_token"])
+      return false if profile.blank?
+
+      credential.with_lock do
+        blob = decoded_state(credential.config_data)
+        next false if auth_record(blob)["profile_arn"].present?
+
+        repaired = blob_with_profile(blob, profile)
+        next false if repaired.blank?
+
+        credential.update!(config_data: credential.config_data.merge("state_b64" => Base64.strict_encode64(repaired)))
+        Rails.logger.info("[KiroCliAdapter] stored the profile the login did not on credential #{credential.id}")
+        true
+      end
+    rescue StandardError => e
+      Rails.logger.warn("[KiroCliAdapter] could not store the login's profile: #{e.class}: #{e.message}")
+      false
     end
 
     # =================================================================
@@ -628,7 +749,7 @@ module Agents
         "KIRO_TELEMETRY_OTEL" => "1",
         "KIRO_TELEMETRY_OTLP_ENDPOINT" => Settings.otel.endpoint,
         "KIRO_TELEMETRY_EXPORT_INTERVAL_MS" => OTEL_EXPORT_INTERVAL_MS,
-        "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session&.route_token}"
+        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
       }.compact_blank
     end
 
@@ -659,20 +780,14 @@ module Agents
     def auth_record(blob)
       return {} if blob.blank?
 
-      Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
-        file.binmode
-        file.write(blob)
-        file.flush
+      with_state_database(blob) do |db|
+        token = token_row(db)
+        return {} if token.blank?
 
-        SQLite3::Database.new(file.path, readonly: true) do |db|
-          token = token_row(db)
-          return {} if token.blank?
-
-          # The `state` table is what the CLI itself reads, so it wins; the token row is
-          # the fallback, because a social refresh hands the profile ARN back with the
-          # new token and that is the only place we can have stored it.
-          return token.merge("profile_arn" => profile_arn_from(db) || token["profile_arn"]).compact
-        end
+        # The `state` table is what the CLI itself reads, so it wins; the token row is
+        # the fallback, because a social refresh hands the profile ARN back with the
+        # new token and that is the only place we can have stored it.
+        return token.merge("profile_arn" => profile_arn_from(db) || token["profile_arn"]).compact
       end
       {}
     rescue SQLite3::Exception => e
@@ -774,6 +889,12 @@ module Agents
     # credential IS those bytes.
     def blob_with_token(blob, key, token)
       with_state_database(blob, readonly: false) do |db, path|
+        # An UPDATE runs whatever triggers the file declares. The CLI's own database has
+        # none on this table; one that does was not written by the CLI.
+        if db.get_first_value("SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'auth_kv'").to_i.positive?
+          raise UntrustedState, "auth_kv carries triggers"
+        end
+
         db.execute("UPDATE auth_kv SET value = ? WHERE key = ?", [ token.to_json, key ])
         db.close
         return File.binread(path)
@@ -784,7 +905,29 @@ module Agents
       nil
     end
 
+    # The row in the shape the CLI writes it: snake_case, unlike the API's answer.
+    def blob_with_profile(blob, profile)
+      value = { "arn" => profile["arn"], "profile_name" => profile["profileName"] }.compact.to_json
+      with_state_database(blob, readonly: false) do |db, path|
+        if db.get_first_value("SELECT count(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'state'").to_i.positive?
+          raise UntrustedState, "state carries triggers"
+        end
+
+        db.execute("INSERT OR IGNORE INTO state (key, value) VALUES (?, ?)", [ PROFILE_STATE_KEY, value ])
+        db.close
+        return File.binread(path)
+      end
+      nil
+    end
+
+    # The database comes back from the container, which is the thing that may be
+    # compromised, so it is opened as a hostile file: it must be a SQLite database of a
+    # plausible size, pass quick_check, and its schema is not trusted — views and
+    # triggers may not call functions with side effects (trusted_schema).
     def with_state_database(blob, readonly: true)
+      raise UntrustedState, "not a SQLite database" unless sqlite_blob?(blob)
+      raise UntrustedState, "#{blob.bytesize} bytes" if blob.bytesize > MAX_STATE_BYTES
+
       Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
         file.binmode
         file.write(blob)
@@ -792,6 +935,10 @@ module Agents
 
         db = SQLite3::Database.new(file.path, readonly: readonly)
         begin
+          db.execute("PRAGMA trusted_schema = OFF")
+          db.execute("PRAGMA cell_size_check = ON")
+          raise UntrustedState, "failed quick_check" unless db.get_first_value("PRAGMA quick_check") == "ok"
+
           yield db, file.path
         ensure
           db.close unless db.closed?
@@ -823,15 +970,36 @@ module Agents
     def api_call(credentials, target)
       record = auth_record(decoded_state(credentials))
       token = record["access_token"]
-      profile_arn = record["profile_arn"]
-      return nil if token.blank? || profile_arn.blank?
+      return nil if token.blank?
 
-      uri = URI(format(API_HOST_TEMPLATE, region: region_from(profile_arn)))
+      profile_arn = record["profile_arn"].presence || discovered_profile_arn(token)
+      return nil if profile_arn.blank?
+
+      control_plane_post(token, target, { origin: API_ORIGIN, profileArn: profile_arn },
+                         region: region_from(profile_arn))
+    end
+
+    # The profile a login without a stored one is scoped to. Only an account with
+    # exactly one profile is answered: with several, the CLI makes the user pick, and
+    # guessing would read another profile's credits.
+    def discovered_profile_arn(token) = discovered_profile(token)&.dig("arn")
+
+    def discovered_profile(token)
+      profiles = Array(control_plane_post(token, LIST_PROFILES_TARGET, { origin: API_ORIGIN })&.dig("profiles"))
+      profiles = profiles.select { |profile| profile.is_a?(Hash) && profile["arn"].present? }
+      return profiles.first if profiles.one?
+
+      Rails.logger.warn("[KiroCliAdapter] no stored profile and #{profiles.size} available, not guessing") if profiles.many?
+      nil
+    end
+
+    def control_plane_post(token, target, payload, region: DEFAULT_REGION)
+      uri = URI(format(API_HOST_TEMPLATE, region: region))
       request = Net::HTTP::Post.new(uri)
       request["Content-Type"] = API_CONTENT_TYPE
       request["X-Amz-Target"] = target
       request["Authorization"] = "Bearer #{token}"
-      request.body = { origin: API_ORIGIN, profileArn: profile_arn }.to_json
+      request.body = payload.to_json
 
       response = Net::HTTP.start(uri.hostname, uri.port, use_ssl: true, open_timeout: 5, read_timeout: 15) do |http|
         http.request(request)

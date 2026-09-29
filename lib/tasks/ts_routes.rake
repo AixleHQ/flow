@@ -1,9 +1,11 @@
-namespace :ts do
-  TS_ROUTES_FILENAME = "app/frontend/shared/routes.ts"
+# frozen_string_literal: true
 
-  desc "Generate #{TS_ROUTES_FILENAME}"
+namespace :ts do
+  routes_file = "app/frontend/shared/routes.ts"
+
+  desc "Generate #{routes_file}"
   task routes: :environment do
-    Rails.logger.info("Generating #{TS_ROUTES_FILENAME}")
+    Rails.logger.info("Generating #{routes_file}")
 
     # Get all named routes from Rails
     routes = Rails.application.routes.routes.select do |route|
@@ -27,9 +29,9 @@ namespace :ts do
     )
 
     # Ensure directory exists
-    FileUtils.mkdir_p(File.dirname(TS_ROUTES_FILENAME))
-    File.write(TS_ROUTES_FILENAME, source)
-    puts "Successfully generated TypeScript route helpers at #{TS_ROUTES_FILENAME}"
+    FileUtils.mkdir_p(File.dirname(routes_file))
+    File.write(routes_file, source)
+    puts "Successfully generated TypeScript route helpers at #{routes_file}"
 
     # Notify about the wrapper
     puts "These routes are now available via the Routes.backend namespace in 'shared/routes.ts'"

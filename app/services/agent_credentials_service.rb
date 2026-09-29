@@ -129,7 +129,7 @@ class AgentCredentialsService
   end
 
   def write_container_file(container_id, path, content)
-    ok = runtime.write_file(container_id, path, content)
+    ok = runtime.write_file(container_id, path, content, **adapter.private_file_write_options(path))
     details = adapter.credential_file_metadata(runtime, container_id, path).merge(write_succeeded: !!ok)
     unless ok && details[:exists] && details[:size].to_i == content.to_s.bytesize
       Rails.logger.error("[AgentCredentials] Credential write verification failed: #{details.inspect}")

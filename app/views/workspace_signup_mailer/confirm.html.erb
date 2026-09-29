@@ -1,0 +1,10 @@
+<p>Hello,</p>
+
+<p>Someone asked to create the <strong><%= @workspace_name %></strong> workspace on Aixle Flow
+using this address. Opening the link below creates it and makes you its administrator.
+The link expires in <%= @ttl_hours %> hours.</p>
+
+<p><%= link_to "Create #{@workspace_name}", @url %></p>
+
+<p>If that was not you, ignore this message. Nothing has been created, and nothing
+will be until the link is opened.</p>

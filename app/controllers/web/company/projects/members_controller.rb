@@ -9,7 +9,8 @@ class Web::Company::Projects::MembersController < Web::Company::Projects::Applic
       members: members.map { |u| UserResource.new(u, params: { company: current_company }).to_h },
       company_users: current_company.users.includes(:company_memberships).order(:name)
                                     .map { |u| UserResource.new(u, params: { company: current_company }).to_h },
-      owner_id: current_project.owner_id
+      owner_id: current_project.owner_id,
+      ownership: ownership_props
     }
   end
 

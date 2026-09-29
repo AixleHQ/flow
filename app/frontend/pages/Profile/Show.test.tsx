@@ -1,11 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { AgentCredential, CurrentUser } from '@/types/generated';
+import { answerFetch } from 'test/fetchStub';
 import { makeFormStub, renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { companyMembershipPath } from 'shared/routes';
-import type { AgentCredential, SharedUser } from 'shared/ui';
 
 import ProfilePage from './Show';
 
@@ -18,11 +19,13 @@ const acmeCompany = {
   secondaryColor: null,
 };
 
-const buildProfile = (overrides: Partial<SharedUser> = {}): SharedUser => ({
+const buildProfile = (overrides: Partial<CurrentUser> = {}): CurrentUser => ({
   id: 42,
   email: 'maria@acme.test',
   name: 'Maria Sokolova',
   state: 'active',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
   position: null,
   preferredAgentLanguage: 'en',
   selectedAgents: [],
@@ -48,6 +51,8 @@ const buildCredential = (overrides: Partial<AgentCredential> = {}): AgentCredent
   defaultModel: null,
   lastUsedAt: null,
   expiresAt: null,
+  loginExpiresAt: null,
+  signedInAt: null,
   connectionStatus: 'active',
   refreshError: null,
   reauthRequired: false,
@@ -56,7 +61,7 @@ const buildCredential = (overrides: Partial<AgentCredential> = {}): AgentCredent
   ...overrides,
 });
 
-const baseProps = (profile: SharedUser) => ({
+const baseProps = (profile: CurrentUser) => ({
   profile,
   languageOptions: ['en', 'es'],
   agentModels: [],
@@ -79,7 +84,18 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// The page reads the AWS connection when it mounts; the auth modal starts a session and polls it.
+const authSession = { data: { id: 1, state: 'starting' } };
+const profileFetch = (extra: Record<string, unknown> = {}) =>
+  answerFetch({ 'GET /api/v1/cloud/aws_connection': { connected: false, reason: null }, ...extra });
+const authSessionFetch = () =>
+  profileFetch({ 'POST /api/v1/terminal_sessions': authSession, 'GET /api/v1/terminal_sessions/1': authSession });
+
 describe('Profile/Show', () => {
+  beforeEach(() => {
+    profileFetch();
+  });
+
   it('renders the profile heading, email and company name from seeded props', () => {
     const profile = buildProfile();
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
@@ -153,6 +169,28 @@ describe('Profile/Show', () => {
     );
   });
 
+  it('signs out every other browser after the user confirms, and offers nothing when there is none', async () => {
+    const profile = buildProfile();
+    const { unmount } = renderAuthedPage(<ProfilePage {...baseProps(profile)} otherSessionsCount={0} />, {
+      props: baseProps(profile),
+    });
+    expect(screen.getByRole('button', { name: /Sign out everywhere else/ })).toBeDisabled();
+    unmount();
+
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} otherSessionsCount={2} />, { props: baseProps(profile) });
+    expect(screen.getByText('You are also signed in on 2 other browsers.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Sign out everywhere else/ }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Sign out' }));
+
+    await waitFor(() =>
+      expect(router.delete).toHaveBeenCalledWith(
+        '/profile/sign_out_other_sessions',
+        expect.objectContaining({ preserveScroll: true }),
+      ),
+    );
+  });
+
   it('offers a Connect Design button for a Claude credential with a claude.ai OAuth token', () => {
     const credential = buildCredential({ agentType: 'claude_code', configKeys: ['claudeAiOauth'] });
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
@@ -172,6 +210,14 @@ describe('Profile/Show', () => {
   it('offers Connect Design for a Console (managed-key) Claude credential too', () => {
     // /design-login layers on either base — claude.ai OR the platform.claude.com key.
     const credential = buildCredential({ agentType: 'claude_code', configKeys: ['primaryApiKey'] });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    expect(screen.getByRole('button', { name: 'Connect Design' })).toBeInTheDocument();
+  });
+
+  it('offers Connect Design for a Claude Platform login', () => {
+    const credential = buildCredential({ agentType: 'claude_code', configKeys: ['platformOauth', 'platformProfile'] });
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
@@ -258,6 +304,33 @@ describe('Profile/Show', () => {
     );
   });
 
+  it('leaving a company where you own projects asks who takes them over first', async () => {
+    const profile = buildProfile();
+    const props = {
+      ...baseProps(profile),
+      projectHandovers: [
+        {
+          membershipId: 5,
+          projects: [{ id: 10, name: 'Gateway', ownerId: profile.id }],
+          candidates: [{ id: 99, name: 'Grace Hopper', email: 'grace@example.com', companyAdmin: true }],
+          heirIds: [99],
+        },
+      ],
+    };
+    renderAuthedPage(<ProfilePage {...props} />, { props });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Leave Acme Robotics' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('You own 1 project here. Choose who takes it over first.')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Transfer and leave' }));
+
+    expect(router.delete).toHaveBeenCalledWith(
+      companyMembershipPath(5),
+      expect.objectContaining({ data: { handover: [{ projectId: 10, userId: 99 }] } }),
+    );
+  });
+
   it('does NOT leave a company when the confirm modal is cancelled', async () => {
     const profile = buildProfile();
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
@@ -337,6 +410,23 @@ describe('Profile/Show', () => {
     expect(screen.getByText('Connected')).toBeInTheDocument();
     // formatDate renders "Configured <date> · Last used <date>" inside one Text node.
     expect(screen.getByText(/Configured/)).toHaveTextContent(/Last used/);
+  });
+
+  // A subscription token lives 8 hours, so a date alone never changed after a re-login and
+  // users kept signing in again to make it move.
+  it('shows when the user signed in and how long the login itself has left', () => {
+    const inSevenHours = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString();
+    const credential = buildCredential({
+      signedInAt: '2026-09-28T17:40:00Z',
+      loginExpiresAt: inSevenHours,
+      expiresAt: new Date(Date.now() - 60 * 1000).toISOString(),
+    });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    const meta = screen.getByText(/Signed in/);
+    expect(meta).toHaveTextContent(/Expires in 7 h/);
+    expect(meta).not.toHaveTextContent(/Configured/);
   });
 
   it('renders Authenticate (not Re-authenticate) for an agent that has no credential', () => {
@@ -512,7 +602,7 @@ describe('Profile/Show', () => {
   });
 
   it('opens the authentication modal and starts a terminal session when Re-authenticate is clicked', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = authSessionFetch();
     const credential = buildCredential({ id: 400, agentType: 'claude_code' });
     const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
@@ -528,7 +618,7 @@ describe('Profile/Show', () => {
   });
 
   it('starts a terminal auth session for Codex instead of linking to a hosted OAuth callback', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = authSessionFetch();
     const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 
@@ -552,12 +642,7 @@ describe('Profile/Show', () => {
   });
 
   it('connects Antigravity through the same auth-session terminal as every other agent', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: { id: 1, state: 'starting' } }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
+    const fetchSpy = authSessionFetch();
     const profile = buildProfile({ configuredAgents: [], agentCredentials: [] });
     renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
 

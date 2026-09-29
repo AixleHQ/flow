@@ -9,8 +9,9 @@ class BoardTaskResource < ApplicationResource
   # web client (see `ApplicationResource#to_h`), so they are written camelCase here;
   # the agent-facing `snake_keys` payload keeps the Ruby spelling below.
   GATE_TYPE = "Array<{ id: number; gateType: string; status: string; ciStatus: string; " \
-              "conclusion: string | null; metadata: Record<string, unknown>; " \
-              "source: Record<string, unknown>; ageSeconds: number; expiresAt: string; " \
+              "conclusion: string | null; " \
+              "metadata: Record<string, unknown> & { repoFullName?: string; prNumber?: number; runId?: number }; " \
+              "source: Record<string, unknown>; ageSeconds: number; expiresAt: string | null; " \
               "expired: boolean; diagnosticReason: string | null; createdAt: string; " \
               "resolvedAt: string | null }>"
 
@@ -40,7 +41,7 @@ class BoardTaskResource < ApplicationResource
              :assignee_id, :board_column_id, :position,
              :parent_task_id, :tags, :created_at, :updated_at
 
-  typelize :string?
+  typelize "string | null"
   attribute :assignee_name do |task|
     task.assignee&.name
   end
@@ -65,11 +66,13 @@ class BoardTaskResource < ApplicationResource
     task.has_attribute?(:assets_count) ? task[:assets_count].to_i : task.task_assets.size
   end
 
-  typelize "Array<{ id: number; state: string; createdAt: string }>"
+  typelize "Array<{ id: number; state: string; createdAt: string; durationSeconds?: number | null; errorMessage?: string | null }>"
   attribute :recent_workflow_runs do |task|
     waiting = params[:waiting_runs] || WorkflowRun.waiting_for_slot_ids(task.workflow_runs.map(&:id))
     task.workflow_runs.sort_by(&:created_at).last(5).reverse.map do |run|
-      { id: run.id, state: waiting.include?(run.id) ? "queued" : run.state, created_at: run.created_at.iso8601 }
+      duration = (run.completed_at - run.started_at).round if run.started_at && run.completed_at
+      { id: run.id, state: waiting.include?(run.id) ? "queued" : run.state, created_at: run.created_at.iso8601,
+        duration_seconds: duration&.negative? ? nil : duration, error_message: run.failure_reason&.humanize }
     end
   end
 

@@ -7,9 +7,9 @@
 # `(integration_id, key)`. Coder's `LockService` is the first consumer; it
 # keys rows as `coder:workspace_lock:<workspace_name>`.
 #
-# Multi-integration isolation comes for free from the `(integration_id, key)`
-# uniqueness index — two Coder integrations can hold a lock with the same
-# `key` without collision.
+# Keys are unique per integration (`(integration_id, key)`). Coder workspace locks
+# are additionally unique on the workspace id across integrations, because two
+# integrations can reach the same pool of machines.
 class IntegrationData < ApplicationRecord
   self.table_name = "integration_data"
 

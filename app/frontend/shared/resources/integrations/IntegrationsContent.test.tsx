@@ -2,24 +2,26 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { Integration } from '@/types/generated';
+import { buildIntegration } from 'test/factories/integration';
 import { act, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import type { Integration } from './IntegrationsContent';
 import { IntegrationsContent } from './IntegrationsContent';
 
 const settingsProps = { settings: { githubAppSlug: 'aixle-app' } };
 
-const makeIntegration = (overrides: Partial<Integration> = {}): Integration => ({
-  id: 1,
-  name: 'Acme GitHub',
-  provider: 'github',
-  status: 'active',
-  scopeIndicator: 'company',
-  githubUrl: null,
-  connectedBy: { id: 10, name: 'Jane Doe' },
-  createdAt: '2026-01-15T10:00:00Z',
-  ...overrides,
-});
+const makeIntegration = (overrides: Partial<Integration> = {}): Integration =>
+  buildIntegration({
+    id: 1,
+    name: 'Acme GitHub',
+    provider: 'github',
+    status: 'active',
+    scopeIndicator: 'company',
+    githubUrl: null,
+    connectedBy: { id: 10, name: 'Jane Doe' },
+    createdAt: '2026-01-15T10:00:00Z',
+    ...overrides,
+  });
 
 describe('IntegrationsContent', () => {
   it('lets a company admin remove a company-wide YouTrack connection from a project', async () => {
@@ -29,7 +31,7 @@ describe('IntegrationsContent', () => {
         basePath="/company/projects/3/integrations"
         integrations={[makeIntegration({ id: 8, name: 'YouTrack', provider: 'youtrack' })]}
       />,
-      { props: { ...settingsProps, permissions: { isAdmin: true } } },
+      { props: { ...settingsProps, projectPermissions: { canManageCompany: true } } },
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
@@ -48,7 +50,7 @@ describe('IntegrationsContent', () => {
         basePath="/company/projects/3/integrations"
         integrations={[makeIntegration({ provider: 'youtrack' })]}
       />,
-      { props: { ...settingsProps, permissions: { isAdmin: false } } },
+      { props: { ...settingsProps, projectPermissions: { canManageCompany: false } } },
     );
 
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
@@ -56,7 +58,7 @@ describe('IntegrationsContent', () => {
   it('lets a company admin choose company scope when connecting YouTrack', async () => {
     renderPage(
       <IntegrationsContent title="Integrations" basePath="/company/projects/1/integrations" integrations={[]} />,
-      { props: { ...settingsProps, permissions: { isAdmin: true } } },
+      { props: { ...settingsProps, projectPermissions: { canManageCompany: true } } },
     );
 
     await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
@@ -87,7 +89,7 @@ describe('IntegrationsContent', () => {
           makeIntegration({ id: 8, name: 'YouTrack', provider: 'youtrack', youtrackWebhookHeader: 'X-Old' }),
         ]}
       />,
-      { props: { ...settingsProps, permissions: { isAdmin: true } } },
+      { props: { ...settingsProps, projectPermissions: { canManageCompany: true } } },
     );
     await userEvent.click(screen.getByRole('button', { name: 'Rotate webhook token for YouTrack' }));
     const dialog = await screen.findByRole('dialog', { name: 'Update YouTrack webhook' });

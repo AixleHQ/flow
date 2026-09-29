@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
 # Keeps a schedule TriggerBinding in sync with its backing Temporal Schedule.
-# Reconcile = delete any existing schedule, then (re)create it from the binding's
-# schedule_config — so cron/timezone edits and enable/disable all converge.
-# Runs inline (synchronously) on binding create/update/destroy; #reconcile_all
-# re-runs it for every enabled binding on worker boot as the durable backstop.
+# Reconcile = update the schedule in place from the binding's schedule_config,
+# creating it if it is missing, or delete it when the binding is off — so
+# cron/timezone edits and enable/disable all converge without the schedule ever
+# being absent in between. Runs inline (synchronously) on binding
+# create/update/destroy; #reconcile_all re-runs it for every enabled binding on
+# worker boot as the durable backstop.
 class ScheduleReconciler
   # Prefix for the Temporal schedule id backing a per-binding schedule trigger.
   # TemporalService#delete_schedules keys off this to leave these dynamic
@@ -16,26 +18,36 @@ class ScheduleReconciler
     # on worker boot (TemporalService#sync_schedules) so per-binding schedules
     # survive a worker redeploy — otherwise the boot-time static-schedule sync
     # wipes them and nothing else recreates them.
+    #
+    # Converges both ways: a schedule whose binding is gone, off, or bound to a
+    # deleted workflow is removed too — a delete that failed while Temporal was
+    # down would otherwise fire forever.
     def reconcile_all
-      TriggerBinding.where(enabled: true).find_each do |binding|
-        reconcile(binding) if binding.schedule?
+      wanted = []
+      TriggerBinding.where(enabled: true, event_type: TriggerBinding::SCHEDULE_EVENT_TYPE)
+                    .joins(:workflow).merge(Workflow.active).find_each do |binding|
+        wanted << schedule_id(binding.id)
+        reconcile(binding)
       rescue StandardError => e
         Rails.logger.error("[ScheduleReconciler] reconcile_all failed for binding #{binding.id}: #{e.message}")
       end
+      prune_orphans(keep: wanted)
+    end
+
+    def prune_orphans(keep:)
+      (TemporalService.binding_schedule_ids - keep).each { |sid| TemporalService.delete_binding_schedule(sid) }
+    rescue StandardError => e
+      Rails.logger.error("[ScheduleReconciler] pruning orphan schedules failed: #{e.class}: #{e.message}")
     end
 
     def reconcile(binding)
       return unless binding&.schedule?
 
       sid = schedule_id(binding.id)
-      TemporalService.delete_binding_schedule(sid)
-
-      return unless binding.enabled
-
       cron = binding.schedule_config["cron"]
-      return if cron.blank?
+      return TemporalService.delete_binding_schedule(sid) unless binding.live? && cron.present?
 
-      TemporalService.create_binding_schedule(
+      TemporalService.upsert_binding_schedule(
         schedule_id: sid,
         cron: cron,
         timezone: binding.schedule_config["timezone"],

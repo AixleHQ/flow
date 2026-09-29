@@ -3,13 +3,6 @@
 class SessionDurationDistributionService
   include TaskFilterable
 
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
-
   # Buckets defined as [label, min_seconds, max_seconds (nil = no upper bound)]
   BUCKETS = [
     { range: "0–1 min",   min: 0,    max: 60 },
@@ -27,7 +20,7 @@ class SessionDurationDistributionService
     @project = project
     @user    = user
     @scope   = scope.to_s
-    @since   = PERIOD_DAYS.fetch(period.to_s, 30).days.ago
+    @since   = AnalyticsPeriod.since(period.to_s)
     @tags      = Array(tags).presence
     @task_type = task_type.presence
     @participant_id = participant_id.presence

@@ -1,10 +1,11 @@
 import { Box, Button, Text } from '@mantine/core';
 import { useState } from 'react';
 
-import { formatDuration } from './boardFormat';
-import type { TaskWorkflowRun } from './taskRuns';
+import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
-type RunStep = NonNullable<TaskWorkflowRun['steps']>[number];
+import { formatDuration } from './boardFormat';
+
+type RunStep = TaskWorkflowRun['steps'][number];
 
 const stepDotColor = (state: string): string => {
   if (state === 'done') return 'var(--app-success-fg)';

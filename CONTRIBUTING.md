@@ -6,26 +6,29 @@ Thank you for your interest in contributing to Aixle Flow!
 
 1. Create a new branch from `develop` for your feature or fix.
 2. Make your changes following the project conventions.
-3. Run the full check suite before submitting:
+3. Run the full check suite before submitting — it is what CI runs, and it changes no files:
 
 ```bash
-make check
+docker compose exec -T web make check_all
 ```
+
+(`make check` is an alias.) CI runs the same checks as two jobs, `make be_check_all` and `make fe_check_all`. It also scans the history for secrets with gitleaks; `make secret-scan` runs the same scan (on the host, it needs Docker).
 
 ## Code Quality
 
-Before opening a PR, ensure the following pass:
+Before opening a PR, ensure the following pass (inside the container: `docker compose exec -T web make <target>`):
 
 | Command | Description |
 |---------|-------------|
-| `make lint` | Run all linters |
-| `make test` | Run all tests |
+| `make lint` | ESLint, RuboCop, Brakeman, and TypeScript |
+| `make test` | Backend test suite (`rails test`) |
+| `make fe-test` | Frontend tests (Vitest) |
 | `make rubocop` | Ruby linter |
 | `make eslint` | JavaScript/TypeScript linter |
 | `make brakeman` | Security analysis |
 | `make fsd` | Feature-Sliced Design check |
 
-Auto-fix options are available via `make rubocop-fix` and `make eslint-fix`.
+`make fix` applies every autocorrection the linters offer (`rubocop -a`, `eslint --fix`, `steiger --fix`).
 
 ## Pull Request Guidelines
 

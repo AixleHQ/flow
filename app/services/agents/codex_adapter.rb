@@ -83,7 +83,7 @@ module Agents
     end
 
     # ChatGPT OAuth: the access token is a JWT whose `exp` we read, and the token endpoint
-    # returns a rotated refresh token when it issues one (#refresh_access_token! keeps the
+    # returns a rotated refresh token when it issues one (#refresh! keeps the
     # previous one when it does not).
     def credential_lifecycle
       { expiry: :token, refresh: :server, rotation: :rotating, nominal_ttl: nil }.freeze
@@ -93,6 +93,19 @@ module Agents
     # soonest expiry (epoch ms) so AgentCredential#expires_at is populated and the
     # proactive-refresh sweep selects the credential before it expires (instead of
     # only refreshing reactively on a 401).
+    def rotatable_credential_keys = %w[tokens]
+
+    # The ChatGPT account the tokens act for: auth.json records it beside them, and
+    # the id_token names it too.
+    def credential_identity(credentials)
+      tokens = credentials["tokens"]
+      return nil unless tokens.is_a?(Hash)
+
+      claims = jwt_claims(tokens["id_token"])
+      tokens["account_id"].presence || claims.dig("https://api.openai.com/auth", "chatgpt_account_id").presence ||
+        claims["sub"].presence
+    end
+
     def token_expires_at(credentials)
       tokens = credentials["tokens"]
       return nil unless tokens.is_a?(Hash)
@@ -112,7 +125,7 @@ module Agents
     end
 
     # Generate auth.json config for a new container
-    def generate_config(credentials, workflow_config = {})
+    def generate_config(credentials, _workflow_config = {})
       {
         **credentials,
         "last_refresh" => credentials["last_refresh"] || Time.current.iso8601
@@ -135,8 +148,8 @@ module Agents
     end
 
     # Session command: always codex --yolo, with workspace trust granted inline.
-    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file.
-    def session_command(mode:, prompt: nil, model: nil, workspace: DEFAULT_WORKSPACE)
+    # The prompt is appended by AgentSessionStrategy, read from its prompt file.
+    def session_command(mode:, model: nil, workspace: DEFAULT_WORKSPACE)
       model_flag = model ? " --model #{Shellwords.shellescape(model)}" : ""
       "codex#{model_flag} --yolo#{cli_trust_flag(workspace)}"
     end
@@ -295,36 +308,6 @@ module Agents
       { status: "unavailable" }
     end
 
-    # Refresh an expired access token using the stored refresh_token.
-    # Persists new tokens back to the AgentCredential record.
-    # Returns the new access_token on success, nil on failure.
-    def refresh_access_token!(credential)
-      refresh_token = credential.config_data.dig("tokens", "refresh_token")
-      return nil if refresh_token.blank?
-
-      tokens = Codex::Api.refresh_tokens(refresh_token: refresh_token)
-
-      current_tokens = credential.config_data["tokens"] || {}
-      # Never discard the prior refresh_token/id_token when the server omits a
-      # rotated one (RFC: keep the old until a new pair is committed).
-      new_tokens = current_tokens.merge(
-        "access_token" => tokens.access_token,
-        "refresh_token" => tokens.refresh_token || current_tokens["refresh_token"],
-        "id_token" => tokens.id_token || current_tokens["id_token"]
-      ).compact
-
-      new_config = credential.config_data.merge("tokens" => new_tokens, "last_refresh" => Time.current.iso8601)
-      # Persist under a row lock with the rotation guard so a concurrent session
-      # cleanup or sweep can't clobber a newer token.
-      persisted = persist_refreshed!(credential, new_config)
-      Rails.logger.info("[CodexAdapter] Access token refreshed for credential #{credential.id}")
-
-      persisted.dig("tokens", "access_token")
-    rescue StandardError => e
-      Rails.logger.warn("[CodexAdapter] Token refresh error: #{e.class}: #{e.message}")
-      nil
-    end
-
     def numeric_value(value)
       return nil if value.nil?
 
@@ -354,16 +337,31 @@ module Agents
       details.merge(valid: true, error_code: nil)
     end
 
-    # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
-    # refresh_access_token! which persists under a row lock via persist_refreshed!.
-    # @param credential [AgentCredential]
-    # @return [Hash] { status: :refreshed | :error, detail: String | nil }
-    # margin_ms is ignored: this agent stores no per-block expiry to compare it
-    # against, so a call is already the decision to refresh.
-    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
-      new_token = refresh_access_token!(credential)
-      new_token ? { status: :refreshed, detail: nil }
-                : { status: :error, detail: "codex token refresh failed" }
+    # Refresh the access token with the stored refresh_token, persisting under the row
+    # lock. The server does not always rotate the refresh token or reissue the id_token,
+    # and dropping either when it is omitted would kill the login at its next refresh.
+    #
+    # margin_ms is ignored: this agent stores no per-block expiry to compare it against,
+    # so a call is already the decision to refresh.
+    def perform_refresh!(credential, margin_ms: nil)
+      current_tokens = credential.config_data["tokens"] || {}
+      refresh_token = current_tokens["refresh_token"]
+      return { status: :error, detail: "no refresh token stored — sign in again", permanent: true } if refresh_token.blank?
+
+      tokens = Codex::Api.refresh_tokens(refresh_token: refresh_token)
+      new_tokens = current_tokens.merge(
+        "access_token" => tokens.access_token,
+        "refresh_token" => tokens.refresh_token || refresh_token,
+        "id_token" => tokens.id_token || current_tokens["id_token"]
+      ).compact
+
+      persist_refreshed!(credential, credential.config_data.merge("tokens" => new_tokens, "last_refresh" => Time.current.iso8601))
+      { status: :refreshed, detail: nil }
+    rescue Codex::Api::HTTPError => e
+      rejected = e.status == 401 || e.body.to_s.match?(/invalid_grant|refresh_token_(expired|reused|invalidated)/)
+      { status: :error, detail: "#{e.class}: #{e.message}", permanent: rejected }
+    rescue Codex::Api::ApiError => e
+      { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
     end
 
     # Default environment variables for Codex CLI runtime.
@@ -374,7 +372,7 @@ module Agents
         # auth.openai.com is the token endpoint the CLI refreshes against; chatgpt.com
         # alone showed inference and nothing about the login's lifecycle.
         "MITM_TRACKED_DOMAINS" => "chatgpt.com,auth.openai.com",
-        "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}"
+        "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session)
       }
     end
 
@@ -471,7 +469,7 @@ module Agents
     rescue Codex::Api::UnauthorizedError
       raise unless credential
 
-      new_token = refresh_access_token!(credential)
+      new_token = refresh_for_request!(credential)&.dig("tokens", "access_token")
       raise unless new_token
 
       Codex::Api.models(access_token: new_token)
@@ -788,6 +786,9 @@ module Agents
 
         # Full filesystem and network access
         sandbox_mode = "danger-full-access"
+
+        # The image pins the CLI version: no startup update check or update prompt
+        check_for_update_on_startup = false
 
         [projects."#{workspace}"]
         trust_level = "trusted"

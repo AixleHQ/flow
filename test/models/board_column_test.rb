@@ -94,7 +94,7 @@ class BoardColumnTest < ActiveSupport::TestCase
   test "with_tasks_count counts each column's active tasks in one query" do
     backlog = BoardColumn.create!(name: "Backlog", board: @board, position: 1)
     done = BoardColumn.create!(name: "Done", board: @board, position: 2)
-    empty = BoardColumn.create!(name: "Empty", board: @board, position: 3)
+    BoardColumn.create!(name: "Empty", board: @board, position: 3)
     create_list(:board_task, 2, board: @board, board_column: backlog)
     create(:board_task, board: @board, board_column: done)
     create(:board_task, board: @board, board_column: done, archived_at: Time.current)

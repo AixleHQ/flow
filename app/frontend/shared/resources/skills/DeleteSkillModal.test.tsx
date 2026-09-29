@@ -12,8 +12,8 @@ describe('DeleteSkillModal', () => {
   it('renders the confirmation prompt with the skill title when opened', () => {
     renderPage(<DeleteSkillModal opened onClose={vi.fn()} skill={skill} basePath="/projects/1/skills" />);
 
-    expect(screen.getByRole('heading', { name: /delete skill/i })).toBeInTheDocument();
-    expect(screen.getByText(/this action cannot be undone/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /archive skill/i })).toBeInTheDocument();
+    expect(screen.getByText(/restore it from the Archived tab/i)).toBeInTheDocument();
     expect(screen.getByText('React Helper')).toBeInTheDocument();
   });
 
@@ -33,14 +33,14 @@ describe('DeleteSkillModal', () => {
   it('renders no modal content when skill is null', () => {
     renderPage(<DeleteSkillModal opened onClose={vi.fn()} skill={null} basePath="/projects/1/skills" />);
 
-    expect(screen.queryByRole('heading', { name: /delete skill/i })).not.toBeInTheDocument();
-    expect(screen.queryByText(/this action cannot be undone/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /archive skill/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/restore it from the Archived tab/i)).not.toBeInTheDocument();
   });
 
-  it('confirming Delete fires router.delete with the skill path', async () => {
+  it('confirming Archive fires router.delete with the skill path', async () => {
     renderPage(<DeleteSkillModal opened onClose={vi.fn()} skill={skill} basePath="/projects/1/skills" />);
 
-    await userEvent.click(screen.getByRole('button', { name: /delete/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^archive$/i }));
 
     expect(router.delete).toHaveBeenCalledWith(
       '/projects/1/skills/7',

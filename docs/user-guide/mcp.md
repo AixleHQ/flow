@@ -47,13 +47,54 @@ internal server (see [resource resolution](tools.md#resource-resolution)).
 For `stdio`, set `command` (e.g. `npx @playwright/mcp --headless`); the
 platform splits it into executable + args. For `http`/`sse`, set `url`.
 
+A package launched through `npx`, `uvx` or `pipx run` must name an exact release
+(`name@1.2.3` for npm, `name==1.2.3` for PyPI). Without one, every session would
+install whatever was published last (`@playwright/mcp` is the exception: every
+session runs the version baked into the agent image). A catalog connector whose registry entry says
+`latest` is pinned to the release that is current when you install it. To move
+to a newer release, edit the server's command, or install the connector again.
+
 ## Credentials (Config Items)
 
-Custom servers don't store secrets inline. Header and env values can
-reference **Config Items**, which are resolved at session start — so the
-secret lives in one encrypted place and the server config just points at
-it. If an agent can't reach a server, the usual cause is a missing
-Config Item or the wrong `transport`.
+Header and env values can hold a secret directly, or reference a **Config
+Item** as `config_item:NAME` (e.g. `Bearer config_item:SENTRY_TOKEN`), which
+is resolved at session start. Prefer the reference: the secret then lives in
+one place, and rotating it needs no edit to the server.
+
+- Values are encrypted at rest. The UI, the admin panel and the MCP tools show
+  which keys are set, never their values.
+- A referenced Config Item is attached to every session the server is attached
+  to. Its value reaches the container only inside that server's config, each
+  delivery is recorded in the item's access log (`config_item_accesses`,
+  channel `mcp_config`), and the value is redacted from the session's logs like
+  any other session secret.
+- Values belong to the address they were entered for. Changing a server's
+  origin (`http`/`sse`) or its command line (`stdio`) clears every stored
+  header and env value and disconnects its OAuth connections — enter them
+  again in the same save or afterwards. A new path on the same origin, or
+  switching between `http` and `sse`, keeps them. An OAuth credential is only
+  ever sent to the origin it was issued for.
+
+If an agent can't reach a server, the usual cause is a missing Config Item, a
+server whose address changed and was never given its credentials back, or the
+wrong `transport`.
+
+## OAuth servers
+
+With **Auth type: OAuth 2.1** the platform discovers the server's authorization
+server (RFC 9728, then RFC 8414) and registers itself there, or uses a client
+an operator registered by hand when the server does not allow that.
+
+- Discovery refuses metadata that does not describe the server it came from: a
+  protected resource on another origin or outside the server's path, an issuer
+  other than the one the metadata was fetched for, or a consent page on a site
+  that is neither the issuer's nor the MCP server's.
+- A **shared** credential is one connection the whole project acts as, so
+  connecting or reconnecting it needs edit rights on the project's MCP
+  servers. A **per-user** credential is each member's own account; any member
+  who can use the server can connect it.
+- Every credential records who connected it, and is only ever sent to the
+  origin it was issued for.
 
 ## URL safety
 
@@ -66,11 +107,11 @@ hostnames that resolve to them).
 
 The same `/mcp` endpoint also serves a **personal** server: not a
 session's tools, but your own Aixle account, so an outside client
-(Claude Code, Claude Desktop, any MCP client) can drive the platform for
+(Claude Code, Codex, Claude Desktop, any MCP client) can drive the platform for
 you — list projects, build workflows, run them, work the board.
 
 Enable it under **Profile → MCP**, which hands you an `amcp_` token and,
-alongside it, the two ways to install the server. Clients register it
+alongside it, the ways to install the server. Clients register it
 under the name `flow`, so its tools appear as `mcp__flow__list_projects`
 and so on.
 
@@ -78,10 +119,20 @@ and so on.
 claude mcp add flow --transport http $MCP_SERVER_URL --header "Authorization: Bearer amcp_…"
 ```
 
+For Codex, which reads a bearer token only from an environment variable:
+
+```
+export FLOW_MCP_TOKEN="amcp_…"
+codex mcp add flow --url $MCP_SERVER_URL --bearer-token-env-var FLOW_MCP_TOKEN
+```
+
+Keep the `export` in your shell profile — Codex reads the variable every
+time it starts the server.
+
 For Cursor the same tab has an **Add to Cursor** button — a
 `cursor://anysphere.cursor-deeplink/mcp/install` link carrying the URL and
 the bearer header — plus a **Copy JSON** action for any other client's
-`mcp.json`. All three carry the token, so they are only offered while the
+`mcp.json`. All of these carry the token, so they are only offered while the
 token is on screen: it is stored as a digest and shown exactly once.
 
 The token carries **exactly your own access level** — every call runs

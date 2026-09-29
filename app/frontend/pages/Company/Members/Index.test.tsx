@@ -2,13 +2,12 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Member } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-
-import type { MemberUser } from 'shared/resources/members/MembersContent';
 
 import MembersIndex from './Index';
 
-const member = (overrides: Partial<MemberUser> = {}): MemberUser => ({
+const member = (overrides: Partial<Member> = {}): Member => ({
   id: 1,
   email: 'dana@example.com',
   name: 'Dana Member',
@@ -16,6 +15,7 @@ const member = (overrides: Partial<MemberUser> = {}): MemberUser => ({
   state: 'active',
   position: null,
   invitedAt: null,
+  acceptedAt: null,
   createdAt: '2026-01-01T00:00:00Z',
   invitedBy: null,
   ...overrides,

@@ -2,9 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { ConfigItem } from '@/types/generated';
 import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import { ConfigItemsContent, type ConfigItem } from './ConfigItemsContent';
+import { ConfigItemsContent } from './ConfigItemsContent';
 
 const makeItem = (overrides: Partial<ConfigItem> = {}): ConfigItem => ({
   id: 1,
@@ -13,8 +14,9 @@ const makeItem = (overrides: Partial<ConfigItem> = {}): ConfigItem => ({
   description: 'An API key',
   itemType: 'variable',
   scopeType: 'project',
-  scopeIndicator: 'P',
+  scopeIndicator: 'project',
   createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
   ...overrides,
 });
 

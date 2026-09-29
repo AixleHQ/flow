@@ -18,6 +18,7 @@ class SessionService
       preflight_cloud!(user, company || project&.company)
       preflight_agent_credential!(user, company || project&.company, agent_type, session_type: session_type)
       preflight_url_safety!(params[:mcp_server_ids])
+      preflight_company_active!(company || project&.company)
 
       # auth_kind ("design") is carried in metadata so AgentAuthStrategy can run the
       # /design-login variant (inject the base credential, watch designOauth.accessToken).
@@ -38,9 +39,9 @@ class SessionService
 
       return session unless session.save
 
-      # #enqueue! self-gates on the policy and returns nil when admission is off,
-      # so the writer lock is taken around the queue write only — never around
-      # the save, which touches half a dozen join tables.
+      Versions::LaunchRecord.record!(session)
+      # The writer lock is taken around the queue write only — never around the
+      # save, which touches half a dozen join tables.
       SessionAdmissionService.enqueue!(session)
       launch_session(session)
 
@@ -48,7 +49,7 @@ class SessionService
     end
 
     def finish(session:)
-      if session.queued? && session.session_admission
+      if session.queued?
         if session.step_run
           WorkflowService.cancel(run: session.step_run.workflow_run)
           return session.reload
@@ -76,13 +77,14 @@ class SessionService
     # would put a token round-trip in front of each container step.
     def revalidate_admission!(session, refresh_tokens: false)
       SessionAdmissionService.ensure_run_active!(session)
-      raise SessionAdmissionService::Stopped, "User account unavailable" if session.user.deleted_at || !session.user.active?
+      raise SessionAdmissionService::Stopped, "User account unavailable" unless session.user&.authenticatable?
       if session.project && !session.project.accessible_by?(session.user)
         raise SessionAdmissionService::Stopped, "Project access revoked"
       end
       if session.company_id && !CompanyMembership.active.exists?(company_id: session.company_id, user_id: session.user_id)
         raise SessionAdmissionService::Stopped, "Company membership revoked"
       end
+      preflight_company_active!(SessionCompany.company_for(session))
       if session.session_type != "auth_setup" && session.session_credential.nil?
         raise SessionAdmissionService::Stopped, "Agent credential unavailable"
       end
@@ -100,13 +102,9 @@ class SessionService
     end
 
     def cancel(session:)
-      if session.session_admission
-        SessionAdmissionService.cancel!(session)
-        TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission.reload.released_at
-        return session
-      end
-      cancel_temporal_workflow(session) if session.temporal_workflow_id.present?
-      session.fail! if session.may_fail?
+      SessionAdmissionService.cancel!(session)
+      TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission&.reload&.released_at
+      session
     end
 
     # Fail a session AND wake its container workflow, so the container's cleanup
@@ -131,10 +129,7 @@ class SessionService
     # accumulated state, not from the row.
     def fail_session(session:, error_message: nil)
       session.update!(error_message: error_message) if error_message.present?
-      # Marking the row failed frees nothing: the reservation is only released
-      # once the runtime is confirmed gone (AD-6). Cancelling is what starts
-      # that, for a queued session and an admitted one alike.
-      return cancel(session: session) if unreleased_admission?(session)
+      return fail_admitted_session(session) if unreleased_admission?(session)
 
       stop_admission_operations(session)
       session.fail! if session.may_fail?
@@ -149,6 +144,7 @@ class SessionService
         step_run.lock!
         return step_run.terminal_session if step_run.terminal_session
         raise SessionAdmissionService::Stopped, "Workflow cancelled" if step_run.workflow_run.stop_requested_at || step_run.workflow_run.state == "cancelled"
+        preflight_company_active!(step_run.workflow_run.project&.company)
         session = build_for_workflow_step(step_run: step_run)
         SessionAdmissionService.enqueue!(session)
       end
@@ -193,6 +189,7 @@ class SessionService
       config = SessionConfigResolver.resolve(session)
       session.update!(agent_type: config[:agent_runtime], mode: config[:mode])
       attach_resolved_resources(session, config)
+      Versions::LaunchRecord.record!(session, step_run: step_run)
       session
     end
 
@@ -211,18 +208,27 @@ class SessionService
       admission.present? && admission.released_at.nil?
     end
 
+    # Marking the row failed frees nothing: the reservation is only released once
+    # the runtime is confirmed gone (AD-6), and cancelling the session's container
+    # workflow is what starts that. The verdict is `failed`, not `cancelled`: a
+    # cancelled step session cancels its whole run (WorkflowExecutionWorkflowV2),
+    # which would skip on_failure, quota classification and the Slack failure notice.
+    def fail_admitted_session(session)
+      SessionAdmissionService.cancel!(session, outcome: "failed")
+      TemporalService.cancel_workflow(session.workflow_id) unless session.session_admission.reload.released_at
+      # #cancel! fails the session under the writer lock, and #fail! wakes the parent
+      # run only after that commits. This covers a session that had already ended,
+      # which #cancel! leaves alone; the signal just sets a decision flag, so a
+      # second one changes nothing.
+      WorkflowService.notify_container_finished(step_run: session.step_run) if session.step_run
+      session
+    end
+
     # Granting is cheap and must happen now so the caller sees a real queue
     # position. Dispatching is not: it costs a preflight and a Temporal RPC per
     # session, so this hands off only THIS session and leaves the rest of the
     # newly granted batch to the relay running in the reconciler.
     def launch_session(session)
-      unless session.session_admission
-        refresh_oauth_tokens_for_session(session) if session.session_type == "workflow_step"
-        session.start! if session.may_start?
-        start_temporal_workflow(session)
-        return
-      end
-
       SessionAdmissionService.drain!
       admission = session.session_admission.reload
       SessionLaunchRelay.dispatch(admission) if admission.admitted_at && admission.launch_state == "pending"
@@ -261,15 +267,14 @@ class SessionService
         owner = server.credential_scope_per_user? ? user : server.scope
         next if owner.nil?
 
-        cred = OauthCredential.for_mcp_server(server).for_owner(owner)
-                              .where.not(status: :revoked).order(updated_at: :desc).first
+        cred = OauthCredential.current_for(server: server, owner: owner)
         next if cred.nil?
 
         Oauth::TokenService.refresh_if_expiring_soon(cred)
         cred.reload
         if cred.error?
           raise Oauth::PreflightError, [ { mcp_server_id: server.id, name: server.name, reason: :credential_error,
-                                           connect_url: "/oauth/mcp/#{server.id}/connect" } ]
+                                           connect_url: "/oauth/mcp/#{server.id}/connect", connect_method: "post" } ]
         end
       end
     end
@@ -315,6 +320,20 @@ class SessionService
     # model validates at create/update, but DNS (rebinding) or the stored value
     # may have changed since — a host that now resolves to a private/internal IP
     # must not be dialed. Cheap: url_safety uses local resolvers only.
+    # A suspended or archived company runs nothing. Checked at creation and again
+    # on every phase, because a company suspended while a session is queued or
+    # running has to stop that session too — the same shape as a revoked
+    # membership, and the relay turns it into a cancellation the owner can read.
+    #
+    # Metering leans on this: Billing::CapacityWindow bills only active
+    # companies, which is only honest while they are also the only ones that can
+    # occupy a slot.
+    def preflight_company_active!(company)
+      return if company.nil? || company.active?
+
+      raise SessionAdmissionService::Stopped, "Company #{company.name} is #{company.state} and cannot run sessions"
+    end
+
     def preflight_url_safety!(mcp_server_ids)
       return if mcp_server_ids.blank?
 
@@ -328,51 +347,16 @@ class SessionService
       raise UnsafeMcpUrlError, "MCP server URL failed a safety check at launch: #{unsafe.join('; ')}" if unsafe.any?
     end
 
-    def start_temporal_workflow(session)
-      result = TemporalService.start_workflow(
-        TemporalWorkflowRegistry.container_workflow,
-        { session_id: session.id, manifest: session.strategy.build_manifest },
-        id: session.workflow_id,
-        execution_timeout: TerminalSession::WORKFLOW_TIMEOUT
-      )
-      raise result[:error] unless result[:ok]
-
-      session.update!(
-        temporal_workflow_id: result[:workflow_id],
-        temporal_run_id: result[:run_id]
-      )
-    rescue StandardError => e
-      Rails.logger.error("[SessionService] Failed to start workflow for session #{session.id}: #{e.message}")
-      session.update!(error_message: "Failed to start workflow: #{e.message}")
-      session.fail! if session.may_fail?
-    end
-
     def signal_container_finished(session)
       result = TemporalService.send_signal(session.workflow_id, :container_finished, session.step_run&.id)
 
+      # A workflow that is already gone leaves the reservation to the reconciler,
+      # which confirms the runtime is absent before releasing it.
       if result.is_a?(Hash) && !result[:ok]
-        error_msg = result[:error].to_s
-        Rails.logger.warn("[SessionService] Signal failed for session #{session.id}: #{error_msg}")
-
-        if error_msg.include?("already completed") || error_msg.include?("not found") || error_msg.include?("disabled")
-          Rails.logger.warn("[SessionService] Temporal workflow gone, finishing session #{session.id} directly")
-          finalize_finished(session)
-        end
+        Rails.logger.warn("[SessionService] Signal failed for session #{session.id}: #{result[:error]}")
       end
     rescue StandardError => e
       Rails.logger.error("[SessionService] Failed to signal container_finished for session #{session.id}: #{e.message}")
-      finalize_finished(session)
-    end
-
-    def finalize_finished(session)
-      return if session.session_admission
-      session.complete_finish!
-    end
-
-    def cancel_temporal_workflow(session)
-      TemporalService.cancel_workflow(session.workflow_id)
-    rescue StandardError => e
-      Rails.logger.error("[SessionService] Failed to cancel workflow for session #{session.id}: #{e.message}")
     end
 
     def refresh_oauth_tokens_for_session(session)
@@ -382,20 +366,19 @@ class SessionService
         owner = server.credential_scope_per_user? ? session.user : server.scope
         next if owner.nil?
 
-        cred = OauthCredential.for_mcp_server(server).for_owner(owner)
-                              .where.not(status: :revoked).order(updated_at: :desc).first
+        cred = OauthCredential.current_for(server: server, owner: owner)
         next if cred.nil?
 
         if cred.error?
           raise Oauth::PreflightError, [ { mcp_server_id: server.id, name: server.name, reason: :credential_error,
-                                           connect_url: "/oauth/mcp/#{server.id}/connect" } ]
+                                           connect_url: "/oauth/mcp/#{server.id}/connect", connect_method: "post" } ]
         end
 
         Oauth::TokenService.refresh_if_expiring_soon(cred)
         cred.reload
         if cred.error?
           raise Oauth::PreflightError, [ { mcp_server_id: server.id, name: server.name, reason: :credential_error,
-                                           connect_url: "/oauth/mcp/#{server.id}/connect" } ]
+                                           connect_url: "/oauth/mcp/#{server.id}/connect", connect_method: "post" } ]
         end
       end
     end

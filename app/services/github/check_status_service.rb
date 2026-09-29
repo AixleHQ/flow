@@ -32,9 +32,20 @@ module Github
       pr = client.pull_request(repo_full_name, pr_number)
       head_sha = pr[:head][:sha]
 
-      suites = Array(client.check_suites_for_ref(repo_full_name, head_sha)[:check_suites])
+      suites = Array(client.check_suites_for_ref(repo_full_name, head_sha, per_page: 100)[:check_suites])
       return unresolvable("no check suites on #{repo_full_name}@#{head_sha[0, 7]} for PR ##{pr_number}") if suites.empty?
 
+      # GitHub opens a suite for every installed app with the checks permission,
+      # including apps that never report a run (Railway, for one). Such a suite
+      # sits in `queued` with no runs forever, so it cannot be waited on. It is
+      # set aside only while another suite has runs: a fresh push shows every
+      # suite empty for a few seconds, and that is "not started", not "done".
+      reporting = suites.reject { |suite| empty_suite?(suite) }
+      if reporting.empty?
+        return Ci::ProbeResult.in_progress("no check runs reported yet on PR ##{pr_number}")
+      end
+
+      suites = reporting
       pending = suites.reject { |suite| suite[:status].to_s == "completed" }
       if pending.any?
         return Ci::ProbeResult.in_progress(
@@ -94,6 +105,10 @@ module Github
       # reported either.
       values = conclusions.map { |c| c.to_s.presence || "unknown" }
       values.find { |c| !Gate::PASSING_CONCLUSIONS.include?(c) } || values.first || "success"
+    end
+
+    def empty_suite?(suite)
+      suite[:status].to_s != "completed" && suite[:latest_check_runs_count].to_i.zero?
     end
 
     def unresolvable(detail)

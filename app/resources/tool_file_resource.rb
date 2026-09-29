@@ -8,12 +8,12 @@ class ToolFileResource < ApplicationResource
     tool_file.binary?
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :file_name do |tool_file|
     tool_file.binary? ? File.basename(tool_file.path) : nil
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :file_url do |tool_file|
     tool_file.binary? ? tool_file.file_url : nil
   end

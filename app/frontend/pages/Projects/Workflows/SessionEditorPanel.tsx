@@ -13,11 +13,12 @@ import {
 } from '@tabler/icons-react';
 import { useState } from 'react';
 
-import type { ConfigItemPicker } from '@/types/generated';
+import type { ConfigItemPicker, Step } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ToolPicker } from 'shared/components/ToolPicker';
 import { type ToolGroup } from 'shared/lib/toolPicker';
+import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
 
 import classes from './BuilderPage.module.css';
 
@@ -26,35 +27,31 @@ interface NamedItem {
   name: string;
 }
 
-interface AssetSpec {
-  name: string;
-  assetType: string;
-  required: boolean;
-  namePattern?: string | null;
-}
+type AssetSpec = Step['outputAssetSpecs'][number];
 
-interface Step {
-  id: number;
-  name: string;
-  instructions: string | null;
-  position: number;
-  agentId: number | null;
-  requiredAgentRuntime: string | null;
-  preferredModel: string | null;
-  allowNonInteractive: boolean;
-  skipPolicy: string;
-  onFailure: string;
-  bmadEnabled: boolean;
-  dependsOnStepIds: number[];
-  toolIds: number[];
-  mcpServerIds: number[];
-  skillIds: number[];
-  assetIds: number[];
-  repositoryIds: number[];
-  configItemIds: number[];
-  inputAssetSpecs: AssetSpec[];
-  outputAssetSpecs: AssetSpec[];
-}
+type SessionStep = Pick<
+  Step,
+  | 'id'
+  | 'name'
+  | 'instructions'
+  | 'position'
+  | 'agentId'
+  | 'requiredAgentRuntime'
+  | 'preferredModel'
+  | 'allowNonInteractive'
+  | 'skipPolicy'
+  | 'onFailure'
+  | 'bmadEnabled'
+  | 'dependsOnStepIds'
+  | 'toolIds'
+  | 'mcpServerIds'
+  | 'skillIds'
+  | 'assetIds'
+  | 'repositoryIds'
+  | 'configItemIds'
+  | 'inputAssetSpecs'
+  | 'outputAssetSpecs'
+>;
 
 const SKIP_POLICY_TEXTS: Record<string, string> = {
   never: 'This session always runs when the workflow is triggered.',
@@ -165,8 +162,8 @@ interface AgentModelsEntry {
 }
 
 interface SessionEditorPanelProps {
-  step: Step;
-  allSteps: Step[];
+  step: SessionStep;
+  allSteps: SessionStep[];
   agents: NamedItem[];
   tools: NamedItem[];
   toolGroups: ToolGroup[];
@@ -177,7 +174,7 @@ interface SessionEditorPanelProps {
   configItems: ConfigItemPicker[];
   agentModels?: AgentModelsEntry[];
   readOnly: boolean;
-  onFieldChange: (field: string, value: unknown, immediate?: boolean) => void;
+  onFieldChange: (field: string, value: unknown) => void;
   onAssetSpecsChange: (field: 'inputAssetSpecs' | 'outputAssetSpecs', specs: AssetSpec[]) => void;
 }
 
@@ -303,7 +300,7 @@ export function SessionEditorPanel({
             <Select
               data={[{ value: '', label: 'No agent' }, ...toSelectData(agents)]}
               value={step.agentId ? String(step.agentId) : ''}
-              onChange={(v) => onFieldChange('agentId', v ? Number(v) : null, true)}
+              onChange={(v) => onFieldChange('agentId', v ? Number(v) : null)}
               disabled={readOnly}
               clearable
               placeholder="No agent"
@@ -330,22 +327,13 @@ export function SessionEditorPanel({
               </span>
             </label>
             <Select
-              data={[
-                { value: '', label: 'None (default)' },
-                { value: 'claude_code', label: 'Claude Code' },
-                { value: 'cursor_cli', label: 'Cursor CLI' },
-                { value: 'codex', label: 'Codex' },
-                { value: 'gemini_cli', label: 'Gemini CLI' },
-                { value: 'antigravity_cli', label: 'Antigravity CLI' },
-                { value: 'grok', label: 'Grok' },
-                { value: 'kiro_cli', label: 'Kiro CLI' },
-              ]}
+              data={[{ value: '', label: 'None (default)' }, ...AGENT_SELECT_OPTIONS]}
               value={step.requiredAgentRuntime ?? ''}
               onChange={(v) => {
                 const runtime = v || null;
                 if (runtime === step.requiredAgentRuntime) return;
-                onFieldChange('requiredAgentRuntime', runtime, true);
-                if (step.preferredModel) onFieldChange('preferredModel', null, true);
+                onFieldChange('requiredAgentRuntime', runtime);
+                if (step.preferredModel) onFieldChange('preferredModel', null);
               }}
               disabled={readOnly}
               clearable
@@ -376,7 +364,7 @@ export function SessionEditorPanel({
               <Select
                 data={preferredModelOptions}
                 value={step.preferredModel ?? null}
-                onChange={(v) => onFieldChange('preferredModel', v || null, true)}
+                onChange={(v) => onFieldChange('preferredModel', v || null)}
                 disabled={readOnly}
                 clearable
                 searchable
@@ -413,7 +401,7 @@ export function SessionEditorPanel({
             tools={tools}
             groups={toolGroups}
             value={step.toolIds}
-            onChange={(ids) => onFieldChange('toolIds', ids, true)}
+            onChange={(ids) => onFieldChange('toolIds', ids)}
             disabled={readOnly}
             placeholder="None added"
             aria-label="Tools"
@@ -433,7 +421,7 @@ export function SessionEditorPanel({
           <MultiSelect
             data={toSelectData(mcpServers)}
             value={toStringArr(step.mcpServerIds)}
-            onChange={(v) => onFieldChange('mcpServerIds', toNumberArr(v), true)}
+            onChange={(v) => onFieldChange('mcpServerIds', toNumberArr(v))}
             disabled={readOnly}
             searchable
             placeholder="None added"
@@ -451,7 +439,7 @@ export function SessionEditorPanel({
           <MultiSelect
             data={toSelectData(skills)}
             value={toStringArr(step.skillIds)}
-            onChange={(v) => onFieldChange('skillIds', toNumberArr(v), true)}
+            onChange={(v) => onFieldChange('skillIds', toNumberArr(v))}
             disabled={readOnly}
             searchable
             placeholder="None added"
@@ -464,12 +452,12 @@ export function SessionEditorPanel({
 
         <div className={classes.resGroup}>
           <div className={classes.resType}>
-            Assets <span className={classes.resTypeSub}>— files loaded into /workspace/input</span>
+            Assets <span className={classes.resTypeSub}>— files loaded into /workspace/assets</span>
           </div>
           <AssetPicker
             assets={assets}
             value={step.assetIds}
-            onChange={(ids) => onFieldChange('assetIds', ids, true)}
+            onChange={(ids) => onFieldChange('assetIds', ids)}
             disabled={readOnly}
             placeholder="None added"
             aria-label="Assets"
@@ -483,7 +471,7 @@ export function SessionEditorPanel({
           <MultiSelect
             data={configItemSelectData}
             value={toStringArr(stepConfigItemIds)}
-            onChange={(v) => onFieldChange('configItemIds', toNumberArr(v), true)}
+            onChange={(v) => onFieldChange('configItemIds', toNumberArr(v))}
             disabled={readOnly}
             searchable
             placeholder="None added"
@@ -501,7 +489,7 @@ export function SessionEditorPanel({
           <MultiSelect
             data={toSelectData(repositories)}
             value={toStringArr(step.repositoryIds)}
-            onChange={(v) => onFieldChange('repositoryIds', toNumberArr(v), true)}
+            onChange={(v) => onFieldChange('repositoryIds', toNumberArr(v))}
             disabled={readOnly}
             searchable
             placeholder="None added"
@@ -531,7 +519,7 @@ export function SessionEditorPanel({
         <MultiSelect
           data={dependencyOptions}
           value={toStringArr(step.dependsOnStepIds)}
-          onChange={(v) => onFieldChange('dependsOnStepIds', toNumberArr(v), true)}
+          onChange={(v) => onFieldChange('dependsOnStepIds', toNumberArr(v))}
           disabled={readOnly}
           searchable
           placeholder="Select sessions this session depends on…"
@@ -587,7 +575,7 @@ export function SessionEditorPanel({
             </div>
             <Switch
               checked={step.allowNonInteractive}
-              onChange={(e) => onFieldChange('allowNonInteractive', e.currentTarget.checked, true)}
+              onChange={(e) => onFieldChange('allowNonInteractive', e.currentTarget.checked)}
               disabled={readOnly}
             />
           </div>
@@ -606,7 +594,7 @@ export function SessionEditorPanel({
                 { value: 'manual', label: 'Manual' },
               ]}
               value={step.skipPolicy}
-              onChange={(v) => onFieldChange('skipPolicy', v ?? 'never', true)}
+              onChange={(v) => onFieldChange('skipPolicy', v ?? 'never')}
               disabled={readOnly}
               allowDeselect={false}
               styles={{
@@ -639,7 +627,7 @@ export function SessionEditorPanel({
                 { value: 'skip', label: 'Skip' },
               ]}
               value={step.onFailure}
-              onChange={(v) => onFieldChange('onFailure', v ?? 'fail', true)}
+              onChange={(v) => onFieldChange('onFailure', v ?? 'fail')}
               disabled={readOnly}
               allowDeselect={false}
               styles={{
@@ -671,7 +659,7 @@ export function SessionEditorPanel({
             </div>
             <Switch
               checked={step.bmadEnabled}
-              onChange={(e) => onFieldChange('bmadEnabled', e.currentTarget.checked, true)}
+              onChange={(e) => onFieldChange('bmadEnabled', e.currentTarget.checked)}
               disabled={readOnly}
             />
           </div>

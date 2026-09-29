@@ -20,17 +20,14 @@ class GateServiceTest < ActiveSupport::TestCase
 
   # == resolve_github_checks ==
 
-  test "resolves a pending gate matching repo and PR number" do
+  test "a completed suite has a matching pending gate checked against GitHub" do
     gate = @task.gates.create!(
       gate_type: :github_checks_completed,
       metadata:  { repo_full_name: @repo_name, pr_number: 42 },
       creator: @user
     )
 
-    TaskService.expects(:resolve_gate).with(
-      gate: gate,
-      resolution_data: { conclusion: "success" }
-    ).once
+    GateReconciler.expects(:reconcile).with(gate).once
 
     GateService.resolve_github_checks(
       repo_full_name: @repo_name,
@@ -46,7 +43,7 @@ class GateServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    TaskService.expects(:resolve_gate).never
+    GateReconciler.expects(:reconcile).never
 
     GateService.resolve_github_checks(
       repo_full_name: @repo_name,
@@ -62,7 +59,7 @@ class GateServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    TaskService.expects(:resolve_gate).never
+    GateReconciler.expects(:reconcile).never
 
     GateService.resolve_github_checks(
       repo_full_name: @repo_name,
@@ -79,7 +76,7 @@ class GateServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    TaskService.expects(:resolve_gate).never
+    GateReconciler.expects(:reconcile).never
 
     GateService.resolve_github_checks(
       repo_full_name: @repo_name,
@@ -88,7 +85,7 @@ class GateServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test "resolves multiple matching gates across different tasks" do
+  test "checks every matching gate across different tasks" do
     task2 = create(:board_task, board: @board, board_column: @column, assignee: @user)
 
     gate1 = @task.gates.create!(
@@ -103,8 +100,8 @@ class GateServiceTest < ActiveSupport::TestCase
     )
 
     resolved_gates = []
-    TaskService.stubs(:resolve_gate).with do |args|
-      resolved_gates << args[:gate]
+    GateReconciler.stubs(:reconcile).with do |gate|
+      resolved_gates << gate
       true
     end
 
@@ -131,13 +128,39 @@ class GateServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    TaskService.expects(:resolve_gate).never
+    GateReconciler.expects(:reconcile).never
 
     GateService.resolve_github_checks(
       repo_full_name: @repo_name,
       pr_number: 42,
       conclusion: "success"
     )
+  end
+
+  # The event's own verdict is one suite's; the gate resolves on every suite of
+  # the pull request's current head, as GitHub reports it now.
+  test "a quick suite finishing green does not pass a gate whose other suites failed" do
+    gate = @task.gates.create!(gate_type: :github_checks_completed,
+                               metadata: { repo_full_name: @repo_name, pr_number: 42 }, creator: @user)
+    probe = mock("probe")
+    probe.stubs(:call).returns(Ci::ProbeResult.completed("failure", "2 check suite(s) completed on PR #42"))
+    Ci::GateProbe.stubs(:new).returns(probe)
+
+    GateService.resolve_github_checks(repo_full_name: @repo_name, pr_number: 42, conclusion: "success")
+
+    assert_equal "failure", gate.reload.resolution_data["conclusion"]
+  end
+
+  test "a suite finishing while others still run leaves the gate pending" do
+    gate = @task.gates.create!(gate_type: :github_checks_completed,
+                               metadata: { repo_full_name: @repo_name, pr_number: 42 }, creator: @user)
+    probe = mock("probe")
+    probe.stubs(:call).returns(Ci::ProbeResult.in_progress("1/2 check suites still running on PR #42"))
+    Ci::GateProbe.stubs(:new).returns(probe)
+
+    GateService.resolve_github_checks(repo_full_name: @repo_name, pr_number: 42, conclusion: "success")
+
+    assert_predicate gate.reload, :pending?
   end
 
   # == resolve_github_workflow ==
@@ -227,6 +250,30 @@ class GateServiceTest < ActiveSupport::TestCase
   end
 
   # == resolve_gitlab_pipeline ==
+
+  test "a delivery resolves only the gates of the repository it authenticated as" do
+    gitlab = create(:integration, :gitlab, :active, company: @company, connected_by: @user)
+    ours = create(:repository, full_name: "group/app", scope: @project, integration: gitlab)
+    other_company = create(:company)
+    other_user = create(:user, company: other_company)
+    other_project = create(:project, company: other_company, owner: other_user)
+    create(:repository, full_name: "group/app", scope: other_project,
+                        integration: create(:integration, :gitlab, :active, company: other_company, connected_by: other_user))
+    other_board = create(:board, project: other_project)
+    other_task = create(:board_task, board: other_board, board_column: create(:board_column, board: other_board))
+    mine = @task.gates.create!(gate_type: :gitlab_pipeline_completed, creator: @user,
+                               metadata: { repo_full_name: "group/app", pipeline_id: 77 })
+    theirs = other_task.gates.create!(gate_type: :gitlab_pipeline_completed, creator: other_user,
+                                      metadata: { repo_full_name: "group/app", pipeline_id: 77 })
+    resolved = []
+    TaskService.stubs(:resolve_gate).with { |args| resolved << args[:gate] }
+
+    GateService.resolve_gitlab_pipeline(repository: ours, repo_full_name: "group/app", pipeline_id: 77, status: "success")
+
+    assert_equal [ mine ], resolved
+    assert_not_includes resolved, theirs
+  end
+
 
   test "resolves a pending gitlab pipeline gate matching repo and pipeline_id" do
     gate = @task.gates.create!(

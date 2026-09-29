@@ -228,4 +228,32 @@ class RepositoryTest < ActiveSupport::TestCase
       @integration.destroy
     end
   end
+  # The integration is what clones the repository, so it has to be one the
+  # repository's project may use.
+  test "refuses an integration that belongs to another company" do
+    project = create(:project, :standalone)
+    foreign = create(:integration, company: create(:company))
+
+    repo = build(:repository, scope: project, integration: foreign)
+
+    assert_not repo.valid?
+    assert_match(/integration_id must belong to this project/, repo.errors[:integration].join)
+    assert_empty repo.errors[:full_name], "a foreign installation's account must not be echoed back"
+  end
+
+  test "refuses an integration connected to a different project of the same company" do
+    project = create(:project, :standalone)
+    sibling = create(:project, company: project.company, owner: project.owner)
+    integration = create(:integration, company: project.company, project: sibling)
+
+    assert_not build(:repository, scope: project, integration: integration).valid?
+  end
+
+  test "accepts a company-wide integration and one connected to the project" do
+    project = create(:project, :standalone)
+
+    assert build(:repository, scope: project, integration: create(:integration, company: project.company)).valid?
+    assert build(:repository, scope: project,
+                              integration: create(:integration, company: project.company, project: project)).valid?
+  end
 end

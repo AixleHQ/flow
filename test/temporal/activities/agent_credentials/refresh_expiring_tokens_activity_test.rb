@@ -102,6 +102,51 @@ module Activities
         assert_equal 1001, @runtime.file_attributes(CREDENTIALS_PATH)[:uid]
       end
 
+      KIRO_STATE_PATH = "/home/kiro/.local/share/kiro-cli/data.sqlite3"
+
+      def kiro_state(access_token:, expires_at:)
+        Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
+          db = SQLite3::Database.new(file.path)
+          db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
+          db.execute("INSERT INTO auth_kv VALUES ('kirocli:social:token', ?)",
+                     [ { "access_token" => access_token, "refresh_token" => "rt-old",
+                         "expires_at" => expires_at.utc.iso8601 }.to_json ])
+          db.close
+          File.binread(file.path)
+        end
+      end
+
+      def kiro_access_token(blob)
+        Tempfile.create([ "kiro-read", ".sqlite3" ]) do |file|
+          File.binwrite(file.path, blob)
+          db = SQLite3::Database.new(file.path)
+          JSON.parse(db.get_first_value("SELECT value FROM auth_kv"))["access_token"].tap { db.close }
+        end
+      end
+
+      # Kiro's token lives inside the CLI's SQLite database, so a delivery written as a
+      # file would replace the database the container holds open.
+      test "swaps a refreshed Kiro token into the parked holder's own database" do
+        blob = kiro_state(access_token: "at-old", expires_at: 5.minutes.from_now)
+        credential = AgentCredential.from_artifacts(@user.id, @company.id, "kiro_cli",
+                                                    { "state_b64" => Base64.strict_encode64(blob) })
+        session = create(:terminal_session, user: @user, company_id: @company.id, agent_type: "kiro_cli",
+                                            state: "ready", container_id: "ctr-1")
+        @runtime.fs[KIRO_STATE_PATH] = blob
+        @runtime.set_terminal_pane("waiting for input", last_output_at: 2.hours.ago)
+        stub_request(:post, Agents::KiroCliAdapter::SOCIAL_REFRESH_URL).to_return(
+          status: 200, headers: { "Content-Type" => "application/json" },
+          body: { accessToken: "at-new", refreshToken: "rt-new", expiresIn: 3600 }.to_json
+        )
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:refreshed]
+        assert_equal 1, result[:delivered]
+        assert_equal "at-new", kiro_access_token(Base64.strict_decode64(credential.reload.config_data["state_b64"]))
+        assert_equal "at-new", kiro_access_token(@runtime.read_file(session.container_id, KIRO_STATE_PATH))
+      end
+
       test "leaves a credential alone while its holder is mid-turn" do
         credential = claude_credential
         holder_session
@@ -112,6 +157,25 @@ module Activities
         assert_equal 0, result[:refreshed]
         assert_equal 1, result[:skipped_busy]
         assert_equal "at-old", credential.reload.config_data.dig("claudeAiOauth", "accessToken")
+      end
+
+      # Cursor's refresh returns no new refresh token, so the holder's copy stays valid and
+      # there is no reason to wait for it to go quiet.
+      test "refreshes a static-rotation credential even while its holder is mid-turn" do
+        credential = AgentCredential.from_artifacts(@user.id, @company.id, "cursor_cli",
+                                                    { "accessToken" => "at-old", "refreshToken" => "at-old" })
+        create(:terminal_session, user: @user, company_id: @company.id, agent_type: "cursor_cli",
+                                  state: "running", container_id: "ctr-1")
+        @runtime.set_terminal_pane("● Running tests…", last_output_at: 30.seconds.ago)
+        stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL)
+          .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                     body: { access_token: "at-new", id_token: "id", shouldLogout: false }.to_json)
+
+        result = run_activity(RefreshExpiringTokensActivity)
+
+        assert_equal 1, result[:refreshed]
+        assert_equal 0, result[:skipped_busy]
+        assert_equal "at-new", credential.reload.config_data["accessToken"]
       end
 
       test "treats an unreadable container as busy rather than parked" do

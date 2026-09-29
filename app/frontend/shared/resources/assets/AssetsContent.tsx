@@ -41,7 +41,9 @@ import Uppy from '@uppy/core';
 import type { Body, Meta, UppyFile } from '@uppy/core';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import { apiFetch } from 'shared/lib/apiFetch';
+import type { Asset, AssetVersion, Folder } from '@/types/generated';
+
+import { apiFetch, apiRequest } from 'shared/lib/apiFetch';
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { formatFileSize } from 'shared/lib/formatFileSize';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
@@ -66,13 +68,10 @@ import {
   siblingNames,
 } from './folderTree';
 import { MoveToFolderModal } from './MoveToFolderModal';
-import type { Asset, AssetVersion, Folder } from './types';
 import { useAssetMutations } from './useAssetMutations';
 import { useAssetSelection } from './useAssetSelection';
 import { useAssetViewState } from './useAssetViewState';
 import { useFolderMutations } from './useFolderMutations';
-
-export type { Asset, AssetVersion, Folder } from './types';
 
 /** What the Move-to-folder modal is currently acting on. */
 type MoveTarget = { kind: 'asset'; asset: Asset } | { kind: 'folder'; path: string } | { kind: 'bulk'; ids: number[] };
@@ -300,11 +299,10 @@ export function AssetsContent({
         // to undefined. The name only picks the cache key's extension, so a fallback is fine.
         const file: UppyFile<Meta, Body> | undefined = uppy.getFile(key);
         const qs = new URLSearchParams({ filename: file?.name ?? 'file' });
-        const res = await apiFetch(`${PRESIGN_URL}?${qs}`);
-        const data = await res.json();
+        const data = await apiRequest<{ url: string; key: string }>(`${PRESIGN_URL}?${qs}`);
         // Returning `key` tells the plugin which object the URL was actually signed for, so it
         // reports the server's key — not the file id above — once the upload succeeds.
-        return { url: data.url as string, key: data.key as string };
+        return { url: data.url, key: data.key };
       },
     });
 
@@ -896,6 +894,7 @@ export function AssetsContent({
         asset={previewAsset}
         onClose={() => setPreviewAsset(null)}
         downloadUrl={previewAsset ? downloadUrl(previewAsset) : ''}
+        onUnshare={canExecute ? (asset) => assetMutations.unshare(asset.id) : undefined}
       />
 
       {/* Version History Modal */}

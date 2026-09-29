@@ -1,4 +1,4 @@
-import type { McpServer } from './types';
+import type { MCPServer } from '@/types/generated';
 
 // Health signals a catalog-installed MCP server can carry, ordered by how much
 // they should interrupt someone scanning a table.
@@ -19,7 +19,7 @@ export interface ServerHealthSignal {
 
 const listNames = (names: string[] | undefined): string => (names ?? []).join(', ');
 
-const driftDetail = (server: McpServer): string => {
+const driftDetail = (server: MCPServer): string => {
   const drift = server.toolDrift;
   if (!drift) return '';
 
@@ -31,7 +31,7 @@ const driftDetail = (server: McpServer): string => {
 };
 
 // Highest severity first, so a row's first icon is its worst news.
-export const serverHealthSignals = (server: McpServer): ServerHealthSignal[] => {
+export const serverHealthSignals = (server: MCPServer): ServerHealthSignal[] => {
   const signals: ServerHealthSignal[] = [];
 
   if (server.toolDrift) {
@@ -92,6 +92,6 @@ export const serverHealthSignals = (server: McpServer): ServerHealthSignal[] => 
   return signals;
 };
 
-const hasDrift = (server: McpServer): boolean => !!server.toolDrift;
+const hasDrift = (server: MCPServer): boolean => !!server.toolDrift;
 
-export const driftedServers = (servers: McpServer[]): McpServer[] => servers.filter(hasDrift);
+export const driftedServers = (servers: MCPServer[]): MCPServer[] => servers.filter(hasDrift);

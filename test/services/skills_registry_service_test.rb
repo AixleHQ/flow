@@ -138,6 +138,42 @@ class SkillsRegistryServiceTest < ActiveSupport::TestCase
     assert_includes skill.content, "# Next.js"
     assert_equal "sha256:deadbeef", skill.content_hash
     assert_equal "registry", skill.origin
+    # The whole directory is kept: it is what sessions write, instead of fetching
+    # upstream's current copy.
+    assert_equal [ "LICENSE.txt", "SKILL.md" ], skill.files.keys.sort
+    assert_equal "MIT", skill.files["LICENSE.txt"]
+  end
+
+  def stub_pdf_download
+    stub_request(:get, "https://www.skills.sh/api/download/anthropics/skills/pdf")
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                 body: { hash: "sha256:pdf", files: [ { path: "SKILL.md", contents: "---\nname: pdf\ndescription: PDFs\n---\n" } ] }.to_json)
+  end
+
+  def flag_pdf!(risk)
+    create(:catalog_skill, source: "anthropics/skills", slug: "pdf",
+                           audit: { "snyk" => { "risk" => risk } }, audit_risk: risk)
+  end
+
+  # The catalog modal asks first; every other way in has to ask too.
+  test "install refuses a skill an audit flags until the risk is acknowledged" do
+    flag_pdf!("critical")
+    stub_pdf_download
+
+    error = assert_raises(SkillsRegistryService::RiskNotAcknowledged) do
+      SkillsRegistryService.install("anthropics/skills/pdf", scope: @project)
+    end
+    assert_match(/flagged as critical risk \(snyk: critical\)/, error.message)
+    assert_not @project.skills.exists?
+
+    assert SkillsRegistryService.install("anthropics/skills/pdf", scope: @project, acknowledge_risk: true).persisted?
+  end
+
+  test "a skill nobody flagged installs without the question" do
+    flag_pdf!("low")
+    stub_pdf_download
+
+    assert SkillsRegistryService.install("anthropics/skills/pdf", scope: @project).persisted?
   end
 
   test "install records the install count the caller already knows" do

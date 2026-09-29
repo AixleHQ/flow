@@ -214,11 +214,13 @@ class Web::Company::Projects::SkillsControllerTest < ActionDispatch::Integration
     assert_equal "house-style", skill.reload.name
   end
 
-  test "destroy removes skill and redirects" do
+  test "destroy archives the skill and redirects" do
     skill = create(:skill, :with_project_scope, scope: @project)
 
     delete company_project_skill_path(@project, skill)
     assert_redirected_to company_project_skills_path(@project)
-    assert_equal "Skill removed", flash[:notice]
+    assert_equal "Skill archived", flash[:notice]
+    assert skill.reload.archived?
+    assert_equal %w[created archived], skill.entity_versions.reorder(:number).map { |v| v.event.to_s }
   end
 end

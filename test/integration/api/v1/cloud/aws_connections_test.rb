@@ -12,6 +12,7 @@ module Api
           @company = create(:company)
           @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
           @sso = FakeAwsSsoClient.new(region: "us-west-2")
+          @sso.approver = @user.email
           # Stub the app-owned seams, never the vendor SDK (docs/testing.md R2). Completing a
           # connection also lists the account's models, so that seam needs a fake too.
           CloudAuth::AwsSsoClient.stubs(:new).returns(@sso)

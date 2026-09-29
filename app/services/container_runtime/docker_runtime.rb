@@ -137,6 +137,8 @@ module ContainerRuntime
       container = resolve_container(id)
       wait_seconds = timeout || 1800
       container.wait(wait_seconds)
+    rescue Docker::Error::TimeoutError
+      raise WaitTimeout, "still running after #{wait_seconds}s"
     end
 
     def container_logs(id, stdout: true, stderr: true)

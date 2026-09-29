@@ -1,8 +1,31 @@
 protocol: "http"
 
+# The suite exercises both redirect providers through OmniAuth's test mode, so
+# this installation genuinely offers them — and availability is derived from
+# credentials being present (Auth::DeploymentProviders.configured_kinds), not
+# merely declared.
+google_oauth:
+  client_id: "test-google-client-id"
+  client_secret: "test-google-client-secret"
+
+microsoft_oauth:
+  client_id: "test-microsoft-client-id"
+  client_secret: "test-microsoft-client-secret"
+  tenant_id: "common"
+
 # Safe non-production defaults — production requires real env vars (required_env.rb).
 encryption:
   credentials_key: <%= ENV['CREDENTIALS_SECRET_KEY'] || 'test secret key' %>
   config_items_key: <%= ENV['CONFIG_ITEMS_SECRET_KEY'] || 'config items test key' %>
   integrations_key: <%= ENV['INTEGRATIONS_SECRET_KEY'] || 'integrations test key' %>
   oauth_key: <%= ENV['OAUTH_SECRET_KEY'] || 'oauth test key' %>
+
+# Local work is a self-hosted installation: the capacity is the operator's own
+# and nothing is metered to a billing provider.
+deployment:
+  mode: <%= ENV['DEPLOYMENT_MODE'] || 'self_hosted' %>
+
+agents:
+  antigravity:
+    oauth_client_id: test-antigravity-client.apps.googleusercontent.com
+    oauth_client_secret: test-antigravity-secret

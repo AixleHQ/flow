@@ -15,6 +15,7 @@ module PersonalTools
       param :command, type: :string, description: "Command template."
       param :enabled, type: :boolean, description: "Enabled flag."
       param :input_schema, type: :object, description: "JSON Schema."
+      param :base_version, type: :integer, description: "The version you read (current_version_number). A newer one means someone else saved since, and the update is refused."
     end
 
     ATTRS = %w[display_name docker_image description command enabled input_schema].freeze
@@ -28,7 +29,7 @@ module PersonalTools
       attrs = params.slice(*ATTRS).reject { |_, v| v.nil? }
       return error("No fields to update") if attrs.empty?
 
-      tool.update!(attrs)
+      Versions.save!(tool, actor: version_actor, base_version: base_version) { tool.update!(attrs) }
       success(id: tool.id, name: tool.name, updated_fields: attrs.keys)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to update tool: #{e.message}")

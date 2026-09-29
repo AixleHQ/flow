@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class FixWorkflowRunAssetsStepRunFkOnDelete < ActiveRecord::Migration[8.1]
   def up
     remove_foreign_key :workflow_run_assets, column: :produced_by_step_run_id

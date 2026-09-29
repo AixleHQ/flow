@@ -2,9 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { ConfigItem } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
-
-import type { ConfigItem } from 'shared/resources/config-items/ConfigItemsContent';
 
 import ConfigPage from './ConfigPage';
 
@@ -17,8 +16,9 @@ const makeItem = (overrides: Partial<ConfigItem> = {}): ConfigItem => ({
   description: 'Primary database connection',
   itemType: 'variable',
   scopeType: 'project',
-  scopeIndicator: 'P',
+  scopeIndicator: 'project',
   createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
   ...overrides,
 });
 

@@ -27,6 +27,14 @@ class MembershipMailerTest < ActionMailer::TestCase
     assert_equal @membership, CompanyMembership.find_by_token_for(:invitation, CGI.unescape(token))
   end
 
+  test "invitation email writes the inviter's address as a styled link, not a bare one the client auto-links" do
+    html = Nokogiri::HTML(MembershipMailer.invitation(@membership).html_part.decoded)
+    link = html.at_css("a[href='mailto:#{@inviter.email}']")
+
+    assert link, "expected an explicit mailto link for the inviter"
+    assert_includes link["style"], "color:#d1cfcd"
+  end
+
   test "invitation_reminder carries a still-valid token link and the expiry date" do
     @membership.update!(invited_at: 6.days.ago)
     email = MembershipMailer.invitation_reminder(@membership)
@@ -53,12 +61,21 @@ class MembershipMailerTest < ActionMailer::TestCase
   end
 
   test "role_changed names both the old and the new role" do
-    @membership.update!(role: "admin")
-    email = MembershipMailer.role_changed(@membership, "employee")
+    membership = create(:company_membership, :admin, user: @invitee, company: create(:company))
+    email = MembershipMailer.role_changed(membership, "employee")
 
     assert_equal [ "invitee@example.com" ], email.to
     body = email.text_part.decoded
     assert_includes body, "Employee"
     assert_includes body, "Admin"
+    assert_not_includes body, "finish onboarding"
+  end
+
+  test "role_changed tells a promoted viewer to finish onboarding with a CLI" do
+    membership = create(:company_membership, user: @invitee, company: create(:company))
+    email = MembershipMailer.role_changed(membership, "viewer")
+
+    assert_includes email.text_part.decoded, "finish onboarding and connect at least one agent CLI"
+    assert_includes email.html_part.decoded, "finish onboarding and connect at least one agent CLI"
   end
 end

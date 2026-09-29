@@ -29,6 +29,13 @@ class ContainerService
 
   PHASES = %i[pull_image create_container start_container exec cleanup].freeze
 
+  # What only the create phase needs. The env carries decrypted secrets (vendor
+  # API keys, per-session keys, the prompt) and nothing after create reads any
+  # of it — before_create_container rebuilds the spec on every attempt — so it
+  # never leaves the phase: the state a phase returns is what Temporal records
+  # in workflow history and the admitted path persists.
+  CREATE_ONLY_KEYS = %i[env_vars cmd host_config exposed_ports labels working_dir].freeze
+
   def initialize(strategy:, state: {})
     @strategy = strategy
     @state = {}.merge(state || {}).deep_symbolize_keys
@@ -45,6 +52,7 @@ class ContainerService
     @state.merge!(invoke(:"before_#{phase}"))
     @state.merge!(invoke(phase))
     @state.merge!(invoke(:"after_#{phase}"))
+    @state.except!(*CREATE_ONLY_KEYS)
 
     duration = ((Time.current - start_time) * 1000).to_i
     Rails.logger.info("[ContainerService] Phase #{phase} completed in #{duration}ms")

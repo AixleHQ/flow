@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Puma configuration for the dedicated MCP (Model Context Protocol) server.
 # Runs on a separate port to isolate MCP traffic from the main web server.
 

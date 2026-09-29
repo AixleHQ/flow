@@ -12,21 +12,21 @@ describe('DeleteMcpServerModal', () => {
   it('renders the title and the server name in the confirmation prompt', () => {
     renderPage(<DeleteMcpServerModal opened onClose={vi.fn()} server={server} basePath="/projects/1/mcp-servers" />);
 
-    expect(screen.getByRole('heading', { name: /delete mcp server/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /archive mcp server/i })).toBeInTheDocument();
     expect(screen.getByText('GitHub Server')).toBeInTheDocument();
-    expect(screen.getByText(/this action cannot be undone/i)).toBeInTheDocument();
+    expect(screen.getByText(/restore it from the Archived tab/i)).toBeInTheDocument();
   });
 
   it('renders nothing when no server is provided', () => {
     renderPage(<DeleteMcpServerModal opened onClose={vi.fn()} server={null} basePath="/projects/1/mcp-servers" />);
 
-    expect(screen.queryByRole('heading', { name: /delete mcp server/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /archive mcp server/i })).not.toBeInTheDocument();
   });
 
-  it('confirming Delete fires router.delete to the server path', async () => {
+  it('confirming Archive fires router.delete to the server path', async () => {
     renderPage(<DeleteMcpServerModal opened onClose={vi.fn()} server={server} basePath="/projects/1/mcp-servers" />);
 
-    await userEvent.click(screen.getByRole('button', { name: /delete/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^archive$/i }));
 
     expect(router.delete).toHaveBeenCalledWith(
       '/projects/1/mcp-servers/7',

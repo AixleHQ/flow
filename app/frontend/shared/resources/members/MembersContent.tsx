@@ -28,6 +28,8 @@ import {
 } from '@tabler/icons-react';
 import { useMemo, useState } from 'react';
 
+import type { Member } from '@/types/generated';
+
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
 import { userPath } from 'shared/routes';
@@ -38,28 +40,16 @@ import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/Resourc
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { InviteMemberDrawer } from './InviteMemberDrawer';
-
-// A company-membership row: `id` is the user id (member routes are keyed by
-// user id), while `role`/`state` are the PER-COMPANY membership role and state
-// (invited | active | suspended).
-export interface MemberUser {
-  id: number;
-  email: string;
-  name: string;
-  role: UserRole;
-  state: string;
-  position: string | null;
-  invitedAt: string | null;
-  createdAt: string;
-  invitedBy: { id: number; name: string } | null;
-}
+import type { ProjectHandover } from './projectHandover';
+import { ProjectHandoverModal } from './ProjectHandoverModal';
 
 interface MembersContentProps {
-  users: MemberUser[];
+  users: Member[];
   basePath: string;
   title: string;
   subtitle?: string;
   showRoleActions?: boolean;
+  projectHandover?: ProjectHandover | null;
 }
 
 // Revoked members are never rendered (the index excludes them).
@@ -125,7 +115,14 @@ const STATUS_FILTER_OPTIONS = [
   { value: 'all', label: 'All Statuses' },
 ];
 
-export const MembersContent = ({ users, basePath, title, subtitle, showRoleActions = true }: MembersContentProps) => {
+export const MembersContent = ({
+  users,
+  basePath,
+  title,
+  subtitle,
+  showRoleActions = true,
+  projectHandover = null,
+}: MembersContentProps) => {
   const { currentUser, permissions } = usePage<SharedProps>().props;
   // Every control this page offers mutates membership, so the whole action surface hangs off one
   // permission. `permissions` is optional on SharedProps — absent means "not permitted", matching
@@ -135,14 +132,15 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('active');
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [handoverFor, setHandoverFor] = useState<Member | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const activeAdminCount = useMemo(
-    () => users.filter((u) => (u.role === 'admin' || u.role === 'super_admin') && u.state === 'active').length,
+    () => users.filter((u) => u.role === 'admin' && u.state === 'active').length,
     [users],
   );
 
-  const isLastAdmin = (user: MemberUser) =>
-    (user.role === 'admin' || user.role === 'super_admin') && user.state === 'active' && activeAdminCount <= 1;
+  const isLastAdmin = (user: Member) => user.role === 'admin' && user.state === 'active' && activeAdminCount <= 1;
 
   const filtered = useMemo(() => {
     let result = users;
@@ -165,6 +163,20 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
     router.patch(`${basePath}/${userId}`, { user: { role } }, { preserveScroll: true });
   };
 
+  const handlePromoteViewer = (userId: number, name: string) => {
+    modals.openConfirmModal({
+      title: 'Make employee',
+      children: (
+        <Text size="sm">
+          <b>{name}</b> will get member access to this company. They must finish onboarding and connect at least one CLI
+          before they can run agents.
+        </Text>
+      ),
+      labels: { confirm: 'Make Employee', cancel: 'Cancel' },
+      onConfirm: () => handleRoleChange(userId, 'employee'),
+    });
+  };
+
   const handleStateEvent = (userId: number, event: string) => {
     router.patch(`${basePath}/${userId}`, { user: { stateEvent: event } }, { preserveScroll: true });
   };
@@ -174,6 +186,11 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
   };
 
   const handleDelete = (userId: number, name: string) => {
+    const owner = users.find((u) => u.id === userId);
+    if (owner && projectHandover?.projects.some((p) => p.ownerId === userId)) {
+      setHandoverFor(owner);
+      return;
+    }
     modals.openConfirmModal({
       title: 'Remove member',
       children: (
@@ -366,6 +383,14 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
                                     Make Admin
                                   </Menu.Item>
                                 )}
+                                {showRoleActions && user.role === 'viewer' && user.state === 'active' && (
+                                  <Menu.Item
+                                    leftSection={<IconUserCheck size={14} />}
+                                    onClick={() => handlePromoteViewer(user.id, user.name)}
+                                  >
+                                    Make Employee
+                                  </Menu.Item>
+                                )}
                                 {showRoleActions && user.role === 'admin' && (
                                   <Tooltip label="Cannot modify the last admin" disabled={!isLastAdmin(user)}>
                                     <Menu.Item
@@ -422,6 +447,33 @@ export const MembersContent = ({ users, basePath, title, subtitle, showRoleActio
             </Table.Tbody>
           </Table>
         </ResourceTableShell>
+      )}
+
+      {handoverFor && projectHandover && (
+        <ProjectHandoverModal
+          title="Remove member"
+          intro={
+            <Text size="sm">
+              Remove <b>{handoverFor.name || handoverFor.email}</b> from this company? They lose access to every project
+              in it. This action cannot be undone.
+            </Text>
+          }
+          confirmLabel="Transfer and remove"
+          subject="They"
+          leavingUserId={handoverFor.id}
+          handover={projectHandover}
+          submitting={removing}
+          onClose={() => setHandoverFor(null)}
+          onConfirm={(handover) => {
+            setRemoving(true);
+            router.delete(`${basePath}/${handoverFor.id}`, {
+              data: { handover },
+              preserveScroll: true,
+              onSuccess: () => setHandoverFor(null),
+              onFinish: () => setRemoving(false),
+            });
+          }}
+        />
       )}
 
       {canManageMembers && (

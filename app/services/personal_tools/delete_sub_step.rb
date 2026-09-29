@@ -12,16 +12,18 @@ module PersonalTools
       param :workflow_id, type: :integer, description: "Workflow id.", required: true
       param :step_id, type: :integer, description: "Step id.", required: true
       param :sub_step_id, type: :integer, description: "Sub-step id (from get_workflow_step).", required: true
+      param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
     def execute
       project = find_project!
       authorize!(project, :update?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
-      step = find_step!(find_workflow!(project))
+      workflow = find_workflow!(project)
+      step = find_step!(workflow)
       sub_step = find_sub_step!(step)
 
       name = sub_step.name
-      sub_step.destroy
+      Versions.save!(workflow, actor: version_actor, base_version: base_version) { sub_step.destroy }
       success(deleted_sub_step_id: sub_step.id, name: name, step_id: step.id,
               soft_deleted: sub_step.deleted?)
     end

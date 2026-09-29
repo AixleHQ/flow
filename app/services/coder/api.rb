@@ -39,8 +39,10 @@ module Coder
         { id: body["id"], username: body["username"], email: body["email"] }
       end
 
-      def list_workspaces(coder_url:, session_token:)
-        body = json_get("/api/v2/workspaces", coder_url: coder_url, session_token: session_token, op: "list_workspaces")
+      # `query` is Coder's workspace search, e.g. "owner:me".
+      def list_workspaces(coder_url:, session_token:, query: nil)
+        path = query.present? ? "/api/v2/workspaces?q=#{CGI.escape(query)}" : "/api/v2/workspaces"
+        body = json_get(path, coder_url: coder_url, session_token: session_token, op: "list_workspaces")
         body["workspaces"] || []
       end
 
@@ -160,7 +162,9 @@ module Coder
       # Non-trusted host → must not use internal DNS: resolve via public DNS
       #                 and connect to the public IPv4 directly.
       def resolve_target(uri)
-        return [ uri.to_s, nil, nil ] if UrlSafetyValidator.trusted_host?(uri.host.to_s)
+        return [ uri.to_s, nil, nil ] if UrlSafetyValidator.trusted_host?(
+          uri.host.to_s, trusted_hosts_override: UrlSafetyValidator.configured_trusted_hosts
+        )
 
         public_ip = UrlSafetyValidator.resolve_public_ipv4(uri.host)
         return [ uri.to_s, nil, nil ] if public_ip.nil?

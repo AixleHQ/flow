@@ -5,6 +5,7 @@ class Web::DocsController < Web::ApplicationController
 
   skip_before_action :redirect_super_admin_to_admin_panel
   skip_before_action :enforce_onboarding
+  skip_before_action :enforce_company_auth_policy
 
   def show
     slug = (params[:slug].presence || "user-guide").downcase
@@ -30,10 +31,11 @@ class Web::DocsController < Web::ApplicationController
   # rather than a missing line. DocsControllerTest compares the two and fails
   # when they drift.
   PAGES = %w[using-flow getting-started project-home tasks running-workflows starting-work
-             sessions-and-runs session-queues assets personas agent-capabilities repositories ai-builder
-             people-and-access secrets analytics company-workspace examples
+             sessions-and-runs session-queues plans-and-limits aws-marketplace-billing assets personas
+             agent-capabilities repositories ai-builder
+             people-and-access signing-in secrets templates analytics company-workspace examples
              user-guide quick-start agents runtimes tools mcp board workflows
-             triggers-and-gates integrations azure-devops configuration reference cli-ref
+             triggers-and-gates integrations azure-devops configuration configuring-sso reference cli-ref
              api-guide config-schema user-guide-outline changelog-product-areas].freeze
 
   def page_exists?(slug)

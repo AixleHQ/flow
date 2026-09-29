@@ -4,7 +4,7 @@ module PersonalTools
   class DeleteCustomTool < Base
     tool do
       display_name "Delete Custom Tool"
-      description "Soft-delete a custom tool."
+      description "Archive a custom tool. Agents stop being served it; it keeps its history and can be restored from the Tools page. Refused while a workflow uses it."
       audience :user
       tags :resources
       param :project_id, type: :integer, description: "Project id.", required: true
@@ -18,8 +18,8 @@ module PersonalTools
       return error("Custom tool not found in this project") unless tool
 
       name = tool.name
-      tool.soft_delete!
-      success(deleted_tool_id: tool.id, name: name)
+      Versions.archive!(tool, actor: version_actor)
+      success(archived_tool_id: tool.id, name: name)
     end
   end
 end

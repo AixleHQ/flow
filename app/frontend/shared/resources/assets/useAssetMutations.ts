@@ -89,5 +89,25 @@ export function useAssetMutations(apiBasePath: string) {
     }
   };
 
-  return { submitting, move, bulk };
+  // The link stops working at once; sharing again makes a new one.
+  const unshare = async (assetId: number): Promise<boolean> => {
+    setSubmitting(true);
+    try {
+      const res = await apiFetch(`${apiBasePath}/${assetId}/share`, { method: 'DELETE' });
+      if (!res.ok) {
+        notifications.show({ message: await parseError(res, 'Failed to stop sharing'), color: 'red' });
+        return false;
+      }
+      notifications.show({ message: 'The public link no longer works', color: 'green' });
+      reload();
+      return true;
+    } catch {
+      notifications.show({ message: 'Failed to stop sharing', color: 'red' });
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return { submitting, move, bulk, unshare };
 }

@@ -11,13 +11,26 @@ module Github
       @project = project
     end
 
-    def create(installation_id:)
-      integration = @company.integrations.new(
-        provider: :github,
-        connected_by: @connected_by,
-        status: :inactive,
-        project: @project
+    # `via_setup:` — the id arrived on GitHub's own post-install redirect, with
+    # our signed state. Only that path may connect an installation the company
+    # does not hold yet (and, where the App's OAuth credentials are configured,
+    # only for an installation the person completing the install can see).
+    # Everywhere else — "link to project" — the id has to be one the company
+    # already holds; the App's JWT can read every installation, so its existence
+    # proves nothing about who installed it.
+    def create(installation_id:, via_setup: false, oauth_code: nil)
+      unless via_setup || Integration.github_installation_held_by?(@company, installation_id)
+        return refused("This GitHub installation is not connected to this workspace")
+      end
+      if via_setup && Github::InstallationOwnership.enforced? &&
+         !Github::InstallationOwnership.new(code: oauth_code).includes?(installation_id)
+        return refused("Could not confirm you have access to this GitHub installation")
+      end
+
+      integration = Integration.find_or_build_github_for_installation(
+        company: @company, connected_by: @connected_by, project: @project, installation_id: installation_id
       )
+      integration.status = :inactive
       integration.credentials_data = { installation_id: installation_id.to_s }
 
       begin
@@ -97,6 +110,15 @@ module Github
       integration.status = :active
       integration.save
       integration
+    end
+
+    private
+
+    def refused(message)
+      @company.integrations.build(
+        provider: :github, connected_by: @connected_by, project: @project, status: :error,
+        name: "GitHub (refused)", settings: { auth_mode: "app", error: message }
+      )
     end
   end
 end

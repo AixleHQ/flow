@@ -306,6 +306,43 @@ class UrlSafetyValidatorTest < ActiveSupport::TestCase
     refute UrlSafetyValidator.safe?("http://127.0.0.1")
   end
 
+
+  # ====================================================================
+  # Special-purpose ranges and IPv6 forms that carry an IPv4 address
+  # ====================================================================
+
+  test "special-purpose ranges are blocked" do
+    %w[100.64.0.1 100.127.255.254 0.1.2.3 198.18.0.1 192.0.0.8 224.0.0.1 255.255.255.255 240.0.0.1
+       ff02::1 2001:db8::1 2001::1].each do |address|
+      assert UrlSafetyValidator.blocked_ip?(IPAddr.new(address)), "#{address} should be blocked"
+    end
+  end
+
+  test "an IPv6 address is judged by the IPv4 address it carries" do
+    %w[::ffff:10.0.0.1 64:ff9b::a9fe:a9fe 2002:a9fe:a9fe::1].each do |address|
+      assert UrlSafetyValidator.blocked_ip?(IPAddr.new(address)), "#{address} reaches an internal IPv4"
+    end
+    assert_not UrlSafetyValidator.blocked_ip?(IPAddr.new("64:ff9b::808:808")), "NAT64 of a public address is public"
+  end
+
+  test "public addresses stay reachable" do
+    %w[8.8.8.8 93.184.215.14 100.128.0.1 2606:4700:4700::1111].each do |address|
+      assert_not UrlSafetyValidator.blocked_ip?(IPAddr.new(address)), "#{address} should be allowed"
+    end
+  end
+
+  # URL_SAFETY_TRUSTED_HOSTS is for the integration that must reach our own
+  # privately-resolving hosts; any other URL naming one is judged like any other.
+  test "a host the deployment trusts for Coder is not trusted by other URL checks" do
+    UrlSafetyValidator.stubs(:configured_trusted_hosts).returns([ "coder.staging.aixle.com" ])
+    stub_resolve("coder.staging.aixle.com", "10.0.0.5")
+
+    assert_includes UrlSafetyValidator.errors_for("https://coder.staging.aixle.com/mcp"),
+                    "cannot point to private or internal network addresses"
+    assert_empty UrlSafetyValidator.errors_for("https://coder.staging.aixle.com",
+                                               trusted_hosts_override: UrlSafetyValidator.configured_trusted_hosts)
+  end
+
   private
 
   # Stub the libc resolver (getaddrinfo) — the SAME one Net::HTTP dials with —

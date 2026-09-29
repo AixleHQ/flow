@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
 
+import { useCanWrite } from 'shared/lib/hooks/useCanWrite';
 import { PageHeader } from 'shared/ui/PageHeader';
 
 interface CatalogWorkflow {
@@ -25,11 +26,12 @@ interface ProjectOption {
 
 interface Props {
   workflows: CatalogWorkflow[];
-  projects: ProjectOption[];
+  projectOptions: ProjectOption[];
 }
 
 const IndexPage = () => {
-  const { workflows, projects } = usePage<{ props: Props }>().props as unknown as Props;
+  const { workflows, projectOptions: projects } = usePage<{ props: Props }>().props as unknown as Props;
+  const canWrite = useCanWrite();
 
   const [search, setSearch] = useState('');
   const [debouncedSearch] = useDebouncedValue(search, 300);
@@ -45,7 +47,7 @@ const IndexPage = () => {
     );
   }, [workflows, debouncedSearch]);
 
-  const projectOptions = useMemo(() => projects.map((p) => ({ value: String(p.id), label: p.name })), [projects]);
+  const selectOptions = useMemo(() => projects.map((p) => ({ value: String(p.id), label: p.name })), [projects]);
 
   const handleDuplicate = () => {
     if (!duplicateWorkflow || !selectedProjectId) return;
@@ -116,9 +118,11 @@ const IndexPage = () => {
                       &middot; {new Date(wf.publishedAt).toLocaleDateString()}
                     </Text>
                   </Group>
-                  <Button fullWidth variant="light" onClick={() => setDuplicateWorkflow(wf)}>
-                    Duplicate to project
-                  </Button>
+                  {canWrite && (
+                    <Button fullWidth variant="light" onClick={() => setDuplicateWorkflow(wf)}>
+                      Duplicate to project
+                    </Button>
+                  )}
                 </Stack>
               </Card>
             ))}
@@ -144,7 +148,7 @@ const IndexPage = () => {
             <Select
               label="Project"
               placeholder="Select project"
-              data={projectOptions}
+              data={selectOptions}
               value={selectedProjectId}
               onChange={(value) => setSelectedProjectId(value ?? '')}
               searchable

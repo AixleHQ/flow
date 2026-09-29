@@ -31,7 +31,7 @@ module Agents
     # A real SQLite database in the CLI's own layout, for the paths that actually read
     # it (the bearer, the profile ARN, and the API calls both feed). The byte fixtures
     # above are enough for the format checks; this is not.
-    def real_state_credentials
+    def real_state_credentials(profile: true)
       Tempfile.create([ "kiro-fixture", ".sqlite3" ]) do |file|
         db = SQLite3::Database.new(file.path)
         db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
@@ -41,9 +41,11 @@ module Agents
         db.execute("INSERT INTO auth_kv VALUES (?, ?)", [ "kirocli:odic:token",
                                                           { "access_token" => "tok-abc",
                                                             "refresh_token" => "ref-abc" }.to_json ])
-        db.execute("INSERT INTO state VALUES (?, ?)", [ Agents::KiroCliAdapter::PROFILE_STATE_KEY,
-                                                        { "arn" => "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD",
-                                                          "profile_name" => "KiroProfile-us-east-1" }.to_json ])
+        if profile
+          db.execute("INSERT INTO state VALUES (?, ?)", [ Agents::KiroCliAdapter::PROFILE_STATE_KEY,
+                                                          { "arn" => "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD",
+                                                            "profile_name" => "KiroProfile-us-east-1" }.to_json ])
+        end
         db.close
 
         { "state_b64" => Base64.strict_encode64(File.binread(file.path)) }
@@ -203,6 +205,88 @@ module Agents
       assert_includes files.keys, "/home/kiro/.kiro/settings/mcp.json"
     end
 
+    # == Credential delivery ==
+
+    STATE_PATH = "/home/kiro/.local/share/kiro-cli/data.sqlite3"
+    HANDOFF_PATH = "/home/kiro/.local/share/kiro-cli/.aixle-token-handoff.json"
+
+    # A state database as a running container holds it: the login row plus a row the CLI
+    # wrote after launch, which a delivery must not take away.
+    def state_db(access_token:, expires_at:, key: "kirocli:social:token")
+      Tempfile.create([ "kiro-state", ".sqlite3" ]) do |file|
+        db = SQLite3::Database.new(file.path)
+        db.execute("CREATE TABLE auth_kv (key TEXT PRIMARY KEY, value TEXT)")
+        db.execute("CREATE TABLE state (key TEXT PRIMARY KEY, value TEXT)")
+        db.execute("INSERT INTO auth_kv VALUES (?, ?)", [ key, { "access_token" => access_token,
+                                                                 "refresh_token" => "rt-#{access_token}",
+                                                                 "expires_at" => expires_at }.to_json ])
+        db.execute("INSERT INTO state VALUES ('chat.lastConversation', 'since-launch')")
+        db.close
+        File.binread(file.path)
+      end
+    end
+
+    def credentials_from(blob) = { "state_b64" => Base64.strict_encode64(blob) }
+
+    def row_in(blob, sql)
+      Tempfile.create([ "kiro-read", ".sqlite3" ]) do |file|
+        File.binwrite(file.path, blob)
+        db = SQLite3::Database.new(file.path)
+        db.get_first_value(sql).tap { db.close }
+      end
+    end
+
+    def held_token(runtime)
+      JSON.parse(row_in(runtime.fs[STATE_PATH], "SELECT value FROM auth_kv"))
+    end
+
+    def kiro_runtime(container_token: "at-old", container_expiry: "2026-09-25T05:48:24.123456Z", key: "kirocli:social:token")
+      ContainerRuntime::FakeRuntime.new(agent_type: "kiro_cli").tap do |runtime|
+        runtime.fs[STATE_PATH] = state_db(access_token: container_token, expires_at: container_expiry, key: key)
+      end
+    end
+
+    # The file a delivery would write is the database the CLI holds open.
+    test "credential_files never hands over the state database" do
+      assert_empty @adapter.credential_files(real_state_credentials)
+    end
+
+    test "deliver_credential swaps the refreshed token into the container's database and keeps the rest" do
+      runtime = kiro_runtime
+      credentials = credentials_from(state_db(access_token: "at-new", expires_at: "2026-09-25T06:01:02Z"))
+
+      assert @adapter.deliver_credential(runtime, "ctr-1", credentials)
+
+      assert_equal "at-new", held_token(runtime)["access_token"]
+      assert_equal "rt-at-new", held_token(runtime)["refresh_token"]
+      assert_equal "since-launch", row_in(runtime.fs[STATE_PATH], "SELECT value FROM state")
+      refute runtime.fs.key?(HANDOFF_PATH), "the handoff file carries the token and must not outlive the swap"
+      assert_equal 0o600, runtime.file_attributes(HANDOFF_PATH)[:mode]
+    end
+
+    # The CLI renews on its own inside the container; ours is then the older token.
+    test "deliver_credential keeps a token the container has already renewed further" do
+      runtime = kiro_runtime(container_token: "at-container", container_expiry: "2026-09-25T07:00:00Z")
+      credentials = credentials_from(state_db(access_token: "at-new", expires_at: "2026-09-25T06:01:02Z"))
+
+      assert @adapter.deliver_credential(runtime, "ctr-1", credentials)
+      assert_equal "at-container", held_token(runtime)["access_token"]
+    end
+
+    test "deliver_credential fails rather than adding a login row the container does not have" do
+      runtime = kiro_runtime(key: "kirocli:odic:token")
+      credentials = credentials_from(state_db(access_token: "at-new", expires_at: "2026-09-25T06:01:02Z"))
+
+      assert_equal false, @adapter.deliver_credential(runtime, "ctr-1", credentials) # rubocop:disable Minitest/RefuteFalse
+      assert_equal "at-old", held_token(runtime)["access_token"]
+      refute runtime.fs.key?(HANDOFF_PATH)
+    end
+
+    test "a credential without a login has nothing to deliver" do
+      assert_equal false, @adapter.credential_deliverable?({}) # rubocop:disable Minitest/RefuteFalse
+      assert @adapter.credential_deliverable?(real_state_credentials)
+    end
+
     test "auth_setup_files seeds the shared Kiro settings before the login runs" do
       assert_includes @adapter.auth_setup_files.keys, "/home/kiro/.kiro/settings/mcp.json"
     end
@@ -247,7 +331,7 @@ module Agents
     # leave the CLI unlaunched.
     test "session_command contains no single quotes" do
       refute_includes @adapter.session_command(mode: "interactive"), "'"
-      refute_includes @adapter.session_command(mode: "non_interactive", prompt: "go"), "'"
+      refute_includes @adapter.session_command(mode: "non_interactive"), "'"
     end
 
     # The V3 TUI ignores the positional prompt AgentSessionStrategy appends, measured on
@@ -256,7 +340,7 @@ module Agents
     # `--no-interactive` is the only mode that consumes the argument.
     test "session_command goes headless for an automatic session, so the prompt lands" do
       assert_equal "kiro-cli --v3 chat --trust-all-tools --no-interactive",
-                   @adapter.session_command(mode: "non_interactive", prompt: "ship it")
+                   @adapter.session_command(mode: "non_interactive")
     end
 
     # An interactive session carries no prompt, so it keeps the TUI.
@@ -366,7 +450,8 @@ module Agents
 
       assert_equal "1", env["KIRO_TELEMETRY_OTEL"]
       assert_equal Settings.otel.endpoint, env["KIRO_TELEMETRY_OTLP_ENDPOINT"]
-      assert_equal "terminal_session_token=tok-123", env["OTEL_RESOURCE_ATTRIBUTES"]
+      assert_equal "terminal_session_token=tok-123,terminal_session_key=#{UsageStatistics::SessionKey.generate('tok-123')}",
+                   env["OTEL_RESOURCE_ATTRIBUTES"]
       # Measured: this one stops the export altogether, cost figures included.
       refute_includes env.keys, "KIRO_DISABLE_TELEMETRY"
     end
@@ -599,6 +684,87 @@ module Agents
       assert_equal "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD", record["profile_arn"]
     end
 
+    def stub_available_profiles(*arns)
+      stub_request(:post, "https://management.us-east-1.kiro.dev/")
+        .with(headers: { "X-Amz-Target" => Agents::KiroCliAdapter::LIST_PROFILES_TARGET })
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                   body: { "profiles" => arns.map { |arn| { "arn" => arn, "profileName" => "KiroProfile" } } }.to_json)
+    end
+
+    test "a login that stored no profile reads usage with the one its account has" do
+      stub_available_profiles("arn:aws:codewhisperer:us-east-1:5678:profile/IDC")
+      stub_usage_limits(current_usage: 3503.2)
+
+      result = @adapter.fetch_subscription_usage(real_state_credentials(profile: false))
+
+      assert_equal "ok", result[:status]
+      assert_requested(:post, "https://management.us-east-1.kiro.dev/",
+                       headers: { "X-Amz-Target" => Agents::KiroCliAdapter::USAGE_LIMITS_TARGET }) do |request|
+        JSON.parse(request.body)["profileArn"] == "arn:aws:codewhisperer:us-east-1:5678:profile/IDC"
+      end
+    end
+
+    test "a login that stored no profile does not guess between several" do
+      stub_available_profiles("arn:aws:codewhisperer:us-east-1:1:profile/A", "arn:aws:codewhisperer:us-east-1:2:profile/B")
+      usage = stub_usage_limits(current_usage: 1.0)
+
+      assert_equal({ status: "unavailable" }, @adapter.fetch_subscription_usage(real_state_credentials(profile: false)))
+      assert_not_requested usage
+    end
+
+    # == Completing a login captured before the CLI stored its profile ==
+
+    def stored_profile_row(credential)
+      Tempfile.create([ "kiro-read", ".sqlite3" ]) do |file|
+        file.binmode
+        file.write(Base64.strict_decode64(credential.reload.config_data["state_b64"]))
+        file.flush
+        db = SQLite3::Database.new(file.path)
+        value = db.get_first_value("SELECT value FROM state WHERE key = ?", [ Agents::KiroCliAdapter::PROFILE_STATE_KEY ])
+        db.close
+        value && JSON.parse(value)
+      end
+    end
+
+    test "a login that stored no profile gets the one its account has, in the CLI's own shape" do
+      stub_available_profiles("arn:aws:codewhisperer:us-east-1:5678:profile/IDC")
+      credential = credential_for(real_state_credentials(profile: false))
+
+      assert @adapter.repair_credential!(credential)
+
+      assert_equal({ "arn" => "arn:aws:codewhisperer:us-east-1:5678:profile/IDC", "profile_name" => "KiroProfile" },
+                   stored_profile_row(credential))
+      assert_equal "tok-abc", stored_token(credential)["access_token"]
+    end
+
+    test "a login that stored its profile is left alone" do
+      profiles = stub_available_profiles("arn:aws:codewhisperer:us-east-1:5678:profile/IDC")
+      credential = credential_for(real_state_credentials)
+
+      assert_not @adapter.repair_credential!(credential)
+
+      assert_equal "arn:aws:codewhisperer:us-east-1:1234:profile/ABCD", stored_profile_row(credential)["arn"]
+      assert_not_requested profiles
+    end
+
+    test "a login is not completed with a guess between several profiles" do
+      stub_available_profiles("arn:aws:codewhisperer:us-east-1:1:profile/A", "arn:aws:codewhisperer:us-east-1:2:profile/B")
+      credential = credential_for(real_state_credentials(profile: false))
+
+      assert_not @adapter.repair_credential!(credential)
+
+      assert_nil stored_profile_row(credential)
+    end
+
+    test "a login stays as it is when the control plane does not answer" do
+      stub_request(:post, "https://management.us-east-1.kiro.dev/").to_return(status: 500, body: "{}")
+      credential = credential_for(real_state_credentials(profile: false))
+
+      assert_not @adapter.repair_credential!(credential)
+
+      assert_nil stored_profile_row(credential)
+    end
+
     # == Token refresh ==
 
     # A credential in the CLI's own layout for the refresh paths: a token that is about
@@ -639,6 +805,38 @@ module Agents
       ms = @adapter.token_expires_at(refreshable_credentials(expires_at: expiry))
 
       assert_in_delta Time.zone.parse(expiry).to_f * 1000, ms, 1000
+    end
+
+    # The database comes back from the container, so it is not opened on trust.
+    test "a stored state that is not a SQLite database is not opened" do
+      assert_nil @adapter.token_expires_at({ "state_b64" => Base64.strict_encode64("not a database") })
+    end
+
+    test "a corrupt state database is refused rather than read" do
+      blob = Base64.strict_decode64(refreshable_credentials["state_b64"])
+      corrupt = blob.byteslice(0, 100) + ("\xFF".b * (blob.bytesize - 100))
+
+      assert_nil @adapter.token_expires_at({ "state_b64" => Base64.strict_encode64(corrupt) })
+    end
+
+    test "a refresh will not write into a database whose token table carries triggers" do
+      blob = Base64.strict_decode64(refreshable_credentials(key: "kirocli:social:token")["state_b64"])
+      rigged = Tempfile.create([ "kiro-rigged", ".sqlite3" ]) do |file|
+        File.binwrite(file.path, blob)
+        db = SQLite3::Database.new(file.path)
+        db.execute("CREATE TABLE loot (value TEXT)")
+        db.execute("CREATE TRIGGER copy AFTER UPDATE ON auth_kv BEGIN INSERT INTO loot VALUES (new.value); END")
+        db.close
+        File.binread(file.path)
+      end
+      credential = credential_for({ "state_b64" => Base64.strict_encode64(rigged) })
+      stub_request(:post, Agents::KiroCliAdapter::SOCIAL_REFRESH_URL)
+        .to_return(status: 200, body: { accessToken: "new-access", refreshToken: "new-refresh", expiresIn: 3600 }.to_json)
+
+      result = @adapter.refresh!(credential)
+
+      assert_equal :error, result[:status]
+      assert_equal Base64.strict_encode64(rigged), credential.reload.config_data["state_b64"]
     end
 
     test "token_expires_at is nil when there is no login to expire" do

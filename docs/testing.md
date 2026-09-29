@@ -2,7 +2,7 @@
 
 The testing doctrine for this repository. Most code here is written by AI agents, so the rules
 live in the repo and in linters — not in anyone's memory. Background and evidence:
-`ai/research/technical-testing-strategy-and-conventions-research-2026-07-02.md`.
+`docs/research/technical-testing-strategy-and-conventions-research-2026-07-02.md`.
 
 **The one-sentence doctrine: test observable behavior through real collaborators, fake only at
 app-owned boundaries, and let linters — not reviewers — hold the line.**
@@ -20,13 +20,14 @@ app-owned boundaries, and let linters — not reviewers — hold the line.**
       policy / job / unit     collaborators, fakes at boundaries
 ```
 
-- The backend suite runs serially (~55s full) — fast enough to run before every push
-  (`make check_all`, see CLAUDE.md). Parallelization was tried and deliberately parked:
-  see the note in `test/test_helper.rb` (worker-DB reconstruct instability + several
-  agent sessions sharing one Postgres). Don't re-enable it casually.
-- **One suite run at a time.** All sessions and git worktrees share the same
-  `aixle_test` database; overlapping runs corrupt each other. `make` targets are
-  flock-serialized; direct `bin/rails test` is not — check nothing else is running.
+- The backend suite runs in parallel: `parallelize(workers: :number_of_processors)` in
+  `test/test_helper.rb` forks one worker per core, each with its own database
+  (`aixle_test-0`, `aixle_test-1`, …). Runs below Rails' threshold (50 cases) — a single
+  file, the system suite — stay serial; `PARALLEL_WORKERS=1` forces a serial run. Run the
+  whole gate before every push (`make check_all`, see CLAUDE.md).
+- **One suite run at a time.** Sessions and git worktrees that share a Postgres share
+  `aixle_test` and the per-worker databases; overlapping runs corrupt each other. `make`
+  targets are flock-serialized; direct `bin/rails test` is not — check nothing else is running.
 - Coverage floors are enforced ratchets: backend `COVERAGE_MIN` in the `Makefile`, frontend
   `coverage.thresholds` in `vitest.config.ts`. Raise them as coverage grows; never lower them.
 
@@ -39,7 +40,7 @@ app-owned boundaries, and let linters — not reviewers — hold the line.**
 | Request (integration) | auth, authorization wiring, status, redirects, Inertia contract | `sign_in_as` through the real login POST; `assert_inertia_page` + `assert_inertia_props` for key props | re-test service logic in depth |
 | Policy | every Pundit policy | permit/forbid matrix per role (pure unit tests) | — |
 | Job | enqueue + perform | ActiveJob test helpers + boundary fakes | — |
-| Temporal workflow | orchestration logic | full-execution tests run the real workflow through the SDK time-skipping `WorkflowEnvironment` with fake activities, via the `run_workflow` helper (`test/support/temporal_workflow_helper.rb`) — the in-memory test server boots ~5s once then is instant, and time-skips retry backoff; it does NOT touch the shared Postgres. The helper's worker sets `workflow_failure_exception_types: [Exception]`, so an unexpected exception fails the workflow and surfaces as `WorkflowFailedError` — without it Temporal retries the workflow task forever (no RetryPolicy governs that), and the test hangs silently until CI kills the job. White-box tests of orchestration internals (signal races, decision logic) stay plain unit tests. Callers of `TemporalService` keep the `TemporalHelper` seam. | stub `Temporalio::Testing` itself (outside `temporal_service_test`, its own contract test) |
+| Temporal workflow | orchestration logic | full-execution tests run the real workflow through the SDK time-skipping `WorkflowEnvironment` with fake activities, via the `run_workflow` helper (`test/support/temporal_workflow_helper.rb`) — the in-memory test server boots ~5s once then is instant, and time-skips retry backoff; it does NOT touch the shared Postgres. The helper's worker sets `workflow_failure_exception_types: [Exception]`, so an unexpected exception fails the workflow and surfaces as `WorkflowFailedError` — without it Temporal retries the workflow task forever (no RetryPolicy governs that), and the test hangs silently until CI kills the job. White-box tests of orchestration internals (signal races, decision logic) stay plain unit tests. Callers of `TemporalService` keep the `TemporalHelper` seam. Replay safety: every recorded history under `test/fixtures/files/temporal_histories/` must replay on the current code (`history_replay_test.rb`); record new ones as `docs/architecture/temporal-versioning.md` describes. | stub `Temporalio::Testing` itself (outside `temporal_service_test`, its own contract test) |
 | Temporal activity | side effects | run the activity through `Temporalio::Testing::ActivityEnvironment` via the `run_activity` helper (serverless — no boot/hang risk); boundaries stay behind their fakes | — |
 | Adapter (one per vendor) | translation to the vendor API | WebMock `stub_request` contract tests with realistic payloads | leak vendor constants upward |
 | FE component/page | rendering + interaction given props | RTL role/label queries, `userEvent`, typed factories | `querySelector`, snapshots, style assertions |
@@ -160,7 +161,7 @@ and never swap constants at runtime.
   hand-rolled literal builders) + the first system e2e specs: Capybara + Cuprite (headless
   Chromium, no chromedriver) with SitePrism page objects (`test/system/`), driving the real
   Rails+Inertia+React stack against built Vite test assets. Run in `check_all` via `rails
-  test:system` (chromium is in the Docker image; `bin/vite build --mode test` runs first because
-  the test env now uses built assets, not a dev server).
+  test:system` (chromium is in the Docker image; `VITE_RUBY_MODE=test bin/vite build` runs first
+  because the test env uses built assets, not a dev server).
 
 Details in the research report.

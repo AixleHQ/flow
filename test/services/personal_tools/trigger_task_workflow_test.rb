@@ -32,7 +32,7 @@ module PersonalTools
     # would make the fixture itself the "run already in flight" the tool refuses.
     def stub_started_run
       run = create(:workflow_run, workflow: @workflow, project: @project, user: @user, state: "pending")
-      WorkflowService.stubs(:start).returns(run)
+      WorkflowService.stubs(:enqueue).returns(run)
       run
     end
 
@@ -41,7 +41,7 @@ module PersonalTools
     # one kwarg worth an expectation rather than a stub.
     def expect_start_as(expected_user)
       run = create(:workflow_run, workflow: @workflow, project: @project, user: expected_user, state: "pending")
-      WorkflowService.expects(:start).with(has_entries(user: expected_user)).returns(run)
+      WorkflowService.expects(:enqueue).with(has_entries(user: expected_user)).returns(run)
       run
     end
 

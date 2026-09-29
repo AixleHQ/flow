@@ -23,6 +23,12 @@ module Api
               head :no_content
             end
 
+            def unshare
+              asset = current_task.task_assets.find(params[:id])
+              asset.unshare!
+              render json: TaskAssetResource.new(asset).to_h
+            end
+
             private
 
             def asset_params

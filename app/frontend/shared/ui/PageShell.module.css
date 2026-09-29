@@ -1,9 +1,5 @@
 .root {
-  background: radial-gradient(
-    ellipse at 50% 0%,
-    var(--app-bg-paper) 0%,
-    var(--app-bg-deep) 70%
-  );
+  background: radial-gradient(ellipse at 50% 0%, var(--app-bg-paper) 0%, var(--app-bg-deep) 70%);
 }
 
 .fullPage {

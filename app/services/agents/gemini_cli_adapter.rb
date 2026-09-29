@@ -71,17 +71,17 @@ module Agents
     end
 
     # Not used directly — API key is extracted via decrypt in save_credentials
-    def extract_credentials(config_content)
+    def extract_credentials(_config_content)
       {}
     end
 
-    def generate_config(credentials, workflow_config = {})
+    def generate_config(credentials, _workflow_config = {})
       credentials
     end
 
     # API key auth: GEMINI_API_KEY env var + settings.json. Also pre-trusts the
     # workspace so the agent session doesn't stop on the folder-trust prompt.
-    def config_files(credentials, workflow_config = {})
+    def config_files(_credentials, workflow_config = {})
       workspace = workflow_config[:workspace] || "/workspace"
       {
         "#{home_dir}/.gemini/settings.json" => generate_settings(
@@ -111,7 +111,7 @@ module Agents
 
     # Pass API key as env var — Gemini CLI picks it up automatically
     def default_env_vars(session)
-      env = { "OTEL_RESOURCE_ATTRIBUTES" => "terminal_session_token=#{session.route_token}" }
+      env = { "OTEL_RESOURCE_ATTRIBUTES" => UsageStatistics::SessionKey.resource_attributes(session) }
 
       # Inject the API key from the credential of THIS session's company: keys are per
       # company so the vendor bill lands on the company that ran the session.
@@ -151,7 +151,7 @@ module Agents
       api_key_data.dig("token", "accessToken")
     end
 
-    def session_command(mode:, prompt: nil, model: nil)
+    def session_command(mode:, model: nil)
       model ? "gemini --model #{Shellwords.shellescape(model)} --yolo" : "gemini --yolo"
     end
 

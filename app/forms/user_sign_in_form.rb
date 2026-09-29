@@ -32,7 +32,7 @@ class UserSignInForm
     else
       # Run a dummy bcrypt comparison to equalize response timing regardless of
       # whether the email exists, preventing user enumeration via timing.
-      BCrypt::Password.new("$2a$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW") == password
+      BCrypt::Password.new("$2a$12$R9h/cIPz0gi.URNNX3kh2OPST9/PgBkqquzi.Ss7KIUgO2t0jWMUW").is_password?(password)
       true
     end
   end

@@ -2,12 +2,13 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { Member } from '@/types/generated';
 import { buildSharedPermissions, buildSharedUser } from 'test/factories/sharedProps';
 import { buildSharedProps, renderAuthedPage, renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
-import { MembersContent, type MemberUser } from './MembersContent';
+import { MembersContent } from './MembersContent';
 
-const makeUser = (over: Partial<MemberUser> = {}): MemberUser => ({
+const makeUser = (over: Partial<Member> = {}): Member => ({
   id: 1,
   email: 'ada@example.com',
   name: 'Ada Lovelace',
@@ -15,12 +16,13 @@ const makeUser = (over: Partial<MemberUser> = {}): MemberUser => ({
   state: 'active',
   position: null,
   invitedAt: null,
+  acceptedAt: null,
   createdAt: '2024-01-01T00:00:00Z',
   invitedBy: null,
   ...over,
 });
 
-const baseProps = (users: MemberUser[]) => ({
+const baseProps = (users: Member[]) => ({
   users,
   basePath: '/company/members',
   title: 'Members',
@@ -129,6 +131,35 @@ describe('MembersContent', () => {
     );
   });
 
+  it('removing a member who owns projects asks who takes them over and sends the choices', async () => {
+    renderAuthedPage(
+      <MembersContent
+        {...baseProps([
+          makeUser({ id: 7, name: 'Ada Lovelace', role: 'employee', state: 'active' }),
+          makeUser({ id: 8, name: 'Grace Hopper', role: 'admin', state: 'active' }),
+        ])}
+        projectHandover={{
+          projects: [{ id: 10, name: 'Gateway', ownerId: 7 }],
+          candidates: [{ id: 8, name: 'Grace Hopper', email: 'grace@example.com', companyAdmin: true }],
+          heirIds: [8],
+        }}
+      />,
+    );
+
+    const adaRow = screen.getByText('Ada Lovelace').closest('tr') as HTMLElement;
+    await userEvent.click(within(adaRow).getByRole('button'));
+    await userEvent.click(await screen.findByRole('menuitem', { name: /remove/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Gateway')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Transfer and remove' }));
+
+    expect(router.delete).toHaveBeenCalledWith(
+      '/company/members/7',
+      expect.objectContaining({ data: { handover: [{ projectId: 10, userId: 8 }] } }),
+    );
+  });
+
   it('the "Make Admin" menu action fires router.patch with the new role', async () => {
     renderAuthedPage(<MembersContent {...baseProps([makeUser({ id: 9, name: 'Ada Lovelace', role: 'employee' })])} />);
 
@@ -146,6 +177,47 @@ describe('MembersContent', () => {
         expect.objectContaining({ preserveScroll: true }),
       ),
     );
+  });
+
+  it('promoting a viewer asks for confirmation, then patches the role to employee', async () => {
+    renderAuthedPage(<MembersContent {...baseProps([makeUser({ id: 11, name: 'Vic Viewer', role: 'viewer' })])} />);
+
+    const row = screen.getByText('Vic Viewer').closest('tr') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button'));
+
+    expect(screen.queryByRole('menuitem', { name: /make admin/i })).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('menuitem', { name: /make employee/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/connect at least one CLI/i)).toBeInTheDocument();
+    expect(router.patch).not.toHaveBeenCalled();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Make Employee' }));
+
+    await waitFor(() =>
+      expect(router.patch).toHaveBeenCalledWith(
+        '/company/members/11',
+        { user: { role: 'employee' } },
+        expect.objectContaining({ preserveScroll: true }),
+      ),
+    );
+  });
+
+  it('offers no Make Employee on a suspended viewer', async () => {
+    renderAuthedPage(
+      <MembersContent
+        {...baseProps([makeUser({ id: 12, name: 'Sid Suspended', role: 'viewer', state: 'suspended' })])}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Filter by status' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'All Statuses' }));
+
+    const row = screen.getByText('Sid Suspended').closest('tr') as HTMLElement;
+    await userEvent.click(within(row).getByRole('button'));
+
+    expect(await screen.findByRole('menuitem', { name: /activate/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /make employee/i })).not.toBeInTheDocument();
   });
 
   it('a pending invite shows Invited status and a Resend Invitation action', async () => {

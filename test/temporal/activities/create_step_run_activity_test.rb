@@ -57,6 +57,24 @@ module Activities
         assert_equal @step, new_step_run.step
         assert new_step_run.pending?
       end
+
+      # get_step_run reports both.
+      test "a retry knows which attempt it is and what the earlier ones failed with" do
+        first = create(:step_run, workflow_run: @run, step: @step)
+        first.mark_failed!("container exited 137", error_category: :oom)
+        second = StepRun.find(run_activity(CreateStepRunActivity,
+          { "workflow_run_id" => @run.id, "step_id" => @step.id, "force_new" => true })["step_run_id"])
+        second.mark_failed!("tests failed")
+
+        third = StepRun.find(run_activity(CreateStepRunActivity,
+          { "workflow_run_id" => @run.id, "step_id" => @step.id, "force_new" => true })["step_run_id"])
+
+        assert_equal 1, second.retry_count
+        assert_equal 2, third.retry_count
+        assert_equal [ "container exited 137", "tests failed" ], third.error_history.map { |e| e["error"] }
+        assert_equal [ first.id, second.id ], third.error_history.map { |e| e["step_run_id"] }
+        assert_equal "oom", third.error_history.first["error_category"]
+      end
     end
   end
 end

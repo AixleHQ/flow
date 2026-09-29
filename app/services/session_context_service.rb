@@ -243,7 +243,15 @@ class SessionContextService
       installed
     end
 
+    # A registry skill runs the files stored when it was installed, written straight
+    # into the agent's skills directory: no fetch from upstream at session start, so
+    # what runs is the release a person chose. Only a row installed before the files
+    # were kept still goes through `skills add`, which fetches upstream's current copy.
     def install_registry_skill(container_id, adapter, skill)
+      if skill.files.present? && adapter.skills_install_path.present?
+        return write_skill_files(container_id, adapter, skill, skill.files)
+      end
+
       agent_name = adapter.skills_agent_name
       cmd = [
         "env", "DISABLE_TELEMETRY=1",
@@ -279,19 +287,27 @@ class SessionContextService
         return "error: runtime has no skills directory"
       end
 
-      # The Agent Skills spec requires the directory name to equal the skill's
-      # `name`, which is why the manual form validates that name so strictly.
-      #
-      # Written through the service's own helper so it lands with the agent's uid:
-      # writing as root would create ~/.claude and ~/.claude/skills owned by root
-      # before the agent (uid 1001) ever touches them, and every later write by the
-      # agent into that tree would fail with EACCES.
-      path = "#{dir}/#{skill.name}/SKILL.md"
-      if write_file(container_id, path, skill.content.to_s, adapter.container_uid)
-        Rails.logger.info("[SessionContext] Wrote manual skill: #{path}")
+      write_skill_files(container_id, adapter, skill, { "SKILL.md" => skill.content.to_s })
+    end
+
+    # The Agent Skills spec requires the directory name to equal the skill's `name`,
+    # which is why the manual form validates that name so strictly.
+    #
+    # Written through the service's own helper so it lands with the agent's uid:
+    # writing as root would create ~/.claude and ~/.claude/skills owned by root before
+    # the agent (uid 1001) ever touches them, and every later write by the agent into
+    # that tree would fail with EACCES.
+    def write_skill_files(container_id, adapter, skill, files)
+      dir = "#{adapter.skills_install_path}/#{skill.name}"
+      failed = files.reject do |path, content|
+        Skill.safe_relative_path?(path) && write_file(container_id, "#{dir}/#{path}", content.to_s, adapter.container_uid)
+      end.keys
+
+      if failed.empty?
+        Rails.logger.info("[SessionContext] Wrote skill #{skill.name}: #{files.size} file(s) into #{dir}")
         "ok"
       else
-        Rails.logger.warn("[SessionContext] Failed to write manual skill: #{path}")
+        Rails.logger.warn("[SessionContext] Failed to write skill #{skill.name}: #{failed.join(', ')}")
         "error: write failed"
       end
     end
@@ -324,8 +340,7 @@ class SessionContextService
       expanded = expand_path(path, adapter.home_dir)
       write_file(container_id, expanded, content, adapter.container_uid)
 
-      merged_metadata = (session.context_metadata || {}).merge(result.to_json_hash)
-      session.update_column(:context_metadata, merged_metadata)
+      session.merge_jsonb!(:context_metadata, result.to_json_hash)
 
       Rails.logger.info("[SessionContext] Injected context file: #{path} (#{content.bytesize} bytes, #{result.applied_builders.size} builders)")
       { path => content }
@@ -337,12 +352,15 @@ class SessionContextService
     # Always includes internal Aixle MCP + external servers from session_config.
     # Delegates format generation to adapter, handles merge strategy.
     def inject_mcp_config(container_id, session)
-      all_servers = build_all_servers(session)
+      delivered = Set.new
+      all_servers = build_all_servers(session, delivered: delivered)
       return {} if all_servers.empty?
 
       adapter = adapter_for(session)
       config_files = adapter.mcp_config(all_servers)
       return {} if config_files.blank?
+
+      record_reference_access(container_id, session, delivered)
 
       config_files.each do |path, content|
         expanded = expand_path(path, adapter.home_dir)
@@ -407,25 +425,65 @@ class SessionContextService
       path.sub(/\A~/, home_dir)
     end
 
+    # Attached ids are validated when the session is created; the lookup is
+    # scoped again here because this is where a foreign id would turn into a
+    # clone token, an MCP header or a file in the container.
+    def tenant_owned(klass, session)
+      TenantScope.owned(klass, project: session.project, company: SessionCompany.company_for(session))
+    end
+
+    # The items a `config_item:NAME` reference may resolve to: those attached to
+    # the session, which includes every item an attached server references
+    # (SessionConfigResolver#resolve_config_item_ids) — never the whole project.
     def resolve_effective_config_items(session)
       return {} unless session.project.present?
 
-      ConfigItem.effective_for_project(session.project)
+      ids = SessionConfigResolver.new(session).resolve_config_item_ids
+      return {} if ids.blank?
+
+      tenant_owned(ConfigItem, session).where(id: ids).index_by(&:name)
     end
 
-    # Resolve embedded config_item:NAME references (for headers like "Bearer config_item:KEY")
-    def resolve_embedded_references(value, effective_items)
+    # Resolve embedded config_item:NAME references (for headers like "Bearer config_item:KEY").
+    # `delivered` collects the items whose values were substituted.
+    def resolve_embedded_references(value, effective_items, delivered = nil)
       return value unless value.is_a?(String) && value.include?("config_item:")
 
-      value.gsub(/config_item:(\w+)/) do
+      value.gsub(MCPServer::CONFIG_ITEM_REFERENCE) do
         item_name = ::Regexp.last_match(1)
-        resolved = effective_items[item_name]
+        item = effective_items[item_name]
+        resolved = item && item_value(item)
         unless resolved
-          Rails.logger.warn("[SessionContext] ConfigItem '#{item_name}' not found in header")
+          Rails.logger.warn("[SessionContext] ConfigItem '#{item_name}' not attached or unreadable, left unresolved")
           next "config_item:#{item_name}"
         end
+        delivered&.add(item)
         resolved
       end
+    end
+
+    def item_value(item)
+      item.decrypted_value
+    rescue Encryptable::DecryptionError => e
+      Rails.logger.error("[SessionContext] #{e.message}")
+      nil
+    end
+
+    # A value that reaches the container inside an MCP header or env entry is
+    # handed out as surely as one fetched with get_config_item, so it is audited
+    # the same way and armed for the container's log filters before the file
+    # carrying it is written.
+    def record_reference_access(container_id, session, items)
+      return if items.empty?
+
+      items.each do |item|
+        ConfigItemAccess.record!(config_item: item, session: session, user: session.user,
+                                 channel: ConfigItemAccess::CHANNEL_MCP_CONFIG)
+      end
+      return unless items.any?(&:secret?)
+      return if Sessions::SecretRegistry.publish!(session, container: container_id)
+
+      Rails.logger.warn("[SessionContext] session=#{session.id} redaction list not armed before the MCP config was written")
     end
 
     # Legacy context builders removed in Story 25.7.
@@ -437,7 +495,7 @@ class SessionContextService
       ids = session.skill_ids
       return [] if ids.blank?
 
-      skills = Skill.where(id: ids).to_a
+      skills = tenant_owned(Skill, session).where(id: ids).to_a
       found_ids = skills.map(&:id)
       missing = ids - found_ids
 
@@ -451,7 +509,7 @@ class SessionContextService
       ids = session.input_asset_ids
       return if ids.blank?
 
-      assets = Asset.where(id: ids).includes(:versions).to_a
+      assets = tenant_owned(Asset, session).where(id: ids).includes(:versions).to_a
       missing = ids - assets.map(&:id)
       missing.each { |id| Rails.logger.warn("[SessionContext] Asset #{id} not found, skipping") }
 
@@ -483,7 +541,7 @@ class SessionContextService
       # it likes, which reshuffles the `repositories:` list sent to GitHub for the
       # group token and the order repositories clone in — a difference that shows up
       # as a test failing only on some runs.
-      repos = Repository.where(id: ids).order(:id).includes(:integration).to_a
+      repos = tenant_owned(Repository, session).where(id: ids).order(:id).includes(:integration).to_a
       return if repos.empty?
 
       adapter = adapter_for(session)
@@ -522,18 +580,37 @@ class SessionContextService
           next
         end
 
-        token = begin
-          generate_clone_token(integration, group_repos)
-        rescue => e
-          Rails.logger.warn("[SessionContext] Group token failed for integration #{integration.id}: #{e.message}")
-          nil
-        end
+        clone_with_git_helper(container_id, group_repos, uid, session, path_map)
+      end
+    end
 
-        if token
-          group_repos.each { |repo| clone_repository(container_id, repo, integration, token, uid, session, path_map) }
-        else
-          clone_with_per_repo_tokens(container_id, group_repos, integration, uid, session, path_map)
+    # GitHub and GitLab take the Azure path: a credential vended per repository
+    # (narrowed to it, for a GitHub App) authenticates the clone through a header,
+    # and the checkout is left with a clean remote and the credential helper for
+    # the agent's own fetch and push. No token goes in the remote URL, where it
+    # would sit in .git/config, in `ps` and in the Kubernetes exec query string.
+    def clone_with_git_helper(container_id, group_repos, uid, session, path_map)
+      setup = GitCredentials::SessionGitSetup.new(runtime: runtime, container_id: container_id, session: session)
+
+      group_repos.each do |repo|
+        result = setup.clone(repo, path_map[repo.id], uid)
+        # Once more after a pause, as the anonymous path does: GitHub answers
+        # "Repository not found" for a moment after an installation gains access.
+        unless result[2].to_i.zero?
+          sleep 2
+          result = setup.clone(repo, path_map[repo.id], uid)
         end
+        if result[2].to_i.zero?
+          repo.update_column(:last_fetched_at, Time.current)
+          Rails.logger.info("[SessionContext] Cloned repository: #{repo.full_name} → #{path_map[repo.id]}")
+        else
+          record_failed_repo(session, repo, "git clone exited with #{result[2]}: #{Array(result[1]).join.truncate(300)}")
+        end
+      rescue GitCredentials::Vendor::NotAuthorized => e
+        record_failed_repo(session, repo, "Git credential unavailable: #{e.message}")
+      rescue StandardError => e
+        Rails.logger.error("[SessionContext] Clone failed for #{repo.full_name}: #{e.class}")
+        record_failed_repo(session, repo, "Token generation failed: #{e.message}")
       end
     end
 
@@ -563,36 +640,6 @@ class SessionContextService
       end
     end
 
-    # One repository the installation cannot reach (attached before the App lost
-    # access to it, say) fails the WHOLE group's token — GitHub rejects the
-    # `repositories:` list wholesale with a 422. Falling back to a token per
-    # repository keeps the failure with the repository that caused it.
-    def clone_with_per_repo_tokens(container_id, group_repos, integration, uid, session, path_map)
-      group_repos.each do |repo|
-        token = begin
-          generate_clone_token(integration, [ repo ])
-        rescue => e
-          Rails.logger.error("[SessionContext] Failed to generate token for #{repo.full_name}: #{e.message}")
-          record_failed_repo(session, repo, "Token generation failed: #{e.message}")
-          next
-        end
-
-        clone_repository(container_id, repo, integration, token, uid, session, path_map)
-      end
-    end
-
-    def generate_clone_token(integration, group_repos)
-      case integration.provider.to_s
-      when "github"
-        repo_names = group_repos.map(&:repo_name)
-        Github::TokenService.new(integration).generate_installation_token(repositories: repo_names)
-      when "gitlab"
-        integration.credentials_data["personal_access_token"]
-      else
-        raise "Unsupported provider: #{integration.provider}"
-      end
-    end
-
     def clone_repository(container_id, repo, integration, token, uid, session, path_map = nil)
       target_path = path_map&.dig(repo.id) || RepositoryWorkspacePath.for_repository(session, repo)
       2.times do |index|
@@ -602,7 +649,7 @@ class SessionContextService
         if exit_code.to_i.zero?
           repo.update_column(:last_fetched_at, Time.current)
           Rails.logger.info("[SessionContext] Cloned repository: #{repo.full_name} → #{target_path}")
-          return
+          break
         end
 
         stderr = Array(result[1]).join
@@ -622,27 +669,17 @@ class SessionContextService
       runtime.exec(container_id, cmd)
     end
 
-    # Public repositories clone with no credentials at all. Their clone_url is
-    # validated by Repository to be the anonymous https url of full_name on an
-    # allowlisted host, which is what makes it safe to interpolate here.
-    def build_clone_url(repo, integration, token)
-      return Shellwords.escape(repo.clone_url) if integration.nil?
-
-      case integration.provider.to_s
-      when "github"
-        "https://x-access-token:#{token}@github.com/#{repo.full_name}.git"
-      when "gitlab"
-        "https://oauth2:#{token}@gitlab.com/#{repo.full_name}.git"
-      else
-        Shellwords.escape(repo.clone_url)
-      end
+    # Only public repositories reach this path; they clone with no credentials at
+    # all. Their clone_url is validated by Repository to be the anonymous https url
+    # of full_name on an allowlisted host.
+    def build_clone_url(repo, _integration, _token)
+      Shellwords.escape(repo.clone_url)
     end
 
     def record_failed_repo(session, repo, error)
-      meta = session.metadata || {}
-      meta["failed_repos"] ||= []
-      meta["failed_repos"] << { "id" => repo.id, "full_name" => repo.full_name, "error" => error.to_s.truncate(500) }
-      session.update_column(:metadata, meta)
+      session.change_jsonb!(:metadata) do |doc|
+        (doc["failed_repos"] ||= []) << { "id" => repo.id, "full_name" => repo.full_name, "error" => error.to_s.truncate(500) }
+      end
     end
 
     # == Container File Operations ==
@@ -699,10 +736,10 @@ class SessionContextService
     # == MCP Server Resolution ==
 
     # Combine internal Aixle MCP + resolved custom external servers.
-    def build_all_servers(session)
+    def build_all_servers(session, delivered: nil)
       effective_items = resolve_effective_config_items(session)
       external = resolve_mcp_servers(session)
-                   .map { |s| resolve_server_secrets(s, effective_items, session) }
+                   .map { |s| resolve_server_secrets(s, effective_items, session, delivered: delivered) }
 
       [ build_internal_mcp(session) ] + external
     end
@@ -735,7 +772,7 @@ class SessionContextService
       ids = session.mcp_server_ids
       return [] if ids.blank?
 
-      servers = MCPServer.where(id: ids, enabled: true).to_a
+      servers = tenant_owned(MCPServer, session).where(id: ids, enabled: true).to_a
       found_ids = servers.map(&:id)
       missing = ids - found_ids
 
@@ -743,13 +780,13 @@ class SessionContextService
       servers
     end
 
-    def resolve_server_secrets(server, effective_items, session = nil)
+    def resolve_server_secrets(server, effective_items, session = nil, delivered: nil)
       resolved_headers = (server.headers || {}).transform_values do |value|
-        resolve_embedded_references(value, effective_items)
+        resolve_embedded_references(value, effective_items, delivered)
       end
 
       resolved_env = (server.env || {}).transform_values do |value|
-        resolve_embedded_references(value, effective_items)
+        resolve_embedded_references(value, effective_items, delivered)
       end
 
       # OAuth injection (oauth-unification §4.4). No-op unless the server is an

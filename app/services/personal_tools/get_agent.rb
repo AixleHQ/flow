@@ -27,7 +27,8 @@ module PersonalTools
       success(id: agent.id, name: agent.name, title: agent.title, icon: agent.icon,
               persona: agent.persona, principles: agent.principles,
               communication_style: agent.communication_style,
-              source: agent.source.to_s, scope: agent.scope_type)
+              source: agent.source.to_s, scope: agent.scope_type,
+              current_version_number: agent.current_version_number)
     end
   end
 end

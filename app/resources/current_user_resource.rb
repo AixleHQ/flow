@@ -22,17 +22,17 @@ class CurrentUserResource < ApplicationResource
     (params[:current_membership]&.credentials || []).map { |c| AgentCredentialResource.new(c).to_h }
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :position do |_user|
     params[:current_membership]&.position&.to_s
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :preferred_agent_language do |_user|
     params[:current_membership]&.preferred_agent_language
   end
 
-  typelize "string[]"
+  typelize CompanyMembership::AVAILABLE_AGENTS, multi: true
   attribute :selected_agents do |_user|
     params[:current_membership]&.selected_agents || []
   end
@@ -45,7 +45,7 @@ class CurrentUserResource < ApplicationResource
     params[:current_membership]&.onboarding_state || "step1"
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :onboarding_completed_at do |_user|
     params[:current_membership]&.onboarding_completed_at
   end
@@ -65,7 +65,7 @@ class CurrentUserResource < ApplicationResource
     company && CompanyResource.new(company).to_h
   end
 
-  typelize "'employee' | 'admin' | 'viewer' | 'super_admin' | null"
+  typelize [ *CompanyMembership.role.values, "super_admin" ], nullable: true
   attribute :current_role do |user|
     next "super_admin" if user.super_admin?
 
@@ -81,12 +81,12 @@ class CurrentUserResource < ApplicationResource
     user.active_memberships_with_company.map { |m| MembershipResource.new(m).to_h }
   end
 
-  typelize "string[]"
+  typelize CompanyMembership::AVAILABLE_AGENTS, multi: true
   attribute :configured_agents do |_user|
     params[:current_membership]&.configured_agents || []
   end
 
-  typelize :string?
+  typelize CompanyMembership::AVAILABLE_AGENTS, nullable: true
   attribute :default_agent_runtime do |_user|
     params[:current_membership]&.default_agent_runtime
   end

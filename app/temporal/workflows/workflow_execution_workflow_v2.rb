@@ -99,10 +99,25 @@ module Workflows
         if status["state"] == "cancelled" || status["step_state"] == "cancelled"
           @cancelled = true
           @step_decisions[id.to_i] = :cancelled
-        elsif %w[finished failed].include?(status["state"])
+        elsif status["step_state"] == "skipped" && decisions_read_from_step_state?
+          # Skip and Approve are written to the step before they are signalled,
+          # so a signal that never arrives costs one poll, not the run.
+          @step_decisions[id.to_i] ||= :skipped
+        elsif %w[finished failed].include?(status["state"]) ||
+              (status["step_state"] == "completed" && decisions_read_from_step_state?)
           @step_decisions[id.to_i] ||= :completed
         end
       end
     end
+
+    # Code without this patch kept polling past a Skip or Approve whose signal
+    # was lost, and its histories must replay that way.
+    def decisions_read_from_step_state?
+      Temporalio::Workflow.patched("step-state-decides-without-signal")
+    end
+
+    # Every wait here reads the durable state, so a decision that arrived while
+    # the launch was still returning is never cleared.
+    def keep_signals_delivered_during_launch? = true
   end
 end

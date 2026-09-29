@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 Rails.application.routes.draw do
   # Define your application routes per the DSL in https://guides.rubyonrails.org/routing.html
 
@@ -20,6 +22,7 @@ Rails.application.routes.draw do
   # per-session key (AzureDevops::GitSessionKey), NOT by the session's mcp_key —
   # see the controller for why. Not an MCP tool and not in any tool list.
   post "/azure/git/credentials", to: "azure_git_credentials#create"
+  post "/agents/git/credentials", to: "git_credentials#create"
 
   # Credential write-back from agent containers: the in-container watcher posts an auth
   # file here as soon as the CLI rotates it, so a container that dies without cleanup no
@@ -61,9 +64,65 @@ Rails.application.routes.draw do
   get "/share/:token", to: "web/public_assets#show", as: :public_asset
   get "/share/:token/raw", to: "web/public_assets#raw", as: :public_asset_raw
 
+  # Per-company OIDC sign-in (CAP-3). One deployment-wide callback; which
+  # connection issued the code is carried in the SIGNED state, never in the path.
+  # Step one of signing in: an address, and nothing else. What comes back is
+  # decided by its DOMAIN — never by whether an account exists, which would make
+  # this an oracle for which addresses are registered.
+  post "login/identify", to: "web/oidc_sessions#identify", as: :login_identify
+  # Emailed single-use sign-in links (CAP-4). The GET only CONFIRMS; the POST
+  # consumes. Mail scanners fetch every URL in a message, and a link that signed
+  # people in on GET would be burned before its owner ever clicked it.
+  # Passkeys (CAP-4). Registration is for a signed-in person; sign-in is
+  # anonymous, because a discoverable credential names its own account.
+  # Time-based one-time codes, enrolled by the person they belong to (CAP-4).
+  post "totp", to: "web/totp#create", as: :totp
+  post "totp/confirm", to: "web/totp#confirm", as: :confirm_totp
+  delete "totp", to: "web/totp#destroy"
+
+  post "passkeys/options", to: "web/passkeys#options", as: :passkey_options
+  post "passkeys", to: "web/passkeys#create", as: :passkeys
+  delete "passkeys/:id", to: "web/passkeys#destroy", as: :passkey
+  post "login/passkey/options", to: "web/passkey_sessions#options", as: :passkey_login_options
+  post "login/passkey", to: "web/passkey_sessions#create", as: :passkey_login
+
+  post "login/magic", to: "web/magic_links#create", as: :request_magic_link
+  get "login/magic/:token", to: "web/magic_links#show", as: :magic_link
+  post "login/magic/:token", to: "web/magic_links#confirm", as: :confirm_magic_link
+  post "auth/oidc/:id/start", to: "web/oidc_sessions#start", as: :oidc_start
+  get "auth/oidc/callback", to: "web/oidc_sessions#callback", as: :oidc_callback
+
   # OmniAuth callbacks (path_prefix = /auth)
   get "auth/:provider/callback", to: "web/sessions#omniauth", as: :auth_callback
   get "auth/failure", to: "web/sessions#failure", as: :auth_failure
+
+  # SCIM 2.0 (CAP-6). The bearer token decides the company; there is deliberately
+  # no tenant in the path, so a leaked URL reveals nothing and grants nothing.
+  #
+  # The paths are spelled out rather than drawn with `resources` for two reasons,
+  # and both are invisible to a request test that picks its own URLs:
+  #
+  #  * SCIM fixes the path as "/Users", capital U. Every provider appends it to
+  #    the base URL we hand out, and Scimitar advertises it that way in
+  #    ResourceTypes — while Rails routing is case-sensitive, so `resources`
+  #    answers "/scim/users" and 404s the only spelling a real client sends.
+  #  * PUT and PATCH are different operations here. Scimitar's #replace takes a
+  #    whole resource, #update takes a PATCH "Operations" body; `resources` maps
+  #    both verbs onto #update, so a provider's PUT would be read as a patch.
+  namespace :scim do
+    mount Scimitar::Engine, at: "/"
+
+    # Named explicitly, and suppressed where a name would be meaningless. Left
+    # to itself Rails derives one from the literal segment — "scim_Users", with
+    # the capital, and then a bare "scim" for the next route on the same path,
+    # which reads as the engine root rather than a member.
+    get    "Users",     to: "users#index",   as: :users
+    post   "Users",     to: "users#create",  as: nil
+    get    "Users/:id", to: "users#show",    as: :user
+    put    "Users/:id", to: "users#replace", as: nil
+    patch  "Users/:id", to: "users#update",  as: nil
+    delete "Users/:id", to: "users#destroy", as: nil
+  end
 
   namespace :api, defaults: { format: :json } do
     namespace :v1 do
@@ -107,6 +166,7 @@ Rails.application.routes.draw do
         resources :assets, only: %i[create update destroy] do
           member do
             get :download
+            delete :share, action: :unshare
           end
           collection do
             post :bulk_actions
@@ -126,6 +186,7 @@ Rails.application.routes.draw do
           resources :assets, only: %i[create update destroy] do
             member do
               get :download
+              delete :share, action: :unshare
             end
             collection do
               post :bulk_actions
@@ -136,6 +197,15 @@ Rails.application.routes.draw do
           patch "folders/relocate", to: "folders#relocate"
           delete "folders", to: "folders#destroy"
 
+          resources :entity_versions, only: %i[index show] do
+            member do
+              post :revert
+            end
+            collection do
+              post :restore
+            end
+          end
+
           resources :workflows, only: %i[show update destroy] do
             scope module: :workflows do
               resources :steps, only: %i[index show create update destroy] do
@@ -144,6 +214,7 @@ Rails.application.routes.draw do
                 end
               end
               resources :triggers, only: %i[index create update destroy]
+              resource :aggregate, only: %i[update]
             end
           end
 
@@ -152,6 +223,7 @@ Rails.application.routes.draw do
               member do
                 post :export
                 get :download
+                delete :share, action: :unshare
               end
               collection do
                 post :export_all
@@ -184,7 +256,9 @@ Rails.application.routes.draw do
               end
               scope module: :task do
                 resources :comments, only: %i[index create]
-                resources :assets, only: %i[index create destroy]
+                resources :assets, only: %i[index create destroy] do
+                  member { delete :share, action: :unshare }
+                end
                 resources :gates, only: %i[destroy]
                 resources :transitions, only: %i[index]
                 resources :activities, only: %i[index]
@@ -205,6 +279,7 @@ Rails.application.routes.draw do
         post :impersonate
         post :stop_impersonate
         post :restore
+        delete :sign_out_everywhere
         delete :permanent_destroy
       end
     end
@@ -249,7 +324,7 @@ Rails.application.routes.draw do
     # Not an Administrate resource: manual triggers for the mirrored catalogs, so a
     # fresh deployment does not sit on an empty catalog until the first scheduled run.
     resources :catalog_syncs, only: %i[index create]
-    resource :session_admission, only: %i[show update]
+    resource :session_admission, only: %i[show]
   end
 
   scope module: :web, defaults: { format: :html } do
@@ -260,9 +335,25 @@ Rails.application.routes.draw do
     get "docs", to: "docs#show", as: :docs
     get "docs/*slug", to: "docs#show", as: :docs_page, constraints: { slug: /[^\/]+/ }
 
+    # What Flow does, what a queue costs and the ROI model the sales team
+    # quotes. Public: the signup form links to it, and its reader has no
+    # account yet.
+    get "how-it-works", to: "how_it_works#show", as: :how_it_works
+
+    # The template catalog is public (design D16): anyone can browse it; an
+    # install goes through company/template_installs and needs a sign-in.
+    get "templates", to: "templates#index", as: :templates
+    get "templates/:namespace/:slug", to: "templates#show", as: :template,
+                                      constraints: { namespace: /[a-z0-9-]+/, slug: /[a-z0-9-]+/ }
+
     get "login", to: "sessions#new", as: :login
     post "login", to: "sessions#create"
     delete "logout", to: "sessions#destroy", as: :logout
+
+    # Step-up re-authentication (AD-5). Reached when a live session does not
+    # satisfy the company it is trying to enter; never a sign-out.
+    get "step_up", to: "step_ups#new", as: :step_up
+    post "step_up", to: "step_ups#create"
 
     # Invitation acceptance (public — the signed token is the credential).
     # Tokens can contain dots, which format negotiation would otherwise eat.
@@ -282,8 +373,17 @@ Rails.application.routes.draw do
       put :update_default_model, on: :member
       delete :destroy_credential, on: :member
       post :regenerate_mcp_token, on: :member
+      delete :sign_out_other_sessions, on: :member
       delete :disable_mcp_token, on: :member
       patch :update_mcp_tools, on: :member
+      # Passkeys, one-time codes and live sessions — the person's own security
+      # surface (CAP-4, AD-18).
+      get :security, on: :member
+    end
+    # The confirmation link a stranger is emailed: opening it is the proof of
+    # the address, and the only thing that writes the company.
+    resource :workspace, only: %i[new create], controller: "workspaces" do
+      get :confirm, on: :member
     end
     resource :onboarding, only: %i[show update], controller: "onboarding"
 
@@ -303,12 +403,15 @@ Rails.application.routes.draw do
     # Public RFC "Client ID Metadata Document" (CIMD). When an MCP authorization
     # server supports CIMD, this URL is our client_id and the AS dereferences it.
     get "oauth/client-metadata.json", to: "oauth#client_metadata", as: :oauth_client_metadata
-    get "oauth/:provider/authorize", to: "oauth#authorize", as: :oauth_authorize
+    post "oauth/:provider/authorize", to: "oauth#authorize", as: :oauth_authorize
     get "oauth/callback", to: "oauth#callback", as: :oauth_callback
     # MCP OAuth 2.1 connect (oauth-unification §5): discovery + dynamic client
     # registration, then the SAME consent flow as #authorize. The mcp_server_id
     # sources the discovered DCR client; the callback stays the shared oauth_callback.
-    get "oauth/mcp/:mcp_server_id/connect", to: "oauth#mcp_connect", as: :oauth_mcp_connect
+    post "oauth/mcp/:mcp_server_id/connect", to: "oauth#mcp_connect", as: :oauth_mcp_connect
+    # Links (a reconnect email, a page from before connect became a POST) land on
+    # the server's page instead: a GET must not start anything.
+    get "oauth/mcp/:mcp_server_id/connect", to: "oauth#mcp_connect_page"
 
     namespace :company do
       post "switch", to: "switch#create", as: :switch
@@ -318,11 +421,30 @@ Rails.application.routes.draw do
       resources :members, only: %i[index create update destroy] do
         post :resend, on: :member
       end
+      resource :settings, only: %i[show update], controller: "settings"
+      # The second tab of company settings: everything that decides how a person
+      # gets into this workspace. It reads as settings, so it lives under them —
+      # but its controls apply on the spot, which is why it is a page of its own
+      # rather than another card inside the settings form's single Save.
+      get "settings/access", to: "auth_policies#index", as: :settings_access
+      # Which sign-in methods this company accepts (AD-4). The id is an
+      # IdentityProvider id: a deployment-scoped provider or one of this
+      # company's own connections.
+      resources :auth_policies, only: :update
+      # Checking the DNS record. A POST because it is what switches domain
+      # auto-join on, not a question about the current state.
+      resource :domain_verification, only: :create, controller: "domain_verifications"
+      # A company's own OIDC connections. Created disabled; enabling them goes
+      # through the prove-before-enforce guard on auth_policies#update.
+      resources :identity_providers, only: %i[create update destroy]
+      # Directory sync (SCIM). One per company; the token is shown once.
+      resource :scim_configuration, only: %i[create destroy]
       # Config items are Project-scoped only — managed under company/projects/:id/config_items.
       # GitHub App setup callback (single global endpoint; project target carried in `state`).
       # Company-level integration management has been removed — integrations are project-scoped.
       get "integrations/github_setup", to: "integrations/github_setup#github_setup",
           as: :integrations_github_setup
+      resources :template_installs, only: %i[new create]
       resources :projects, only: %i[index show create destroy] do
         scope module: :projects do
           resources :overview, only: :index
@@ -330,7 +452,11 @@ Rails.application.routes.draw do
           # favorite per (user, project), and the actor is always current_user.
           resource :favorite, only: %i[create destroy]
           resource :board, only: %i[show]
+          resources :template_installs, only: %i[show] do
+            resources :setup_items, only: %i[update]
+          end
           resources :sessions, only: %i[index new show] do
+            get :rows, on: :collection
             scope module: :sessions do
               resources :artifacts, only: :index do
                 collection do
@@ -400,6 +526,7 @@ Rails.application.routes.draw do
           resources :config_items, only: %i[index create update destroy]
           resources :members, only: %i[index create destroy]
           resource :settings, only: %i[show update]
+          resource :ownership, only: :update
         end
       end
       resources :workflow_catalog, only: :index do
@@ -410,6 +537,7 @@ Rails.application.routes.draw do
       resources :analytics, only: :index
       resources :assets, only: %i[index]
       resources :sessions, only: %i[index show] do
+        get :rows, on: :collection
         scope module: :sessions do
           resources :artifacts, only: :index do
             collection do

@@ -419,12 +419,12 @@ class MCPServerTest < ActiveSupport::TestCase
   end
 
   test "a pasted command line is stored split into the executable and its argv" do
-    server = stdio_server(command: "npx @playwright/mcp --headless")
+    server = stdio_server(command: "npx @playwright/mcp@0.0.41 --headless")
 
     assert server.save, server.errors.full_messages.to_sentence
     assert_equal "npx", server.command
-    assert_equal [ "@playwright/mcp", "--headless" ], server.args
-    assert_equal [ "@playwright/mcp", "--headless" ], server.launch_args
+    assert_equal [ "@playwright/mcp@0.0.41", "--headless" ], server.args
+    assert_equal [ "@playwright/mcp@0.0.41", "--headless" ], server.launch_args
   end
 
   test "a catalog install keeps the argv it was rendered with" do
@@ -437,23 +437,23 @@ class MCPServerTest < ActiveSupport::TestCase
   end
 
   test "editing the line replaces the stored argv rather than adding to it" do
-    server = stdio_server(command: "uvx server-a --verbose")
+    server = stdio_server(command: "uvx server-a==1.0.0 --verbose")
     server.save!
 
-    server.update!(command: "uvx server-b")
+    server.update!(command: "uvx server-b==2.0.0")
 
     assert_equal "uvx", server.command
-    assert_equal [ "server-b" ], server.args
+    assert_equal [ "server-b==2.0.0" ], server.args
   end
 
   test "saving an unrelated field leaves an already-split line alone" do
-    server = stdio_server(command: "npx pkg --flag")
+    server = stdio_server(command: "npx pkg@1.0.0 --flag")
     server.save!
 
     server.update!(description: "renamed")
 
     assert_equal "npx", server.command
-    assert_equal [ "pkg", "--flag" ], server.args
+    assert_equal [ "pkg@1.0.0", "--flag" ], server.args
   end
 
   test "command_line rejoins the launch line for the form, quoting only what needs it" do
@@ -464,7 +464,7 @@ class MCPServerTest < ActiveSupport::TestCase
   end
 
   test "command_line round-trips a quoted argument through a re-save" do
-    server = stdio_server(command: 'npx pkg --title "my server"')
+    server = stdio_server(command: 'npx pkg@1.0.0 --title "my server"')
     server.save!
 
     reparsed = stdio_server(name: "reparsed", command: server.command_line)
@@ -504,21 +504,173 @@ class MCPServerTest < ActiveSupport::TestCase
   end
 
   test "an argument that merely contains an operator is not mistaken for one" do
-    server = stdio_server(command: 'npx pkg --filter "a && b"')
+    server = stdio_server(command: 'npx pkg@1.0.0 --filter "a && b"')
 
     assert server.valid?, server.errors.full_messages.to_sentence
-    assert_equal [ "pkg", "--filter", "a && b" ], server.args
+    assert_equal [ "pkg@1.0.0", "--filter", "a && b" ], server.args
   end
 
   # A row written before the split existed keeps working, and stays editable for a
   # reason that has nothing to do with its command.
-  test "a legacy unsplit row can still be disabled" do
-    server = stdio_server(command: "npx legacy-pkg --flag")
+  # == Package pins ==
+
+  test "a package runner must name an exact release" do
+    [ "npx -y pkg", "npx pkg@latest", "npx pkg@^1.2.0", "uvx mcp-server-git", "uvx mcp-server-git>=0.6",
+      "pipx run mcp-server-git", "npx -y -p @scope/pkg mcp-cli" ].each do |line|
+      server = stdio_server(name: "floating #{line}", command: line)
+
+      assert_not server.valid?, "#{line} should need a pin"
+      assert_match(/must pin/, server.errors[:command].to_sentence)
+    end
+  end
+
+  test "an exact release, a local path or a URL passes" do
+    [ "npx -y @scope/pkg@1.2.3", "npx pkg@2025.8.21 --flag", "npx -y -p @scope/pkg@1.0.0-rc.1 mcp-cli",
+      "uvx mcp-server-git==0.6.2", "uvx mcp-server-git@0.6.2", "uvx --from mcp-server-git==0.6.2 mcp-server-git",
+      "pipx run mcp-server-git==0.6.2", "pipx run --spec mcp-server-git==0.6.2 mcp-server-git",
+      "npx ./local-server", "node server.js", "npx @playwright/mcp --headless", "npx @playwright/mcp@latest" ].each do |line|
+      server = stdio_server(name: "pinned #{line}", command: line)
+
+      assert server.valid?, "#{line}: #{server.errors.full_messages.to_sentence}"
+    end
+  end
+
+  test "an unpinned row that predates the rule can still be edited for an unrelated reason" do
+    server = stdio_server(command: "npx pkg@1.0.0")
     server.save!
-    server.update_columns(command: "npx legacy-pkg --flag", args: [])
+    server.update_columns(command: "npx", args: [ "pkg" ])
+
+    assert server.reload.update(description: "still here"), server.errors.full_messages.to_sentence
+  end
+
+  test "a legacy unsplit row can still be disabled" do
+    server = stdio_server(command: "npx legacy-pkg@1.0.0 --flag")
+    server.save!
+    server.update_columns(command: "npx legacy-pkg@1.0.0 --flag", args: [])
 
     server.reload
     assert server.update(enabled: false), server.errors.full_messages.to_sentence
-    assert_equal [ "legacy-pkg", "--flag" ], server.reload.launch_args
+    assert_equal [ "legacy-pkg@1.0.0", "--flag" ], server.reload.launch_args
+  end
+
+  # --- Secrets: encrypted at rest, bound to their destination ---
+
+  def oauth_server_with_credentials
+    server = create(:mcp_server, scope: @project, url: "https://mcp.example.com/mcp", transport: "http",
+                                 auth_type: :oauth, headers: { "X-Api-Key" => "k-123456" })
+    client = OauthClient.create!(issuer: "https://auth.example.com", authorization_endpoint: "https://auth.example.com/a",
+                                 token_endpoint: "https://auth.example.com/t", client_id: "dcr-1", source: "dcr")
+    OauthCredential.create!(owner: @project, oauth_client: client, provider: "mcp:mcp.example.com",
+                            mcp_server: server, resource: server.url, access_token: "at-1", status: :active)
+    server.create_manual_oauth_client!(source: OauthClient::SOURCE_MANUAL, client_id: "manual-1", client_secret: "cs-1")
+    server
+  end
+
+  def stored_row(server)
+    MCPServer.connection.select_one("SELECT headers, env, encrypted_headers, encrypted_env FROM mcp_servers WHERE id = #{server.id}")
+  end
+
+  test "header and env values are stored encrypted, never as plaintext" do
+    server = create(:mcp_server, scope: @project, headers: { "Authorization" => "Bearer s3cret-token" })
+    server.update!(env: { "API_KEY" => "env-s3cret" })
+
+    row = stored_row(server)
+    assert_equal({}, JSON.parse(row["headers"]))
+    assert_equal({}, JSON.parse(row["env"]))
+    assert_not_includes row["encrypted_headers"], "s3cret-token"
+    assert_not_includes row["encrypted_env"], "env-s3cret"
+    assert_equal({ "Authorization" => "Bearer s3cret-token" }, server.reload.headers)
+    assert_equal({ "API_KEY" => "env-s3cret" }, server.env)
+  end
+
+  test "once purpose binding is on, a ciphertext moved into the other column does not decrypt" do
+    Settings.encryption[:bind_purpose] = true
+    server = create(:mcp_server, scope: @project, headers: { "Authorization" => "Bearer s3cret-token" })
+    server.update_columns(encrypted_env: server.encrypted_headers)
+
+    assert_raises(Encryptable::DecryptionError) { server.reload.env }
+  ensure
+    Settings.encryption[:bind_purpose] = false
+  end
+
+  test "a plaintext copy written by older code is the newest and wins" do
+    server = create(:mcp_server, scope: @project, headers: { "Authorization" => "Bearer old" })
+    server.update_columns(headers: { "Authorization" => "Bearer written-by-old-code" })
+
+    assert_equal({ "Authorization" => "Bearer written-by-old-code" }, server.reload.headers)
+  end
+
+  test "moving to another origin drops the stored values and the OAuth connections" do
+    server = oauth_server_with_credentials
+
+    server.update!(url: "https://attacker.example.net/mcp")
+
+    server.reload
+    assert_equal({}, server.headers)
+    assert_nil server.encrypted_headers
+    assert_empty server.oauth_credentials
+    assert_nil server.manual_oauth_client
+  end
+
+  test "a new path, a new transport on the same origin, or a rename keeps them" do
+    server = oauth_server_with_credentials
+
+    server.update!(url: "https://mcp.example.com/v2/mcp")
+    server.update!(transport: "sse")
+    server.update!(description: "renamed")
+
+    server.reload
+    assert_equal({ "X-Api-Key" => "k-123456" }, server.headers)
+    assert_equal 1, server.oauth_credentials.count
+    assert server.manual_oauth_client
+  end
+
+  test "values supplied in the same save as the move are the ones kept" do
+    server = create(:mcp_server, scope: @project, url: "https://mcp.example.com/mcp",
+                                 headers: { "X-Api-Key" => "old", "X-Other" => "old-2" })
+
+    server.update!(url: "https://new.example.org/mcp", headers: { "X-Api-Key" => "new-value" })
+
+    assert_equal({ "X-Api-Key" => "new-value" }, server.reload.headers)
+  end
+
+  test "a stdio server's env is dropped when a different package is launched, not when the line is resubmitted" do
+    server = create(:mcp_server, :stdio_transport, scope: @project, command: "npx -y @scope/good-mcp@1.2.0",
+                                                   env: { "TOKEN" => "t-123456" })
+
+    server.update!(command: "npx -y @scope/good-mcp@1.2.0")
+    assert_equal({ "TOKEN" => "t-123456" }, server.reload.env)
+
+    server.update!(command: "npx -y @evil/exfiltrate@6.6.6")
+    assert_equal({}, server.reload.env)
+  end
+
+  test "lists the config items its values reference" do
+    server = create(:mcp_server, scope: @project,
+                                 headers: { "Authorization" => "Bearer config_item:API_TOKEN", "X-Plain" => "literal" })
+    server.update!(env: { "DB" => "postgres://config_item:DB_USER@host" })
+
+    assert_equal %w[API_TOKEN DB_USER], server.reload.config_item_refs
+  end
+
+  test "purging encrypts what older code left as plaintext and clears every plaintext copy" do
+    server = create(:mcp_server, scope: @project)
+    server.update_columns(headers: { "Authorization" => "Bearer legacy" }, env: { "K" => "legacy-env" })
+
+    assert_equal 1, MCPServer.purge_plaintext_secrets!
+
+    row = stored_row(server)
+    assert_equal({}, JSON.parse(row["headers"]))
+    assert_equal({}, JSON.parse(row["env"]))
+    assert_equal({ "Authorization" => "Bearer legacy" }, server.reload.headers)
+    assert_equal({ "K" => "legacy-env" }, server.env)
+    assert_equal 0, MCPServer.purge_plaintext_secrets!
+  end
+
+  test "the masked views show which keys are set, never the values" do
+    server = create(:mcp_server, scope: @project, headers: { "Authorization" => "Bearer s3cret-token" })
+
+    assert_equal({ "Authorization" => "••••••" }, server.masked_headers)
+    assert_equal({}, server.masked_env)
   end
 end

@@ -30,6 +30,7 @@ own agent containers; leave them unset and nothing changes.
 
    ```bash
    DOCKER_NETWORK=trevally_net
+   DOCKER_AGENT_NETWORK=trevally_agents
    WEB_IMAGE=web-trevally
    PORT=4010
    VITE_RUBY_PORT=4011
@@ -58,7 +59,8 @@ own agent containers; leave them unset and nothing changes.
 
 | Variable | Default | What shares state without it |
 |---|---|---|
-| `DOCKER_NETWORK` | `app_default` | `db`, `redis` and `web` resolve to the other stack; agent containers join it too, via `Settings.docker.network` |
+| `DOCKER_NETWORK` | `app_default` | `db`, `redis` and `web` resolve to the other stack |
+| `DOCKER_AGENT_NETWORK` | `app_agents` | Agent containers join the other stack's agent network (`Settings.docker.agent_network`) and reach its `web` |
 | `WEB_IMAGE` | `web` | A build in the worktree overwrites the image the main stack runs |
 | `PORT`, `VITE_RUBY_PORT`, `MCP_PORT` | `4000`–`4002` | Port bind conflict |
 | `TEMPORAL_HOST_PORT`, `TEMPORAL_UI_HOST_PORT` | `7233`, `8080` | Port bind conflict (in-network traffic still uses `temporal:7233`) |

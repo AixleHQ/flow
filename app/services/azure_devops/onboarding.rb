@@ -189,7 +189,7 @@ module AzureDevops
     def service_principal_object_id(installation)
       token = AppTokenService.new(installation).access_token(force: true).value
       payload = token.split(".")[1].to_s
-      claims = JSON.parse(Base64.urlsafe_decode64(payload + ("=" * ((4 - payload.length % 4) % 4))))
+      claims = JSON.parse(Base64.urlsafe_decode64(payload + ("=" * ((4 - (payload.length % 4)) % 4))))
       oid = claims["oid"].presence
       raise Error.new("Entra issued a token without an oid claim", code: "unexpected_token") if oid.blank?
 

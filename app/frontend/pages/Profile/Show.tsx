@@ -28,15 +28,18 @@ import { IconCheck, IconDoorExit, IconLock, IconTrash } from '@tabler/icons-reac
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { z } from 'zod';
 
+import type { AgentCredential, CurrentUser, Membership } from '@/types/generated';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { getConsumer } from 'shared/lib/actionCableConsumer';
-import { apiFetch } from 'shared/lib/apiFetch';
-import { formatDateMedium } from 'shared/lib/formatDate';
+import { apiFetch, apiRequest } from 'shared/lib/apiFetch';
+import { formatDateMedium, formatDateTimeShort, formatExpiry } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
 import { AwsConnectionModal } from 'shared/resources/cloud-connections/AwsConnectionModal';
+import type { ProjectHandover } from 'shared/resources/members/projectHandover';
+import { ProjectHandoverModal } from 'shared/resources/members/ProjectHandoverModal';
 import { UsageLimitsCard, type UsageLimitsEntry } from 'shared/resources/usage/UsageLimitsCard';
 import {
   apiV1CloudAwsConnectionPath,
@@ -46,8 +49,10 @@ import {
   finishApiV1TerminalSessionPath,
   healthApiV1CloudAwsConnectionPath,
 } from 'shared/routes';
-import { AGENT_BRAND_COLORS, TERMINAL_BG } from 'shared/theme/vendorColors';
-import { type AgentCredential, type AgentType, type SharedMembership, type SharedUser, type UserRole } from 'shared/ui';
+import { AGENT_BRAND_COLORS } from 'shared/theme/vendorColors';
+import { type AgentType, type UserRole } from 'shared/ui';
+import { AGENT_RUNTIMES, AGENT_TYPES } from 'shared/ui/agentRuntimes';
+import { LiveTerminal } from 'shared/ui/sessions';
 import { StatusBadge, type StatusTone } from 'shared/ui/StatusBadge';
 
 import { ProfileTabs } from './ProfileTabs';
@@ -67,50 +72,12 @@ const LANGUAGE_OPTIONS = [
   { value: 'uk', label: 'Ukrainian' },
 ];
 
-const AVAILABLE_AGENTS: { type: AgentType; name: string; description: string; color: string }[] = [
-  {
-    type: 'claude_code',
-    name: 'Claude Code',
-    description: "Anthropic's AI coding assistant with deep reasoning capabilities",
-    color: AGENT_BRAND_COLORS.claude_code,
-  },
-  {
-    type: 'cursor_cli',
-    name: 'Cursor CLI',
-    description: 'AI-powered code editor with context-aware suggestions',
-    color: AGENT_BRAND_COLORS.cursor_cli,
-  },
-  {
-    type: 'codex',
-    name: 'OpenAI Codex',
-    description: "OpenAI's code generation model optimized for multiple languages",
-    color: AGENT_BRAND_COLORS.codex,
-  },
-  {
-    type: 'gemini_cli',
-    name: 'Gemini CLI',
-    description: "Google's multimodal AI for code and documentation tasks",
-    color: AGENT_BRAND_COLORS.gemini_cli,
-  },
-  {
-    type: 'antigravity_cli',
-    name: 'Antigravity CLI',
-    description: "Google's agent-first terminal runtime, signed in with your Google account",
-    color: AGENT_BRAND_COLORS.antigravity_cli,
-  },
-  {
-    type: 'grok',
-    name: 'Grok',
-    description: "xAI's Grok CLI for agentic coding in the terminal",
-    color: AGENT_BRAND_COLORS.grok,
-  },
-  {
-    type: 'kiro_cli',
-    name: 'Kiro CLI',
-    description: "AWS's Kiro CLI — spec-driven agentic coding in the terminal",
-    color: AGENT_BRAND_COLORS.kiro_cli,
-  },
-];
+const AVAILABLE_AGENTS = AGENT_TYPES.map((type) => ({
+  type,
+  name: AGENT_RUNTIMES[type].productName,
+  description: AGENT_RUNTIMES[type].description,
+  color: AGENT_BRAND_COLORS[type],
+}));
 
 const ROLE_COLORS: Record<UserRole, string> = {
   super_admin: 'grape',
@@ -172,18 +139,22 @@ interface AgentModelsEntry {
 }
 
 interface Props {
-  profile: SharedUser;
+  profile: CurrentUser;
   // Memberships still in the `invited` state — profile.memberships is active-only.
   // Optional: only ProfileController#show sends it.
-  pendingInvitations?: SharedMembership[];
+  pendingInvitations?: Membership[];
+  // Companies where leaving would orphan projects this user owns.
+  projectHandovers?: (ProjectHandover & { membershipId: number })[];
   languageOptions: string[];
+  // Live browser sign-ins other than this one.
+  otherSessionsCount?: number;
   agentModels: AgentModelsEntry[];
   cableStream?: string;
   // Deferred (group "limits"): absent until Inertia's follow-up request lands.
   usageLimits?: UsageLimitsEntry[];
 }
 
-function DefaultAgentSelector({ profile }: { profile: SharedUser }) {
+function DefaultAgentSelector({ profile }: { profile: CurrentUser }) {
   const credentials = profile.agentCredentials ?? [];
   const [saving, setSaving] = useState(false);
 
@@ -297,7 +268,7 @@ function CredentialModelRow({ credential, models }: { credential: AgentCredentia
   );
 }
 
-function DefaultModelSelector({ profile, agentModels }: { profile: SharedUser; agentModels: AgentModelsEntry[] }) {
+function DefaultModelSelector({ profile, agentModels }: { profile: CurrentUser; agentModels: AgentModelsEntry[] }) {
   const credentials = profile.agentCredentials ?? [];
   const modelsMap = useMemo(() => {
     const m: Record<string, AgentModel[]> = {};
@@ -323,7 +294,7 @@ function DefaultModelSelector({ profile, agentModels }: { profile: SharedUser; a
   );
 }
 
-function AgentDefaultsSection({ profile, agentModels }: { profile: SharedUser; agentModels: AgentModelsEntry[] }) {
+function AgentDefaultsSection({ profile, agentModels }: { profile: CurrentUser; agentModels: AgentModelsEntry[] }) {
   return (
     <Card p={24}>
       <Title order={4} mb={4}>
@@ -340,17 +311,71 @@ function AgentDefaultsSection({ profile, agentModels }: { profile: SharedUser; a
   );
 }
 
+function SessionsSection({ otherSessionsCount }: { otherSessionsCount: number }) {
+  const [signingOut, setSigningOut] = useState(false);
+
+  const signOutOthers = () => {
+    modals.openConfirmModal({
+      title: 'Sign out everywhere else',
+      children: (
+        <Text size="sm">Every other browser signed in to your account is signed out. This one stays signed in.</Text>
+      ),
+      labels: { confirm: 'Sign out', cancel: 'Cancel' },
+      confirmProps: { color: 'red' },
+      onConfirm: () => {
+        setSigningOut(true);
+        router.delete('/profile/sign_out_other_sessions', {
+          preserveScroll: true,
+          onFinish: () => setSigningOut(false),
+        });
+      },
+    });
+  };
+
+  return (
+    <Card p={24}>
+      <Title order={4} mb={4}>
+        Sessions
+      </Title>
+      <Text size="sm" c="dimmed" mb="md">
+        {otherSessionsCount === 0
+          ? 'You are signed in on this browser only.'
+          : `You are also signed in on ${otherSessionsCount} other ${otherSessionsCount === 1 ? 'browser' : 'browsers'}.`}
+      </Text>
+      <Button
+        variant="light"
+        color="red"
+        size="xs"
+        leftSection={<IconDoorExit size={14} />}
+        onClick={signOutOthers}
+        loading={signingOut}
+        disabled={otherSessionsCount === 0}
+      >
+        Sign out everywhere else
+      </Button>
+    </Card>
+  );
+}
+
 function CompaniesSection({
   profile,
   pendingInvitations,
+  projectHandovers,
 }: {
-  profile: SharedUser;
-  pendingInvitations: SharedMembership[];
+  profile: CurrentUser;
+  pendingInvitations: Membership[];
+  projectHandovers: (ProjectHandover & { membershipId: number })[];
 }) {
   const memberships = profile.memberships ?? [];
   const [leavingId, setLeavingId] = useState<number | null>(null);
+  const [handoverFor, setHandoverFor] = useState<Membership | null>(null);
+  const handoverForCompany = handoverFor && projectHandovers.find((h) => h.membershipId === handoverFor.id);
 
-  const leaveCompany = (membership: SharedMembership) => {
+  const leaveCompany = (membership: Membership) => {
+    if (projectHandovers.some((h) => h.membershipId === membership.id)) {
+      setHandoverFor(membership);
+      return;
+    }
     modals.openConfirmModal({
       title: 'Leave company',
       children: (
@@ -415,6 +440,33 @@ function CompaniesSection({
         </>
       )}
 
+      {handoverFor && handoverForCompany && (
+        <ProjectHandoverModal
+          title="Leave company"
+          intro={
+            <Text size="sm">
+              Leave {handoverFor.company.name}? You will lose access to its projects and data. You will need a new
+              invitation to rejoin.
+            </Text>
+          }
+          confirmLabel="Transfer and leave"
+          subject="You"
+          leavingUserId={profile.id}
+          handover={handoverForCompany}
+          submitting={leavingId === handoverFor.id}
+          onClose={() => setHandoverFor(null)}
+          onConfirm={(handover) => {
+            setLeavingId(handoverFor.id);
+            router.delete(companyMembershipPath(handoverFor.id), {
+              data: { handover },
+              preserveScroll: true,
+              onSuccess: () => setHandoverFor(null),
+              onFinish: () => setLeavingId(null),
+            });
+          }}
+        />
+      )}
+
       <Stack gap="sm">
         {memberships.map((membership) => (
           <Group key={membership.id} justify="space-between" wrap="nowrap">
@@ -470,7 +522,7 @@ function AgentAuthModal({
   const isDesign = authKind === 'design';
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [sessionState, setSessionState] = useState<AuthSessionState>('idle');
-  const [ttydUrl, setTtydUrl] = useState<string | null>(null);
+  const [terminalSocketUrl, setTerminalSocketUrl] = useState<string | null>(null);
   const [watcherUrl, setWatcherUrl] = useState<string | null>(null);
   const [cableStream, setCableStream] = useState<string | null>(null);
   const [launchPhase, setLaunchPhase] = useState<string | null>(null);
@@ -496,13 +548,8 @@ function AgentAuthModal({
     setSessionState(state);
     setLaunchPhase((s.launchPhase as string) ?? null);
     setLaunchError((s.launchError as string) ?? null);
-    if (state === 'ready' && s.websocketUrl) {
-      const base = (s.websocketUrl as string)
-        .replace('wss://', 'https://')
-        .replace('ws://', 'http://')
-        .replace('/ws', '');
-      setTtydUrl(base);
-    }
+    const socketUrl = s.websocketUrl as string | null;
+    if (state === 'ready' && socketUrl) setTerminalSocketUrl(socketUrl);
     if (s.watcherUrl) setWatcherUrl(s.watcherUrl as string);
     // Set once the in-container credential helper reported no cloud connection, which only
     // happens because Claude Code's own Bedrock wizard asked it for credentials.
@@ -537,7 +584,7 @@ function AgentAuthModal({
   const startAuth = useCallback(async () => {
     cleanup();
     setSessionState('starting');
-    setTtydUrl(null);
+    setTerminalSocketUrl(null);
     setWatcherUrl(null);
     setCableStream(null);
     setAuthDetected(false);
@@ -640,7 +687,7 @@ function AgentAuthModal({
     finishingRef.current = true;
     setFinishError(false);
     try {
-      await apiFetch(finishApiV1TerminalSessionPath(sessionId), { method: 'POST' });
+      await apiRequest(finishApiV1TerminalSessionPath(sessionId), { method: 'POST' });
       setSessionState('finished');
       notifications.show({ message: `${agentInfo.name} authentication saved!`, color: 'green' });
       setTimeout(() => {
@@ -745,16 +792,11 @@ function AgentAuthModal({
       );
     }
 
-    if (sessionState === 'ready' && ttydUrl) {
+    if (sessionState === 'ready' && terminalSocketUrl) {
       return (
         <Box style={{ display: 'flex', flexDirection: 'column', height: 500 }}>
-          <Box style={{ flex: 1, overflow: 'hidden' }}>
-            <iframe
-              src={ttydUrl}
-              title={`Authenticate ${agentInfo.name}`}
-              allow="clipboard-read; clipboard-write"
-              style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8, backgroundColor: TERMINAL_BG }}
-            />
+          <Box style={{ flex: 1, overflow: 'hidden', borderRadius: 8 }}>
+            <LiveTerminal url={terminalSocketUrl} label={`Authenticate ${agentInfo.name}`} />
           </Box>
           <Group justify="space-between" p="sm" style={{ borderTop: '1px solid var(--app-border-default)' }}>
             {authDetected && finishError ? (
@@ -815,7 +857,7 @@ function AgentAuthModal({
   );
 }
 
-function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
+function AgentRuntimesSection({ profile }: { profile: CurrentUser }) {
   const configuredAgents = profile.configuredAgents ?? [];
   const credentialsMap = (profile.agentCredentials ?? []).reduce<Record<string, AgentCredential>>((acc, c) => {
     acc[c.agentType] = c;
@@ -968,9 +1010,11 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                   </Text>
                   {isConfigured && credential && (
                     <Text size="xs" c="dimmed" mt={4}>
-                      Configured {formatDateMedium(credential.createdAt)}
+                      {credential.signedInAt
+                        ? `Signed in ${formatDateTimeShort(credential.signedInAt)}`
+                        : `Configured ${formatDateMedium(credential.createdAt)}`}
                       {credential.lastUsedAt && ` · Last used ${formatDateMedium(credential.lastUsedAt)}`}
-                      {credential.expiresAt && ` · Expires ${formatDateMedium(credential.expiresAt)}`}
+                      {credential.loginExpiresAt && ` · Expires ${formatExpiry(credential.loginExpiresAt)}`}
                     </Text>
                   )}
                   {/* Why the platform gave up, in the vendor's words. Spelled out rather than
@@ -1028,12 +1072,13 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
                     {isConfigured ? 'Re-authenticate' : 'Authenticate'}
                   </Button>
                   {/* Design login layers a `designOauth` block onto an existing Claude login. It works
-                      on either base (claude.ai OR the Console managed key), so offer it once any base
-                      login exists. */}
+                      on any base (claude.ai, the Claude Platform profile or the Console managed key), so
+                      offer it once any base login exists. */}
                   {isConfigured &&
                     credential &&
                     agent.type === 'claude_code' &&
                     (credential.configKeys.includes('claudeAiOauth') ||
+                      credential.configKeys.includes('platformOauth') ||
                       credential.configKeys.includes('primaryApiKey')) && (
                       <Button variant="light" size="xs" onClick={() => handleAuth(agent.type, 'design')}>
                         {credential.configKeys.includes('designOauth') ? 'Reconnect Design' : 'Connect Design'}
@@ -1069,7 +1114,15 @@ function AgentRuntimesSection({ profile }: { profile: SharedUser }) {
   );
 }
 
-function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, usageLimits }: Props) {
+function ProfilePage({
+  profile,
+  pendingInvitations,
+  projectHandovers,
+  otherSessionsCount,
+  agentModels,
+  cableStream,
+  usageLimits,
+}: Props) {
   const currentCompanyName = profile.currentCompany?.name ?? null;
   useInertiaCableStream(cableStream, { only: ['profile', 'agent_models'] });
 
@@ -1235,8 +1288,13 @@ function ProfilePage({ profile, pendingInvitations, agentModels, cableStream, us
 
           {/* Side column: companies, agent defaults. */}
           <Box className={classes.colSide}>
-            <CompaniesSection profile={profile} pendingInvitations={pendingInvitations ?? []} />
+            <CompaniesSection
+              profile={profile}
+              pendingInvitations={pendingInvitations ?? []}
+              projectHandovers={projectHandovers ?? []}
+            />
             <AgentDefaultsSection profile={profile} agentModels={agentModels} />
+            <SessionsSection otherSessionsCount={otherSessionsCount ?? 0} />
           </Box>
         </Box>
       </Box>

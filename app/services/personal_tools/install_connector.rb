@@ -48,7 +48,8 @@ module PersonalTools
 
     def install(connector, target_id, project)
       result = MCP::ConnectorInstaller.call(
-        connector: connector, target_id: target_id, values: string_values, project: project
+        connector: connector, target_id: target_id, values: string_values, project: project,
+        actor: version_actor
       )
       server = result.server
 

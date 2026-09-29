@@ -3,6 +3,10 @@
 # AgentCredential - Stores encrypted authentication artifacts for agents
 class AgentCredential < ApplicationRecord
   include Encryptable
+  include RefreshLease
+
+  encryption_key :credentials_key
+  encrypted_column :encrypted_config_data
   extend Enumerize
 
   belongs_to :user
@@ -90,6 +94,7 @@ class AgentCredential < ApplicationRecord
     undetermined = arel_table[:expires_at].eq(nil)
                                           .and(arel_table[:agent_type].in(token_expiry_agent_types))
     where(status: :active).where(arel_table[:expires_at].lteq(within.from_now).or(undetermined))
+      .where(user_id: User.authenticatable.select(:id)) # a suspended or deleted account's logins lapse
   }
   # Credentials no live container currently holds.
   #
@@ -126,19 +131,37 @@ class AgentCredential < ApplicationRecord
     result.fetch(:permanent) { result[:detail].to_s.include?("invalid_grant") }
   end
 
-  class PreflightError < StandardError
-    attr_reader :credential
+  # A renewal that did not happen. Raised into the error reporter, never at the caller:
+  # the caller gets the adapter's result Hash and decides what the failure means for it.
+  class RefreshFailed < StandardError
+    attr_reader :credential, :source, :permanent
 
-    def initialize(credential)
+    def initialize(credential, source:, detail:, permanent:)
       @credential = credential
-      super("Your #{credential.agent_type.titleize} login has expired. Go to profile settings and sign in again.")
+      @source = source
+      @permanent = permanent
+      super("#{credential.agent_type} credential refresh failed (#{source}): #{detail}")
     end
   end
 
-  # Virtual attribute for admin display (shows keys without values)
-  def config_keys
-    config_data.keys.join(", ")
-  rescue StandardError
+  REFRESH_ERROR_SOURCE = "agent_credential.refresh"
+
+  class PreflightError < StandardError
+    attr_reader :credential
+
+    # `reason: :unreadable` — the stored login cannot be decrypted with this
+    # server's keys; signing in again stores a fresh one.
+    def initialize(credential, reason: :expired)
+      @credential = credential
+      problem = reason == :unreadable ? "can't be read on this server" : "has expired"
+      super("Your #{credential.agent_type.titleize} login #{problem}. Go to profile settings and sign in again.")
+    end
+  end
+
+  # The admin page lists every credential, including one this server's keys cannot read.
+  def login_blocks
+    config_keys.join(", ")
+  rescue Encryptable::DecryptionError
     "Unable to decrypt"
   end
 
@@ -172,6 +195,9 @@ class AgentCredential < ApplicationRecord
       "collected_at" => Time.current,
       "artifact_keys" => artifacts_hash.keys
     )
+    # collected_at moves on every refresh and write-back; this is the last time a person
+    # actually signed in, which is what the profile has to show after a re-login.
+    credential.metadata = credential.metadata.merge("signed_in_at" => Time.current) if new_authorization
     credential.save!
     credential
   end
@@ -197,23 +223,44 @@ class AgentCredential < ApplicationRecord
     "agent_models/#{agent_type}/#{id}"
   end
 
-  # Get decrypted config data as hash
+  # Decrypted config data. Raises Encryptable::DecryptionError when the stored
+  # blob cannot be read: an unreadable credential must stop a launch with a
+  # sign-in prompt, never start a session that has no credentials at all.
   def config_data
     return {} if encrypted_config_data.blank?
 
-    decrypted = encryptor.decrypt_and_verify(encrypted_config_data)
-    JSON.parse(decrypted)
-  rescue ActiveSupport::MessageVerifier::InvalidSignature,
-         ActiveSupport::MessageEncryptor::InvalidMessage, JSON::ParserError, TypeError
-    # Fallback: try reading as plain JSON (for existing unencrypted data).
-    # InvalidMessage (AES-GCM wrong/rotated key) is rescued too so an un-recrypted
-    # row degrades gracefully instead of 500ing during the key-migration window.
-    JSON.parse(encrypted_config_data) rescue {}
+    JSON.parse(decrypt_secret(encrypted_config_data, column: "encrypted_config_data"))
+  rescue JSON::ParserError
+    raise Encryptable::DecryptionError.new("AgentCredential#encrypted_config_data (id=#{id.inspect}) is not a credential",
+                                           model: "AgentCredential", record_id: id)
   end
 
-  # Set config data (will be encrypted)
   def config_data=(hash)
-    self.encrypted_config_data = encryptor.encrypt_and_sign(hash.to_json)
+    self.encrypted_config_data = encrypt_secret(hash.to_json, column: "encrypted_config_data")
+    self.metadata = (metadata || {}).merge("config_keys" => hash.keys.map(&:to_s))
+  end
+
+  # Which login blocks the credential holds (claudeAiOauth, designOauth, …) — not
+  # their contents. Recorded in the clear when the data is written, because the
+  # current user, credentials included, is serialized on every page, and reading
+  # the keys from the blob would decrypt every credential on every request. A row
+  # written before the names were recorded still decrypts, until its next write.
+  def config_keys
+    metadata&.dig("config_keys") || config_data.keys
+  end
+
+  # When the login the CLI runs on expires. A row written before this was recorded falls
+  # back to the soonest expiry, which is what the profile used to show.
+  def login_expires_at
+    return expires_at unless metadata&.key?("login_expires_at")
+
+    raw = metadata["login_expires_at"]
+    raw.present? ? Time.zone.parse(raw) : nil
+  end
+
+  def signed_in_at
+    raw = metadata&.dig("signed_in_at")
+    raw.present? ? Time.zone.parse(raw.to_s) : nil
   end
 
   # Get adapter for this agent type
@@ -261,19 +308,47 @@ class AgentCredential < ApplicationRecord
   # - :held — another live container already holds these tokens. Rotating now would
   #   invalidate the copy it is running on, turning one stale session into several.
   #   That container refreshes for itself and cleanup merges the result back.
-  # - the re-check under the row lock — parallel launches of the same credential
-  #   would otherwise each fire a refresh, and every one after the first replays a
-  #   grant the server has already rotated out.
+  # - the refresh lease, and the re-check once it is held — parallel launches of the
+  #   same credential (or a launch racing the sweep) would otherwise each fire a
+  #   refresh, and every one after the first replays a grant the server has already
+  #   rotated out. A launch that finds the lease taken waits for that refresh and
+  #   starts on its result.
   def refresh_if_expiring!(within: SESSION_REFRESH_THRESHOLD, excluding_session_id: nil)
     return :not_needed unless expiring_within?(within)
-    return :held if held_by_live_session?(excluding_session_id: excluding_session_id)
+    return :held if rotating_refresh? && held_by_live_session?(excluding_session_id: excluding_session_id)
 
-    with_lock do
-      reload
+    outcome = with_refresh_lease do
       next :not_needed unless expiring_within?(within)
 
-      adapter.refresh!(self, margin_ms: within.in_milliseconds)
+      renew!(source: :launch, margin_ms: within.in_milliseconds)
     end
+    return outcome unless outcome == :busy
+
+    await_refresh
+    return :not_needed unless expiring_within?(within)
+
+    { status: :error, detail: "a concurrent refresh did not renew the token", permanent: false }
+  end
+
+  # The one way a stored credential is renewed — by the sweep, at launch, and when a
+  # vendor API rejects the token mid-request. It exists so that every renewal records
+  # its outcome the same way: success clears the error state, failure counts towards
+  # condemning the credential (and mails its owner when it does), and every failure is
+  # reported to Sentry. Before this each caller did its own subset, and the reactive
+  # path did none — 40+ Cursor refreshes a day failed with a 404 and not one of them
+  # was recorded anywhere but an INFO log line.
+  #
+  # `source` names the caller in the report (:sweep, :launch, :unauthorized).
+  # Returns the adapter's result Hash; never raises.
+  def renew!(source:, margin_ms: nil)
+    result = begin
+      # Omitted rather than passed as nil: an adapter's own default margin must survive.
+      margin_ms ? adapter.refresh!(self, margin_ms: margin_ms) : adapter.refresh!(self)
+    rescue StandardError => e
+      { status: :error, detail: "#{e.class}: #{e.message}", permanent: false }
+    end
+    record_refresh_outcome(result, source: source)
+    result
   end
 
   # Whether the login the CLI cannot run without is already past its expiry. Reads the
@@ -299,7 +374,13 @@ class AgentCredential < ApplicationRecord
     return false unless base_login_expired?
     return true unless self.class.refreshable_agent_types.include?(agent_type)
 
-    held_by_live_session?(excluding_session_id: excluding_session_id)
+    rotating_refresh? && held_by_live_session?(excluding_session_id: excluding_session_id)
+  end
+
+  # Whether renewing invalidates the grant it replaces. Only then does a live container's
+  # copy go stale under a refresh; a static refresh token can be renewed with holders.
+  def rotating_refresh?
+    adapter.credential_lifecycle[:rotation] == :rotating
   end
 
   def mark_refresh_error!(message, permanent: false)
@@ -323,6 +404,33 @@ class AgentCredential < ApplicationRecord
   end
 
   private
+
+  def record_refresh_outcome(result, source:)
+    case result[:status]
+    when :refreshed
+      clear_refresh_error! if refresh_error.present? || error?
+    when :not_needed
+      # A credential with no expiry (an API key, a Bedrock connection) is never refreshed,
+      # so nothing else would ever clear an error a failed attempt left on it — and every
+      # sweep still selects it, one transient failure away from condemning it.
+      clear_refresh_error! if active? && expires_at.nil? && refresh_error.present?
+    when :error
+      permanent = self.class.permanent_failure?(result)
+      mark_refresh_error!(result[:detail], permanent: permanent)
+      report_refresh_failure(result[:detail], source: source, permanent: permanent)
+    end
+  end
+
+  def report_refresh_failure(detail, source:, permanent:)
+    Rails.error.report(
+      RefreshFailed.new(self, source: source, detail: detail, permanent: permanent),
+      handled: true,
+      severity: :error,
+      source: REFRESH_ERROR_SOURCE,
+      context: { agent_type: agent_type, credential_id: id, refresh_source: source.to_s,
+                 permanent: permanent, status: status.to_s, failure_count: refresh_failure_count }
+    )
+  end
 
   def notify_refresh_failure
     return if user&.email.blank?
@@ -371,15 +479,18 @@ class AgentCredential < ApplicationRecord
   # Derive expires_at from the adapter's soonest token expiry (epoch ms → Time).
   # nil when the agent's tokens carry no expiry (e.g. codex/cursor today), which
   # keeps the credential always-active in `.active` (its expiry is unknown, not past).
+  #
+  # The base login's own expiry is recorded beside it: expires_at is the soonest across
+  # every block (it is when the sweep must wake up), so an add-on such as Claude's design
+  # token would otherwise decide what the profile says about the login itself. Kept in
+  # metadata, in the clear, for the same reason as config_keys.
   def sync_expires_at
     ms = adapter.token_expires_at(config_data)
     self.expires_at = ms ? Time.zone.at(ms / 1000.0) : nil
+    base_ms = adapter.base_token_expires_at(config_data)
+    self.metadata = (metadata || {}).merge("login_expires_at" => base_ms ? Time.zone.at(base_ms / 1000.0).iso8601 : nil)
   rescue StandardError => e
     Rails.logger.warn("[AgentCredential] sync_expires_at failed for #{id}: #{e.message}")
     self.expires_at = nil
-  end
-
-  def encryption_key_setting
-    Settings.encryption.credentials_key
   end
 end

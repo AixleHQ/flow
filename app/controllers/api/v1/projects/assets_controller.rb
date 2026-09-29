@@ -24,6 +24,13 @@ module Api
           render json: { id: asset.id }, status: :ok
         end
 
+        # @summary Stop sharing an asset publicly: its link stops working, and sharing again makes a new one
+        def unshare
+          asset = current_project.assets.find(params[:id])
+          asset.unshare!
+          render json: AssetResource.new(asset).to_h
+        end
+
         # @summary Move an asset to a different folder
         def update
           asset = current_project.assets.active.find(params[:id])

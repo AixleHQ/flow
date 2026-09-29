@@ -12,7 +12,7 @@ For conceptual explanations of *why* a thing exists, see the User Guide. Referen
 
 ```
 Company
-├── Users (roles: employee, admin, super_admin)
+├── Memberships → Users (roles: admin, employee, viewer; a user can belong to several companies)
 ├── Agents, Tools, Skills, MCP Servers, Workflows  (company-scoped, inherited by all projects)
 ├── Repositories, ConfigItems
 └── Projects

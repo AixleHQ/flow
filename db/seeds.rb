@@ -1,17 +1,24 @@
 # frozen_string_literal: true
 
-# Stop here in production environment
-if Rails.env.production?
-  puts "Skipping all seed data creation in production environment"
+# Demo users with a known password belong on a laptop, not in any deployed
+# environment — staging included.
+unless Rails.env.local?
+  puts "Skipping all seed data creation in #{Rails.env}"
   return
 end
+
+# Deployment-scoped auth providers (AD-4). Idempotent, and the same call the
+# backfill migration makes in production, so a freshly seeded dev database and a
+# migrated production database offer exactly the same sign-in methods.
+puts "Ensuring deployment auth providers..."
+Auth::DeploymentProviders.ensure_all!
 
 # Create super admin user (platform-level admin)
 puts "Creating super admin user..."
 super_admin_email = Settings.admin.email
 super_admin_password = Settings.admin.password
 
-super_admin = User.find_or_create_by!(email: super_admin_email) do |user|
+User.find_or_create_by!(email: super_admin_email) do |user|
   user.name = "Super Admin"
   user.password = super_admin_password
   user.password_confirmation = super_admin_password
@@ -23,9 +30,6 @@ end
 # reconciled into shadow rows — see Tools::Reconciler.
 puts "Reconciling platform tools..."
 Tools::Reconciler.run!
-
-require_relative "seeds/aixle_builder"
-Seeds::AixleBuilder.seed!
 
 seed_company_slug = ENV.fetch("SEED_COMPANY_SLUG", "demo")
 seed_company_name = ENV.fetch("SEED_COMPANY_NAME", "Demo Company")

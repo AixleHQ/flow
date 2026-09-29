@@ -16,5 +16,7 @@ export function useProjectPermissions(): ProjectPermissions {
   return {
     canExecute: projectPermissions?.canExecute ?? true,
     canManage: projectPermissions?.canManage ?? true,
+    // Not permissive by default: it unlocks changes to company-wide resources.
+    canManageCompany: projectPermissions?.canManageCompany ?? false,
   };
 }

@@ -1,11 +1,6 @@
-import type {
-  SharedCompany,
-  SharedMembership,
-  SharedPermissions,
-  SharedProps,
-  SharedSettings,
-  SharedUser,
-} from 'shared/ui';
+import type { Company, CurrentUser, Membership } from '@/types/generated';
+
+import type { SharedPermissions, SharedProps, SharedSettings } from 'shared/ui';
 
 // Every authenticated page renders inside AuthLayout, which reads currentUser/flash/projects/
 // permissions/settings off usePage().props. Without currentUser the layout short-circuits to a
@@ -13,7 +8,7 @@ import type {
 // tests must seed these. buildSharedProps() is the canonical, type-checked default — spread it into
 // renderPage(..., { props: { ...buildSharedProps(), ...pageSpecificProps } }) or use renderAuthedPage().
 
-const buildSharedCompany = (overrides: Partial<SharedCompany> = {}): SharedCompany => ({
+const buildSharedCompany = (overrides: Partial<Company> = {}): Company => ({
   id: 1,
   name: 'Test Company',
   emailDomain: 'example.com',
@@ -23,7 +18,7 @@ const buildSharedCompany = (overrides: Partial<SharedCompany> = {}): SharedCompa
   ...overrides,
 });
 
-const buildSharedMembership = (overrides: Partial<SharedMembership> = {}): SharedMembership => ({
+const buildSharedMembership = (overrides: Partial<Membership> = {}): Membership => ({
   id: 1,
   role: 'admin',
   state: 'active',
@@ -31,11 +26,13 @@ const buildSharedMembership = (overrides: Partial<SharedMembership> = {}): Share
   ...overrides,
 });
 
-export const buildSharedUser = (overrides: Partial<SharedUser> = {}): SharedUser => ({
+export const buildSharedUser = (overrides: Partial<CurrentUser> = {}): CurrentUser => ({
   id: 1,
   email: 'test@example.com',
   name: 'Test User',
   state: 'active',
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
   position: null,
   preferredAgentLanguage: 'en',
   selectedAgents: [],

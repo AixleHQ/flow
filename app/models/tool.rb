@@ -4,7 +4,7 @@
 #
 # source:
 # - db:   user-created custom tool (docker_image + command), Project-scoped,
-#         authored via the UI or meta_create_tool
+#         authored via the UI or the personal MCP server
 # - code: reconciler-owned shadow row of a code-defined platform tool; the
 #         definition (schema, tags, availability, injection) lives on the
 #         InternalTools::* class — see Tools::Registry / Tools::Reconciler
@@ -21,6 +21,8 @@ class Tool < ApplicationRecord
   enumerize :execution_mode, in: %i[app container], default: :container, predicates: true
 
   belongs_to :scope, polymorphic: true, optional: true
+  include TenantColumns
+  include Versioned
 
   has_many :tool_files, dependent: :destroy
   has_many :tool_results, dependent: :destroy
@@ -56,8 +58,8 @@ class Tool < ApplicationRecord
   # Tools shown in UI management: user-authored custom tools only. Platform
   # (code) tools are injected/gated automatically and are not managed here.
   scope :ui_visible, -> { db_source }
-  # Pickers: attachable platform tools (user_attachable false hides the Aixle
-  # Builder meta_* tools) plus in-scope custom tools, gated on the
+  # Pickers: attachable platform tools (user_attachable false hides session
+  # plumbing like finish_session) plus in-scope custom tools, gated on the
   # reconciler-owned requires_integration projection.
   scope :visible_for_project, ->(project) {
     not_deleted.enabled.where(source: "code", user_attachable: true)
@@ -183,6 +185,13 @@ class Tool < ApplicationRecord
     deleted_at.present?
   end
 
+  alias archived? deleted?
+  alias archive! soft_delete!
+
+  def unarchive!
+    update!(deleted_at: nil)
+  end
+
   # Rug-pull check: true when the stored digest matches the current
   # definition. A write that bypassed validations (update_columns, raw SQL,
   # a compromised console) leaves a mismatch and serving fails closed.
@@ -204,6 +213,15 @@ class Tool < ApplicationRecord
       "required_config_items" => required_config_items.as_json
     }
     Digest::SHA256.hexdigest(JSON.dump(payload))
+  end
+
+  # Ransack
+  def self.ransackable_attributes(_auth_object = nil)
+    %w[name display_name source scope_type enabled deleted_at created_at updated_at]
+  end
+
+  def self.ransackable_associations(_auth_object = nil)
+    %w[scope tool_files]
   end
 
   private
@@ -327,14 +345,5 @@ class Tool < ApplicationRecord
         timeout: timeout, tool_result_id: tool_result_id
       )
     end
-  end
-
-  # Ransack
-  def self.ransackable_attributes(_auth_object = nil)
-    %w[name display_name source scope_type enabled deleted_at created_at updated_at]
-  end
-
-  def self.ransackable_associations(_auth_object = nil)
-    %w[scope tool_files]
   end
 end

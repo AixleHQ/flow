@@ -21,8 +21,6 @@ module Activities
         step_run.mark_running!
         step_run.create_sub_step_runs!
 
-        prepare_workspace(step_run)
-
         {
           "step_run_id" => step_run.id,
           "step_id" => step_run.step_id,
@@ -32,6 +30,8 @@ module Activities
 
       private
 
+      # A validator that crashed has not judged the step's inputs, so the step does
+      # not start on them — the same rule CompleteStepActivity#validate_outputs keeps.
       def validate_inputs(step_run)
         step = step_run.step
         workflow_run = step_run.workflow_run
@@ -39,8 +39,8 @@ module Activities
         available = collect_available_input_names(step, workflow_run)
         InputValidator.new(step, available).validate!
       rescue StandardError => e
-        Rails.logger.error("[PrepareStepActivity] Input validation error: #{e.message}")
-        InputValidator::Result.new(valid?: true, errors: [])
+        Rails.logger.error("[PrepareStepActivity] Input validation crashed: #{e.class}: #{e.message}")
+        InputValidator::Result.new(valid?: false, errors: [ "input validation could not run: #{e.message}" ])
       end
 
       def collect_available_input_names(step, workflow_run)
@@ -61,19 +61,10 @@ module Activities
                              (step.asset_ids || []) +
                              (workflow_run.input_asset_ids || [])
         if injected_asset_ids.present?
-          names += ::Asset.where(id: injected_asset_ids.uniq).pluck(:name)
+          names += TenantScope.owned(::Asset, project: workflow_run.project).where(id: injected_asset_ids.uniq).pluck(:name)
         end
 
         names.uniq
-      end
-
-      def prepare_workspace(step_run)
-        return unless step_run.terminal_session&.container_id.present?
-
-        preparator = WorkspacePreparator.new(step_run)
-        preparator.prepare!(step_run.terminal_session.container_id)
-      rescue StandardError => e
-        Rails.logger.warn("[PrepareStepActivity] Workspace preparation failed: #{e.message}")
       end
     end
   end

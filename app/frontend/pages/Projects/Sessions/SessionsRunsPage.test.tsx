@@ -1,10 +1,23 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import { act, renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import SessionsRunsPage, { type ListEntry, type SessionsRunsPageProps } from './SessionsRunsPage';
+
+type CableHandlers = { received: (data: Record<string, unknown>) => void };
+let lastCableHandlers: CableHandlers | null = null;
+vi.mock('shared/lib/actionCableConsumer', () => ({
+  getConsumer: () => ({
+    subscriptions: {
+      create: (_params: unknown, handlers: CableHandlers) => {
+        lastCableHandlers = handlers;
+        return { unsubscribe: vi.fn() };
+      },
+    },
+  }),
+}));
 
 const project = { id: 7, name: 'Falcon Project' };
 
@@ -199,5 +212,66 @@ describe('Projects/Sessions/SessionsRunsPage', () => {
     expect(screen.getByText('4.7M')).toBeInTheDocument();
     expect(screen.getByText('$4.78')).toBeInTheDocument();
     expect(screen.getByText('11m 0s')).toBeInTheDocument();
+  });
+
+  describe('live updates', () => {
+    afterEach(() => {
+      lastCableHandlers = null;
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    });
+
+    async function signal(data: Record<string, unknown>) {
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+      });
+      await act(async () => {
+        lastCableHandlers!.received(data);
+        vi.advanceTimersByTime(300);
+      });
+      vi.useRealTimers();
+    }
+
+    it('refreshes a run when one of its step sessions changes', async () => {
+      vi.useFakeTimers();
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          new Response(JSON.stringify({ entries: [buildRunEntry({ state: 'failed' })] }), { status: 200 }),
+        );
+      renderWith(seed({ cableStream: 'signed-project' }));
+      const failedBefore = screen.queryAllByText('Failed').length;
+
+      await signal({ type: 'session_update', id: 1986 });
+
+      expect(String(fetchSpy.mock.calls[0][0])).toBe('/company/projects/7/sessions/rows?run_ids%5B%5D=1443');
+      await waitFor(() => expect(screen.queryAllByText('Failed')).toHaveLength(failedBefore + 1));
+    });
+
+    it('refreshes a standalone session row by its own id', async () => {
+      vi.useFakeTimers();
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValue(
+          new Response(JSON.stringify({ entries: [buildSessionEntry({ state: 'failed' })] }), { status: 200 }),
+        );
+      renderWith(seed({ cableStream: 'signed-project' }));
+      const failedBefore = screen.queryAllByText('Failed').length;
+
+      await signal({ type: 'session_update', id: 2009 });
+
+      expect(String(fetchSpy.mock.calls[0][0])).toBe('/company/projects/7/sessions/rows?session_ids%5B%5D=2009');
+      await waitFor(() => expect(screen.queryAllByText('Failed')).toHaveLength(failedBefore + 1));
+    });
+
+    it('ignores an update for something this list does not show', async () => {
+      vi.useFakeTimers();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      renderWith(seed({ cableStream: 'signed-project' }));
+
+      await signal({ type: 'run_update', id: 9999 });
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
   });
 });

@@ -5,6 +5,16 @@
 **Author:** Artem Petrov + AI Analysis
 **Depends on:** [Workflow Engine](../architecture/workflows.md), [BMAD Integration](./bmad.md)
 
+> **What ships.** This document is the original design; the implementation differs in
+> two ways that matter. The Aixle Builder is an interactive agent session — a
+> `TerminalSession` flagged `metadata.aixle_builder`, started from the project's Aixle
+> Builder page (`Web::Company::Projects::AixleBuilderController`) — not a run of a
+> System-scoped workflow. And its tools are the personal MCP tools, pinned to the
+> session's project (`Tools::BuilderToolset`, see §2.3), not the `meta_*` tools of §3,
+> which do not exist in the code; neither do the per-run limits of §8.3. The activity log
+> (`metadata["builder_activities"]`, §6.1) and the session page with its live workflow and
+> board previews are built as described.
+
 ---
 
 ## 1. Goal
@@ -199,11 +209,25 @@ POST /api/v1/company/projects/{project_id}/workflow_runs
 
 ### 2.3 Permissions
 
-The meta-workflow tools require:
-- The user must be an **admin** or **owner** in the company (to create company-level entities)
-- Or have permissions to create project-level entities
+The builder has no permissions of its own. Its tools are the personal MCP tools
+(`Tools::BuilderToolset`), served by the builder session's own MCP endpoint and run as
+the user who started the session:
 
-Each internal tool checks permissions through the standard policy layer.
+- **Pinned to one project.** `project_id` is filled in from the session and dropped from
+  the schema the agent sees, and every project, workflow, step, and session lookup is
+  confined to that project (`PersonalTools::Base` with `pinned_project:`), so an id from
+  another project reads as not found.
+- **Checked like the UI.** Each tool authorizes through the same Pundit policy classes and
+  policy contexts the web controllers use (`PersonalTools::Base#authorize!`, with a
+  `ProjectContext`), so the builder can do exactly what that user could do in this project
+  from the UI, and no more. Tools that read or steer sessions and runs apply the same model
+  rules the screens do (`TerminalSession#visible_to?`, `WorkflowRun#controllable_by?`).
+- **Narrower than the personal server.** Only the personal tools that act on a project
+  (plus `list_sessions` and `get_session_log`) are served. Tools that would pass secret
+  values through the agent's transcript or change project settings are left out: the
+  config-item and custom-tool writers, and `update_project_settings`.
+- **No personal token in the container.** The session authenticates to its MCP endpoint
+  with its own session key; the user's personal MCP token never enters the container.
 
 ---
 
@@ -1226,7 +1250,7 @@ The user starts the Meta-Workflow
     │     • Or specific files: agent YAML, workflow YAML, instructions.md
     │
     ▼
-Input assets are mounted into /workspace/input/
+Input assets are mounted into /workspace/assets/
     │
     ├── _bmad/
     │   ├── agents/
@@ -1386,8 +1410,8 @@ Each activity is a plain hash: `action` (created_step, created_agent, ...),
 
 ### 6.2 Live Workflow Constructor
 
-There is no dedicated `MetaWorkflowChannel` — `app/channels/` contains only
-`SessionListChannel`. Real-time updates ride on **Turbo Streams**: after each
+There is no dedicated `MetaWorkflowChannel` — `app/channels/` holds no custom
+channels at all. Real-time updates ride on **Inertia Cable** streams: after each
 meta-tool persists a builder activity, `persist_activity` calls
 `broadcast_refresh_to(target)` (see §6.1). The target (workflow run or session)
 broadcasts a Turbo refresh over its own stream; the frontend re-fetches the
@@ -1543,28 +1567,13 @@ end
 
 ## 8. Safeguards and limits
 
-### 8.1 Only the Meta-Workflow has meta-tools
+### 8.1 Only builder sessions get the builder tools
 
-Meta-tools (all `meta_*`) are internal-tool handlers under `InternalTools::`,
-each declared with `tags :builder` and `user_attachable false` (so users cannot
-attach them to arbitrary steps). They reach an agent only by being attached to
-the steps of the System-scoped **Aixle Builder** workflow.
-
-There is no `Workflow#meta_workflow?` predicate and no `config['meta_workflow']`
-flag (`ALLOWED_CONFIG_KEYS` would reject that key). The builder workflow is
-identified structurally:
-
-```ruby
-class Workflow < ApplicationRecord
-  def system?
-    scope_type == "System"
-  end
-
-  def self.aixle_builder
-    system.active.find_by!(name: "Aixle Builder")
-  end
-end
-```
+`Tools::BuilderToolset.serves?(session)` is true only for a session flagged
+`metadata.aixle_builder` that has a project and a user, and the session MCP handler
+(`Tools::MCPRequestHandler`) adds the toolset only then; a session tool of the same name
+wins. The tools are the personal MCP tools, so they carry no builder-specific privilege —
+see §2.3.
 
 ### 8.2 Cleanup on a Failed Run
 
@@ -1724,19 +1733,13 @@ Meta-tools have limits for safety:
 
 ## 10. Implementation Status
 
-**Status: largely implemented.** The `scope_type: "System"` model support, the
-full set of workflow and board meta-tools (§3.1), implicit target-workflow state,
-System-workflow exclusion from `visible_for_project`, the Aixle Builder routes,
-and the `LandingPage` / `SessionPage` frontend are all built. Real-time updates
-use Turbo `broadcast_refresh_to` over the `builder_activities` metadata log
-(§6.1/§6.2) rather than a dedicated ActionCable channel or an ActiveRecord
-activity model.
-
-Notable deltas from the original plan: `meta_import_bmad` and a
-`meta_list_mcp_servers` tool were not built; the four `meta_link_*_to_step` tools
-collapsed into a single `meta_link_resource_to_step`; skills are handled via
-`meta_search_skills` + `meta_install_skill` (against the skills.sh registry)
-rather than a `meta_create_skill`.
+See the note at the top of this document. Built: the Aixle Builder routes
+(`/company/projects/:id/aixle_builder`, `…/start`, `…/:id/session`, `…/:id/finish`), the
+`LandingPage` / `SessionPage` frontend, the builder's reference files and workflow guides
+in the session context, and the `builder_activities` metadata log, refreshed on the page
+through Inertia Cable (`broadcasts_to`) rather than a dedicated Action Cable channel or an
+activity model. The tool surface is `Tools::BuilderToolset` (§2.3), not the `meta_*`
+catalogue of §3.
 
 ---
 

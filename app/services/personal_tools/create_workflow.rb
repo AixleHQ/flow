@@ -16,7 +16,8 @@ module PersonalTools
       project = find_project!
       authorize!(project, :create?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
 
-      workflow = project.workflows.create!(name: params[:name], description: params[:description], config: {})
+      workflow = project.workflows.new(name: params[:name], description: params[:description], config: {})
+      Versions.save!(workflow, actor: version_actor) { workflow.save! }
       success(id: workflow.id, name: workflow.name, description: workflow.description)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create workflow: #{e.message}")

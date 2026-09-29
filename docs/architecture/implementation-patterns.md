@@ -1,7 +1,5 @@
 # Implementation Patterns & Consistency Rules
 
-**Updated:** 2026-02-21
-
 ---
 
 ## Naming Conventions
@@ -15,9 +13,9 @@
 - **Array columns:** plural — `models`, `tags`, `selected_agents`
 
 ### API
-- **Endpoints:** plural resources — `/api/v1/company/tools`, `/api/v1/company/projects/:id/agents`
-- **Nested:** max 2 levels — `/api/v1/company/projects/:project_id/terminal_sessions`
-- **Custom actions:** member/collection routes — `POST /terminal_sessions/:id/finish`
+- **Endpoints:** plural resources — `/api/v1/terminal_sessions`, `/api/v1/projects/:project_id/workflows/:id`
+- **Nested:** under the project that owns them — `/api/v1/projects/:project_id/board/tasks/:task_id/comments`
+- **Custom actions:** member/collection routes — `POST /api/v1/terminal_sessions/:id/finish`, `PATCH .../board/tasks/:id/move`
 - **Query params:** snake_case — `params[:q]` for Ransack search
 
 ### Code
@@ -40,27 +38,24 @@
 
 ## API Controller Patterns
 
-### Minimalist Style
-Controllers: 2-3 lines per action max. Use `respond_with` for automatic format + status.
+### Actions render resources explicitly
+
+Each action finds its record inside the request's scope, lets `dynamic_authorize!` check
+it, and renders an Alba resource (`app/resources/`) itself, with an explicit status.
 
 ```ruby
-module Api::V1::Company
-  class AssetsController < Api::V1::ApplicationController
-    def index
-      assets = current_company.assets.ransack(params[:q]).result
-      respond_with paginate(assets)
-    end
+# app/controllers/api/v1/projects/board/tasks_controller.rb
+def show
+  task = current_board.board_tasks.find(params[:id])
+  render json: BoardTaskResource.new(task).to_h
+end
 
-    def create
-      asset = current_company.assets.create(asset_params)
-      respond_with asset
-    end
-
-    def update
-      asset = current_company.assets.find(params[:id])
-      asset.update(asset_params)
-      respond_with asset
-    end
+def create
+  task = TaskService.create(board: current_board, params: task_params, actor: current_user)
+  if task.persisted?
+    render json: BoardTaskResource.new(task).to_h, status: :created
+  else
+    render json: { errors: task.errors.full_messages }, status: :unprocessable_entity
   end
 end
 ```
@@ -70,15 +65,15 @@ end
 API tree (no `Api::V1::Company::ApplicationController` layer):
 
 ```ruby
-ApplicationController                    # Auth, browser, gon
+ApplicationController                    # AuthConcern, allow_browser, underscore_params
   Api::V1::ApplicationController         # JSON API, pagination, rescue_from, dynamic_authorize!
-    Api::V1::Company::AssetsController   # inherits directly; defines current_company inline
+    Api::V1::Company::AssetsController   # inherits directly; uses AuthConcern's session company
     Api::V1::Projects::ApplicationController  # current_project
 ```
 
-`dynamic_authorize!` is a `before_action` in `Api::V1::ApplicationController` (applies to the whole api/v1 tree). Company controllers inherit directly from it and define `current_company` inline; `current_project` lives in `Api::V1::Projects::ApplicationController`.
+`dynamic_authorize!` is a `before_action` in `Api::V1::ApplicationController` (applies to the whole api/v1 tree). Company controllers inherit directly from it and use AuthConcern's `current_company` — the session company, validated against active memberships on every request. The SPA calls the API on the same cookie session as the page, so never re-resolve the company (for example to the first membership): a multi-company user would write into a company other than the one on screen. `current_project` lives in `Api::V1::Projects::ApplicationController`.
 
-The genuine 4-level base-controller chain exists only in the **Web** namespace:
+The **Web** namespace has its own base-controller chain:
 
 ```ruby
 Web::ApplicationController
@@ -94,16 +89,24 @@ Authorization is automatic via `dynamic_authorize!`:
 3. `policy_record` is overridable per controller
 
 ### Response Formats
-- **Lists:** `{ items: [...] }` — via `ApplicationSerializer` base
-- **Single:** `{ data: {...} }` — via `ApplicationSerializer` base
-- **Errors:** `{ errors: { field: ["msg"] } }` (validation) or `{ error: "msg" }` (other)
-- **Pagination:** `PaginationConcern` with pagy — adds `X-Total`, `X-Per-Page` headers
+
+What the controllers return — no envelope around the resource:
+
+- **Single record:** the resource's hash itself — `render json: XResource.new(record).to_h`.
+- **Lists:** a bare array of resource hashes. A list that pages says so in headers
+  (`X-Total-Count` on the board's task lists), not in a wrapper object. A few endpoints return
+  a named key because they carry more than one thing (`{ triggers: [...] }`, `{ sessions: [...] }`).
+- **Errors:** `{ error: "message" }` for a refusal or a missing record (the base controller's
+  403/404/CSRF handlers); `{ errors: [...] }` for validation messages. An uncaught
+  `ActiveRecord::RecordInvalid` is answered with both: `{ error: "a, b", errors: ["a", "b"] }`.
+  The frontend's `apiRequest`/`apiMutate` (`shared/lib/apiFetch.ts`) read `message`, then
+  `error`, then `errors`, so a new endpoint may use either shape.
+- **Keys** are camelCase on the wire: Alba resources camelize their own keys.
 
 ### Key Principles
-- `respond_with` — auto format + status
 - `Ransack` — filtering: `Model.ransack(params[:q]).result`
-- `paginate` — via PaginationConcern
-- No `before_action :set_resource` — find record inline for explicitness
+- `paginate` — via PaginationConcern (pagy); `inertia_scroll` for Inertia infinite scroll
+- No `before_action :set_resource` — find the record inline, inside the request's scope
 - `@variable ||=` — memoization within request
 
 ---
@@ -120,10 +123,11 @@ Authorization is automatic via `dynamic_authorize!`:
 - **Temporal:** `app/temporal/workflows/`, `app/temporal/activities/`
 
 ### Frontend (Inertia + React)
-- **Pages:** `app/frontend/pages/` — one component per Inertia page (server-driven routing)
-- **Shared:** `app/frontend/shared/` — `components`, `lib`, `resources`, `ui`, `ui-inertia`, `theme`, `config`, generated `routes.ts`
+- **Pages:** `app/frontend/pages/` — Inertia page components grouped by product area (server-driven routing); a page's private components and hooks sit next to it
+- **Layouts:** `app/frontend/layouts/` — `AuthLayout`, the signed-in shell
+- **Shared:** `app/frontend/shared/` — `ui`, `components`, `resources`, `lib`, `theme`, `analytics`, generated `routes.ts`
 - **Co-located tests:** `*.test.tsx` next to component
-- **API:** `shared/lib/apiFetch.ts` — `fetch` wrapper (CSRF + JSON); most data arrives via Inertia props (no RTK Query)
+- **API:** `shared/lib/apiFetch.ts` — `fetch` wrapper (CSRF + JSON); most data arrives via Inertia props
 
 ### Test Organization
 - **Mirrors app structure:** `test/controllers/`, `test/services/`, `test/models/`
@@ -138,11 +142,12 @@ Authorization is automatic via `dynamic_authorize!`:
 ### State Machines (AASM)
 - Located in `app/state_machines/`
 - `StateEventConcern` auto-generates `{column}_event=` setters for API use
-- Frontend sends: `{ onboarding_state_event: "go_next" }` — setter triggers AASM event
+- Frontend sends: `{ onboardingStateEvent: "go_next" }` (underscored to `onboarding_state_event` on arrival) — setter triggers AASM event
 - Active machines:
-  - **User:** `state` (active/pending/suspended/archived), `onboarding_state` (step1→completed)
+  - **User:** `state` (active/pending/suspended/archived)
+  - **CompanyMembership:** `state` (invited/active/suspended/revoked), `onboarding_state` (step1→step2→completed)
   - **Company:** `state` (active/suspended/archived)
-  - **TerminalSession:** `state` (not_started/running/ready/finishing/finished/failed)
+  - **TerminalSession:** `state` (not_started/queued/running/ready/finishing/finished/failed/cancelled)
   - **WorkflowRun:** `state` (pending/running/paused/completed/failed/cancelled)
 
 ### Polymorphic Scoping
@@ -159,7 +164,7 @@ Authorization is automatic via `dynamic_authorize!`:
 - **Rule:** Always use setter (`config_data=`), never write `encrypted_config_data` directly
 
 ### Case Conversion (Frontend ↔ Backend)
-- **Server-side, not client-side.** Alba `transform_keys :lower_camel` in `ApplicationResource` camelizes serialized JSON; `InertiaPropsCamelizer` (`config/initializers/inertia.rb`) camelizes all Inertia props
+- **Server-side, not client-side.** Alba `transform_keys :lower_camel` in `ApplicationResource` camelizes serialized JSON; `DeepKeyCamelizer`, installed as Inertia's `prop_transformer` in `config/initializers/inertia.rb`, camelizes all Inertia props; `ApplicationController#underscore_params` underscores incoming params
 - **TS types:** Typelizer generates camelCase interfaces (`config/initializers/typelizer.rb`)
 - **Rule:** Ruby stays snake_case; TS interfaces are always camelCase
 
@@ -185,14 +190,14 @@ Authorization is automatic via `dynamic_authorize!`:
   `bin/temporal_worker`, which runs after `config/environment`).
 
 ### Error Handling
-- **Controllers:** `rescue_from` in `ApplicationController` for global errors
+- **Controllers:** `rescue_from` in the base controllers — `Api::V1::ApplicationController` (JSON 403, 404, and 422 for invalid records and CSRF failures) and `Web::Company::ApplicationController` (Pundit refusals)
 - **Services:** custom exceptions → `Temporalio::Error::ApplicationError`
 - **Temporal:** `TemporalExceptions.wrap(error, retryable:, benign:)`
 - **Frontend:** `apiFetch` response checks + Mantine notifications for toasts
 
 ### Logging
-- **Backend:** Lograge (structured JSON) + Rollbar (error tracking)
-- **Frontend:** structured console logging
+- **Backend:** Lograge (structured JSON) + Sentry (error tracking)
+- **Frontend:** Sentry (`shared/lib/sentry.ts`), initialized before the app mounts
 
 ---
 
@@ -207,6 +212,5 @@ Authorization is automatic via `dynamic_authorize!`:
 - **Never** skip `# frozen_string_literal: true`
 - **Never** create `before_action :set_resource` → find inline
 - **Never** stub Mocha `.returns` with a block for dynamic fake objects → use `Object.new` + `define_singleton_method`
-- **Never** return bare arrays from API → always wrap in `items`/`data`
 - **Never** use global loading states → track loading per request (local state around `apiFetch`)
 - **Never** validate only on submit → use on blur + on submit

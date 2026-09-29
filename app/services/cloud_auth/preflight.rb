@@ -30,7 +30,11 @@ module CloudAuth
       credential = CredentialLookup.claude_code(user_id: user&.id, company_id: company&.id)
       return [] if credential.nil?
 
-      block = credential.config_data[Agents::ClaudeCodeAdapter::BEDROCK_KEY]
+      block = begin
+        credential.config_data[Agents::ClaudeCodeAdapter::BEDROCK_KEY]
+      rescue Encryptable::DecryptionError
+        raise AgentCredential::PreflightError.new(credential, reason: :unreadable)
+      end
       return [] unless block.is_a?(Hash)
 
       reason = unusable_reason(block)

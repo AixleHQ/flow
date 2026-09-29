@@ -4,29 +4,12 @@ import { IconAlertCircle, IconChevronLeft, IconDeviceFloppy, IconDownload, IconF
 import { useCallback, useState } from 'react';
 
 import { AuthLayout } from 'layouts/AuthLayout';
-
-interface Session {
-  id: number;
-  agentType: string | null;
-  state: string;
-  artifactsReviewed: boolean | null;
-  projectName: string | null;
-}
-
-interface Artifact {
-  id: number;
-  name: string;
-  folder: string | null;
-  status: string;
-  fileSize: number | null;
-  contentType: string | null;
-  downloadUrl: string | null;
-  createdAt: string;
-}
+import type SessionArtifact from 'types/generated/SessionArtifact';
+import type TerminalSession from 'types/generated/TerminalSession';
 
 interface Props {
-  session: Session;
-  artifacts: Artifact[];
+  session: TerminalSession;
+  artifacts: SessionArtifact[];
   alreadyReviewed: boolean;
 }
 

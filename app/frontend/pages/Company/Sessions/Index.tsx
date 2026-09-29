@@ -7,6 +7,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { AuthLayout } from 'layouts/AuthLayout';
 
 import { SessionFeedTable, type SessionFeedRow } from 'shared/resources/sessions/SessionFeedTable';
+import { AGENT_SELECT_OPTIONS } from 'shared/ui/agentRuntimes';
 
 import classes from './Index.module.css';
 
@@ -25,22 +26,13 @@ type Props = {
   filters: Filters;
   total: number;
   userOptions: { id: number; name: string }[];
+  cableStream?: string;
 };
 
 const TYPE_TABS: { value: ListType; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'run', label: 'Workflow runs' },
   { value: 'solo', label: 'Standalone' },
-];
-
-const AGENT_OPTIONS = [
-  { value: 'claude_code', label: 'Claude Code' },
-  { value: 'cursor_cli', label: 'Cursor CLI' },
-  { value: 'codex', label: 'Codex' },
-  { value: 'gemini_cli', label: 'Gemini CLI' },
-  { value: 'antigravity_cli', label: 'Antigravity CLI' },
-  { value: 'grok', label: 'Grok' },
-  { value: 'kiro_cli', label: 'Kiro CLI' },
 ];
 
 // The shared status vocabulary — the four values the project feed exposes as
@@ -55,7 +47,7 @@ const STATUS_OPTIONS = [
 
 const SESSIONS_URL = '/company/sessions';
 
-const SessionsIndex = ({ sessions, filters, total, userOptions }: Props) => {
+const SessionsIndex = ({ sessions, filters, total, userOptions, cableStream }: Props) => {
   const [searchValue, setSearchValue] = useState(filters.search ?? '');
 
   const navigate = useCallback(
@@ -124,7 +116,7 @@ const SessionsIndex = ({ sessions, filters, total, userOptions }: Props) => {
         <Select
           placeholder="Agent"
           aria-label="Filter by agent"
-          data={AGENT_OPTIONS}
+          data={AGENT_SELECT_OPTIONS}
           value={filters.agentType ?? null}
           onChange={(v) => navigate({ agentType: v ?? undefined })}
           clearable
@@ -153,6 +145,7 @@ const SessionsIndex = ({ sessions, filters, total, userOptions }: Props) => {
 
       <SessionFeedTable
         sessions={sessions}
+        cableStream={cableStream}
         resetKey={JSON.stringify(filters)}
         emptyLabel={hasFilters ? 'No sessions match these filters.' : 'No sessions yet'}
       />

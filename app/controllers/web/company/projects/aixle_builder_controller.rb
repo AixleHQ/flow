@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::ApplicationController
+  WORKFLOW_GUIDES_NOTE = "> These guides are shared with the personal MCP server. In the builder you are " \
+                         "already inside one project: skip `list_projects` and never pass `project_id`."
+
   def show
     sessions = current_project.terminal_sessions
                        .with_cached_resource_counts
@@ -25,10 +28,6 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
   end
 
   def start
-    meta_tool_ids = Tool.shadow_rows_for_names(
-      Tools::Registry.tagged(:builder).map(&:name)
-    ).select(&:enabled?).map(&:id)
-
     session = SessionService.create_and_start(
       user: current_user,
       project: current_project,
@@ -36,15 +35,11 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
       agent_type: params[:agent_runtime] || current_project_membership&.default_agent_runtime || "claude_code",
       params: {
         mode: "interactive",
-        initial_prompt: "First read the reference files in /workspace/references/ (aixle-system-reference.md and bmad-llms-full.txt) to understand the platform. Then help me build a workflow automation — start by asking what process I want to automate.",
-        tool_ids: meta_tool_ids,
+        initial_prompt: "Help me automate a process in this project — start by asking what I want to automate.",
         requested_model: params[:preferred_model],
         metadata: { aixle_builder: true },
         input_asset_ids: Array(params[:input_asset_ids]).map(&:to_i),
-        session_config: {
-          "bmad_enabled" => true,
-          "config_files" => builder_reference_files
-        }
+        session_config: { "config_files" => builder_reference_files }
       }
     )
 
@@ -111,13 +106,11 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
   private
 
   def builder_reference_files
-    files = {}
-    ref_dir = Rails.root.join("references")
-    if ref_dir.exist?
-      ref_dir.children.select(&:file?).each do |path|
-        files["/workspace/references/#{path.basename}"] = File.read(path)
-      end
-    end
-    files
+    dir = ContextBuilders::AixleBuilder::REFERENCE_DIR
+    files = Rails.root.join("references").glob("*.md").to_h { |path| [ "#{dir}/#{path.basename}", path.read ] }
+    files.merge(
+      "#{dir}/workflow-guides.md" => [ WORKFLOW_GUIDES_NOTE, Tools::PersonalMCPGuides.build_workflow,
+                                       Tools::PersonalMCPGuides.author_step ].join("\n\n")
+    )
   end
 end

@@ -33,10 +33,10 @@ module Agents
 
     # == Auth ==
 
-    # Three ways to be finished, any-match: an API key, a claude.ai token, or — since
+    # Any-match: an API key, a claude.ai token, a Claude Platform profile token, or — since
     # Bedrock produces no token at all — the marker its wizard writes into settings.json.
     test "auth_required_keys covers every way a login can finish" do
-      assert_equal %w[primaryApiKey claudeAiOauth.accessToken env.CLAUDE_CODE_USE_BEDROCK],
+      assert_equal %w[primaryApiKey claudeAiOauth.accessToken access_token env.CLAUDE_CODE_USE_BEDROCK],
                    @adapter.auth_required_keys
     end
 
@@ -68,12 +68,13 @@ module Agents
     # Code's Bedrock wizard lists profiles from ~/.aws/config, and it executes their
     # credential_process during verification. That execution is how we learn the user chose
     # Bedrock inside the TUI, before anything is written to disk.
-    test "the default auth kind seeds the platform AWS profile and no credential" do
+    test "the default auth kind seeds the platform AWS profile, the theme and no credential" do
       files = @adapter.auth_setup_files_for("agent", { "claudeAiOauth" => {} })
 
-      assert_equal [ "/home/claude/.aws/config" ], files.keys
-      assert_includes files.values.first, "[profile aixle-bedrock]"
-      assert_includes files.values.first, "credential_process = /usr/local/bin/aixle-aws-creds"
+      assert_equal [ "/home/claude/.aws/config", "/home/claude/.claude/settings.json" ], files.keys.sort
+      assert_includes files["/home/claude/.aws/config"], "[profile aixle-bedrock]"
+      assert_includes files["/home/claude/.aws/config"], "credential_process = /usr/local/bin/aixle-aws-creds"
+      assert_equal({ "theme" => "auto" }, JSON.parse(files["/home/claude/.claude/settings.json"]))
     end
 
     test "design kind watches only for the designOauth block" do
@@ -184,6 +185,13 @@ module Agents
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
       assert_equal "bypassPermissions", settings.dig("permissions", "defaultMode")
       assert_equal "90000", settings.dig("env", "MCP_TIMEOUT")
+    end
+
+    test "a session's Claude Code stays on the version its image pins" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk-xxx" })
+
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+      assert_equal "1", settings.dig("env", "DISABLE_AUTOUPDATER")
     end
 
     # A mid-session delivery has no workflow_config, so re-rendering settings.json or
@@ -339,6 +347,13 @@ module Agents
       # user clicks through the warning; without it, bypassPermissions still blocks.
       assert_equal true, settings["skipDangerousModePermissionPrompt"] # rubocop:disable Minitest/AssertTruthy
       assert_equal true, settings["bypassPermissionsWarningAccepted"] # rubocop:disable Minitest/AssertTruthy
+    end
+
+    test "settings let Claude Code follow the terminal's light or dark theme" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "interactive" })
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+
+      assert_equal "auto", settings["theme"]
     end
 
     test "config_files defaults to bypassPermissions when mode is absent" do
@@ -657,6 +672,21 @@ module Agents
       assert_operator block["expiresAt"], :>, soon
     end
 
+    test "refresh! logs a successful rotation with the credential and both expiries" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-a", "refreshToken" => "old-r", "expiresAt" => soon }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 200, body: { access_token: "new-a", refresh_token: "new-r", expires_in: 28_800 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      Rails.logger.stubs(:info)
+      Rails.logger.expects(:info)
+           .with(regexp_matches(/Token refreshed \(block=claudeAiOauth credential=#{cred.id} expiresAt=.*newExpiresAt=\S+ rotated=true\)/))
+
+      @adapter.refresh!(cred)
+    end
+
     test "refresh! uses the designOauth block's own clientId and preserves refreshToken/scopes when the server omits them" do
       soon = ms_from_now(5 * 60 * 1000)
       cred = create(:agent_credential, :claude_code, user: @user, config_data: {
@@ -780,6 +810,37 @@ module Agents
       assert_equal "design-client", block["clientId"], "the block stays so the UI still offers Reconnect Design"
     end
 
+    # The loser of a race must not wipe the winner's login: the rejection was of the
+    # refresh token it sent, and a container rotated it (and wrote the rotation back)
+    # while the request was out.
+    test "refresh! leaves a block alone when its refresh token was rotated while the request was out" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-a", "refreshToken" => "old-r", "expiresAt" => soon }
+      })
+      winner = { "accessToken" => "won-a", "refreshToken" => "won-r", "expiresAt" => ms_from_now(8 * 3_600_000) }
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL).to_return do
+        AgentCredential.find(cred.id).tap { |row| row.update!(config_data: row.config_data.merge("claudeAiOauth" => winner)) }
+        { status: 400, body: { error: "invalid_grant" }.to_json, headers: { "Content-Type" => "application/json" } }
+      end
+
+      result = @adapter.refresh!(cred)
+
+      assert_not_equal :error, result[:status]
+      assert_equal winner, cred.reload.config_data["claudeAiOauth"]
+    end
+
+    test "a second refresher finds the lease taken and leaves the credential to the first" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "a", "refreshToken" => "r", "expiresAt" => soon }
+      })
+      AgentCredential.where(id: cred.id).update_all(refresh_lease_until: 1.minute.from_now, refresh_lease_token: "other")
+
+      assert_equal :busy, @adapter.refresh!(cred)[:status]
+      assert_not_requested :post, ClaudeCodeAdapter::OAUTH_TOKEN_URL
+    end
+
     test "refresh! clears claudeAiOauth accessToken on invalid_grant" do
       soon = ms_from_now(5 * 60 * 1000)
       cred = create(:agent_credential, :claude_code, user: @user, config_data: {
@@ -876,6 +937,27 @@ module Agents
 
       assert_not_includes files.keys, "/home/claude/.aws/config"
       assert_not_includes settings_env(files).keys, "CLAUDE_CODE_USE_BEDROCK"
+    end
+
+    # A contract over every file the container is handed: the Identity Center
+    # material the device flow stores server-side reaches none of them.
+    test "no rendered file carries the Identity Center registration or tokens" do
+      block = bedrock_block.merge(
+        "identity_center" => {
+          "start_url" => "https://acme.awsapps.com/start", "sso_region" => "us-east-1",
+          "account_id" => "111122223333", "role_name" => "Bedrock",
+          "registration" => { "client_id" => "cid", "client_secret" => "idc-client-secret" },
+          "token" => { "access_token" => "idc-access", "refresh_token" => "idc-refresh-token" }
+        }
+      )
+
+      files = @adapter.config_files({ "awsBedrock" => block })
+      rendered = files.values.join("\n")
+
+      assert_not_includes rendered, "idc-client-secret"
+      assert_not_includes rendered, "idc-refresh-token"
+      assert_not_includes rendered, "identity_center"
+      assert_equal "1", settings_env(files)["CLAUDE_CODE_USE_BEDROCK"], "Bedrock is still configured"
     end
 
     test "an awsBedrock block without a region is ignored" do
@@ -1554,7 +1636,183 @@ module Agents
       assert_nil @adapter.fetch_subscription_usage({})
     end
 
+    # == Claude Platform login (~/.config/anthropic profile) ==
+    #
+    # Payloads mirror what Claude Code 2.1.281 wrote after a real Claude Platform login.
+
+    PLATFORM_CREDS_PATH = "/home/claude/.config/anthropic/credentials/default.json"
+    PLATFORM_CONFIG_PATH = "/home/claude/.config/anthropic/configs/default.json"
+
+    test "the platform profile files are watched and read back" do
+      assert_includes @adapter.auth_watch_path.split(","), PLATFORM_CREDS_PATH
+      assert_includes @adapter.auth_file_paths, PLATFORM_CONFIG_PATH
+    end
+
+    test "a platform credentials file finishes the login; its config file alone does not" do
+      assert @adapter.auth_complete?(platform_credentials_json)
+      refute @adapter.auth_complete?(platform_config_json)
+    end
+
+    test "a platform login is captured as a token block plus the profile config" do
+      captured = CredentialCapture.from_files(platform_files, adapter: @adapter)
+
+      block = captured.fetch("platformOauth")
+      assert_equal "sk-ant-oat01-platform", block["accessToken"]
+      assert_equal "sk-ant-ort01-platform", block["refreshToken"]
+      assert_equal 1_790_679_907_000, block["expiresAt"]
+      assert_equal %w[user:inference user:profile], block["scopes"]
+      assert_equal "wrkspc_01", block.dig("account", "workspace_id")
+      assert_nil block.dig("account", "access_token")
+      assert_equal "user_oauth", captured.dig("platformProfile", "authentication", "type")
+    end
+
+    test "a captured platform login renders back into the files the CLI reads" do
+      captured = CredentialCapture.from_files(platform_files, adapter: @adapter)
+
+      files = @adapter.config_files(captured)
+
+      assert_equal JSON.parse(platform_credentials_json), JSON.parse(files.fetch(PLATFORM_CREDS_PATH))
+      assert_equal JSON.parse(platform_config_json), JSON.parse(files.fetch(PLATFORM_CONFIG_PATH))
+      assert_not_includes files.fetch("/home/claude/.claude.json"), "sk-ant-o"
+      refute files.key?("/home/claude/.claude/.credentials.json")
+    end
+
+    test "a platform login whose config was never captured still gets one" do
+      captured = CredentialCapture.from_files({ PLATFORM_CREDS_PATH => platform_credentials_json }, adapter: @adapter)
+
+      config = JSON.parse(@adapter.credential_files(captured).fetch(PLATFORM_CONFIG_PATH))
+
+      assert_equal({ "type" => "user_oauth", "client_id" => ClaudeCodeAdapter::PLATFORM_OAUTH_CLIENT_ID },
+                   config["authentication"])
+      assert_equal "org-uuid", config["organization_id"]
+      assert_equal "wrkspc_01", config["workspace_id"]
+    end
+
+    # With both present the CLI runs on claude.ai, so a stored claude.ai login would silently
+    # take over from the Platform login the user just made.
+    test "logging in to Claude Platform drops a claude.ai login" do
+      current = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-old" }, "primaryApiKey" => "sk-ant-old" }
+      captured = CredentialCapture.from_files(platform_files, adapter: @adapter)
+
+      merged = @adapter.reconcile_captured_credentials("agent", current, captured)
+
+      assert_equal "sk-ant-oat01-platform", merged.dig("platformOauth", "accessToken")
+      assert merged["platformProfile"].present?
+      assert_nil merged["claudeAiOauth"]
+      assert_nil merged["primaryApiKey"]
+    end
+
+    test "logging in with claude.ai drops a platform login and its profile" do
+      current = CredentialCapture.from_files(platform_files, adapter: @adapter)
+      captured = { "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-new" } }
+
+      merged = @adapter.reconcile_captured_credentials("agent", current, captured)
+
+      assert_nil merged["platformOauth"]
+      assert_nil merged["platformProfile"]
+    end
+
+    test "a platform login gates launches on its own expiry" do
+      credentials = { "platformOauth" => { "accessToken" => "a", "expiresAt" => 1_790_679_907_000 } }
+
+      assert_equal 1_790_679_907_000, @adapter.base_token_expires_at(credentials)
+      assert_equal 1_790_679_907_000, @adapter.token_expires_at(credentials)
+    end
+
+    test "a session writes a platform token rotation back" do
+      assert_includes @adapter.writeback_file_paths, PLATFORM_CREDS_PATH
+      current = CredentialCapture.from_files(platform_files, adapter: @adapter)
+      rotated_file = platform_credentials_json(access: "sk-ant-oat01-rotated", refresh: "sk-ant-ort01-rotated",
+                                               expires_at: 1_790_700_000)
+      incoming = CredentialCapture.from_files({ PLATFORM_CREDS_PATH => rotated_file }, adapter: @adapter)
+
+      travel_to Time.zone.at(1_790_660_000) do
+        merged = @adapter.merge_container_credentials(current, incoming)
+
+        assert_equal "sk-ant-oat01-rotated", merged.dig("platformOauth", "accessToken")
+        assert_equal current["platformProfile"], merged["platformProfile"]
+      end
+    end
+
+    test "refresh! renews a platform login against the API host with the profile's client" do
+      soon = ms_from_now(5 * 60 * 1000)
+      captured = CredentialCapture.from_files(platform_files, adapter: @adapter)
+      captured["platformOauth"]["expiresAt"] = soon
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: captured)
+      stub_request(:post, ClaudeCodeAdapter::PLATFORM_OAUTH_TOKEN_URL)
+        .with(body: { grant_type: "refresh_token", client_id: "platform-client", refresh_token: "sk-ant-ort01-platform" }.to_json,
+              headers: { "Content-Type" => "application/json", "anthropic-beta" => "oauth-2025-04-20" })
+        .to_return(status: 200,
+                   body: { access_token: "sk-ant-oat01-new", refresh_token: "sk-ant-ort01-new", expires_in: 28_800,
+                           scope: "user:inference user:profile" }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :refreshed, result[:status]
+      block = cred.reload.config_data["platformOauth"]
+      assert_equal "sk-ant-oat01-new", block["accessToken"]
+      assert_equal "sk-ant-ort01-new", block["refreshToken"]
+      assert_operator block["expiresAt"], :>, soon
+      assert_equal "wrkspc_01", block.dig("account", "workspace_id"), "profile fields survive the refresh"
+    end
+
+    test "a rejected platform refresh condemns the credential" do
+      captured = CredentialCapture.from_files(platform_files, adapter: @adapter)
+      captured["platformOauth"]["expiresAt"] = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: captured)
+      stub_request(:post, ClaudeCodeAdapter::PLATFORM_OAUTH_TOKEN_URL)
+        .to_return(status: 400, body: { error: "invalid_grant" }.to_json, headers: { "Content-Type" => "application/json" })
+
+      result = @adapter.refresh!(cred)
+
+      assert_equal :error, result[:status]
+      assert result[:permanent]
+      assert_nil cred.reload.config_data.dig("platformOauth", "accessToken")
+    end
+
+    test "a refreshed platform login is delivered owner-only" do
+      runtime = ContainerRuntime::FakeRuntime.new(agent_type: "claude_code")
+      credentials = CredentialCapture.from_files(platform_files, adapter: @adapter)
+
+      assert @adapter.deliver_credential(runtime, "ctr-1", credentials)
+
+      assert_equal({ mode: 0o600, uid: 1001, gid: 1001 }, runtime.file_attributes(PLATFORM_CREDS_PATH))
+    end
+
+    test "fetch_available_models_with_source asks with the platform token" do
+      captured = stub_models_response([ { "id" => "claude-sonnet-5", "display_name" => "Claude Sonnet 5" } ])
+
+      result = @adapter.fetch_available_models_with_source({ "platformOauth" => { "accessToken" => "sk-ant-oat01-platform" } })
+
+      assert_equal :api, result[:source]
+      assert_equal "Bearer sk-ant-oat01-platform", captured[:req]["authorization"]
+    end
+
     private
+
+    def platform_files
+      { PLATFORM_CREDS_PATH => platform_credentials_json, PLATFORM_CONFIG_PATH => platform_config_json }
+    end
+
+    def platform_credentials_json(access: "sk-ant-oat01-platform", refresh: "sk-ant-ort01-platform", expires_at: 1_790_679_907)
+      {
+        "version" => "1.0", "type" => "oauth_token",
+        "access_token" => access, "refresh_token" => refresh, "expires_at" => expires_at,
+        "scope" => "user:inference user:profile",
+        "organization_uuid" => "org-uuid", "organization_name" => "Example Org",
+        "account_email" => "someone@example.com",
+        "workspace_id" => "wrkspc_01", "workspace_name" => "Default", "created_by" => "claude-code"
+      }.to_json
+    end
+
+    def platform_config_json
+      {
+        "version" => "1.0", "organization_id" => "org-uuid", "workspace_id" => "wrkspc_01",
+        "authentication" => { "type" => "user_oauth", "client_id" => "platform-client" },
+        "created_by" => "claude-code"
+      }.to_json
+    end
 
     def connect_bedrock
       AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", {

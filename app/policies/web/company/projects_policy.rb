@@ -12,7 +12,7 @@ module Web
       end
 
       def create?
-        true
+        !read_only?
       end
 
       def destroy?

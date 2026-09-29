@@ -1,6 +1,14 @@
+# frozen_string_literal: true
+
 require "temporalio/workflow"
 
 class Workflows::Base < Temporalio::Workflow::Definition
+  # Workflow code runs in Temporal's sandbox, where autoloading a constant (a
+  # `require`) is an illegal call that fails the workflow task. Resolved here,
+  # while the class loads, because development and a local test run do not
+  # eager-load.
+  Input = TemporalInput
+
   class << self
     def inherited(subclass)
       super
@@ -28,7 +36,7 @@ class Workflows::Base < Temporalio::Workflow::Definition
   end
 
   def execute(input = nil)
-    hashie_input = input.is_a?(Hash) ? Hashie::Mash.new(input) : input
+    hashie_input = Input.wrap(input)
     run(hashie_input)
   end
 

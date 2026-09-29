@@ -16,6 +16,8 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     @skill = create(:skill, scope: @source_project)
     @mcp = create(:mcp_server, scope: @source_project, name: "context7")
     @tool = create(:tool, scope: @source_project, name: "my_tool")
+    @company_asset = create(:asset, scope: @company)
+    @project_asset = create(:asset, scope: @source_project)
 
     @source = create(:workflow, scope: @source_project, name: "Source WF",
                                 config: {
@@ -26,7 +28,7 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     @step1 = create(:step, workflow: @source, position: 1, name: "First",
                            agent_id: @agent.id,
                            tool_ids: [ @tool.id ], skill_ids: [ @skill.id ],
-                           mcp_server_ids: [ @mcp.id ], asset_ids: [ 42, 43 ])
+                           mcp_server_ids: [ @mcp.id ], asset_ids: [ @company_asset.id, @project_asset.id ])
     @step2 = create(:step, workflow: @source, position: 2, name: "Second",
                            depends_on_step_ids: [ @step1.id ],
                            preferred_model: "claude-sonnet-4",
@@ -49,8 +51,8 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert copied_steps[1].bmad_enabled
     assert_equal "claude_code", copied_steps[1].required_agent_runtime
     assert_equal 1, copied_steps[0].sub_steps.active.count
-    # assets are intentionally NOT copied — asset_ids pass through unchanged (D5)
-    assert_equal [ 42, 43 ], copied_steps[0].asset_ids
+    # assets are not copied (D5): the company's carry over, the source project's cannot be reached
+    assert_equal [ @company_asset.id ], copied_steps[0].asset_ids
   end
 
   test "copies a source-project agent into the target project and remaps agent_id" do
@@ -90,6 +92,20 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     [ "base_tool_ids", "base_skill_ids", "base_mcp_server_ids" ].each do |key|
       assert_not_nil copy.config[key]
     end
+  end
+
+  test "a copied skill keeps what it is: a hand-written one stays manual, a registry one keeps its files" do
+    manual = create(:skill, scope: @source_project, origin: :manual, name: "house-style",
+                            source: nil, package: nil, content: "---\nname: house-style\n---\n")
+    @skill.update!(files: { "SKILL.md" => "# pinned" }, content_hash: "sha256:pinned")
+    @step1.update!(skill_ids: [ @skill.id, manual.id ])
+
+    copy = WorkflowDuplicator.new(@source, target_scope: @project).duplicate!
+    copied = Skill.where(id: copy.steps.not_deleted.order(:position).first.skill_ids).index_by(&:name)
+
+    assert_predicate copied["house-style"], :manual?
+    assert_equal({ "SKILL.md" => "# pinned" }, copied[@skill.name].files)
+    assert_equal "sha256:pinned", copied[@skill.name].content_hash
   end
 
   test "idempotent reuse: two steps sharing an agent produce one project-local agent" do
@@ -141,6 +157,20 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     assert binary_file.binary?, "expected copied binary tool file to have a Shrine file attachment"
     assert_equal "\x00\x01BINARY\x02".b, binary_file.file.download.read.b
     assert_equal "hello text", text_file.content
+  end
+
+  test "a copied binary tool file is its own object, so deleting the copy leaves the source's bytes" do
+    source_tool = create(:tool, scope: @source_project, name: "binary_tool")
+    source_file = source_tool.tool_files.create!(path: "/workspace/bin/tool", file: StringIO.new("\x00BIN"))
+    @step1.update!(tool_ids: [ source_tool.id ])
+
+    copy = WorkflowDuplicator.new(@source, target_scope: @project).duplicate!
+    new_tool = Tool.find(copy.steps.not_deleted.order(:position).first.tool_ids.first)
+    copied_file = new_tool.tool_files.sole
+
+    assert_not_equal source_file.file.id, copied_file.file.id
+    new_tool.destroy!
+    assert_equal "\x00BIN".b, source_file.reload.file.download.read.b
   end
 
   test "copies requires_integration tool as gated: excluded from pickers until integration active" do
@@ -233,5 +263,21 @@ class WorkflowDuplicatorTest < ActiveSupport::TestCase
     copy = WorkflowDuplicator.new(@source, target_scope: @project, name: "Custom Name").duplicate!
 
     assert_equal "Custom Name (1)", copy.name
+  end
+  # A step id list written before ids were validated may still name another
+  # company's MCP server; duplicating must drop it, never clone it (headers and all).
+  test "never clones another company's resources named by a step" do
+    other_company = create(:company)
+    foreign_project = create(:project, company: other_company, owner: create(:user, company: other_company))
+    foreign_server = create(:mcp_server, scope: foreign_project, name: "their-server",
+                                         headers: { "Authorization" => "Bearer theirs" })
+    workflow = create(:workflow, scope: @source_project, name: "Legacy")
+    step = create(:step, workflow: workflow)
+    step.update_column(:mcp_server_ids, [ foreign_server.id ])
+
+    copy = WorkflowDuplicator.new(workflow, target_scope: @project, name: "Legacy copy").duplicate!
+
+    assert_not MCPServer.for_project(@project).exists?(name: "their-server")
+    assert_equal [], copy.steps.first.mcp_server_ids
   end
 end

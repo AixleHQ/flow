@@ -24,7 +24,7 @@ module Github
       integration = nil
       assert_difference("Integration.count", 1) do
         integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-          .create(installation_id: "12345")
+          .create(installation_id: "12345", via_setup: true)
       end
 
       assert integration.persisted?
@@ -51,7 +51,7 @@ module Github
       })
 
       integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-        .create(installation_id: "67890")
+        .create(installation_id: "67890", via_setup: true)
 
       assert integration.active?
       assert_equal "octocat", integration.name
@@ -69,7 +69,7 @@ module Github
 
       integration = Github::IntegrationService.new(
         company: @company, connected_by: @user, project: project
-      ).create(installation_id: "12345")
+      ).create(installation_id: "12345", via_setup: true)
 
       assert integration.active?
       assert_equal project.id, integration.project_id
@@ -183,7 +183,7 @@ module Github
       stub_token_service
       project = create(:project, company: @company, owner: @user)
       service = Github::IntegrationService.new(company: @company, connected_by: @user, project: project)
-      app_integration = service.create(installation_id: "12345")
+      app_integration = service.create(installation_id: "12345", via_setup: true)
 
       assert_difference("Integration.count", 1) do
         service.create_with_pat(personal_access_token: "ghp_developer_token")
@@ -196,10 +196,88 @@ module Github
       stub_token_service
 
       integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-        .create(installation_id: 12_345)
+        .create(installation_id: 12_345, via_setup: true)
 
       assert integration.persisted?
       assert_equal "12345", integration.credentials_data["installation_id"]
+    end
+
+    # ----- Installation claims -----
+    #
+    # Every customer installs the same App and its JWT can read every
+    # installation, so "it exists" says nothing about whose it is.
+
+    test "link to project refuses an installation the company does not hold" do
+      stub_token_service
+      project = create(:project, company: @company, owner: @user)
+
+      integration = nil
+      assert_no_difference("Integration.count") do
+        integration = Github::IntegrationService.new(company: @company, connected_by: @user, project: project)
+          .create(installation_id: "55555")
+      end
+
+      assert_not integration.persisted?
+      assert_match(/not connected to this workspace/, integration.settings["error"])
+    end
+
+    test "link to project reuses an installation the company already holds" do
+      stub_token_service
+      Github::IntegrationService.new(company: @company, connected_by: @user).create(installation_id: "55555", via_setup: true)
+      project = create(:project, company: @company, owner: @user)
+
+      integration = Github::IntegrationService.new(company: @company, connected_by: @user, project: project)
+        .create(installation_id: "55555")
+
+      assert integration.persisted?
+      assert integration.active?
+      assert_equal project.id, integration.project_id
+    end
+
+    test "an installation another company has connected cannot be connected again" do
+      stub_token_service
+      other_company = create(:company)
+      Github::IntegrationService.new(company: other_company, connected_by: create(:user, :admin, company: other_company))
+        .create(installation_id: "77777", via_setup: true)
+
+      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
+        .create(installation_id: "77777", via_setup: true)
+
+      assert_not integration.persisted?
+      assert_includes integration.errors.full_messages, "This GitHub installation is already connected to another workspace"
+    end
+
+    test "with the installer confirmed by GitHub, one installation can serve two companies" do
+      stub_token_service
+      other_company = create(:company)
+      Github::IntegrationService.new(company: other_company, connected_by: create(:user, :admin, company: other_company))
+        .create(installation_id: "77777", via_setup: true)
+      Github::InstallationOwnership.stubs(:enforced?).returns(true)
+      ownership = mock("ownership")
+      ownership.stubs(:includes?).with("77777").returns(true)
+      Github::InstallationOwnership.stubs(:new).with(code: "oauth-code").returns(ownership)
+
+      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
+        .create(installation_id: "77777", via_setup: true, oauth_code: "oauth-code")
+
+      assert integration.persisted?
+      assert integration.active?
+      assert_equal [ other_company.id, @company.id ].sort,
+                   Integration.where(provider: :github, github_installation_id: 77_777, status: "active").pluck(:company_id).sort
+    end
+
+    test "with the App's OAuth client configured, a new installation needs the installer's confirmation" do
+      stub_token_service
+      Github::InstallationOwnership.stubs(:enforced?).returns(true)
+      ownership = mock("ownership")
+      ownership.stubs(:includes?).with("88888").returns(false)
+      Github::InstallationOwnership.stubs(:new).with(code: nil).returns(ownership)
+
+      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
+        .create(installation_id: "88888", via_setup: true)
+
+      assert_not integration.persisted?
+      assert_match(/Could not confirm/, integration.settings["error"])
     end
   end
 end

@@ -32,10 +32,14 @@ module Users
       other_project = create(:project, company: @company, owner: @heir)
       favorite = create(:project_favorite, project: other_project, user: @user)
       collaborator = create(:project_collaborator, project: other_project, user: @user)
-      session = build(:terminal_session, user: @user, project: other_project)
-      session.save!(validate: false)
       board = create(:board, project: other_project)
       preset = BoardViewPreset.create!(board: board, user: @user, name: "Mine", filters: { "state" => "active" })
+      oauth = OauthCredential.create!(owner: @user, provider: "sentry", status: :active, access_token: "at-1",
+                                      oauth_client: OauthClient.create!(issuer: "https://sentry.io", client_id: "c",
+                                                                        authorization_endpoint: "https://sentry.io/a",
+                                                                        token_endpoint: "https://sentry.io/t",
+                                                                        source: "static"))
+      UserSession.start!(user: @user)
 
       PermanentDeletionService.call(user: @user, actor: @actor)
 
@@ -43,13 +47,47 @@ module Users
       assert_nil AgentCredential.find_by(id: credential.id)
       assert_nil ProjectFavorite.find_by(id: favorite.id)
       assert_nil ProjectCollaborator.find_by(id: collaborator.id)
-      assert_nil TerminalSession.find_by(id: session.id)
       assert_nil BoardViewPreset.find_by(id: preset.id)
+      assert_nil OauthCredential.find_by(id: oauth.id), "a deleted user's grants must not keep refreshing"
+      assert_not UserSession.exists?(user_id: @user.id)
+    end
+
+    # The company's analytics are built on sessions and their usage; deleting a
+    # person must not shrink what the company spent.
+    test "keeps the user's sessions and their usage as the company's history" do
+      other_project = create(:project, company: @company, owner: @heir)
+      session = create(:terminal_session, :agent_session, user: @user, project: other_project, state: "finished")
+      usage = UsageStatistic.create!(terminal_session: session, tokens: 100, cost_cents: 5)
+
+      PermanentDeletionService.call(user: @user, actor: @actor)
+
+      assert_nil session.reload.user_id
+      assert_equal 5, usage.reload.cost_cents
+    end
+
+    test "refuses to delete a company's only admin" do
+      solo_company = create(:company)
+      solo_admin = create(:user, :admin, company: solo_company)
+
+      error = assert_raises(PermanentDeletionService::LastAdminError) do
+        PermanentDeletionService.call(user: solo_admin, actor: @actor)
+      end
+      assert_match solo_company.name, error.message
+      assert User.exists?(solo_admin.id)
+    end
+
+    test "refuses while one of the user's sessions is still running" do
+      create(:terminal_session, :agent_session, :running, user: @user, project: create(:project, company: @company, owner: @heir))
+
+      assert_raises(PermanentDeletionService::LiveSessionsError) do
+        PermanentDeletionService.call(user: @user, actor: @actor)
+      end
+      assert User.exists?(@user.id)
     end
 
     test "succeeds for a fully-wired user with tool_results and usage_statistics" do
       other_project = create(:project, company: @company, owner: @heir)
-      session = build(:terminal_session, user: @user, project: other_project)
+      session = build(:terminal_session, user: @user, project: other_project, state: "finished")
       session.save!(validate: false)
       UsageStatistic.create!(terminal_session: session, tokens: 100, cost_cents: 5)
       tool_result = create(:tool_result, terminal_session: session)
@@ -59,8 +97,8 @@ module Users
       end
 
       assert_nil User.find_by(id: @user.id)
-      assert_nil TerminalSession.find_by(id: session.id)
-      assert_nil tool_result.reload.terminal_session_id
+      assert_nil session.reload.user_id
+      assert_equal session.id, tool_result.reload.terminal_session_id
     end
 
     test "transfers owned projects to the company heir admin" do
@@ -139,11 +177,11 @@ module Users
       email = @user.email
       id = @user.id
 
-      assert_difference("Audited::Audit.where(action: 'permanent_delete').count", 1) do
+      assert_difference("Audit.where(action: 'permanent_delete').count", 1) do
         PermanentDeletionService.call(user: @user, actor: @actor)
       end
 
-      audit = Audited::Audit.where(action: "permanent_delete").order(:id).last
+      audit = Audit.where(action: "permanent_delete").order(:id).last
       assert_equal id, audit.audited_changes["id"]
       assert_equal email, audit.audited_changes["email"]
       assert_equal @actor.id, audit.user_id

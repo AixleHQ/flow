@@ -147,6 +147,8 @@ class Web::ProfileControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to mcp_profile_path
     follow_redirect!
     assert_inertia_props { |props| assert props[:mcp][:token].starts_with?(User::MCP_TOKEN_PREFIX) }
+    # The page holding the token is sealed in the browser's history (Inertia encrypt_history).
+    assert_includes response.body, '"encryptHistory":true'
 
     get mcp_profile_path
     assert_inertia_props { |props| assert_nil props[:mcp][:token] }

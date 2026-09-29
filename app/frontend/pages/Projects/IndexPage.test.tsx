@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
 import { buildProject } from 'test/factories/project';
+import { buildSharedPermissions } from 'test/factories/sharedProps';
 import { makeFormStub, renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 import type Project from 'types/generated/Project';
 
@@ -26,6 +27,15 @@ describe('Projects/IndexPage', () => {
 
     expect(screen.getByText('No projects yet')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create Your First Project' })).toBeInTheDocument();
+  });
+
+  it('offers a viewer no way to create a project', () => {
+    renderAuthedPage(<IndexPage />, {
+      props: { projects: [], permissions: buildSharedPermissions({ isAdmin: false, canWrite: false }) },
+    });
+
+    expect(screen.getByText('You have not been added to a project yet.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Create/ })).not.toBeInTheDocument();
   });
 
   it('lists projects and filters them by the search query', async () => {

@@ -11,8 +11,10 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
                        .includes({ oauth_credentials: :oauth_client }, :manual_oauth_client)
                        .order(kind: :asc, created_at: :desc)
     config_items = ConfigItem.visible_for_project(current_project).pluck(:name)
+    archived = MCPServer.for_project(current_project).archived.order(archived_at: :desc)
 
     render inertia: "Projects/McpServers/McpServersPage", props: {
+      archived_servers: archived.map { |s| MCPServerResource.new(s, params: { user: current_user }).to_h },
       project: project_props,
       # params[:user] lets oauth_status resolve the CURRENT viewer's credential for
       # per_user servers (otherwise every per_user server reads "Not connected").
@@ -34,31 +36,34 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
   end
 
   def create
-    server = current_project.mcp_servers.new(server_params)
-
-    if server.save
-      sync_manual_oauth_client(server)
-      redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server created"
-    else
-      redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
-    end
+    server = current_project.mcp_servers.new
+    assign_server_params(server)
+    Versions.save!(server, actor: version_actor) { server.save! }
+    sync_manual_oauth_client(server)
+    redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server created"
+  rescue ActiveRecord::RecordInvalid
+    redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
   end
 
   def update
-    server = current_project.mcp_servers.find(params[:id])
-
-    if server.update(server_params(existing: server))
-      sync_manual_oauth_client(server)
-      redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server updated"
-    else
-      redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
+    server = current_project.mcp_servers.unarchived.find(params[:id])
+    moved = false
+    Versions.save!(server, actor: version_actor, base_version: params[:base_version]) do
+      assign_server_params(server)
+      moved = server.destination_changed?
+      server.save!
     end
+    sync_manual_oauth_client(server)
+    notice = moved ? "MCP server updated. Its address changed, so its stored header and env values and its OAuth connections were cleared — enter them again." : "MCP server updated"
+    redirect_to company_project_mcp_servers_path(current_project), notice: notice
+  rescue ActiveRecord::RecordInvalid
+    redirect_to company_project_mcp_servers_path(current_project), inertia: { errors: server.errors }
   end
 
   def destroy
-    server = current_project.mcp_servers.find(params[:id])
-    server.destroy
-    redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server deleted"
+    server = current_project.mcp_servers.unarchived.find(params[:id])
+    Versions.archive!(server, actor: version_actor)
+    redirect_to company_project_mcp_servers_path(current_project), notice: "MCP server archived"
   end
 
   # Moves an install to the version the catalog now carries. Explicit on purpose:
@@ -69,7 +74,7 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
     connector = Connector.find_by(name: server.connector_name)
     return redirect_back_with(alert: "This connector is no longer in the catalog") if connector.nil?
 
-    MCP::ConnectorUpdater.apply(server: server, connector: connector, values: install_values)
+    MCP::ConnectorUpdater.apply(server: server, connector: connector, values: install_values, actor: version_actor)
     redirect_to company_project_mcp_servers_path(current_project),
                 notice: "#{server.name} updated to #{server.connector_version}"
   rescue MCP::ConnectorUpdater::Error, ActiveRecord::RecordInvalid => e
@@ -156,15 +161,19 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
     [ [ :mcpServer, :env ], [ :mcpServer, :headers ], [ :values ] ]
   end
 
-  # @param existing [MCPServer, nil] the record being updated (nil on create)
-  def server_params(existing: nil)
-    permitted = params.require(:mcp_server).permit(
+  def server_params
+    params.require(:mcp_server).permit(
       :name, :url, :transport, :description, :enabled,
       :command, :auth_type, :credential_scope, headers: {}, env: {}
     ).merge(kind: :custom)
+  end
 
-    unmask_secrets!(permitted, existing)
-    permitted
+  # Destination first, so the server can tell whether its stored values still
+  # apply before the submitted ones are unmasked against them.
+  def assign_server_params(server)
+    permitted = server_params
+    server.assign_attributes(permitted.except(:headers, :env))
+    server.assign_attributes(unmasked_secrets(permitted, server))
   end
 
   # Credentials for an authorization server that will not let us register ourselves
@@ -188,18 +197,23 @@ class Web::Company::Projects::MCPServersController < Web::Company::Projects::App
     client.save!
   end
 
-  # Restore untouched secrets on edit: the UI resubmits unchanged header/env
-  # values as the masking sentinel (it never sees the real secret), so swap each
-  # sentinel back to the currently-stored value. Keys the user removed in the UI
-  # are absent from the submission and stay removed; freshly-entered values pass
-  # through. Without this, a plain update! wipes every untouched secret.
-  def unmask_secrets!(permitted, existing)
-    %i[headers env].each do |field|
+  # The UI resubmits an untouched header/env value as the masking sentinel (it
+  # never sees the real secret), so each sentinel is swapped back for the stored
+  # value. Keys removed in the UI are absent and stay removed; freshly entered
+  # values pass through.
+  #
+  # Only while the server still points where the values were entered for: after
+  # a change of address a sentinel resolves to nothing, so re-pointing a server
+  # can never carry its credentials along to the new host.
+  def unmasked_secrets(permitted, server)
+    keep = server.persisted? && !server.destination_changed?
+
+    %i[headers env].each_with_object({}) do |field, secrets|
       submitted = permitted[field]
       next if submitted.nil?
 
-      stored = (existing&.public_send(field) || {})
-      permitted[field] = submitted.to_h.each_with_object({}) do |(key, value), memo|
+      stored = keep ? server.public_send(field) : {}
+      secrets[field] = submitted.to_h.each_with_object({}) do |(key, value), memo|
         resolved = value == SECRET_MASK ? stored[key.to_s] : value
         memo[key] = resolved unless resolved.nil?
       end

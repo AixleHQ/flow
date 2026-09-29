@@ -5,6 +5,8 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState, type FC } from 'react';
 import { z } from 'zod';
 
+import type { Repository } from '@/types/generated';
+
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const schema = z.object({
@@ -15,17 +17,8 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-interface Repository {
-  id: number;
-  fullName: string;
-  sourceBranch: string;
-  purpose: string | null;
-  description: string | null;
-  integration: { id: number; name: string; provider: string } | null;
-}
-
 interface Props {
-  repo: Repository | null;
+  repo: Pick<Repository, 'id' | 'fullName' | 'sourceBranch' | 'purpose' | 'description' | 'integration'> | null;
   branches?: string[];
   basePath: string;
   onClose: () => void;

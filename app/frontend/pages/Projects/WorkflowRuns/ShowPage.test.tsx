@@ -1,11 +1,13 @@
 import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { buildSharedPermissions } from 'test/factories/sharedProps';
 import { buildStepRun } from 'test/factories/stepRun';
 import { buildSubStepRun } from 'test/factories/subStepRun';
 import { buildWorkflowRun } from 'test/factories/workflowRun';
 import { buildWorkflowRunAsset } from 'test/factories/workflowRunAsset';
+import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
 import { renderAuthedPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 import type WorkflowRun from 'types/generated/WorkflowRun';
 
@@ -37,6 +39,34 @@ function seed(props: Record<string, unknown> = {}) {
 }
 
 describe('Projects/WorkflowRuns/ShowPage', () => {
+  beforeEach(() => {
+    installFakeWebSocket();
+  });
+
+  it('names the workflow version each session ran, and warns when it changed mid-run', () => {
+    const run = makeRun({
+      workflowVersionNumbers: [7, 8],
+      stepRuns: [
+        buildStepRun({ id: 101, stepId: 1, stepName: 'Compile Specs', stepPosition: 1, workflowVersionNumber: 7 }),
+        buildStepRun({ id: 102, stepId: 2, stepName: 'Render Output', stepPosition: 2, workflowVersionNumber: 8 }),
+      ],
+    });
+
+    renderAuthedPage(<ShowPage />, { props: seed({ run }) });
+
+    expect(screen.getByText('The workflow was saved while this run was in progress')).toBeInTheDocument();
+    expect(screen.getByText('Session 1 · v7')).toBeInTheDocument();
+    expect(screen.getByText('Session 2 · v8')).toBeInTheDocument();
+    expect(screen.getByText('v7 → v8')).toBeInTheDocument();
+  });
+
+  it('says nothing about versions for a run that kept one', () => {
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ workflowVersionNumbers: [3] }) }) });
+
+    expect(screen.queryByText('The workflow was saved while this run was in progress')).not.toBeInTheDocument();
+    expect(screen.getByText('v3')).toBeInTheDocument();
+  });
+
   it('renders the shared detail header: breadcrumb, name, status, id and stats', () => {
     renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ costCents: 1234 }) }) });
 
@@ -294,21 +324,20 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
     );
   });
 
-  it('shows the live console beside the session list while a session is running', () => {
+  it('shows the live console beside the session list while a session is running', async () => {
     const running = buildStepRun({
       id: 701,
       stepName: 'Collect data',
       stepPosition: 1,
       state: 'running',
-      terminalUrl: 'https://host.test/t/abc/tty',
+      websocketUrl: 'wss://host.test/t/abc/tty/ws',
     });
     renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ stepRuns: [running] }) }) });
 
     expect(screen.getByText('Live')).toBeInTheDocument();
     expect(screen.getByText('Session 1 · Collect data')).toBeInTheDocument();
-    expect((screen.getByTitle('Terminal') as HTMLIFrameElement).getAttribute('src')).toBe(
-      'https://host.test/t/abc/tty',
-    );
+    expect(screen.getByRole('group', { name: 'Terminal' })).toBeInTheDocument();
+    await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://host.test/t/abc/tty/ws'));
   });
 
   it('shows a console and action bar for every concurrently active step in a parallel run', async () => {
@@ -317,7 +346,7 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       stepName: 'Collect data',
       stepPosition: 1,
       state: 'running',
-      terminalUrl: 'https://host.test/t/a/tty',
+      websocketUrl: 'wss://host.test/t/a/tty/ws',
       terminalSessionId: 91,
       allowNonInteractive: false,
     });
@@ -326,18 +355,20 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       stepName: 'Review draft',
       stepPosition: 2,
       state: 'waiting_input',
-      terminalUrl: 'https://host.test/t/b/tty',
+      websocketUrl: 'wss://host.test/t/b/tty/ws',
     });
     renderAuthedPage(<ShowPage />, {
       props: seed({ run: makeRun({ mode: 'interactive', stepRuns: [runningA, waitingB] }) }),
     });
 
     // Both steps get their own console.
-    const terminals = screen.getAllByTitle('Terminal') as HTMLIFrameElement[];
-    expect(terminals.map((t) => t.getAttribute('src')).sort()).toEqual([
-      'https://host.test/t/a/tty',
-      'https://host.test/t/b/tty',
-    ]);
+    expect(screen.getAllByRole('group', { name: 'Terminal' })).toHaveLength(2);
+    await waitFor(() =>
+      expect(FakeWebSocket.instances.map((socket) => socket.url).sort()).toEqual([
+        'wss://host.test/t/a/tty/ws',
+        'wss://host.test/t/b/tty/ws',
+      ]),
+    );
 
     // Both steps get their own action bar — the running one can be finished,
     // the waiting one can be approved, and each targets its own step_run_id.
@@ -359,13 +390,13 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       stepName: 'Collect data',
       stepPosition: 1,
       state: 'running',
-      terminalUrl: 'https://host.test/t/abc/tty',
+      websocketUrl: 'wss://host.test/t/abc/tty/ws',
     });
     renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ stepRuns: [running] }) }) });
 
     await userEvent.click(screen.getByRole('tab', { name: /^Assets/ }));
 
-    expect(screen.queryByTitle('Terminal')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Terminal' })).not.toBeInTheDocument();
   });
 
   it('lists assets with download and promote controls', async () => {
@@ -390,6 +421,43 @@ describe('Projects/WorkflowRuns/ShowPage', () => {
       'https://files.example.com/report.pdf',
     );
     expect(screen.getByRole('button', { name: /promote all to project/i })).toBeInTheDocument();
+  });
+
+  it('links a shared output to its public page and stops sharing it', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    const assets = [buildWorkflowRunAsset({ id: 33, name: 'summary.md', shareUrl: 'https://flow.test/share/abc' })];
+    renderAuthedPage(<ShowPage />, { props: seed({ run: makeRun({ state: 'completed' }), assets }) });
+
+    await userEvent.click(screen.getByRole('tab', { name: /^Assets/ }));
+
+    expect(screen.getByRole('link', { name: /Public link/ })).toHaveAttribute('href', 'https://flow.test/share/abc');
+    await userEvent.click(screen.getByRole('button', { name: /Stop sharing/ }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        '/api/v1/projects/7/workflow_runs/42/workflow_run_assets/33/share',
+        expect.objectContaining({ method: 'DELETE' }),
+      );
+    });
+    fetchSpy.mockRestore();
+  });
+
+  it('shows a viewer the public link but not the control to stop sharing', async () => {
+    const assets = [buildWorkflowRunAsset({ id: 33, name: 'summary.md', shareUrl: 'https://flow.test/share/abc' })];
+    renderAuthedPage(<ShowPage />, {
+      props: seed({
+        run: makeRun({ state: 'completed' }),
+        assets,
+        permissions: buildSharedPermissions({ isAdmin: false, canWrite: false }),
+      }),
+    });
+
+    await userEvent.click(screen.getByRole('tab', { name: /^Assets/ }));
+
+    expect(screen.getByRole('link', { name: /Public link/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Stop sharing/ })).not.toBeInTheDocument();
   });
 
   it('promotes a single asset through the promote modal via apiFetch', async () => {

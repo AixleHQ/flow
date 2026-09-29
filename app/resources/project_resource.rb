@@ -78,10 +78,10 @@ class ProjectResource < ApplicationResource
   # Whether the CURRENT user has starred this project. Favorite state is
   # per-user, so it can't be read off the project — the caller loads its own
   # favorites once (`params[:favorite_project_ids]`, a Set of project ids) and
-  # every project in the list answers from it. Opt-in like `members` above and
-  # for the same reason: a surface that renders no star (the sidebar list on
-  # every page, a project header) should not pay for the lookup, and `false` is
-  # the correct answer for "no star is being rendered here".
+  # every project in the list answers from it. Opt-in like `members` above:
+  # surfaces that render no star and do not reorder by favorite can skip the
+  # lookup (`false` is then correct). The projects index and the shared sidebar
+  # list both pass the set.
   typelize :boolean
   attribute :favorite do |project|
     params[:favorite_project_ids]&.include?(project.id) || false

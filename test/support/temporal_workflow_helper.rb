@@ -12,11 +12,11 @@ module TemporalWorkflowHelper
   # reads #name and #task_queue off it.
   ActivityRef = Struct.new(:name, :task_queue)
 
-  def run_workflow(workflow_class, *args, activities: [], task_queue: "test-queue")
-    env = Temporalio::Testing::WorkflowEnvironment.start_time_skipping
+  def run_workflow(workflow_class, *args, activities: [], task_queue: "test-queue", interceptors: [])
+    env = Temporalio::Testing::WorkflowEnvironment.start_time_skipping(data_converter: TemporalService.data_converter)
     worker = Temporalio::Worker.new(
       client: env.client, task_queue: task_queue,
-      workflows: [ workflow_class ], activities: activities,
+      workflows: [ workflow_class ], activities: activities, interceptors: interceptors,
       # Production wants the opposite of this. An unexpected exception in workflow
       # code is a workflow *task* failure, which Temporal retries forever on purpose
       # — no RetryPolicy governs it — so a bad deploy suspends the workflow instead

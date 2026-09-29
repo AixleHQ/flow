@@ -21,7 +21,8 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :create?, policy: Web::Company::Projects::AgentsPolicy, project: project)
-      agent = project.agents.create!(params.slice(*ATTRS).compact)
+      agent = project.agents.new(params.slice(*ATTRS).compact)
+      Versions.save!(agent, actor: version_actor) { agent.save! }
       success(id: agent.id, name: agent.name, title: agent.title)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to create agent: #{e.message}")

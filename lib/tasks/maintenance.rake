@@ -1,56 +1,48 @@
 # frozen_string_literal: true
 
 namespace :maintenance do
-  desc "Fail WorkflowRuns stuck in running/paused beyond the stale threshold and terminate their sessions. Set DRY_RUN=true to preview."
+  desc "Fail WorkflowRuns in running/paused whose Temporal execution is gone, and terminate their sessions. Set DRY_RUN=true to preview."
   task cleanup_stale_runs: :environment do
-    dry_run         = ENV.fetch("DRY_RUN", "false") == "true"
-    stale_threshold = Activities::Workflow::CleanupStaleRunsActivity::STALE_THRESHOLD
+    dry_run  = ENV.fetch("DRY_RUN", "false") == "true"
+    activity = Activities::Workflow::CleanupStaleRunsActivity.new
 
-    puts "[cleanup_stale_runs] dry_run=#{dry_run}, threshold=#{stale_threshold.inspect}"
-    puts "[cleanup_stale_runs] scanning for runs stuck in running/paused older than #{stale_threshold.ago} ..."
-
-    stale = WorkflowRun
-      .where(state: %w[running paused])
-      .where(started_at: ...stale_threshold.ago)
-
-    puts "[cleanup_stale_runs] found #{stale.count} stale run(s)"
-
-    cleaned = 0
-    session_failures = 0
-
-    stale.find_each do |run|
-      active_sessions = run.step_runs
-                           .includes(:terminal_session)
-                           .filter_map(&:terminal_session)
-                           .select(&:may_fail?)
-
-      puts "[cleanup_stale_runs] run ##{run.id} (#{run.state}, started #{run.started_at}) — #{active_sessions.size} active session(s)"
-
-      next if dry_run
-
-      active_sessions.each do |session|
-        SessionService.fail_session(
-          session: session,
-          error_message: "Terminated by stale run cleanup task (WorkflowRun ##{run.id})"
-        )
-        session_failures += 1
-        puts "  -> failed session ##{session.id}"
-      rescue StandardError => e
-        puts "  -> ERROR failing session ##{session.id}: #{e.message}"
-      end
-
-      run.update_column(:failure_reason, "stale_run")
-      run.fail! if run.may_fail?
-      cleaned += 1
-      puts "  -> run ##{run.id} transitioned to failed"
-    rescue StandardError => e
-      puts "  -> ERROR processing run ##{run.id}: #{e.message}"
-    end
+    puts "[cleanup_stale_runs] dry_run=#{dry_run}; probing runs started before #{Activities::Workflow::CleanupStaleRunsActivity::PROBE_AFTER.ago}"
 
     if dry_run
+      %i[running paused].each do |state|
+        activity.orphaned_runs(state).each do |run|
+          puts "[cleanup_stale_runs] run ##{run.id} (#{run.state}, started #{run.started_at}) — execution #{run.execution_workflow_id} is gone"
+        end
+      end
       puts "[cleanup_stale_runs] DRY RUN complete — no changes written"
     else
-      puts "[cleanup_stale_runs] done: #{cleaned} run(s) failed, #{session_failures} session(s) terminated"
+      result = activity.run
+      puts "[cleanup_stale_runs] done: #{result[:cleaned_running]} running and #{result[:cleaned_paused]} paused run(s) failed"
     end
+  end
+
+  desc "Encrypt MCP header/env values still held as plaintext and clear the plaintext copies. Run once nothing runs code older than the encryption change."
+  task purge_plaintext_mcp_secrets: :environment do
+    count = MCPServer.purge_plaintext_secrets!
+    puts "[purge_plaintext_mcp_secrets] encrypted and cleared the plaintext copies of #{count} MCP server(s)"
+  end
+
+  desc "Store the files of registry skills installed before skills kept them, so their sessions stop fetching " \
+       "upstream's current copy. Rate-limited upstream (60 downloads/hour): run again for the rest. LIMIT=50."
+  task snapshot_skills: :environment do
+    limit = ENV.fetch("LIMIT", "50").to_i
+    pending = Skill.with_origin(:registry).where(files: {}).order(:id).limit(limit)
+    stored = 0
+    pending.each do |skill|
+      detail = SkillsRegistryService.fetch_skill_detail("#{skill.source}/#{skill.package.to_s.split('@').last}")
+      next puts("[snapshot_skills] ##{skill.id} #{skill.package}: no bundle (kept on skills add)") if detail&.dig("files").blank?
+
+      skill.update!(files: detail["files"], content: detail["content"], content_hash: detail["content_hash"])
+      stored += 1
+    rescue SkillsRegistryService::RegistryError => e
+      puts "[snapshot_skills] ##{skill.id} #{skill.package}: #{e.message}"
+    end
+    left = Skill.with_origin(:registry).where(files: {}).count
+    puts "[snapshot_skills] stored #{stored}; #{left} registry skill(s) still install through skills add"
   end
 end

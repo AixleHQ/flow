@@ -262,7 +262,7 @@ module ContainerStrategies
 
       host_config = strategy.build_host_config
 
-      assert_equal Settings.docker.network, host_config["NetworkMode"]
+      assert_equal Settings.docker.agent_network, host_config["NetworkMode"]
     end
 
     # == Exposed Ports Tests ==
@@ -416,7 +416,7 @@ module ContainerStrategies
     test "normal auth watches the base login keys" do
       env_vars = build_strategy.build_env_vars
       assert_includes env_vars,
-                      "AUTH_REQUIRED_KEYS=primaryApiKey,claudeAiOauth.accessToken,env.CLAUDE_CODE_USE_BEDROCK"
+                      "AUTH_REQUIRED_KEYS=primaryApiKey,claudeAiOauth.accessToken,access_token,env.CLAUDE_CODE_USE_BEDROCK"
     end
 
     test "design auth watches the designOauth key instead" do

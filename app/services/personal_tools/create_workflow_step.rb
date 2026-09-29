@@ -41,6 +41,7 @@ module PersonalTools
             items: { type: "integer" }
       param :bmad_enabled, type: :boolean, description: "Run this step with the BMAD method enabled."
       param :allow_non_interactive, type: :boolean, description: "Allow this step to run without a human in the loop."
+      param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
     OPTIONAL = %i[required_agent_runtime tool_ids skill_ids mcp_server_ids config_item_ids depends_on_step_ids
@@ -53,10 +54,13 @@ module PersonalTools
       return error("Workflow not found in this project") unless workflow
 
       position = params[:position] || (workflow.steps.maximum(:position).to_i + 1)
-      step = workflow.steps.create!(
-        { name: params[:name], position: position,
-          instructions: params[:instructions], agent_id: params[:agent_id] }.merge(wiring)
-      )
+      step = nil
+      Versions.save!(workflow, actor: version_actor, base_version: base_version) do
+        step = workflow.steps.create!(
+          { name: params[:name], position: position,
+            instructions: params[:instructions], agent_id: params[:agent_id] }.merge(wiring)
+        )
+      end
       success(id: step.id, workflow_id: workflow.id, name: step.name, position: step.position,
               tool_ids: step.tool_ids, skill_ids: step.skill_ids, mcp_server_ids: step.mcp_server_ids,
               config_item_ids: step.config_item_ids,

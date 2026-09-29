@@ -91,6 +91,40 @@ describe('Profile MCP tab', () => {
     expect(command).toHaveTextContent('Authorization: Bearer amcp_tok_abc123');
   });
 
+  it('renders a Codex command that reads the token from an exported env var', () => {
+    renderPageWith(buildMcp({ enabled: true, token: 'amcp_tok_abc123' }));
+
+    const command = screen.getByText(/codex mcp add flow/);
+    expect(command).toHaveTextContent('export FLOW_MCP_TOKEN="amcp_tok_abc123"');
+    expect(command).toHaveTextContent(
+      'codex mcp add flow --url https://flow.example.com/mcp --bearer-token-env-var FLOW_MCP_TOKEN',
+    );
+  });
+
+  it('keeps showing the one-time token while taking it out of the history entry Back returns to', () => {
+    renderPageWith(buildMcp({ enabled: true, token: 'amcp_tok_abc123' }));
+
+    expect(router.replaceProp).toHaveBeenCalledWith('mcp.token', null);
+    expect(screen.getByTestId('mcp-token')).toHaveTextContent('amcp_tok_abc123');
+  });
+
+  // Enable MCP is a router.post, which Inertia answers without remounting the page.
+  it('shows a token that arrives while the page is already open', () => {
+    const { rerender } = renderPageWith();
+
+    rerender(<ProfileMcpPage mcp={buildMcp({ enabled: true, token: 'amcp_tok_new' })} />);
+
+    expect(screen.getByTestId('mcp-token')).toHaveTextContent('amcp_tok_new');
+  });
+
+  it('takes the token off the screen once MCP is disabled', () => {
+    const { rerender } = renderPageWith(buildMcp({ enabled: true, token: 'amcp_tok_abc123' }));
+
+    rerender(<ProfileMcpPage mcp={buildMcp({ enabled: false })} />);
+
+    expect(screen.queryByTestId('mcp-token')).not.toBeInTheDocument();
+  });
+
   // Cursor installs from a deeplink whose `config` is the base64 of the server
   // entry alone — decoded here so a wrong shape fails loudly rather than
   // silently producing a link Cursor rejects.
@@ -113,6 +147,7 @@ describe('Profile MCP tab', () => {
 
     expect(screen.queryByRole('link', { name: 'Add to Cursor' })).not.toBeInTheDocument();
     expect(screen.queryByText(/claude mcp add/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/codex mcp add/)).not.toBeInTheDocument();
   });
 
   it('treats a null selection as every tool enabled', () => {

@@ -20,20 +20,32 @@
  *   - GET /file?path=... - Returns file content
  *   - GET /health - Health check
  *   - GET /auth - Check authentication status (for auth_setup sessions)
+ *
+ * Upload server (UPLOAD_PORT, 4041): a POST stores an image pasted into the
+ * browser terminal and answers with its path, which the page then types into the
+ * CLI. A port of its own because Traefik routes it only for the session's owner;
+ * the file server above is open to everyone the session is shared with.
  */
 
+const { isUtf8 } = require('buffer');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const net = require('net');
 const path = require('path');
 
-const chokidar = require('chokidar');
-const { WebSocketServer } = require('ws');
+// Loaded on first use so the pure helpers below can be unit-tested without
+// the watcher's npm dependencies installed.
+const chokidar = { watch: (...args) => require('chokidar').watch(...args) };
 
 // Configuration
 const PORT = parseInt(process.env.WATCHER_PORT || '4040', 10);
 const WATCH_DIR = process.env.WATCH_DIR || '/workspace';
+const UPLOAD_PORT = parseInt(process.env.UPLOAD_PORT || '4041', 10);
+const VSCODE_SETTINGS_PATH = process.env.VSCODE_SETTINGS_PATH || '/opt/openvscode-server/default-settings.json';
+const UPLOAD_DIR = process.env.UPLOAD_DIR || '/tmp/aixle-uploads';
+const UPLOAD_MAX_BYTES = 10 * 1024 * 1024;
+const UPLOAD_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
 
 // Auth watcher configuration (from ContainerService)
 // Only used for auth_setup session type
@@ -87,7 +99,7 @@ function formatFileSize(bytes) {
 function getFileType(ext) {
   const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp'];
   const pdfExts = ['pdf'];
-  const binaryExts = ['zip', 'tar', 'gz', 'rar', '7z', 'exe', 'dll', 'so', 'dylib', 'bin', 'dat'];
+  const binaryExts = ['zip', 'tar', 'gz', 'rar', '7z', 'exe', 'dll', 'so', 'dylib', 'bin', 'dat', 'sqlite', 'sqlite3', 'db'];
   const videoExts = ['mp4', 'webm', 'avi', 'mov', 'mkv'];
   const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac'];
 
@@ -226,6 +238,192 @@ function buildTree(dir, depth = 0) {
 }
 
 /**
+ * Resolve a client-supplied path inside `root`, or return null when it escapes.
+ * A plain prefix test lets `/workspace-x` through for `/workspace`, and a
+ * symlink planted inside the workspace can point anywhere, so both the lexical
+ * path and its real target have to stay under the root.
+ */
+function resolveInside(root, requested) {
+  const base = path.resolve(root);
+  const candidate = path.resolve(base, requested);
+  const inside = (p, r) => p === r || p.startsWith(r + path.sep);
+  if (!inside(candidate, base)) return null;
+
+  try {
+    const realBase = fs.realpathSync(base);
+    const realCandidate = fs.realpathSync(candidate);
+    if (!inside(realCandidate, realBase)) return null;
+  } catch (e) {
+    if (e.code !== 'ENOENT') return null;
+  }
+  return candidate;
+}
+
+/**
+ * Where /preload may send the browser: somewhere on the host that served the
+ * preload page, under the /t/ routes. Anything else — another host, `//evil`,
+ * `javascript:` — is refused, so the page cannot be used as an open redirect.
+ */
+function safePreloadTarget(to, requestHost) {
+  if (!to || !requestHost) return null;
+  let target;
+  try {
+    target = new URL(to, `http://${requestHost}`);
+  } catch (e) {
+    return null;
+  }
+  if (!['http:', 'https:'].includes(target.protocol)) return null;
+  if (target.host !== requestHost) return null;
+  if (!target.pathname.startsWith('/t/')) return null;
+  return target.href;
+}
+
+const VSCODE_THEMES = { light: 'Default Light Modern', dark: 'Default Dark Modern' };
+
+/**
+ * The image's VS Code settings with the theme for `scheme`, or null without them.
+ */
+function vscodeUserSettings(scheme, settingsPath = VSCODE_SETTINGS_PATH) {
+  try {
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+    settings['workbench.colorTheme'] = VSCODE_THEMES[scheme] || VSCODE_THEMES.dark;
+    return JSON.stringify(settings, null, 2);
+  } catch (e) {
+    log.warn(`No VS Code settings at ${settingsPath}: ${e.message}`);
+    return null;
+  }
+}
+
+function sendHtml(res, title, script) {
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>${title}</title>
+<style>body{margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;color:#ccc;font-family:sans-serif;font-size:14px}</style>
+</head>
+<body>
+<span>${title}</span>
+<script>${script}</script>
+</body>
+</html>`;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.writeHead(200);
+  res.end(html);
+}
+
+const inlineJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
+
+/**
+ * Browser-side script of /preload (reset, then open VS Code) and /theme (settings only).
+ *
+ * VS Code in the browser keeps USER settings in IndexedDB, not in the server's
+ * data dir, and ignores application-scoped keys (theme, startup editor) in the
+ * Machine settings it does read. Its per-workspace state lives in a database
+ * named after the folder URI, whose authority is location.host — port included.
+ * Every session reuses that same URI, so without a reset it reopens the editors
+ * of an earlier session, files that may not exist in this one.
+ */
+function vscodeStateScript({ settings, redirectTo }) {
+  const resetWorkspace = redirectTo !== null;
+  const emptyEditorState = JSON.stringify({
+    'editorpart.state': {
+      serializedGrid: {
+        root: {
+          type: 'branch',
+          data: [{ type: 'leaf', data: { id: 0, editors: [], mru: [], preview: -1 }, size: 863 }],
+          size: 883,
+        },
+        orientation: 0,
+        width: 883,
+        height: 863,
+      },
+      activeGroup: 0,
+      mostRecentActiveGroups: [0],
+    },
+  });
+
+  return `
+(async () => {
+  const emptyEditorState = ${inlineJson(emptyEditorState)};
+  const userSettings = ${inlineJson(settings)};
+  const resetWorkspace = ${resetWorkspace};
+  const redirectTo = ${inlineJson(redirectTo)};
+
+  const done = (req) => new Promise((resolve) => { req.onsuccess = () => resolve(req.result); req.onerror = () => resolve(null); req.onblocked = () => resolve(null); });
+
+  const patchState = async (name, clear) => {
+    const req = indexedDB.open(name, 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('ItemTable'); };
+    const db = await done(req);
+    if (!db) return;
+    const store = db.objectStoreNames.contains('ItemTable') ? 'ItemTable' : db.objectStoreNames[0];
+    if (!store) { db.close(); return; }
+    const tx = db.transaction(store, 'readwrite');
+    const s = tx.objectStore(store);
+    if (clear) s.clear();
+    s.put(emptyEditorState, 'memento/workbench.parts.editor');
+    s.put('true', 'workbench.auxiliaryBar.hidden');
+    s.put('true', 'workbench.auxiliaryBar.empty');
+    s.put('true', 'workbench.activityBar.hidden');
+    s.put(JSON.stringify([{id:'workbench.panel.chat',pinned:true,visible:false,order:1},{id:'workbench.viewContainer.agentSessions',pinned:true,visible:false,order:6}]), 'workbench.auxiliarybar.pinnedPanels');
+    s.put(JSON.stringify([{id:'workbench.panel.chat',visible:false},{id:'workbench.viewContainer.agentSessions',visible:false}]), 'workbench.auxiliarybar.viewContainersWorkspaceState');
+    await new Promise((resolve) => { tx.oncomplete = resolve; tx.onerror = resolve; });
+    db.close();
+  };
+
+  // Store names are the ones VS Code 1.106 creates at version 3; a database made
+  // here must already hold all three.
+  const writeUserSettings = async () => {
+    if (!userSettings) return;
+    const req = indexedDB.open('vscode-web-db', 3);
+    req.onupgradeneeded = () => {
+      for (const name of ['vscode-userdata-store', 'vscode-logs-store', 'vscode-filehandles-store']) {
+        if (!req.result.objectStoreNames.contains(name)) req.result.createObjectStore(name);
+      }
+    };
+    const db = await done(req);
+    if (!db) return;
+    if (db.objectStoreNames.contains('vscode-userdata-store')) {
+      const tx = db.transaction('vscode-userdata-store', 'readwrite');
+      tx.objectStore('vscode-userdata-store').put(new TextEncoder().encode(userSettings), '/User/settings.json');
+      await new Promise((resolve) => { tx.oncomplete = resolve; tx.onerror = resolve; });
+    }
+    db.close();
+    // What VS Code's own IndexedDB file provider posts, so an open editor reloads its settings.
+    try {
+      const channel = new BroadcastChannel('vscode.indexedDB.vscode-userdata.changes');
+      channel.postMessage([{ type: 0, resource: { scheme: 'vscode-userdata', authority: '', path: '/User/settings.json', query: '', fragment: '' } }]);
+      channel.close();
+    } catch (e) {}
+  };
+
+  try {
+    // VS Code's own hash of the folder URI (stringHash in base/common/hash.ts).
+    function numberHash(val, h) { return (((h << 5) - h) + val) | 0; }
+    function stringHash(s, h) {
+      h = numberHash(149417, h);
+      for (let i = 0; i < s.length; i++) h = numberHash(s.charCodeAt(i), h);
+      return h;
+    }
+    const workspaceDbName = 'vscode-web-state-db-' + stringHash('vscode-remote://' + location.host + '/workspace', 0).toString(16);
+
+    // Cleared, not deleted: every session's editor is on the same origin and folder
+    // URI, so another tab's VS Code may hold this database open — a delete would
+    // wait for it (and hang this page) and then cut that editor off.
+    const work = Promise.all([
+      resetWorkspace ? patchState('vscode-web-state-db-global', false) : null,
+      resetWorkspace ? patchState(workspaceDbName, true) : null,
+      writeUserSettings(),
+    ]);
+    // Never keep the editor from opening over a database that does not answer.
+    await Promise.race([work, new Promise((resolve) => setTimeout(resolve, 3000))]);
+  } catch (e) {}
+
+  if (redirectTo) window.location.replace(redirectTo);
+})();
+`;
+}
+
+/**
  * HTTP request handler
  */
 function handleRequest(req, res) {
@@ -252,9 +450,8 @@ function handleRequest(req, res) {
       return;
     }
 
-    // Resolve full path and ensure it's within WATCH_DIR (security)
-    const fullPath = path.resolve(WATCH_DIR, filePath);
-    if (!fullPath.startsWith(path.resolve(WATCH_DIR))) {
+    const fullPath = resolveInside(WATCH_DIR, filePath);
+    if (!fullPath) {
       res.setHeader('Content-Type', 'application/json');
       res.writeHead(403);
       res.end(JSON.stringify({ error: 'Access denied: path outside workspace' }));
@@ -331,88 +528,24 @@ function handleRequest(req, res) {
     return;
   }
 
-  // Preload page: patches VS Code IndexedDB then redirects to VS Code.
+  // Preload page: resets VS Code's browser state, then redirects to VS Code.
   // Served at the same traefik origin as VS Code so IndexedDB is shared.
   if (url.pathname === '/preload') {
-    const to = url.searchParams.get('to');
-    if (!to || (!to.startsWith('/') && !to.startsWith('http'))) {
+    const to = safePreloadTarget(url.searchParams.get('to'), req.headers.host);
+    if (!to) {
       res.writeHead(400);
       res.end('Missing or invalid ?to= parameter');
       return;
     }
+    sendHtml(res, 'Loading editor...', vscodeStateScript({ settings: vscodeUserSettings(url.searchParams.get('scheme')), redirectTo: to }));
+    return;
+  }
 
-    const emptyEditorState = JSON.stringify({
-      'editorpart.state': {
-        serializedGrid: {
-          root: {
-            type: 'branch',
-            data: [{ type: 'leaf', data: { id: 0, editors: [], mru: [], preview: -1 }, size: 863 }],
-            size: 883,
-          },
-          orientation: 0,
-          width: 883,
-          height: 863,
-        },
-        activeGroup: 0,
-        mostRecentActiveGroups: [0],
-      },
-    });
-
-    const html = `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>Loading editor...</title>
-<style>body{margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;color:#ccc;font-family:sans-serif;font-size:14px}</style>
-</head>
-<body>
-<span>Loading editor...</span>
-<script>
-(async () => {
-  const emptyEditorState = ${JSON.stringify(emptyEditorState)};
-  const patch = (name) => new Promise((resolve) => {
-    const req = indexedDB.open(name, 1);
-    req.onupgradeneeded = () => { req.result.createObjectStore('ItemTable'); };
-    req.onsuccess = () => {
-      const db = req.result;
-      const store = db.objectStoreNames.contains('ItemTable') ? 'ItemTable' : db.objectStoreNames[0];
-      if (!store) { db.close(); resolve(); return; }
-      const tx = db.transaction(store, 'readwrite');
-      const s = tx.objectStore(store);
-      s.put(emptyEditorState, 'memento/workbench.parts.editor');
-      s.put('true', 'workbench.auxiliaryBar.hidden');
-      s.put('true', 'workbench.auxiliaryBar.empty');
-      s.put('true', 'workbench.activityBar.hidden');
-      s.put(JSON.stringify([{id:'workbench.panel.chat',pinned:true,visible:false,order:1},{id:'workbench.viewContainer.agentSessions',pinned:true,visible:false,order:6}]), 'workbench.auxiliarybar.pinnedPanels');
-      s.put(JSON.stringify([{id:'workbench.panel.chat',visible:false},{id:'workbench.viewContainer.agentSessions',visible:false}]), 'workbench.auxiliarybar.viewContainersWorkspaceState');
-      tx.oncomplete = () => { db.close(); resolve(); };
-      tx.onerror = () => { db.close(); resolve(); };
-    };
-    req.onerror = () => resolve();
-  });
-
-  try {
-    // Compute the workspace-specific DB name using VS Code's own hash algorithm:
-    // hash = stringHash("vscode-remote://{hostname}/workspace", 0).toString(16)
-    function numberHash(val, h) { return (((h << 5) - h) + val) | 0; }
-    function stringHash(s, h) {
-      h = numberHash(149417, h);
-      for (let i = 0; i < s.length; i++) h = numberHash(s.charCodeAt(i), h);
-      return h;
-    }
-    const folderUri = 'vscode-remote://' + window.location.hostname + '/workspace';
-    const workspaceDbName = 'vscode-web-state-db-' + stringHash(folderUri, 0).toString(16);
-
-    await Promise.all(['vscode-web-state-db-global', workspaceDbName].map(patch));
-  } catch(e) {}
-
-  window.location.replace(${JSON.stringify(to)});
-})();
-</script>
-</body>
-</html>`;
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.writeHead(200);
-    res.end(html);
+  // Switches an open VS Code between light and dark. The session page loads it in a
+  // hidden frame when the app changes theme; VS Code reloads its settings on the
+  // change notification, so the editor is not reopened and unsaved work survives.
+  if (url.pathname === '/theme') {
+    sendHtml(res, 'Theme', vscodeStateScript({ settings: vscodeUserSettings(url.searchParams.get('scheme')), redirectTo: null }));
     return;
   }
 
@@ -582,27 +715,35 @@ function startCredentialSync() {
   let lastPostAt = 0;
   let lastPayload = null;
 
+  // A file that is not UTF-8 (Kiro's login is a SQLite database) travels as base64:
+  // decoding it as text replaces every invalid byte, and the platform would store a
+  // database the CLI can no longer open.
   function collect() {
     const files = {};
+    const filesB64 = {};
     for (const filePath of CREDENTIAL_SYNC_PATHS) {
       try {
         const stats = fs.statSync(filePath);
         if (!stats.isFile() || stats.size === 0 || stats.size > CREDENTIAL_SYNC_MAX_BYTES) continue;
-        files[filePath] = fs.readFileSync(filePath, 'utf8');
+        const content = fs.readFileSync(filePath);
+        if (isUtf8(content)) files[filePath] = content.toString('utf8');
+        else filesB64[filePath] = content.toString('base64');
       } catch (e) {
         // Absent or unreadable: nothing to report for this path.
       }
     }
-    return files;
+    return { files, filesB64 };
   }
 
   function post() {
-    const files = collect();
-    if (Object.keys(files).length === 0) return;
+    const { files, filesB64 } = collect();
+    const count = Object.keys(files).length + Object.keys(filesB64).length;
+    if (count === 0) return;
 
     // Unchanged content is not news. The CLI rewrites these files for reasons other than a
     // rotation, and every post takes a row lock on the credential.
-    const body = JSON.stringify({ files });
+    const payload = Object.keys(filesB64).length > 0 ? { files, files_b64: filesB64 } : { files };
+    const body = JSON.stringify(payload);
     if (body === lastPayload) return;
 
     const request = transport.request(
@@ -623,7 +764,7 @@ function startCredentialSync() {
         res.resume();
         if (res.statusCode >= 200 && res.statusCode < 300) {
           lastPayload = body;
-          log.info(`Credential sync: reported ${Object.keys(files).length} file(s)`);
+          log.info(`Credential sync: reported ${count} file(s)`);
         } else {
           log.warn(`Credential sync rejected: HTTP ${res.statusCode}`);
         }
@@ -663,11 +804,68 @@ function startCredentialSync() {
 }
 
 /**
+ * Name for an uploaded image, or null for a type an agent CLI cannot attach.
+ */
+function uploadFileName(contentType, now = new Date(), random = Math.random) {
+  const ext = UPLOAD_TYPES[String(contentType || '').split(';')[0].trim().toLowerCase()];
+  if (!ext) return null;
+  const stamp = now.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+  const suffix = Math.floor(random() * 0x10000).toString(16).padStart(4, '0');
+  return `paste-${stamp}-${suffix}.${ext}`;
+}
+
+function handleUpload(req, res) {
+  const reply = (status, body) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.writeHead(status);
+    res.end(JSON.stringify(body));
+  };
+  if (req.method !== 'POST') return reply(405, { error: 'Method not allowed' });
+
+  const name = uploadFileName(req.headers['content-type']);
+  if (!name) return reply(415, { error: 'Only PNG, JPEG, GIF and WebP images can be pasted' });
+  if (Number(req.headers['content-length']) > UPLOAD_MAX_BYTES) {
+    return reply(413, { error: `Images are limited to ${formatFileSize(UPLOAD_MAX_BYTES)}` });
+  }
+
+  const chunks = [];
+  let size = 0;
+  let refused = false;
+  req.on('data', (chunk) => {
+    if (refused) return;
+    size += chunk.length;
+    if (size > UPLOAD_MAX_BYTES) {
+      refused = true;
+      reply(413, { error: `Images are limited to ${formatFileSize(UPLOAD_MAX_BYTES)}` });
+      req.destroy();
+      return;
+    }
+    chunks.push(chunk);
+  });
+  req.on('end', () => {
+    if (refused) return;
+    if (size === 0) return reply(400, { error: 'Empty upload' });
+    try {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true, mode: 0o755 });
+      const target = path.join(UPLOAD_DIR, name);
+      // 0644: the watcher runs as root, the agent CLI that reads the file does not.
+      fs.writeFileSync(target, Buffer.concat(chunks), { mode: 0o644 });
+      log.info(`Stored pasted image ${target} (${formatFileSize(size)})`);
+      reply(201, { path: target });
+    } catch (err) {
+      reply(500, { error: err.message });
+    }
+  });
+}
+
+/**
  * Main server setup
  */
 function startServer() {
   startMcpForwarder();
+  http.createServer(handleUpload).listen(UPLOAD_PORT, () => log.info(`Upload server on port ${UPLOAD_PORT}`));
   const server = http.createServer(handleRequest);
+  const { WebSocketServer } = require('ws');
   const wss = new WebSocketServer({ server });
 
   // Track connected clients
@@ -804,6 +1002,9 @@ function startServer() {
   });
 }
 
-// Start the server
-startServer();
-startCredentialSync();
+if (require.main === module) {
+  startServer();
+  startCredentialSync();
+}
+
+module.exports = { resolveInside, safePreloadTarget, uploadFileName, vscodeUserSettings };

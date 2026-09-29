@@ -95,6 +95,26 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert admin.reload.active?
   end
 
+  test "the sole active admin's membership cannot be deleted either, except with its company" do
+    admin = create(:company_membership, :admin, user: @user, company: @company)
+
+    assert_not admin.destroy
+    assert_includes admin.errors[:base].to_sentence, "last admin"
+
+    @company.destroy!
+    assert_not CompanyMembership.exists?(admin.id)
+  end
+
+  # Two admins demoting each other at the same moment must not both succeed:
+  # the check holds the company row while it counts.
+  test "the last-admin check locks the company row before counting admins" do
+    admin = create(:company_membership, :admin, user: @user, company: @company)
+    create(:company_membership, :admin, user: create(:user), company: @company)
+    admin.role = "employee"
+
+    assert_queries_match(/FROM "companies".*FOR UPDATE/m) { admin.save! }
+  end
+
   test "demote is valid once a second active admin exists" do
     admin = create(:company_membership, :admin, user: @user, company: @company)
     create(:company_membership, :admin, user: create(:user), company: @company)
@@ -266,5 +286,163 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert membership.save, membership.errors.full_messages.to_sentence
 
     assert_equal owner.id, elsewhere.reload.owner_id
+  end
+
+  # === handover before revocation ===
+
+  test "revoke_with_handover gives each project to its chosen member and the rest to the heir" do
+    admin = create(:user, :admin, company: @company)
+    owner = create(:user, :employee, company: @company)
+    chosen = create(:user, :employee, company: @company)
+    handed = create(:project, company: @company, owner: owner)
+    left_out = create(:project, company: @company, owner: owner)
+    handed.add_collaborator(chosen)
+
+    membership = owner.company_memberships.sole
+    assert membership.revoke_with_handover(handed.id => chosen.id), membership.errors.full_messages.to_sentence
+
+    assert membership.reload.revoked?
+    assert_equal chosen, handed.reload.owner
+    assert_empty handed.collaborators, "neither the new owner nor the member who left stays a collaborator"
+    assert_equal admin, left_out.reload.owner
+  end
+
+  test "revoke_with_handover changes nothing when a chosen member cannot own the project" do
+    create(:user, :admin, company: @company)
+    owner = create(:user, :employee, company: @company)
+    viewer = create(:user, :viewer, company: @company, email: "client-#{SecureRandom.hex(3)}@external.com")
+    first = create(:project, company: @company, owner: owner, name: "First")
+    second = create(:project, company: @company, owner: owner, name: "Second")
+    employee = create(:user, :employee, company: @company)
+
+    membership = owner.company_memberships.sole
+    assert_equal false, membership.revoke_with_handover(first.id => employee.id, second.id => viewer.id) # rubocop:disable Minitest/RefuteFalse
+
+    assert_match(/Second/, membership.errors[:base].to_sentence)
+    assert membership.active?
+    assert membership.reload.active?
+    assert_equal owner, first.reload.owner, "the earlier handover is rolled back with the rest"
+    assert_equal owner, second.reload.owner
+  end
+
+  test "revoke_with_handover refuses a project the member does not own" do
+    create(:user, :admin, company: @company)
+    member = create(:user, :employee, company: @company)
+    someone_elses = create(:project, company: @company, owner: create(:user, :employee, company: @company))
+
+    membership = member.company_memberships.sole
+    assert_equal false, membership.revoke_with_handover(someone_elses.id => member.id) # rubocop:disable Minitest/RefuteFalse
+    assert membership.reload.active?
+  end
+
+  test "handing every project over lets an owner go even with no other admin to inherit" do
+    owner = create(:user, :employee, company: @company)
+    colleague = create(:user, :employee, company: @company)
+    project = create(:project, company: @company, owner: owner)
+
+    membership = owner.company_memberships.sole
+    assert membership.revoke_with_handover(project.id => colleague.id), membership.errors.full_messages.to_sentence
+    assert_equal colleague, project.reload.owner
+  end
+
+  test "the heir who was already a collaborator does not end up both owner and collaborator" do
+    admin = create(:user, :admin, company: @company)
+    owner = create(:user, :employee, company: @company)
+    project = create(:project, company: @company, owner: owner)
+    project.add_collaborator(admin)
+
+    membership = owner.company_memberships.sole
+    membership.aasm(:state).fire(:revoke)
+    assert membership.save, membership.errors.full_messages.to_sentence
+
+    assert_equal admin, project.reload.owner
+    assert_empty project.collaborators
+  end
+
+  # === viewer promotion (flow-dev #2025) ===
+
+  def onboarded_viewer(**attrs)
+    create(:company_membership, :viewer, user: create(:user), company: @company,
+                                         onboarding_state: "completed", onboarding_completed_at: 1.day.ago,
+                                         position: "dev", preferred_agent_language: "en", **attrs)
+  end
+
+  test "promoting an onboarded viewer to employee reopens onboarding at the agent step" do
+    membership = onboarded_viewer
+
+    assert membership.update(role: "employee"), membership.errors.full_messages.to_sentence
+
+    membership.reload
+    assert_equal "step2", membership.onboarding_state
+    assert_nil membership.onboarding_completed_at
+    assert_not membership.can_complete_onboarding?
+  end
+
+  test "promotion reopens onboarding even when the member already has a credential in this company" do
+    membership = onboarded_viewer
+    create(:agent_credential, user: membership.user, company: @company)
+
+    membership.update!(role: "employee")
+
+    assert_equal "step2", membership.reload.onboarding_state
+    assert membership.can_complete_onboarding?
+  end
+
+  test "a credential in another company does not let a promoted member complete onboarding" do
+    membership = onboarded_viewer
+    other = create(:company_membership, user: membership.user)
+    create(:agent_credential, user: membership.user, company: other.company)
+
+    membership.update!(role: "employee")
+
+    assert_not membership.reload.can_complete_onboarding?
+    assert_not membership.aasm(:onboarding_state).may_fire_event?(:complete)
+  end
+
+  test "a viewer promoted before finishing onboarding keeps their step" do
+    membership = create(:company_membership, :viewer, user: create(:user), company: @company, onboarding_state: "step1")
+
+    membership.update!(role: "employee")
+
+    assert_equal "step1", membership.reload.onboarding_state
+  end
+
+  test "switching between employee and admin leaves onboarding completed" do
+    create(:company_membership, :admin, user: create(:user), company: @company)
+    membership = create(:company_membership, user: create(:user), company: @company,
+                                             onboarding_state: "completed", onboarding_completed_at: 1.day.ago)
+
+    membership.update!(role: "admin")
+    membership.update!(role: "employee")
+
+    assert_equal "completed", membership.reload.onboarding_state
+    assert membership.onboarding_completed_at.present?
+  end
+
+  test "a viewer cannot become admin in one step" do
+    membership = onboarded_viewer
+
+    assert_not membership.update(role: "admin")
+    assert_includes membership.errors[:role], "of a viewer can only change to Employee"
+    assert_equal "viewer", membership.reload.role
+  end
+
+  test "only an active viewer can be promoted" do
+    %i[invited suspended].each do |state|
+      membership = create(:company_membership, :viewer, state, user: create(:user), company: @company)
+
+      assert_not membership.update(role: "employee"), "#{state} viewer must not be promotable"
+      assert_includes membership.errors[:base], "Only an active viewer can be promoted"
+    end
+  end
+
+  test "re-inviting a revoked viewer as employee is allowed and still reopens onboarding" do
+    membership = onboarded_viewer(state: "revoked")
+
+    membership.assign_attributes(role: "employee", invited_at: Time.current)
+    membership.aasm(:state).fire(:reinvite)
+
+    assert membership.save, membership.errors.full_messages.to_sentence
+    assert_equal "step2", membership.reload.onboarding_state
   end
 end

@@ -2,7 +2,9 @@ import { Tooltip } from '@mantine/core';
 import { IconCheck } from '@tabler/icons-react';
 import type { ReactNode } from 'react';
 
-import { AgentLogo, AGENT_LABELS } from './AgentLogo';
+import { AGENT_TYPES, agentLabel } from '../agentRuntimes';
+
+import { AgentLogo } from './AgentLogo';
 import classes from './SelectableTiles.module.css';
 
 interface FormSectionProps {
@@ -20,8 +22,6 @@ export function FormSection({ icon, children, first = false }: FormSectionProps)
     </div>
   );
 }
-
-const RUNTIME_ORDER = ['claude_code', 'cursor_cli', 'codex', 'gemini_cli', 'antigravity_cli', 'grok', 'kiro_cli'];
 
 interface RuntimeTilesProps {
   value: string | null;
@@ -41,7 +41,7 @@ export function RuntimeTiles({
 }: RuntimeTilesProps) {
   return (
     <div className={classes.runtimeGrid}>
-      {RUNTIME_ORDER.map((agentType) => {
+      {AGENT_TYPES.map((agentType) => {
         const isConfigured = configured.includes(agentType);
         const isSelected = value === agentType;
 
@@ -61,7 +61,7 @@ export function RuntimeTiles({
               onClick={() => isConfigured && onChange(agentType)}
             >
               <AgentLogo agentType={agentType} size={18} />
-              <span className={classes.runtimeName}>{AGENT_LABELS[agentType]}</span>
+              <span className={classes.runtimeName}>{agentLabel(agentType)}</span>
               {!isConfigured && <span className={classes.setup}>Setup</span>}
               {isSelected && (
                 <span className={classes.tick}>

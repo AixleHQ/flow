@@ -18,23 +18,15 @@ import { Tooltip } from '@mantine/core';
 import { IconGripVertical, IconPlus, IconTrash } from '@tabler/icons-react';
 import { useRef, useState } from 'react';
 
+import type { Step, SubStep } from '@/types/generated';
+
 import classes from './BuilderPage.module.css';
 
-interface SubStep {
-  id: number;
-  name: string;
-  position: number;
-}
+type TreeSubStep = Pick<SubStep, 'id' | 'name' | 'position'>;
 
-interface Step {
-  id: number;
-  name: string;
-  position: number;
-  allowNonInteractive: boolean;
-  bmadEnabled: boolean;
-  dependsOnStepIds: number[];
-  subSteps: SubStep[];
-}
+type TreeStep = Pick<Step, 'id' | 'name' | 'position' | 'allowNonInteractive' | 'bmadEnabled' | 'dependsOnStepIds'> & {
+  subSteps: TreeSubStep[];
+};
 
 type SelectionMode = 'session' | 'step';
 export interface Selection {
@@ -44,8 +36,8 @@ export interface Selection {
 }
 
 interface SessionTagsProps {
-  step: Step;
-  allSteps: Step[];
+  step: TreeStep;
+  allSteps: TreeStep[];
 }
 
 function SessionTags({ step, allSteps }: SessionTagsProps) {
@@ -102,7 +94,7 @@ function SessionTags({ step, allSteps }: SessionTagsProps) {
 }
 
 interface SortableStepRowProps {
-  step: SubStep;
+  step: TreeSubStep;
   index: number;
   isSelected: boolean;
   onSelect: () => void;
@@ -173,10 +165,10 @@ function SortableStepRow({ step, index, isSelected, onSelect, onDelete, readOnly
 }
 
 interface SortableSessionRowProps {
-  step: Step;
+  step: TreeStep;
   index: number;
   selection: Selection | null;
-  allSteps: Step[];
+  allSteps: TreeStep[];
   onSelectSession: (id: number) => void;
   onSelectStep: (sessionId: number, stepId: number) => void;
   onDeleteSession: (id: number) => void;
@@ -432,7 +424,7 @@ function AddSessionGhost({ onAdd }: AddSessionGhostProps) {
 }
 
 interface SessionTreeNavProps {
-  steps: Step[];
+  steps: TreeStep[];
   selection: Selection | null;
   readOnly: boolean;
   onSelectSession: (id: number) => void;

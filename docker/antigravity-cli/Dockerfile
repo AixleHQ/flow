@@ -23,9 +23,9 @@ RUN set -eux; \
     test "$(su antigravity -c 'agy --version')" = "$ANTIGRAVITY_CLI_VERSION"
 
 # The CLI version this image actually shipped with, recorded where anything can read it:
-# `docker run <image> cat /etc/aixle-cli-version`. Three of these CLIs are installed from a
-# vendor script with no version to pin (claude, cursor, kiro), so two builds of the same
-# Dockerfile are not the same image and nothing else says which one a container is running.
+# `docker run <image> cat /etc/aixle-cli-version`. Cursor and Kiro come from vendor
+# installers that install only the latest release, and the canary builds the newest
+# release of the pinned ones, so the version is not always the one this file names.
 RUN su antigravity -c 'agy --version' > /etc/aixle-cli-version
 
 COPY base/tmux.conf /etc/tmux.conf
@@ -39,7 +39,7 @@ COPY base/auth-check/index.js /opt/auth-check/index.js
 COPY base/logger/ /opt/mitm/
 COPY base/entrypoint.sh /app/
 RUN chmod +x /app/entrypoint.sh /opt/mitm/*.sh && \
-    chown -R antigravity:antigravity /workspace /opt/watcher /home/antigravity
+    chown -R antigravity:antigravity /workspace /home/antigravity
 
 WORKDIR /workspace
 ENV HOME=/home/antigravity AGENT_NAME="Antigravity CLI" LANG=C.UTF-8 PATH="/home/antigravity/.local/bin:${PATH}"

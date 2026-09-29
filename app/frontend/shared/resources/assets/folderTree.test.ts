@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { Asset, Folder } from '@/types/generated';
+
 import {
   ancestorPaths,
   buildFolderPaths,
@@ -12,7 +14,6 @@ import {
   searchAssets,
   siblingNames,
 } from './folderTree';
-import type { Asset, Folder } from './types';
 
 function asset(over: Partial<Asset> = {}): Asset {
   return {
@@ -26,7 +27,8 @@ function asset(over: Partial<Asset> = {}): Asset {
     scopeIndicator: 'project',
     status: 'active',
     createdById: 1,
-    createdByName: null,
+    stepRunId: null,
+    createdByName: 'Author',
     versionsCount: 1,
     latestVersion: null,
     createdAt: '2026-01-01T00:00:00Z',

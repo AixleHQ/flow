@@ -1,0 +1,8 @@
+<p>Hello <%= @user.name %>,</p>
+
+<p>Use this link to sign in. It works once and expires in <%= @ttl_minutes %> minutes.</p>
+
+<p><%= link_to "Sign in", @url %></p>
+
+<p>If you did not ask to sign in, you can ignore this message — the link is useless
+without your mailbox, and nobody has been let in.</p>

@@ -35,34 +35,36 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
       end
     end
 
+    # The edit dialog's branch picker asks for these with `only: [editBranches]`;
+    # nothing ever answered it, so the picker stayed empty.
+    if params[:edit_repo_id].present?
+      repo = repositories.find { |r| r.id == params[:edit_repo_id].to_i }
+      props[:edit_branches] = repo ? branches_of(repo) : []
+    end
+
     render inertia: "Projects/Repositories/RepositoriesPage", props: props
   end
 
   def create
     repo =
       if public_params[:public_url].present?
-        begin
-          build_public_repository
-        rescue PublicRepositoryService::Error => e
-          return redirect_to company_project_repositories_path(current_project),
-                             inertia: { errors: { public_url: e.message } }
-        end
+        build_public_repository
       elsif azure_integration
-        begin
-          build_azure_repository(azure_integration)
-        rescue AzureDevops::Error => e
-          return redirect_to company_project_repositories_path(current_project),
-                             inertia: { errors: { external_id: e.message } }
-        end
+        build_azure_repository(azure_integration)
       else
-        Repository.new(create_params.merge(scope: current_project))
+        build_code_host_repository
       end
 
     if repo.save
+      Repositories::CiWebhook.register(repo)
       redirect_to company_project_repositories_path(current_project), notice: "Repository added"
     else
       redirect_to company_project_repositories_path(current_project), inertia: { errors: repo.errors }
     end
+  rescue PublicRepositoryService::Error => e
+    redirect_to company_project_repositories_path(current_project), inertia: { errors: { public_url: e.message } }
+  rescue AzureDevops::Error => e
+    redirect_to company_project_repositories_path(current_project), inertia: { errors: { external_id: e.message } }
   end
 
   def update
@@ -77,11 +79,25 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
 
   def destroy
     repo = Repository.visible_for_project(current_project).find(params[:id])
+    Repositories::CiWebhook.unregister(repo)
     repo.destroy
     redirect_to company_project_repositories_path(current_project), notice: "Repository removed"
   end
 
   private
+
+  # A public repository has no connection to ask; its branch stays a free-text field.
+  def branches_of(repo)
+    integration = repo.integration
+    return [] unless integration&.active?
+
+    service = RepositoryService.for(integration)
+    if integration.azure_devops?
+      service.list_branches(repo.external_id, project_id: repo.external_project_id)
+    else
+      service.list_branches(repo.full_name)
+    end
+  end
 
   # A public repository is verified against the host's public API before it is
   # attached: it must exist and be public, or an anonymous clone would fail
@@ -101,6 +117,28 @@ class Web::Company::Projects::RepositoriesController < Web::Company::Projects::A
   def create_params
     params.require(:repository).permit(:full_name, :source_branch, :integration_id, :description, :purpose,
                                        :is_private, :external_id)
+  end
+
+  # The picker sends a name, not a visibility, so a private repository was
+  # listed as public. The code host is asked — only through a connection this
+  # project can see; any other id is left to the model's validation to refuse.
+  def build_code_host_repository
+    repo = Repository.new(create_params.merge(scope: current_project))
+    integration = Integration.visible_for_project(current_project)
+                             .where(provider: Repository::CODE_HOST_PROVIDERS)
+                             .find_by(id: repo.integration_id)
+    found = integration && code_host_repository(integration, repo.full_name)
+    repo.is_private = found[:is_private] if found
+    repo
+  end
+
+  # Only a label: a lookup that cannot run (no GitHub App configured, the host
+  # unreachable) must not stop the repository from being added.
+  def code_host_repository(integration, full_name)
+    RepositoryService.for(integration).find_repo(full_name)
+  rescue StandardError => e
+    Rails.logger.warn("[Repositories] visibility of #{full_name} unknown: #{e.class}")
+    nil
   end
 
   # The integration named in the request, only when it is an Azure connection

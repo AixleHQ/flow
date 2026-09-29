@@ -6,7 +6,7 @@ class UserResource < ApplicationResource
   # Position is per-company too (a person can be qa in one company and cto in
   # another), so it resolves through the same `params: { company: }` context as
   # the role below.
-  typelize :string?
+  typelize "string | null"
   attribute :position do |user|
     company = params[:company]
     next nil unless company
@@ -17,7 +17,7 @@ class UserResource < ApplicationResource
   # Roles are per-company (CompanyMembership); pass `params: { company: }` to
   # resolve the user's role within that company. Without a company context the
   # role is nil (a user has no global role anymore).
-  typelize :string?
+  typelize "string | null"
   attribute :role do |user|
     company = params[:company]
     next nil unless company

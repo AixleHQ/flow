@@ -34,7 +34,8 @@ module ContainerStrategies
       uid = adapter.container_uid
 
       adapter.auth_setup_files_for(auth_kind, current_credential_config).each do |path, content|
-        wrote = runtime.write_file(container, path, content, uid: uid, gid: uid)
+        options = { uid: uid, gid: uid }.merge(adapter.private_file_write_options(path))
+        wrote = runtime.write_file(container, path, content, **options)
         if wrote == false
           Rails.logger.error("[AgentAuth] FAILED to write auth setup file: #{path}")
         else

@@ -21,6 +21,19 @@ class TemporalServiceTest < ActiveSupport::TestCase
     Temporalio::Testing::WorkflowEnvironment.stubs(:start_local)
   end
 
+  # == Payloads ==
+
+  class Revivable
+    def self.json_create(_hash) = new
+  end
+
+  test "a payload naming a json_class decodes as the hash it is, never as that class" do
+    converter = TemporalService.data_converter.payload_converter
+    payload = converter.to_payload({ "json_class" => Revivable.name, "session_id" => 7 })
+
+    assert_equal({ "json_class" => Revivable.name, "session_id" => 7 }, converter.from_payload(payload))
+  end
+
   # == Configuration Tests ==
 
   test "address combines host and port from settings" do
@@ -65,26 +78,15 @@ class TemporalServiceTest < ActiveSupport::TestCase
     assert workflows.all? { |w| w < Workflows::Base }
   end
 
-  # == Workflow ID Generation ==
+  # == Workflow ID ==
 
-  test "workflow_id generates deterministic id from workflow and input" do
-    workflow = OpenStruct.new(name: "TestWorkflow")
-    input = { key: "value" }
+  # Object#hash is seeded per process, so an id derived from the input never
+  # deduplicated anything across pods.
+  test "a start without an explicit workflow id is refused" do
+    workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
 
-    id1 = TemporalService.workflow_id(workflow, input)
-    id2 = TemporalService.workflow_id(workflow, input)
-
-    assert_equal id1, id2
-    assert id1.start_with?("TestWorkflow-")
-  end
-
-  test "workflow_id generates different ids for different inputs" do
-    workflow = OpenStruct.new(name: "TestWorkflow")
-
-    id1 = TemporalService.workflow_id(workflow, { a: 1 })
-    id2 = TemporalService.workflow_id(workflow, { b: 2 })
-
-    refute_equal id1, id2
+    assert_raises(ArgumentError) { TemporalService.start_workflow(workflow, { test: true }) }
+    assert_raises(ArgumentError) { TemporalService.execute_workflow(workflow, { test: true }) }
   end
 
   # == Start Workflow Tests ==
@@ -93,7 +95,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
     workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
 
     # start_local returns nil (stubbed)
-    result = TemporalService.start_workflow(workflow, { test: true })
+    result = TemporalService.start_workflow(workflow, { test: true }, id: "test-wf")
 
     refute result[:ok]
     assert_equal "Temporal is disabled", result[:error]
@@ -130,7 +132,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
       Temporalio::Error.new("Connection refused")
     )
 
-    result = TemporalService.start_workflow(workflow, { test: true })
+    result = TemporalService.start_workflow(workflow, { test: true }, id: "test-wf")
 
     refute result[:ok]
     assert_match(/Connection refused/, result[:error])
@@ -143,7 +145,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
     Settings.temporal.stubs(:enabled).returns("false")
 
     # start_local returns nil (stubbed)
-    result = TemporalService.execute_workflow(workflow, { test: true })
+    result = TemporalService.execute_workflow(workflow, { test: true }, id: "test-wf")
 
     assert_nil result
   end
@@ -159,7 +161,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
     Temporalio::Testing::WorkflowEnvironment.unstub(:start_local)
     Temporalio::Testing::WorkflowEnvironment.expects(:start_local).yields(mock_env).returns(expected_result)
 
-    result = TemporalService.execute_workflow(workflow, { test: true })
+    result = TemporalService.execute_workflow(workflow, { test: true }, id: "test-wf")
 
     assert_equal expected_result, result
   end
@@ -172,7 +174,7 @@ class TemporalServiceTest < ActiveSupport::TestCase
     )
 
     assert_raises(Temporalio::Error) do
-      TemporalService.execute_workflow(workflow, { test: true })
+      TemporalService.execute_workflow(workflow, { test: true }, id: "test-wf")
     end
   end
 
@@ -215,6 +217,48 @@ class TemporalServiceTest < ActiveSupport::TestCase
 
     refute result[:ok]
     assert_match(/Connection failed/, result[:error])
+  end
+
+  # == Execution state ==
+
+  def describing(workflow_id)
+    handle = mock("handle")
+    client = mock("client")
+    client.stubs(:workflow_handle).with(workflow_id).returns(handle)
+    Temporalio::Testing::WorkflowEnvironment.stubs(:start_local).yields(OpenStruct.new(client: client))
+    handle
+  end
+
+  test "execution_state tells running from closed" do
+    Settings.temporal.stubs(:enabled).returns("true")
+    handle = describing("workflow-execution-1")
+
+    handle.stubs(:describe).returns(OpenStruct.new(status: Temporalio::Client::WorkflowExecutionStatus::RUNNING))
+    assert_equal :running, TemporalService.execution_state("workflow-execution-1")
+
+    handle.stubs(:describe).returns(OpenStruct.new(status: Temporalio::Client::WorkflowExecutionStatus::TERMINATED))
+    assert_equal :closed, TemporalService.execution_state("workflow-execution-1")
+  end
+
+  test "execution_state reports an execution Temporal has no record of as not_found" do
+    Settings.temporal.stubs(:enabled).returns("true")
+    describing("workflow-execution-1").stubs(:describe).raises(
+      Temporalio::Error::RPCError.new("not found", code: Temporalio::Error::RPCError::Code::NOT_FOUND, raw_grpc_status: nil)
+    )
+
+    assert_equal :not_found, TemporalService.execution_state("workflow-execution-1")
+  end
+
+  test "execution_state is unknown when Temporal cannot be asked" do
+    Settings.temporal.stubs(:enabled).returns("true")
+    describing("workflow-execution-1").stubs(:describe).raises(
+      Temporalio::Error::RPCError.new("down", code: Temporalio::Error::RPCError::Code::UNAVAILABLE, raw_grpc_status: nil)
+    )
+
+    assert_equal :unknown, TemporalService.execution_state("workflow-execution-1")
+
+    Settings.temporal.stubs(:enabled).returns("false")
+    assert_equal :unknown, TemporalService.execution_state("workflow-execution-1")
   end
 
   # == Cancel Workflow Tests ==
@@ -301,92 +345,123 @@ class TemporalServiceTest < ActiveSupport::TestCase
     TemporalService.create_schedule(schedule_def)
   end
 
-  test "delete_schedules deletes all schedules" do
-    mock_schedule1 = OpenStruct.new(id: "schedule-1")
-    mock_schedule2 = OpenStruct.new(id: "schedule-2")
-
-    mock_handle1 = mock("handle1")
-    mock_handle1.expects(:delete)
-    mock_handle2 = mock("handle2")
-    mock_handle2.expects(:delete)
+  test "prune_schedules deletes the static schedules that are no longer defined" do
+    mock_handle = mock("handle")
+    mock_handle.expects(:delete)
 
     mock_client = mock("client")
-    mock_client.expects(:list_schedules).returns([ mock_schedule1, mock_schedule2 ])
-    mock_client.expects(:schedule_handle).with("schedule-1").returns(mock_handle1)
-    mock_client.expects(:schedule_handle).with("schedule-2").returns(mock_handle2)
+    mock_client.expects(:list_schedules).returns([ OpenStruct.new(id: "gone"), OpenStruct.new(id: "kept") ])
+    mock_client.expects(:schedule_handle).with("gone").returns(mock_handle)
+    mock_client.expects(:schedule_handle).with("kept").never
 
     Temporalio::Testing::WorkflowEnvironment.stubs(:start_local).yields(
       OpenStruct.new(client: mock_client)
     )
 
-    TemporalService.delete_schedules
+    assert_empty TemporalService.prune_schedules(keep: [ "kept" ])
   end
 
-  test "delete_schedule deletes specific schedule" do
-    schedule_def = OpenStruct.new(workflow: "test")
-    workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
+  # == Schedule sync converges ==
 
-    TemporalWorkflowRegistry.stubs(:workflows).returns({ "test" => workflow })
+  def schedule_env(client)
+    Temporalio::Testing::WorkflowEnvironment.stubs(:start_local).yields(OpenStruct.new(client: client))
+  end
 
-    mock_handle = mock("handle")
-    mock_handle.expects(:delete)
+  def not_found
+    Temporalio::Error::RPCError.new("not found", code: Temporalio::Error::RPCError::Code::NOT_FOUND, raw_grpc_status: nil)
+  end
 
-    mock_client = mock("client")
-    mock_client.expects(:schedule_handle).with("TestWorkflow").returns(mock_handle)
-
-    Temporalio::Testing::WorkflowEnvironment.stubs(:start_local).yields(
-      OpenStruct.new(client: mock_client)
+  def with_definitions(*names)
+    workflows = names.to_h { |n| [ n, OpenStruct.new(name: n.camelize, owner: "q") ] }
+    TemporalWorkflowRegistry.stubs(:workflows).returns(workflows)
+    TemporalService.stubs(:schedule_definitions).returns(
+      names.map { |n| OpenStruct.new(workflow: n, cron: "0 * * * *", enabled: true) }
     )
-
-    TemporalService.delete_schedule(schedule_def)
   end
 
-  test "delete_schedule deletes schedule successfully" do
-    schedule_def = OpenStruct.new(workflow: "test")
-    workflow = OpenStruct.new(name: "TestWorkflow", owner: "test-queue")
-
-    TemporalWorkflowRegistry.stubs(:workflows).returns({ "test" => workflow })
-
-    mock_handle = mock("handle")
-    mock_handle.expects(:delete)
-
-    mock_client = mock("client")
-    mock_client.expects(:schedule_handle).with("TestWorkflow").returns(mock_handle)
-
-    mock_env = OpenStruct.new(client: mock_client)
-
-    Temporalio::Testing::WorkflowEnvironment.unstub(:start_local)
-    Temporalio::Testing::WorkflowEnvironment.expects(:start_local).yields(mock_env)
-
-    TemporalService.delete_schedule(schedule_def)
-  end
-
-  test "sync_schedules deletes and recreates static schedules, then reconciles per-binding ones" do
-    TemporalService.expects(:delete_schedules).once
-    TemporalService.stubs(:schedule_definitions).returns([
-      OpenStruct.new(workflow: "test", cron: "0 * * * *", enabled: true)
-    ])
-    TemporalService.expects(:create_schedule).once
+  test "sync_schedules updates existing schedules in place and never deletes a defined one" do
+    with_definitions("alpha")
+    handle = mock("handle")
+    handle.expects(:update).once
+    handle.expects(:delete).never
+    client = mock("client")
+    client.stubs(:schedule_handle).with("Alpha").returns(handle)
+    client.expects(:list_schedules).returns([ OpenStruct.new(id: "Alpha") ])
+    client.expects(:create_schedule).never
+    schedule_env(client)
     ScheduleReconciler.expects(:reconcile_all).once
 
-    TemporalService.sync_schedules
+    assert_empty TemporalService.sync_schedules
   end
 
-  test "delete_schedules prunes static schedules but preserves per-binding schedule triggers" do
-    static  = OpenStruct.new(id: "stale_static_workflow")
-    dynamic = OpenStruct.new(id: "schedule-trigger-3")
+  test "sync_schedules creates a schedule Temporal does not have" do
+    with_definitions("alpha")
+    handle = mock("handle")
+    handle.stubs(:update).raises(not_found)
+    client = mock("client")
+    client.stubs(:schedule_handle).with("Alpha").returns(handle)
+    client.expects(:create_schedule).with("Alpha", instance_of(Temporalio::Client::Schedule)).once
+    client.stubs(:list_schedules).returns([])
+    schedule_env(client)
+    ScheduleReconciler.stubs(:reconcile_all)
 
-    mock_client = mock("client")
-    mock_client.expects(:list_schedules).returns([ static, dynamic ])
-    static_handle = mock("static_handle")
-    static_handle.expects(:delete).once
-    mock_client.expects(:schedule_handle).with("stale_static_workflow").returns(static_handle)
-    mock_client.expects(:schedule_handle).with("schedule-trigger-3").never
+    assert_empty TemporalService.sync_schedules
+  end
 
-    mock_env = OpenStruct.new(client: mock_client)
-    Temporalio::Testing::WorkflowEnvironment.unstub(:start_local)
-    Temporalio::Testing::WorkflowEnvironment.expects(:start_local).yields(mock_env)
+  test "upsert_binding_schedule updates in place and creates only when missing" do
+    TemporalWorkflowRegistry.stubs(:workflows).returns(
+      { "scheduled_trigger_workflow" => OpenStruct.new(name: "ScheduledTriggerWorkflow", owner: "q") }
+    )
+    existing = mock("existing")
+    existing.expects(:update).once
+    missing = mock("missing")
+    missing.stubs(:update).raises(not_found)
+    client = mock("client")
+    client.stubs(:schedule_handle).with("schedule-trigger-1").returns(existing)
+    client.stubs(:schedule_handle).with("schedule-trigger-2").returns(missing)
+    client.expects(:create_schedule).with("schedule-trigger-2", instance_of(Temporalio::Client::Schedule)).once
+    schedule_env(client)
 
-    TemporalService.delete_schedules
+    TemporalService.upsert_binding_schedule(schedule_id: "schedule-trigger-1", cron: "0 9 * * *", input: {})
+    TemporalService.upsert_binding_schedule(schedule_id: "schedule-trigger-2", cron: "0 9 * * *", input: {})
+  end
+
+  # One failure must not abort the loop and leave every later schedule missing.
+  test "one failing schedule does not stop the others, and is reported" do
+    with_definitions("alpha", "beta")
+    broken = mock("broken")
+    broken.stubs(:update).raises(RuntimeError, "boom")
+    healthy = mock("healthy")
+    healthy.expects(:update).once
+    client = mock("client")
+    client.stubs(:schedule_handle).with("Alpha").returns(broken)
+    client.stubs(:schedule_handle).with("Beta").returns(healthy)
+    client.stubs(:list_schedules).returns([ OpenStruct.new(id: "Alpha"), OpenStruct.new(id: "Beta") ])
+    schedule_env(client)
+    ScheduleReconciler.expects(:reconcile_all).once
+
+    failures = TemporalService.sync_schedules
+
+    assert_equal 1, failures.size
+    assert_match(/alpha: RuntimeError: boom/, failures.first)
+  end
+
+  test "sync_schedules prunes undefined static schedules but preserves per-binding schedule triggers" do
+    with_definitions("alpha")
+    handle = mock("handle")
+    handle.stubs(:update)
+    stale = mock("stale")
+    stale.expects(:delete).once
+    client = mock("client")
+    client.stubs(:schedule_handle).with("Alpha").returns(handle)
+    client.stubs(:schedule_handle).with("stale_static_workflow").returns(stale)
+    client.expects(:schedule_handle).with("schedule-trigger-3").never
+    client.stubs(:list_schedules).returns(
+      [ OpenStruct.new(id: "Alpha"), OpenStruct.new(id: "stale_static_workflow"), OpenStruct.new(id: "schedule-trigger-3") ]
+    )
+    schedule_env(client)
+    ScheduleReconciler.stubs(:reconcile_all)
+
+    assert_empty TemporalService.sync_schedules
   end
 end

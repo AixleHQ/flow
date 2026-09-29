@@ -11,6 +11,20 @@ The builder runs on a real agent, so the project needs at least one configured
 runtime — it says so plainly if none is connected. Viewers do not get the start
 control, since they cannot execute work in the project.
 
+## What it can touch
+
+The builder acts as you, with your permissions, and only inside the project you
+started it in. It sees what the project already has — workflows, board columns,
+agents, repositories, MCP servers, the names of your secrets — and reuses them
+rather than creating duplicates. Three things stay with you:
+
+- **Secrets and variables.** Add them in project settings; the builder attaches
+  them to steps by name and never sees a value.
+- **Integrations.** It gives you the link; you connect GitHub, Slack and the rest
+  in the browser.
+- **Custom tools and project settings.** It describes what is needed and leaves
+  the change to you.
+
 ## A builder session
 
 1. **Say what you want.** "When a card lands in Triage, summarise it, label it,
@@ -18,10 +32,12 @@ control, since they cannot execute work in the project.
    the builder should read something first.
 2. **Watch it work.** The session shows its terminal live and an activity feed
    naming each thing it creates as it creates it.
-3. **Check what it made.** The **Workflows** and **Board** tabs show the result
+3. **Let it check its work.** Before calling a workflow done, the builder
+   validates it and can start a test run and read the result.
+4. **Check what it made.** The **Workflows** and **Board** tabs show the result
    — workflows with their steps, columns with their auto-trigger bindings —
    while the session is still open.
-4. **Finish Session** when it looks right.
+5. **Finish Session** when it looks right.
 
 Previous builder sessions stay in a list; an unfinished one offers to continue
 where it stopped. A session that ended badly keeps its error, so you can see

@@ -26,7 +26,7 @@ class OutboxRelayTest < ActiveSupport::TestCase
   test "drain dispatches a pending event stuck past the grace window" do
     event = pending_column_event(created_at: 5.minutes.ago)
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: @workflow, task: @task, user: @user, mode: :non_interactive)
     ).once.returns(build(:workflow_run))
 
@@ -42,7 +42,7 @@ class OutboxRelayTest < ActiveSupport::TestCase
   test "drain leaves a fresh pending event alone until the grace window passes" do
     event = pending_column_event(created_at: Time.current)
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     result = OutboxRelay.drain
 
@@ -55,7 +55,7 @@ class OutboxRelayTest < ActiveSupport::TestCase
       project: @project, board_task: @task, actor: @user,
       data: { "workflow_id" => @workflow.id }, relay_state: "dispatched", created_at: 5.minutes.ago)
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     assert_equal 0, OutboxRelay.drain[:swept]
   end
@@ -63,7 +63,7 @@ class OutboxRelayTest < ActiveSupport::TestCase
   test "draining the same event twice starts the workflow once (idempotent via dedup)" do
     event = pending_column_event(created_at: 5.minutes.ago)
 
-    WorkflowService.expects(:start).once.returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
 
     OutboxRelay.drain
     # Force it back to pending to simulate a relay that crashed after starting the
@@ -78,7 +78,7 @@ class OutboxRelayTest < ActiveSupport::TestCase
   test "drain skips events that have exhausted their relay attempts" do
     pending_column_event(created_at: 5.minutes.ago, attempts: TriggerEvent::RELAY_MAX_ATTEMPTS)
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     assert_equal 0, OutboxRelay.drain[:swept]
   end
@@ -86,13 +86,13 @@ class OutboxRelayTest < ActiveSupport::TestCase
   test "a failing dispatch is retried with an incremented attempt and left pending" do
     event = pending_column_event(created_at: 5.minutes.ago)
 
-    WorkflowService.expects(:start).raises(StandardError, "temporal down")
+    WorkflowService.expects(:enqueue).raises(StandardError, "database down")
 
     OutboxRelay.drain
 
     event.reload
     assert_equal "pending", event.relay_state
     assert_equal 1, event.relay_attempts
-    assert_equal "temporal down", event.relay_error
+    assert_equal "database down", event.relay_error
   end
 end

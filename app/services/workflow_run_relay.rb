@@ -22,9 +22,10 @@ class WorkflowRunRelay
 
   class << self
     # Re-dispatch runs left undispatched past the grace window. Rows are claimed
-    # under FOR UPDATE SKIP LOCKED in a short transaction so concurrent drainers
-    # never grab the same run, and the lock is released before dispatching — the
-    # Temporal call must not run while holding row locks.
+    # durably — selected FOR UPDATE SKIP LOCKED and stamped relay_claimed_at in the
+    # same short transaction — so a drainer that starts while another is still
+    # dispatching finds nothing to take, although the locks are gone before the
+    # Temporal call (which must not run while holding them).
     #
     # Returns { swept:, dispatched:, failed: } counts.
     def drain(limit: DEFAULT_LIMIT, now: Time.current)
@@ -60,11 +61,13 @@ class WorkflowRunRelay
 
     def claim_ids(limit:, now:)
       WorkflowRun.transaction do
-        WorkflowRun
+        ids = WorkflowRun
           .stuck_for_relay(now)
           .limit(limit)
           .lock("FOR UPDATE SKIP LOCKED")
           .pluck(:id)
+        WorkflowRun.where(id: ids).update_all(relay_claimed_at: now) if ids.any?
+        ids
       end
     end
   end

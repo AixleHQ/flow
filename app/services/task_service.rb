@@ -84,6 +84,11 @@ class TaskService
 
       pending_event = nil
       ActiveRecord::Base.transaction do
+        # Positions are renumbered per column with no unique index behind them,
+        # so two moves into one column at once duplicated a position. Moves take
+        # the columns they touch in id order (no deadlock between opposite moves),
+        # then the task.
+        [ from_column, to_column ].uniq.sort_by(&:id).each(&:lock!)
         task.lock!
 
         if position
@@ -131,7 +136,7 @@ class TaskService
         when :move_to_column then move(task: task, to_column: to_column, actor: actor)
         when :set_priority  then task.update!(priority: extra_params[:priority])
         when :set_assignee  then task.update!(assignee_id: extra_params[:assignee_id])
-        when :add_tag       then task.update!(tags: (task.tags + [ extra_params[:tag] ]).uniq)
+        when :add_tag       then task.with_lock { task.update!(tags: (task.tags + [ extra_params[:tag] ]).uniq) }
         end
 
         succeeded << task.id
@@ -324,12 +329,15 @@ class TaskService
     # committing the domain write. The out-of-transaction check_auto_trigger
     # wrapper above is where best-effort error handling lives.
     #
-    # The two remaining guards are deliberate and self-clearing, and nothing else
+    # The remaining guards are deliberate and self-clearing, and nothing else
     # may be added that isn't: an auto-trigger that stops firing and never
     # resumes is indistinguishable from a broken board.
     #   • trigger_mode — configuration. Manual means manual.
     #   • a pending gate — the task is waiting on a precondition (CI, approval).
     #     Gates carry a TTL and are reconciled, so this clears itself.
+    #   • the binding's cooldown_seconds — the same card entering the column
+    #     again that soon (a drag that bounces, a double drop) does not start a
+    #     second run. Per card, so moving several cards at once starts them all.
     #
     # A third guard used to latch on "the workflow's most recent run in this
     # project failed with quota_exceeded", meant to stop a stampede of runs
@@ -343,6 +351,7 @@ class TaskService
       binding = column.column_workflow_binding
       return nil unless binding&.trigger_mode&.to_sym == :auto
       return nil if task.gates.pending.exists?
+      return nil if triggered_within_cooldown?(binding, task)
 
       TriggerEngine.record_column_trigger(
         binding: binding, task: task,
@@ -351,6 +360,14 @@ class TaskService
     end
 
     private
+
+    def triggered_within_cooldown?(binding, task)
+      return false unless binding.cooldown_seconds.to_i.positive?
+
+      TriggerEvent.where(event_type: TriggerEngine::COLUMN_EVENT_TYPE, board_task_id: task.id,
+                         source: "column_workflow_binding:#{binding.id}")
+                  .exists?(created_at: binding.cooldown_seconds.seconds.ago..)
+    end
 
     # Pulls `board_column_id` out of an update's attributes when it names a
     # DIFFERENT column on this task's board — that is a move, and #update hands
@@ -459,7 +476,7 @@ class TaskService
         board: board, board_task: task, event_type: event_type,
         actor: actor, actor_type: actor_type, metadata: metadata
       )
-      board.touch
+      BoardRefresh.request(board)
     rescue StandardError => e
       Rails.logger.warn("[TaskService] Failed to record activity #{event_type}: #{e.message}")
     end

@@ -32,7 +32,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
       project: @project, workflow: @workflow, created_by: @user,
       event_type: "slack.message", filter_predicate: { "channel" => "C1" })
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: @workflow, mode: :non_interactive, user: @user)
     ).once.returns(build(:workflow_run))
 
@@ -50,11 +50,56 @@ class TriggerEngineTest < ActiveSupport::TestCase
       project: @project, workflow: @workflow, created_by: @user,
       event_type: "slack.message", filter_predicate: { "channel" => "C1" })
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
+    Slack::HelpResponder.expects(:call).once.returns(true)
 
     TriggerEngine.publish(
       event_type: "slack.message", source: "slack:test",
       data: { "channel" => "OTHER" }, project: @project, dedup_key: "evt-2"
+    )
+  end
+
+  test "publish replies with help when Slack text is /help and does not start a workflow" do
+    create(:trigger_binding,
+      project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", filter_predicate: { "channel" => "C1" })
+
+    WorkflowService.expects(:enqueue).never
+    Slack::HelpResponder.expects(:call).once.returns(true)
+
+    TriggerEngine.publish(
+      event_type: "slack.message", source: "slack:test",
+      data: { "channel" => "C1", "text" => "<@B0T> /help" }, project: @project, dedup_key: "evt-help"
+    )
+  end
+
+  test "publish replies with help when no Slack binding matches" do
+    create(:trigger_binding,
+      project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "channel" => "C1", "text" => { "op" => "contains", "value" => "ship" } })
+
+    WorkflowService.expects(:enqueue).never
+    Slack::HelpResponder.expects(:call).once.returns(true)
+
+    TriggerEngine.publish(
+      event_type: "slack.message", source: "slack:test",
+      data: { "channel" => "C1", "text" => "<@B0T>" }, project: @project, dedup_key: "evt-bare"
+    )
+  end
+
+  test "publish still starts a matching Slack binding and does not help" do
+    create(:trigger_binding,
+      project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "channel" => "C1", "text" => { "op" => "contains", "value" => "ship" } })
+
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
+    Slack::HelpResponder.expects(:call).never
+
+    TriggerEngine.publish(
+      event_type: "slack.message", source: "slack:test",
+      data: { "channel" => "C1", "text" => "<@B0T> please ship it" }, project: @project, dedup_key: "evt-ship"
     )
   end
 
@@ -63,7 +108,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
       project: @project, workflow: @workflow, created_by: @user,
       event_type: "slack.message", filter_predicate: {})
 
-    WorkflowService.expects(:start).once.returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
 
     2.times do
       TriggerEngine.publish(
@@ -77,7 +122,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
   end
 
   test "dispatch is a no-op when the event has no project (tenant) scope" do
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     event = TriggerEngine.publish(
       event_type: "slack.message", source: "slack:test",
@@ -87,13 +132,39 @@ class TriggerEngineTest < ActiveSupport::TestCase
     assert event.persisted?
   end
 
+  test "a binding with a cooldown starts one run per window and records the rest as skipped" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                             event_type: "slack.message", cooldown_seconds: 60)
+    WorkflowService.expects(:enqueue).once.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
+
+    %w[evt-1 evt-2].each do |key|
+      TriggerEngine.publish(event_type: "slack.message", source: "slack:test", data: {}, project: @project, dedup_key: key)
+    end
+
+    assert_equal %w[skipped started], TriggerDispatch.order(:status).pluck(:status)
+    assert_equal({ "reason" => "cooldown" }, TriggerDispatch.find_by(status: "skipped").detail)
+  end
+
+  test "a binding starts again once its cooldown has passed" do
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+                             event_type: "slack.message", cooldown_seconds: 60)
+    WorkflowService.expects(:enqueue).twice.returns(create(:workflow_run, workflow: @workflow, project: @project, user: @user))
+
+    TriggerEngine.publish(event_type: "slack.message", source: "slack:test", data: {}, project: @project, dedup_key: "evt-1")
+    travel 61.seconds do
+      TriggerEngine.publish(event_type: "slack.message", source: "slack:test", data: {}, project: @project, dedup_key: "evt-2")
+    end
+
+    assert_equal %w[started started], TriggerDispatch.pluck(:status)
+  end
+
   test "fire_for_binding does not start a run without an actor" do
     binding = create(:trigger_binding,
       project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
     binding.update_column(:created_by_id, nil)
     event = create(:trigger_event, event_type: "slack.message", project: @project)
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     assert_nil TriggerEngine.fire_for_binding(binding: binding, event: event)
   end
@@ -104,7 +175,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
     create(:trigger_binding,
       project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message")
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     event = TriggerEngine.record_event(
       event_type: "slack.message", source: "internal",
@@ -126,7 +197,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
     )
     task = create(:board_task, board: board, board_column: column)
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: @workflow, task: task, mode: :non_interactive)
     ).once.returns(build(:workflow_run))
 
@@ -144,7 +215,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
       event_type: "slack.message", filter_predicate: {})
     event = create(:trigger_event, event_type: "slack.message", project: @project, relay_state: "pending")
 
-    WorkflowService.expects(:start).once.returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).once.returns(build(:workflow_run))
 
     TriggerEngine.dispatch_pending(event)
     assert_equal "dispatched", event.reload.relay_state
@@ -164,7 +235,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
     )
 
     run = build(:workflow_run)
-    WorkflowService.expects(:start).once.returns(run)
+    WorkflowService.expects(:enqueue).once.returns(run)
 
     result = TriggerEngine.fire_workflow(
       workflow: @workflow, project: @project, task: nil, actor: @user,
@@ -184,7 +255,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
       status: "started", workflow_run: existing_run
     )
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     assert_equal existing_run, TriggerEngine.fire_workflow(
       workflow: @workflow, project: @project, task: nil, actor: @user,
@@ -194,12 +265,30 @@ class TriggerEngineTest < ActiveSupport::TestCase
 
   # == subject_policy ==
 
+  # A generic webhook's data is the sender's own request body.
+  test "a webhook cannot hand the run another tenant's assets or reach a Slack integration" do
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "webhook.received", subject_policy: :none)
+    own = create(:asset, scope: @project)
+    other_company = create(:company)
+    foreign = create(:asset, scope: other_company)
+    slack = Integration.create!(provider: :slack, company: other_company, name: "Theirs", status: :active)
+    event = create(:trigger_event, event_type: "webhook.received", source: "generic:wh-test", project: @project,
+      data: { "input_asset_ids" => [ own.id, foreign.id ], "integration_id" => slack.id,
+              "files" => [ { "id" => "F1", "url_private" => "https://files.slack.com/x" } ] })
+
+    Slack::FileIngestor.expects(:new).never
+    WorkflowService.expects(:enqueue).with(has_entries(input_asset_ids: [ own.id ])).once.returns(build(:workflow_run))
+
+    TriggerEngine.fire_for_binding(binding: binding, event: event)
+  end
+
   test "subject_policy none starts a task-less project run" do
     binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
       event_type: "slack.message", subject_policy: :none)
     event = create(:trigger_event, event_type: "slack.message", project: @project)
 
-    WorkflowService.expects(:start).with(has_entries(task: nil, workflow: @workflow)).once.returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).with(has_entries(task: nil, workflow: @workflow)).once.returns(build(:workflow_run))
 
     TriggerEngine.fire_for_binding(binding: binding, event: event)
   end
@@ -212,7 +301,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
       subject_title_template: "Triage: {{text}}")
     event = create(:trigger_event, event_type: "slack.message", project: @project, data: { "text" => "fix login" })
 
-    WorkflowService.expects(:start).with(has_entries(workflow: @workflow)).once.returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).with(has_entries(workflow: @workflow)).once.returns(build(:workflow_run))
 
     assert_difference -> { BoardTask.count }, 1 do
       TriggerEngine.fire_for_binding(binding: binding, event: event)
@@ -231,7 +320,7 @@ class TriggerEngineTest < ActiveSupport::TestCase
       event_type: "webhook.received", subject_policy: :existing_task)
     event = create(:trigger_event, event_type: "webhook.received", project: @project, board_task: task)
 
-    WorkflowService.expects(:start).with(has_entries(task: task, workflow: @workflow)).once.returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).with(has_entries(task: task, workflow: @workflow)).once.returns(build(:workflow_run))
 
     TriggerEngine.fire_for_binding(binding: binding, event: event)
   end

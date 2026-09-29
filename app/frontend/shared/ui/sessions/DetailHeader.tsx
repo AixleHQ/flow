@@ -1,7 +1,9 @@
 import { Link } from '@inertiajs/react';
 import type { ReactNode } from 'react';
 
-import { AgentLogo, agentLabel } from './AgentLogo';
+import { agentLabel } from '../agentRuntimes';
+
+import { AgentLogo } from './AgentLogo';
 import classes from './DetailHeader.module.css';
 import { ModeTag, modeLabel } from './ModeTag';
 import { StatusTag } from './StatusTag';

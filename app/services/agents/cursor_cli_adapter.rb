@@ -2,7 +2,6 @@
 
 require "net/http"
 require "json"
-require "set"
 
 module Agents
   # Cursor CLI adapter for credential handling
@@ -68,6 +67,12 @@ module Agents
       jwt_exp_ms(credentials["accessToken"])
     end
 
+    def rotatable_credential_keys = %w[accessToken refreshToken]
+
+    def credential_identity(credentials)
+      jwt_claims(credentials["accessToken"])["sub"].presence
+    end
+
     # Extract only the credentials we need to persist
     def extract_credentials(config_content)
       config = parse_json(config_content)
@@ -75,7 +80,7 @@ module Agents
     end
 
     # Generate auth.json for a new container
-    def generate_config(credentials, workflow_config = {})
+    def generate_config(credentials, _workflow_config = {})
       {
         "accessToken" => credentials["accessToken"],
         "refreshToken" => credentials["refreshToken"]
@@ -99,8 +104,8 @@ module Agents
 
     # Session command: agent --force (interactive), agent --force -p (non-interactive)
     # --force: auto-approve all tools unless explicitly denied (yolo mode)
-    # Prompt value is passed via AGENT_PROMPT env var and /tmp/.agent_prompt file
-    def session_command(mode:, prompt: nil, model: nil)
+    # The prompt is appended by AgentSessionStrategy, read from its prompt file.
+    def session_command(mode:, model: nil)
       model ? "agent --force --model #{Shellwords.shellescape(model)}" : "agent --force"
     end
 
@@ -166,9 +171,8 @@ module Agents
       response = request_models(access_token)
 
       if response_unauthorized?(response) && credential
-        new_token = refresh_cursor_token!(credential)
-        # :logout is a verdict, not a token — the server ended this login.
-        return [] unless new_token.is_a?(String)
+        new_token = refresh_for_request!(credential)&.dig("accessToken")
+        return [] if new_token.blank?
 
         response = request_models(new_token)
       end
@@ -184,22 +188,36 @@ module Agents
       []
     end
 
-    # Proactive-refresh hook (Temporal sweep). Thin wrapper over the reactive
-    # refresh_cursor_token! which persists under a row lock via persist_refreshed!.
-    # @param credential [AgentCredential]
-    # @return [Hash] { status: :refreshed | :error, detail: String | nil }
-    # margin_ms is ignored: this agent stores no per-block expiry to compare it
-    # against, so a call is already the decision to refresh.
-    def refresh!(credential, margin_ms: nil) # rubocop:disable Lint/UnusedMethodArgument
-      case refresh_cursor_token!(credential)
-      when :logout
-        # The server has ended this login; no amount of retrying brings it back.
-        { status: :error, detail: "cursor session ended — sign in again", permanent: true }
-      when nil
-        { status: :error, detail: "cursor token refresh failed", permanent: false }
-      else
-        { status: :refreshed, detail: nil }
+    # Exchange the stored refresh token for a fresh session token.
+    #
+    # The response carries `access_token` and `id_token` and NO new refresh token, and
+    # `shouldLogout` when the server wants this login ended. The IDE stores the new access
+    # token in both slots, and so do we: the refresh token we were given at login carries
+    # its own 60-day expiry, so keeping it would let the credential die on schedule however
+    # often we refreshed. Writing the new token into both rolls the window forward, which
+    # is why a signed-in IDE never has to sign in again.
+    #
+    # margin_ms is ignored: this agent stores no per-block expiry to compare it against,
+    # so a call is already the decision to refresh.
+    def perform_refresh!(credential, margin_ms: nil)
+      refresh_token = credential.config_data["refreshToken"]
+      return { status: :error, detail: "no refresh token stored — sign in again", permanent: true } if refresh_token.blank?
+
+      response = post_token_request(refresh_token)
+      unless response.is_a?(Net::HTTPSuccess)
+        return { status: :error, detail: "#{response.code}: #{response.body.to_s.truncate(200)}",
+                 permanent: response_unauthorized?(response) }
       end
+
+      data = parse_json(response.body)
+      # Not an error status: the server answers 200 and asks for the session to end.
+      return { status: :error, detail: "cursor session ended — sign in again", permanent: true } if data["shouldLogout"] == true
+
+      new_access = data["access_token"]
+      return { status: :error, detail: "token response carried no access_token", permanent: false } if new_access.blank?
+
+      persist_refreshed!(credential, credential.config_data.merge("accessToken" => new_access, "refreshToken" => new_access))
+      { status: :refreshed, detail: nil }
     end
 
     # Env vars for MITM proxy and http2-logger configuration.
@@ -250,14 +268,12 @@ module Agents
       api_events = fetch_filtered_events(access_token, { start_ms: api_start, end_ms: api_end })
 
       # Store raw API result in metadata for debugging
-      meta = terminal_session.metadata || {}
-      meta["usage_api_result"] = {
+      terminal_session.merge_jsonb!(:metadata, "usage_api_result" => {
         "fetched_at" => Time.current.iso8601,
         "time_window" => { "start_ms" => api_start, "end_ms" => api_end },
         "events" => api_events || [],
         "total_fetched" => api_events&.size || 0
-      }
-      terminal_session.update_column(:metadata, meta)
+      })
 
       if api_events.blank?
         Rails.logger.warn("[CursorCliAdapter] API returned 0 events for session #{terminal_session.id}")
@@ -282,49 +298,6 @@ module Agents
 
     def response_unauthorized?(response)
       response.code == "401" || response.code == "403"
-    end
-
-    # Exchange the stored refresh token for a fresh session token.
-    #
-    # The response carries `access_token` and `id_token` and NO new refresh token, and
-    # `shouldLogout` when the server wants this login ended. The IDE stores the new access
-    # token in both slots, and so do we: the refresh token we were given at login carries
-    # its own 60-day expiry, so keeping it would let the credential die on schedule however
-    # often we refreshed. Writing the new token into both rolls the window forward, which
-    # is why a signed-in IDE never has to sign in again.
-    #
-    # Returns the new access token, :logout when the server asked for one, or nil.
-    def refresh_cursor_token!(credential)
-      refresh_token = credential.config_data["refreshToken"]
-      return nil if refresh_token.blank?
-
-      response = post_token_request(refresh_token)
-
-      unless response.is_a?(Net::HTTPSuccess)
-        Rails.logger.warn("[CursorCliAdapter] Token refresh failed: #{response.code} #{response.body.to_s.truncate(200)}")
-        return response_unauthorized?(response) ? :logout : nil
-      end
-
-      data = parse_json(response.body)
-      # Not an error status: the server answers 200 and asks for the session to end.
-      return :logout if data["shouldLogout"] == true
-
-      new_access = data["access_token"]
-      return nil if new_access.blank?
-
-      updated = credential.config_data.merge(
-        "accessToken" => new_access,
-        "refreshToken" => new_access
-      )
-      # Persist under a row lock with the rotation guard so a concurrent session
-      # cleanup or sweep can't clobber a newer token.
-      persisted = persist_refreshed!(credential, updated)
-      Rails.logger.info("[CursorCliAdapter] Token refreshed for credential #{credential.id}")
-
-      persisted["accessToken"]
-    rescue StandardError => e
-      Rails.logger.warn("[CursorCliAdapter] Token refresh error: #{e.message}")
-      nil
     end
 
     # JSON, not form encoding: the endpoint is the IDE's, and the IDE posts JSON.
@@ -588,7 +561,7 @@ module Agents
     # OTLP payload helpers
     # =========================================================================
 
-    def generate_cli_config(workflow_config)
+    def generate_cli_config(_workflow_config)
       {
         # Required fields per docs
         "version" => 1,

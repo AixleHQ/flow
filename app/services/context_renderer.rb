@@ -120,18 +120,14 @@ class ContextRenderer
       lines = content.lines
       in_skill_detail = false
       lines.select do |line|
-        if line.strip.start_with?("### ")
-          in_skill_detail = false
-          true
-        elsif line.strip.start_with?("- **") || line.strip.start_with?("* **")
+        if line.strip.start_with?("- **", "* **")
           in_skill_detail = true
-          true
-        elsif in_skill_detail && (line.strip.start_with?("  ") || line.strip.empty?)
-          false
+        elsif in_skill_detail && line.strip.empty?
+          next false
         else
           in_skill_detail = false
-          true
         end
+        true
       end.join
     end
   end

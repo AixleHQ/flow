@@ -1,20 +1,3 @@
-/* ── Brand lockup (logo + Flow) ─────────────────── */
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.brandFlow {
-  font-family: 'Hanken Grotesk', sans-serif;
-  font-weight: 700;
-  font-size: 26px;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  color: var(--app-text-primary);
-}
-
 /* ── Card ───────────────────────────────────────── */
 
 @keyframes fadeSlideUp {
@@ -90,23 +73,6 @@
   font-family: var(--app-font-body, 'Figtree', sans-serif);
   font-size: 14px;
   font-weight: 500;
-}
-
-/* ── Google Button ──────────────────────────────── */
-
-.googleButton {
-  background-color: var(--app-bg-elevated);
-  color: var(--app-text-primary);
-  border-color: var(--app-border-default);
-  font-family: var(--app-font-body, 'Figtree', sans-serif);
-  font-size: 14px;
-  font-weight: 500;
-  transition: background-color 150ms ease, border-color 150ms ease;
-}
-
-.googleButton:hover {
-  background-color: var(--app-bg-elevated);
-  border-color: var(--app-border-strong);
 }
 
 /* ── No Workspace Screen ────────────────────────── */

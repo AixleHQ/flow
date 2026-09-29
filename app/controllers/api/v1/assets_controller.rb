@@ -3,6 +3,9 @@
 module Api
   module V1
     class AssetsController < ApplicationController
+      # The dev/test S3 stand-in: @uppy/aws-s3 PUTs the bytes with no CSRF header,
+      # exactly as it would to S3. The key it writes to was minted by #presign.
+      skip_before_action :verify_authenticity_token, only: :upload
       # An id minted by #presign, optionally carrying the original file's extension. The dev/test
       # upload endpoint accepts nothing else, so a caller cannot steer a write out of `cache/`.
       CACHE_KEY_PATTERN = %r{\Acache/\h{60}(\.[a-z0-9]{1,16})?\z}

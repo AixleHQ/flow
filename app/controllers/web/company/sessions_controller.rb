@@ -7,6 +7,7 @@
 class Web::Company::SessionsController < Web::Company::ApplicationController
   # In-flight states, for the visibility-scoped search below.
   SEARCH_IN_FLIGHT_STATES = %w[not_started queued running ready finishing].freeze
+  ROWS_LIMIT = 100
 
   def index
     base = filtered_scope
@@ -23,8 +24,23 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
       },
       filters: feed_filters.merge(type: list_type),
       total: base.count,
-      user_options: user_options
+      user_options: user_options,
+      cable_stream: inertia_cable_stream(current_company, :sessions)
     }
+  end
+
+  # The rows a live list asks back for after an update signal. Every member may
+  # read these: the member pages already list each member's sessions to the
+  # whole company, redacted per viewer exactly as here.
+  def rows
+    ids = Array(params[:ids]).map(&:to_i).uniq.first(ROWS_LIMIT)
+    sessions = company_sessions_scope.where(id: ids, session_type: SessionsRunsFeed::LISTABLE_SESSION_TYPES)
+                                     .with_cached_resource_counts
+                                     .includes(:user, :project, :session_admission,
+                                               :tools, :skills, :mcp_servers, :config_items,
+                                               :input_assets, :repositories)
+
+    render json: { sessions: sessions.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h } }
   end
 
   def show
@@ -90,11 +106,12 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   # Search matches on `initial_prompt`, a field the row itself may not be allowed
   # to reveal (TerminalSession#visible_to?). Without this a private session whose
   # hidden prompt matched someone's term would still surface, leaking the match.
-  # Same shape as SessionsRunsFeed#viewer_visible_scope, company-wide.
+  # Same shape as SessionsRunsFeed#viewer_visible_scope, company-wide. A left
+  # join: the sessions of a deleted user stay findable where they are team work.
   def search_visible_scope
-    own = TerminalSession.joins(:user).where(terminal_sessions: { user_id: current_user.id })
-    steps = TerminalSession.joins(:user).where(terminal_sessions: { session_type: "workflow_step" })
-    shared = TerminalSession.joins(:user).where(
+    own = TerminalSession.left_joins(:user).where(terminal_sessions: { user_id: current_user.id })
+    steps = TerminalSession.left_joins(:user).where(terminal_sessions: { session_type: "workflow_step" })
+    shared = TerminalSession.left_joins(:user).where(
       "(terminal_sessions.state IN (:in_flight) AND users.share_active_sessions = TRUE) " \
       "OR (terminal_sessions.state NOT IN (:in_flight) AND users.share_completed_sessions = TRUE)",
       in_flight: SEARCH_IN_FLIGHT_STATES

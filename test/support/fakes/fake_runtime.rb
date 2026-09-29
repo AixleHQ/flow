@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "open3"
+require "tmpdir"
+
 module ContainerRuntime
   # Canonical in-memory fake for the container runtime boundary (docs/testing.md §4,
   # R3). It is a real ContainerRuntime::BaseRuntime implementing the documented
@@ -32,6 +35,7 @@ module ContainerRuntime
     attr_reader :fs, :execs, :agent_type, :deleted_session_resources, :uploads
 
     def initialize(agent_type: "claude_code", filesystem: nil)
+      super()
       @agent_type = agent_type
       @fs = filesystem || build_filesystem(agent_type)
       @execs = []
@@ -40,6 +44,7 @@ module ContainerRuntime
       @unreachable_execs = []
       @raising_execs = []
       @unreadable_paths = []
+      @unwritable_paths = []
       @uploads = []
       @upload_handler = nil
       @terminal_pane = ""
@@ -96,6 +101,14 @@ module ContainerRuntime
     # be reachable, so the path stays in #fs and only the read fails.
     def fail_read(path)
       @unreadable_paths << path.to_s
+      self
+    end
+
+    # Write failure injection: both real runtimes answer false for a file they could
+    # not place (tar stream or exec error, tar exiting non-zero) rather than raising.
+    # `path` is a String or, for names with a random part, a Regexp.
+    def fail_write(path)
+      @unwritable_paths << path
       self
     end
 
@@ -215,6 +228,11 @@ module ContainerRuntime
         return [ [ output ], [ "" ], 0 ]
       end
 
+      # Python an adapter runs in the container (every agent image ships python3) is run
+      # for real against the virtual FS, so what it does to a file is the outcome a test
+      # sees rather than a canned answer.
+      return run_python(cmd[2], cmd.drop(3)) if cmd.is_a?(Array) && cmd[0] == "python3" && cmd[1] == "-c"
+
       [ [ resolve_command(cmd) ], [ "" ], 0 ]
     end
 
@@ -233,6 +251,8 @@ module ContainerRuntime
     # the container's own user can neither read nor delete, and `exec` here does
     # not run as root.
     def write_file(_id, path, content, mode: 0o644, uid: 0, gid: 0)
+      return false if @unwritable_paths.any? { |unwritable| unwritable === path.to_s }
+
       @fs[path] = content
       @written_files[path] = { mode: mode, uid: uid, gid: gid }
       true
@@ -377,6 +397,26 @@ module ContainerRuntime
     end
 
     # -- Per-agent virtual filesystem with realistic fixture data -------------
+
+    # Every absolute-path argument is materialized from #fs into a scratch file, and read
+    # back afterwards — or removed from #fs if the script deleted it.
+    def run_python(script, args)
+      Dir.mktmpdir("fake-runtime") do |dir|
+        local = args.each_with_index.to_h do |arg, i|
+          arg.start_with?("/") ? [ arg, File.join(dir, "arg#{i}#{File.extname(arg)}") ] : [ arg, arg ]
+        end
+        local.each { |path, file| File.binwrite(file, @fs[path]) if path != file && @fs.key?(path) }
+
+        stdout, stderr, status = Open3.capture3("python3", "-c", script, *local.values)
+
+        local.each do |path, file|
+          next if path == file
+
+          File.exist?(file) ? @fs[path] = File.binread(file) : @fs.delete(path)
+        end
+        [ [ stdout ], [ stderr ], status.exitstatus ]
+      end
+    end
 
     def build_filesystem(agent_type)
       auth = AUTH_CONFIGS.fetch(agent_type)

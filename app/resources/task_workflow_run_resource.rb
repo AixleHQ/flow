@@ -5,17 +5,17 @@ class TaskWorkflowRunResource < ApplicationResource
 
   attributes :id, :state, :mode, :started_at, :completed_at, :created_at
 
-  typelize :string?
+  typelize "string | null"
   attribute :workflow_name do |run|
     run.workflow&.name
   end
 
-  typelize :number?
+  typelize "number | null"
   attribute :total_cost_cents do |run|
     run.respond_to?(:total_cost_cents) ? run.total_cost_cents : nil
   end
 
-  typelize :number?
+  typelize "number | null"
   attribute :duration_seconds do |run|
     next nil unless run.started_at && run.completed_at
     duration = (run.completed_at - run.started_at).round

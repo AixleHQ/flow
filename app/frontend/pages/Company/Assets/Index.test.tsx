@@ -1,9 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
 
+import type { Asset } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
-
-import type { Asset } from 'shared/resources/assets/AssetsContent';
 
 import AssetsIndex from './Index';
 
@@ -18,6 +17,7 @@ const asset = (overrides: Partial<Asset> = {}): Asset => ({
   scopeIndicator: 'company',
   status: 'active',
   createdById: 1,
+  stepRunId: null,
   createdByName: 'Alice',
   versionsCount: 1,
   latestVersion: {
@@ -26,6 +26,7 @@ const asset = (overrides: Partial<Asset> = {}): Asset => ({
     contentType: 'application/pdf',
     fileSize: 2048,
     source: 'upload',
+    uploadedById: 1,
     fileUrl: null,
     createdAt: '2026-02-01T00:00:00Z',
   },

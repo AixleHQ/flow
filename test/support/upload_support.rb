@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module UploadSupport
   IMAGE_FILE_PATH = "test/files/test.png".freeze
   IMAGE_METADATA = { "mime_type" => "image/png", "filename" => "test.png" }.freeze

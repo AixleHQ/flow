@@ -16,6 +16,9 @@
 # token columns.
 class AzureDevopsInstallation < ApplicationRecord
   include Encryptable
+
+  encryption_key :integrations_key
+  encrypted_column :encrypted_access_token
   extend Enumerize
 
   enumerize :status, in: %i[inactive active error], default: :inactive, predicates: true, scope: true
@@ -63,17 +66,16 @@ class AzureDevopsInstallation < ApplicationRecord
 
   # ----- Token cache (written only by AzureDevops::AppTokenService) -----
 
+  # A cache: an entry that cannot be read is a miss, and the service mints anew.
   def cached_access_token
-    return nil if encrypted_access_token.blank?
-
-    encryptor.decrypt_and_verify(encrypted_access_token)
-  rescue ActiveSupport::MessageVerifier::InvalidSignature,
-         ActiveSupport::MessageEncryptor::InvalidMessage
+    decrypt_secret(encrypted_access_token, column: "encrypted_access_token")
+  rescue Encryptable::DecryptionError => e
+    Rails.logger.warn("[AzureDevopsInstallation] #{e.message}; treating the cached token as absent")
     nil
   end
 
   def cached_access_token=(value)
-    self.encrypted_access_token = value.present? ? encryptor.encrypt_and_sign(value.to_s) : nil
+    self.encrypted_access_token = value.present? ? encrypt_secret(value.to_s, column: "encrypted_access_token") : nil
   end
 
   # A cache entry is only usable for the exact credential generation and
@@ -107,9 +109,6 @@ class AzureDevopsInstallation < ApplicationRecord
 
   private
 
-  def encryption_key_setting
-    Settings.encryption.integrations_key
-  end
 
   # Ownership and Azure identity are what the authorization check reads. If they
   # could move while project integrations point here, an approved binding to one

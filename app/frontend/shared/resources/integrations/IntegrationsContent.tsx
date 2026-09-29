@@ -1,4 +1,4 @@
-import { router, usePage } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import {
   ActionIcon,
   Badge,
@@ -38,10 +38,11 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useMemo, useState } from 'react';
 
+import type { Integration } from '@/types/generated';
+
 import { formatDateMedium } from 'shared/lib/formatDate';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
-import type { SharedProps } from 'shared/ui';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
@@ -52,39 +53,6 @@ import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { GithubProps } from './GithubConnectModal';
-
-export interface Integration {
-  id: number;
-  name: string;
-  provider: string;
-  status: string;
-  scopeIndicator: string;
-  githubUrl: string | null;
-  githubAuthMode?: string | null;
-  githubTokenScopes?: string[];
-  installationId?: string;
-  coderUrl?: string | null;
-  coderDefaultTemplate?: string | null;
-  coderMachinePrefix?: string | null;
-  coderLockTtlMinutes?: number | null;
-  slackRequestUrl?: string | null;
-  youtrackCallbackUrl?: string | null;
-  youtrackBaseUrl?: string | null;
-  youtrackProjectName?: string | null;
-  youtrackBotLogin?: string | null;
-  youtrackWebhookHeader?: string | null;
-  youtrackLastReceivedAt?: string | null;
-  azureAuthMode?: string | null;
-  azureOrganization?: string | null;
-  azureProjectName?: string | null;
-  azureProjectIds?: string[];
-  azureProjectDisplayNames?: string[];
-  azureIdentity?: string | null;
-  azureCapabilities?: string[];
-  azureUrl?: string | null;
-  connectedBy: { id: number; name: string };
-  createdAt: string;
-}
 
 interface IntegrationsContentProps {
   integrations: Integration[];
@@ -136,8 +104,7 @@ export const IntegrationsContent = ({
   azureDevops,
   github,
 }: IntegrationsContentProps) => {
-  const { permissions } = usePage<SharedProps>().props;
-  const { canExecute } = useProjectPermissions();
+  const { canExecute, canManageCompany } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
   const [search, setSearch] = useState('');
   const [scopeFilter, setScopeFilter] = useState('all');
@@ -810,7 +777,7 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {integration.provider === 'youtrack' && canExecute && (!readOnly || permissions?.isAdmin) && (
+                        {integration.provider === 'youtrack' && canExecute && (!readOnly || canManageCompany) && (
                           <Tooltip label="Rotate webhook token">
                             <ActionIcon
                               aria-label={`Rotate webhook token for ${integration.name}`}
@@ -826,7 +793,7 @@ export const IntegrationsContent = ({
                             </ActionIcon>
                           </Tooltip>
                         )}
-                        {canExecute && (!readOnly || (integration.provider === 'youtrack' && permissions?.isAdmin)) && (
+                        {canExecute && (!readOnly || canManageCompany) && (
                           <Tooltip label="Remove">
                             <ActionIcon
                               aria-label="Remove"
@@ -912,7 +879,7 @@ export const IntegrationsContent = ({
             Enter a permanent token and the database ID of one YouTrack project. After connecting, configure the
             YouTrack Webhook Triggers app manually with the callback URL and header shown on the integration card.
           </Text>
-          {isProjectContext && permissions?.isAdmin && (
+          {isProjectContext && canManageCompany && (
             <SegmentedControl
               aria-label="Aixle scope"
               data={[

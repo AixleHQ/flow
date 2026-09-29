@@ -11,6 +11,7 @@ class CatalogSkillResource < ApplicationResource
   # rendered on a typed query has no mirror row behind it (a GET must not write to a
   # table shared by every tenant), so a database id would be null exactly when the
   # entry is newest.
+  typelize created_at: "string | null", updated_at: "string | null"
   attributes :registry_id, :source, :slug, :title, :description,
              :installs, :featured, :created_at, :updated_at
 
@@ -28,7 +29,7 @@ class CatalogSkillResource < ApplicationResource
 
   # Derived from the GitHub owner in the registry id, never curated. Null when the
   # id yields nothing usable; the UI then draws a monogram.
-  typelize :string?
+  typelize "string | null"
   attribute :icon_url do |catalog_skill|
     catalog_skill.icon_url
   end
@@ -40,7 +41,7 @@ class CatalogSkillResource < ApplicationResource
 
   # The worst verdict any audit provider reported. NULL means nobody audited this
   # skill — which the UI must not render as a clean bill of health.
-  typelize :string?
+  typelize "string | null"
   attribute :audit_risk do |catalog_skill|
     catalog_skill.audit_risk
   end
@@ -49,7 +50,7 @@ class CatalogSkillResource < ApplicationResource
   # snyk has rated skills "high" that the others call "safe" — and collapsing that
   # into one badge would hide the most informative part of the signal.
   typelize audit_providers: "Array<{ provider: string; risk: string | null; score: number | null; " \
-                            "alerts: number | null; analyzed_at: string | null }>"
+                            "alerts: number | null; analyzedAt: string | null }>"
   attribute :audit_providers do |catalog_skill|
     catalog_skill.audit_providers
   end

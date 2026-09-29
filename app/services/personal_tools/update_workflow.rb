@@ -44,6 +44,7 @@ module PersonalTools
             description: "When true, every step is granted every resource in the project and the base_* " \
                          "lists stop being the limit. Convenient for a workflow you trust, and the " \
                          "opposite of least privilege for one that installs or runs third-party code."
+      param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
     ATTRS = %i[name description].freeze
@@ -65,7 +66,7 @@ module PersonalTools
       CONFIG_FLAGS.each { |k| config[k] = ActiveModel::Type::Boolean.new.cast(params[k]) if params.key?(k) }
       return error("No fields to update") if attrs.empty? && config.empty?
 
-      ActiveRecord::Base.transaction do
+      Versions.save!(workflow, actor: version_actor, base_version: base_version) do
         workflow.update!(attrs) if attrs.any?
         workflow.merge_config!(config) if config.any?
       end

@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module CompanyMembershipStateMachine
   extend ActiveSupport::Concern
 
@@ -63,7 +65,7 @@ module CompanyMembershipStateMachine
       # A role change within a company can newly require an agent this membership
       # never connected (a viewer promoted to employee). Back to agent selection,
       # not step1 — the profile answers for this company still stand.
-      event :reopen do
+      event :reopen, after: :clear_onboarding_completed_at do
         transitions from: :completed, to: :step2
       end
     end

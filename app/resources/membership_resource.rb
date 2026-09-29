@@ -8,7 +8,7 @@ class MembershipResource < ApplicationResource
 
   attributes :id
 
-  typelize %w[employee admin viewer]
+  typelize CompanyMembership.role.values
   attribute :role do |membership|
     membership.role.to_s
   end

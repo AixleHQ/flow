@@ -19,6 +19,7 @@ module PersonalTools
       param :content, type: :string,
                       description: "Full replacement SKILL.md: frontmatter with name and description, then instructions.",
                       required: true
+      param :base_version, type: :integer, description: "The version you read (current_version_number). A newer one means someone else saved since, and the update is refused."
     end
 
     def execute
@@ -32,12 +33,14 @@ module PersonalTools
       result = ::Skills::SkillMarkdown.parse(params[:content])
       return error("Invalid SKILL.md: #{result.error_sentence}") unless result.valid?
 
-      skill.update!(
-        name: result.name,
-        title: result.frontmatter["title"].presence || result.name,
-        description: result.description,
-        content: result.content
-      )
+      Versions.save!(skill, actor: version_actor, base_version: base_version) do
+        skill.update!(
+          name: result.name,
+          title: result.frontmatter["title"].presence || result.name,
+          description: result.description,
+          content: result.content
+        )
+      end
       success(id: skill.id, name: skill.name, title: skill.title)
     rescue ActiveRecord::RecordInvalid => e
       error("Failed to update skill: #{e.record.errors.full_messages.join(', ')}")

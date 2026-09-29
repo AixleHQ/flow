@@ -10,8 +10,8 @@ module Tools
   #               picker SECTION ("Board management", "Slack"): its header
   #               attaches every session tool carrying the tag in one click, and
   #               the tools under it can each be attached on their own. Hidden
-  #               tags stay out of the picker entirely: they auto-inject, are
-  #               builder-bound, or are surfaced through a managed server.
+  #               tags stay out of the picker entirely: they auto-inject or are
+  #               surfaced through a managed server.
   #
   # A tag not listed here is treated as hidden. A user_attachable session tool
   # that matches no visible tag falls through to the picker's ungrouped list.
@@ -44,8 +44,7 @@ module Tools
       Entry.new(tag: :workflow_control, label: "Workflow control", ui_visible: false),
       Entry.new(tag: :async_results, label: "Async results", ui_visible: false),
       Entry.new(tag: :session_lifecycle, label: "Session lifecycle", ui_visible: false),
-      Entry.new(tag: :repositories, label: "Repositories", ui_visible: false),
-      Entry.new(tag: :builder, label: "Aixle Builder", ui_visible: false)
+      Entry.new(tag: :repositories, label: "Repositories", ui_visible: false)
     ].freeze
 
     BY_TAG = ENTRIES.index_by(&:tag).freeze

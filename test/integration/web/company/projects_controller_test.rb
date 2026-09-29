@@ -59,11 +59,27 @@ class Web::Company::ProjectsControllerTest < ActionDispatch::IntegrationTest
     get company_members_path
 
     assert_equal [ "Zeta", "Alpha" ], inertia.props[:projects].pluck(:name)
+    assert_equal [ true, false ], inertia.props[:projects].pluck(:favorite)
   end
 
   test "create redirects on success" do
     post company_projects_path, params: { project: { name: "Test Project", description: "A test" } }
     assert_response :redirect
+  end
+
+  test "a viewer cannot create a project" do
+    viewer = create(:user, :viewer, :onboarding_completed, company: @company, email: "client-#{SecureRandom.hex(3)}@external.com",
+                                                             password: AuthHelper::TEST_PASSWORD)
+    sign_in_as(viewer)
+
+    assert_no_difference -> { Project.count } do
+      post company_projects_path, params: { project: { name: "Client Project" } }
+    end
+    assert_equal "You are not authorized to perform this action.", flash[:alert]
+
+    get company_projects_path
+    assert inertia.props[:permissions].key?(:canWrite)
+    refute inertia.props.dig(:permissions, :canWrite)
   end
 
   test "destroy redirects on success" do

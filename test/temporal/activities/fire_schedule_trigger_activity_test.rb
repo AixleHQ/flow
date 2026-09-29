@@ -14,7 +14,7 @@ module Activities
       end
 
       test "records a schedule.fired event and starts the bound workflow" do
-        WorkflowService.expects(:start).with(has_entries(workflow: @workflow, user: @user)).once.returns(build(:workflow_run))
+        WorkflowService.expects(:enqueue).with(has_entries(workflow: @workflow, user: @user)).once.returns(build(:workflow_run))
 
         result = run_activity(FireScheduleTriggerActivity, Hashie::Mash.new(trigger_binding_id: @binding.id))
 
@@ -22,12 +22,30 @@ module Activities
         assert result.key?(:workflow_run_id)
       end
 
+      test "a schedule that fires for a deleted workflow starts nothing" do
+        @workflow.update_column(:deleted_at, Time.current)
+        WorkflowService.expects(:enqueue).never
+
+        result = run_activity(FireScheduleTriggerActivity, Hashie::Mash.new(trigger_binding_id: @binding.id))
+
+        assert_nil result[:workflow_run_id]
+      end
+
+      test "a schedule that outlived its binding removes itself" do
+        gone = @binding.id
+        @binding.delete
+        ScheduleReconciler.expects(:remove).with(gone).once
+        WorkflowService.expects(:enqueue).never
+
+        run_activity(FireScheduleTriggerActivity, Hashie::Mash.new(trigger_binding_id: gone))
+      end
+
       test "create_task subject policy makes the scheduled run create a card" do
         board = create(:board, project: @project)
         column = create(:board_column, board: board)
         @binding.update!(subject_policy: :create_task, subject_column: column, subject_title_template: "Nightly {{date}}")
 
-        WorkflowService.expects(:start).with(has_entries(workflow: @workflow)).once.returns(build(:workflow_run))
+        WorkflowService.expects(:enqueue).with(has_entries(workflow: @workflow)).once.returns(build(:workflow_run))
 
         assert_difference -> { BoardTask.count }, 1 do
           run_activity(FireScheduleTriggerActivity, Hashie::Mash.new(trigger_binding_id: @binding.id))

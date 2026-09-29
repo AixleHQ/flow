@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class DropContactRequests < ActiveRecord::Migration[8.0]
   def up
     drop_table :contact_requests

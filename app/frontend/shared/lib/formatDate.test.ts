@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatDate, parseDate } from './formatDate';
+import { formatDate, formatExpiry, parseDate } from './formatDate';
 
 describe('parseDate', () => {
   it('parses ISO8601', () => {
@@ -23,5 +23,23 @@ describe('parseDate', () => {
 describe('formatDate', () => {
   it('returns an em dash for null', () => {
     expect(formatDate(null)).toBe('—');
+  });
+});
+
+describe('formatExpiry', () => {
+  const now = new Date('2026-09-29T10:00:00Z');
+
+  it('says how long an 8-hour token has left, so a renewal is visible the same day', () => {
+    expect(formatExpiry('2026-09-29T17:00:00Z', now)).toMatch(/^in 7 h \(.+\)$/);
+    expect(formatExpiry('2026-09-29T10:25:00Z', now)).toMatch(/^in 25 min \(.+\)$/);
+  });
+
+  it('says a lapsed token has expired', () => {
+    expect(formatExpiry('2026-09-29T09:00:00Z', now)).toMatch(/^expired /);
+  });
+
+  it('falls back to date and time beyond a day, and an em dash for nothing', () => {
+    expect(formatExpiry('2026-11-02T02:16:00Z', now)).toMatch(/2026/);
+    expect(formatExpiry(null, now)).toBe('—');
   });
 });

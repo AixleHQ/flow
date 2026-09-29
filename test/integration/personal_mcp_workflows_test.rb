@@ -280,8 +280,8 @@ class PersonalMCPWorkflowsTest < ActionDispatch::IntegrationTest
     dropped = payload(call_tool("delete_sub_step",
                                 { project_id: @project.id, workflow_id: @workflow.id, step_id: s1["id"],
                                   sub_step_id: payload(sub)["id"] }))
-    refute dropped["soft_deleted"]
-    assert_not SubStep.exists?(payload(sub)["id"])
+    assert dropped["soft_deleted"]
+    assert SubStep.find(payload(sub)["id"]).deleted?
 
     upd = call_tool("update_workflow_step",
                     { project_id: @project.id, workflow_id: @workflow.id, step_id: s2["id"],

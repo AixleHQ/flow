@@ -19,6 +19,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   AUTHORIZE_HOST = "sentry.io"
 
   setup do
+    resolve_hosts_publicly!
     # Real cache so an encoded state's nonce survives to #consume.
     @cache = ActiveSupport::Cache::MemoryStore.new
     Rails.stubs(:cache).returns(@cache)
@@ -86,7 +87,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   # --- AUTHORIZE -----------------------------------------------------------
 
   test "authorize redirects to the provider with mandatory PKCE (S256) and no verifier in the URL" do
-    get oauth_authorize_path("sentry"), params: { owner_type: "Company", owner_id: @company.id, return_to: "/company/projects" }
+    post oauth_authorize_path("sentry"), params: { owner_type: "Company", owner_id: @company.id, return_to: "/company/projects" }
 
     assert_response :redirect
     location = @response.headers["Location"]
@@ -103,7 +104,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "authorize sanitizes an open-redirect return_to before signing it into the state" do
-    get oauth_authorize_path("sentry"), params: { owner_type: "Company", owner_id: @company.id, return_to: "//evil.com/steal" }
+    post oauth_authorize_path("sentry"), params: { owner_type: "Company", owner_id: @company.id, return_to: "//evil.com/steal" }
 
     assert_response :redirect
     signed = query_params(@response.headers["Location"])["state"]
@@ -111,7 +112,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "authorize neutralizes a control-char return_to (browsers strip Tab/CR/LF into a protocol-relative redirect)" do
-    get oauth_authorize_path("sentry"), params: { owner_type: "Company", owner_id: @company.id, return_to: "/\t/evil.com" }
+    post oauth_authorize_path("sentry"), params: { owner_type: "Company", owner_id: @company.id, return_to: "/\t/evil.com" }
 
     assert_response :redirect
     signed = query_params(@response.headers["Location"])["state"]
@@ -119,14 +120,14 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "authorize rejects an unknown provider" do
-    get oauth_authorize_path("github"), params: { owner_type: "Company", owner_id: @company.id }
+    post oauth_authorize_path("github"), params: { owner_type: "Company", owner_id: @company.id }
     assert_redirected_to root_path
     assert_equal "Unknown OAuth provider", flash[:alert]
   end
 
   test "authorize refuses an owner the user may not act for" do
     other = create(:company)
-    get oauth_authorize_path("sentry"), params: { owner_type: "Company", owner_id: other.id }
+    post oauth_authorize_path("sentry"), params: { owner_type: "Company", owner_id: other.id }
     assert_redirected_to root_path
     assert_equal "Not permitted", flash[:alert]
   end
@@ -279,7 +280,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     client = build_dcr_client
     stub_discovery!(client: client)
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
+    post oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
 
     assert_response :redirect
     location = @response.headers["Location"]
@@ -313,7 +314,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     client.update!(authorization_endpoint: "https://auth.mcp.test/authorize?resource=https%3A%2F%2Fauth.mcp.test&prompt=consent")
     stub_discovery!(client: client)
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
 
     assert_response :redirect
     location = @response.headers["Location"]
@@ -335,7 +336,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
     stub_discovery!(client: build_dcr_client, scopes: "openid offline_access workspace:member")
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
 
     q = query_params(@response.headers["Location"])
     assert_equal "openid offline_access workspace:member", q["scope"]
@@ -346,7 +347,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
     stub_discovery!(client: build_dcr_client, scopes: "mcp:read")
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
 
     refute query_params(@response.headers["Location"]).key?("prompt")
   end
@@ -355,7 +356,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
     stub_discovery!(client: build_dcr_client(scopes: nil), scopes: nil)
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
 
     q = query_params(@response.headers["Location"])
     refute q.key?("scope"), "an empty scope= is a request error at some authorization servers"
@@ -366,7 +367,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     error = MCP::RegistrationError.new("unexpected status=400", code: "invalid_redirect_uri")
     MCP::OauthDiscoveryService.stubs(:prepare).raises(error)
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
+    post oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
 
     assert_redirected_to "/company/projects"
     assert_equal error.user_message, flash[:alert]
@@ -377,7 +378,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
     MCP::OauthDiscoveryService.stubs(:prepare).raises(MCP::DiscoveryError, "connection reset")
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
 
     assert_equal MCP::DiscoveryError::GENERIC, flash[:alert]
     assert_no_match(/connection reset/, flash[:alert], "an exception message is not a user message")
@@ -388,18 +389,56 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
                     url: "https://mcp.acme.test/v1")
     stub_discovery!(client: build_dcr_client)
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
 
     payload = Oauth::State.decode(query_params(@response.headers["Location"])["state"])
     assert_equal "User", payload["owner_type"]
     assert_equal @user.id, payload["owner_id"]
   end
 
+  test "a GET to the connect URL starts nothing and lands on the server's page" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    MCP::OauthDiscoveryService.expects(:prepare).never
+
+    get "/oauth/mcp/#{server.id}/connect"
+
+    assert_redirected_to company_project_mcp_servers_path(@project)
+  end
+
+  # Connecting a shared credential sets the identity everyone using the server
+  # acts as — a read-only member may use the server, not re-bind it.
+  test "mcp_connect refuses a viewer the shared identity of a server" do
+    viewer = create(:user, :onboarding_completed, company: @company, membership_role: "viewer",
+                                                  password: AuthHelper::TEST_PASSWORD)
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared,
+                                          url: "https://mcp.acme.test/v1")
+    MCP::OauthDiscoveryService.expects(:prepare).never
+    delete logout_path
+    sign_in_as(viewer)
+
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
+
+    assert_redirected_to root_path
+    assert_equal "Not permitted", flash[:alert]
+  end
+
+  test "authorize refuses a member who is not an admin the company's identity" do
+    member = create(:user, :onboarding_completed, company: @company, membership_role: "employee",
+                                                  password: AuthHelper::TEST_PASSWORD)
+    delete logout_path
+    sign_in_as(member)
+
+    post oauth_authorize_path("sentry"), params: { owner_type: "Company", owner_id: @company.id }
+
+    assert_redirected_to root_path
+    assert_equal "Not permitted", flash[:alert]
+  end
+
   test "mcp_connect refuses a non-oauth server (never runs discovery)" do
     server = create(:mcp_server, :custom, scope: @project) # auth_type :none
     MCP::OauthDiscoveryService.expects(:prepare).never
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
     assert_redirected_to root_path
     assert_equal "Not permitted", flash[:alert]
   end
@@ -410,7 +449,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     server = create(:mcp_server, :custom, scope: other_project, auth_type: :oauth, url: "https://mcp.other.test/v1")
     MCP::OauthDiscoveryService.expects(:prepare).never
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
     assert_redirected_to root_path
     assert_equal "Not permitted", flash[:alert]
   end
@@ -419,7 +458,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
     MCP::OauthDiscoveryService.stubs(:prepare).raises(MCP::DiscoveryError.new("boom"))
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
+    post oauth_mcp_connect_path(mcp_server_id: server.id), params: { return_to: "/company/projects" }
     assert_redirected_to "/company/projects"
     assert_equal "Couldn't connect to this MCP server", flash[:alert]
   end
@@ -460,6 +499,77 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
     assert_equal "mcp-at-1", cred.access_token
   end
 
+  # RFC 9207: an authorization response naming another issuer is a mix-up.
+  test "callback (mcp) refuses a response whose iss names another issuer" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    client = build_dcr_client
+    stub_mcp_token_success!("https://auth.mcp.test/token")
+    state = build_state(owner: @project, provider: "mcp:mcp.acme.test", mcp_server_id: server.id,
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: client.id)
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "mcp-code-1", state: state, iss: "https://accounts.real-provider.test" }
+    end
+
+    assert_match(/different server/, flash[:alert])
+    assert_not_requested(:post, "https://auth.mcp.test/token")
+  end
+
+  test "callback (mcp) refuses a response without iss from a server that promised one" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    client = build_dcr_client
+    client.update!(metadata: { "asm" => { "authorization_response_iss_parameter_supported" => true } })
+    stub_mcp_token_success!("https://auth.mcp.test/token")
+    state = build_state(owner: @project, provider: "mcp:mcp.acme.test", mcp_server_id: server.id,
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: client.id)
+
+    get oauth_callback_path, params: { code: "mcp-code-1", state: state }
+
+    assert_match(/different server/, flash[:alert])
+    assert_not_requested(:post, "https://auth.mcp.test/token")
+  end
+
+  test "callback (mcp) accepts a matching iss and records who connected" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    client = build_dcr_client
+    stub_mcp_token_success!("https://auth.mcp.test/token")
+    state = build_state(owner: @project, provider: "mcp:mcp.acme.test", mcp_server_id: server.id,
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: client.id)
+
+    get oauth_callback_path, params: { code: "mcp-code-1", state: state, iss: "https://auth.mcp.test/" }
+
+    assert_equal "Connected", flash[:notice]
+    assert_equal @user, OauthCredential.last.connected_by
+  end
+
+  test "callback (mcp) records the resource the grant was issued for" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    client = build_dcr_client
+    stub_mcp_token_success!("https://auth.mcp.test/token")
+    state = build_state(owner: @project, provider: "mcp:mcp.acme.test", mcp_server_id: server.id,
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: client.id)
+
+    get oauth_callback_path, params: { code: "mcp-code-1", state: state }
+
+    assert_equal "https://mcp.acme.test/v1", OauthCredential.last.resource
+  end
+
+  test "callback (mcp) refuses a grant for a server re-pointed while the user was consenting" do
+    server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, url: "https://mcp.acme.test/v1")
+    client = build_dcr_client
+    stub_mcp_token_success!("https://auth.mcp.test/token")
+    state = build_state(owner: @project, provider: "mcp:mcp.acme.test", mcp_server_id: server.id,
+                        resource: "https://mcp.acme.test/v1", oauth_client_id: client.id)
+    server.update!(url: "https://collector.example.net/v1")
+
+    assert_no_difference("OauthCredential.count") do
+      get oauth_callback_path, params: { code: "mcp-code-1", state: state }
+    end
+
+    assert_match(/address changed/, flash[:alert])
+    assert_not_requested(:post, "https://auth.mcp.test/token")
+  end
+
   test "callback (mcp) rejects an oauth_client_id that is not a source:\"dcr\" client" do
     static = OauthClient.create!(issuer: "https://static.test", client_id: "static-cid", source: "static",
                                  authorization_endpoint: "https://static.test/authorize",
@@ -498,7 +608,7 @@ class Web::OauthControllerTest < ActionDispatch::IntegrationTest
                               .with(mcp_url: server.url, manual_client: manual)
                               .returns(OpenStruct.new(oauth_client: manual, resource: server.url, scopes: nil))
 
-    get oauth_mcp_connect_path(mcp_server_id: server.id)
+    post oauth_mcp_connect_path(mcp_server_id: server.id)
 
     assert_equal "operator-cid", query_params(@response.headers["Location"])["client_id"]
   end

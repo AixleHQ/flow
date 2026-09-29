@@ -65,6 +65,21 @@ than duplicating a few hundred rate-limited requests.
                         class: "button" %>
         </td>
       </tr>
+      <tr>
+        <td>Templates</td>
+        <td>
+          <%= number_with_delimiter(@templates_count) %> listed
+          <% if @templates_commit %>at <code><%= @templates_commit.first(7) %></code><% end %>
+        </td>
+        <td><%= @templates_synced_at ? l(@templates_synced_at, format: :short) : "never" %></td>
+        <td>hourly, :20</td>
+        <td>
+          <%= button_to "Sync template catalog",
+                        admin_catalog_syncs_path(catalog: "templates"),
+                        method: :post,
+                        class: "button" %>
+        </td>
+      </tr>
     </tbody>
   </table>
 

@@ -2,11 +2,13 @@ import '@testing-library/jest-dom/vitest';
 
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { router } from '@inertiajs/react';
+import { notifications } from '@mantine/notifications';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildBoardColumn } from 'test/factories/boardColumn';
 import { buildBoardTask } from 'test/factories/boardTask';
+import { answerFetch } from 'test/fetchStub';
 import { act, renderHook, waitFor } from 'test/renderPage';
 import type BoardColumn from 'types/generated/BoardColumn';
 import type BoardTask from 'types/generated/BoardTask';
@@ -67,7 +69,7 @@ describe('useBoardDnd', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('persists the move of a task created after mount, without a reload', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = answerFetch({ 'PATCH /api/v1/projects/:project/tasks/:task/move': {} });
     const existing = buildBoardTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, position: 0 });
     const { result } = renderHook(() => useBoardHarness([existing]));
 
@@ -87,7 +89,7 @@ describe('useBoardDnd', () => {
   });
 
   it('moves an existing card onto another card and persists the target position', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const fetchSpy = answerFetch({ 'PATCH /api/v1/projects/:project/tasks/:task/move': {} });
     const dragged = buildBoardTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, position: 0 });
     const target = buildBoardTask({ id: 2, title: 'Render dashboard charts', boardColumnId: 200, position: 0 });
     const { result } = renderHook(() => useBoardHarness([dragged, target]));
@@ -113,6 +115,27 @@ describe('useBoardDnd', () => {
     });
 
     await waitFor(() => expect(result.current.tasks.find((t) => t.id === task.id)?.boardColumnId).toBe(100));
+  });
+
+  // fetch resolves for a refusal too; a 403/422 must not leave the card where it was dropped.
+  it("puts the card back and shows the server's reason when the move is refused", async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Task has an active agent run' }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const show = vi.spyOn(notifications, 'show').mockImplementation(() => '');
+    const task = buildBoardTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100, position: 0 });
+    const { result } = renderHook(() => useBoardHarness([task]));
+
+    act(() => result.current.handleDragStart(pickUp(task)));
+    await act(async () => {
+      await result.current.handleDragEnd(dropOnColumn(task, IN_PROGRESS));
+    });
+
+    await waitFor(() => expect(result.current.tasks.find((t) => t.id === task.id)?.boardColumnId).toBe(100));
+    expect(show).toHaveBeenCalledWith(expect.objectContaining({ message: 'Task has an active agent run' }));
   });
 
   // Regression for #580: dragging a column used to persist via `setColumns` *and* trigger a
@@ -145,6 +168,25 @@ describe('useBoardDnd', () => {
 
   it('restores the pre-drag column order when the reorder request fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+    const created = buildBoardColumn({ id: 300, name: 'Done', position: 2 });
+    const { result } = renderHook(() => useBoardHarness([], [BACKLOG, IN_PROGRESS, created]));
+
+    act(() => result.current.handleDragStart(pickUpColumn(created)));
+    await act(async () => {
+      await result.current.handleDragEnd(dropColumnOn(created, BACKLOG));
+    });
+
+    await waitFor(() => expect(result.current.columns.map((c) => c.id)).toEqual([100, 200, 300]));
+  });
+
+  it('restores the column order when the server refuses the reorder', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: 'You cannot change this board' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.spyOn(notifications, 'show').mockImplementation(() => '');
     const created = buildBoardColumn({ id: 300, name: 'Done', position: 2 });
     const { result } = renderHook(() => useBoardHarness([], [BACKLOG, IN_PROGRESS, created]));
 

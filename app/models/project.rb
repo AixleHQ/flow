@@ -16,6 +16,7 @@ class Project < ApplicationRecord
   has_many :project_favorites, dependent: :destroy
   has_many :favorited_by_users, through: :project_favorites, source: :user
   has_many :terminal_sessions, dependent: :nullify
+  has_many :oauth_credentials, as: :owner, dependent: :destroy
   has_many :config_items, as: :scope, dependent: :destroy
   has_many :agents, as: :scope, dependent: :destroy
   has_many :tools, as: :scope, dependent: :destroy
@@ -30,6 +31,9 @@ class Project < ApplicationRecord
   has_one :board, dependent: :destroy
   has_many :workflows, as: :scope, dependent: :destroy
   has_many :workflow_runs, dependent: :destroy
+  # A limit outliving its project kept reserving capacity nobody could use.
+  has_one :session_concurrency_limit, as: :scope, dependent: :destroy
+  has_many :template_installs, dependent: :destroy
 
   # Validations
   validates :name, presence: true, uniqueness: { scope: :company_id }
@@ -79,11 +83,11 @@ class Project < ApplicationRecord
   }
 
   # Ransack
-  def self.ransackable_attributes(auth_object = nil)
+  def self.ransackable_attributes(_auth_object = nil)
     %w[name description state created_at updated_at]
   end
 
-  def self.ransackable_associations(auth_object = nil)
+  def self.ransackable_associations(_auth_object = nil)
     %w[company owner]
   end
 
@@ -120,6 +124,33 @@ class Project < ApplicationRecord
   # Check if user is admin of project (owner only)
   def admin?(user)
     owner_id == user.id
+  end
+
+  def ownership_candidates
+    company.ownership_candidates.where.not(id: owner_id)
+  end
+
+  # Hands the project to another member. The previous owner stays on as a
+  # collaborator unless they are leaving the company; a collaborator row for
+  # the new owner goes, since ProjectCollaborator refuses a row for the
+  # project's own owner.
+  def transfer_ownership_to(new_owner, keep_previous_owner: true)
+    transaction do
+      lock!
+      unless new_owner && ownership_candidates.exists?(id: new_owner.id)
+        errors.add(:owner, "must be an active company member who is not a viewer or the current owner")
+        raise ActiveRecord::Rollback
+      end
+
+      previous_owner = owner
+      project_collaborators.where(user: new_owner).destroy_all
+      update!(owner: new_owner)
+      project_collaborators.create!(user: previous_owner) if keep_previous_owner
+    end
+    errors.empty?
+  rescue ActiveRecord::RecordInvalid => e
+    errors.add(:base, e.record.errors.full_messages.to_sentence)
+    false
   end
 
   # Returns all member users (owner first, then collaborators)

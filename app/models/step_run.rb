@@ -6,6 +6,7 @@ class StepRun < ApplicationRecord
   belongs_to :workflow_run, counter_cache: true
   belongs_to :step
   belongs_to :terminal_session, optional: true
+  belongs_to :workflow_version, class_name: "EntityVersion", optional: true
 
   has_many :sub_step_runs, dependent: :destroy
   has_many :produced_workflow_run_assets, class_name: "WorkflowRunAsset", foreign_key: :produced_by_step_run_id,
@@ -17,6 +18,24 @@ class StepRun < ApplicationRecord
   broadcasts_to :workflow_run, on: :update
 
   scope :ordered, -> { joins(:step).order("steps.position ASC") }
+
+  HISTORY_ERROR_LIMIT = 2_000
+
+  # A retry is a new step run of the same step. It carries the tally — which
+  # attempt it is and what the earlier ones failed with — so get_step_run can
+  # tell an agent or a person more than "failed".
+  def self.next_attempt!(workflow_run:, step:)
+    earlier = workflow_run.step_runs.where(step: step).order(:id).to_a
+    workflow_run.step_runs.create!(step: step, state: :pending, retry_count: earlier.size,
+                                   error_history: earlier.filter_map(&:history_entry))
+  end
+
+  def history_entry
+    return if error_message.blank?
+
+    { "step_run_id" => id, "state" => state.to_s, "error_category" => error_category,
+      "error" => error_message.truncate(HISTORY_ERROR_LIMIT), "at" => (completed_at || updated_at)&.iso8601 }.compact
+  end
 
   def mark_running!
     update!(state: :running, started_at: Time.current, error_message: nil)

@@ -12,14 +12,14 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
 
   # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+  # Spend lives in usage_statistics, which the ingest updates while the session
+  # runs; the session's own columns are only copied at its end.
   def create_session_with_usage(project:, user:, cost_cents:, total_tokens:, created_at: Time.current)
-    create(:terminal_session,
-      project: project,
-      user: user,
-      session_type: "agent_session",
-      cost_cents: cost_cents,
-      total_tokens: total_tokens,
-      created_at: created_at)
+    session = create(:terminal_session, project: project, user: user, session_type: "agent_session",
+                                        created_at: created_at)
+    UsageStatistic.create!(terminal_session: session, cost_cents: cost_cents, input_tokens: total_tokens,
+                           output_tokens: 0, cache_write_tokens: 0, cache_read_tokens: 0, tokens: total_tokens)
+    session
   end
 
   def create_session_linked_to_task(project:, user:, cost_cents:, total_tokens:, board_task:, created_at: Time.current)
@@ -40,6 +40,26 @@ class SessionCostTokenUsageServiceTest < ActiveSupport::TestCase
       tags: tags,
       task_type: task_type
     ).call
+  end
+
+  # ─── Source of spend ─────────────────────────────────────────────────────────
+
+  test "a running session's spend is counted before the session ends" do
+    session = create(:terminal_session, :running, project: @project, user: @admin, session_type: "agent_session")
+    UsageStatistic.create!(terminal_session: session, cost_cents: 42, input_tokens: 10, output_tokens: 5,
+                           cache_write_tokens: 0, cache_read_tokens: 0, tokens: 15)
+
+    result = call_service(scope: "project")
+
+    assert_equal 42, result.totals.total_cost_cents
+    assert_equal 15, result.totals.total_tokens
+  end
+
+  test "a login session is not a work session and is not counted" do
+    create(:terminal_session, :auth_setup, project: @project, user: @admin)
+    create_session_with_usage(project: @project, user: @admin, cost_cents: 100, total_tokens: 10)
+
+    assert_equal 100, call_service(scope: "project").totals.avg_cost_cents_per_session
   end
 
   # ─── Scope: project ──────────────────────────────────────────────────────────

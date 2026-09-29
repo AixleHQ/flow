@@ -15,7 +15,7 @@ class Web::OnboardingController < Web::ApplicationController
   # gets its own role, agent selection and agent credential.
   def show
     if current_membership.onboarding_completed?
-      redirect_to company_projects_path
+      redirect_to take_pending_template_install_path || company_projects_path
       return
     end
 

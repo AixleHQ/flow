@@ -3,10 +3,10 @@
 namespace :tools do
   desc "Run a tool by name through Temporal container workflow. " \
        "Usage: rake tools:run NAME=slack_history PARAMS='channel:projectx-eng,SLACK_RANGE:7d' " \
-       "[COMPANY=dualboot] [PROJECT=aixle-mvp] [TIMEOUT=300] [SYNC=true]"
+       "COMPANY=<slug> [PROJECT=<slug>] [TIMEOUT=300] [SYNC=true]"
   task run: :environment do
     name       = ENV.fetch("NAME") { abort "NAME is required" }
-    company_slug = ENV["COMPANY"] || "dualboot"
+    company_slug = ENV.fetch("COMPANY") { abort "COMPANY is required" }
     project_slug = ENV["PROJECT"]
     timeout    = (ENV["TIMEOUT"] || 300).to_i
     sync       = ENV.fetch("SYNC", "true") == "true"
@@ -16,7 +16,7 @@ namespace :tools do
     project = project_slug ? company.projects.find_by!(slug: project_slug) : nil
 
     tool = resolve_tool(name, company, project)
-    puts "Tool: #{tool.display_name} (#{tool.kind}/#{tool.execution_mode})"
+    puts "Tool: #{tool.display_name} (#{tool.source}/#{tool.execution_mode})"
     puts "Params: #{params}" if params.any?
 
     if tool.execution_mode.app?
@@ -35,20 +35,22 @@ namespace :tools do
   end
 
   def resolve_tool(name, company, project)
-    Tool.find_by(name: name, kind: %w[system internal workflow]) ||
+    # Platform tools are code-defined; their rows carry source "code" (the old
+    # `kind` column is gone).
+    Tool.find_by(name: name, source: "code", deleted_at: nil) ||
       (project && Tool.find_by(name: name, scope: project)) ||
       Tool.find_by(name: name, scope: company) ||
       abort("Tool '#{name}' not found")
   end
 
-  def run_app_tool(tool, params, project)
+  def run_app_tool(tool, params, _project)
     result = InternalToolExecutor.execute(tool, params, nil)
     puts "Exit: #{result[:exit_code]}"
     puts result[:stdout] if result[:stdout].present?
     $stderr.puts result[:stderr] if result[:stderr].present?
   end
 
-  def run_container_tool(tool, params, company, project, timeout, sync)
+  def run_container_tool(tool, params, _company, project, timeout, sync)
     tool_result = ToolResult.create!(
       tool: tool,
       execution_id: ToolResult.generate_id,

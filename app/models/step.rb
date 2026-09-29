@@ -2,8 +2,9 @@
 
 class Step < ApplicationRecord
   extend Enumerize
+  include ProjectOwnedReferences
 
-  SUPPORTED_AGENT_RUNTIMES = %w[claude_code cursor_cli codex gemini_cli antigravity_cli].freeze
+  SUPPORTED_AGENT_RUNTIMES = CompanyMembership::AVAILABLE_AGENTS
 
   belongs_to :workflow
   belongs_to :agent, optional: true
@@ -22,6 +23,7 @@ class Step < ApplicationRecord
   validates :required_agent_runtime, inclusion: { in: SUPPORTED_AGENT_RUNTIMES }, allow_nil: true
   validate :depends_on_step_ids_valid
   validate :config_item_ids_belong_to_project
+  validate :resource_ids_belong_to_project
 
   default_scope { order(:position) }
 
@@ -37,6 +39,9 @@ class Step < ApplicationRecord
     deleted_at.present?
   end
 
+  # Always a soft delete: a version snapshot names steps by id, and a revert
+  # brings one back by clearing `deleted_at` — a hard-deleted id would leave the
+  # snapshot's `depends_on_step_ids` pointing at nothing.
   def destroy
     dependent = workflow.steps.not_deleted.where.not(id: id)
                         .where("depends_on_step_ids @> ?::jsonb", [ id ].to_json)
@@ -45,12 +50,8 @@ class Step < ApplicationRecord
       return false
     end
 
-    if step_runs.exists?
-      soft_delete!
-      self
-    else
-      super
-    end
+    soft_delete!
+    self
   end
 
   def dependency_steps
@@ -61,6 +62,14 @@ class Step < ApplicationRecord
 
   def root?
     depends_on_step_ids.blank?
+  end
+
+  def self.ransackable_attributes(_auth_object = nil)
+    %w[name position created_at updated_at]
+  end
+
+  def self.ransackable_associations(_auth_object = nil)
+    %w[workflow agent sub_steps]
   end
 
   private
@@ -93,6 +102,21 @@ class Step < ApplicationRecord
     errors.add(:config_item_ids, "contains items outside this project: #{foreign.sort.join(', ')}")
   end
 
+  STEP_RESOURCES = {
+    agent_id: :agents, tool_ids: :tools, skill_ids: :skills, mcp_server_ids: :mcp_servers,
+    asset_ids: :assets, repository_ids: :repositories
+  }.freeze
+
+  def resource_ids_belong_to_project
+    return unless workflow&.scope_type == "Project"
+
+    STEP_RESOURCES.each do |attribute, kind|
+      next unless will_save_change_to_attribute?(attribute)
+
+      validate_owned_ids(workflow.scope, kind, attribute, attribute_in_database(attribute), self[attribute])
+    end
+  end
+
   def depends_on_step_ids_valid
     return if depends_on_step_ids.blank?
 
@@ -101,18 +125,40 @@ class Step < ApplicationRecord
       return
     end
 
-    sibling_ids = workflow.steps.not_deleted.where.not(id: id).pluck(:id)
-    invalid_ids = depends_on_step_ids - sibling_ids
+    siblings = workflow.steps.not_deleted.where.not(id: id).pluck(:id, :name, :depends_on_step_ids)
+    invalid_ids = depends_on_step_ids - siblings.map(&:first)
     if invalid_ids.any?
       errors.add(:depends_on_step_ids, "contains invalid step ids: #{invalid_ids.join(', ')}")
+      return
     end
+
+    cycle = dependency_cycle(siblings)
+    errors.add(:depends_on_step_ids, "would create a cycle: #{cycle.join(' → ')}") if cycle
   end
 
-  def self.ransackable_attributes(_auth_object = nil)
-    %w[name position created_at updated_at]
+  # A run starts only the steps whose dependencies have all finished, so steps
+  # that wait on each other never start, and the run ends with them still pending.
+  def dependency_cycle(siblings)
+    return nil if new_record?
+
+    names = siblings.to_h { |step_id, step_name, _| [ step_id, step_name ] }.merge(id => name)
+    graph = siblings.to_h { |step_id, _, deps| [ step_id, Array(deps) ] }.merge(id => depends_on_step_ids)
+    path = path_back_to_self(graph)
+    path&.map { |step_id| names[step_id] }
   end
 
-  def self.ransackable_associations(_auth_object = nil)
-    %w[workflow agent sub_steps]
+  def path_back_to_self(graph)
+    stack = [ [ id, [ id ] ] ]
+    seen = Set.new
+    until stack.empty?
+      step_id, path = stack.pop
+      graph.fetch(step_id, []).each do |dep|
+        return path + [ id ] if dep == id
+        next unless seen.add?(dep)
+
+        stack.push([ dep, path + [ dep ] ])
+      end
+    end
+    nil
   end
 end

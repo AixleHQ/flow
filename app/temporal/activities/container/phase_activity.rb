@@ -18,15 +18,25 @@ module Activities
 
         log(:info, "[ContainerPhase] #{phase} for #{strategy.class.name.demodulize}")
         service.run_phase(phase)
-      rescue ContainerService::PhaseError, ArgumentError => e
-        raise TemporalExceptions.non_retryable(e, benign: @cleanup_phase, details: phase_error_details(e))
-      rescue Docker::Error::NotFoundError => e
-        raise TemporalExceptions.non_retryable(e, benign: @cleanup_phase)
-      rescue Docker::Error::DockerError => e
-        raise TemporalExceptions.wrap(e, retryable: true)
+      rescue ContainerService::PhaseError => e
+        raise classified(e)
+      rescue ArgumentError => e
+        raise TemporalExceptions.non_retryable(e)
       end
 
       private
+
+      # A transient runtime failure is retried; a missing object is expected only
+      # while cleaning up; everything else fails the phase and is reported —
+      # including every other cleanup failure, which leaves something behind.
+      def classified(error)
+        details = phase_error_details(error)
+        case ContainerService::ErrorClassification.classify(error.original_error)
+        when :transient then TemporalExceptions.wrap(error, retryable: true, details: details)
+        when :gone then TemporalExceptions.non_retryable(error, benign: @cleanup_phase, details: details)
+        else TemporalExceptions.non_retryable(error, details: details)
+        end
+      end
 
       # A strategy's ProvisioningError-style domain errors carry a secret-safe
       # `.details` diagnostic (see AgentSessionStrategy::ProvisioningError). PhaseError

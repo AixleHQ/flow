@@ -13,8 +13,12 @@ import {
 } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import type { BoardColumn, Project, TerminalSession, Workflow } from '@/types/generated';
+
 import { formatTime, parseDate } from 'shared/lib/formatDate';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
+import { agentLabel, isAgentType } from 'shared/ui/agentRuntimes';
+import { LiveTerminal } from 'shared/ui/sessions';
 import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
@@ -23,43 +27,16 @@ import classes from './SessionPage.module.css';
 
 // ── Types ──────────────────────────────────────────
 
-interface Project {
-  id: number;
-  name: string;
-}
-
-interface Session {
-  id: number;
-  state: string;
-  agentType: string | null;
-  mode: string | null;
-  websocketUrl: string | null;
-  ideUrl: string | null;
-  createdAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  errorMessage: string | null;
-}
-
 interface Props {
   project: Project;
-  session: Session;
+  session: TerminalSession;
   cableStream: string;
   builderActivities?: MetaActivity[];
-  workflows?: WorkflowPreview[];
-  boardColumns?: BoardColumnPreview[];
+  workflows?: Workflow[];
+  boardColumns?: BoardColumn[];
 }
 
 // ── Constants ──────────────────────────────────────
-
-const AGENT_LABELS: Record<string, string> = {
-  claude_code: 'Claude Code',
-  cursor_cli: 'Cursor CLI',
-  codex: 'Codex',
-  gemini_cli: 'Gemini CLI',
-  grok: 'Grok',
-  kiro_cli: 'Kiro CLI',
-};
 
 // ── Meta Activity Types ────────────────────────────
 
@@ -71,32 +48,31 @@ interface MetaActivity {
   timestamp: string;
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  created_workflow: 'Created workflow',
-  deleted_workflow: 'Deleted workflow',
-  created_step: 'Created step',
-  created_sub_step: 'Created sub-step',
-  updated_sub_step: 'Updated sub-step',
-  deleted_sub_step: 'Deleted sub-step',
-  updated_step: 'Updated step',
-  deleted_step: 'Deleted step',
-  reordered_steps: 'Reordered steps',
-  created_agent: 'Created agent',
-  created_tool: 'Created tool',
-  created_skill: 'Created skill',
-  created_mcp_server: 'Created MCP server',
-  linked_tool: 'Linked tool',
-  linked_skill: 'Linked skill',
-  linked_mcp_server: 'Linked MCP server',
-  finalized_workflow: 'Finalized workflow',
-  created_board_column: 'Created column',
-  updated_board_column: 'Updated column',
-  deleted_board_column: 'Deleted column',
-  reordered_board_columns: 'Reordered columns',
-  created_column_binding: 'Created binding',
-  updated_column_binding: 'Updated binding',
-  deleted_column_binding: 'Deleted binding',
-  setup_board_from_preset: 'Board from preset',
+// Activities record the builder tool that made the change (`create_workflow_step`);
+// sessions from before that recorded past-tense names (`created_step`).
+const PAST_TENSE: Record<string, string> = {
+  add: 'Added',
+  approve: 'Approved',
+  archive: 'Archived',
+  cancel: 'Cancelled',
+  create: 'Created',
+  delete: 'Deleted',
+  duplicate: 'Duplicated',
+  install: 'Installed',
+  move: 'Moved',
+  reorder: 'Reordered',
+  retry: 'Retried',
+  setup: 'Set up',
+  skip: 'Skipped',
+  trigger: 'Triggered',
+  uninstall: 'Uninstalled',
+  update: 'Updated',
+};
+
+const formatActivityAction = (action: string): string => {
+  const [verb, ...rest] = action.split('_');
+  const label = [PAST_TENSE[verb] ?? verb.charAt(0).toUpperCase() + verb.slice(1), ...rest].join(' ');
+  return label.replace(/\bmcp\b/g, 'MCP');
 };
 
 const ENTITY_ICONS: Record<string, typeof IconGitBranch> = {
@@ -110,23 +86,9 @@ const ENTITY_ICONS: Record<string, typeof IconGitBranch> = {
   BoardColumn: IconColumns,
   Board: IconColumns,
   ColumnWorkflowBinding: IconColumns,
+  Trigger: IconColumns,
+  BoardTask: IconColumns,
 };
-
-// ── Workflow / Board preview types ─────────────────
-
-interface WorkflowPreview {
-  id: number;
-  name: string;
-  description: string | null;
-  stepsCount: number;
-}
-
-interface BoardColumnPreview {
-  id: number;
-  name: string;
-  purpose: string | null;
-  workflowBinding: { workflowName: string; triggerMode: string } | null;
-}
 
 // ── Main Component ─────────────────────────────────
 
@@ -145,7 +107,6 @@ const SessionPage = () => {
   const isTerminal = ['finished', 'failed', 'cancelled'].includes(s.state);
   const [finishRequested, setFinishRequested] = useState(false);
   const [tab, setTab] = useState<string | null>('activity');
-  const [termLoaded, setTermLoaded] = useState(false);
 
   const basePath = `/company/projects/${project.id}`;
 
@@ -156,13 +117,8 @@ const SessionPage = () => {
 
   const allActivities = useMemo(() => builderActivities ?? [], [builderActivities]);
 
-  const ttydUrl = useMemo(() => {
-    if (!s.websocketUrl) return null;
-    return s.websocketUrl.replace('wss://', 'https://').replace('ws://', 'http://').replace('/ws', '');
-  }, [s.websocketUrl]);
-
-  const canShowTerminal = !!ttydUrl && s.state === 'ready';
-  const agentLabel = AGENT_LABELS[s.agentType ?? ''] ?? s.agentType ?? '—';
+  const canShowTerminal = !!s.websocketUrl && s.state === 'ready';
+  const runtimeLabel = agentLabel(s.agentType);
 
   const handleFinish = useCallback(() => {
     setFinishRequested(true);
@@ -213,20 +169,7 @@ const SessionPage = () => {
     return (
       <div className={classes.mainPanel}>
         <div className={`${classes.panelFrame} ${classes.terminalFrame}`}>
-          {!termLoaded && (
-            <div className={classes.loadingOverlay}>
-              <Loader size="md" />
-              <Text size="sm" c="dimmed">
-                Connecting to terminal...
-              </Text>
-            </div>
-          )}
-          <iframe
-            src={ttydUrl!}
-            title="Terminal"
-            allow="clipboard-read; clipboard-write"
-            onLoad={() => setTermLoaded(true)}
-          />
+          <LiveTerminal url={s.websocketUrl!} uploadUrl={s.uploadUrl} />
         </div>
       </div>
     );
@@ -261,7 +204,7 @@ const SessionPage = () => {
                   {entityName}
                 </Text>
                 <Text size="xs" c="dimmed">
-                  {ACTION_LABELS[activity.action] || activity.action}
+                  {formatActivityAction(activity.action)}
                 </Text>
                 <Text size="10px" c="dimmed">
                   {formatTime(activity.timestamp)}
@@ -421,8 +364,8 @@ const SessionPage = () => {
             )}
           </div>
           <div className={classes.headerRight}>
-            <Badge color={AGENT_LABELS[s.agentType ?? ''] ? undefined : 'gray'} size="sm" variant="light">
-              {agentLabel}
+            <Badge color={isAgentType(s.agentType) ? undefined : 'gray'} size="sm" variant="light">
+              {runtimeLabel}
             </Badge>
             {isActive && (
               <Button

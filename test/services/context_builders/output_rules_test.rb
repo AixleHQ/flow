@@ -66,4 +66,10 @@ class ContextBuilders::OutputRulesTest < ActiveSupport::TestCase
 
     assert_operator critical_pos, :<, output_pos, "critical-rules must appear before output-rules"
   end
+
+  test "does not apply to a builder session, whose deliverable is configuration" do
+    session = create(:terminal_session, :aixle_builder, user: @user, project: @project)
+
+    assert_not ContextBuilders::OutputRules.new(session).applicable?
+  end
 end

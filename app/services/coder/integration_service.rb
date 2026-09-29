@@ -22,7 +22,7 @@ module Coder
       integration = build_integration
 
       url_errors = UrlSafetyValidator.errors_for(
-        normalized_url
+        normalized_url, trusted_hosts_override: UrlSafetyValidator.configured_trusted_hosts
       )
       if url_errors.any?
         integration.credentials_data = {

@@ -3,13 +3,6 @@
 class ProjectAnalyticsService
   include TaskFilterable
 
-  PERIOD_DAYS = {
-    "7d" => 7,
-    "30d" => 30,
-    "90d" => 90,
-    "1y" => 365
-  }.freeze
-
   Result = Struct.new(
     :total_sessions, :total_cost_cents, :total_tokens,
     :avg_cost_cents_per_session, :workflows_run,
@@ -20,7 +13,7 @@ class ProjectAnalyticsService
     @project = project
     @user = user
     @scope = scope.to_s
-    @since = PERIOD_DAYS.fetch(period.to_s, 30).days.ago
+    @since = AnalyticsPeriod.since(period.to_s)
     @tags = Array(tags).presence
     @task_type = task_type.presence
     @participant_id = participant_id.presence
@@ -49,7 +42,7 @@ class ProjectAnalyticsService
   attr_reader :project, :user, :scope, :since, :tags, :task_type, :participant_id
 
   def base_sessions
-    s = scope_sessions.where(created_at: since..)
+    s = scope_sessions.where(created_at: since.., session_type: AnalyticsPeriod::USAGE_SESSION_TYPES)
     s = s.where(user_id: participant_id) if participant_id
     apply_task_filters(s)
   end

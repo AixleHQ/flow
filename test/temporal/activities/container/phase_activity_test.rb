@@ -50,6 +50,42 @@ module Activities
         refute_includes error.details.inspect, decoy.config_data["api_key"]
       end
 
+      def agent_session
+        create(:terminal_session, :agent_session, user: @user, agent_type: "codex")
+      end
+
+      test "a transient runtime failure is retried, a real one is not" do
+        session = agent_session
+        @runtime.stubs(:start_container).raises(Errno::ECONNREFUSED)
+        transient = assert_raises(Temporalio::Error::ApplicationError) do
+          run_activity(PhaseActivity, { phase: "start_container", session_id: session.id, state: { container_id: "c1" } })
+        end
+        assert_not transient.non_retryable
+
+        @runtime.stubs(:start_container).raises(Kubeclient::HttpError.new(403, "forbidden", nil))
+        fatal = assert_raises(Temporalio::Error::ApplicationError) do
+          run_activity(PhaseActivity, { phase: "start_container", session_id: session.id, state: { container_id: "c1" } })
+        end
+        assert fatal.non_retryable
+      end
+
+      # Only a cleanup that finds the object already gone is expected; any other
+      # cleanup failure leaves something behind and has to be seen.
+      test "a cleanup that finds the container gone is benign, any other cleanup failure is not" do
+        session = agent_session
+        @runtime.stubs(:resolve_container).raises(Kubeclient::ResourceNotFoundError.new(404, "gone", nil))
+        gone = assert_raises(Temporalio::Error::ApplicationError) do
+          run_activity(PhaseActivity, { phase: "cleanup", session_id: session.id, state: { container_id: "c1" } })
+        end
+        assert_equal TemporalExceptions::BENIGN, gone.category
+
+        @runtime.stubs(:resolve_container).raises(RuntimeError, "runtime refused")
+        failed = assert_raises(Temporalio::Error::ApplicationError) do
+          run_activity(PhaseActivity, { phase: "cleanup", session_id: session.id, state: { container_id: "c1" } })
+        end
+        assert_not_equal TemporalExceptions::BENIGN, failed.category
+      end
+
       # ArgumentError (the other class rescued alongside PhaseError here) has no #details, and a
       # PhaseError can wrap an original error that isn't a diagnostic at all — both must fall back
       # to no details instead of raising while building the ApplicationError.

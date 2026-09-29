@@ -153,4 +153,16 @@ class ContainerServiceTest < ActiveSupport::TestCase
     assert_equal "bar", state[:foo]
     assert_equal "mock-container-123", state[:container_id]
   end
+  # The returned state is what Temporal records in workflow history and what the
+  # admitted path persists, so the create phase's spec — the env especially,
+  # which carries decrypted secrets — must not survive the phase.
+  test "the create phase keeps its container spec to itself" do
+    state = ContainerService.new(strategy: MockStrategy.new).run_phase(:create_container)
+
+    assert_equal "mock-container-123", state[:container_id]
+    assert_equal "test-image:latest", state[:image]
+    %i[env_vars labels host_config cmd exposed_ports working_dir].each do |key|
+      assert_not state.key?(key), "#{key} leaked out of the create phase"
+    end
+  end
 end

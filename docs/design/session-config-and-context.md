@@ -182,17 +182,21 @@ end
 
 ### 1.3.5 repositories
 
-Additive. Step controls this via `mount_repositories` (bool):
+Additive over the run, the workflow and the step; the project's repositories only
+when nothing is named and the workflow inherits all project resources
+(`SessionConfigResolver#workflow_session_repository_ids`):
 
 ```ruby
-def resolve_repository_ids(workflow_run, step, project)
-  return [] unless step.mount_repositories
+def workflow_session_repository_ids
+  explicit = (workflow_run.repository_ids + workflow.base_repository_ids + step.repository_ids).uniq
+  return explicit if explicit.any?
+  return project_repository_ids if workflow.inherit_all_project_resources
 
-  (workflow_run.repository_ids.presence || project.repositories.pluck(:id))
+  []
 end
 ```
 
-On a manual workflow launch the user selects repos. On an auto-trigger — all of the project's repos are taken.
+On a manual workflow launch the user selects repos; a step can add its own.
 
 ### 1.3.6 input_assets — additive
 
@@ -366,8 +370,7 @@ class SessionConfigResolver
 
   def resolve_repository_ids
     if workflow_session?
-      return [] unless step&.mount_repositories
-      workflow_run&.repository_ids.presence || project_repository_ids
+      workflow_session_repository_ids # run + workflow base + step; project repos only when inheriting
     else
       session.repository_ids.presence || []
     end
@@ -618,7 +621,7 @@ A `config_resolution` section is added to `ContextResult.to_json_hash` (see
 |---|----------|---------|
 | 1 | `inherit_all` — a single flag or per-resource (inherit_all_tools, inherit_all_skills...)? | A single flag — simpler. If you need all, you usually need all |
 | 2 | Can a step **exclude** a tool from the workflow base? | No. Additive = add only. If needed — do not put it in the base |
-| 3 | Are repos also additive or fallback? | Fallback: user run repos or project repos. The step only toggles on/off via mount_repositories |
+| 3 | Are repos also additive or fallback? | Additive: run + workflow base + step repositories; the project's repositories only when nothing is named and the workflow inherits all project resources |
 | 4 | Board task description → an addition to step instructions? | A separate story, not in scope. For now the task description lives in the board-context section (Epic 27) |
 
 ---

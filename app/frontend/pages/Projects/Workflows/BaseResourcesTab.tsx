@@ -1,7 +1,7 @@
 import { MultiSelect, Switch } from '@mantine/core';
 import type { ReactNode } from 'react';
 
-import type { ConfigItemPicker } from '@/types/generated';
+import type { ConfigItemPicker, Workflow } from '@/types/generated';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
 import { ToolPicker } from 'shared/components/ToolPicker';
@@ -12,18 +12,19 @@ interface NamedItem {
   name: string;
 }
 
-interface Workflow {
-  inheritAllProjectResources: boolean;
-  baseToolIds: number[];
-  baseSkillIds: number[];
-  baseMCPServerIds: number[];
-  baseAssetIds: number[];
-  baseRepositoryIds: number[];
-  baseConfigItemIds: number[];
-}
+type BaseResources = Pick<
+  Workflow,
+  | 'inheritAllProjectResources'
+  | 'baseToolIds'
+  | 'baseSkillIds'
+  | 'baseMCPServerIds'
+  | 'baseAssetIds'
+  | 'baseRepositoryIds'
+  | 'baseConfigItemIds'
+>;
 
 interface BaseResourcesTabProps {
-  workflow: Workflow;
+  workflow: BaseResources;
   tools: NamedItem[];
   toolGroups: ToolGroup[];
   skills: NamedItem[];

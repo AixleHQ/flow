@@ -4,6 +4,7 @@ class AssetFileUploader < Shrine
   plugin :activerecord
   plugin :determine_mime_type, analyzer: :marcel, analyzer_options: { filename_fallback: true }
   plugin :pretty_location
+  plugin :rack_response
   plugin :restore_cached_data
   plugin :cached_attachment_data
   plugin :validation_helpers

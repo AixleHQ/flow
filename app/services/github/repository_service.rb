@@ -2,6 +2,11 @@
 
 module Github
   class RepositoryService
+    # Listings are walked a page (100 rows) at a time up to this many pages: the
+    # whole listing for any real account, but never an unbounded walk inside a
+    # web request — Octokit's own auto_paginate has no limit.
+    MAX_PAGES = 10
+
     def initialize(integration)
       @integration = integration
     end
@@ -17,11 +22,9 @@ module Github
     def list_available
       repos =
         if pat_mode?
-          client(auto_paginate: true).repos(
-            nil, affiliation: "owner,collaborator,organization_member", per_page: 100
-          )
+          paged { |c| c.repos(nil, affiliation: "owner,collaborator,organization_member", per_page: 100) }
         else
-          client(auto_paginate: true).list_app_installation_repositories[:repositories]
+          paged(within: :repositories) { |c| c.list_app_installation_repositories(per_page: 100) }
         end
 
       repos.map { |repo| map_repo(repo) }
@@ -38,7 +41,7 @@ module Github
     end
 
     def list_branches(full_name)
-      client(auto_paginate: true).branches(full_name).map(&:name)
+      paged { |c| c.branches(full_name, per_page: 100) }.map(&:name)
     rescue Octokit::Error => e
       Rails.logger.warn("[Github::RepositoryService] Failed to list branches for #{full_name}: #{e.message}")
       []
@@ -62,11 +65,28 @@ module Github
       @integration.github_pat?
     end
 
-    def client(auto_paginate: false)
-      token = Github::TokenService.new(@integration).generate_installation_token
-      client = Octokit::Client.new(access_token: token)
-      client.auto_paginate = auto_paginate
-      client
+    def client
+      Octokit::Client.new(access_token: Github::TokenService.new(@integration).generate_installation_token)
+    end
+
+    # The first page comes from the block; later ones follow the Link header.
+    # `within` names the key that holds the rows when a page wraps them.
+    def paged(within: nil)
+      github = client
+      rows = rows_of(yield(github), within)
+      response = github.last_response
+      (MAX_PAGES - 1).times do
+        link = response&.rels&.[](:next)
+        break unless link
+
+        response = link.get
+        rows.concat(rows_of(response.data, within))
+      end
+      rows
+    end
+
+    def rows_of(page, within)
+      Array(within ? page[within] : page)
     end
 
     def map_repo(repo)

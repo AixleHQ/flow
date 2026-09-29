@@ -47,7 +47,10 @@ class Tools::CallExecutorTest < ActiveSupport::TestCase
   # read $REPO and $GITHUB_TOKEN) keep it unconditionally, and a code-defined app
   # tool must opt in.
 
-  test "a container tool still gets REPO, GITHUB_TOKEN and BRANCH from the attached repository" do
+  # The workflow input is kept in Temporal history, so a container tool's
+  # payload carries a reference to the repository; the token is minted by
+  # CustomToolStrategy inside the activity (see custom_tool_strategy_test).
+  test "a container tool gets REPO and BRANCH, and a repository reference instead of a token" do
     repo, fake_github = attached_github_repository
     tool = create(:tool, scope: @project, name: "my_linter", docker_image: "linter:1.0")
     captured = nil
@@ -60,10 +63,11 @@ class Tools::CallExecutorTest < ActiveSupport::TestCase
 
     params = captured[:parameters]
     assert_equal repo.full_name, params["REPO"]
-    assert_equal "tok-123", params["GITHUB_TOKEN"]
     assert_equal repo.source_branch, params["BRANCH"]
+    assert_equal repo.id, params[ContainerStrategies::CustomToolStrategy::REPOSITORY_REFERENCE]
+    assert_nil params["GITHUB_TOKEN"]
     assert_nil params["repository_id"]
-    assert fake_github.called?(:generate_installation_token)
+    assert_not fake_github.called?(:generate_installation_token)
   end
 
   test "an app tool that declares the legacy binding gets the expansion" do

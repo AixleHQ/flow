@@ -22,23 +22,27 @@ module Sessions
     LIST_PATH = "/var/log/mitm/redact.list"
     FILE_MODE = 0o644
 
-    def self.publish!(session, runtime: nil)
-      new(session, runtime: runtime).publish!
+    # `container:` names the container when the session does not record it yet —
+    # while its context is still being assembled.
+    def self.publish!(session, runtime: nil, container: nil)
+      new(session, runtime: runtime, container: container).publish!
     end
 
-    def initialize(session, runtime: nil)
+    def initialize(session, runtime: nil, container: nil)
       @session = session
       @runtime = runtime
+      @container = container
     end
 
     # True when the container is carrying a list that covers every secret this session
     # has been handed — including, deliberately, when there is no container: the logs
     # this protects are the ones written inside one.
     def publish!
-      return true if session.nil? || session.container_id.blank?
+      target = @container.presence || session&.container_id
+      return true if session.nil? || target.blank?
 
       container_runtime.write_file(
-        session.container_id, LIST_PATH, payload,
+        target, LIST_PATH, payload,
         mode: FILE_MODE, uid: 0, gid: 0
       )
     rescue StandardError => e
@@ -61,8 +65,14 @@ module Sessions
       ConfigItemAccess
         .where(terminal_session_id: session.id, item_type: "secret")
         .includes(:config_item)
-        .filter_map { |access| access.config_item&.decrypted_value.presence }
+        .filter_map { |access| readable_value(access.config_item) }
         .uniq
+    end
+
+    def readable_value(item)
+      item&.decrypted_value.presence
+    rescue Encryptable::DecryptionError
+      nil
     end
 
     def container_runtime

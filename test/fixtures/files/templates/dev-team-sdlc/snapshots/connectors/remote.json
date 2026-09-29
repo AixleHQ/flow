@@ -1,0 +1,33 @@
+{
+  "normalizer_version": 3,
+  "name": "app.linear/linear",
+  "title": null,
+  "description": "MCP server for Linear project management and issue tracking",
+  "version": "1.0.0",
+  "schema_version": "2025-09-29",
+  "repository_url": null,
+  "status": "active",
+  "is_latest": true,
+  "published_at": "2025-09-18T15:51:15.598862Z",
+  "updated_at": "2025-09-18T15:51:15.598862Z",
+  "targets": [
+    {
+      "id": "remote:http:https://mcp.linear.app/mcp",
+      "kind": "remote",
+      "transport": "http",
+      "url": "https://mcp.linear.app/mcp",
+      "supported": true,
+      "unsupported_reason": null,
+      "inputs": []
+    },
+    {
+      "id": "remote:sse:https://mcp.linear.app/sse",
+      "kind": "remote",
+      "transport": "sse",
+      "url": "https://mcp.linear.app/sse",
+      "supported": false,
+      "unsupported_reason": "the SSE transport is deprecated and cannot be verified from here — add this server by hand if you need it",
+      "inputs": []
+    }
+  ]
+}

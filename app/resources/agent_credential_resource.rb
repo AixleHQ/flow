@@ -1,18 +1,33 @@
 # frozen_string_literal: true
 
 class AgentCredentialResource < ApplicationResource
+  typelize agent_type: CompanyMembership::AVAILABLE_AGENTS
   attributes :id, :agent_type, :default_model, :last_used_at, :expires_at, :created_at, :updated_at
 
   typelize "string[]"
   attribute :config_keys do |credential|
-    credential.config_data.keys
+    credential.config_keys
   rescue StandardError
     []
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :default_model do |credential|
     credential.default_model
+  end
+
+  # The login's own expiry, not the soonest across every token block (expires_at): an
+  # add-on such as Claude's design token must not make a working login read as expiring.
+  typelize "string | null"
+  attribute :login_expires_at do |credential|
+    credential.login_expires_at&.iso8601
+  end
+
+  # The last time the user actually signed in — not a token refresh, which happens every
+  # few hours on its own.
+  typelize "string | null"
+  attribute :signed_in_at do |credential|
+    credential.signed_in_at&.iso8601
   end
 
   # Connection status.
@@ -26,7 +41,7 @@ class AgentCredentialResource < ApplicationResource
   # agent whose token carries no exp) reads as "active" — expiry unknown, not past.
   typelize %w[active expiring expired error]
   attribute :connection_status do |credential|
-    exp = credential.expires_at
+    exp = credential.login_expires_at
     if credential.error? then "error"
     elsif exp.nil? then "active"
     elsif exp <= Time.current then "expired"
@@ -63,8 +78,8 @@ class AgentCredentialResource < ApplicationResource
 
   # Whether re-authenticating is the only remedy, so the UI can say so rather than imply
   # that waiting might help. True when this runtime cannot renew server-side
-  # (BaseAdapter#credential_lifecycle) — Grok stores no refresh token at all — or when the
-  # platform has already exhausted its retries.
+  # (BaseAdapter#credential_lifecycle), or when the platform has already exhausted its
+  # retries.
   typelize :boolean
   attribute :reauth_required do |credential|
     credential.error? || credential.adapter.credential_lifecycle[:refresh] != :server

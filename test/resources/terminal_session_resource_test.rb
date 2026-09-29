@@ -11,7 +11,7 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     # Only project sessions are queued, and the launch phases this resource
     # reports are the queue's, so every fixture here is project-bound.
     @project = create(:project, owner: @user, company: @user.companies.first)
-    with_ceiling(1)
+    with_scope_defaults(project: 1)
   end
 
   def payload(session) = TerminalSessionResource.new(session.reload).to_h
@@ -61,7 +61,7 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     assert_nil payload(session)["launchError"]
   end
 
-  # A refused preflight used to leave the session sitting in `queued` with
+  # A refused preflight must not leave the session sitting in `queued` with
   # nothing but the queue's own explanation on screen.
   test "the launch's own failure is carried to the screen" do
     session = create(:terminal_session, user: @user, project: @project)
@@ -76,5 +76,48 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
 
     assert_nil payload(session)["launchPhase"]
     assert_nil payload(session)["launchError"]
+  end
+
+  # == shared sessions ==
+
+  test "someone the session is shared with gets the read-only terminal, no IDE and no IDE token" do
+    colleague = create(:user, :employee, company: @user.companies.first)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, state: "ready",
+                                                        metadata: { "vscode_token" => "tkn-secret", "note" => "x" })
+
+    shared = TerminalSessionResource.new(session.reload, params: { viewer: colleague }).to_h
+    own = TerminalSessionResource.new(session, params: { viewer: @user }).to_h
+
+    assert_match %r{/t/#{session.route_token}/view/ws\z}, shared["websocketUrl"]
+    assert_nil shared["ideUrl"]
+    assert_not shared.to_json.include?("tkn-secret")
+    assert_match %r{/t/#{session.route_token}/tty/ws\z}, own["websocketUrl"]
+    assert_includes own["ideUrl"], "tkn-secret"
+    # Only the owner may paste an image into the container.
+    assert_nil shared["uploadUrl"]
+    assert_match %r{/t/#{session.route_token}/upload\z}, own["uploadUrl"]
+  end
+
+  test "served from a host of their own, container URLs carry the viewer's ticket" do
+    Settings.stubs(:domain).returns("flow.example.com")
+    Settings.traefik.stubs(:http_base).returns("https://t.flow.example.com")
+    Settings.traefik.stubs(:ws_base).returns("wss://t.flow.example.com")
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, state: "ready")
+
+    url = TerminalSessionResource.new(session, params: { viewer: @user }).to_h["websocketUrl"]
+
+    assert url.start_with?("wss://t.flow.example.com/t/#{session.route_token}/tty/ws?#{ContainerTicket::PARAM}=")
+    ticket = Rack::Utils.parse_query(URI.parse(url).query)[ContainerTicket::PARAM]
+    assert_equal @user, ContainerTicket.user_for(ticket, session: session)
+  end
+
+  test "config files keep their paths through every camelizing pass" do
+    session = create(:terminal_session, :agent_session, user: @user, project: @project,
+                                                        session_config: { "config_files" => { "/workspace/.aixle/references/guide.md" => "# Guide" } })
+
+    props = DeepKeyCamelizer.call(TerminalSessionResource.new(session, params: { viewer: @user }).to_h)
+
+    assert_equal [ { "path" => "/workspace/.aixle/references/guide.md", "content" => "# Guide" } ],
+                 props.dig("sessionConfig", "configFiles")
   end
 end

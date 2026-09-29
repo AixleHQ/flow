@@ -3,8 +3,8 @@ name: DCO
 # Verifies every commit in the pull request carries a Developer Certificate of Origin
 # sign-off (`git commit -s`) whose email matches the commit author. Self-contained on
 # purpose: no third-party action, so this check cannot be influenced by an upstream
-# release. Merge commits and bot authors are exempt, matching the behaviour of the
-# reference implementation (https://github.com/dcoapp/app).
+# release. Merge commits are exempt, and so are bot and service-account authors in a pull
+# request opened by a bot or by someone with a role on this repository (see below).
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ jobs:
   dco:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Need both sides of the range to enumerate the PR's commits.
           fetch-depth: 0
@@ -26,8 +26,21 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          OPENER_TYPE: ${{ github.event.pull_request.user.type }}
+          OPENER_ROLE: ${{ github.event.pull_request.author_association }}
         run: |
           set -uo pipefail
+
+          # A commit's author name and email are whatever its committer typed, so in an
+          # outside contributor's pull request a `[bot]` name or a company address proves
+          # nothing. Those exemptions hold only where GitHub itself vouches for who opened
+          # the pull request: a bot account, or a member or collaborator of this
+          # repository — which is how a maintainer's batch of Dependabot commits and a
+          # colleague's pull request of platform-agent commits keep passing.
+          case "$OPENER_TYPE/$OPENER_ROLE" in
+            Bot/* | */OWNER | */MEMBER | */COLLABORATOR) trusted_opener=1 ;;
+            *) trusted_opener=0 ;;
+          esac
 
           failed=0
           # %H, author email, author name, then the raw body — NUL-delimited per commit
@@ -52,19 +65,21 @@ jobs:
             # aixle-com GitHub App, but not every one of their identities carries the
             # `[bot]` suffix — match our service-account domains too, since those
             # commits are the company's own output.
-            case "$author_name" in
-              *'[bot]')
-                echo "skip     $sha (bot author: $author_name)"
-                continue
-                ;;
-            esac
             author_email=$(printf '%s' "$author_email" | tr '[:upper:]' '[:lower:]')
-            case "$author_email" in
-              *'@aixle.com' | *'@aixle.local' | *'@aixle.bot' | *'@palad.ai')
-                echo "skip     $sha (service account: $author_email)"
-                continue
-                ;;
-            esac
+            if [ "$trusted_opener" -eq 1 ]; then
+              case "$author_name" in
+                *'[bot]')
+                  echo "skip     $sha (bot author: $author_name)"
+                  continue
+                  ;;
+              esac
+              case "$author_email" in
+                *'@aixle.com' | *'@aixle.local' | *'@aixle.bot' | *'@palad.ai')
+                  echo "skip     $sha (service account: $author_email)"
+                  continue
+                  ;;
+              esac
+            fi
             # Every Signed-off-by email in the body, one per line, lowercased.
             signoffs=$(printf '%s\n' "$body" \
               | grep -iE '^[[:space:]]*Signed-off-by:[[:space:]]*.+<.+@.+>' \
@@ -102,6 +117,10 @@ jobs:
 
           If the sign-off email is right but the author's is not, set
           `git config user.email` and re-run the rebase above.
+
+          If an agent or a bot authored commits for you, take authorship
+          of them — you are the one certifying their origin:
+              git rebase origin/develop --exec 'git commit --amend --no-edit --reset-author --signoff'
           ─────────────────────────────────────────────────────────────────
           EOF
             exit 1

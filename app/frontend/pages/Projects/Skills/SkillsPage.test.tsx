@@ -2,9 +2,8 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { CatalogSkill, Skill } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
-
-import type { CatalogSkill, Skill } from 'shared/resources/skills/SkillsContent';
 
 import SkillsPage from './SkillsPage';
 
@@ -24,6 +23,8 @@ const skill = (overrides: Partial<Skill> = {}): Skill => ({
   registryUrl: 'https://skills.sh/acme/skills/react-expert',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  currentVersionNumber: 1,
+  archivedAt: null,
   ...overrides,
   content: overrides.content ?? null,
 });
@@ -42,6 +43,8 @@ const catalogSkill = (overrides: Partial<CatalogSkill> = {}): CatalogSkill => ({
   registryUrl: 'https://skills.sh/anthropics/skills/frontend-design',
   auditRisk: null,
   auditProviders: [],
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
   ...overrides,
 });
 

@@ -1,8 +1,8 @@
 # API reference
 
-Aixle Flow exposes a REST API under `/api/v1`, plus webhook receivers
-for Git host events. A live OpenAPI explorer is served from the running
-app itself.
+Aixle Flow exposes a REST API under `/api/v1`, an MCP server, and webhook
+receivers for Git hosts, Slack, and other sources. A live OpenAPI explorer
+is served from the running app itself.
 
 ## OpenAPI explorer
 
@@ -17,23 +17,31 @@ endpoint. Use this as the canonical source — the tables below give you
 the shape, but the explorer has the full request/response specs and
 lets you try calls inline.
 
-> **info** **Auth required in non-dev environments.** The `/api-docs` endpoint is protected by HTTP Basic Auth in non-dev environments. Set `DOCS_LOGIN` and `DOCS_PASSWORD` env vars to configure credentials.
+> **info** **Auth required in non-dev environments.** The `/api-docs` endpoint is protected by HTTP Basic Auth in non-dev environments. Set `DOCS_LOGIN` and `DOCS_PASSWORD` env vars to configure credentials; with either unset it admits nobody.
 
 ## Authentication
 
-Most endpoints are session-authenticated (cookie). Sign in via the web
-UI first, then your browser session is good for the API too.
+The `/api/v1` endpoints are the API the web app itself calls. They are
+authenticated by the signed-in browser session (the `_aixle_session`
+cookie): sign in via the web UI first, then your browser session is good
+for the API too. Requests other than GET must also send the page's CSRF
+token in `X-CSRF-Token`. There is no API token or login endpoint here —
+programmatic access goes through the MCP server with a personal token.
 
-Two endpoints are explicitly **unauthenticated** and verified via HMAC
-signature instead:
+The endpoints that answer without a browser session authenticate their
+caller themselves:
 
-| Endpoint                  | Verification                                        |
-| ------------------------- | --------------------------------------------------- |
-| `POST /webhooks/github`   | HMAC SHA-256 using `GITHUB_WEBHOOK_SECRET`.         |
-| `POST /webhooks/gitlab`   | Per-repository token in `X-Gitlab-Token` header.    |
-
-Internal endpoints (`/api/v1/internal/*`) are reserved for agent
-containers and use a different token mechanism (`ws_auth`).
+| Endpoint | Caller | Authenticated by |
+| -------- | ------ | ---------------- |
+| `POST /webhooks/github` | GitHub App | HMAC SHA-256 signature using `GITHUB_WEBHOOK_SECRET`. |
+| `POST /webhooks/gitlab` | GitLab project hook | The repository's secret in the `X-Gitlab-Token` header. |
+| `POST /webhooks/azure_devops/:endpoint_id` | Azure DevOps Service Hooks | HTTP Basic, with the credentials of that subscription. |
+| `POST /webhooks/slack/events` | Slack Events API | The Slack app's signing secret. |
+| `POST /webhooks/in/:slug` | Any configured source | The endpoint's own verification strategy, checked on the raw body. |
+| `GET /api/v1/internal/ws_auth` | Traefik ForwardAuth, before it proxies a container's terminal, IDE, or file view | A signed-in viewer: the session cookie on the app's host, or a short-lived container ticket on a sandbox host. The viewer must be allowed to reach the session, only the session's owner gets the writable terminal and the IDE, and the session must be `ready`. |
+| `POST /api/v1/internal/usage_statistics` | The OTLP ingest relay, forwarding agent telemetry | Each batch names its session in the `terminal_session_token` resource attribute and proves it with `terminal_session_key`, a key the app derives from that session and recomputes on arrival. |
+| `/mcp`, `/action_mcp` | Agent sessions; people's own agents | A session's MCP key, or a personal MCP token (`amcp_…`), in `X-Session-Key` or `Authorization: Bearer`. |
+| `POST /cloud/aws/credentials`, `/agents/credentials`, `/agents/git/credentials`, `/azure/git/credentials` | Helpers inside an agent container | `X-Session-Id` plus a key the app derives for that session; a session that is no longer active is refused. |
 
 ## REST surface — by resource
 
@@ -52,8 +60,9 @@ PATCH  /api/v1/projects/:project_id/workflows/:wf_id/steps/:id
 DELETE /api/v1/projects/:project_id/workflows/:wf_id/steps/:id
 ```
 
-Company-scoped workflows live at `/api/v1/workflows/...` (same shape,
-no `:project_id`).
+Triggers hang off the same path: `GET`/`POST
+/api/v1/projects/:project_id/workflows/:wf_id/triggers` and
+`PATCH`/`DELETE .../triggers/:id`.
 
 ### Workflow runs
 
@@ -128,11 +137,27 @@ GET    /api/v1/projects/:project_id/board/tasks/:task_id/activities
 GET    /api/v1/projects/:project_id/board/tasks/:task_id/statistics
 ```
 
+`GET .../board/tasks` is the board's pagination endpoint — the board page
+props carry only the first page of each column, and the column pulls the
+rest from here as it is scrolled:
+
+| Query param                            | Meaning                                                             |
+| -------------------------------------- | ------------------------------------------------------------------- |
+| `board_column_id`                      | Restrict to one column.                                             |
+| `limit` / `offset`                     | Page window, ordered by `position` then `id`.                       |
+| `q[title_cont]`, `q[assignee_id_eq]`, … | Ransack predicates over `BoardTask.ransackable_attributes`.         |
+| `tags[]` + `tags_match=all`            | Tag filter. Default matches any listed tag; `all` requires them all. |
+| `archived`                             | `archived` for archived only, `all` for both; default active only.   |
+
+The response carries the **unpaginated** match count in the
+`X-Total-Count` header, which is how a column header shows its real total
+while holding a single page.
+
 ### Assets
 
 ```
-GET  /api/v1/assets/presign
-POST /api/v1/assets/upload
+GET /api/v1/assets/presign          # -> { method: "PUT", url, key } for a direct upload
+PUT /api/v1/assets/upload/*key      # development/test only: stands in for S3
 
 POST   /api/v1/company/assets
 DELETE /api/v1/company/assets/:id
@@ -145,17 +170,28 @@ GET    /api/v1/projects/:project_id/assets/:id/download
 
 ## Real-time
 
-| Channel                          | What it streams                                          |
-| -------------------------------- | -------------------------------------------------------- |
-| ActionCable at `/cable`          | Board updates, workflow run progress, terminal session output. |
-| ActionMCP at `/action_mcp`       | Internal Model Context Protocol endpoint for agent containers. |
+| Endpoint                 | What it carries                                                   |
+| ------------------------ | ----------------------------------------------------------------- |
+| Action Cable at `/cable` | Inertia Cable signed streams: refresh signals for boards, runs, and sessions, and id-only row updates for the session and run lists. Never record data — the page fetches what changed through its own authorized request. |
+| `/t/:route_token/...`    | A session's terminal, IDE, and file views, proxied by Traefik to the container once `ws_auth` admits the viewer. |
+
+## MCP server
+
+`/mcp` and `/action_mcp` (the path agent containers are configured with,
+`MCP_SERVER_URL`) serve the same Model Context Protocol endpoint. An agent
+session reaches it with its session key and gets the session's tools; a
+person reaches it with a personal MCP token and gets the tools of their own
+account.
 
 ## Webhooks
 
-| Endpoint                  | Purpose                                                |
-| ------------------------- | ------------------------------------------------------ |
-| `POST /webhooks/github`   | Push, pull_request, check_run events from GitHub App.  |
-| `POST /webhooks/gitlab`   | GitLab project event hooks.                            |
+| Endpoint                                   | Purpose                                                        |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| `POST /webhooks/github`                    | `check_suite` and `workflow_run` events from the GitHub App.   |
+| `POST /webhooks/gitlab`                    | GitLab pipeline hooks.                                         |
+| `POST /webhooks/azure_devops/:endpoint_id` | Azure DevOps Service Hook deliveries.                          |
+| `POST /webhooks/slack/events`              | Slack Events API, routed to the workspace's installation.      |
+| `POST /webhooks/in/:slug`                  | Generic inbound webhooks that fire workflow triggers.          |
 
 See the Integrations page for how to wire these up.
 

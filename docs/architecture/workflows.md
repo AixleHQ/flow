@@ -183,10 +183,10 @@ class Step < ApplicationRecord
   #
   # depends_on_step_ids: jsonb (DAG — ids of sibling steps this step depends on)
   # preferred_model: string (optional model override, e.g. "claude-sonnet-4")
-  # required_agent_runtime: string (optional — claude_code, cursor_cli, gemini_cli, codex)
+  # required_agent_runtime: string (optional — one of Step::SUPPORTED_AGENT_RUNTIMES)
   # bmad_enabled: boolean (default: false — inject BMAD-method context)
   # tool_ids / mcp_server_ids / skill_ids / asset_ids: jsonb (resources available in this step)
-  # mount_repositories: boolean (default: true)
+  # repository_ids: jsonb (repositories cloned for this step, merged with the workflow's base_repository_ids)
   # deleted_at: datetime (soft delete — steps with runs are soft-deleted, not destroyed)
   #
   # on_failure: enum (retry, skip, fail)

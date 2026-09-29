@@ -1,0 +1,31 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.word {
+  font-family: 'Hanken Grotesk', sans-serif;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--app-text-primary);
+}
+
+.sm .word {
+  font-size: 20px;
+}
+
+.md .word {
+  font-size: 26px;
+}
+
+.lg .word {
+  font-size: 34px;
+}
+
+@media (max-width: 480px) {
+  .lg .word {
+    font-size: 26px;
+  }
+}

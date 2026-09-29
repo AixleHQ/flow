@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
 class Workflow < ApplicationRecord
+  include ProjectOwnedReferences
   belongs_to :scope, polymorphic: true, optional: true
+  include TenantColumns
+  include Versioned
   belongs_to :published_by, class_name: "User", optional: true
 
   has_many :steps, dependent: :destroy
@@ -25,6 +28,7 @@ class Workflow < ApplicationRecord
   validates :scope, presence: true, unless: -> { scope_type == "System" }
   validate :config_keys_whitelist
   validate :base_config_item_ids_belong_to_project
+  validate :base_resource_ids_belong_to_project
 
   scope :active, -> { where(deleted_at: nil) }
   scope :published, -> { where.not(published_at: nil) }
@@ -49,17 +53,40 @@ class Workflow < ApplicationRecord
     association(:steps).loaded? ? steps.reject(&:deleted?) : steps.not_deleted.to_a
   end
 
+  # The one way a workflow is deleted — from the UI, the API and the personal MCP
+  # alike. Refused while a run is live or a board column still starts it;
+  # otherwise every trigger that could start it again is switched off (their
+  # schedules go with them) and it is marked deleted, in one transaction. Its
+  # runs and their history stay.
   def soft_delete!
+    raise ActiveRecord::RecordNotDestroyed.new("Cannot delete — it has active runs", self) if has_active_runs?
+
     if column_workflow_bindings.any?
       bound = column_workflow_bindings.includes(board_column: { board: :project })
       descs = bound.map { |b| "'#{b.board_column.name}' in project '#{b.board_column.board.project.name}'" }
-      raise ActiveRecord::RecordNotDestroyed, "Cannot delete — bound to column #{descs.join(', ')}"
+      raise ActiveRecord::RecordNotDestroyed.new("Cannot delete — bound to column #{descs.join(', ')}", self)
     end
-    update!(deleted_at: Time.current)
+
+    transaction do
+      trigger_bindings.where(enabled: true).find_each { |binding| binding.update!(enabled: false) }
+      update!(deleted_at: Time.current)
+    end
   end
 
   def deleted?
     deleted_at.present?
+  end
+
+  alias archived? deleted?
+  alias archive! soft_delete!
+
+  # Triggers archiving switched off stay off unless named here — a schedule
+  # coming back to life on its own would start runs nobody asked for.
+  def unarchive!(enable_trigger_ids: [])
+    transaction do
+      update!(deleted_at: nil)
+      trigger_bindings.where(id: enable_trigger_ids).find_each { |binding| binding.update!(enabled: true) }
+    end
   end
 
   def published?
@@ -86,10 +113,6 @@ class Workflow < ApplicationRecord
 
   def system?
     scope_type == "System"
-  end
-
-  def self.aixle_builder
-    system.active.find_by!(name: "Aixle Builder")
   end
 
   def base_tool_ids
@@ -146,6 +169,21 @@ class Workflow < ApplicationRecord
   # this workflow spawns, so it may only name config items of the workflow's own
   # project. A System workflow (Aixle Builder) has no project and therefore no
   # base config items at all.
+  BASE_RESOURCES = {
+    "base_tool_ids" => :tools, "base_skill_ids" => :skills, "base_mcp_server_ids" => :mcp_servers,
+    "base_asset_ids" => :assets, "base_repository_ids" => :repositories
+  }.freeze
+
+  def base_resource_ids_belong_to_project
+    return unless scope_type == "Project" && will_save_change_to_config?
+
+    before = (attribute_in_database(:config) || {}).to_h.stringify_keys
+    after = (config || {}).to_h.stringify_keys
+    BASE_RESOURCES.each do |key, kind|
+      validate_owned_ids(scope, kind, :config, before[key], after[key], label: key)
+    end
+  end
+
   def base_config_item_ids_belong_to_project
     ids = base_config_item_ids
     return if ids.blank?

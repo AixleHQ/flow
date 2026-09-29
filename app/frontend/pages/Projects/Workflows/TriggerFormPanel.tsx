@@ -64,7 +64,7 @@ function slackFilterFromPredicate(pred: Record<string, unknown>): { channel: str
 }
 
 // Builds a ready-to-run curl command for the created webhook, adapting the auth
-// headers to the chosen verification strategy. Ported from WorkflowTriggersDrawer.
+// headers to the chosen verification strategy.
 function buildWebhookCurl(url: string, secret: string | undefined, verification: string): string {
   const s = secret || '<secret>';
   if (verification === 'hmac_sha256') {
@@ -148,7 +148,7 @@ export function TriggerFormPanel({
     editing?.kind === 'youtrack' ? slackFilterFromPredicate(editPred).op : 'contains',
   );
 
-  const [verification, setVerification] = useState('none');
+  const [verification, setVerification] = useState('shared_token');
   const [secret, setSecret] = useState('');
   const [condField, setCondField] = useState(editWebhook?.field ?? '');
   const [condOp, setCondOp] = useState(editWebhook?.op ?? 'eq');
@@ -811,7 +811,7 @@ export function TriggerFormPanel({
                       }}
                     />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12, marginBottom: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12 }}>
                     <div>
                       <label
                         style={{
@@ -870,6 +870,9 @@ export function TriggerFormPanel({
                         }}
                       />
                     </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 4, marginBottom: 12 }}>
+                    @mention /help lists this channel&apos;s commands. The word help can&apos;t be used as a pattern.
                   </div>
                   <div style={{ marginBottom: 12 }}>
                     <Switch
@@ -984,12 +987,12 @@ export function TriggerFormPanel({
                         </label>
                         <Select
                           data={[
-                            { value: 'none', label: 'None' },
-                            { value: 'hmac_sha256', label: 'HMAC SHA-256' },
                             { value: 'shared_token', label: 'Shared token' },
+                            { value: 'hmac_sha256', label: 'HMAC SHA-256' },
+                            { value: 'none', label: 'None — anyone with the URL can run this workflow' },
                           ]}
                           value={verification}
-                          onChange={(v) => setVerification(v ?? 'none')}
+                          onChange={(v) => setVerification(v ?? 'shared_token')}
                           allowDeselect={false}
                           styles={{
                             input: {
@@ -1014,7 +1017,7 @@ export function TriggerFormPanel({
                           Secret
                         </label>
                         <PasswordInput
-                          placeholder="optional"
+                          placeholder="generated if left blank"
                           value={secret}
                           onChange={(e) => setSecret(e.currentTarget.value)}
                           styles={{

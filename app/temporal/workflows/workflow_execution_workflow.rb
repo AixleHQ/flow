@@ -43,12 +43,20 @@ module Workflows
       @cancelled = true
     end
 
+    # A signal handler can run before `run` does — in the first activation, for a
+    # signal delivered while no worker was polling — so what the handlers write
+    # exists from construction, and `run` keeps it.
+    def initialize
+      super
+      reset_signal_state
+    end
+
     def run(input)
       init_state(input.workflow_run_id)
       update_status(:running)
 
       process_steps
-      update_status(final_status)
+      update_status(final_status, reason: @failure_reason)
     rescue Temporalio::Error::ActivityError => e
       Temporalio::Workflow.logger.error("[WorkflowExecution] Failed: #{extract_error_message(e)}")
       update_status(:failed)
@@ -60,21 +68,27 @@ module Workflows
     # --- Initialization ---
 
     def init_state(workflow_run_id)
+      # Code without this patch threw away what arrived before `run`, and its
+      # histories must replay that way. Retirement: docs/architecture/temporal-versioning.md.
+      reset_signal_state unless Temporalio::Workflow.patched("keep-signals-delivered-before-run")
       @workflow_run_id = workflow_run_id
-      @step_decisions = {}
-      @cancelled = false
       @failed = false
       @completed_step_ids = []
       @all_steps = fetch_ordered_steps
       @mode = fetch_mode
       # Counts failed completions (complete_step / prepare_step / timeout) per step_id for on_failure retry caps
       @step_failure_counts = {}
-      # step_run_id -> step_id reverse map, populated as step_runs are used
+      # step_run_ids where CompleteStepActivity detected a quota error — must never be retried
+      @quota_error_step_run_ids = {}
+    end
+
+    def reset_signal_state
+      @step_decisions = {}
+      @cancelled = false
+      # step_run_id -> step_id, populated as step_runs are used
       @step_run_to_step_id = {}
       # step_id -> new_step_run_id, set when a user-initiated retry creates a new step_run
       @retry_overrides = {}
-      # step_run_ids where CompleteStepActivity detected a quota error — must never be retried
-      @quota_error_step_run_ids = {}
     end
 
     def final_status
@@ -87,7 +101,10 @@ module Workflows
     def process_steps
       until @failed || @cancelled
         ready = ready_steps
-        break if ready.empty?
+        if ready.empty?
+          unsatisfiable_dependencies!
+          break
+        end
 
         results = execute_steps_parallel(ready)
         results.each do |step_id, result|
@@ -98,6 +115,17 @@ module Workflows
           @completed_step_ids << step_id unless result == :retried
         end
       end
+    end
+
+    # Nothing is ready, yet steps are left: they wait on each other, or on a step
+    # that is not in the run. They will never start, so the run has not completed.
+    def unsatisfiable_dependencies!
+      waiting = @all_steps.map { |s| s["step_id"] } - @completed_step_ids
+      return if waiting.empty?
+
+      @failed = true
+      @failure_reason = "unsatisfiable_dependencies"
+      Temporalio::Workflow.logger.error("[WorkflowExecution] Steps #{waiting.join(', ')} can never start: unsatisfiable dependencies")
     end
 
     def ready_steps
@@ -114,32 +142,6 @@ module Workflows
       @mode == "non_interactive" || (@mode == "mixed" && step_data["auto_run"])
     end
 
-    # --- Step processing ---
-
-    def process_auto_steps(steps)
-      results = execute_steps_parallel(steps)
-      results.each do |step_id, result|
-        if result == :failed || result == :cancelled
-          @failed = true
-          break
-        end
-        @completed_step_ids << step_id
-      end
-    end
-
-    def process_interactive_steps(steps)
-      steps.each do |step_data|
-        break if @cancelled
-
-        result = execute_step(step_data)
-        if result == :failed || result == :cancelled
-          @failed = true
-          break
-        end
-        @completed_step_ids << step_data["step_id"]
-      end
-    end
-
     # --- Single step execution ---
 
     def execute_step(step_data)
@@ -152,6 +154,9 @@ module Workflows
         return recover_from_step_failure(step_data, step_run_id)
       end
 
+      # Cleared before the launch, not after it: a session can finish, or be
+      # approved, while its launch activity is still returning.
+      @step_decisions[step_run_id] = nil if keep_signals_delivered_during_launch?
       begin
         launch_step_session(step_run_id)
       rescue Temporalio::Error::ActivityError
@@ -247,7 +252,7 @@ module Workflows
 
     def wait_for_interactive_decision(step_data, step_run_id)
       @current_interactive_step_run_id = step_run_id
-      @step_decisions[step_run_id] = nil
+      @step_decisions[step_run_id] = nil unless keep_signals_delivered_during_launch?
 
       Temporalio::Workflow.timeout(INTERACTIVE_TIMEOUT) do
         Temporalio::Workflow.wait_condition { @step_decisions[step_run_id] || @cancelled }
@@ -368,9 +373,9 @@ module Workflows
       Temporalio::Workflow.logger.warn("[WorkflowExecution] Failed to mark step skipped: #{e.message}")
     end
 
-    def update_status(status)
+    def update_status(status, reason: nil)
       execute_activity(activities.workflow_update_workflow_run_status_activity,
-        { workflow_run_id: @workflow_run_id, status: status.to_s },
+        { workflow_run_id: @workflow_run_id, status: status.to_s, reason: reason }.compact,
         start_to_close_timeout: 30)
     end
 
@@ -386,10 +391,16 @@ module Workflows
     # --- Signal helpers ---
 
     def wait_for_signal(step_run_id)
-      @step_decisions[step_run_id] = nil
+      @step_decisions[step_run_id] = nil unless keep_signals_delivered_during_launch?
       Temporalio::Workflow.timeout(INTERACTIVE_TIMEOUT) do
         Temporalio::Workflow.wait_condition { @step_decisions[step_run_id] || @cancelled }
       end
+    end
+
+    # Code without this patch cleared the decision after the launch, and its
+    # histories must replay that way.
+    def keep_signals_delivered_during_launch?
+      Temporalio::Workflow.patched("keep-signals-delivered-during-launch")
     end
   end
 end

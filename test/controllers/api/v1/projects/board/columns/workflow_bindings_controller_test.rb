@@ -50,7 +50,7 @@ module Api
             end
 
             test "update returns binding json" do
-              binding = ColumnWorkflowBinding.create!(
+              ColumnWorkflowBinding.create!(
                 board_column: @column,
                 workflow: @workflow,
                 trigger_mode: :manual,

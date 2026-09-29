@@ -4,9 +4,7 @@
 # review when matching files change. Later matches take precedence.
 # Docs: https://docs.github.com/articles/about-code-owners
 #
-# TODO (maintainers): replace the placeholder team/handles below with real
-# GitHub usernames or a @AixleHQ/<team> team, then keep this in sync with the
-# maintainer list in GOVERNANCE.md.
+# @AixleHQ/maintainers is the org team; keep it in step with GOVERNANCE.md.
 
 # Default owners for everything in the repo
 *                               @AixleHQ/maintainers
@@ -25,7 +23,6 @@
 
 # Container runtimes & agent images
 /docker/                        @AixleHQ/maintainers
-/kube/                          @AixleHQ/maintainers
 
 # Docs, community health, and project meta
 /docs/                          @AixleHQ/maintainers

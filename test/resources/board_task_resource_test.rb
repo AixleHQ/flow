@@ -41,6 +41,18 @@ class BoardTaskResourceTest < ActiveSupport::TestCase
     assert_equal [ "running" ], states
   end
 
+  test "a finished run tells the card how long it took, and a failed one why" do
+    done = create(:workflow_run, :completed, workflow: @workflow, project: @project, user: @user, board_task: @task,
+                                             started_at: 90.seconds.ago, completed_at: Time.current, created_at: 2.minutes.ago)
+    failed = create(:workflow_run, :failed, workflow: @workflow, project: @project, user: @user, board_task: @task,
+                                            failure_reason: "unsatisfiable_dependencies")
+
+    runs = BoardTaskResource.new(@task.reload).to_h["recentWorkflowRuns"].index_by { |r| r[:id] || r["id"] }
+
+    assert_equal 90, runs[done.id]["durationSeconds"]
+    assert_equal "Unsatisfiable dependencies", runs[failed.id]["errorMessage"]
+  end
+
   # The board resolves this once for the whole page; a card handed the answer
   # must use it rather than asking again.
   test "a caller-supplied answer is used instead of querying per card" do

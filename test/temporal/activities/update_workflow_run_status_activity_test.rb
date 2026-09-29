@@ -57,6 +57,25 @@ module Activities
         assert_not_nil run.completed_at
       end
 
+      test "a failure's reason is recorded on the run" do
+        run = create(:workflow_run, :running, project: @project, workflow: @workflow, user: @user)
+
+        run_activity(UpdateWorkflowRunStatusActivity,
+                     { "workflow_run_id" => run.id, "status" => "failed", "reason" => "unsatisfiable_dependencies" })
+
+        assert_equal "unsatisfiable_dependencies", run.reload.failure_reason
+      end
+
+      test "a reason already on the run is not overwritten" do
+        run = create(:workflow_run, :running, project: @project, workflow: @workflow, user: @user)
+        run.update_columns(failure_reason: "quota_exceeded")
+
+        run_activity(UpdateWorkflowRunStatusActivity,
+                     { "workflow_run_id" => run.id, "status" => "failed", "reason" => "unsatisfiable_dependencies" })
+
+        assert_equal "quota_exceeded", run.reload.failure_reason
+      end
+
       test "pauses a running run when status is paused" do
         run = create(:workflow_run, :running, project: @project, workflow: @workflow, user: @user)
 

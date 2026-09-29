@@ -1,21 +1,19 @@
+# Dev containers run as the host user (UID/GID, exported by the Makefile), so
+# everything they write into these bind-mounts is owned by that user on a Linux
+# host — no root, no chown. The caches are bind-mounts rather than named volumes
+# for the same reason: a named volume is created root-owned.
 x-web-volumes: &web-volumes
   - .:/app:cached
-  - ~/.bash_history:/home/app/.bash_history
-  - bundle_cache:/bundle_cache
-  # Non-root app user's $HOME (L-22). Without this, corepack/yarn's global
-  # cache lives in the container's writable layer, which `docker compose run`
-  # throws away every invocation — yarn re-fetches every package each time
-  # a one-off container starts (e.g. `dcr web bash`).
-  - app_home:/home/app
+  - ./.docker-cache/bundle:/bundle_cache
+  - ./.docker-cache/home:/home/app
   - ./docker/remote/db_dumps:/db_dumps:cached
 
 # Worker needs Docker socket access for container lifecycle management (docker-api gem).
 # Web does not — it uses kubeclient for k8s in production.
 x-worker-volumes: &worker-volumes
   - .:/app:cached
-  - ~/.bash_history:/home/app/.bash_history
-  - bundle_cache:/bundle_cache
-  - app_home:/home/app
+  - ./.docker-cache/bundle:/bundle_cache
+  - ./.docker-cache/home:/home/app
   - ./docker/remote/db_dumps:/db_dumps:cached
   - /var/run/docker.sock:/var/run/docker.sock
 
@@ -28,6 +26,14 @@ x-db-environment: &db-environment
 x-web-environment: &web-environment
   <<: *db-environment
   APP_VERSION: dev
+  HOME: /home/app
+  # The container runs as the host's uid, which has no passwd entry inside the
+  # image. Go's user.Current() needs one or $USER, and without either the
+  # Temporal test server refuses to boot ("error detecting resource: user:
+  # Current requires cgo or $USER set in environment") — every workflow test
+  # fails with a Go dependency-injection wall of text. CI sets USER itself, so
+  # only local runs saw it.
+  USER: app
   BUNDLE_PATH: /bundle_cache
   GEM_HOME: /bundle_cache
   GEM_PATH: /bundle_cache
@@ -48,27 +54,14 @@ x-web-environment: &web-environment
   VITE_RUBY_PORT: ${VITE_RUBY_PORT:-4001}
   REDIS_URL: redis://redis:6379/1
   DOCKER_NETWORK: ${DOCKER_NETWORK:-app_default}
-
-x-toolbox-environment: &toolbox-environment
-  - PROJECT=aixle
-  - APPLICATION=app-web
-  - AWS_REGION
-  - AWS_DEFAULT_REGION
-  - AWS_ACCESS_KEY_ID
-  - AWS_SECRET_ACCESS_KEY
-  - AWS_SESSION_TOKEN
-  - AWS_SECURITY_TOKEN
-  - AWS_SESSION_EXPIRATION
-  - AWS_SESSION_TOKEN_TTL=24h
-  - AWS_CHAINED_SESSION_TOKEN_TTL=24h
-  - AWS_ASSUME_ROLE_TTL=24h
+  DOCKER_AGENT_NETWORK: ${DOCKER_AGENT_NETWORK:-app_agents}
 
 services:
   temporal:
     image: temporalio/auto-setup:1.29.7
     restart: on-failure
     ports:
-      - "${TEMPORAL_HOST_PORT:-7233}:7233"
+      - "${BIND_ADDRESS:-127.0.0.1}:${TEMPORAL_HOST_PORT:-7233}:7233"
     environment:
       - DB=postgres12
       - DB_PORT=5432
@@ -90,7 +83,7 @@ services:
   temporal-ui:
     image: temporalio/ui:2.43.3
     ports:
-      - "${TEMPORAL_UI_HOST_PORT:-8080}:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:${TEMPORAL_UI_HOST_PORT:-8080}:8080"
     depends_on:
       - temporal
     environment:
@@ -103,11 +96,15 @@ services:
     build:
       dockerfile: ./Dockerfile
     image: ${WEB_IMAGE:-web}
+    # Exported by the Makefile. A plain `docker compose` does not see them —
+    # they are shell variables, not environment ones — and lands on 1000:1000;
+    # set them in .env to make both paths agree (see .env.example).
+    user: "${UID:-1000}:${GID:-1000}"
     volumes: *web-volumes
     ports:
-      - '${PORT:-4000}:${PORT:-4000}'
-      - '${VITE_RUBY_PORT:-4001}:${VITE_RUBY_PORT:-4001}'
-      - '${MCP_PORT:-4002}:${MCP_PORT:-4002}'  # MCP server (separate Puma via Procfile.dev)
+      - '${BIND_ADDRESS:-127.0.0.1}:${PORT:-4000}:${PORT:-4000}'
+      - '${BIND_ADDRESS:-127.0.0.1}:${VITE_RUBY_PORT:-4001}:${VITE_RUBY_PORT:-4001}'
+      - '${BIND_ADDRESS:-127.0.0.1}:${MCP_PORT:-4002}:${MCP_PORT:-4002}'  # MCP server (separate Puma via Procfile.dev)
     depends_on:
       db:
         condition: service_healthy
@@ -123,6 +120,9 @@ services:
       - "traefik.http.services.${DOCKER_NETWORK:-app_default}-api.loadbalancer.server.port=${PORT:-4000}"
     entrypoint: bin/docker-entrypoint
     command: dev
+    # On the agent network so containers reach MCP, credential vending and the
+    # usage ingest; db, redis and temporal are deliberately not.
+    networks: [ default, agents ]
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:${PORT:-4000}/up || exit 1"]
       interval: 10s
@@ -132,6 +132,9 @@ services:
 
   worker:
     image: ${WEB_IMAGE:-web}
+    user: "${UID:-1000}:${GID:-1000}"
+    group_add:
+      - "${DOCKER_GID:-0}"
     volumes: *worker-volumes
     environment:
       <<: *web-environment
@@ -175,15 +178,15 @@ services:
   traefik:
     image: traefik:v3.6.6
     ports:
-      - "${HTTP_HOST_PORT:-80}:80"
-      - "${HTTPS_HOST_PORT:-443}:443"
-      - "${TRAEFIK_DASHBOARD_HOST_PORT:-8090}:8080"
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTP_HOST_PORT:-80}:80"
+      - "${BIND_ADDRESS:-127.0.0.1}:${HTTPS_HOST_PORT:-443}:443"
+      - "${BIND_ADDRESS:-127.0.0.1}:${TRAEFIK_DASHBOARD_HOST_PORT:-8090}:8080"
     command:
       - "--api.dashboard=true"
       - "--api.insecure=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=${DOCKER_NETWORK:-app_default}"
+      - "--providers.docker.network=${DOCKER_AGENT_NETWORK:-app_agents}"
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
@@ -192,6 +195,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./docker/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    environment:
+      PORT: ${PORT:-4000}
+    networks: [ default, agents ]
     attach: false
 
   otlp-ingest:
@@ -200,37 +206,21 @@ services:
       dockerfile: Dockerfile
     image: aixle/otlp-ingest:latest
     ports:
-      - '${OTLP_HOST_PORT:-4318}:4318'
+      - '${BIND_ADDRESS:-127.0.0.1}:${OTLP_HOST_PORT:-4318}:4318'
+    networks: [ default, agents ]
     attach: false
 
-  remote:
-    profiles: [infra]
-    build:
-      context: ./docker/remote
-      args:
-        platform: '${PLATFORM:-linux_arm64}'
-    entrypoint: ''
-    environment: *toolbox-environment
-    volumes:
-      - ./docker/remote:/app:cached
-      - .aws:/root/.aws
-
-  toolbox:
-    profiles: [infra]
-    image: ghcr.io/artempartos/ecs_toolbox:latest
-    environment: *toolbox-environment
-    volumes:
-      - .:/app:cached
-      - /var/run/docker.sock:/var/run/docker.sock
-
 volumes:
-  bundle_cache:
-  app_home:
   pg_data:
   redis_data:
 
 networks:
-  # Fixed, not Compose-derived: agent containers join it by name
-  # (docs/project/worktree-stack.md).
+  # Fixed, not Compose-derived (docs/project/worktree-stack.md).
   default:
     name: ${DOCKER_NETWORK:-app_default}
+  # The only network agent containers join (Settings.docker.agent_network). It
+  # holds web, otlp-ingest and traefik — what an agent has to reach — and not
+  # db (trust auth), redis or temporal (no auth at all), which an agent on the
+  # platform's own network could read and write outright.
+  agents:
+    name: ${DOCKER_AGENT_NETWORK:-app_agents}

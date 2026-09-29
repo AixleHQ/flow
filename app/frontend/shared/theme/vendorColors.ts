@@ -1,3 +1,5 @@
+import type { AgentType } from 'shared/ui/types';
+
 /**
  * The one legitimate home for literal colors outside the theme.
  *
@@ -13,7 +15,7 @@
  */
 
 /** Agent-runtime identity swatches, keyed by `agentType`. */
-export const AGENT_BRAND_COLORS: Record<string, string> = {
+export const AGENT_BRAND_COLORS: Record<AgentType, string> = {
   claude_code: '#d97706',
   cursor_cli: '#7c3aed',
   codex: '#10a37f',
@@ -39,11 +41,13 @@ export const GOOGLE_BRAND = {
   red: '#EA4335',
 } as const;
 
-/**
- * Terminal surfaces render an xterm.js canvas that is black by contract, not a
- * themed surface — the agent's own ANSI colors are drawn against it.
- */
-export const TERMINAL_BG = '#000';
+/** Microsoft's four-square mark, for the "Sign in with Microsoft" button. */
+export const MICROSOFT_BRAND = {
+  orange: '#F35325',
+  green: '#81BC06',
+  blue: '#05A6F0',
+  yellow: '#FFBA08',
+} as const;
 
 /**
  * Backgrounds the vendor logo tiles need to stay legible: the Codex mark is dark

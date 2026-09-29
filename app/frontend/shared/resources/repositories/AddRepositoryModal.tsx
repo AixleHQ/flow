@@ -6,6 +6,8 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useMemo, useState, type FC } from 'react';
 import { z } from 'zod';
 
+import type { Integration } from '@/types/generated';
+
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const schema = z
@@ -53,12 +55,6 @@ interface Props {
   onClose: () => void;
   basePath: string;
   existingRepoNames: Set<string>;
-}
-
-interface Integration {
-  id: number;
-  name: string;
-  provider: string;
 }
 
 interface AvailableRepo {

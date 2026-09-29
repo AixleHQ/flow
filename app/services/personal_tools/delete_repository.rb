@@ -18,6 +18,7 @@ module PersonalTools
       return error("Repository not found in this project") unless repo
 
       name = repo.full_name
+      Repositories::CiWebhook.unregister(repo)
       repo.destroy
       success(deleted_repository_id: params[:repository_id].to_i, full_name: name)
     end

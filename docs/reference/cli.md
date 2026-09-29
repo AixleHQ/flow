@@ -19,15 +19,16 @@ of these from the repo root.
 | `make deps`        | `bundle install` + `yarn install` inside the web container.        |
 | `make db-prepare`  | `db:create db:migrate db:seed`.                                    |
 | `make db-reset`    | `db:drop db:create db:migrate db:seed`. **Destroys local data.**   |
-| `make restore-dump`| Restore from `/db_dumps/latest.sql.gz`.                            |
+| `make restore-dump`| Replace the local dev database with `/db_dumps/latest.sql.gz` (refuses any other database). |
 
 ## Checks and linters
 
 | Command            | What it does                                                                |
 | ------------------ | --------------------------------------------------------------------------- |
-| `make check`       | Run backend + frontend checks sequentially, stop on first failure.          |
+| `make check`       | The gate: every check CI runs (same as `check_all`), nothing autocorrected. |
 | `make check_all`   | Run all checks in parallel, never short-circuit, summarize failures.        |
-| `make lint`        | All linters: eslint-fix, rubocop-fix, brakeman, typescript.                 |
+| `make lint`        | All linters: eslint, rubocop, brakeman, typescript — no autocorrect.        |
+| `make fix`         | Autocorrect: rubocop -a, eslint --fix, steiger --fix.                       |
 | `make test`        | Rails tests (`bundle exec rails test`).                                     |
 | `make rails-test`  | Same as above.                                                              |
 | `make rubocop`     | Ruby linter.                                                                |
@@ -43,7 +44,7 @@ of these from the repo root.
 | ----------------------- | ------------------------------------------------------------------ |
 | `make build-web`        | Build the web image.                                               |
 | `make build-otlp-ingest`| Build the OpenTelemetry ingest image.                              |
-| `make build-agents`     | Build all six agent runtime images (`claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `grok`, `kiro_cli`) plus the shared `agent-base-core`. Agents build in parallel. |
+| `make build-agents`     | Build all seven agent runtime images (`claude_code`, `cursor_cli`, `codex`, `gemini_cli`, `antigravity_cli`, `grok`, `kiro_cli`) plus the shared `agent-base-core`. Agents build in parallel. |
 
 ## Help
 

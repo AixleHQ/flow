@@ -1,14 +1,11 @@
 import { Head, usePage } from '@inertiajs/react';
 
-import { AssetsContent, type Asset, type AssetVersion, type Folder } from 'shared/resources/assets/AssetsContent';
+import type { Asset, AssetVersion, Folder, Project } from '@/types/generated';
+
+import { AssetsContent } from 'shared/resources/assets/AssetsContent';
 import { apiV1ProjectAssetsPath, apiV1ProjectFoldersPath } from 'shared/routes';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface Props {
   project: Project;

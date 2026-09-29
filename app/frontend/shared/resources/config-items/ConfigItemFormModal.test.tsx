@@ -26,6 +26,19 @@ describe('ConfigItemFormModal', () => {
     expect(screen.getByDisplayValue('API_KEY')).toBeInTheDocument();
   });
 
+  it("edits a variable in place and never pre-fills a secret's value", () => {
+    const variable = { id: 7, name: 'REGION', value: 'eu-west-1', description: null, itemType: 'variable' };
+    const { unmount } = renderPage(
+      <ConfigItemFormModal opened onClose={vi.fn()} basePath={basePath} item={variable} />,
+    );
+    expect(screen.getByDisplayValue('eu-west-1')).toBeInTheDocument();
+    unmount();
+
+    const secret = { id: 8, name: 'API_KEY', value: '••••••••', description: null, itemType: 'secret' };
+    renderPage(<ConfigItemFormModal opened onClose={vi.fn()} basePath={basePath} item={secret} />);
+    expect(screen.queryByDisplayValue('••••••••')).not.toBeInTheDocument();
+  });
+
   it('submitting a valid create form fires router.post with the config item payload', async () => {
     renderPage(<ConfigItemFormModal opened onClose={vi.fn()} basePath={basePath} />);
 

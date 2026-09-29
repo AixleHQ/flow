@@ -10,6 +10,7 @@ module Oauth
     TOKEN_ENDPOINT = "https://provider.test/oauth/token"
 
     setup do
+      resolve_hosts_publicly!
       Rails.logger.stubs(:info)
       Rails.logger.stubs(:warn)
 
@@ -187,6 +188,47 @@ module Oauth
       assert_not_requested :post, TOKEN_ENDPOINT
     end
 
+    # == single writer (refresh lease) ==
+
+    test "calls the provider with no transaction open" do
+      cred = build_credential(owner: @user, access_token: "old-token", refresh_token: "r", expires_at: 1.minute.ago)
+      open_transactions = nil
+      stub_request(:post, TOKEN_ENDPOINT).to_return do
+        open_transactions = ActiveRecord::Base.connection.open_transactions
+        { status: 200, body: { access_token: "new-token", expires_in: 3_600 }.to_json,
+          headers: { "Content-Type" => "application/json" } }
+      end
+      baseline = ActiveRecord::Base.connection.open_transactions
+
+      assert_equal "new-token", Oauth::TokenService.fresh(cred)
+      assert_equal baseline, open_transactions
+    end
+
+    test "a caller that finds another refresh under way uses that refresh's token" do
+      cred = build_credential(owner: @user, access_token: "old-token", refresh_token: "r", expires_at: 1.minute.ago)
+      winner = OauthCredential.find(cred.id)
+      winner.access_token = "refreshed-elsewhere"
+      winner.expires_at = 2.hours.from_now
+      winner.save!
+      OauthCredential.where(id: cred.id).update_all(refresh_lease_until: 0.5.seconds.from_now, refresh_lease_token: "other")
+
+      assert_equal "refreshed-elsewhere", Oauth::TokenService.fresh(cred)
+      assert_not_requested :post, TOKEN_ENDPOINT
+    end
+
+    test "a rejection of a refresh token rotated meanwhile is not held against the credential" do
+      cred = build_credential(owner: @user, access_token: "old-token", refresh_token: "r-old", expires_at: 1.minute.ago)
+      stub_request(:post, TOKEN_ENDPOINT).to_return do
+        other = OauthCredential.find(cred.id)
+        other.refresh_token = "r-rotated"
+        other.save!
+        { status: 400, body: { error: "invalid_grant" }.to_json }
+      end
+
+      assert_raises(Oauth::ReauthRequired) { Oauth::TokenService.fresh(cred) }
+      assert_equal 0, cred.reload.refresh_failure_count
+    end
+
     # == pick_credential: server scoping (scope-driven, oauth-unification §4.4) ==
 
     test "a per_user oauth server selects the acting user's own credential" do
@@ -247,6 +289,31 @@ module Oauth
 
       assert_nil Oauth::TokenService.pick_credential(server: server, owner: nil, provider: nil, user: @user)
       assert_nil Oauth::TokenService.access_token_for(server: server, user: @user)
+    end
+
+    # A token is only ever sent to the origin it was issued for, however the
+    # server's URL came to move (a write that skipped the model included).
+    test "a credential issued for another origin is never injected" do
+      server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared,
+                                            url: "https://mcp.example.com/mcp")
+      build_credential(owner: @project, mcp_server: server, resource: "https://mcp.example.com/mcp",
+                       access_token: "issued-for-example-com", expires_at: 1.hour.from_now)
+      server.update_column(:url, "https://collector.example.net/mcp")
+
+      assert_raises(Oauth::ReauthRequired) do
+        Oauth::TokenService.access_token_for(server: server.reload, user: @user)
+      end
+    end
+
+    test "a credential from before the binding is bound to the server's current URL on first use" do
+      server = create(:mcp_server, :custom, scope: @project, auth_type: :oauth, credential_scope: :shared,
+                                            url: "https://mcp.example.com/mcp")
+      cred = build_credential(owner: @project, mcp_server: server, access_token: "legacy-token",
+                              expires_at: 1.hour.from_now)
+      cred.update_column(:resource, nil)
+
+      assert_equal "legacy-token", Oauth::TokenService.access_token_for(server: server, user: @user)
+      assert_equal "https://mcp.example.com/mcp", cred.reload.resource
     end
 
     test "ignores revoked credentials when picking for a server" do
@@ -351,9 +418,9 @@ module Oauth
     end
 
     def build_credential(owner:, oauth_client: @client, provider: "sentry", mcp_server: nil,
-                         status: :active, access_token: nil, refresh_token: nil, expires_at: nil)
+                         status: :active, access_token: nil, refresh_token: nil, expires_at: nil, resource: nil)
       cred = OauthCredential.new(owner: owner, oauth_client: oauth_client, provider: provider,
-                                 mcp_server: mcp_server, status: status)
+                                 mcp_server: mcp_server, status: status, resource: resource)
       cred.access_token = access_token if access_token
       cred.refresh_token = refresh_token if refresh_token
       cred.expires_at = expires_at

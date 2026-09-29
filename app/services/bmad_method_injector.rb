@@ -75,11 +75,12 @@ class BmadMethodInjector
     @runtime = runtime
   end
 
+  # No Timeout.timeout around this: the install exec carries its own timeout, and
+  # an asynchronous interrupt inside a Temporal activity can land anywhere,
+  # including half way through a database write.
   def inject!
-    Timeout.timeout(INSTALL_TIMEOUT) do
-      run_bmad_install
-      hide_bmad_in_vscode
-    end
+    run_bmad_install
+    hide_bmad_in_vscode
     record_install_status("success")
   rescue Timeout::Error
     Rails.logger.warn("[BmadMethodInjector] Install timed out after #{INSTALL_TIMEOUT}s, proceeding without BMAD")
@@ -94,7 +95,8 @@ class BmadMethodInjector
   attr_reader :container_id, :session, :runtime
 
   def run_bmad_install
-    cmd = build_install_command
+    token_path = write_read_token
+    cmd = build_install_command(token_path)
     result = runtime.exec(container_id, [ "sh", "-c", cmd ], timeout: INSTALL_TIMEOUT)
     exit_code = result[2].to_i
 
@@ -105,6 +107,8 @@ class BmadMethodInjector
       Rails.logger.error("[BmadMethodInjector] Install failed (exit #{exit_code}): #{details}")
       raise InstallError, "npx bmad-method install failed with exit code #{exit_code}: #{details}"
     end
+  ensure
+    runtime.exec(container_id, [ "sh", "-c", "rm -f #{Shellwords.escape(token_path)}" ]) if token_path
   end
 
   # The installer explains why it gave up on STDOUT — its prompt/logger writes
@@ -134,7 +138,7 @@ class BmadMethodInjector
     write_vscode_settings(JSON.pretty_generate(settings))
   end
 
-  def build_install_command
+  def build_install_command(token_path = nil)
     parts = [ "npx -y bmad-method@#{BMAD_METHOD_VERSION} install" ]
     parts << "--directory /workspace"
     parts << "--tools #{resolve_tool}"
@@ -147,10 +151,24 @@ class BmadMethodInjector
     parts << "--yes"
 
     command = parts.join(" ")
-    token = github_read_token
-    return command if token.blank?
+    return command if token_path.blank?
 
-    "GITHUB_TOKEN=#{shell_quote(token)} #{command}"
+    file = Shellwords.escape(token_path)
+    "GITHUB_TOKEN=\"$(cat #{file})\"; rm -f #{file}; export GITHUB_TOKEN; #{command}"
+  end
+
+  # The token reaches the installer through a 0600 file owned by the session's
+  # user, read into the environment and deleted before anything runs — never in
+  # the command, which is argv in the container and, on Kubernetes, part of the
+  # exec request the apiserver logs.
+  def write_read_token
+    token = github_read_token
+    return nil if token.blank?
+
+    path = "/tmp/.aixle-gh-read-#{SecureRandom.hex(8)}"
+    uid = AgentCredentialsService.for(session.agent_type).adapter.container_uid
+    runtime.write_file(container_id, path, token, mode: 0o600, uid: uid, gid: uid)
+    path
   end
 
   # Every external module (`bmb`, `cis`, `wds`) has its stable tag resolved
@@ -162,14 +180,8 @@ class BmadMethodInjector
   # later install aborts with a 403. The installer's own error text says to set
   # GITHUB_TOKEN; this reuses the scopeless public-read token the skills catalog
   # already carries (Settings.github.read_token). Absent, the install still runs
-  # and simply keeps the anonymous budget it had before.
-  #
-  # Handed over as an argv-scoped env prefix rather than a file on disk: the
-  # install shell runs as uid 1001 while ContainerRuntime#write_file writes as
-  # root, so a token file in sticky /tmp is one that shell cannot unlink again,
-  # and a leftover secret at rest is worse than an argv the same single-tenant
-  # container already sees repo-scoped installation tokens through. It is
-  # scrubbed from everything this class logs or records.
+  # and simply keeps the anonymous budget it had before. It is scrubbed from
+  # everything this class logs or records.
   def github_read_token
     Settings.github.read_token.presence
   end
@@ -239,10 +251,8 @@ class BmadMethodInjector
   end
 
   def record_install_status(status, error: nil)
-    meta = session.context_metadata || {}
-    meta["bmad_install_status"] = status
-    meta["bmad_install_error"] = error.to_s.truncate(500) if error
-    session.update_column(:context_metadata, meta)
+    session.merge_jsonb!(:context_metadata, { "bmad_install_status" => status,
+                                              "bmad_install_error" => error&.to_s&.truncate(500) }.compact)
   rescue StandardError => e
     Rails.logger.warn("[BmadMethodInjector] Failed to record install status: #{e.message}")
   end

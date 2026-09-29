@@ -34,11 +34,6 @@ Report privately through one of these channels:
    advisory visible only to maintainers.
 2. **Email** — `security@aixle.com`.
 
-> **TODO (product):** confirm/create the `security@aixle.com` mailbox, and
-> enable *Private Vulnerability Reporting* in
-> **Settings → Code security and analysis** so option 1 is live before the repo
-> goes public.
-
 Please include, as far as you can:
 
 - a description of the vulnerability and its impact;
@@ -48,8 +43,7 @@ Please include, as far as you can:
 
 ## What to expect
 
-> **TODO (product):** confirm the response targets below — these are
-> best-practice defaults, not yet an agreed SLA.
+These are targets, not a contractual SLA:
 
 - **Acknowledgement** within **3 business days**.
 - **Initial assessment** (severity + whether we accept the report) within

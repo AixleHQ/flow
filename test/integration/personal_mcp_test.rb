@@ -125,7 +125,7 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
 
   test "the guidance prompts are served" do
     names = rpc("prompts/list").dig("result", "prompts").map { |p| p["name"] }
-    assert_equal %w[author_step build_workflow setup_project tool_catalog], names.sort
+    assert_equal %w[author_step build_workflow publish_template setup_project tool_catalog], names.sort
 
     wf = prompt_text("build_workflow")
     assert_match(/create_workflow/, wf)
@@ -254,5 +254,20 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     rpc("tools/list")
 
     assert_not_nil @user.reload.mcp_token_last_used_at
+  end
+
+  test "the last-used timestamp is written at most every few minutes, not on every call" do
+    rpc("tools/list")
+    first = @user.reload.mcp_token_last_used_at
+
+    travel 1.minute do
+      rpc("tools/list")
+      assert_equal first, @user.reload.mcp_token_last_used_at
+    end
+
+    travel User::MCP_TOKEN_USE_GRANULARITY + 1.minute do
+      rpc("tools/list")
+      assert_operator @user.reload.mcp_token_last_used_at, :>, first
+    end
   end
 end

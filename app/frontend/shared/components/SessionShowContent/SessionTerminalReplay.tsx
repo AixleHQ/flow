@@ -19,6 +19,8 @@ type Status = 'idle' | 'loading' | 'ready' | 'empty' | 'error';
 
 interface Props {
   logUrl: string;
+  /** Take the parent's full height instead of the fixed inline pane. */
+  fill?: boolean;
 }
 
 // Read the app's terminal colors from the --app-* theme tokens (light/dark aware).
@@ -64,7 +66,7 @@ function computeLayout(text: string, el: HTMLElement) {
   return { cols, rows, fontSize };
 }
 
-export function SessionTerminalReplay({ logUrl }: Props) {
+export function SessionTerminalReplay({ logUrl, fill = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<import('@xterm/xterm').Terminal | null>(null);
   const [open, setOpen] = useState(true);
@@ -82,7 +84,7 @@ export function SessionTerminalReplay({ logUrl }: Props) {
     if (!open) return undefined;
 
     let disposed = false;
-    let onResize: (() => void) | null = null;
+    let observer: ResizeObserver | null = null;
     setStatus('loading');
 
     async function run() {
@@ -136,12 +138,14 @@ export function SessionTerminalReplay({ logUrl }: Props) {
 
         // On container resize keep the inferred column count; only rescale the
         // font (and rows) so the fixed-width box-art stays aligned and fitted.
-        onResize = () => {
+        // Observes the element, not the window: maximizing the console grows
+        // the pane without any window resize.
+        observer = new ResizeObserver(() => {
           const layout = computeLayout(text, el);
           term.options.fontSize = layout.fontSize;
           term.resize(cols, layout.rows);
-        };
-        window.addEventListener('resize', onResize);
+        });
+        observer.observe(el);
 
         setTruncated(isTruncated);
         setStatus('ready');
@@ -154,7 +158,7 @@ export function SessionTerminalReplay({ logUrl }: Props) {
 
     return () => {
       disposed = true;
-      if (onResize) window.removeEventListener('resize', onResize);
+      observer?.disconnect();
       termRef.current?.dispose();
       termRef.current = null;
     };
@@ -168,7 +172,7 @@ export function SessionTerminalReplay({ logUrl }: Props) {
   }, [colorScheme]);
 
   return (
-    <Box w="100%">
+    <Box w="100%" className={fill ? classes.fill : undefined}>
       <UnstyledButton onClick={() => setOpen((o) => !o)} w="100%" aria-expanded={open}>
         <Group gap={6}>
           <IconChevronRight
@@ -182,7 +186,7 @@ export function SessionTerminalReplay({ logUrl }: Props) {
       </UnstyledButton>
 
       {open && (
-        <Box mt={6}>
+        <Box mt={6} className={fill ? classes.fillBody : undefined}>
           {status === 'empty' ? (
             <Text size="xs" c="dimmed" ta="center">
               No terminal output was captured for this session.
@@ -198,7 +202,7 @@ export function SessionTerminalReplay({ logUrl }: Props) {
                   Log truncated — showing the most recent output.
                 </Text>
               )}
-              <Box className={classes.terminal} pos="relative">
+              <Box className={fill ? `${classes.terminal} ${classes.terminalFill}` : classes.terminal} pos="relative">
                 {status !== 'ready' && (
                   <Box className={classes.loaderOverlay}>
                     <Loader size="sm" />

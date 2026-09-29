@@ -40,6 +40,16 @@ module Api
 
             assert_response :no_content
           end
+
+          test "unshare stops a public link working" do
+            token = @asset.share!
+
+            delete :unshare, params: { project_id: @project.id, task_id: @task.id, id: @asset.id }
+
+            assert_response :success
+            assert_nil response.parsed_body["shareUrl"]
+            assert_nil PubliclyShareable.find_shared(token)
+          end
         end
       end
     end

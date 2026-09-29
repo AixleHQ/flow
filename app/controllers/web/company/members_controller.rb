@@ -14,7 +14,8 @@ class Web::Company::MembersController < Web::Company::ApplicationController
                                  .order(created_at: :desc)
 
     render inertia: "Company/Members/Index", props: {
-      users: memberships.map { |m| MemberResource.new(m).to_h }
+      users: memberships.map { |m| MemberResource.new(m).to_h },
+      project_handover: current_membership&.admin? ? ProjectHandover.for_company(current_company) : nil
     }
   end
 
@@ -68,8 +69,11 @@ class Web::Company::MembersController < Web::Company::ApplicationController
                          inertia: { errors: { base: "This action is not available for the member's current state" } }
     end
 
+    promoted = membership.promoted_from_viewer?
+
     if membership.save
-      redirect_to company_members_path, notice: "Member updated"
+      notice = promoted ? "Role updated. They must connect a CLI to finish onboarding." : "Member updated"
+      redirect_to company_members_path, notice: notice
     else
       redirect_to company_members_path, inertia: { errors: membership.errors }
     end
@@ -79,9 +83,8 @@ class Web::Company::MembersController < Web::Company::ApplicationController
   # global User identity (and their other memberships) stays intact.
   def destroy
     membership = member_membership
-    membership.aasm(:state).fire(:revoke) if membership.may_revoke?
 
-    if membership.revoked? && membership.save
+    if membership.revoke_with_handover(handover_params)
       redirect_to company_members_path, notice: "Member removed"
     else
       redirect_to company_members_path, inertia: { errors: membership.errors }

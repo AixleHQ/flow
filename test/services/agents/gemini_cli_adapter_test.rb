@@ -108,9 +108,9 @@ module Agents
 
     test "session_command uses yolo mode for all sessions" do
       assert_equal "gemini --yolo", @adapter.session_command(mode: "interactive")
-      assert_equal "gemini --yolo", @adapter.session_command(mode: "non_interactive", prompt: "do it")
+      assert_equal "gemini --yolo", @adapter.session_command(mode: "non_interactive")
       assert_equal "gemini --model gemini-2.5-pro --yolo",
-                   @adapter.session_command(mode: "non_interactive", prompt: "do it", model: "gemini-2.5-pro")
+                   @adapter.session_command(mode: "non_interactive", model: "gemini-2.5-pro")
     end
 
     test "env_vars_from_metadata returns empty hash" do

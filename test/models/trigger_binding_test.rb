@@ -64,6 +64,21 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert_includes binding.errors[:subject_column], "is required when subject_policy is create_task"
   end
 
+  test "a subject_column on another project's board is rejected" do
+    other_project = create(:project, owner: @user, company: @company)
+    foreign_column = create(:board_column, board: create(:board, project: other_project))
+    own_column = create(:board_column, board: create(:board, project: @project))
+
+    foreign = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", subject_policy: :create_task, subject_column: foreign_column)
+    own = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", subject_policy: :create_task, subject_column: own_column)
+
+    assert_not foreign.valid?
+    assert_match(/subject_column_id must belong to this project/, foreign.errors[:subject_column].join)
+    assert own.valid?
+  end
+
   test "schedule binding requires a cron in schedule_config" do
     binding = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
       event_type: "schedule.fired", schedule_config: {})
@@ -109,5 +124,61 @@ class TriggerBindingTest < ActiveSupport::TestCase
     event = create(:trigger_event, event_type: "slack.message", project: @project)
 
     assert_equal [ match.id ], TriggerBinding.for_event(event).pluck(:id)
+  end
+
+  test "accepts an empty predicate and a scalar or known operator condition" do
+    empty = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, filter_predicate: {})
+    scalar = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "webhook.received", filter_predicate: { "branch" => "main" })
+    operator = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      filter_predicate: { "text" => { "op" => "contains", "value" => "ship" } })
+    present = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      filter_predicate: { "text" => { "op" => "present" } })
+
+    assert empty.valid?
+    assert scalar.valid?
+    assert operator.valid?
+    assert present.valid?
+  end
+
+  test "rejects a slack text command of help and allows a word that only contains it" do
+    help = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "text" => { "op" => "eq", "value" => "help" } })
+    slashed = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "text" => { "op" => "contains", "value" => "/HELP" } })
+    helpful = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message",
+      filter_predicate: { "text" => { "op" => "contains", "value" => "helpful" } })
+    webhook = build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "webhook.received",
+      filter_predicate: { "text" => "help" })
+
+    assert_not help.valid?
+    assert_match(/can't use help/, help.errors[:filter_predicate].join)
+    assert_not slashed.valid?
+    assert helpful.valid?
+    assert webhook.valid?
+  end
+
+  def schedule_binding(enabled:)
+    TriggerBinding.create!(project: @project, workflow: @workflow, created_by: @user, event_type: "schedule.fired",
+                           enabled: enabled, schedule_config: { "cron" => "0 9 * * *", "timezone" => "UTC" })
+  end
+
+  test "a schedule created disabled never reaches Temporal, since it has no schedule yet" do
+    TemporalService.stubs(:enabled?).returns(true)
+    ScheduleReconciler.expects(:reconcile).never
+
+    schedule_binding(enabled: false)
+  end
+
+  test "a schedule is reconciled when created enabled and again when switched on" do
+    TemporalService.stubs(:enabled?).returns(true)
+    ScheduleReconciler.expects(:reconcile).twice
+
+    schedule_binding(enabled: true)
+    schedule_binding(enabled: false).update!(name: "renamed")
   end
 end

@@ -1,9 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it } from 'vitest';
 
+import type { Agent } from '@/types/generated';
 import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
-
-import type { Agent } from 'shared/resources/agents/AgentsContent';
 
 import AgentsPage from './AgentsPage';
 
@@ -23,6 +22,8 @@ const agent = (overrides: Partial<Agent> = {}): Agent => ({
   scopeIndicator: 'project',
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
+  currentVersionNumber: 1,
+  archivedAt: null,
   ...overrides,
 });
 

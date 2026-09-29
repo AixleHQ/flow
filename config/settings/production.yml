@@ -2,8 +2,11 @@ temporal:
   enabled: true
 
 agents:
-  # The whole built-in set lives in one registry, so one prefix replaces the
-  # seven per-runtime image entries this file used to carry. Tag stays blank:
-  # these are published as moving tags, which is the registry default.
-  image_prefix: <%= ENV['AGENT_IMAGE_PREFIX'] || 'ghcr.io/aixle/aixle-app-' %>
+  # The whole built-in set lives in one registry, so one prefix names all seven
+  # runtime images. The default is where
+  # .github/workflows/images.yml publishes them (ghcr.io/aixlehq/flow-<runtime>).
+  # A blank tag is a moving one, so the Kubernetes runtime then pulls on every
+  # start (KubernetesRuntime#image_pull_policy_for) rather than trusting a node's
+  # cache; pin AGENT_IMAGE_TAG to a release or sha for a fleet that runs one version.
+  image_prefix: <%= ENV['AGENT_IMAGE_PREFIX'] || 'ghcr.io/aixlehq/flow-' %>
   image_tag: <%= ENV['AGENT_IMAGE_TAG'] || '' %>

@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildProject } from 'test/factories/project';
 import { renderPage, screen, userEvent } from 'test/renderPage';
 
 import { ProjectCard } from './ProjectCard';
@@ -10,9 +11,7 @@ import { ProjectCard } from './ProjectCard';
 const withText = (text: string) => (_content: string, element: Element | null) =>
   element?.textContent === text && element.children.length === 2;
 
-// ProjectCard declares its own local Project interface (concrete counts), so build a matching
-// fixture inline rather than from the generated type (whose counts are `unknown`).
-const project = {
+const project = buildProject({
   id: 1,
   name: 'Acme',
   description: 'A test project',
@@ -31,7 +30,7 @@ const project = {
     { id: 3, initials: 'CE' },
   ],
   favorite: false,
-};
+});
 
 describe('ProjectCard', () => {
   it('renders the name, status, and pluralized stats', () => {

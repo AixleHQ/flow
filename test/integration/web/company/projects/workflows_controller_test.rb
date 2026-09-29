@@ -119,6 +119,34 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_equal "Keeps its name", wf.reload.name
   end
 
+  # The UI deletes the one way the API does: softly, keeping the run history, and
+  # reporting a refusal instead of success.
+  test "an archived workflow leaves the list for the archived view" do
+    workflow = create(:workflow, scope: @project, name: "Old pipeline")
+    Versions.archive!(workflow, actor: Versions::Actor.ui(@user))
+
+    get company_project_workflows_path(@project)
+
+    assert_not_includes inertia.props[:workflows].pluck(:id), workflow.id
+    archived = inertia.props[:archivedWorkflows]
+    assert_equal [ [ workflow.id, "Old pipeline" ] ], archived.map { |w| w.values_at("id", "name") }
+    assert archived.first["archivedAt"].present?
+  end
+
+  test "destroy keeps the run history and refuses while a run is live" do
+    wf = create(:workflow, scope: @project)
+    run = create(:workflow_run, :running, workflow: wf, project: @project, user: @user)
+
+    delete company_project_workflow_path(@project, wf)
+    assert_match(/active runs/, flash[:alert])
+    assert_nil wf.reload.deleted_at
+
+    run.update_column(:state, "completed")
+    delete company_project_workflow_path(@project, wf)
+    assert wf.reload.deleted_at
+    assert WorkflowRun.exists?(run.id)
+  end
+
   test "destroy redirects on success" do
     wf = create(:workflow, scope: @project)
 

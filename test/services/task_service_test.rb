@@ -52,7 +52,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: anything, mode: :non_interactive)
     ).once
 
@@ -153,7 +153,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     workflow = create(:workflow, scope: @project)
     ColumnWorkflowBinding.create!(board_column: other, workflow: workflow, trigger_mode: :auto)
     task = create(:board_task, board: @board, board_column: @column)
-    WorkflowService.expects(:start).once.returns(create(:workflow_run, workflow: workflow, project: @project, user: @user))
+    WorkflowService.expects(:enqueue).once.returns(create(:workflow_run, workflow: workflow, project: @project, user: @user))
 
     TaskService.update(task: task, params: { board_column_id: other.id }, actor: @user)
   end
@@ -233,7 +233,7 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     task = create(:board_task, board: @board, board_column: @column, position: 1)
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
@@ -249,7 +249,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     task = create(:board_task, board: @board, board_column: @column, position: 1)
     create(:workflow_run, workflow: prior_workflow, project: @project, user: @user, board_task: task, state: "running")
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: auto_workflow, task: task, mode: :non_interactive)
     ).once
 
@@ -263,7 +263,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
     task = create(:board_task, board: @board, board_column: @column)
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).returns(build(:workflow_run))
 
@@ -283,7 +283,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
     task = create(:board_task, board: @board, board_column: @column, assignee: assignee)
 
-    WorkflowService.expects(:start).with(has_entries(user: assignee)).returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).with(has_entries(user: assignee)).returns(build(:workflow_run))
 
     TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
   end
@@ -293,7 +293,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     workflow = create(:workflow, scope: @project)
     binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
     task = create(:board_task, board: @board, board_column: @column, assignee: assignee)
-    WorkflowService.stubs(:start).returns(build(:workflow_run))
+    WorkflowService.stubs(:enqueue).returns(build(:workflow_run))
 
     TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
 
@@ -307,7 +307,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     binding = ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :manual, cooldown_seconds: 0)
     task = create(:board_task, board: @board, board_column: @column)
 
-    WorkflowService.expects(:start).with(has_entries(user: @user)).returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).with(has_entries(user: @user)).returns(build(:workflow_run))
 
     TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
   end
@@ -320,7 +320,7 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     # A viewer cannot launch a session at all, so a run must never be attributed
     # to one — it would be work they could not have started themselves.
-    WorkflowService.expects(:start).with(has_entries(user: @user)).returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).with(has_entries(user: @user)).returns(build(:workflow_run))
 
     TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
   end
@@ -333,7 +333,7 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     # Otherwise the fix trades a run on the wrong account for one that dies with
     # "not logged in": a nil credential is silently skipped downstream, never raised.
-    WorkflowService.expects(:start).with(has_entries(user: @user)).returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).with(has_entries(user: @user)).returns(build(:workflow_run))
 
     TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
   end
@@ -345,7 +345,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     task = create(:board_task, board: @board, board_column: @column, assignee: former)
     former.company_memberships.find_by(company: @company).update!(state: "revoked")
 
-    WorkflowService.expects(:start).with(has_entries(user: @user)).returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).with(has_entries(user: @user)).returns(build(:workflow_run))
 
     TaskService.trigger_workflow(task: task, binding: binding, actor: @user)
   end
@@ -357,7 +357,7 @@ class TaskServiceTest < ActiveSupport::TestCase
     ColumnWorkflowBinding.create!(board_column: auto_column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 0)
     task = create(:board_task, board: @board, board_column: @column, assignee: assignee)
 
-    WorkflowService.expects(:start).with(has_entries(user: assignee)).returns(build(:workflow_run))
+    WorkflowService.expects(:enqueue).with(has_entries(user: assignee)).returns(build(:workflow_run))
 
     TaskService.move(task: task, to_column: auto_column, actor: @user)
   end
@@ -409,7 +409,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
@@ -432,7 +432,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     TaskService.resolve_gate(gate: gate1, resolution_data: { conclusion: "success" })
   end
@@ -487,7 +487,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
@@ -510,7 +510,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     TaskService.mark_gate_stale(gate: gate, reason: "run deleted")
   end
@@ -574,7 +574,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
@@ -657,7 +657,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
@@ -680,7 +680,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     assert_difference -> { Gate.count }, -1 do
       assert_no_difference -> { TriggerEvent.where(event_type: TriggerEngine::COLUMN_EVENT_TYPE).count } do
@@ -703,7 +703,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
@@ -727,7 +727,7 @@ class TaskServiceTest < ActiveSupport::TestCase
       creator: @user
     )
 
-    WorkflowService.expects(:start).never
+    WorkflowService.expects(:enqueue).never
 
     TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
   end
@@ -738,7 +738,7 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
@@ -757,7 +757,7 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
@@ -771,10 +771,45 @@ class TaskServiceTest < ActiveSupport::TestCase
 
     task = create(:board_task, board: @board, board_column: @column, assignee: @user)
 
-    WorkflowService.expects(:start).with(
+    WorkflowService.expects(:enqueue).with(
       has_entries(workflow: workflow, task: task, mode: :non_interactive)
     ).once
 
     TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
+  end
+
+  # == check_auto_trigger (cooldown) ==
+
+  test "the same card entering the column again within the cooldown starts one run" do
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 30)
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+
+    WorkflowService.expects(:enqueue).with(has_entries(workflow: workflow, task: task)).once
+
+    2.times { TaskService.check_auto_trigger(task: task, column: @column, actor: @user) }
+  end
+
+  test "the cooldown is per card: moving several cards at once starts each of them" do
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 30)
+    tasks = create_list(:board_task, 2, board: @board, board_column: @column, assignee: @user)
+
+    WorkflowService.expects(:enqueue).twice
+
+    tasks.each { |task| TaskService.check_auto_trigger(task: task, column: @column, actor: @user) }
+  end
+
+  test "the card starts again once its cooldown has passed" do
+    workflow = create(:workflow, scope: @project)
+    ColumnWorkflowBinding.create!(board_column: @column, workflow: workflow, trigger_mode: :auto, cooldown_seconds: 30)
+    task = create(:board_task, board: @board, board_column: @column, assignee: @user)
+
+    WorkflowService.expects(:enqueue).twice
+
+    TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
+    travel 31.seconds do
+      TaskService.check_auto_trigger(task: task, column: @column, actor: @user)
+    end
   end
 end

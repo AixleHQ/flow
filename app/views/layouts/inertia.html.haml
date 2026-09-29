@@ -10,18 +10,19 @@
 
     / Apply the persisted Mantine color scheme before first paint to avoid a flash.
     / Key + default must match localStorageColorSchemeManager in application.tsx.
-    :javascript
-      (function () {
-        try {
-          var scheme = localStorage.getItem('mantine-color-scheme-value') || 'dark';
-          if (scheme === 'auto') {
-            scheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    = javascript_tag nonce: true do
+      :plain
+        (function () {
+          try {
+            var scheme = localStorage.getItem('mantine-color-scheme-value') || 'dark';
+            if (scheme === 'auto') {
+              scheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+            document.documentElement.setAttribute('data-mantine-color-scheme', scheme);
+          } catch (e) {
+            document.documentElement.setAttribute('data-mantine-color-scheme', 'dark');
           }
-          document.documentElement.setAttribute('data-mantine-color-scheme', scheme);
-        } catch (e) {
-          document.documentElement.setAttribute('data-mantine-color-scheme', 'dark');
-        }
-      })();
+        })();
 
     %link{rel: "preconnect", href: "https://fonts.googleapis.com"}/
     %link{rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: true}/

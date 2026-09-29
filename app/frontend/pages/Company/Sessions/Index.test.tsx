@@ -10,10 +10,12 @@ type CableHandlers = {
   received: (data: Record<string, unknown>) => void;
 };
 let lastCableHandlers: CableHandlers | null = null;
+let lastCableParams: Record<string, unknown> | null = null;
 vi.mock('shared/lib/actionCableConsumer', () => ({
   getConsumer: () => ({
     subscriptions: {
-      create: (_params: unknown, handlers: CableHandlers) => {
+      create: (params: Record<string, unknown>, handlers: CableHandlers) => {
+        lastCableParams = params;
         lastCableHandlers = handlers;
         return { unsubscribe: vi.fn() };
       },
@@ -64,6 +66,7 @@ function seed(overrides: Partial<PropsFixture> = {}): PropsFixture {
 describe('Company/Sessions/Index', () => {
   beforeEach(() => {
     lastCableHandlers = null;
+    lastCableParams = null;
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -312,23 +315,44 @@ describe('Company/Sessions/Index', () => {
     });
   });
 
-  it('patches a session in place via a cable update without discarding accumulated pages', async () => {
+  it('fetches a changed row back and patches it in place, keeping the accumulated pages', async () => {
     vi.useFakeTimers();
     const s1 = makeSession({ id: 901, state: 'ready' });
     const s2 = makeSession({ id: 902, state: 'finished' });
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ sessions: [{ ...s1, state: 'finished' }] }), { status: 200 }));
 
-    renderAuthedPage(<SessionsIndex {...seed({ sessions: [s1, s2], total: 2 })} />);
+    renderAuthedPage(<SessionsIndex {...seed({ sessions: [s1, s2], total: 2, cableStream: 'signed-feed' })} />);
 
     await act(async () => {
       vi.advanceTimersByTime(100);
     });
-    expect(lastCableHandlers).not.toBeNull();
+    expect(lastCableParams).toEqual({ channel: 'InertiaCable::StreamChannel', signed_stream_name: 'signed-feed' });
 
     await act(async () => {
-      lastCableHandlers!.received({ type: 'session_update', session: { ...s1, state: 'finished' } });
+      lastCableHandlers!.received({ type: 'session_update', id: 901 });
+      lastCableHandlers!.received({ type: 'session_update', id: 404 });
+      vi.advanceTimersByTime(300);
     });
 
-    expect(screen.getByText(/#901/)).toBeInTheDocument();
+    // Only rows this list holds are asked for, in one request.
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0][0])).toBe('/company/sessions/rows?ids%5B%5D=901');
+    vi.useRealTimers();
+    await waitFor(() => expect(screen.getAllByText('Finished')).toHaveLength(2));
     expect(screen.getByText(/#902/)).toBeInTheDocument();
+    fetchSpy.mockRestore();
+  });
+
+  it('does not subscribe without a stream from the page', async () => {
+    vi.useFakeTimers();
+    renderAuthedPage(<SessionsIndex {...seed()} />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    expect(lastCableHandlers).toBeNull();
   });
 });

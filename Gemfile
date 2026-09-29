@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 source "https://rubygems.org"
 
 ruby file: ".ruby-version"
@@ -6,7 +8,6 @@ ruby file: ".ruby-version"
 gem "rails", "~> 8.1.3"
 # Use postgresql as the database for Active Record
 gem "pg", "~> 1.6"
-gem "responders"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 
@@ -24,6 +25,20 @@ gem "bcrypt", "~> 3.1.22"
 gem "omniauth"
 gem "omniauth-google-oauth2"
 gem "omniauth-rails_csrf_protection"
+# Microsoft work/school accounts. The successor to omniauth-azure-activedirectory-v2;
+# multi-tenant by default, and it folds the Entra `tid` into the UID.
+gem "omniauth-entra-id", "~> 3.1"
+# Generic per-company OIDC connections. NOT an OmniAuth strategy: a customer's
+# issuer and client credentials are a database row, and OmniAuth strategies are
+# boot-time initializer constants (AD-4).
+gem "openid_connect", "~> 2.5"
+# Passkeys. Owns the WebAuthn ceremonies and attestation verification; this app
+# still owns credential storage, the UI and account recovery.
+gem "webauthn", "~> 3.4"
+# SCIM 2.0 as a service provider: a customer's directory pushes joiners and
+# leavers to us. The filter-query grammar is genuinely hard ABNF work, which is
+# what justifies the dependency over hand-rolling.
+gem "scimitar", "~> 2.15"
 
 gem "aasm"
 
@@ -35,25 +50,19 @@ gem "administrate-field-jsonb"
 # so we now declare a pipeline directly (Propshaft serves the gem's prebuilt
 # CSS/JS without a compile step). See administrate docs/migrating-to-v1.md.
 gem "propshaft"
-gem "audited"
 gem "config"
 gem "enumerize"
 gem "gitlab"
 gem "haml-rails"
 gem "hashie"
-gem "kramdown"
-gem "kramdown-parser-gfm"
 gem "jwt"
 gem "octokit"
 gem "ts_routes"
-gem "oj"
 gem "pundit"
 gem "pagy"
 gem "rack-attack"
 gem "rack-cors"
 gem "ransack"
-gem "rolify"
-gem "ruby-filemagic", github: "stoivo/ruby-filemagic"
 
 gem "sentry-ruby"
 gem "sentry-rails"
@@ -63,19 +72,24 @@ gem "rails-i18n"
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 # gem "tzinfo-data", platforms: %i[ windows jruby ]
 
-gem "redis"
+# Action Cable's Redis adapter asks for redis >= 4, < 6 when it loads (until Rails
+# 8.2 moves it onto redis-client), and only production loads it: the test env's
+# cable adapter is `test`, so a redis 6 bump passed CI and would have failed at
+# boot. test/config/action_cable_redis_test.rb loads the adapter to catch that.
+gem "redis", ">= 4", "< 6"
 
 # Temporal workflow orchestration (official SDK)
 gem "temporalio"
 
-# Held below json 3.0, which takes the options of `JSON.parse` as keywords only.
-# temporalio's payload converter still passes them positionally
-# (`JSON.parse(payload.data, @parse_options)` in
-# converters/payload_converter/json_plain.rb), so under json 3 every payload
+# Held below json 3.0, whose `JSON.parse` takes its options as keywords only and
+# rejects `create_additions`, an option json 3 removed. temporalio's payload
+# converter passes them positionally (`JSON.parse(payload.data, @parse_options)`
+# in converters/payload_converter/json_plain.rb), so under json 3 every payload
 # decode raises ArgumentError and every workflow task fails — the worker retries
 # them forever rather than erroring out, which reads as a hang, not a failure.
-# Present in temporalio 1.7, 1.8 and 1.9 alike. Drop the pin once the SDK
-# switches to keywords.
+# Present in temporalio 1.7, 1.8 and 1.9 alike. The SDK's default options are
+# `{ create_additions: true }`; TemporalService.data_converter already passes none,
+# so the pin can go once the SDK switches to keywords.
 gem "json", "< 3"
 
 # Reduces boot times through caching; required in config/boot.rb
@@ -128,7 +142,6 @@ group :development, :test do
   gem "debug"
   gem "dotenv-rails", require: false
   gem "bullet"
-  gem "byebug"
   gem "pry-byebug"
   gem "pry-rails"
 
@@ -138,7 +151,6 @@ end
 
 group :development do
   gem "foreman"
-  gem "spring"
 
   # Rubocop and related gems
   gem "rubocop"
@@ -159,10 +171,9 @@ group :test do
   # Rails testing
   gem "minitest"
   gem "minitest-hooks"
+  gem "minitest-mock"
   gem "minitest-power_assert"
-  gem "minitest-rails"
   gem "mocha"
-
   # Coverage and mocking
   gem "simplecov", require: false
   gem "webmock"
@@ -173,7 +184,11 @@ group :test do
   gem "site_prism"
 end
 
-gem "shrine", "~> 3.9"
+gem "shrine", "~> 3.10"
+# Content types, for Shrine's determine_mime_type analyzer and the code that labels
+# session logs and step outputs. Nothing else requires it: the app does not load
+# Active Storage, which would.
+gem "marcel", "~> 1.0"
 gem "aws-sdk-s3", "~> 1.232"
 
 # Bedrock runtime, for the cloud-connection health check: the only way to tell a user
@@ -192,7 +207,6 @@ gem "ruby-vips", "~> 2.3" # image_processing 2.0 no longer declares it; shrine.r
 gem "faraday-retry", "~> 2.3"
 
 gem "lograge", "~> 0.15.0"
-gem "minitar"
 
 # Reads ONE credential format, not an application database. Kiro CLI keeps its login in
 # a SQLite file rather than a JSON document, so Agents::KiroCliAdapter has to open that
@@ -200,7 +214,13 @@ gem "minitar"
 # hands us JSON and needs nothing here.
 gem "sqlite3", "~> 2.9"
 
+# Time-based one-time codes: a step-up method in production, not just a test
+# fixture — User#totp_secret and Auth::Methods::Totp both run on it.
 gem "rotp", "~> 6.3"
+
+# Renders the otpauth:// URI as the QR an authenticator app scans. Server-side so
+# the enrolment payload stays one response and no QR library reaches the bundle.
+gem "rqrcode", "~> 3.1"
 
 # Docker API for container management
 gem "docker-api", "~> 2.3"

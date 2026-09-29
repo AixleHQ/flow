@@ -16,6 +16,7 @@ module PersonalTools
       param :instructions, type: :string, description: "Updated instructions (markdown)."
       param :position, type: :integer, description: "Updated position within the step."
       param :required, type: :boolean, description: "Whether the sub-step is required."
+      param :base_version, type: :integer, description: "The workflow version you read (current_version_number). A newer one means someone else saved since, and the change is refused."
     end
 
     UPDATABLE = %i[name instructions position required].freeze
@@ -23,13 +24,14 @@ module PersonalTools
     def execute
       project = find_project!
       authorize!(project, :update?, policy: Web::Company::Projects::WorkflowsPolicy, project: project)
-      step = find_step!(find_workflow!(project))
+      workflow = find_workflow!(project)
+      step = find_step!(workflow)
       sub_step = find_sub_step!(step)
 
       attrs = UPDATABLE.each_with_object({}) { |k, h| h[k] = params[k] if params.key?(k) }
       return error("No fields to update") if attrs.empty?
 
-      sub_step.update!(attrs)
+      Versions.save!(workflow, actor: version_actor, base_version: base_version) { sub_step.update!(attrs) }
       success(id: sub_step.id, step_id: step.id, name: sub_step.name, position: sub_step.position,
               updated_fields: attrs.keys.map(&:to_s))
     rescue ActiveRecord::RecordInvalid => e

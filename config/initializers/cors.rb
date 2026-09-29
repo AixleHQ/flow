@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 unless Rails.env.development?
   Rails.application.config.middleware.insert_before 0, Rack::Cors do
     allow do

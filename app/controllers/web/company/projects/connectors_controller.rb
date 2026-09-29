@@ -12,7 +12,8 @@ class Web::Company::Projects::ConnectorsController < Web::Company::Projects::App
     return redirect_back_with(alert: "Connector not found") if connector.nil?
 
     result = MCP::ConnectorInstaller.call(
-      connector: connector, target_id: params[:target_id], values: install_values, project: current_project
+      connector: connector, target_id: params[:target_id], values: install_values, project: current_project,
+      actor: version_actor
     )
 
     redirect_to company_project_mcp_servers_path(current_project), notice: install_notice(result)

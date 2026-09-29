@@ -6,6 +6,7 @@ module Web
       def index? = admin?
       def new? = admin?
       def show? = admin?
+      def rows? = membership.present?
     end
   end
 end

@@ -5,8 +5,12 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useState, type FC } from 'react';
 import { z } from 'zod';
 
+import type { Agent } from '@/types/generated';
+
+import { UNSAVED_CHANGES_PROMPT } from 'shared/lib/hooks/useUnsavedChangesGuard';
 import { EmojiPicker } from 'shared/ui/EmojiPicker';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
+import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 const agentSchema = z.object({
   name: z
@@ -21,21 +25,14 @@ const agentSchema = z.object({
   principles: z.string().max(2000).optional(),
 });
 
-interface Agent {
-  id: number;
-  name: string;
-  title: string;
-  icon: string | null;
-  persona: string;
-  communicationStyle: string | null;
-  principles: string | null;
-}
+type EditableAgent = Pick<Agent, 'id' | 'name' | 'title' | 'icon' | 'persona' | 'communicationStyle' | 'principles'> &
+  Partial<Pick<Agent, 'currentVersionNumber'>>;
 
 interface AgentFormModalProps {
   opened: boolean;
   onClose: () => void;
-  editAgent?: Agent | null;
-  duplicateAgent?: Agent | null;
+  editAgent?: EditableAgent | null;
+  duplicateAgent?: EditableAgent | null;
   basePath: string;
 }
 
@@ -58,14 +55,16 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
   useEffect(() => {
     if (opened) {
       if (editAgent) {
-        form.setValues({
+        const values = {
           name: editAgent.name,
           title: editAgent.title,
           icon: editAgent.icon || '',
           persona: editAgent.persona,
           communicationStyle: editAgent.communicationStyle || '',
           principles: editAgent.principles || '',
-        });
+        };
+        form.setValues(values);
+        form.resetDirty(values);
       } else if (duplicateAgent) {
         form.setValues({
           name: `${duplicateAgent.name}_copy`,
@@ -85,7 +84,7 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
   const handleSubmit = (values: typeof form.values) => {
     setSubmitting(true);
 
-    const data = { agent: values };
+    const data = { agent: values, baseVersion: editAgent?.currentVersionNumber };
 
     if (isEditMode && editAgent) {
       router.patch(`${basePath}/${editAgent.id}`, data, {
@@ -122,15 +121,24 @@ export const AgentFormModal: FC<AgentFormModalProps> = ({ opened, onClose, editA
     form.setFieldValue('name', value.toLowerCase().replace(/[^a-z0-9_]/g, '_'));
   };
 
+  const unsaved = isEditMode && form.isDirty();
+  const handleClose = () => {
+    if (unsaved && !window.confirm(UNSAVED_CHANGES_PROMPT)) return;
+    onClose();
+  };
+
   return (
     <ResourceDrawer
       opened={opened}
-      onClose={onClose}
+      onClose={handleClose}
       title={isEditMode ? 'Edit Agent' : duplicateAgent ? 'Duplicate Agent' : 'Create Agent'}
       footer={
-        <Button type="submit" form="agent-form" fullWidth loading={submitting}>
-          {isEditMode ? 'Save' : 'Create'}
-        </Button>
+        <Stack gap="xs">
+          <UnsavedChangesNotice visible={unsaved} />
+          <Button type="submit" form="agent-form" fullWidth loading={submitting}>
+            {isEditMode ? 'Save' : 'Create'}
+          </Button>
+        </Stack>
       }
     >
       <form id="agent-form" onSubmit={form.onSubmit(handleSubmit)}>

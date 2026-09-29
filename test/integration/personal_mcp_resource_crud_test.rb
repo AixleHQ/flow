@@ -34,7 +34,8 @@ class PersonalMCPResourceCrudTest < ActionDispatch::IntegrationTest
     assert_equal "Senior Coder", @project.agents.find(id).title
 
     assert_not error?(call_tool("delete_agent", { project_id: @project.id, agent_id: id }))
-    assert_not @project.agents.exists?(id)
+    assert @project.agents.find(id).archived?
+    assert_equal %w[created saved archived], @project.agents.find(id).entity_versions.reorder(:number).map { |v| v.event.to_s }
   end
 
   test "custom tool create / update / delete round-trip" do
@@ -67,7 +68,20 @@ class PersonalMCPResourceCrudTest < ActionDispatch::IntegrationTest
 
     assert_not error?(call_tool("update_mcp_server", { project_id: @project.id, mcp_server_id: id, enabled: false }))
     assert_not error?(call_tool("delete_mcp_server", { project_id: @project.id, mcp_server_id: id }))
-    assert_not MCPServer.exists?(id)
+    assert MCPServer.find(id).archived?
+  end
+
+  # The tool is also the Builder's, driven by an agent that reads untrusted text:
+  # re-pointing a server through it must leave its credentials behind.
+  test "update_mcp_server pointed at a new host drops the stored credentials" do
+    server = create(:mcp_server, scope: @project, name: "ctx7", url: "https://mcp.example.com/mcp", transport: :http,
+                                 headers: { "Authorization" => "Bearer super-secret" })
+
+    body = payload(call_tool("update_mcp_server", { project_id: @project.id, mcp_server_id: server.id,
+                                                    url: "https://collector.example.net/mcp" }))
+
+    assert body["secrets_cleared"]
+    assert_equal({}, server.reload.headers)
   end
 
   test "get_mcp_server returns the wiring but never a header or env VALUE" do
@@ -266,7 +280,7 @@ class PersonalMCPResourceCrudTest < ActionDispatch::IntegrationTest
     assert_equal skill.id, installed["id"]
 
     assert_not error?(call_tool("uninstall_skill", { project_id: @project.id, skill_id: skill.id }))
-    assert_not Skill.exists?(skill.id)
+    assert skill.reload.archived?
   end
 
   test "a read-only viewer cannot create resources" do

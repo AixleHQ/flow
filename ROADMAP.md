@@ -28,11 +28,11 @@ in place.
 | ✅     | Demo GIF / screenshot in README                   | [#177](https://github.com/AixleHQ/flow/issues/177) |
 | ⬜     | FAQ — drafted from first 2–4 weeks of user questions | [#178](https://github.com/AixleHQ/flow/issues/178) |
 | ⬜     | `SECURITY.md` with private vulnerability reporting | — |
-| ⬜     | `CODE_OF_CONDUCT.md` (Contributor Covenant)        | — |
-| ⬜     | Issue & PR templates + `CODEOWNERS`                | — |
+| ✅     | `CODE_OF_CONDUCT.md` (Contributor Covenant)        | — |
+| ✅     | Issue & PR templates + `CODEOWNERS`                | — |
 | ⬜     | 5–10 prepared "good first issue" tickets at launch | — |
 | ⬜     | Public CI green (tests, lint, type check)          | — |
-| ⬜     | Dependabot + CodeQL turned on                      | — |
+| ⬜     | CodeQL turned on (Dependabot already runs)         | — |
 
 ---
 
@@ -63,7 +63,6 @@ Direction-setting items. Specifics will firm up as v0.2 ships.
 - 💡 **Aixle Builder v2** — generate a workflow from a freeform task description.
 - 💡 **Skills marketplace** — reusable agent skills as a registry.
 - 💡 **Public REST API + Headless mode** — trigger runs from GitHub Actions / GitLab CI.
-- 💡 **Kubernetes runtime** parity with Docker runtime (already scaffolded behind `CONTAINER_RUNTIME=kubernetes`).
 - 💡 **Hosted / cloud offering** — a managed edition with pricing tiers, alongside the self-hosted Apache 2.0 build.
 
 ---

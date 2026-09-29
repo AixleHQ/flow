@@ -25,14 +25,10 @@ module MCP
 
     setup do
       Rails.logger.stubs(:warn)
-      # Deterministic, network-free resolution: the validator resolves hostnames
-      # with libc getaddrinfo (the same resolver Net::HTTP dials with), so stub
-      # THAT to treat every hostname as public. Literal-IP hosts (10.0.0.1,
-      # 127.0.0.1, 169.254.169.254) are classified by IPAddr and never hit this
-      # path, so they stay blocked.
-      Addrinfo.stubs(:getaddrinfo).returns([])
-      # Do not pin (which would use real public DNS); the per-hop guard is the tested backstop.
-      UrlSafetyValidator.stubs(:resolve_public_ipv4).returns(nil)
+      # Deterministic, network-free resolution: every hostname resolves to one
+      # public address. Literal-IP hosts (10.0.0.1, 127.0.0.1, 169.254.169.254)
+      # are classified by IPAddr and never hit this path, so they stay blocked.
+      resolve_hosts_publicly!
     end
 
     # ============================ HAPPY PATH ============================
@@ -59,6 +55,69 @@ module MCP
       assert_equal MCP_URL, result.resource
       # Scopes preferred from PRM scopes_supported.
       assert_equal "read write", result.scopes
+    end
+
+    # ===================== METADATA MUST MATCH ITS SERVER =====================
+
+    test "refuses protected-resource metadata that names a resource on another origin" do
+      stub_probe
+      stub_prm(body: default_prm_body.merge(resource: "https://elsewhere.example.net/v1"))
+
+      error = assert_raises(MCP::MetadataMismatchError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+      assert_equal "resource", error.code
+    end
+
+    test "refuses a resource on the same origin that does not cover the server's path" do
+      stub_probe
+      stub_prm(body: default_prm_body.merge(resource: "https://mcp.example.com/v2"))
+
+      assert_raises(MCP::MetadataMismatchError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+    end
+
+    test "accepts a resource that names the server's origin or a parent path" do
+      stub_probe
+      stub_prm(body: default_prm_body.merge(resource: "https://MCP.example.com/"))
+      stub_asm
+      stub_registration
+
+      assert MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL).oauth_client.persisted?
+    end
+
+    test "refuses authorization-server metadata that names another issuer" do
+      stub_probe
+      stub_prm
+      stub_asm(body: default_asm_body.merge("issuer" => "https://accounts.real-provider.test"))
+
+      error = assert_raises(MCP::MetadataMismatchError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+      assert_equal "issuer", error.code
+    end
+
+    # The mix-up: consent at a real provider, the code then posted to our own
+    # token endpoint along with the PKCE verifier.
+    test "refuses a consent page on a site that is neither the issuer's nor the server's" do
+      stub_probe
+      stub_prm
+      stub_asm(body: default_asm_body.merge("authorization_endpoint" => "https://accounts.real-provider.test/o/auth"))
+
+      error = assert_raises(MCP::MetadataMismatchError) { MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL) }
+      assert_equal "authorization_endpoint", error.code
+      assert_not_requested :post, REG_EP
+    end
+
+    test "accepts a consent page the MCP server hosts in front of a separate identity provider" do
+      idp = "https://login.idp-host.test"
+      stub_probe
+      stub_prm(body: default_prm_body.merge(authorization_servers: [ idp ]))
+      stub_request(:get, "#{idp}/.well-known/oauth-authorization-server").to_return(
+        status: 200, headers: json_headers,
+        body: { "issuer" => idp, "authorization_endpoint" => "https://app.example.com/oauth/authorize",
+                "token_endpoint" => "#{idp}/token", "registration_endpoint" => "#{idp}/register" }.to_json
+      )
+      stub_request(:post, "#{idp}/register").to_return(status: 201, headers: json_headers,
+                                                       body: { client_id: "idp-client" }.to_json)
+
+      client = MCP::OauthDiscoveryService.prepare(mcp_url: MCP_URL).oauth_client
+      assert_equal "https://app.example.com/oauth/authorize", client.authorization_endpoint
     end
 
     # ============================ CIMD ============================

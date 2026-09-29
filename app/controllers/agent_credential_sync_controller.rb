@@ -26,6 +26,7 @@ class AgentCredentialSyncController < ActionController::API
     session = TerminalSession.find_by(id: request.headers["X-Session-Id"])
     return unauthorized unless session&.active?
     return unauthorized unless Agents::SessionKey.valid?(session, request.headers["X-Agent-Key"])
+    return unauthorized unless session.owner_entitled?
 
     # An auth_setup session is a login in progress: AgentAuthStrategy owns what it captures
     # and how (the design-login merge rules, the completion gate). A write-back racing that
@@ -47,15 +48,31 @@ class AgentCredentialSyncController < ActionController::API
     render json: { error: "unauthorized" }, status: :unauthorized
   end
 
-  # Only the paths this agent's adapter names as its auth files. The container says which
-  # file it is reporting, and a container is exactly the thing that may be compromised, so
-  # the path is checked against the adapter rather than trusted.
+  # Only the paths this agent's adapter names as its write-back files. The container says
+  # which file it is reporting, and a container is exactly the thing that may be
+  # compromised, so the path is checked against the adapter rather than trusted.
+  #
+  # A binary file (Kiro's SQLite login) is taken only from `files_b64`: sent as text it
+  # has already been decoded as UTF-8 by an older watcher, and every byte that was not
+  # UTF-8 is gone.
   def permitted_files(adapter)
-    posted = params[:files]
+    allowed = adapter.writeback_file_paths
+    posted_files("files").merge(posted_files("files_b64").transform_values { |content| decode64(content) })
+      .select { |path, content| allowed.include?(path) && content.present? }
+      .select { |path, content| adapter.binary_writeback_path?(path) == (content.encoding == Encoding::BINARY) }
+  end
+
+  def posted_files(key)
+    posted = params[key]
     return {} unless posted.respond_to?(:to_unsafe_h)
 
-    allowed = adapter.auth_file_paths
-    posted.to_unsafe_h.select { |path, content| allowed.include?(path) && content.is_a?(String) && content.present? }
+    posted.to_unsafe_h.select { |_path, content| content.is_a?(String) }
+  end
+
+  def decode64(content)
+    Base64.strict_decode64(content)
+  rescue ArgumentError
+    nil
   end
 
   def persist(session, credential, files)
@@ -63,12 +80,12 @@ class AgentCredentialSyncController < ActionController::API
                                                            log_prefix: "AgentCredentialSync")
     return head :unprocessable_entity if captured.blank?
 
-    # The same read-merge-write the cleanup path uses, under the same row lock: the adapter
-    # merges per token block and refuses to downgrade a newer stored token to an older one,
-    # so a slow post cannot undo a refresh that has happened since.
+    # The same read-merge-write the cleanup path uses, under the same row lock. Rotations
+    # only (BaseAdapter#merge_container_credentials): a token block the credential already
+    # holds, fresher, same account, plausible expiry — never anything new.
     changed = credential.with_lock do
       current = credential.config_data
-      merged = credential.adapter.merge_refreshed_credentials(current, captured)
+      merged = credential.adapter.merge_container_credentials(current, captured)
       next false if merged == current
 
       AgentCredential.from_artifacts(credential.user_id, credential.company_id, credential.agent_type, merged)

@@ -6,11 +6,13 @@ class Web::Company::WorkflowCatalogController < Web::Company::ApplicationControl
                         .includes(:steps, :published_by)
                         .order(published_at: :desc)
 
-    projects = Project.for_user(current_user).order(:name)
+    project_options = Project.for_user(current_user).order(:name)
 
     render inertia: "Company/WorkflowCatalog/IndexPage", props: {
       workflows: -> { workflows.map { |w| catalog_workflow_props(w) } },
-      projects: -> { projects.map { |p| { id: p.id, name: p.name } } }
+      # Named distinctly from the shared sidebar `projects` prop so this page
+      # does not overwrite the favorites-first workspace switcher list.
+      project_options: -> { project_options.map { |p| { id: p.id, name: p.name } } }
     }
   end
 
@@ -18,7 +20,7 @@ class Web::Company::WorkflowCatalogController < Web::Company::ApplicationControl
     workflow = Workflow.published_in_company(current_company).find(params[:id])
     project = Project.for_user(current_user).find(params[:project_id])
 
-    duplicator = WorkflowDuplicator.new(workflow, target_scope: project)
+    duplicator = WorkflowDuplicator.new(workflow, target_scope: project, actor: version_actor)
     copy = duplicator.duplicate!
 
     flash[:notice] = "Workflow and its resources copied to #{project.name}. Assets, repositories, integrations and secrets are not copied."

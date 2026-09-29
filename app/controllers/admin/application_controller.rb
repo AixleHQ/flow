@@ -8,6 +8,14 @@ module Admin
 
     before_action :authenticate_admin!
 
+    # Administrate renders HTML only, so a request for any other format has no
+    # template and used to end in a 500.
+    rescue_from ActionView::MissingTemplate do |error|
+      raise error if request.format.html?
+
+      head :not_acceptable
+    end
+
     # Re-add associations skipped via {SkipAdministrateCollectionIncludes} on dashboards — they are
     # still needed on standalone index tables, but redundant on nested Administrate collections.
     INDEX_COLLECTION_INCLUDES_EXTRAS = {

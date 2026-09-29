@@ -272,10 +272,14 @@ class IntegrationTest < ActiveSupport::TestCase
     assert_equal({}, integration.credentials_data)
   end
 
-  test "credentials_data returns empty hash on invalid encrypted data" do
+  # Unreadable credentials must not pass for an integration that holds none —
+  # only the display path shows them as empty.
+  test "credentials_data raises on unreadable encrypted data; the display reader does not" do
     integration = build(:integration, company: @company, connected_by: @user)
     integration[:credentials] = "garbage-data"
-    assert_equal({}, integration.credentials_data)
+
+    assert_raises(Encryptable::DecryptionError) { integration.credentials_data }
+    assert_equal({}, integration.credentials_data_for_display)
   end
 
   test "installation_id convenience method" do
@@ -319,7 +323,7 @@ class IntegrationTest < ActiveSupport::TestCase
 
   test "destroying company destroys integrations" do
     other_company = create(:company)
-    other_user = create(:user, :employee, company: other_company)
+    create(:user, :employee, company: other_company)
     external_user = create(:user, :employee, company: create(:company))
     create(:integration, company: other_company, connected_by: external_user)
     assert_difference("Integration.count", -1) do

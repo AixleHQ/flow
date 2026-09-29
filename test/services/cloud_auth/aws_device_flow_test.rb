@@ -12,6 +12,7 @@ module CloudAuth
       @user = create(:user, :admin, company: @company)
       @other = create(:user, company: @company)
       @sso = FakeAwsSsoClient.new(region: "us-west-2")
+      @sso.approver = @user.email
       @catalog = nil
       factory = @catalog_factory = lambda do |**args|
         @catalog = FakeAwsModelCatalog.new(**args)
@@ -75,6 +76,30 @@ module CloudAuth
       assert_raises(DeniedError) do
         AwsDeviceFlow.new(user: @other, company: @company, client: @sso).poll(handle: started.handle)
       end
+    end
+
+    # == finish: who approved ==
+
+    # The phishing case: a link started here, approved by someone in another
+    # organisation, would otherwise land their AWS access in this account.
+    test "an authorization approved by someone else is refused and stores nothing" do
+      @sso.approver = "developer@victim.example"
+      started = start_flow
+      @flow.poll(handle: started.handle)
+
+      error = assert_raises(DeniedError) do
+        @flow.finish(handle: started.handle, account_id: "111122223333", role_name: "BedrockUser", region: "us-east-1")
+      end
+      assert_match(/approved in AWS as developer@victim.example, not as #{Regexp.escape(@user.email)}/, error.message)
+      assert_nil AgentCredential.find_by(user_id: @user.id, company_id: @company.id, agent_type: "claude_code")
+    end
+
+    test "the approver's name is compared without regard to case" do
+      @sso.approver = @user.email.upcase
+      started = start_flow
+      @flow.poll(handle: started.handle)
+
+      assert @flow.finish(handle: started.handle, account_id: "111122223333", role_name: "BedrockUser", region: "us-east-1")
     end
 
     # == finish ==

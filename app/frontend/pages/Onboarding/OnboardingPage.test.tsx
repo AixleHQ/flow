@@ -2,11 +2,14 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { CurrentUser } from '@/types/generated';
 import { buildSharedUser } from 'test/factories/sharedProps';
+import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
+import { answerFetch } from 'test/fetchStub';
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 import type TerminalSession from 'types/generated/TerminalSession';
 
-import type { AgentType, SharedUser } from 'shared/ui';
+import type { AgentType } from 'shared/ui';
 
 import OnboardingPage from './OnboardingPage';
 
@@ -47,13 +50,22 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
   metadata: null,
   collectedAt: null,
   updatedAt: '2026-01-01T00:00:00Z',
-  sessionConfig: {},
+  websocketUrl: null,
+  uploadUrl: null,
+  terminalLogUrl: null,
+  watcherUrl: null,
+  ideUrl: null,
+  cableStream: 'signed-auth-stream',
+  sessionConfig: { configFiles: [] },
   toolIds: [],
   skillIds: [],
   mcpServerIds: [],
   configItemIds: [],
   inputAssetIds: [],
   repositoryIds: [],
+  userName: null,
+  userEmail: null,
+  projectName: null,
   pendingArtifactsCount: 0,
   sessionLogsCount: 0,
   cloudConnectRequested: false,
@@ -64,7 +76,7 @@ const buildTerminalSession = (overrides: Partial<TerminalSession> = {}): Termina
 // from currentUser.onboardingState (step1 → Profile, step2 → Connect Agents / See the platform)
 // and seeds its local position/language/selectedAgents state from the same user object. There is
 // no separate summary/"Complete" state — step2's "Get started" fires `complete` directly.
-const userAt = (overrides: Partial<SharedUser> = {}): SharedUser =>
+const userAt = (overrides: Partial<CurrentUser> = {}): CurrentUser =>
   buildSharedUser({
     name: 'Riley Onboarder',
     onboardingState: 'step1',
@@ -355,6 +367,7 @@ describe('Onboarding/OnboardingPage', () => {
   });
 
   it('shows the failure panel and retries session creation when an auth session failed', async () => {
+    answerFetch({ 'POST /api/v1/terminal_sessions': { data: buildTerminalSession({ agentType: 'claude_code' }) } });
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
@@ -370,7 +383,7 @@ describe('Onboarding/OnboardingPage', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]);
     expect(await screen.findByText('Authentication session failed to start.')).toBeInTheDocument();
 
-    // Retry POSTs a fresh session (apiFetch → mocked fetch resolves 200) then reloads auth_sessions.
+    // Retry POSTs a fresh session, then reloads auth_sessions.
     // The partial-reload key is the SERVER prop name (snake_case): inertia_rails filters
     // `only` before the camelCase prop transformer runs, so 'authSessions' matches nothing.
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
@@ -378,7 +391,8 @@ describe('Onboarding/OnboardingPage', () => {
     await waitFor(() => expect(router.reload).toHaveBeenCalledWith({ only: ['auth_sessions'] }));
   });
 
-  it('renders the ttyd terminal iframe for a ready auth session after clicking Connect', async () => {
+  it("connects the auth session's terminal once it is ready and Connect is clicked", async () => {
+    installFakeWebSocket();
     renderAuthedPage(<OnboardingPage />, {
       props: {
         currentUser: userAt({
@@ -395,7 +409,8 @@ describe('Onboarding/OnboardingPage', () => {
     // Expand terminal by clicking Connect button
     await userEvent.click(screen.getAllByRole('button', { name: 'Connect' })[0]);
 
-    expect(await screen.findByTitle('Agent Authentication Terminal')).toBeInTheDocument();
+    expect(await screen.findByRole('group', { name: 'Agent Authentication Terminal' })).toBeInTheDocument();
+    await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://term.example/ws'));
     expect(screen.getByText('Complete authentication in the terminal above')).toBeInTheDocument();
   });
 
@@ -428,7 +443,7 @@ describe('Onboarding/OnboardingPage', () => {
   });
 
   describe('viewer (read-only client) onboarding', () => {
-    const viewerAt = (overrides: Partial<SharedUser> = {}): SharedUser =>
+    const viewerAt = (overrides: Partial<CurrentUser> = {}): CurrentUser =>
       userAt({ currentRole: 'viewer', ...overrides });
 
     it('hides the Connect Agents step and shows See the platform step for a viewer', () => {

@@ -20,8 +20,9 @@ class MCPServerDashboard < Administrate::BaseDashboard
     description: Field::Text.with_options(truncate: 80),
     scope_type: Field::String,
     scope_id: Field::Number,
-    headers: Field::JSONB,
-    env: Field::JSONB,
+    # Values are credentials: the admin sees which keys are set, never the values.
+    masked_headers: Field::JSONB,
+    masked_env: Field::JSONB,
     args: Field::JSONB,
     created_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M"),
     updated_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M")
@@ -48,8 +49,8 @@ class MCPServerDashboard < Administrate::BaseDashboard
     description
     scope_type
     scope_id
-    headers
-    env
+    masked_headers
+    masked_env
     args
     created_at
     updated_at

@@ -7,7 +7,7 @@ class SessionConcurrencyLimitDashboard < Administrate::BaseDashboard
     id: Field::Number.with_options(searchable: true),
     scope_type: Field::Select.with_options(
       include_blank: false,
-      collection: %w[Project User]
+      collection: SessionConcurrencyLimit::SCOPE_TYPES
     ),
     scope_id: Field::Number,
     max_sessions: Field::Number,
@@ -38,10 +38,11 @@ class SessionConcurrencyLimitDashboard < Administrate::BaseDashboard
     max_sessions
   ].freeze
 
-  # Project is the only scope; the filter is kept so the saved-search UI still has
-  # one, and so a stray legacy row is visible by its absence from it.
+  # A company row is what the installation sells; a project row is a reservation
+  # drawn from it. A stray legacy row is visible by its absence from both filters.
   COLLECTION_FILTERS = {
-    project: ->(resources) { resources.where(scope_type: "Project") }
+    company: ->(resources) { resources.for_companies },
+    project: ->(resources) { resources.for_projects }
   }.freeze
 
   def display_resource(limit)

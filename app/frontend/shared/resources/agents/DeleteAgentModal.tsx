@@ -1,19 +1,14 @@
 import { Box, Text } from '@mantine/core';
 import { type FC } from 'react';
 
-import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
+import type { Agent } from '@/types/generated';
 
-interface Agent {
-  id: number;
-  name: string;
-  title: string;
-  icon: string | null;
-}
+import { ConfirmDeleteModal } from 'shared/ui/ConfirmDeleteModal';
 
 interface DeleteAgentModalProps {
   opened: boolean;
   onClose: () => void;
-  agent: Agent | null;
+  agent: Pick<Agent, 'id' | 'name' | 'title' | 'icon'> | null;
   basePath: string;
 }
 
@@ -24,10 +19,11 @@ export const DeleteAgentModal: FC<DeleteAgentModalProps> = ({ opened, onClose, a
     <ConfirmDeleteModal
       opened={opened}
       onClose={onClose}
-      title="Delete Agent"
+      title="Archive Agent"
+      confirmLabel="Archive"
       itemId={agent.id}
       basePath={basePath}
-      description="Are you sure you want to delete this agent?"
+      description="Archive this agent? It disappears from pickers and new sessions but keeps its history, and you can restore it from the Archived tab. Archiving is refused while a workflow uses it."
       preview={
         <>
           <Text fz={24}>{agent.icon || '🤖'}</Text>
@@ -41,7 +37,6 @@ export const DeleteAgentModal: FC<DeleteAgentModalProps> = ({ opened, onClose, a
           </Box>
         </>
       }
-      warning="This action cannot be undone. Any sessions or workflows using this agent may be affected."
     />
   );
 };

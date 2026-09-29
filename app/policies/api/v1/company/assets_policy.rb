@@ -8,6 +8,7 @@ module Api
         def create? = !read_only?
         def update? = !read_only?
         def destroy? = !read_only?
+        def unshare? = !read_only?
         def bulk_actions? = !read_only?
       end
     end

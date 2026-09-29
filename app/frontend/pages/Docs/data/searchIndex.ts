@@ -49,6 +49,18 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Why a session says Queued, every combination of project limit and installation ceiling, how a reservation differs from a cap, and what clearing a limit does.',
   },
   {
+    slug: 'plans-and-limits',
+    title: 'Plans & limits',
+    section: 'Using Flow',
+    desc: 'Hosted Flow: what a queue costs, why capacity is charged for whether or not it is busy, the first 100 queue-hours free and the rate you spend them at, and what happens when they run out.',
+  },
+  {
+    slug: 'aws-marketplace-billing',
+    title: 'AWS Marketplace billing',
+    section: 'Using Flow',
+    desc: 'Flow bought through AWS Marketplace: capacity metered to your own AWS bill in queue-minutes, no free allowance and no card, why every company needs a limit, and how a disputed bill is settled.',
+  },
+  {
     slug: 'sessions-and-runs',
     title: 'Sessions & Runs',
     section: 'Using Flow',
@@ -91,10 +103,22 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Admin, employee and viewer roles, company members, project collaborators, and what each role can see.',
   },
   {
+    slug: 'signing-in',
+    title: 'Signing in & SSO',
+    section: 'Using Flow',
+    desc: 'Every way to prove who you are, which methods a workspace accepts, connecting your own OpenID Connect provider, passkeys and authentication codes, and directory sync.',
+  },
+  {
     slug: 'secrets',
     title: 'Secrets & Variables',
     section: 'Using Flow',
     desc: 'Credentials and configuration a run needs, kept out of prompts, task text and logs.',
+  },
+  {
+    slug: 'templates',
+    title: 'Templates',
+    section: 'Using Flow',
+    desc: 'Install reviewed connectors, boards, workflows and projects from the catalog, finish the setup checklist, and publish your own.',
   },
   {
     slug: 'analytics',
@@ -203,6 +227,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     title: 'API',
     section: 'Reference',
     desc: 'REST API under /api/v1 — workflows, workflow runs, board, tasks, assets, and webhooks.',
+  },
+  {
+    slug: 'configuring-sso',
+    title: 'Configuring sign-in methods',
+    section: 'User guide',
+    desc: 'For operators: how availability is derived from credentials, registering Google and Microsoft, what per-company OIDC needs from the installation, and the claim that identifies a person.',
   },
   {
     slug: 'config-schema',

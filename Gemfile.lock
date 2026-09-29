@@ -1,9 +1,3 @@
-GIT
-  remote: https://github.com/stoivo/ruby-filemagic.git
-  revision: 11a606a1ec1f18e57e2b466c2c59f73ab7aa0166
-  specs:
-    ruby-filemagic (0.7.3)
-
 GEM
   remote: https://rubygems.org/
   specs:
@@ -96,17 +90,17 @@ GEM
     administrate-field-shrine (0.0.5)
       administrate (> 0.5.0)
       rails (>= 4.2)
+    aes_key_wrap (1.1.0)
     alba (4.0.0)
+    android_key_attestation (0.3.0)
     anonymous_loader (0.1.3)
       version_gem (~> 1.1, >= 1.1.14)
     ast (2.4.3)
-    audited (5.8.0)
-      activerecord (>= 5.2, < 8.2)
-      activesupport (>= 5.2, < 8.2)
+    attr_required (1.0.2)
     auth-sanitizer (0.2.3)
       version_gem (~> 1.1, >= 1.1.14)
     aws-eventstream (1.4.0)
-    aws-partitions (1.1287.0)
+    aws-partitions (1.1289.0)
     aws-sdk-bedrock (1.94.0)
       aws-sdk-core (~> 3, >= 3.256.0)
       aws-sigv4 (~> 1.5)
@@ -125,7 +119,7 @@ GEM
     aws-sdk-kms (1.132.0)
       aws-sdk-core (~> 3, >= 3.256.0)
       aws-sigv4 (~> 1.5)
-    aws-sdk-s3 (1.232.0)
+    aws-sdk-s3 (1.232.1)
       aws-sdk-core (~> 3, >= 3.256.0)
       aws-sdk-kms (~> 1)
       aws-sigv4 (~> 1.5)
@@ -135,6 +129,7 @@ GEM
     bcrypt (3.1.22)
     benchmark (0.5.0)
     bigdecimal (4.1.3)
+    bindata (2.5.1)
     bootsnap (1.26.0)
       msgpack (~> 1.5)
     brakeman (8.0.6)
@@ -154,8 +149,10 @@ GEM
       rack-test (>= 0.6.3)
       regexp_parser (>= 1.5, < 3.0)
       xpath (~> 3.2)
+    cbor (0.5.10.3)
     childprocess (5.1.0)
       logger (~> 1.5)
+    chunky_png (1.4.0)
     coderay (1.1.3)
     concurrent-ruby (1.3.8)
     config (5.6.1)
@@ -163,6 +160,9 @@ GEM
       ostruct
     connection_pool (3.0.2)
     content_disposition (1.0.0)
+    cose (1.3.1)
+      cbor (~> 0.5.9)
+      openssl-signature_algorithm (~> 1.0)
     crack (1.0.1)
       bigdecimal
       rexml
@@ -214,6 +214,8 @@ GEM
       faraday-net_http (>= 2.0, < 3.5)
       json
       logger
+    faraday-follow_redirects (0.5.0)
+      faraday (>= 1, < 3)
     faraday-net_http (3.4.4)
       net-http (~> 0.5)
     faraday-retry (2.4.0)
@@ -245,22 +247,22 @@ GEM
       terminal-table (>= 1.5.1)
     globalid (1.4.0)
       activesupport (>= 6.1)
-    google-protobuf (4.36.1)
+    google-protobuf (4.36.2)
       bigdecimal
       rake (~> 13.3)
-    google-protobuf (4.36.1-aarch64-linux-gnu)
+    google-protobuf (4.36.2-aarch64-linux-gnu)
       bigdecimal
       rake (~> 13.3)
-    google-protobuf (4.36.1-aarch64-linux-musl)
+    google-protobuf (4.36.2-aarch64-linux-musl)
       bigdecimal
       rake (~> 13.3)
-    google-protobuf (4.36.1-arm64-darwin)
+    google-protobuf (4.36.2-arm64-darwin)
       bigdecimal
       rake (~> 13.3)
-    google-protobuf (4.36.1-x86_64-linux-gnu)
+    google-protobuf (4.36.2-x86_64-linux-gnu)
       bigdecimal
       rake (~> 13.3)
-    google-protobuf (4.36.1-x86_64-linux-musl)
+    google-protobuf (4.36.2-x86_64-linux-musl)
       bigdecimal
       rake (~> 13.3)
     haml (7.2.0)
@@ -307,6 +309,13 @@ GEM
       reline (>= 0.4.2)
     jmespath (1.6.2)
     json (2.21.2)
+    json-jwt (1.17.2)
+      activesupport (>= 4.2)
+      aes_key_wrap
+      base64
+      bindata
+      faraday (~> 2.0)
+      faraday-follow_redirects
     json_schemer (2.5.0)
       bigdecimal
       hana (~> 1.3)
@@ -328,10 +337,6 @@ GEM
       activerecord
       kaminari-core (= 1.2.2)
     kaminari-core (1.2.2)
-    kramdown (2.5.2)
-      rexml (>= 3.4.4)
-    kramdown-parser-gfm (1.1.0)
-      kramdown (~> 2.0)
     kubeclient (4.13.0)
       http (>= 3.0, < 6.0)
       jsonpath (~> 1.0)
@@ -378,7 +383,7 @@ GEM
       net-smtp
     marcel (1.2.1)
     matrix (0.4.3)
-    mcp (1.5.1)
+    mcp (1.6.0)
       json_schemer (>= 2.4)
     method_source (1.1.0)
     mime-types (3.7.0)
@@ -386,16 +391,15 @@ GEM
       mime-types-data (~> 3.2025, >= 3.2025.0507)
     mime-types-data (3.2026.0203)
     mini_mime (1.1.5)
-    minitar (1.1.0)
-    minitest (5.27.0)
+    minitest (6.0.6)
+      drb (~> 2.0)
+      prism (~> 1.5)
     minitest-hooks (1.5.4)
       minitest (> 5.3)
+    minitest-mock (5.27.0)
     minitest-power_assert (0.3.1)
       minitest
       power_assert (>= 1.1)
-    minitest-rails (8.1.0)
-      minitest (~> 5.20)
-      railties (>= 8.1.0, < 8.2.0)
     mocha (3.1.0)
       ruby2_keywords (>= 0.0.5)
     msgpack (1.8.4)
@@ -451,14 +455,14 @@ GEM
     octokit (10.0.0)
       faraday (>= 1, < 3)
       sawyer (~> 0.9)
-    oj (3.17.6)
-      bigdecimal (>= 3.0)
-      ostruct (>= 0.2)
     omniauth (2.1.4)
       hashie (>= 3.4.6)
       logger
       rack (>= 2.2.3)
       rack-protection
+    omniauth-entra-id (3.1.1)
+      jwt (>= 2.9.2)
+      omniauth-oauth2 (~> 1.8)
     omniauth-google-oauth2 (1.2.3)
       jwt (>= 2.9.2, < 4)
       oauth2 (~> 2.0)
@@ -470,6 +474,21 @@ GEM
     omniauth-rails_csrf_protection (2.0.1)
       actionpack (>= 4.2)
       omniauth (~> 2.0)
+    openid_connect (2.5.0)
+      activemodel
+      attr_required (>= 1.0.0)
+      faraday (~> 2.0)
+      faraday-follow_redirects
+      json-jwt (>= 1.16)
+      mail
+      rack-oauth2 (~> 2.2)
+      swd (~> 2.0)
+      tzinfo
+      validate_url
+      webfinger (~> 2.0)
+    openssl (4.0.2)
+    openssl-signature_algorithm (1.3.0)
+      openssl (> 2.0)
     ostruct (0.6.3)
     pagy (43.6.2)
       json
@@ -516,6 +535,13 @@ GEM
     rack-cors (3.0.0)
       logger
       rack (>= 3.0.14)
+    rack-oauth2 (2.3.0)
+      activesupport
+      attr_required
+      faraday (~> 2.0)
+      faraday-follow_redirects
+      json-jwt (>= 1.11.0)
+      rack (>= 2.1.0)
     rack-protection (4.2.1)
       base64 (>= 0.1.0)
       logger (>= 1.6.0)
@@ -564,7 +590,7 @@ GEM
       zeitwerk (~> 2.6)
     rainbow (3.1.1)
     rake (13.4.2)
-    ransack (4.4.1)
+    ransack (5.0.2)
       activerecord (>= 7.2)
       activesupport (>= 7.2)
       i18n
@@ -583,22 +609,22 @@ GEM
       redis-client (>= 0.22.0)
     redis-client (0.30.0)
       connection_pool
-    regexp_parser (2.12.0)
+    regexp_parser (2.13.0)
     reline (0.7.0)
       io-console (~> 0.5)
     request_store (1.7.0)
       rack (>= 1.4)
-    responders (3.2.1)
-      actionpack (>= 7.0)
-      railties (>= 7.0)
     rest-client (2.1.0)
       http-accept (>= 1.7.0, < 2.0)
       http-cookie (>= 1.0.2, < 2.0)
       mime-types (>= 1.16, < 4.0)
       netrc (~> 0.8)
     rexml (3.4.4)
-    rolify (6.0.1)
     rotp (6.3.0)
+    rqrcode (3.2.0)
+      chunky_png (~> 1.0)
+      rqrcode_core (~> 2.0)
+    rqrcode_core (2.1.0)
     rubocop (1.91.0)
       json (>= 2.3)
       language_server-protocol (~> 3.17.0.2)
@@ -624,7 +650,7 @@ GEM
       lint_roller (~> 1.1)
       rubocop (>= 1.89.0, < 2.0)
       rubocop-ast (>= 1.47.1, < 2.0)
-    rubocop-rails (2.37.0)
+    rubocop-rails (2.38.0)
       activesupport (>= 4.2.0)
       lint_roller (~> 1.1)
       rack (>= 1.1)
@@ -640,9 +666,13 @@ GEM
       logger
     ruby2_keywords (0.0.5)
     rubyzip (2.4.1)
+    safety_net_attestation (0.5.0)
+      jwt (>= 2.0, < 4.0)
     sawyer (0.9.2)
       addressable (>= 2.3.5)
       faraday (>= 0.17.3, < 3)
+    scimitar (2.15.0)
+      rails (>= 7.0)
     securerandom (0.4.1)
     sentry-rails (7.0.0)
       railties (>= 5.2.0)
@@ -651,7 +681,7 @@ GEM
       bigdecimal
       concurrent-ruby (~> 1.0, >= 1.0.2)
       logger
-    shrine (3.9.0)
+    shrine (3.10.0)
       content_disposition (~> 1.0)
       down (~> 5.1)
     simplecov (1.3.0)
@@ -674,7 +704,6 @@ GEM
       railties (>= 7.1)
       thor (>= 1.3.1)
     sorbet-runtime (0.6.13312)
-    spring (4.7.0)
     sqlite3 (2.9.6-aarch64-linux-gnu)
     sqlite3 (2.9.6-aarch64-linux-musl)
     sqlite3 (2.9.6-arm-linux-gnu)
@@ -683,23 +712,28 @@ GEM
     sqlite3 (2.9.6-x86_64-linux-gnu)
     sqlite3 (2.9.6-x86_64-linux-musl)
     stackprof (0.2.28)
+    swd (2.0.3)
+      activesupport (>= 3)
+      attr_required (>= 0.0.5)
+      faraday (~> 2.0)
+      faraday-follow_redirects
     temple (0.10.4)
-    temporalio (1.8.0)
+    temporalio (1.9.0)
       google-protobuf (>= 3.25.0)
       logger
-    temporalio (1.8.0-aarch64-linux)
+    temporalio (1.9.0-aarch64-linux)
       google-protobuf (>= 3.25.0)
       logger
-    temporalio (1.8.0-aarch64-linux-musl)
+    temporalio (1.9.0-aarch64-linux-musl)
       google-protobuf (>= 3.25.0)
       logger
-    temporalio (1.8.0-arm64-darwin)
+    temporalio (1.9.0-arm64-darwin)
       google-protobuf (>= 3.25.0)
       logger
-    temporalio (1.8.0-x86_64-linux)
+    temporalio (1.9.0-x86_64-linux)
       google-protobuf (>= 3.25.0)
       logger
-    temporalio (1.8.0-x86_64-linux-musl)
+    temporalio (1.9.0-x86_64-linux-musl)
       google-protobuf (>= 3.25.0)
       logger
     terminal-table (4.0.0)
@@ -712,6 +746,10 @@ GEM
     tilt (2.8.0)
     timeout (0.6.1)
     tomlrb (2.0.4)
+    tpm-key_attestation (0.14.2)
+      bindata (~> 2.4)
+      openssl (> 2.0)
+      openssl-signature_algorithm (~> 1.0)
     ts_routes (1.0.3)
       railties (>= 4.0)
     tsort (0.2.0)
@@ -720,12 +758,15 @@ GEM
       railties (>= 6.1.0)
     tzinfo (2.0.6)
       concurrent-ruby (~> 1.0)
-    unicode-display_width (3.2.0)
-      unicode-emoji (~> 4.1)
-    unicode-emoji (4.2.0)
+    unicode-display_width (3.3.0)
+      unicode-emoji (~> 4.3)
+    unicode-emoji (4.3.0)
     uniform_notifier (1.18.0)
     uri (1.1.1)
     useragent (0.16.11)
+    validate_url (1.0.15)
+      activemodel (>= 3.0.0)
+      public_suffix
     version_gem (1.1.15)
     vite_rails (3.11.1)
       railties (>= 5.1, < 9)
@@ -736,6 +777,18 @@ GEM
       mutex_m
       rack-proxy (~> 0.6, >= 0.6.1)
       zeitwerk (~> 2.2)
+    webauthn (3.4.3)
+      android_key_attestation (~> 0.3.0)
+      bindata (~> 2.4)
+      cbor (~> 0.5.9)
+      cose (~> 1.1)
+      openssl (>= 2.2)
+      safety_net_attestation (~> 0.5.0)
+      tpm-key_attestation (~> 0.14.0)
+    webfinger (2.1.3)
+      activesupport
+      faraday (~> 2.0)
+      faraday-follow_redirects
     webmock (3.26.4)
       addressable (>= 2.8.0)
       crack (>= 0.3.2)
@@ -776,7 +829,6 @@ DEPENDENCIES
   administrate-field-jsonb
   administrate-field-shrine
   alba
-  audited
   aws-sdk-bedrock (~> 1.94)
   aws-sdk-bedrockruntime (~> 1.85)
   aws-sdk-s3 (~> 1.232)
@@ -784,7 +836,6 @@ DEPENDENCIES
   bootsnap
   brakeman
   bullet
-  byebug
   capybara (>= 3)
   config
   csv
@@ -807,26 +858,25 @@ DEPENDENCIES
   json (< 3)
   json_schemer
   jwt
-  kramdown
-  kramdown-parser-gfm
   kubeclient (~> 4.13)
   letter_opener
   letter_opener_web
   license_finder
   lograge (~> 0.15.0)
+  marcel (~> 1.0)
   mcp
-  minitar
   minitest
   minitest-hooks
+  minitest-mock
   minitest-power_assert
-  minitest-rails
   mocha
   oas_rails
   octokit
-  oj
   omniauth
+  omniauth-entra-id (~> 3.1)
   omniauth-google-oauth2
   omniauth-rails_csrf_protection
+  openid_connect (~> 2.5)
   pagy
   pg (~> 1.6)
   propshaft
@@ -839,25 +889,23 @@ DEPENDENCIES
   rails (~> 8.1.3)
   rails-i18n
   ransack
-  redis
-  responders
-  rolify
+  redis (>= 4, < 6)
   rotp (~> 6.3)
+  rqrcode (~> 3.1)
   rubocop
   rubocop-factory_bot
   rubocop-minitest
   rubocop-performance
   rubocop-rails
   rubocop-rails-omakase
-  ruby-filemagic!
   ruby-vips (~> 2.3)
+  scimitar (~> 2.15)
   sentry-rails
   sentry-ruby
-  shrine (~> 3.9)
+  shrine (~> 3.10)
   simplecov
   site_prism
   solid_queue (~> 1.7)
-  spring
   sqlite3 (~> 2.9)
   stackprof (~> 0.2.28)
   temporalio
@@ -865,6 +913,7 @@ DEPENDENCIES
   ts_routes
   typelizer
   vite_rails (~> 3.11)
+  webauthn (~> 3.4)
   webmock
   websocket-client-simple (~> 0.3)
 

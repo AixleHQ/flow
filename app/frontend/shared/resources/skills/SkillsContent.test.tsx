@@ -2,9 +2,10 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import type { CatalogSkill, Skill } from '@/types/generated';
 import { renderPage, screen, userEvent } from 'test/renderPage';
 
-import { SkillsContent, type CatalogSkill, type Skill } from './SkillsContent';
+import { SkillsContent } from './SkillsContent';
 
 function makeSkill(overrides: Partial<Skill> = {}): Skill {
   return {
@@ -24,6 +25,8 @@ function makeSkill(overrides: Partial<Skill> = {}): Skill {
     registryUrl: 'https://skills.sh/acme/skills/eslint-config',
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:00Z',
+    currentVersionNumber: 1,
+    archivedAt: null,
     ...overrides,
   };
 }
@@ -43,11 +46,14 @@ function makeCatalogSkill(overrides: Partial<CatalogSkill> = {}): CatalogSkill {
     registryUrl: 'https://skills.sh/anthropics/skills/pdf',
     auditRisk: null,
     auditProviders: [],
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
     ...overrides,
   };
 }
 
 const baseProps = {
+  projectId: 1,
   basePath: '/company/projects/1/skills',
   title: 'Project Skills',
   subtitle: 'Skills this project can use',
@@ -106,15 +112,15 @@ describe('SkillsContent — installed skills', () => {
     expect(screen.getAllByText('eslint-config')).toHaveLength(1);
   });
 
-  // The trash icon → confirmation → router.delete chain is the only destructive path
+  // The archive icon → confirmation → router.delete chain is the only destructive path
   // on this page, and it is wired here rather than in the modal.
-  it('opens the delete confirmation from the card and deletes on confirm', async () => {
+  it('opens the archive confirmation from the card and archives on confirm', async () => {
     renderPage(<SkillsContent {...baseProps} skills={[makeSkill({ id: 7 })]} />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Remove eslint-config' }));
-    expect(screen.getByText('Delete Skill')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Archive eslint-config' }));
+    expect(screen.getByText('Archive Skill')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
 
     expect(router.delete).toHaveBeenCalledWith(
       '/company/projects/1/skills/7',
@@ -161,7 +167,7 @@ describe('SkillsContent — installed skills', () => {
 
     expect(router.patch).toHaveBeenCalledWith(
       '/company/projects/1/skills/4',
-      { content },
+      { content, baseVersion: 1 },
       expect.objectContaining({ preserveScroll: true }),
     );
   });

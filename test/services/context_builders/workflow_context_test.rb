@@ -97,8 +97,8 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     ss2 = create(:sub_step, step: @step2, name: "Write tests", position: 2)
     ss3 = create(:sub_step, step: @step2, name: "Implement", position: 3)
 
-    ssr1 = create(:sub_step_run, :completed, step_run: @step_run, sub_step: ss1)
-    ssr2 = create(:sub_step_run, :in_progress, step_run: @step_run, sub_step: ss2)
+    create(:sub_step_run, :completed, step_run: @step_run, sub_step: ss1)
+    create(:sub_step_run, :in_progress, step_run: @step_run, sub_step: ss2)
     create(:sub_step_run, step_run: @step_run, sub_step: ss3)
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
@@ -134,8 +134,8 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
 
   test "sub-steps section includes note and data truncated" do
     ss1 = create(:sub_step, step: @step2, name: "Analysis", position: 1)
-    ssr = create(:sub_step_run, :completed, step_run: @step_run, sub_step: ss1,
-      note: "Analyzed codebase " + "x" * 250,
+    create(:sub_step_run, :completed, step_run: @step_run, sub_step: ss1,
+      note: "Analyzed codebase " + ("x" * 250),
       data: { "files" => 12, "issues" => 3 })
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
@@ -171,7 +171,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
   # -- Story 26.3: Previous Steps Summary --
 
   test "previous-steps section produced when earlier steps completed" do
-    step_run1 = create(:step_run, :completed, workflow_run: @workflow_run, step: @step1, step_note: "Analyzed the code thoroughly")
+    create(:step_run, :completed, workflow_run: @workflow_run, step: @step1, step_note: "Analyzed the code thoroughly")
 
     session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: @step_run)
     builder = ContextBuilders::WorkflowContext.new(session)
@@ -214,7 +214,7 @@ class ContextBuilders::WorkflowContextTest < ActiveSupport::TestCase
     builder = ContextBuilders::WorkflowContext.new(session)
     content = builder.build.find { |s| s.tag == "previous-steps" }.content
 
-    assert_includes content, "A" * 497 + "..."
+    assert_includes content, ("A" * 497) + "..."
     assert_not content.include?("A" * 600)
   end
 

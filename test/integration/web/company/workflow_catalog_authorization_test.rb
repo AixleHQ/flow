@@ -6,12 +6,12 @@ require "test_helper"
 # shared AuthorizationMatrix harness (docs/testing.md §2).
 #
 # Policy (Web::Company::WorkflowCatalogPolicy, context = BaseContext, no project):
-#   index?     => company_member? (current_user.company_id.present?)  (read)
-#   duplicate? => company_member? (current_user.company_id.present?)  (write)
+#   index?     => company_member?                 (read)
+#   duplicate? => company_member? && !read_only?  (write)
 #
-# This is the "any company member" case: the gate is only "the user has a
-# company", so EVERY persona — including a foreign-company admin — is authorized
-# for both actions. The controller (not the policy) keeps users inside their own
+# This is the "any company member" case: EVERY persona — including a
+# foreign-company admin — may read the catalog, and every one but the viewer may
+# copy from it (a copy creates a workflow and its resources in the project). The controller (not the policy) keeps users inside their own
 # company's data via record scoping: `Workflow.published_in_company(current_company)`
 # and `Project.for_user(current_user)`. So the matrix here asserts that no company
 # member is denied, and each reaches a clean success (a valid workflow + an
@@ -24,9 +24,9 @@ class Web::Company::WorkflowCatalogAuthorizationTest < ActionDispatch::Integrati
     viewer: :allowed_read, stranger: :allowed_read, foreign_admin: :allowed_read
   }.freeze
 
-  ALL_MEMBERS_WRITE = {
+  WRITERS = {
     owner: :allowed_write, admin: :allowed_write, collaborator: :allowed_write,
-    viewer: :allowed_write, stranger: :allowed_write, foreign_admin: :allowed_write
+    viewer: :denied, stranger: :allowed_write, foreign_admin: :allowed_write
   }.freeze
 
   setup do
@@ -55,12 +55,11 @@ class Web::Company::WorkflowCatalogAuthorizationTest < ActionDispatch::Integrati
     end
   end
 
-  # duplicate is gated only on company membership, so every persona is authorized.
-  # Each targets a workflow + project it can reach, so the allowed outcome is the
-  # duplicator's success redirect (302, no denial alert) — distinguishing a real
-  # authorization pass from the policy's denial redirect.
-  test "duplicate: any authenticated company member is authorized to copy a workflow" do
-    assert_role_matrix(ALL_MEMBERS_WRITE, transport: :web) do |role|
+  # Each persona targets a workflow + project it can reach, so the allowed outcome
+  # is the duplicator's success redirect (302, no denial alert) — distinguishing a
+  # real authorization pass from the policy's denial redirect.
+  test "duplicate: any company member but the viewer may copy a workflow" do
+    assert_role_matrix(WRITERS, transport: :web) do |role|
       if role == :foreign_admin
         post duplicate_company_workflow_catalog_path(@foreign_workflow),
              params: { project_id: @foreign_project.id }

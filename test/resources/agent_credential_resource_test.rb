@@ -7,13 +7,36 @@ class AgentCredentialResourceTest < ActiveSupport::TestCase
     @user = create(:user, :with_company)
   end
 
-  # expires_at is normally derived from the token blob via a before_save; set it
+  # The login's expiry is normally derived from the token blob via a before_save; set it
   # directly (bypassing the callback) to exercise each status branch.
   def status_for(expires_at)
     cred = create(:agent_credential, :codex, user: @user,
                   config_data: { "tokens" => { "access_token" => "x" } })
-    cred.update_column(:expires_at, expires_at)
+    cred.update_columns(expires_at: expires_at, metadata: cred.metadata.merge("login_expires_at" => expires_at&.iso8601))
     AgentCredentialResource.new(cred.reload).to_h["connectionStatus"]
+  end
+
+  # expires_at is the soonest across every block — when the sweep must wake. A design token
+  # that expires first used to turn a working Claude login "Expiring" on the profile.
+  test "connection_status and the shown expiry follow the base login, not an add-on" do
+    base_exp = 6.hours.from_now
+    cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+      "claudeAiOauth" => { "accessToken" => "sk-ant-oat01-x", "expiresAt" => (base_exp.to_f * 1000).to_i },
+      "designOauth" => { "accessToken" => "sk-ant-design", "expiresAt" => (5.minutes.from_now.to_f * 1000).to_i }
+    })
+
+    json = AgentCredentialResource.new(cred.reload).to_h
+
+    assert_equal "active", json["connectionStatus"]
+    assert_in_delta base_exp.to_i, Time.zone.parse(json["loginExpiresAt"]).to_i, 2
+    assert_operator cred.expires_at, :<, 10.minutes.from_now, "the sweep still wakes for the design token"
+  end
+
+  test "a row written before the login expiry was recorded keeps showing the column" do
+    cred = create(:agent_credential, :codex, user: @user, config_data: { "tokens" => { "access_token" => "x" } })
+    cred.update_columns(expires_at: 10.minutes.from_now, metadata: cred.metadata.except("login_expires_at"))
+
+    assert_equal "expiring", AgentCredentialResource.new(cred.reload).to_h["connectionStatus"]
   end
 
   test "connection_status is active when the token expiry is far off" do
@@ -41,7 +64,8 @@ class AgentCredentialResourceTest < ActiveSupport::TestCase
   # A credential is unique per (user, company, agent_type), so each runtime gets one row
   # and the expiry is moved under it.
   def status_at(credential, expires_at)
-    credential.update_column(:expires_at, expires_at)
+    credential.update_columns(expires_at: expires_at,
+                              metadata: credential.metadata.merge("login_expires_at" => expires_at.iso8601))
     AgentCredentialResource.new(credential.reload).to_h["connectionStatus"]
   end
 

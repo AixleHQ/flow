@@ -93,4 +93,21 @@ class Web::Company::MembershipsControllerTest < ActionDispatch::IntegrationTest
     assert_response :redirect
     assert other_membership.reload.active?
   end
+
+  test "leaving hands the projects you own to the members you chose" do
+    create(:user, :admin, company: @company_a)
+    colleague = create(:user, :employee, company: @company_a)
+    project = create(:project, company: @company_a, owner: @user)
+
+    get profile_path
+    handover = inertia.props[:projectHandovers].sole
+    assert_equal @membership_a.id, handover[:membershipId]
+    assert_equal [ project.id ], handover[:projects].pluck(:id)
+
+    delete company_membership_path(@membership_a), params: { handover: [ { project_id: project.id, user_id: colleague.id } ] }
+
+    assert_redirected_to profile_path
+    assert @membership_a.reload.revoked?
+    assert_equal colleague, project.reload.owner
+  end
 end

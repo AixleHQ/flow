@@ -19,6 +19,13 @@ module Github
     # private ones. Anything narrower cannot clone.
     REPO_SCOPES = %w[repo public_repo].freeze
 
+    # An installation token lives an hour, and minting one per call spent a
+    # GitHub request on every clone, listing and CI check. Kept in this process
+    # only: a copy in Redis or the database would outlive every request that
+    # needed it.
+    TOKENS = ActiveSupport::Cache::MemoryStore.new(size: 1.megabyte)
+    TOKEN_MARGIN = 5.minutes
+
     def initialize(integration)
       @integration = integration
       validate_configuration!
@@ -38,14 +45,8 @@ module Github
     def generate_installation_token(repositories: [])
       return personal_access_token if pat_mode?
 
-      jwt = generate_jwt
-      client = Octokit::Client.new(bearer_token: jwt)
-      options = {}
-      options[:repositories] = repositories if repositories.present?
-      token = client.create_app_installation_access_token(installation_id, options)
-      token.token
-    rescue Octokit::Error => e
-      raise AuthenticationError, "Failed to generate installation token: #{e.message}"
+      key = "#{installation_id}:#{repositories.map(&:to_s).sort.join(',')}"
+      TOKENS.read(key) || mint_installation_token(key, repositories)
     end
 
     def verify_installation
@@ -94,6 +95,17 @@ module Github
     end
 
     private
+
+    def mint_installation_token(key, repositories)
+      client = Octokit::Client.new(bearer_token: generate_jwt)
+      options = repositories.present? ? { repositories: repositories } : {}
+      token = client.create_app_installation_access_token(installation_id, options)
+      expires_at = token.expires_at.presence && (Time.zone.parse(token.expires_at.to_s) - TOKEN_MARGIN)
+      TOKENS.write(key, token.token, expires_at: expires_at) if expires_at&.future?
+      token.token
+    rescue Octokit::Error => e
+      raise AuthenticationError, "Failed to generate installation token: #{e.message}"
+    end
 
     attr_reader :integration
 

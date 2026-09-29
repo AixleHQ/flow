@@ -1,0 +1,5 @@
+<% if field.unlimited? %>
+  <span style="opacity:.6">No limit<%= " — nothing is invoiced for this company" if field.unbilled? %></span>
+<% else %>
+  <%= field.limit %>
+<% end %>

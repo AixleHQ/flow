@@ -52,11 +52,9 @@ class RepositoryWorkspacePath
     # round renames a checkout that already exists — the agent's context table
     # then points somewhere the files are not.
     def persist!(session, path_map)
-      metadata = session.metadata || {}
-      stored = (metadata[METADATA_KEY] || {})
-      metadata[METADATA_KEY] = path_map.transform_keys(&:to_s).merge(stored)
-      session.update_column(:metadata, metadata)
-      metadata[METADATA_KEY]
+      session.change_jsonb!(:metadata) do |doc|
+        doc[METADATA_KEY] = path_map.transform_keys(&:to_s).merge(doc[METADATA_KEY] || {})
+      end[METADATA_KEY]
     end
 
     def stored_map(session)

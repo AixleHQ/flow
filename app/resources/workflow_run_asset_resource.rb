@@ -17,6 +17,11 @@ class WorkflowRunAssetResource < ApplicationResource
     wra.produced_by_step_run&.step&.name
   end
 
+  typelize "string | null", optional: true
+  attribute :share_url do |wra|
+    wra.share_url
+  end
+
   typelize :string?
   attribute :download_url do |wra|
     next nil unless wra.file.present?

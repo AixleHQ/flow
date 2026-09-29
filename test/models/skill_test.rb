@@ -11,6 +11,31 @@ class SkillTest < ActiveSupport::TestCase
 
   # ====== Validations ======
 
+  # == files_from_bundle ==
+
+  test "a bundle's files are kept relative to the directory holding SKILL.md" do
+    files = Skill.files_from_bundle([
+      { "path" => "skills/pdf/SKILL.md", "contents" => "# pdf" },
+      { "path" => "skills/pdf/scripts/fill.py", "contents" => "print(1)" },
+      { "path" => "README.md", "contents" => "outside the skill" }
+    ])
+
+    assert_equal({ "SKILL.md" => "# pdf", "scripts/fill.py" => "print(1)" }, files)
+  end
+
+  test "a bundle that could write outside its directory is refused" do
+    [ "../../.bashrc", "/etc/passwd", "a//b", "scripts\\x", "./x" ].each do |path|
+      bundle = [ { "path" => "SKILL.md", "contents" => "# s" }, { "path" => path, "contents" => "x" } ]
+
+      assert_nil Skill.files_from_bundle(bundle), "#{path} should be refused"
+    end
+  end
+
+  test "a bundle without SKILL.md, or far too large, is not kept" do
+    assert_nil Skill.files_from_bundle([ { "path" => "notes.md", "contents" => "x" } ])
+    assert_nil Skill.files_from_bundle([ { "path" => "SKILL.md", "contents" => "x" * (Skill::MAX_BUNDLE_BYTES + 1) } ])
+  end
+
   test "company scope is rejected (skills are project-only)" do
     skill = build(:skill, scope: @company)
     assert { !skill.valid? }

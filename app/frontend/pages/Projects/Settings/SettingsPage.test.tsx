@@ -24,10 +24,9 @@ const project = {
 const concurrency = {
   maxSessions: null,
   default: 4,
-  installationLimit: null,
+  companyLimit: null,
   available: null,
   allocations: [],
-  queueEnabled: true,
   canManage: true,
 };
 
@@ -401,31 +400,31 @@ describe('Projects/Settings/SettingsPage', () => {
         props: {
           project,
           concurrency,
-          errors: { concurrency: '9 exceeds the installation limit of 10 concurrent sessions.' },
+          errors: { concurrency: '9 exceeds the company limit of 10 concurrent sessions.' },
         },
       });
 
-      expect(screen.getByText(/exceeds the installation limit of 10/)).toBeInTheDocument();
+      expect(screen.getByText(/exceeds the company limit of 10/)).toBeInTheDocument();
     });
 
-    it('reports how much of the installation ceiling is left, and to whom', () => {
+    it("reports how much of the company's limit is left, and to whom", () => {
       renderAuthedPage(<SettingsPage />, {
         props: {
           project,
           concurrency: {
             ...concurrency,
-            installationLimit: 20,
+            companyLimit: 20,
             available: 12,
             allocations: [
               { name: 'Gateway', maxSessions: 3 },
-              { name: 'Other projects', maxSessions: 5 },
+              { name: 'Billing', maxSessions: 5 },
             ],
           },
         },
       });
 
-      expect(screen.getByText(/12 of 20 is unreserved/)).toBeInTheDocument();
-      expect(screen.getByText(/Reserved: Gateway 3, Other projects 5/)).toBeInTheDocument();
+      expect(screen.getByText(/12 of the company.s 20 is unreserved/)).toBeInTheDocument();
+      expect(screen.getByText(/Reserved: Gateway 3, Billing 5/)).toBeInTheDocument();
     });
 
     it('shows the limit read-only to someone who may not change it', () => {
@@ -435,6 +434,31 @@ describe('Projects/Settings/SettingsPage', () => {
 
       expect(screen.queryByLabelText('Concurrent Sessions')).not.toBeInTheDocument();
       expect(screen.getByText(/only a company admin can change this/)).toBeInTheDocument();
+    });
+  });
+
+  describe('ownership transfer', () => {
+    const ownership = {
+      canTransfer: true,
+      candidates: [{ id: 5, name: 'Eve Heir', email: 'eve@example.com', companyAdmin: false, collaborator: true }],
+    };
+
+    it('offers Transfer next to the owner to someone who may transfer, and opens the picker', async () => {
+      renderAuthedPage(<SettingsPage />, { props: { project, concurrency, ownership } });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Transfer' }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByRole('radio', { name: 'Eve Heir' })).toBeInTheDocument();
+    });
+
+    it('shows the owner without a Transfer action to everyone else', () => {
+      renderAuthedPage(<SettingsPage />, {
+        props: { project, concurrency, ownership: { canTransfer: false, candidates: [] } },
+      });
+
+      expect(screen.getByText('Dana Owner')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Transfer' })).not.toBeInTheDocument();
     });
   });
 });

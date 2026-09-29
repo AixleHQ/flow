@@ -30,9 +30,9 @@ module Tools
 
         Company -> Projects. A project owns a board (columns + tasks), its
         workflows (steps -> sub-steps), and the resources steps draw on: agents,
-        tools, skills, MCP servers, repositories, config items, assets. Those
-        resources can be company-scoped (shared by every project in the company)
-        or project-scoped; a project sees both.
+        tools, skills, MCP servers, repositories, config items, assets. All of
+        them belong to one project — only assets can also be company-wide — so
+        an id from one project never works in another.
 
       How to work here:
 
@@ -70,6 +70,7 @@ module Tools
         workflow tools.
       - prompt `author_step` — how to write a step an agent can actually run.
       - prompt `tool_catalog` — every tool on this server, grouped by area.
+      - prompt `publish_template` — turn a working project into a catalog pull request.
       - resource `#{REFERENCE_URI}` — the full platform reference.
     TEXT
 
@@ -88,6 +89,9 @@ module Tools
       { tag: :board, title: "Board",
         blurb: "Columns and tasks. A new project has no board at all until `setup_board` " \
                "creates one, and moving a card is what fires a column trigger." },
+      { tag: :templates, title: "Templates",
+        blurb: "Ready-made connectors, boards, workflows and projects from the reviewed public catalog, " \
+               "and turning a working setup into a catalog pull request." },
       { tag: :workflows, title: "Workflows & runs",
         blurb: "Define workflows and their steps, attach triggers, then start runs and " \
                "diagnose them." },
@@ -110,11 +114,7 @@ module Tools
       # is actually serving — a user who has switched tools off must not be
       # handed a catalog advertising them.
       def tool_catalog(defs = Registry.for_audience(:user))
-        known = CATALOG_GROUPS.map { |g| g[:tag] }
-        sections = CATALOG_GROUPS.filter_map do |group|
-          section(group[:title], group[:blurb], defs.select { |d| d.tags.include?(group[:tag]) })
-        end
-        sections << section("Other", nil, defs.reject { |d| d.tags.intersect?(known) })
+        sections = catalog_sections(defs)
 
         <<~TEXT
           # Aixle tools on this server
@@ -124,12 +124,89 @@ module Tools
           `tools/list`; the flows these tools serve are in the `setup_project`,
           `build_workflow` and `author_step` prompts.
 
-          #{sections.compact.join("\n").rstrip}
+          #{sections.join("\n").rstrip}
 
           Two rules worth repeating, because they are what usually goes wrong:
           read a workflow step before editing it, and remember that an id list
           on an update replaces the current one wholesale.
         TEXT
+      end
+
+      def catalog_sections(defs)
+        known = CATALOG_GROUPS.map { |g| g[:tag] }
+        sections = CATALOG_GROUPS.filter_map do |group|
+          section(group[:title], group[:blurb], defs.select { |d| d.tags.include?(group[:tag]) })
+        end
+        sections << section("Other", nil, defs.reject { |d| d.tags.intersect?(known) })
+        sections.compact
+      end
+
+      def publish_template
+        <<~GUIDE
+          # Publishing a working setup to the Aixle Flow template catalog
+
+          The catalog is the public repository #{Templates::RepositoryClient::REPOSITORY}
+          (branch `#{Templates::RepositoryClient::BRANCH}`). A template is published by a pull
+          request that the Flow maintainers review; every Flow installation mirrors the
+          repository within the hour after merge. Flow itself never writes to the
+          repository — you open the pull request with the user's own GitHub access.
+
+          ## 1. Choose what to publish
+
+          Ask the user which project, and whether it is the whole project (board +
+          workflows), only some workflows, or a single agent or skill. A whole-project
+          template always installs as a new project; anything else can be added to an
+          existing project. For an agent or skill, export with `workflow_ids: []`,
+          `include_board: false` and `agent_ids` / `skill_ids`.
+          Agree on a slug (lowercase words joined by dashes), a name and a one-line summary.
+
+          Every template lives under a publisher **namespace**, and its catalog id is
+          `namespace/slug`. Check `namespaces.yaml` in the repository: if the user
+          already owns a namespace (their GitHub login is in its `owners`), use it.
+          Otherwise add an entry for a new one in the same pull request —
+          `name` (usually their GitHub login), `display_name`, `owners: [<login>]` —
+          and leave `verified` out; only the maintainers set it. A pull request that
+          changes a namespace its author does not own fails CI.
+
+          ## 2. Export
+
+          Call `export_template` with the project, slug and name (`workflow_ids`,
+          `include_board`, `include_assets` as agreed). If it refuses, show the user
+          each reason and fix it in the project first — typically a literal MCP header
+          value that must become a config item (`config_item:NAME`), or a tool image
+          that must be pinned by digest (`image@sha256:…`). Never edit the exported
+          package to smuggle a literal secret back in.
+
+          ## 3. Make it portable — walk through this with the user
+
+          - Every exported `variables` entry carries its current value. For each one,
+            ask whether it is specific to this project (an org slug, a channel, a
+            branch). If so, add an `inputs` entry and replace the value with
+            `{{inputs.<key>}}`. Inputs are only substituted in instructions, agent
+            text, column purposes, workflow descriptions, custom MCP url/args/headers/env,
+            trigger cron and title templates, and variable values.
+          - Read every step's instructions and agent persona for names, URLs or ids
+            that only make sense in this project; generalise them or turn them into inputs.
+          - Write `README.md` (what it does, who it is for) and `SETUP.md` (what to do
+            after installing: which integrations to connect, which secrets to add,
+            which repository to attach). `SETUP.md` is required when `requires` is not empty.
+          - Keep the exported `version: 1` for a new template. Updating an existing
+            template means increasing `version` by one.
+
+          ## 4. Open the pull request
+
+          1. Fork #{Templates::RepositoryClient::REPOSITORY} (or branch, if the user has write access).
+          2. Write `templates/<namespace>/<slug>/template.yaml` from `template_yaml`, and
+             every entry of `files` next to it (`content` as text, `base64` decoded).
+          3. Run the repository's validator (`bin/validate`) and fix what it reports.
+          4. Commit, push, and open the pull request against `#{Templates::RepositoryClient::BRANCH}`.
+             In the description say what the template does, what it installs, and
+             what it needs after install. Mention any third-party container images.
+          5. Give the user the pull request URL.
+
+          The maintainers review the pull request; after merge the template appears in
+          the catalog on the next hourly sync.
+        GUIDE
       end
 
       def setup_project
@@ -189,7 +266,7 @@ module Tools
             text your agents will follow.
 
           ## 6. Agents
-          - `list_agents` — company-scoped agents are already visible here.
+          - `list_agents` — the project's agents.
           - `create_agent` — the persona a step runs as. `get_agent` reads one
             in full before you reuse it.
 
@@ -335,9 +412,9 @@ module Tools
           Wiring:
           - `agent_id` (from `list_agents`) picks who runs the step. `get_agent`
             returns that agent's full persona when the title isn't enough.
-          - `required_agent_runtime` pins the step to `claude_code`, `cursor_cli`,
-            `codex`, or `gemini_cli`. Pass null in `update_workflow_step` to return
-            to normal runtime resolution.
+          - `required_agent_runtime` pins the step to one of
+            #{Step::SUPPORTED_AGENT_RUNTIMES.map { |r| "`#{r}`" }.join(', ')}. Pass null
+            in `update_workflow_step` to return to normal runtime resolution.
           - `tool_ids` / `skill_ids` / `mcp_server_ids` grant capabilities — attach
             only what the step needs (list them with list_project_tools / list_skills /
             list_mcp_servers, and read a skill's content with `get_skill` before

@@ -1,22 +1,27 @@
 # Temporal Schedules Configuration
-# Replaces Sidekiq-cron schedules
 
 schedules:
   - workflow: stale_session_cleanup_workflow
     cron: "0 * * * *"
     enabled: true
 
-  # Reaps WorkflowRun rows that have been running/paused beyond the stale threshold
-  # (4 hours). These accumulate when the WorkflowExecutionWorkflow process crashes
-  # without sending a final status update, leaving the run permanently active and
-  # holding pod quota. Hourly is sufficient: quota is released within one sweep window.
+  # Settles WorkflowRun rows still running/paused after their Temporal execution
+  # closed or disappeared without writing a final status — they hold pod quota and
+  # read as live. Each sweep is one describe per candidate run, so it runs often.
   - workflow: stale_run_cleanup_workflow
-    cron: "30 * * * *"
+    cron: "*/15 * * * *"
     enabled: true
 
   - workflow: dismissed_asset_cleanup_workflow
     cron: "0 3 * * *"
     enabled: true
+
+  # Expires tool output past TOOL_RESULTS_RETENTION_DAYS and fails results stuck
+  # in processing. Hourly so a stuck result is settled within two hours.
+  - workflow: tool_result_cleanup_workflow
+    cron: "17 * * * *"
+    enabled: true
+    overlap: skip
 
   - workflow: quota_error_scan_workflow
     cron: "* * * * *"
@@ -146,6 +151,15 @@ schedules:
     overlap: skip
     enabled: true
 
+  # Mirrors the public templates repository (AixleHQ/flow-templates). Hourly: a
+  # run at an unchanged commit is two small requests and no writes, and a merged
+  # template should appear the same day. SKIP overlap: two runs would write the
+  # same slugs.
+  - workflow: templates_catalog_sync_workflow
+    cron: "20 * * * *"
+    overlap: skip
+    enabled: true
+
   # Follows demand rather than the static seed list: sweeps the terms users actually
   # searched for (CatalogSearchQuery, unattributed), then the same bounded description
   # backfill and audit passes. Daily is affordable because it is narrow — a few dozen
@@ -191,5 +205,16 @@ schedules:
 
   - workflow: session_admission_reconciliation_workflow
     cron: "* * * * *"
+    overlap: skip
+    enabled: true
+
+  # Capacity metering. Runs at five past so the hour it measures has closed.
+  #
+  # SKIP overlap and a single activity attempt: AWS Marketplace counts one record
+  # per hour PER POD, so two passes — or one retried onto another replica — bill
+  # the same hour twice. A failed send is replayed by the next run from the
+  # ledger, inside the six hours AWS still accepts records for.
+  - workflow: capacity_metering_workflow
+    cron: "5 * * * *"
     overlap: skip
     enabled: true

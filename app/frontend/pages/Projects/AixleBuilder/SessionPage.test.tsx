@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it } from 'vitest';
 
+import { FakeWebSocket, installFakeWebSocket } from 'test/fakeWebSocket';
 import { renderAuthedPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import SessionPage from './SessionPage';
@@ -161,6 +162,23 @@ describe('Projects/AixleBuilder/SessionPage', () => {
     expect(screen.getByRole('button', { name: 'Finish Session' })).toBeInTheDocument();
   });
 
+  it("connects the builder's terminal once the session is ready", async () => {
+    installFakeWebSocket();
+    renderAuthedPage(<SessionPage />, {
+      props: {
+        project,
+        session: { ...baseSession, websocketUrl: 'wss://host.test/t/abc/tty/ws' },
+        cableStream: 'signed-stream',
+        builderActivities: [],
+        workflows: [],
+        boardColumns: [],
+      },
+    });
+
+    expect(screen.getByRole('group', { name: 'Terminal' })).toBeInTheDocument();
+    await waitFor(() => expect(FakeWebSocket.latest()?.url).toBe('wss://host.test/t/abc/tty/ws'));
+  });
+
   it('shows the starting-container loader and the current state badge while active without a terminal', () => {
     renderAuthedPage(<SessionPage />, {
       props: {
@@ -253,7 +271,7 @@ describe('Projects/AixleBuilder/SessionPage', () => {
     expect(screen.getByText('Created workflow')).toBeInTheDocument();
   });
 
-  it('falls back to the raw action string for an unmapped activity action', () => {
+  it('labels an activity by the builder tool that made it', () => {
     renderAuthedPage(<SessionPage />, {
       props: {
         project,
@@ -261,9 +279,9 @@ describe('Projects/AixleBuilder/SessionPage', () => {
         cableStream: 'signed-stream',
         builderActivities: [
           {
-            action: 'some_unmapped_action',
-            entityType: 'Tool',
-            entityName: 'Mailer',
+            action: 'install_connector',
+            entityType: 'MCPServer',
+            entityName: 'Linear',
             timestamp: '2026-06-26 10:06:00 UTC',
           },
         ],
@@ -272,8 +290,8 @@ describe('Projects/AixleBuilder/SessionPage', () => {
       },
     });
 
-    expect(screen.getByText('some_unmapped_action')).toBeInTheDocument();
-    expect(screen.getByText('Mailer')).toBeInTheDocument();
+    expect(screen.getByText('Installed connector')).toBeInTheDocument();
+    expect(screen.getByText('Linear')).toBeInTheDocument();
   });
 
   it('shows the activity count in the Activity tab label when activities are present', () => {

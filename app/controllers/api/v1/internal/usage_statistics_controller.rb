@@ -17,6 +17,8 @@ module Api
             render json: { error: result.error }, status: :bad_request
           when :not_found
             render json: { error: result.error }, status: :not_found
+          when :unauthorized
+            render json: { error: result.error }, status: :unauthorized
           else
             render json: { error: result.error || "Failed to persist usage" }, status: :internal_server_error
           end

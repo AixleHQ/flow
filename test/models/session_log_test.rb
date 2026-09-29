@@ -42,7 +42,7 @@ class SessionLogTest < ActiveSupport::TestCase
   end
 
   test "destroyed when terminal_session is destroyed" do
-    log = create(:session_log, terminal_session: @session)
+    create(:session_log, terminal_session: @session)
     assert_difference "SessionLog.count", -1 do
       @session.destroy!
     end

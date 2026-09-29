@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require "temporalio/activity"
 
 class Activities::Base < Temporalio::Activity::Definition
@@ -15,7 +17,7 @@ class Activities::Base < Temporalio::Activity::Definition
 
   def execute(input = nil)
     log(:info, "[#{name}] activity execution started")
-    hashie_input = input.is_a?(Hash) ? Hashie::Mash.new(input) : input
+    hashie_input = TemporalInput.wrap(input)
     result = run(hashie_input)
     log(:info, "[#{name}] activity execution completed")
     result

@@ -13,7 +13,7 @@ class ConfigItemDashboard < Administrate::BaseDashboard
     ),
     scope_type: Field::String,
     scope_id: Field::Number,
-    display_value: Field::String,
+    display_value: Field::String.with_options(searchable: false),
     created_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M"),
     updated_at: Field::DateTime.with_options(format: "%b %-d, %Y %H:%M")
   }.freeze

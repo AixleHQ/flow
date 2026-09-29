@@ -30,19 +30,22 @@ class WorkflowConfigTest < ActiveSupport::TestCase
   end
 
   test "config round-trip preserves base_tool_ids" do
-    @workflow.update!(config: { "base_tool_ids" => [ 1, 2 ] })
+    tool_ids = create_list(:tool, 2, scope: @workflow.scope).map(&:id)
+    @workflow.update!(config: { "base_tool_ids" => tool_ids })
     @workflow.reload
 
-    assert_equal [ 1, 2 ], @workflow.base_tool_ids
+    assert_equal tool_ids, @workflow.base_tool_ids
   end
 
   test "merge_config! merges without overwriting other keys" do
-    @workflow.update!(config: { "base_tool_ids" => [ 1 ], "base_skill_ids" => [ 10 ] })
-    @workflow.merge_config!("base_tool_ids" => [ 1, 2, 3 ])
+    tool_ids = create_list(:tool, 3, scope: @workflow.scope).map(&:id)
+    skill = create(:skill, scope: @workflow.scope)
+    @workflow.update!(config: { "base_tool_ids" => tool_ids.first(1), "base_skill_ids" => [ skill.id ] })
+    @workflow.merge_config!("base_tool_ids" => tool_ids)
     @workflow.reload
 
-    assert_equal [ 1, 2, 3 ], @workflow.base_tool_ids
-    assert_equal [ 10 ], @workflow.base_skill_ids
+    assert_equal tool_ids, @workflow.base_tool_ids
+    assert_equal [ skill.id ], @workflow.base_skill_ids
   end
 
   test "merge_config! sets inherit_all_project_resources" do

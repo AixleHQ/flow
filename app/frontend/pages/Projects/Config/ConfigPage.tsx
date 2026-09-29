@@ -1,13 +1,10 @@
 import { Head, usePage } from '@inertiajs/react';
 
-import { ConfigItemsContent, type ConfigItem } from 'shared/resources/config-items/ConfigItemsContent';
+import type { ConfigItem, Project } from '@/types/generated';
+
+import { ConfigItemsContent } from 'shared/resources/config-items/ConfigItemsContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface Props {
   project: Project;

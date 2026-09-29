@@ -130,7 +130,7 @@ module Skills
       @download_budget = download_budget
       @queries = queries
       @owners = owners
-      @deadline = budget && Time.current + budget
+      @deadline = budget && (Time.current + budget)
       @result = Result.new(fetched: 0, upserted: 0, failed: 0, backfilled: 0, audited: 0)
     end
 

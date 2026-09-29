@@ -1,4 +1,4 @@
-import type { Asset, Folder } from './types';
+import type { Asset, Folder } from '@/types/generated';
 
 /**
  * Pure helpers for the Assets folder view. The tree a viewer sees is the union of persisted

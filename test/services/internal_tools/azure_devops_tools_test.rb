@@ -66,8 +66,10 @@ class InternalTools::AzureDevopsToolsTest < ActiveSupport::TestCase
 
     result = run_tool(InternalTools::AzureDevopsGetWorkItem, { integration_id: foreign.id, work_item_id: 5 })
 
+    # Not even found: a connection outside this project's tenant resolves to nothing.
     assert_equal 1, result[:exit_code]
-    assert_match(/another project/, result[:stderr])
+    assert_match(/not_authorized/, result[:stderr])
+    assert_match(/No such Azure DevOps connection/, result[:stderr])
   end
 
   test "a disabled capability is refused before any Azure request" do

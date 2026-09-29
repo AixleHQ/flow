@@ -29,7 +29,7 @@ module Github
     end
 
     teardown do
-      File.delete(@pem_path) if File.exist?(@pem_path)
+      FileUtils.rm_f(@pem_path)
     end
 
     test "list_available returns the parsed repositories from the installation endpoint" do
@@ -116,6 +116,23 @@ module Github
         )
 
       assert_equal %w[main develop], Github::RepositoryService.new(@integration).list_branches("org/app")
+    end
+
+    test "list_branches follows the pages, and stops at the cap" do
+      cap = Github::RepositoryService::MAX_PAGES
+      (1..(cap + 1)).each do |page|
+        query = page == 1 ? { per_page: 100 } : { per_page: 100, page: page }
+        link = %(<https://api.github.com/repos/org/app/branches?per_page=100&page=#{page + 1}>; rel="next")
+        stub_request(:get, "https://api.github.com/repos/org/app/branches")
+          .with(query: query)
+          .to_return(status: 200, headers: { "Content-Type" => "application/json", "Link" => link },
+                     body: [ { name: "branch-#{page}" } ].to_json)
+      end
+
+      branches = Github::RepositoryService.new(@integration).list_branches("org/app")
+
+      assert_equal (1..cap).map { |page| "branch-#{page}" }, branches
+      assert_not_requested :get, "https://api.github.com/repos/org/app/branches?per_page=100&page=#{cap + 1}"
     end
 
     # ----- PAT mode -----

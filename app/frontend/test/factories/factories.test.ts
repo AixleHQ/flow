@@ -10,6 +10,7 @@ import { buildRepository } from './repository';
 import { buildSessionArtifact } from './sessionArtifact';
 import { buildStepRun } from './stepRun';
 import { buildSubStepRun } from './subStepRun';
+import { buildTaskAsset } from './taskAsset';
 import { buildTaskComment } from './taskComment';
 import { buildTaskStatistics } from './taskStatistics';
 import { buildTaskWorkflowRun } from './taskWorkflowRun';
@@ -24,6 +25,11 @@ describe('typed factories', () => {
       state: 'archived',
       slug: 'acme',
     });
+  });
+
+  it('buildTaskAsset applies overrides', () => {
+    expect(buildTaskAsset().shareUrl).toBeNull();
+    expect(buildTaskAsset({ shareUrl: 'https://x.test/share/t' }).shareUrl).toBe('https://x.test/share/t');
   });
 
   it('buildBoardTask applies overrides', () => {

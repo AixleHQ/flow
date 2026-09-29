@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class AssetUploader < Shrine
   include ImageProcessing::Vips
   plugin :activerecord

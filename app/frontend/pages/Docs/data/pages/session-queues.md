@@ -10,15 +10,15 @@ one does.
 
 ## What is queued, and what is not
 
-**Queued:** every session that belongs to a project. That is workflow-step
-sessions and agent sessions started inside a project.
+**Queued:** every session. Workflow-step sessions and agent sessions started
+inside a project wait in that project's queue.
 
-**Not queued:**
+**Agent logins** have no project, so they queue per person instead: two at a
+time, outside any company's limit. Signing in to two runtimes at once starts
+both immediately.
 
-- **Agent logins.** Signing an agent runtime into your account has no project,
-  so it has no queue to wait in. It starts immediately.
-- **Tool executions.** Running a tool on its own is not a session and takes no
-  slot.
+**Not queued:** tool executions. Running a tool on its own is not a session and
+takes no slot.
 
 ## The two numbers
 
@@ -135,22 +135,25 @@ gives its place to the next one immediately.
 
 ## For operators
 
-The ceiling is `SESSION_CONCURRENCY_LIMIT`, read live — an edit takes effect as
-each pod restarts, with nothing to run afterwards. Leaving it unset means no
-ceiling.
+Capacity is a company's limit, held in the database and set on the company's own
+page in the admin. A project's limit is a reservation drawn from it; projects
+without one share what the reservations leave. A company with no limit of its own
+is unbounded — which is also how an internal organisation is left unbilled.
 
-Lowering it below the sum of project reservations is possible, and nothing can
-refuse it: the ceiling is honoured and the reservations are not, which the queue
-health line reports as over-commitment. A value that is not a positive integer
-leaves the installation with no ceiling at all, and says so on the admin page.
+There is no deployment-wide ceiling. `SESSION_CONCURRENCY_LIMIT` used to be one
+and nothing reads it any more: a single number for the whole installation could
+not describe a deployment running several organisations, and it was never the
+number a customer was sold.
 
-Turning admission on for the first time is still a deliberate act, because it
-puts already-running sessions behind a queue they were never admitted to: the
-Enable button on the admin's Session admission page.
+Lowering a company below the sum of its projects' reservations is possible, and
+nothing refuses it — a downgrade must not be blocked by how the capacity was
+divided. The company limit is then honoured and the reservations are not, which
+the queue health line reports as over-commitment.
+
+Admission is always on and cannot be paused.
 
 The per-project default is `SESSION_PROJECT_CONCURRENCY_DEFAULT`, read live — a
 config change applies as each pod restarts, with nothing to run afterwards.
 
-`bin/rails session_admission:status` prints the current queues, what is
-reserved, and the health counters. Admission can be paused and resumed without
-losing anything already queued.
+The admin's Session admission page shows the current queues, what is reserved,
+and the health counters.

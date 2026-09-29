@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { Asset } from '@/types/generated';
 import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { AssetPreviewModal } from './AssetPreviewModal';
-import type { Asset } from './types';
 
 function makeAsset(overrides: Partial<Asset> = {}): Asset {
   return {
@@ -18,6 +18,7 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
     scopeIndicator: 'company',
     status: 'active',
     createdById: 7,
+    stepRunId: null,
     createdByName: 'Ada Lovelace',
     versionsCount: 1,
     latestVersion: {
@@ -25,7 +26,8 @@ function makeAsset(overrides: Partial<Asset> = {}): Asset {
       version: 3,
       contentType: 'image/png',
       fileSize: 2048,
-      source: null,
+      source: 'upload',
+      uploadedById: 7,
       fileUrl: 'https://files.example/diagram.png',
       createdAt: '2026-01-01T00:00:00Z',
     },
@@ -68,9 +70,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'application/zip',
         fileSize: 5000,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/archive.zip',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -94,9 +97,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'text/plain',
         fileSize: 100,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/notes.txt',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -128,9 +132,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'video/mp4',
         fileSize: 4096,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/clip.mp4',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -150,9 +155,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'audio/mpeg',
         fileSize: 3000,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/song.mp3',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -172,9 +178,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'application/pdf',
         fileSize: 9000,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/report.pdf',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -192,9 +199,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: null,
         fileSize: 1234,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/photo.jpg',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -212,9 +220,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'image/png',
         fileSize: 500,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: null,
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -235,9 +244,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'text/plain',
         fileSize: 3 * 1024 * 1024, // exceeds MAX_TEXT_SIZE (2 MiB)
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/huge.log',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -262,9 +272,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'text/plain',
         fileSize: 50,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/readme.txt',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -291,9 +302,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'image/svg+xml',
         fileSize: 200,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/logo.svg',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
 
@@ -319,9 +331,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'application/octet-stream',
         fileSize: 512,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/tiny.bin',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
     const { unmount } = renderPage(
@@ -337,9 +350,10 @@ describe('AssetPreviewModal', () => {
         version: 1,
         contentType: 'application/octet-stream',
         fileSize: 2 * 1024 * 1024 * 1024,
-        source: null,
+        source: 'upload',
+        uploadedById: 7,
         fileUrl: 'https://files.example/movie.bin',
-        createdAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
       },
     });
     const { unmount: unmountGb } = renderPage(
@@ -354,7 +368,7 @@ describe('AssetPreviewModal', () => {
   });
 
   it('falls back to "Unknown" author and v1 when version metadata is absent', () => {
-    const asset = makeAsset({ createdByName: null, latestVersion: null });
+    const asset = makeAsset({ createdByName: undefined, latestVersion: null });
 
     renderPage(<AssetPreviewModal asset={asset} onClose={vi.fn()} downloadUrl="/download/none" />);
 
@@ -369,5 +383,38 @@ describe('AssetPreviewModal', () => {
 
     expect(screen.queryByText('design')).not.toBeInTheDocument();
     expect(screen.queryByText('v2')).not.toBeInTheDocument();
+  });
+
+  describe('a publicly shared asset', () => {
+    const shared = () => makeAsset({ public: true, shareUrl: 'https://flow.example/share/abc' });
+
+    it('says so and shows the link anyone can open', () => {
+      renderPage(<AssetPreviewModal asset={shared()} onClose={vi.fn()} downloadUrl="/download/1" />);
+
+      expect(screen.getByText('Shared publicly')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'https://flow.example/share/abc' })).toHaveAttribute(
+        'href',
+        'https://flow.example/share/abc',
+      );
+    });
+
+    it('stops sharing on request and closes once it has', async () => {
+      const onUnshare = vi.fn().mockResolvedValue(true);
+      const onClose = vi.fn();
+      renderPage(
+        <AssetPreviewModal asset={shared()} onClose={onClose} downloadUrl="/download/1" onUnshare={onUnshare} />,
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Stop sharing' }));
+
+      expect(onUnshare).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+    });
+
+    it('offers no stop button to someone who cannot change the asset', () => {
+      renderPage(<AssetPreviewModal asset={shared()} onClose={vi.fn()} downloadUrl="/download/1" />);
+
+      expect(screen.queryByRole('button', { name: 'Stop sharing' })).not.toBeInTheDocument();
+    });
   });
 });

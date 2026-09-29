@@ -54,17 +54,19 @@ module MCP
       # inputs the new version still declares.
       #
       # @param values [Hash] answers for newly declared inputs
-      def apply(server:, connector:, values: {})
+      def apply(server:, connector:, values: {}, actor: Versions::Actor.system)
         manifest = latest_manifest(connector)
         raise Error, "Could not fetch the new version from the registry" if manifest.blank?
 
         target = ConnectorManifest.find_target(manifest, installed_target_id(server))
         raise Error, "This version no longer offers the install option you are using" if target.nil?
 
+        target = PackageVersionResolver.pin(target)
         attributes = ConnectorAttributes.build(manifest: manifest, target: target, values: merged_values(server, values))
+        raise Error, ConnectorAttributes.unpinned_message(target) if ConnectorAttributes.unpinned?(target)
         # The user's own label survives: they may have renamed the server, and an
         # update is not the place to take that back.
-        server.update!(attributes.except(:name))
+        Versions.save!(server, actor: actor) { server.update!(attributes.except(:name)) }
 
         # The old baseline and any drift recorded against it describe code that
         # no longer runs, so both are dropped unconditionally — keeping a warning

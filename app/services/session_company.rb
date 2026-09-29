@@ -5,13 +5,9 @@
 #
 # There is no web session here — Temporal activities, container strategies and
 # workflow runs all reach this code with no cookie — so the company is NEVER
-# taken from `session[:current_company_id]`. Resolution order:
-#
-#   1. terminal_sessions.company_id, set explicitly at creation. This is what
-#      makes `auth_setup` sessions correct: they are project-less and they are
-#      exactly the sessions that CREATE a credential, so guessing the company
-#      would authenticate a token into the wrong (billed) tenant.
-#   2. the project's company, for every project-bound session.
+# taken from `session[:current_company_id]`. It is terminal_sessions.company_id,
+# which every session carries (the project's company for project-bound ones);
+# the project is consulted only for a record that has not been validated yet.
 #
 # Nothing falls back to "the user's first membership": for a multi-company user
 # that is a coin flip, and the thing being chosen is who gets billed.

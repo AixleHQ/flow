@@ -27,7 +27,7 @@ module PersonalTools
       success(id: skill.id, name: skill.name, title: skill.title,
               description: skill.description, content: skill.content,
               package: skill.package, source: skill.source, source_url: skill.source_url,
-              origin: skill.origin.to_s)
+              origin: skill.origin.to_s, current_version_number: skill.current_version_number)
     end
   end
 end

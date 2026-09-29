@@ -12,8 +12,8 @@ describe('DeleteToolModal', () => {
   it('renders the confirmation title and the tool name/displayName when opened', () => {
     renderPage(<DeleteToolModal opened onClose={vi.fn()} tool={tool} basePath="/projects/1/tools" />);
 
-    expect(screen.getByText('Delete Tool')).toBeInTheDocument();
-    expect(screen.getByText(/are you sure you want to delete this tool/i)).toBeInTheDocument();
+    expect(screen.getByText('Archive Tool')).toBeInTheDocument();
+    expect(screen.getByText(/archive this tool\? agents stop being served it/i)).toBeInTheDocument();
     expect(screen.getByText('Web Search')).toBeInTheDocument();
     expect(screen.getByText('web_search')).toBeInTheDocument();
   });
@@ -21,13 +21,13 @@ describe('DeleteToolModal', () => {
   it('renders nothing when no tool is provided', () => {
     renderPage(<DeleteToolModal opened onClose={vi.fn()} tool={null} basePath="/projects/1/tools" />);
 
-    expect(screen.queryByText('Delete Tool')).not.toBeInTheDocument();
+    expect(screen.queryByText('Archive Tool')).not.toBeInTheDocument();
   });
 
-  it('confirming the delete fires router.delete to the tool path', async () => {
+  it('confirming the archive fires router.delete to the tool path', async () => {
     renderPage(<DeleteToolModal opened onClose={vi.fn()} tool={tool} basePath="/projects/1/tools" />);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
 
     expect(router.delete).toHaveBeenCalledWith(
       '/projects/1/tools/7',

@@ -3,7 +3,7 @@
 class AgentResource < ApplicationResource
   attributes :id, :name, :title, :icon, :persona, :communication_style,
              :principles, :source, :scope_type, :scope_id,
-             :created_at, :updated_at
+             :current_version_number, :archived_at, :created_at, :updated_at
 
   typelize %w[system company project]
   attribute :scope_indicator do |agent|

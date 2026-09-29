@@ -3,6 +3,7 @@
 class ConfigItemResource < ApplicationResource
   attributes :id, :name, :description, :item_type, :scope_type, :created_at, :updated_at
 
+  typelize :string
   attribute :value do |item|
     item.display_value
   end

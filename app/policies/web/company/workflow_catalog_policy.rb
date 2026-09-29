@@ -4,7 +4,7 @@ module Web
   module Company
     class WorkflowCatalogPolicy < ApplicationPolicy
       def index? = company_member?
-      def duplicate? = company_member?
+      def duplicate? = company_member? && !read_only?
 
       private
 

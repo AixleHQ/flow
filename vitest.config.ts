@@ -40,10 +40,8 @@ export default defineConfig({
       // separate dir so it never clobbers SimpleCov's output in coverage/
       reportsDirectory: './coverage/frontend',
       reporter: ['text-summary', 'json-summary', 'html'],
-      // instrument every included file, not just those imported by a test, so the % is honest
-      // across the whole frontend — untested files count as 0% instead of being omitted entirely.
-      all: true,
-      // count untested source files as 0% so the % reflects the whole frontend
+      // Every file `include` matches is instrumented, imported by a test or not, so an untested
+      // file counts as 0% instead of being left out.
       include: ['app/frontend/**/*.{ts,tsx}'],
       exclude: [
         'app/frontend/**/*.{test,spec}.{ts,tsx}',

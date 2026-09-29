@@ -25,6 +25,7 @@ import {
   IconArchive,
   IconCheck,
   IconCopy,
+  IconCrown,
   IconInfoCircle,
   IconLock,
   IconTrash,
@@ -33,7 +34,9 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useState } from 'react';
 import { z } from 'zod';
 
+import { NO_OWNERSHIP_TRANSFER, type Ownership } from '../ownership';
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
+import { TransferOwnershipModal } from '../TransferOwnershipModal';
 
 import classes from './SettingsPage.module.css';
 
@@ -69,7 +72,7 @@ const schema = z.object({
     .refine((v) => !v || /^[1-9]\d*$/.test(v), 'Must be a whole number greater than zero'),
 });
 
-interface Project {
+interface ProjectSettings {
   id: number;
   name: string;
   description: string | null;
@@ -89,21 +92,21 @@ interface ConcurrencyAllocation {
 }
 
 interface Concurrency {
-  /** This project's own limit, or null when it runs on the installation default. */
+  /** This project's own limit, or null when it runs on the deployment default. */
   maxSessions: number | null;
   default: number;
-  /** The ceiling every project shares, or null when the installation sets none. */
-  installationLimit: number | null;
-  /** The most this project could be set to right now; null when there is no ceiling. */
+  /** The company's own limit, shared by its projects, or null when it has none. */
+  companyLimit: number | null;
+  /** The most this project could be set to right now; null when there is no limit. */
   available: number | null;
   allocations: ConcurrencyAllocation[];
-  queueEnabled: boolean;
   canManage: boolean;
 }
 
 interface Props {
-  project: Project;
+  project: ProjectSettings;
   concurrency: Concurrency;
+  ownership?: Ownership;
 }
 
 function avatarInitials(name: string): string {
@@ -116,7 +119,11 @@ function avatarInitials(name: string): string {
 }
 
 const SettingsPage = () => {
-  const { project, concurrency } = usePage<{ props: Props }>().props as unknown as Props;
+  const {
+    project,
+    concurrency,
+    ownership = NO_OWNERSHIP_TRANSFER,
+  } = usePage<{ props: Props }>().props as unknown as Props;
   const pageErrors = (usePage().props as unknown as { errors?: Record<string, string> }).errors;
   const basePath = `/company/projects/${project.id}`;
 
@@ -194,6 +201,7 @@ const SettingsPage = () => {
     });
   };
 
+  const [transferOpen, setTransferOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
 
@@ -278,11 +286,7 @@ const SettingsPage = () => {
                 {concurrency.canManage ? (
                   <NumberInput
                     label="Concurrent Sessions"
-                    description={
-                      concurrency.queueEnabled
-                        ? `A reservation: this project can always run this many sessions at once, and nothing else may occupy them. Leave empty to share the unreserved pool instead, up to ${concurrency.default} at a time.`
-                        : 'The session queue is switched off for this installation, so this limit is recorded but not enforced yet.'
-                    }
+                    description={`A reservation: this project can always run this many sessions at once, and nothing else may occupy them. Leave empty to share the unreserved pool instead, up to ${concurrency.default} at a time.`}
                     min={1}
                     allowDecimal={false}
                     allowNegative={false}
@@ -309,11 +313,11 @@ const SettingsPage = () => {
                   </>
                 )}
 
-                {concurrency.installationLimit != null && (
+                {concurrency.companyLimit != null && (
                   <Box mt={8}>
                     <Text size="xs" c="dimmed">
-                      {concurrency.available} of {concurrency.installationLimit} is unreserved — shared by every project
-                      that has no limit of its own.
+                      {concurrency.available} of the company&rsquo;s {concurrency.companyLimit} is unreserved — shared
+                      by every project that has no limit of its own.
                     </Text>
                     {concurrency.allocations.length > 0 && (
                       <Text size="xs" c="dimmed">
@@ -373,9 +377,23 @@ const SettingsPage = () => {
               </Box>
 
               <Box>
-                <Text className={classes.metaKey}>Owner</Text>
+                <Group justify="space-between" gap="xs" mb={6}>
+                  <Text className={classes.metaKey} mb={0}>
+                    Owner
+                  </Text>
+                  {ownership.canTransfer && (
+                    <Button
+                      variant="subtle"
+                      size="compact-xs"
+                      leftSection={<IconCrown size={12} />}
+                      onClick={() => setTransferOpen(true)}
+                    >
+                      Transfer
+                    </Button>
+                  )}
+                </Group>
                 <Group gap="sm">
-                  <Box className={classes.ownerAvatar} bg="var(--accent-dim)" c="var(--accent)">
+                  <Box className={classes.ownerAvatar} bg="var(--app-action-selected)" c="var(--app-primary)">
                     {avatarInitials(project.ownerName)}
                   </Box>
                   <Box>
@@ -470,6 +488,16 @@ const SettingsPage = () => {
           </Card>
         </div>
       </div>
+
+      {transferOpen && (
+        <TransferOwnershipModal
+          onClose={() => setTransferOpen(false)}
+          projectId={project.id}
+          projectName={project.name}
+          ownerName={project.ownerName}
+          candidates={ownership.candidates}
+        />
+      )}
 
       <Modal
         opened={deleteOpen}

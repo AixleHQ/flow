@@ -5,7 +5,7 @@ module Web
     module Sessions
       class ArtifactsPolicy < Web::Company::ApplicationPolicy
         def index? = true
-        def review? = true
+        def review? = !read_only?
       end
     end
   end

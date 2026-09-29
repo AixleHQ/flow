@@ -24,11 +24,7 @@ module PersonalTools
       unknown = ids.map(&:to_i) - by_id.keys
       return error("Columns not on this board: #{unknown.join(', ')}") if unknown.any?
 
-      # Two-phase to dodge the (board_id, position) unique index.
-      ActiveRecord::Base.transaction do
-        ids.each_with_index { |id, idx| by_id.fetch(id.to_i).update_column(:position, -(idx + 1)) }
-        ids.each_with_index { |id, idx| by_id.fetch(id.to_i).update_column(:position, idx + 1) }
-      end
+      Positions.reorder!(board.board_columns, ids)
       success(board_id: board.id, new_order: ids)
     end
   end

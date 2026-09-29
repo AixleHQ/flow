@@ -121,7 +121,7 @@ class AssetVersionTest < ActiveSupport::TestCase
 
   test "generate_location produces scoped path" do
     version = create(:asset_version, :with_file, asset: @asset, uploaded_by: @owner)
-    uploader = version.file
+    version.file
 
     location = AssetFileUploader.new(:store).generate_location(
       StringIO.new("x"),

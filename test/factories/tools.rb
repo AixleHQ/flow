@@ -17,9 +17,6 @@ FactoryBot.define do
       scope factory: %i[project standalone]
     end
 
-    trait :project do
-    end
-
     # == Kind Traits ==
 
     trait :system do
@@ -39,15 +36,6 @@ FactoryBot.define do
     trait :workflow do
       source { "code" }
       tags { %w[board] }
-      execution_mode { :app }
-      scope { nil }
-      docker_image { nil }
-    end
-
-    trait :meta do
-      source { "code" }
-      tags { %w[builder] }
-      user_attachable { false }
       execution_mode { :app }
       scope { nil }
       docker_image { nil }

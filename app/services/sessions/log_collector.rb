@@ -164,7 +164,7 @@ module Sessions
     # A log #collect_usage parses is no longer an exception: it is handed back as a
     # Sessions::LogSource, which reads the stored object a line at a time, and every
     # parser was already written against `each_line`.
-    def direct_upload?(path)
+    def direct_upload?(_path)
       @container_redacts && cache_storage.respond_to?(:presign)
     end
 

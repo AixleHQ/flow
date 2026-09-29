@@ -116,7 +116,7 @@ module Activities
       end
 
       def mark_dead(session)
-        session.update!(metadata: (session.metadata || {}).merge(MARKER_KEY => Time.current.iso8601))
+        session.merge_jsonb!(:metadata, MARKER_KEY => Time.current.iso8601)
         log(:info, "Session #{session.id} looks dead; re-checking in #{CONFIRMATION_DELAY.inspect}")
       end
 
@@ -126,7 +126,7 @@ module Activities
       def clear_marker(session)
         return unless session.metadata.is_a?(Hash) && session.metadata.key?(MARKER_KEY)
 
-        session.update!(metadata: session.metadata.except(MARKER_KEY))
+        session.remove_jsonb_keys!(:metadata, MARKER_KEY)
       end
 
       def runtime

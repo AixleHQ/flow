@@ -83,6 +83,19 @@ class WorkflowRunRelayTest < ActiveSupport::TestCase
     assert_match(/unavailable/, run.relay_error)
   end
 
+  # Row locks end at the claim's commit, long before the Temporal call; the
+  # stamp is what keeps a second drainer, started meanwhile, off the same run.
+  test "a claimed run is not taken again until the grace window passes" do
+    run = undispatched_run
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: false, error: "unavailable")
+    WorkflowRunRelay.drain
+
+    assert_equal 0, WorkflowRunRelay.drain[:swept]
+    travel(WorkflowRun::RELAY_GRACE + 1.second) do
+      assert_equal [ run.id ], WorkflowRun.stuck_for_relay.pluck(:id)
+    end
+  end
+
   # One run that can never start must not consume every sweep forever.
   test "drain abandons a run past the attempt ceiling" do
     undispatched_run(attempts: WorkflowRun::RELAY_MAX_ATTEMPTS)

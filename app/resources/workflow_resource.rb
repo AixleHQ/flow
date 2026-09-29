@@ -2,7 +2,13 @@
 
 class WorkflowResource < ApplicationResource
   typelize config: "Record<string, unknown>"
-  attributes :id, :name, :description, :config, :scope_type, :scope_id, :published_at, :created_at, :updated_at
+  attributes :id, :name, :description, :config, :scope_type, :scope_id, :published_at, :current_version_number,
+             :created_at, :updated_at
+
+  typelize "string | null"
+  attribute :archived_at do |workflow|
+    workflow.deleted_at
+  end
 
   typelize %w[system company project]
   attribute :scope_indicator do |workflow|
@@ -19,12 +25,12 @@ class WorkflowResource < ApplicationResource
     workflow.runs.size
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :last_run_at do |workflow|
     workflow.runs.max_by(&:created_at)&.created_at
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :last_run_status do |workflow|
     workflow.runs.max_by(&:created_at)&.state
   end
@@ -34,7 +40,7 @@ class WorkflowResource < ApplicationResource
     workflow.runs.any? { |r| %w[running paused].include?(r.state) }
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :description_excerpt do |workflow|
     workflow.description&.truncate(100)
   end

@@ -1,27 +1,27 @@
 import { Head, usePage } from '@inertiajs/react';
 
-import { AgentsContent, type Agent } from 'shared/resources/agents/AgentsContent';
+import type { Agent, Project } from '@/types/generated';
+
+import { AgentsContent } from 'shared/resources/agents/AgentsContent';
 
 import { persistentProjectLayout, setPageLayout } from '../ProjectLayout';
-
-interface Project {
-  id: number;
-  name: string;
-}
 
 interface Props {
   project: Project;
   agents: Agent[];
+  archivedAgents: Agent[];
 }
 
 const AgentsPage = () => {
-  const { project, agents } = usePage<{ props: Props }>().props as unknown as Props;
+  const { project, agents, archivedAgents } = usePage<{ props: Props }>().props as unknown as Props;
 
   return (
     <>
       <Head title={`Agents — ${project.name}`} />
       <AgentsContent
         agents={agents}
+        archivedAgents={archivedAgents}
+        projectId={project.id}
         basePath={`/company/projects/${project.id}/agents`}
         title="Project Agents"
         subtitle="Manage project-specific agent configurations."

@@ -90,6 +90,8 @@ module Gitlab
     test "configure stores a secret and registers a pipeline webhook via POST /hooks" do
       repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project)
 
+      stub_request(:get, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" }, body: [].to_json)
       stub_request(:post, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
         .to_return(status: 201, headers: { "Content-Type" => "application/json" },
           body: gl_hook(id: 7, url: WEBHOOK_URL, pipeline_events: true).to_json)
@@ -103,6 +105,25 @@ module Gitlab
         body = URI.decode_www_form(req.body).to_h
         body["url"] == WEBHOOK_URL && body["pipeline_events"] == "true" && body["token"] == repository.webhook_secret
       end
+    end
+
+    # The old hook carries a secret that is about to stop matching.
+    test "configure replaces this deployment's earlier hook on the project" do
+      repository = create(:repository, full_name: "group/app", integration: @integration, scope: @project)
+      stub_request(:get, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
+        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+          body: [ gl_hook(id: 42, url: WEBHOOK_URL, pipeline_events: true),
+                  gl_hook(id: 43, url: "https://ci.example.com/hook", pipeline_events: true) ].to_json)
+      delete_ours = stub_request(:delete, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks/42\z})
+                    .to_return(status: 204)
+      stub_request(:post, %r{\A#{Regexp.escape(GITLAB_API)}/projects/#{ENCODED_APP}/hooks\z})
+        .to_return(status: 201, headers: { "Content-Type" => "application/json" },
+          body: gl_hook(id: 44, url: WEBHOOK_URL, pipeline_events: true).to_json)
+
+      Gitlab::RepositoryService.new(@integration).configure(repository)
+
+      assert_requested delete_ours
+      assert_not_requested :delete, %r{/hooks/43\z}
     end
 
     test "remove deletes only the webhook whose url matches this deployment" do

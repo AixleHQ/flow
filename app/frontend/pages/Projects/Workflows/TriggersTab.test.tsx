@@ -10,8 +10,7 @@ type TabProps = ComponentProps<typeof TriggersTab>;
 
 // TriggersTab takes plain props (no usePage read) and talks to the backend through apiFetch(), a thin
 // wrapper over the global fetch() the test setup stubs. Each test that asserts a request (or needs
-// seeded triggers) spies on fetch() and dispatches by HTTP method, exactly like the sibling
-// WorkflowTriggersDrawer.test.tsx in this directory.
+// seeded triggers) spies on fetch() and dispatches by HTTP method.
 
 // ColumnOption / StepOption / Trigger are the component's own local interfaces (no Typelizer type, so
 // no factory exists); these literals match those interfaces exactly.
@@ -245,6 +244,15 @@ describe('Projects/Workflows/TriggersTab', () => {
 
     expect(await screen.findByText('Slack message eq "deploy"')).toBeInTheDocument();
     expect(screen.getByText('any channel')).toBeInTheDocument();
+  });
+
+  it('ignores a stored name and shows the derived slack title', async () => {
+    installFetch({ triggers: [slackTrigger({ name: 'Ship command' })] });
+
+    renderPage(<TriggersTab {...baseProps()} />);
+
+    expect(await screen.findByText('Slack message contains "ship"')).toBeInTheDocument();
+    expect(screen.queryByText('Ship command')).not.toBeInTheDocument();
   });
 
   it('defaults the slack op to "contains" when the predicate omits it', async () => {

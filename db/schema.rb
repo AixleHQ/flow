@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_29_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -25,6 +25,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.jsonb "metadata", default: {}
     t.string "refresh_error"
     t.integer "refresh_failure_count", default: 0, null: false
+    t.string "refresh_lease_token"
+    t.datetime "refresh_lease_until"
     t.string "status", default: "active", null: false
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
@@ -36,20 +38,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   end
 
   create_table "agents", force: :cascade do |t|
+    t.datetime "archived_at"
     t.text "communication_style"
+    t.bigint "company_id"
     t.datetime "created_at", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.string "icon"
     t.string "name", null: false
     t.text "persona", null: false
     t.text "principles"
+    t.bigint "project_id"
     t.bigint "scope_id", null: false
     t.string "scope_type", null: false
     t.string "source", default: "custom", null: false
     t.string "title", null: false
     t.datetime "updated_at", null: false
-    t.index ["scope_type", "scope_id", "name"], name: "index_agents_on_scope_type_and_scope_id_and_name", unique: true
+    t.index ["company_id"], name: "index_agents_on_company_id"
+    t.index ["project_id"], name: "index_agents_on_project_id"
+    t.index ["scope_type", "scope_id", "name"], name: "index_agents_on_scope_type_and_scope_id_and_name", unique: true, where: "(archived_at IS NULL)"
     t.index ["scope_type", "scope_id"], name: "index_agents_on_scope_type_and_scope_id"
   end
+
+  add_check_constraint "agents", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "agents_tenant_columns", validate: false
 
   create_table "asset_versions", force: :cascade do |t|
     t.bigint "asset_id", null: false
@@ -66,42 +76,54 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   end
 
   create_table "assets", force: :cascade do |t|
+    t.bigint "company_id"
     t.datetime "created_at", null: false
     t.bigint "created_by_id"
     t.datetime "deleted_at"
     t.string "folder"
     t.string "name", null: false
+    t.bigint "project_id"
     t.boolean "public", default: false
     t.string "public_token"
     t.datetime "reviewed_at"
     t.bigint "scope_id", null: false
     t.string "scope_type", null: false
+    t.datetime "shared_at"
+    t.bigint "shared_by_id"
+    t.bigint "shared_in_session_id"
     t.string "status", default: "active", null: false
     t.bigint "step_run_id"
     t.string "tags", default: [], array: true
     t.bigint "terminal_session_id"
     t.datetime "updated_at", null: false
     t.index "scope_type, scope_id, COALESCE(folder, ''::character varying), name", name: "index_assets_on_scope_folder_name", unique: true, where: "(deleted_at IS NULL)"
+    t.index ["company_id"], name: "index_assets_on_company_id"
     t.index ["created_by_id"], name: "index_assets_on_created_by_id"
     t.index ["deleted_at"], name: "index_assets_on_deleted_at"
+    t.index ["project_id"], name: "index_assets_on_project_id"
+    t.index ["public_token"], name: "index_assets_on_public_token", unique: true, where: "(public_token IS NOT NULL)"
     t.index ["scope_type", "scope_id"], name: "index_assets_on_scope_type_and_scope_id"
+    t.index ["shared_by_id"], name: "index_assets_on_shared_by_id", where: "(shared_by_id IS NOT NULL)"
+    t.index ["shared_in_session_id"], name: "index_assets_on_shared_in_session_id", where: "(shared_in_session_id IS NOT NULL)"
     t.index ["status"], name: "index_assets_on_status"
     t.index ["step_run_id"], name: "index_assets_on_step_run_id", where: "(step_run_id IS NOT NULL)"
     t.index ["terminal_session_id"], name: "index_assets_on_terminal_session_id"
   end
 
+  add_check_constraint "assets", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL OR scope_type::text = 'Company'::text AND project_id IS NULL AND company_id = scope_id", name: "assets_tenant_columns", validate: false
+
   create_table "audits", force: :cascade do |t|
     t.string "action"
-    t.integer "associated_id"
+    t.bigint "associated_id"
     t.string "associated_type"
-    t.integer "auditable_id"
+    t.bigint "auditable_id"
     t.string "auditable_type"
     t.text "audited_changes"
     t.string "comment"
     t.datetime "created_at"
     t.string "remote_address"
     t.string "request_uuid"
-    t.integer "user_id"
+    t.bigint "user_id"
     t.string "user_type"
     t.string "username"
     t.integer "version", default: 0
@@ -182,7 +204,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "status", default: "pending", null: false
     t.datetime "updated_at", null: false
     t.index ["endpoint_id"], name: "index_azure_devops_subscriptions_on_endpoint_id", unique: true
-    t.index ["integration_id", "azure_project_id", "event_type"], name: "idx_ado_subscriptions_integration_project_event", unique: true
+    t.index ["integration_id", "azure_project_id", "event_type"], name: "idx_ado_subscriptions_integration_project_event", unique: true, nulls_not_distinct: true
     t.index ["integration_id"], name: "index_azure_devops_subscriptions_on_integration_id"
   end
 
@@ -257,6 +279,36 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["project_id"], name: "index_boards_on_project_id", unique: true
   end
 
+  create_table "capacity_meter_reports", force: :cascade do |t|
+    t.integer "attempts", default: 0, null: false
+    t.jsonb "breakdown", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.text "error"
+    t.string "external_id"
+    t.integer "peak_concurrent", default: 0, null: false
+    t.datetime "period_start", null: false
+    t.string "provider", null: false
+    t.integer "quantity_seconds", null: false
+    t.datetime "reported_at"
+    t.string "state", default: "pending", null: false
+    t.integer "unbounded_companies", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.index ["provider", "period_start"], name: "index_capacity_meter_reports_on_provider_and_period_start", unique: true
+    t.index ["state", "period_start"], name: "index_capacity_meter_reports_on_state_and_period_start"
+  end
+
+  create_table "catalog_namespaces", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "display_name", null: false
+    t.string "name", null: false
+    t.string "owners", default: [], null: false, array: true
+    t.datetime "synced_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "url"
+    t.boolean "verified", default: false, null: false
+    t.index ["name"], name: "index_catalog_namespaces_on_name", unique: true
+  end
+
   create_table "catalog_search_queries", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "last_searched_at"
@@ -295,6 +347,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["source"], name: "index_catalog_skills_on_source"
   end
 
+  create_table "catalog_templates", force: :cascade do |t|
+    t.string "categories", default: [], null: false, array: true
+    t.string "commit_sha", null: false
+    t.datetime "created_at", null: false
+    t.jsonb "definition", default: {}, null: false
+    t.jsonb "files", default: {}, null: false
+    t.integer "format_version", null: false
+    t.integer "install_count", default: 0, null: false
+    t.boolean "installable", default: true, null: false
+    t.string "kind", null: false
+    t.string "name", null: false
+    t.string "namespace", null: false
+    t.string "package_digest", null: false
+    t.text "readme"
+    t.text "revocation_reason"
+    t.datetime "revoked_at"
+    t.text "setup_markdown"
+    t.string "slug", null: false
+    t.text "summary"
+    t.datetime "synced_at", null: false
+    t.datetime "updated_at", null: false
+    t.integer "version", null: false
+    t.index ["kind"], name: "index_catalog_templates_on_kind"
+    t.index ["namespace", "slug"], name: "index_catalog_templates_on_namespace_and_slug", unique: true
+  end
+
   create_table "column_transitions", force: :cascade do |t|
     t.bigint "actor_id"
     t.string "actor_type", null: false
@@ -325,8 +403,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
 
   create_table "companies", force: :cascade do |t|
     t.boolean "auto_accept_users", default: false, null: false
+    t.string "billing_state", default: "trialing", null: false
     t.datetime "created_at", null: false
     t.string "display_name"
+    t.string "domain_verification_token"
+    t.datetime "domain_verified_at"
     t.string "email_domain", null: false
     t.text "logo_data"
     t.string "logo_url"
@@ -337,10 +418,42 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "slug", null: false
     t.string "state", null: false
     t.datetime "updated_at", null: false
+    t.index ["billing_state"], name: "index_companies_on_billing_state"
     t.index ["email_domain"], name: "index_companies_on_email_domain", unique: true
     t.index ["name"], name: "index_companies_on_name", unique: true
     t.index ["slug"], name: "index_companies_on_slug", unique: true
     t.index ["state"], name: "index_companies_on_state"
+  end
+
+  create_table "company_auth_policies", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.boolean "enabled", default: true, null: false
+    t.bigint "identity_provider_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "identity_provider_id"], name: "index_company_auth_policies_unique_pair", unique: true
+    t.index ["company_id"], name: "index_company_auth_policies_on_company_id"
+    t.index ["identity_provider_id"], name: "index_company_auth_policies_on_identity_provider_id"
+  end
+
+  create_table "company_capacity_changes", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.integer "max_sessions"
+    t.datetime "occurred_at", null: false
+    t.index ["company_id", "occurred_at"], name: "index_company_capacity_changes_on_company_id_and_occurred_at"
+    t.index ["company_id"], name: "index_company_capacity_changes_on_company_id"
+    t.index ["occurred_at"], name: "index_company_capacity_changes_on_occurred_at"
+  end
+
+  create_table "company_capacity_usages", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "period_start", null: false
+    t.integer "quantity_seconds", default: 0, null: false
+    t.index ["company_id", "period_start"], name: "index_company_capacity_usages_on_company_id_and_period_start", unique: true
+    t.index ["company_id"], name: "index_company_capacity_usages_on_company_id"
+    t.index ["period_start"], name: "index_company_capacity_usages_on_period_start"
   end
 
   create_table "company_memberships", force: :cascade do |t|
@@ -369,6 +482,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   end
 
   create_table "config_item_accesses", force: :cascade do |t|
+    t.string "channel", default: "get_config_item", null: false
     t.bigint "config_item_id", null: false
     t.string "config_item_name", null: false
     t.datetime "created_at", null: false
@@ -381,18 +495,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   end
 
   create_table "config_items", force: :cascade do |t|
+    t.bigint "company_id"
     t.datetime "created_at", null: false
     t.text "description"
     t.text "encrypted_value"
     t.string "item_type", null: false
     t.string "name", null: false
+    t.bigint "project_id"
     t.bigint "scope_id", null: false
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
     t.text "value"
+    t.index ["company_id"], name: "index_config_items_on_company_id"
+    t.index ["project_id"], name: "index_config_items_on_project_id"
     t.index ["scope_type", "scope_id", "name"], name: "index_config_items_on_scope_type_and_scope_id_and_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_config_items_on_scope_type_and_scope_id"
   end
+
+  add_check_constraint "config_items", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "config_items_tenant_columns", validate: false
 
   create_table "connectors", force: :cascade do |t|
     t.boolean "bulk_publisher", default: false, null: false
@@ -420,6 +540,27 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["status"], name: "index_connectors_on_status"
   end
 
+  create_table "entity_versions", force: :cascade do |t|
+    t.bigint "author_id"
+    t.bigint "company_id"
+    t.datetime "created_at", null: false
+    t.string "event", null: false
+    t.jsonb "metadata", default: {}, null: false
+    t.integer "number", null: false
+    t.bigint "project_id"
+    t.bigint "restored_from_id"
+    t.jsonb "snapshot", default: {}, null: false
+    t.integer "snapshot_format", default: 1, null: false
+    t.string "source", null: false
+    t.bigint "terminal_session_id"
+    t.bigint "versionable_id", null: false
+    t.string "versionable_type", null: false
+    t.index ["project_id", "created_at"], name: "index_entity_versions_on_project_id_and_created_at"
+    t.index ["terminal_session_id"], name: "index_entity_versions_on_terminal_session_id", where: "(terminal_session_id IS NOT NULL)"
+    t.index ["versionable_type", "versionable_id", "number"], name: "index_entity_versions_on_versionable_and_number", unique: true
+    t.check_constraint "number > 0", name: "entity_versions_number_positive"
+  end
+
   create_table "external_resources", force: :cascade do |t|
     t.bigint "board_task_id", null: false
     t.datetime "created_at", null: false
@@ -434,16 +575,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   end
 
   create_table "folders", force: :cascade do |t|
+    t.bigint "company_id"
     t.datetime "created_at", null: false
     t.bigint "created_by_id"
     t.string "path", null: false
+    t.bigint "project_id"
     t.bigint "scope_id", null: false
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_folders_on_company_id"
     t.index ["created_by_id"], name: "index_folders_on_created_by_id"
+    t.index ["project_id"], name: "index_folders_on_project_id"
     t.index ["scope_type", "scope_id", "path"], name: "index_folders_on_scope_and_path", unique: true
     t.index ["scope_type", "scope_id"], name: "index_folders_on_scope_type_and_scope_id"
   end
+
+  add_check_constraint "folders", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL OR scope_type::text = 'Company'::text AND project_id IS NULL AND company_id = scope_id", name: "folders_tenant_columns", validate: false
 
   create_table "gates", force: :cascade do |t|
     t.bigint "board_task_id", null: false
@@ -471,6 +618,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["status"], name: "index_gates_on_status"
   end
 
+  create_table "identity_providers", force: :cascade do |t|
+    t.bigint "company_id"
+    t.jsonb "config", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.text "encrypted_secret"
+    t.string "kind", null: false
+    t.string "name"
+    t.string "scope", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id", "kind", "name"], name: "index_identity_providers_unique_company_connection", unique: true, where: "((scope)::text = 'company'::text)"
+    t.index ["company_id"], name: "index_identity_providers_on_company_id"
+    t.index ["kind"], name: "index_identity_providers_unique_deployment_kind", unique: true, where: "((scope)::text = 'deployment'::text)"
+    t.check_constraint "scope::text = 'deployment'::text AND company_id IS NULL OR scope::text = 'company'::text AND company_id IS NOT NULL", name: "identity_providers_scope_company_consistency"
+  end
+
   create_table "integration_data", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.datetime "expires_at"
@@ -478,6 +640,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "key", null: false
     t.datetime "updated_at", null: false
     t.jsonb "value", default: {}, null: false
+    t.index "((value ->> 'workspace_id'::text))", name: "index_integration_data_on_coder_workspace_lock", unique: true, where: "((key)::text ~~ 'coder:workspace_lock:%'::text)"
     t.index ["expires_at"], name: "ix_integration_data_expires_at", where: "(expires_at IS NOT NULL)"
     t.index ["integration_id", "key"], name: "ix_integration_data_integration_key", unique: true
     t.index ["integration_id"], name: "index_integration_data_on_integration_id"
@@ -489,6 +652,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.bigint "connected_by_id"
     t.datetime "created_at", null: false
     t.text "credentials"
+    t.bigint "github_installation_id"
     t.string "name", null: false
     t.bigint "project_id"
     t.string "provider", null: false
@@ -498,26 +662,47 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["azure_devops_installation_id"], name: "index_integrations_on_azure_devops_installation_id"
     t.index ["company_id", "provider"], name: "index_integrations_on_company_id_and_provider"
     t.index ["company_id"], name: "index_integrations_on_company_id"
+    t.index ["github_installation_id"], name: "index_integrations_on_github_installation_id"
+    t.index ["id", "company_id"], name: "index_integrations_on_id_and_company_id", unique: true
     t.index ["project_id", "provider"], name: "index_integrations_on_project_id_and_provider", where: "(project_id IS NOT NULL)"
     t.index ["project_id"], name: "index_integrations_on_project_id"
     t.index ["status"], name: "index_integrations_on_status"
   end
 
+  create_table "magic_link_tokens", force: :cascade do |t|
+    t.datetime "consumed_at"
+    t.datetime "created_at", null: false
+    t.datetime "expires_at", null: false
+    t.string "requested_ip"
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["expires_at"], name: "index_magic_link_tokens_on_expires_at"
+    t.index ["token_digest"], name: "index_magic_link_tokens_on_token_digest", unique: true
+    t.index ["user_id"], name: "index_magic_link_tokens_on_user_id"
+  end
+
   create_table "mcp_servers", force: :cascade do |t|
+    t.datetime "archived_at"
     t.jsonb "args", default: []
     t.string "auth_type", default: "none", null: false
     t.string "command"
+    t.bigint "company_id"
     t.jsonb "connector_manifest", default: {}, null: false
     t.string "connector_name"
     t.string "connector_version"
     t.datetime "created_at", null: false
     t.string "credential_scope", default: "shared", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.text "description"
     t.boolean "enabled", default: true, null: false
+    t.text "encrypted_env"
+    t.text "encrypted_headers"
     t.jsonb "env", default: {}
     t.jsonb "headers", default: {}
     t.string "kind", default: "custom", null: false
     t.string "name", null: false
+    t.bigint "project_id"
     t.bigint "scope_id"
     t.string "scope_type"
     t.jsonb "tool_drift", default: {}, null: false
@@ -526,11 +711,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "transport", default: "sse"
     t.datetime "updated_at", null: false
     t.string "url"
+    t.index ["company_id"], name: "index_mcp_servers_on_company_id"
     t.index ["connector_name"], name: "index_mcp_servers_on_connector_name"
     t.index ["id"], name: "index_mcp_servers_with_tool_drift", where: "(tool_drift <> '{}'::jsonb)"
-    t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true
+    t.index ["name", "scope_type", "scope_id"], name: "index_mcp_servers_on_name_and_scope_type_and_scope_id", unique: true, where: "(archived_at IS NULL)", nulls_not_distinct: true
+    t.index ["project_id"], name: "index_mcp_servers_on_project_id"
     t.index ["scope_type", "scope_id"], name: "index_mcp_servers_on_scope"
   end
+
+  add_check_constraint "mcp_servers", "project_id IS NULL AND company_id IS NULL OR scope_type IS NULL AND scope_id IS NULL AND project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "mcp_servers_tenant_columns", validate: false
 
   create_table "oauth_clients", force: :cascade do |t|
     t.string "authorization_endpoint"
@@ -551,6 +740,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   end
 
   create_table "oauth_credentials", force: :cascade do |t|
+    t.bigint "connected_by_id"
     t.datetime "created_at", null: false
     t.text "encrypted_access_token"
     t.text "encrypted_refresh_token"
@@ -564,13 +754,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "provider", null: false
     t.string "refresh_error"
     t.integer "refresh_failure_count", default: 0, null: false
+    t.string "refresh_lease_token"
+    t.datetime "refresh_lease_until"
+    t.string "resource"
     t.string "scopes"
     t.string "status", default: "pending", null: false
     t.string "token_type", default: "Bearer"
     t.datetime "updated_at", null: false
+    t.index ["connected_by_id"], name: "index_oauth_credentials_on_connected_by_id"
     t.index ["mcp_server_id"], name: "index_oauth_credentials_on_mcp_server_id"
     t.index ["oauth_client_id"], name: "index_oauth_credentials_on_oauth_client_id"
-    t.index ["owner_type", "owner_id", "oauth_client_id", "provider", "mcp_server_id"], name: "idx_oauth_credentials_unique_owner_client", unique: true
+    t.index ["owner_type", "owner_id", "oauth_client_id", "provider", "mcp_server_id"], name: "idx_oauth_credentials_unique_owner_client", unique: true, nulls_not_distinct: true
     t.index ["owner_type", "owner_id", "provider"], name: "idx_on_owner_type_owner_id_provider_1db0e9274f"
     t.index ["owner_type", "owner_id"], name: "index_oauth_credentials_on_owner"
     t.index ["status", "expires_at"], name: "index_oauth_credentials_on_status_and_expires_at"
@@ -610,6 +804,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["company_id", "name"], name: "index_projects_on_company_id_and_name", unique: true
     t.index ["company_id", "slug"], name: "index_projects_on_company_id_and_slug", unique: true
     t.index ["company_id"], name: "index_projects_on_company_id"
+    t.index ["id", "company_id"], name: "index_projects_on_id_and_company_id", unique: true
     t.index ["owner_id"], name: "index_projects_on_owner_id"
     t.index ["state"], name: "index_projects_on_state"
   end
@@ -628,6 +823,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
 
   create_table "repositories", force: :cascade do |t|
     t.string "clone_url", null: false
+    t.bigint "company_id"
     t.datetime "created_at", null: false
     t.text "description"
     t.string "external_id"
@@ -637,23 +833,41 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.bigint "integration_id"
     t.boolean "is_private", default: false
     t.datetime "last_fetched_at"
+    t.bigint "project_id"
     t.text "purpose"
     t.bigint "scope_id", null: false
     t.string "scope_type", null: false
     t.string "source_branch", default: "main", null: false
     t.datetime "updated_at", null: false
     t.string "webhook_secret"
+    t.index ["company_id"], name: "index_repositories_on_company_id"
     t.index ["integration_id"], name: "index_repositories_on_integration_id"
+    t.index ["project_id"], name: "index_repositories_on_project_id"
     t.index ["scope_type", "scope_id", "external_organization_id", "external_project_id", "external_id"], name: "idx_repositories_external_identity", unique: true, where: "(external_id IS NOT NULL)"
     t.index ["scope_type", "scope_id", "full_name"], name: "idx_repositories_scope_full_name", unique: true
     t.index ["scope_type", "scope_id"], name: "index_repositories_on_scope_type_and_scope_id"
     t.index ["webhook_secret"], name: "index_repositories_on_webhook_secret", unique: true
   end
 
+  add_check_constraint "repositories", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "repositories_tenant_columns", validate: false
+
+  create_table "scim_configurations", force: :cascade do |t|
+    t.bigint "company_id", null: false
+    t.datetime "created_at", null: false
+    t.boolean "enabled", default: true, null: false
+    t.bigint "identity_provider_id"
+    t.datetime "last_seen_at"
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_scim_configurations_on_company_id", unique: true
+    t.index ["identity_provider_id"], name: "index_scim_configurations_on_identity_provider_id"
+    t.index ["token_digest"], name: "index_scim_configurations_on_token_digest", unique: true
+  end
+
   create_table "session_admission_policies", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.boolean "enabled", default: false, null: false
-    t.boolean "paused", default: true, null: false
+    t.boolean "enabled", default: true, null: false
+    t.boolean "paused", default: false, null: false
     t.integer "revision", default: 1, null: false
     t.datetime "updated_at", null: false
     t.check_constraint "id = 1", name: "valid_session_policy"
@@ -675,6 +889,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.datetime "claimed_at"
     t.datetime "created_at", null: false
     t.text "last_error"
+    t.integer "launch_attempts", default: 0, null: false
     t.string "launch_state", default: "pending", null: false
     t.string "permit_token"
     t.jsonb "phase_state", default: {}, null: false
@@ -693,14 +908,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   end
 
   create_table "session_concurrency_limits", force: :cascade do |t|
+    t.bigint "company_id"
     t.datetime "created_at", null: false
     t.integer "max_sessions", null: false
+    t.bigint "project_id"
     t.bigint "scope_id", null: false
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_session_concurrency_limits_on_company_id"
+    t.index ["project_id"], name: "index_session_concurrency_limits_on_project_id"
     t.index ["scope_type", "scope_id"], name: "index_session_concurrency_limits_on_scope_type_and_scope_id", unique: true
-    t.check_constraint "max_sessions > 0 AND (scope_type::text = ANY (ARRAY['Project'::character varying, 'User'::character varying]::text[]))", name: "valid_session_scope_limit"
+    t.check_constraint "max_sessions > 0 AND (scope_type::text = ANY (ARRAY['Project'::character varying::text, 'Company'::character varying::text]))", name: "valid_session_scope_limit"
   end
+
+  add_check_constraint "session_concurrency_limits", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL OR scope_type::text = 'Company'::text AND project_id IS NULL AND company_id = scope_id", name: "session_concurrency_limits_tenant_columns", validate: false
 
   create_table "session_config_items", id: false, force: :cascade do |t|
     t.bigint "config_item_id", null: false
@@ -764,25 +985,34 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   end
 
   create_table "skills", force: :cascade do |t|
+    t.datetime "archived_at"
+    t.bigint "company_id"
     t.text "content"
     t.string "content_hash"
     t.datetime "created_at", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.text "description"
+    t.jsonb "files", default: {}, null: false
     t.integer "install_count", default: 0
     t.string "name", null: false
     t.string "origin", default: "registry", null: false
     t.string "package"
+    t.bigint "project_id"
     t.bigint "scope_id"
     t.string "scope_type"
     t.string "source"
     t.string "source_url"
     t.string "title"
     t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_skills_on_company_id"
     t.index ["origin"], name: "index_skills_on_origin"
     t.index ["package"], name: "index_skills_on_package"
-    t.index ["scope_type", "scope_id", "name"], name: "index_skills_on_scope_type_and_scope_id_and_name", unique: true
+    t.index ["project_id"], name: "index_skills_on_project_id"
+    t.index ["scope_type", "scope_id", "name"], name: "index_skills_on_scope_type_and_scope_id_and_name", unique: true, where: "(archived_at IS NULL)", nulls_not_distinct: true
     t.index ["scope_type", "scope_id"], name: "index_skills_on_scope_type_and_scope_id"
   end
+
+  add_check_constraint "skills", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "skills_tenant_columns", validate: false
 
   create_table "solid_queue_blocked_executions", force: :cascade do |t|
     t.string "concurrency_key", null: false
@@ -920,10 +1150,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.bigint "terminal_session_id"
     t.datetime "updated_at", null: false
     t.bigint "workflow_run_id", null: false
+    t.bigint "workflow_version_id"
     t.index ["step_id"], name: "index_step_runs_on_step_id"
     t.index ["terminal_session_id"], name: "index_step_runs_on_terminal_session_id"
     t.index ["workflow_run_id", "state"], name: "index_step_runs_on_workflow_run_id_and_state"
     t.index ["workflow_run_id"], name: "index_step_runs_on_workflow_run_id"
+    t.index ["workflow_version_id"], name: "index_step_runs_on_workflow_version_id", where: "(workflow_version_id IS NOT NULL)"
   end
 
   create_table "steps", force: :cascade do |t|
@@ -992,10 +1224,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.datetime "created_at", null: false
     t.text "file_data"
     t.string "name", null: false
+    t.string "public_token"
+    t.datetime "shared_at"
+    t.bigint "shared_by_id"
+    t.bigint "shared_in_session_id"
     t.string "tags", default: [], array: true
     t.datetime "updated_at", null: false
     t.index ["author_id"], name: "index_task_assets_on_author_id"
     t.index ["board_task_id"], name: "index_task_assets_on_board_task_id"
+    t.index ["public_token"], name: "index_task_assets_on_public_token", unique: true, where: "(public_token IS NOT NULL)"
+    t.index ["shared_by_id"], name: "index_task_assets_on_shared_by_id", where: "(shared_by_id IS NOT NULL)"
+    t.index ["shared_in_session_id"], name: "index_task_assets_on_shared_in_session_id", where: "(shared_in_session_id IS NOT NULL)"
   end
 
   create_table "task_comments", force: :cascade do |t|
@@ -1007,6 +1246,36 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "tags", default: [], array: true
     t.index ["author_id"], name: "index_task_comments_on_author_id"
     t.index ["board_task_id"], name: "index_task_comments_on_board_task_id"
+  end
+
+  create_table "template_installs", force: :cascade do |t|
+    t.string "commit_sha", null: false
+    t.datetime "created_at", null: false
+    t.string "idempotency_key", null: false
+    t.bigint "installed_by_id"
+    t.string "namespace", null: false
+    t.string "package_digest", null: false
+    t.bigint "project_id", null: false
+    t.string "slug", null: false
+    t.datetime "updated_at", null: false
+    t.integer "version", null: false
+    t.index ["installed_by_id", "idempotency_key"], name: "index_template_installs_on_installed_by_id_and_idempotency_key", unique: true
+    t.index ["installed_by_id"], name: "index_template_installs_on_installed_by_id"
+    t.index ["namespace", "slug"], name: "index_template_installs_on_namespace_and_slug"
+    t.index ["project_id"], name: "index_template_installs_on_project_id"
+  end
+
+  create_table "template_setup_items", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.jsonb "detail", default: {}, null: false
+    t.string "kind", null: false
+    t.integer "position", default: 0, null: false
+    t.string "ref", null: false
+    t.string "status", default: "pending", null: false
+    t.bigint "template_install_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["template_install_id", "ref"], name: "index_template_setup_items_on_template_install_id_and_ref", unique: true
+    t.index ["template_install_id"], name: "index_template_setup_items_on_template_install_id"
   end
 
   create_table "terminal_sessions", force: :cascade do |t|
@@ -1045,7 +1314,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "temporal_workflow_id"
     t.bigint "total_tokens", default: 0, null: false
     t.datetime "updated_at", null: false
-    t.bigint "user_id", null: false
+    t.bigint "user_id"
+    t.jsonb "version_ids", default: {}, null: false
     t.index ["company_id"], name: "index_terminal_sessions_on_company_id"
     t.index ["configured_agent_id"], name: "index_terminal_sessions_on_configured_agent_id"
     t.index ["mcp_key"], name: "index_terminal_sessions_on_mcp_key", unique: true
@@ -1087,6 +1357,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.bigint "tool_id", null: false
     t.datetime "updated_at", null: false
     t.index ["execution_id"], name: "index_tool_results_on_execution_id", unique: true
+    t.index ["state", "created_at"], name: "index_tool_results_on_state_and_created_at"
     t.index ["step_run_id"], name: "index_tool_results_on_step_run_id"
     t.index ["terminal_session_id"], name: "index_tool_results_on_terminal_session_id"
     t.index ["tool_id"], name: "index_tool_results_on_tool_id"
@@ -1094,7 +1365,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
 
   create_table "tools", force: :cascade do |t|
     t.text "command"
+    t.bigint "company_id"
     t.datetime "created_at", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.string "definition_digest"
     t.datetime "deleted_at"
     t.text "description"
@@ -1105,6 +1378,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "execution_mode", default: "container", null: false
     t.jsonb "input_schema", default: {}
     t.string "name", null: false
+    t.bigint "project_id"
     t.jsonb "required_config_items", default: []
     t.string "requires_integration"
     t.bigint "scope_id"
@@ -1113,12 +1387,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.jsonb "tags", default: [], null: false
     t.datetime "updated_at", null: false
     t.boolean "user_attachable", default: true, null: false
+    t.index ["company_id"], name: "index_tools_on_company_id"
     t.index ["deleted_at"], name: "index_tools_on_deleted_at"
     t.index ["name"], name: "index_tools_on_name_where_source_code", unique: true, where: "(((source)::text = 'code'::text) AND (deleted_at IS NULL))"
+    t.index ["project_id"], name: "index_tools_on_project_id"
     t.index ["scope_type", "scope_id", "name"], name: "index_tools_on_scope_type_and_scope_id_and_name", unique: true, where: "(deleted_at IS NULL)"
   end
 
   add_check_constraint "tools", "name::text !~~ 'mcp\\_\\_%'::text", name: "tools_name_not_managed_namespace", validate: false
+  add_check_constraint "tools", "project_id IS NULL AND company_id IS NULL OR scope_type IS NULL AND scope_id IS NULL AND project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "tools_tenant_columns", validate: false
 
   create_table "trigger_bindings", force: :cascade do |t|
     t.integer "cooldown_seconds", default: 0, null: false
@@ -1157,6 +1434,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.datetime "updated_at", null: false
     t.bigint "workflow_run_id"
     t.index ["dedup_key"], name: "index_trigger_dispatches_on_dedup_key", unique: true
+    t.index ["trigger_binding_id", "created_at"], name: "index_trigger_dispatches_on_binding_and_created_at"
     t.index ["trigger_binding_id"], name: "index_trigger_dispatches_on_trigger_binding_id"
     t.index ["trigger_event_id"], name: "index_trigger_dispatches_on_trigger_event_id"
     t.index ["workflow_run_id"], name: "index_trigger_dispatches_on_workflow_run_id"
@@ -1206,11 +1484,51 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["terminal_session_id"], name: "index_usage_statistics_on_terminal_session_id", unique: true
   end
 
+  create_table "user_identities", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "email"
+    t.boolean "email_verified", default: false, null: false
+    t.bigint "identity_provider_id", null: false
+    t.datetime "last_used_at"
+    t.string "subject", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["identity_provider_id", "subject"], name: "index_user_identities_on_identity_provider_id_and_subject", unique: true
+    t.index ["identity_provider_id"], name: "index_user_identities_on_identity_provider_id"
+    t.index ["user_id"], name: "index_user_identities_on_user_id"
+  end
+
+  create_table "user_session_proofs", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "identity_provider_id", null: false
+    t.datetime "proved_at", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_session_id", null: false
+    t.index ["identity_provider_id"], name: "index_user_session_proofs_on_identity_provider_id"
+    t.index ["user_session_id", "identity_provider_id"], name: "index_user_session_proofs_unique_pair", unique: true
+    t.index ["user_session_id"], name: "index_user_session_proofs_on_user_session_id"
+  end
+
+  create_table "user_sessions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "impersonator_id"
+    t.string "ip_address"
+    t.datetime "last_seen_at", null: false
+    t.datetime "revoked_at"
+    t.datetime "updated_at", null: false
+    t.string "user_agent"
+    t.bigint "user_id", null: false
+    t.index ["impersonator_id"], name: "index_user_sessions_on_impersonator_id"
+    t.index ["user_id", "revoked_at"], name: "index_user_sessions_on_user_id_and_revoked_at"
+    t.index ["user_id"], name: "index_user_sessions_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "avatar_url"
     t.datetime "created_at", null: false
     t.datetime "deleted_at"
     t.citext "email", null: false
+    t.text "encrypted_totp_secret"
     t.bigint "last_company_id"
     t.jsonb "mcp_enabled_tools"
     t.string "mcp_token_digest"
@@ -1218,10 +1536,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "name", null: false
     t.string "password_digest"
     t.string "provider"
+    t.datetime "sessions_revoked_at"
     t.boolean "share_active_sessions", default: false, null: false
     t.boolean "share_completed_sessions", default: true, null: false
     t.string "state", null: false
     t.boolean "super_admin", default: false, null: false
+    t.datetime "totp_confirmed_at"
     t.string "uid"
     t.datetime "updated_at", null: false
     t.index ["deleted_at"], name: "index_users_on_deleted_at", where: "(deleted_at IS NOT NULL)"
@@ -1229,6 +1549,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["mcp_token_digest"], name: "index_users_on_mcp_token_digest", unique: true
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
     t.index ["state"], name: "index_users_on_state"
+  end
+
+  create_table "webauthn_credentials", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "external_id", null: false
+    t.datetime "last_used_at"
+    t.string "nickname"
+    t.string "public_key", null: false
+    t.bigint "sign_count", default: 0, null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
+    t.index ["external_id"], name: "index_webauthn_credentials_on_external_id", unique: true
+    t.index ["user_id"], name: "index_webauthn_credentials_on_user_id"
   end
 
   create_table "webhook_endpoints", force: :cascade do |t|
@@ -1256,10 +1589,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.integer "file_size"
     t.string "name", null: false
     t.bigint "produced_by_step_run_id"
+    t.string "public_token"
     t.string "s3_key"
+    t.datetime "shared_at"
+    t.bigint "shared_by_id"
+    t.bigint "shared_in_session_id"
     t.datetime "updated_at", null: false
     t.bigint "workflow_run_id", null: false
     t.index ["produced_by_step_run_id"], name: "index_workflow_run_assets_on_produced_by_step_run_id"
+    t.index ["public_token"], name: "index_workflow_run_assets_on_public_token", unique: true, where: "(public_token IS NOT NULL)"
+    t.index ["shared_by_id"], name: "index_workflow_run_assets_on_shared_by_id", where: "(shared_by_id IS NOT NULL)"
+    t.index ["shared_in_session_id"], name: "index_workflow_run_assets_on_shared_in_session_id", where: "(shared_in_session_id IS NOT NULL)"
     t.index ["workflow_run_id"], name: "index_workflow_run_assets_on_workflow_run_id"
   end
 
@@ -1274,6 +1614,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.string "mode", default: "interactive", null: false
     t.bigint "project_id", null: false
     t.integer "relay_attempts", default: 0, null: false
+    t.datetime "relay_claimed_at"
     t.string "relay_error"
     t.string "relay_state", default: "dispatched", null: false
     t.jsonb "repository_ids", default: [], null: false
@@ -1298,17 +1639,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   end
 
   create_table "workflows", force: :cascade do |t|
+    t.bigint "company_id"
     t.jsonb "config", default: {}, null: false
     t.datetime "created_at", null: false
+    t.integer "current_version_number", default: 0, null: false
     t.datetime "deleted_at"
     t.text "description"
     t.string "name", null: false
+    t.bigint "project_id"
     t.datetime "published_at"
     t.bigint "published_by_id"
-    t.integer "scope_id", null: false
+    t.bigint "scope_id", null: false
     t.string "scope_type", null: false
     t.datetime "updated_at", null: false
+    t.index ["company_id"], name: "index_workflows_on_company_id"
     t.index ["deleted_at"], name: "index_workflows_on_deleted_at"
+    t.index ["project_id"], name: "index_workflows_on_project_id"
     t.index ["published_at"], name: "index_workflows_on_published_at", where: "(published_at IS NOT NULL)"
     t.index ["published_by_id"], name: "index_workflows_on_published_by_id"
     t.index ["scope_type", "scope_id", "name"], name: "index_workflows_on_scope_and_name_unique", unique: true, where: "(deleted_at IS NULL)"
@@ -1316,12 +1662,23 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
     t.index ["scope_type"], name: "index_workflows_on_system_scope", where: "((scope_type)::text = 'System'::text)"
   end
 
+  add_check_constraint "workflows", "project_id IS NULL AND company_id IS NULL OR scope_type::text = 'System'::text AND project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "workflows_tenant_columns", validate: false
+
   add_foreign_key "agent_credentials", "companies"
   add_foreign_key "agent_credentials", "users"
+  add_foreign_key "agents", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "agents", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_agents_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "agents", "projects", on_delete: :cascade, validate: false
   add_foreign_key "asset_versions", "assets", on_delete: :cascade
   add_foreign_key "asset_versions", "users", column: "uploaded_by_id", on_delete: :nullify
+  add_foreign_key "assets", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "assets", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_assets_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "assets", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "assets", "step_runs", on_delete: :nullify
+  add_foreign_key "assets", "terminal_sessions", column: "shared_in_session_id", on_delete: :nullify
   add_foreign_key "assets", "terminal_sessions", on_delete: :nullify
   add_foreign_key "assets", "users", column: "created_by_id", on_delete: :nullify
+  add_foreign_key "assets", "users", column: "shared_by_id", on_delete: :nullify
   add_foreign_key "azure_devops_deliveries", "azure_devops_subscriptions"
   add_foreign_key "azure_devops_installations", "companies"
   add_foreign_key "azure_devops_installations", "users", column: "approved_by_id", on_delete: :nullify
@@ -1346,22 +1703,43 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "column_workflow_bindings", "board_columns", on_delete: :cascade
   add_foreign_key "column_workflow_bindings", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "column_workflow_bindings", "workflows", on_delete: :cascade
+  add_foreign_key "company_auth_policies", "companies"
+  add_foreign_key "company_auth_policies", "identity_providers"
+  add_foreign_key "company_capacity_changes", "companies", on_delete: :cascade
+  add_foreign_key "company_capacity_usages", "companies", on_delete: :cascade
   add_foreign_key "company_memberships", "agent_credentials", column: "default_agent_credential_id", on_delete: :nullify
   add_foreign_key "company_memberships", "companies"
   add_foreign_key "company_memberships", "users"
   add_foreign_key "company_memberships", "users", column: "invited_by_id", on_delete: :nullify
+  add_foreign_key "config_items", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "config_items", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_config_items_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "config_items", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "entity_versions", "companies", on_delete: :cascade
+  add_foreign_key "entity_versions", "entity_versions", column: "restored_from_id", on_delete: :nullify
+  add_foreign_key "entity_versions", "projects", on_delete: :cascade
+  add_foreign_key "entity_versions", "terminal_sessions", on_delete: :nullify
+  add_foreign_key "entity_versions", "users", column: "author_id", on_delete: :nullify
   add_foreign_key "external_resources", "board_tasks", on_delete: :cascade
+  add_foreign_key "folders", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "folders", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_folders_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "folders", "projects", on_delete: :cascade, validate: false
   add_foreign_key "folders", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "gates", "board_tasks", on_delete: :cascade
   add_foreign_key "gates", "users", column: "creator_id", on_delete: :nullify
+  add_foreign_key "identity_providers", "companies"
   add_foreign_key "integration_data", "integrations", on_delete: :cascade
   add_foreign_key "integrations", "azure_devops_installations", on_delete: :restrict
   add_foreign_key "integrations", "companies"
   add_foreign_key "integrations", "projects", on_delete: :cascade
   add_foreign_key "integrations", "users", column: "connected_by_id", on_delete: :nullify
+  add_foreign_key "magic_link_tokens", "users"
+  add_foreign_key "mcp_servers", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "mcp_servers", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_mcp_servers_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "mcp_servers", "projects", on_delete: :cascade, validate: false
   add_foreign_key "oauth_clients", "mcp_servers", on_delete: :cascade
   add_foreign_key "oauth_credentials", "mcp_servers", on_delete: :cascade
   add_foreign_key "oauth_credentials", "oauth_clients"
+  add_foreign_key "oauth_credentials", "users", column: "connected_by_id", on_delete: :nullify
   add_foreign_key "project_collaborators", "projects", on_delete: :cascade
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "project_favorites", "projects", on_delete: :cascade
@@ -1369,9 +1747,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "received_webhooks", "webhook_endpoints", on_delete: :cascade
+  add_foreign_key "repositories", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "repositories", "integrations", column: ["integration_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_repositories_integration_company", validate: false
   add_foreign_key "repositories", "integrations", on_delete: :cascade
+  add_foreign_key "repositories", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_repositories_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "repositories", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "scim_configurations", "companies"
+  add_foreign_key "scim_configurations", "identity_providers"
   add_foreign_key "session_admissions", "session_admission_pools"
   add_foreign_key "session_admissions", "terminal_sessions"
+  add_foreign_key "session_concurrency_limits", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "session_concurrency_limits", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_session_concurrency_limits_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "session_concurrency_limits", "projects", on_delete: :cascade, validate: false
   add_foreign_key "session_input_assets", "assets", on_delete: :cascade
   add_foreign_key "session_input_assets", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_logs", "terminal_sessions", on_delete: :cascade
@@ -1384,12 +1771,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "session_skills", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_tools", "terminal_sessions", on_delete: :cascade
   add_foreign_key "session_tools", "tools", on_delete: :cascade
+  add_foreign_key "skills", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "skills", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_skills_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "skills", "projects", on_delete: :cascade, validate: false
   add_foreign_key "solid_queue_blocked_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_claimed_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_failed_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_ready_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_recurring_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
   add_foreign_key "solid_queue_scheduled_executions", "solid_queue_jobs", column: "job_id", on_delete: :cascade
+  add_foreign_key "step_runs", "entity_versions", column: "workflow_version_id", on_delete: :nullify
   add_foreign_key "step_runs", "steps", on_delete: :cascade
   add_foreign_key "step_runs", "terminal_sessions"
   add_foreign_key "step_runs", "workflow_runs", on_delete: :cascade
@@ -1399,17 +1790,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "sub_step_runs", "sub_steps"
   add_foreign_key "sub_steps", "steps"
   add_foreign_key "task_assets", "board_tasks", on_delete: :cascade
+  add_foreign_key "task_assets", "terminal_sessions", column: "shared_in_session_id", on_delete: :nullify
   add_foreign_key "task_assets", "users", column: "author_id", on_delete: :nullify
+  add_foreign_key "task_assets", "users", column: "shared_by_id", on_delete: :nullify
   add_foreign_key "task_comments", "board_tasks", on_delete: :cascade
   add_foreign_key "task_comments", "users", column: "author_id", on_delete: :nullify
+  add_foreign_key "template_installs", "projects", on_delete: :cascade
+  add_foreign_key "template_installs", "users", column: "installed_by_id", on_delete: :nullify
+  add_foreign_key "template_setup_items", "template_installs", on_delete: :cascade
   add_foreign_key "terminal_sessions", "agents", column: "configured_agent_id", on_delete: :nullify
   add_foreign_key "terminal_sessions", "companies"
   add_foreign_key "terminal_sessions", "projects", on_delete: :nullify
-  add_foreign_key "terminal_sessions", "users"
+  add_foreign_key "terminal_sessions", "users", on_delete: :nullify
   add_foreign_key "tool_files", "tools", on_delete: :cascade
   add_foreign_key "tool_results", "step_runs", on_delete: :nullify
   add_foreign_key "tool_results", "terminal_sessions", on_delete: :nullify
   add_foreign_key "tool_results", "tools", on_delete: :cascade
+  add_foreign_key "tools", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "tools", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_tools_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "tools", "projects", on_delete: :cascade, validate: false
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "integrations", on_delete: :nullify
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
@@ -1419,18 +1818,32 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_18_090000) do
   add_foreign_key "trigger_dispatches", "trigger_events", on_delete: :cascade
   add_foreign_key "trigger_dispatches", "workflow_runs", on_delete: :nullify
   add_foreign_key "trigger_events", "board_tasks", on_delete: :nullify
+  add_foreign_key "trigger_events", "companies", on_delete: :cascade
   add_foreign_key "trigger_events", "projects", on_delete: :nullify
   add_foreign_key "trigger_events", "users", column: "actor_id", on_delete: :nullify
   add_foreign_key "usage_statistics", "terminal_sessions"
+  add_foreign_key "user_identities", "identity_providers"
+  add_foreign_key "user_identities", "users"
+  add_foreign_key "user_session_proofs", "identity_providers"
+  add_foreign_key "user_session_proofs", "user_sessions"
+  add_foreign_key "user_sessions", "users", column: "impersonator_id", on_delete: :nullify
+  add_foreign_key "user_sessions", "users", on_delete: :cascade
+  add_foreign_key "users", "companies", column: "last_company_id", on_delete: :nullify
+  add_foreign_key "webauthn_credentials", "users"
   add_foreign_key "webhook_endpoints", "companies", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "projects", on_delete: :cascade
   add_foreign_key "webhook_endpoints", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "step_runs", column: "produced_by_step_run_id", on_delete: :nullify
+  add_foreign_key "workflow_run_assets", "terminal_sessions", column: "shared_in_session_id", on_delete: :nullify
+  add_foreign_key "workflow_run_assets", "users", column: "shared_by_id", on_delete: :nullify
   add_foreign_key "workflow_run_assets", "workflow_runs", on_delete: :cascade
   add_foreign_key "workflow_runs", "agent_credentials", column: "failed_agent_credential_id", on_delete: :nullify
   add_foreign_key "workflow_runs", "board_tasks", on_delete: :nullify
   add_foreign_key "workflow_runs", "projects", on_delete: :cascade
   add_foreign_key "workflow_runs", "users", on_delete: :nullify
   add_foreign_key "workflow_runs", "workflows", on_delete: :cascade
+  add_foreign_key "workflows", "companies", on_delete: :cascade, validate: false
+  add_foreign_key "workflows", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_workflows_project_company", on_delete: :cascade, validate: false
+  add_foreign_key "workflows", "projects", on_delete: :cascade, validate: false
   add_foreign_key "workflows", "users", column: "published_by_id", on_delete: :nullify
 end

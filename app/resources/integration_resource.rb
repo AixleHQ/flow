@@ -23,12 +23,12 @@ class IntegrationResource < ApplicationResource
   # installation row over the settings copy: a stale or edited settings blob
   # must never widen what the UI reports as connected.
 
-  typelize :string?
+  typelize "string | null"
   attribute :azure_auth_mode do |integration|
     integration.azure_devops? ? integration.azure_auth_mode : nil
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :azure_organization do |integration|
     integration.azure_devops? ? integration.azure_organization_slug : nil
   end
@@ -36,7 +36,7 @@ class IntegrationResource < ApplicationResource
   # A connection covers one or more Azure projects. The list is what the UI
   # shows; `azure_project_name` stays for the single-project case so a card that
   # names one project keeps reading naturally.
-  typelize :string?
+  typelize "string | null"
   attribute :azure_project_name do |integration|
     integration.azure_devops? ? integration.azure_project_name : nil
   end
@@ -54,7 +54,7 @@ class IntegrationResource < ApplicationResource
     integration.azure_project_ids.map { |id| names[id].presence || id }
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :azure_identity do |integration|
     integration.azure_devops? ? integration.settings&.dig("identity_display_name") : nil
   end
@@ -64,7 +64,7 @@ class IntegrationResource < ApplicationResource
     integration.azure_devops? ? integration.azure_enabled_capabilities : []
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :azure_url do |integration|
     next nil unless integration.azure_devops?
 
@@ -77,16 +77,16 @@ class IntegrationResource < ApplicationResource
     integration.project_id.present? ? "project" : "company"
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :installation_id do |integration|
-    integration.installation_id
+    integration.credentials_data_for_display["installation_id"]
   end
 
   # ----- GitHub -----
 
   # "app" or "pat" — which credential this connection runs on. Null for every
   # other provider, so the card can key off it without first checking provider.
-  typelize :string?
+  typelize "string | null"
   attribute :github_auth_mode do |integration|
     integration.github_auth_mode
   end
@@ -103,7 +103,7 @@ class IntegrationResource < ApplicationResource
   # Where "Manage on GitHub" goes. An App installation has a settings page;
   # a PAT has none, so the link goes to the account the token acts as — which
   # is the thing someone opening it wants to check.
-  typelize :string?
+  typelize "string | null"
   attribute :github_url do |integration|
     next nil unless integration.github?
 
@@ -112,7 +112,7 @@ class IntegrationResource < ApplicationResource
       next login.present? ? "https://github.com/#{login}" : nil
     end
 
-    iid = integration.installation_id
+    iid = integration.github_installation_id.presence || integration.credentials_data_for_display["installation_id"]
     next nil if iid.blank?
 
     app_slug = Settings.github.app_slug
@@ -123,33 +123,33 @@ class IntegrationResource < ApplicationResource
     end
   end
 
-  typelize "{ id: number; name: string }"
+  typelize "{ id: number | null; name: string }"
   attribute :connected_by do |integration|
     user = integration.connected_by
     { id: user&.id, name: user&.name || User::DELETED_DISPLAY_NAME }
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :coder_url do |integration|
-    integration.coder? ? integration.coder_url : nil
+    integration.coder? ? integration.credentials_data_for_display["coder_url"] : nil
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :coder_default_template do |integration|
     integration.coder? ? integration.coder_default_template : nil
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :coder_machine_prefix do |integration|
     integration.coder? ? integration.coder_machine_prefix : nil
   end
 
-  typelize :number?
+  typelize "number | null"
   attribute :coder_lock_ttl_minutes do |integration|
     integration.coder? ? integration.coder_lock_ttl_minutes : nil
   end
 
-  typelize :string?
+  typelize "string | null"
   attribute :slack_request_url do |integration|
     integration.slack? ? integration.settings&.dig("request_url") : nil
   end

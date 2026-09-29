@@ -8,16 +8,15 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     user: Field::BelongsTo.with_options(searchable: true, searchable_fields: %w[email name]),
     agent_type: Field::Select.with_options(
       include_blank: false,
-      collection: %w[claude_code cursor_cli codex gemini_cli antigravity_cli grok kiro_cli]
+      collection: CompanyMembership::AVAILABLE_AGENTS
     ),
     status: Field::String,
-    metadata: Field::String.with_options(truncate: 100),
+    metadata: Field::String.with_options(truncate: 100, searchable: false),
     expires_at: Field::DateTime,
     last_used_at: Field::DateTime,
     created_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
     updated_at: Field::DateTime.with_options(format: "%B %-d, %Y at %l:%M %p"),
-    # Virtual field for config data preview (read-only)
-    config_keys: Field::String.with_options(truncate: 200)
+    login_blocks: Field::String.with_options(truncate: 200, searchable: false)
   }.freeze
 
   COLLECTION_ATTRIBUTES = %i[
@@ -34,7 +33,7 @@ class AgentCredentialDashboard < Administrate::BaseDashboard
     user
     agent_type
     status
-    config_keys
+    login_blocks
     metadata
     expires_at
     last_used_at

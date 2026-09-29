@@ -16,7 +16,9 @@ class Web::ProfileController < Web::ApplicationController
                                        .invited
                                        .includes(:company)
                                        .map { |m| MembershipResource.new(m).to_h },
+      project_handovers: project_handovers,
       language_options: CompanyMembership::AGENT_LANGUAGES,
+      other_sessions_count: current_user.user_sessions.live.where.not(id: current_user_session&.id).count,
       agent_models: current_membership&.agent_models_for_props || [],
       cable_stream: inertia_cable_stream(current_user),
       # Plan-usage windows are fetched from runtime vendors over HTTP, so they
@@ -33,6 +35,22 @@ class Web::ProfileController < Web::ApplicationController
   # page, because connecting a client and choosing what that client may do are
   # a task of their own — and the tool picker alone is longer than the rest of
   # the profile put together.
+  # The person's own security surface: their passkeys, their one-time codes and
+  # every live session they hold. All of it is theirs — no company-admin surface
+  # reaches these (AD-18).
+  def security
+    render inertia: "Profile/Security", props: {
+      passkeys: current_user.webauthn_credentials.order(created_at: :desc).map { |c|
+        { id: c.id, name: c.display_name, last_used_at: c.last_used_at, created_at: c.created_at }
+      },
+      totp_enabled: current_user.totp_enabled?,
+      sessions: UserSession.live.where(user: current_user).order(created_at: :desc).map { |s|
+        { id: s.id, ip: s.ip_address, user_agent: s.user_agent, last_seen_at: s.last_seen_at,
+          created_at: s.created_at, current: s.id == current_user_session&.id }
+      }
+    }
+  end
+
   def mcp
     render inertia: "Profile/Mcp", props: {
       mcp: {
@@ -47,7 +65,13 @@ class Web::ProfileController < Web::ApplicationController
         # renders that as everything checked, and sends nil back for it.
         enabled_tools: current_user.mcp_enabled_tools
       }
-    }
+    }, encrypt_history: true
+  end
+
+  # Ends every other browser this person is signed in on; this one stays.
+  def sign_out_other_sessions
+    ended = UserSession.revoke_all_for!(current_user, except: current_user_session)
+    redirect_to profile_path, notice: "Signed out of #{ended} other #{'session'.pluralize(ended)}"
   end
 
   # Enable / rotate in one action: the previous token stops working the
@@ -164,6 +188,15 @@ class Web::ProfileController < Web::ApplicationController
   end
 
   private
+
+  # Leaving a company you own projects in hands them over first.
+  def project_handovers
+    current_user.company_memberships.where.not(state: "revoked")
+                .where(company_id: current_user.owned_projects.select(:company_id))
+                .includes(:company).map do |m|
+      { membership_id: m.id, **ProjectHandover.for_company(m.company, owner: current_user) }
+    end
+  end
 
   def require_auth
     redirect_to login_path unless signed_in?

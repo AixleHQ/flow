@@ -11,6 +11,7 @@
 # props), but they can never be deleted because they can never be empty.
 class Folder < ApplicationRecord
   belongs_to :scope, polymorphic: true
+  include TenantColumns
   # Optional so a folder outlives the user who created it — permanent user
   # deletion nullifies the column (see NullifyFoldersCreatedByFk).
   belongs_to :created_by, class_name: "User", optional: true
@@ -92,16 +93,21 @@ class Folder < ApplicationRecord
   end
 
   def descendant_folder_scope
-    self.class.where(scope_type: scope_type, scope_id: scope_id).where("path LIKE ?", "#{path}/%")
+    self.class.where(scope_type: scope_type, scope_id: scope_id).where("path LIKE ?", subtree_pattern)
   end
 
   def descendant_asset_scope
     Asset.active.where(scope_type: scope_type, scope_id: scope_id)
-         .where("folder = :path OR folder LIKE :prefix", path: path, prefix: "#{path}/%")
+         .where("folder = :path OR folder LIKE :prefix", path: path, prefix: subtree_pattern)
   end
 
   def empty?
     descendant_folder_scope.none? && descendant_asset_scope.none?
+  end
+
+  # The path's own LIKE wildcards are literal (see FolderService#subtree_pattern).
+  def subtree_pattern
+    "#{self.class.sanitize_sql_like(path)}/%"
   end
 
   private

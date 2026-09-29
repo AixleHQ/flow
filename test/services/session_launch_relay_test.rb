@@ -6,7 +6,7 @@ class SessionLaunchRelayTest < ActiveSupport::TestCase
   setup do
     @user = create(:user, :with_company)
     @project = create(:project, owner: @user, company: @user.companies.first)
-    with_ceiling(1)
+    with_scope_defaults(project: 1)
     @session = create(:terminal_session, user: @user, project: @project)
     @admission = SessionAdmissionService.enqueue!(@session)
     SessionAdmissionService.drain!
@@ -24,6 +24,23 @@ class SessionLaunchRelayTest < ActiveSupport::TestCase
     assert_equal "acknowledged", @admission.reload.launch_state
     assert_equal "existing-run", @session.reload.temporal_run_id
     assert_equal 1, SessionAdmission.occupied.count
+  end
+
+  test "a launch that keeps failing is given up, with its reason, instead of holding its slot forever" do
+    TemporalService.stubs(:start_workflow).returns({ ok: false, error: "namespace not found" })
+    TemporalService.stubs(:cancel_workflow).returns({ ok: false, error: "not found" })
+
+    SessionLaunchRelay::MAX_LAUNCH_ATTEMPTS.times do
+      SessionLaunchRelay.dispatch(@admission.reload)
+      @admission.update!(claimed_at: 3.minutes.ago)
+    end
+    assert_nil @admission.reload.stop_requested_at
+
+    SessionLaunchRelay.dispatch(@admission.reload)
+
+    assert @admission.reload.stop_requested_at, "the abandoned launch is stopped, so its slot can be released"
+    assert_equal "failed", @session.reload.state
+    assert_match(/Could not start after #{SessionLaunchRelay::MAX_LAUNCH_ATTEMPTS} attempts: .*namespace not found/, @session.error_message)
   end
 
   test "the launch path refreshes agent credentials before building a manifest" do

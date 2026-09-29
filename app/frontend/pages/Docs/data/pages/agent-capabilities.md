@@ -32,6 +32,12 @@ The **Skills** page has two ways in:
 Installed skills are listed with their install counts. Attach a skill where it
 should apply, and agents follow it when the work matches.
 
+Installing keeps a copy of the skill's files, and every session uses that copy.
+A change the publisher makes afterwards reaches your sessions only when you
+install the skill again. A skill that a security audit rates **high** or
+**critical** asks you to confirm before it installs, whether you install it from
+the catalog or through the personal MCP tools.
+
 ## Connectors
 
 The **Connectors** page manages external tool servers. Add one from the

@@ -13,6 +13,27 @@ class AgentCredentialTest < ActiveSupport::TestCase
     @membership = @user.company_memberships.sole
   end
 
+  # --- Login blocks, without decrypting ---
+
+  # The current user (credentials included) is serialized on every page.
+  test "the names of the login blocks are known without decrypting the credential" do
+    credential = create(:agent_credential, user: @user, agent_type: "claude_code")
+    credential.update!(config_data: { "claudeAiOauth" => { "accessToken" => "t" }, "designOauth" => {} })
+
+    # Unreadable ciphertext: an answer here cannot have come from decrypting it.
+    credential.update_column(:encrypted_config_data, "not-a-ciphertext")
+
+    assert_equal %w[claudeAiOauth designOauth], AgentCredential.find(credential.id).config_keys
+  end
+
+  test "a credential written before the names were recorded still answers them" do
+    credential = create(:agent_credential, user: @user, agent_type: "claude_code")
+    credential.update!(config_data: { "primaryApiKey" => "k" })
+    credential.update_column(:metadata, credential.metadata.except("config_keys"))
+
+    assert_equal %w[primaryApiKey], AgentCredential.find(credential.id).config_keys
+  end
+
   # --- Auto-set default on creation ---
 
   test "first credential sets the membership default_agent_credential" do
@@ -270,16 +291,12 @@ class AgentCredentialTest < ActiveSupport::TestCase
     codex = create(:agent_credential, user: @user, agent_type: "codex")
     cursor = create(:agent_credential, user: @user, agent_type: "cursor_cli")
     gemini = create(:agent_credential, user: @user, agent_type: "gemini_cli")
-    # Grok tokens do expire, but xAI publishes no token endpoint to refresh them
-    # server-side — the CLI rotates them in-container and cleanup re-captures the blob.
-    grok = create(:agent_credential, user: @user, agent_type: "grok")
 
     refreshable = AgentCredential.refreshable
     assert_includes refreshable, claude
     assert_includes refreshable, codex
     assert_includes refreshable, cursor
     refute_includes refreshable, gemini
-    refute_includes refreshable, grok
   end
 
   test "refresh_due returns creds expiring within the window and excludes far-future ones" do
@@ -410,13 +427,18 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal false, cred.unrecoverably_expired?(excluding_session_id: launching.id) # rubocop:disable Minitest/RefuteFalse
   end
 
-  test "unrecoverably_expired? is true for an expired agent that cannot refresh at all" do
+  # A Grok login captured before the CLI stored refresh tokens: nothing renews it, and the
+  # launch-time top-up is what says so instead of starting a session that cannot sign in.
+  test "refresh_if_expiring! condemns an expired login that carries no refresh token" do
     cred = create(:agent_credential, user: @user, agent_type: "grok",
                                      config_data: { "auth" => { "default" => { "key" => "tok",
                                                                               "expires_at" => 1.minute.ago.iso8601 } } })
 
-    assert cred.base_login_expired?
-    assert cred.unrecoverably_expired?
+    result = nil
+    assert_error_reported(AgentCredential::RefreshFailed) { result = cred.refresh_if_expiring! }
+
+    assert result[:permanent]
+    assert_equal "error", cred.reload.status
   end
 
   # --- without_live_session scope (keeps the sweep off tokens a container holds) ---
@@ -507,6 +529,20 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal "old-tok", cred.reload.config_data.dig("claudeAiOauth", "accessToken")
   end
 
+  # A static refresh token stays valid in the holder's container, so the launch tops up.
+  test "refresh_if_expiring! does not defer to a holder when the refresh token does not rotate" do
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
+                                     config_data: { "accessToken" => "old", "refreshToken" => "old" })
+    cred.update_column(:expires_at, 20.minutes.from_now)
+    create(:terminal_session, user: @user, company_id: cred.company_id,
+                              agent_type: "cursor_cli", state: "running")
+    stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL)
+      .to_return(status: 200, headers: { "Content-Type" => "application/json" },
+                 body: { access_token: "new", id_token: "id", shouldLogout: false }.to_json)
+
+    assert_equal :refreshed, cred.refresh_if_expiring![:status]
+  end
+
   # The session being launched is the one asking, and its container has not been
   # handed anything yet — it must not block its own top-up.
   test "refresh_if_expiring! ignores the session it is launching for" do
@@ -519,6 +555,129 @@ class AgentCredentialTest < ActiveSupport::TestCase
     result = cred.refresh_if_expiring!(excluding_session_id: launching.id)
 
     assert_equal :refreshed, result[:status]
+  end
+
+  # --- signed_in_at: a person signing in, not a token refresh ---
+
+  test "a new authorization records when the user signed in; a refresh does not move it" do
+    travel_to Time.zone.parse("2026-09-28 17:40:00 UTC") do
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_config(expires_at: 8.hours.from_now),
+                                     new_authorization: true)
+    end
+    travel_to Time.zone.parse("2026-09-29 01:30:00 UTC") do
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_config(expires_at: 8.hours.from_now))
+    end
+
+    cred = AgentCredential.find_by!(user: @user, agent_type: "claude_code")
+    assert_equal Time.zone.parse("2026-09-28 17:40:00 UTC"), cred.signed_in_at
+  end
+
+  # --- renew! (every refresh goes through here) ---
+
+  # An API key has nothing to refresh, so a failed attempt's error would otherwise stay
+  # forever — one transient failure away from condemning a working credential.
+  test "renew! clears a stale error from a credential with no expiry" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code", config_data: { "primaryApiKey" => "sk-ant" })
+    cred.mark_refresh_error!("PG::UndefinedColumn")
+    cred.mark_refresh_error!("PG::UndefinedColumn")
+
+    assert_equal :not_needed, cred.renew!(source: :sweep)[:status]
+
+    cred.reload
+    assert_equal "active", cred.status
+    assert_nil cred.refresh_error
+    assert_equal 0, cred.refresh_failure_count
+  end
+
+  test "renew! leaves the failure count of a token that simply is not due yet" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: refreshable_claude_config(expires_at: 2.hours.from_now))
+    cred.mark_refresh_error!("network timeout")
+
+    assert_equal :not_needed, cred.renew!(source: :sweep)[:status]
+
+    assert_equal 1, cred.reload.refresh_failure_count
+  end
+
+  test "renew! records a successful refresh and clears an earlier failure" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: refreshable_claude_config(expires_at: 5.minutes.from_now))
+    cred.mark_refresh_error!("network timeout")
+    stub_token_endpoint
+
+    assert_no_error_reported { assert_equal :refreshed, cred.renew!(source: :sweep)[:status] }
+
+    cred.reload
+    assert_nil cred.refresh_error
+    assert_equal 0, cred.refresh_failure_count
+  end
+
+  test "renew! condemns a rejected grant and reports it to the error tracker" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: refreshable_claude_config(expires_at: 5.minutes.from_now))
+    stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+      .to_return(status: 400, body: { error: "invalid_grant" }.to_json,
+                 headers: { "Content-Type" => "application/json" })
+
+    report = assert_error_reported(AgentCredential::RefreshFailed) { cred.renew!(source: :sweep) }
+
+    assert_equal "error", cred.reload.status
+    assert_equal AgentCredential::REFRESH_ERROR_SOURCE, report.source
+    assert_equal({ agent_type: "claude_code", refresh_source: "sweep", permanent: true },
+                 report.context.slice(:agent_type, :refresh_source, :permanent))
+  end
+
+  test "renew! turns an adapter that raises into a recorded, reported transient failure" do
+    cred = create(:agent_credential, user: @user, agent_type: "cursor_cli",
+                                     config_data: { "accessToken" => "old", "refreshToken" => "r1" })
+    stub_request(:post, Agents::CursorCliAdapter::CURSOR_AUTH_URL).to_raise(Errno::ECONNRESET)
+
+    assert_error_reported(AgentCredential::RefreshFailed) { cred.renew!(source: :launch) }
+
+    cred.reload
+    assert_equal "active", cred.status
+    assert_equal 1, cred.refresh_failure_count
+    assert_match(/ECONNRESET/, cred.refresh_error)
+  end
+
+  # The provider call runs outside any transaction: rolling back the write of a
+  # refresh token the provider has already rotated would lose the only valid one.
+  test "refresh_if_expiring! calls the provider with no transaction open" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: refreshable_claude_config(expires_at: 20.minutes.from_now))
+    open_transactions = nil
+    stub_request(:post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL).to_return do
+      open_transactions = ActiveRecord::Base.connection.open_transactions
+      { status: 200, body: { access_token: "new-tok", refresh_token: "new-ref", expires_in: 3_600 }.to_json,
+        headers: { "Content-Type" => "application/json" } }
+    end
+    baseline = ActiveRecord::Base.connection.open_transactions
+
+    cred.refresh_if_expiring!
+
+    assert_equal baseline, open_transactions
+  end
+
+  test "a launch that finds another refresh under way does not refresh again" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: refreshable_claude_config(expires_at: 20.minutes.from_now))
+    AgentCredential.where(id: cred.id).update_all(refresh_lease_until: 0.5.seconds.from_now, refresh_lease_token: "other")
+
+    result = cred.refresh_if_expiring!
+
+    # That refresher never renewed it, so the launch says so instead of replaying the grant.
+    assert_equal :error, result[:status]
+    assert_not_requested :post, Agents::ClaudeCodeAdapter::OAUTH_TOKEN_URL
+  end
+
+  test "the refresh lease is given back, and a lapsed one can be taken" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code")
+
+    assert_equal :done, cred.with_refresh_lease { :done }
+    assert_nil cred.reload.refresh_lease_until
+
+    AgentCredential.where(id: cred.id).update_all(refresh_lease_until: 1.minute.ago, refresh_lease_token: "crashed")
+    assert_equal :done, cred.with_refresh_lease { cred.with_refresh_lease { :done } }
   end
 
   # --- status / refresh error lifecycle ---

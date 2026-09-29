@@ -91,6 +91,29 @@ class WorkflowTest < ActiveSupport::TestCase
     assert_equal "project", build(:workflow, scope: @project).scope_indicator
   end
 
+  # Deleting a workflow must stop everything that could start it again.
+  test "soft_delete switches its triggers off and they no longer match events" do
+    wf = create(:workflow, scope: @project)
+    user = create(:user, company: @project.company)
+    binding = create(:trigger_binding, project: @project, workflow: wf, created_by: user, event_type: "webhook.received")
+    event = create(:trigger_event, event_type: "webhook.received", project: @project)
+    assert_includes TriggerBinding.for_event(event), binding
+
+    wf.soft_delete!
+
+    assert_not binding.reload.enabled
+    assert_not binding.live?
+    assert_not_includes TriggerBinding.for_event(event), binding
+  end
+
+  test "soft_delete is refused while a run is live" do
+    wf = create(:workflow, scope: @project)
+    create(:workflow_run, :running, workflow: wf, project: @project, user: create(:user, company: @project.company))
+
+    assert_raises(ActiveRecord::RecordNotDestroyed) { wf.soft_delete! }
+    assert_nil wf.reload.deleted_at
+  end
+
   test "soft_delete sets deleted_at" do
     wf = create(:workflow, scope: @project)
     assert_nil wf.deleted_at
@@ -145,5 +168,15 @@ class WorkflowTest < ActiveSupport::TestCase
       assert_equal [ kept.id ], preloaded.visible_steps.map(&:id)
       assert_equal 1, preloaded.visible_steps.first.sub_steps.size
     end
+  end
+
+  test "rejects base resource ids of another project" do
+    other = create(:project, :standalone)
+    workflow = build(:workflow, scope: @project,
+                                config: { "base_mcp_server_ids" => [ create(:mcp_server, scope: other).id ],
+                                          "base_skill_ids" => [ create(:skill, scope: @project).id ] })
+
+    assert_not workflow.valid?
+    assert_match(/base_mcp_server_ids contains ids outside this project/, workflow.errors[:config].to_sentence)
   end
 end
