@@ -32,7 +32,8 @@ export const TrialBanner = () => {
         {blocked ? (
           <>
             You have used all <span className={classes.figure}>{trial.allowanceHours}</span> of your free queue-hours,
-            so no new sessions start. Anything already running finishes. Talk to us to carry on.
+            so no new sessions start. Anything already running finishes.{' '}
+            {trial.canPay ? 'Add a card to carry on.' : 'Talk to us to carry on.'}
           </>
         ) : (
           <>

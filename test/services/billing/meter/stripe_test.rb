@@ -45,7 +45,7 @@ class Billing::Meter::StripeTest < ActiveSupport::TestCase
     result = @adapter.deliver(report(rows))
 
     assert_equal 1, @client.meter_events.size
-    assert_match(/sent=0:already=1/, result)
+    assert_match(/sent=0:already=1:unbilled=0/, result)
   end
 
   test "the identifier names the company and the hour" do
@@ -54,15 +54,17 @@ class Billing::Meter::StripeTest < ActiveSupport::TestCase
     assert_equal "capacity:#{@acme.id}:#{@hour.to_i}", @client.meter_events.sole.identifier
   end
 
-  # It should not happen — a company is billable only once somebody has paid — but
-  # one missing id must not cost everybody else their hour.
-  test "a company with no customer is skipped, and the rest are still sent" do
-    orphan = create(:company)
+  # Ordinary, not exceptional: our own company is `active` because we say so, not
+  # because anyone pays us, and it will never have a Stripe customer. It is
+  # counted rather than logged, so a permanent condition does not produce a line
+  # per company per hour.
+  test "a company nobody bills is counted, and the rest are still sent" do
+    ours = create(:company)
 
-    result = @adapter.deliver(report(@acme.id.to_s => 60, orphan.id.to_s => 60))
+    result = @adapter.deliver(report(@acme.id.to_s => 60, ours.id.to_s => 60))
 
     assert_equal [ "cus_acme" ], @client.meter_events.map(&:customer_id)
-    assert_match(/sent=1:already=0/, result)
+    assert_match(/sent=1:already=0:unbilled=1/, result)
   end
 
   test "an hour with nothing billable sends nothing and still answers" do
