@@ -153,8 +153,21 @@ module Agents
     # @return [Boolean] whether the container took it
     def deliver_credential(runtime, container_id, credentials)
       credential_files(credentials).all? do |path, content|
-        runtime.write_file(container_id, path, content, uid: container_uid, gid: container_uid)
+        options = { uid: container_uid, gid: container_uid }.merge(private_file_write_options(path))
+        runtime.write_file(container_id, path, content, **options)
       end
+    end
+
+    # Files the CLI refuses to read unless only its own user can (Claude's Platform profile
+    # rejects a group/world-readable credentials file). Written 0600 and agent-owned.
+    def private_file_paths
+      []
+    end
+
+    # Extra write_file options for one path: owner-only mode, and the agent as owner so a
+    # 0600 file stays readable to it.
+    def private_file_write_options(path)
+      private_file_paths.include?(path) ? { mode: 0o600, uid: container_uid, gid: container_uid } : {}
     end
 
     # UID of the container user (used for file ownership in tar headers)

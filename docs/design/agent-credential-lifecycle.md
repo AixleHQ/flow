@@ -41,7 +41,7 @@ Four mechanisms, each independently correct, none aware of the others:
 
 | Runtime | Credential | Expiry known (`token_expires_at`) | Server-side `refresh!` | Who renews in practice | Gap |
 |---|---|---|---|---|---|
-| `claude_code` | `claudeAiOauth` + `designOauth` + optional `primaryApiKey` | yes, soonest block | **yes** (`platform.claude.com/v1/oauth/token`, rotates) | us + the CLI in every container | multi-holder rotation |
+| `claude_code` | `claudeAiOauth` or `platformOauth` (+ `platformProfile`) + `designOauth` + optional `primaryApiKey` | yes, soonest block | **yes** (`platform.claude.com/v1/oauth/token`; `platformOauth` via `api.anthropic.com/v1/oauth/token`; rotates) | us + the CLI in every container | multi-holder rotation |
 | `codex` | `tokens.{access,refresh,id}` | yes (JWT `exp`) | **yes** | us + container | — |
 | `cursor_cli` | `accessToken` + `refreshToken` | yes (JWT `exp`, 60 days) | **yes** — `api2.cursor.sh/oauth/token`, the endpoint the desktop IDE itself uses | us | fixed 2026-09-18; see §Cursor below |
 | `kiro_cli` | SQLite `auth_kv` rows | yes | **yes** — Kiro social endpoint, or AWS SSO OIDC `CreateToken` for Builder ID / IdC | us + container | an IdC login dies at the directory's session cap (8h measured) whatever we do — see §3.2 |
