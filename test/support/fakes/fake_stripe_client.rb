@@ -40,6 +40,10 @@ class FakeStripeClient
     session
   end
 
+  # What the adapter sends, for the assertions that care about the shape rather
+  # than the result.
+  def last_checkout_arguments = @checkout_sessions.last
+
   # The identifier is what makes a replayed hour land once, so the fake answers a
   # repeat the way Stripe does rather than recording it twice.
   def send_meter_event(customer_id:, minutes:, occurred_at:, identifier:)

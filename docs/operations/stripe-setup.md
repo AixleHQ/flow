@@ -83,6 +83,15 @@ Keep the price and `PRICING_QUEUE_HOURLY_RATE` in step: the second is what
 `/how-it-works` quotes to visitors, the first is what they are actually charged.
 They are two copies of one number and will drift if nobody is watching.
 
+### Everyone pays in the price's currency
+
+Stripe's Adaptive Pricing converts the checkout page into the visitor's local
+currency from their IP — a customer in Jakarta was quoted rupiah at Stripe's own
+rate. That is a second price nobody here set and nobody here can reconcile
+against the queue-minutes we metered, so the application turns it off per session
+(`adaptive_pricing: { enabled: false }`). It is set in code rather than in the
+dashboard so it is version-controlled and survives somebody changing a setting.
+
 ## 5. The webhook
 
 **Developers → Webhooks → Add endpoint**, pointed at `https://<host>/webhooks/stripe`,
