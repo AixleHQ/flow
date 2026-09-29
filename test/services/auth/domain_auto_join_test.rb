@@ -18,6 +18,29 @@ class Auth::DomainAutoJoinTest < ActiveSupport::TestCase
     create(:user, email: "newcomer@autojoin-acme.test")
   end
 
+  # Signing up proves a mailbox, not a domain. Until the domain is proved in DNS,
+  # joining strangers to a workspace on the strength of it is how one person ends
+  # up holding everybody else's colleagues.
+  test "an unproved domain joins nobody" do
+    @company.update!(domain_verified_at: nil)
+
+    assert_no_difference "CompanyMembership.count" do
+      assert_nil Auth::DomainAutoJoin.call(newcomer, provider: @google)
+    end
+  end
+
+  test "proving the domain turns it on, with no other change" do
+    @company.update!(domain_verified_at: nil)
+    person = newcomer
+    assert_nil Auth::DomainAutoJoin.call(person, provider: @google)
+
+    @company.update!(domain_verified_at: Time.current)
+
+    assert_difference "CompanyMembership.count", 1 do
+      Auth::DomainAutoJoin.call(person, provider: @google)
+    end
+  end
+
   def disable!(provider)
     CompanyAuthPolicy.find_or_create_by!(company: @company, identity_provider: provider)
                      .update!(enabled: false)

@@ -5,10 +5,12 @@ FactoryBot.define do
     name
     email_domain
     auto_accept_users { false }
-    # Like a company an operator made: past the free allowance, nothing capping
-    # it. A factory default of "trialing" would cap every company in every suite
-    # to one session, and only on an installation running as saas.
+    # Like a company an operator made: past the free allowance with nothing
+    # capping it, and its domain taken as proved. Either default the other way
+    # would quietly change behaviour across every suite that has nothing to do
+    # with billing or with joining.
     billing_state { "active" }
+    domain_verified_at { Time.current }
 
     trait :auto_accept do
       auto_accept_users { true }
@@ -20,6 +22,10 @@ FactoryBot.define do
 
     trait :billing_blocked do
       billing_state { "blocked" }
+    end
+
+    trait :domain_unverified do
+      domain_verified_at { nil }
     end
   end
 end

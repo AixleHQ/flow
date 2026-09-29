@@ -25,6 +25,11 @@ module Auth
 
       company = Company.find_by_email_domain(email.to_s)
       return nil unless company
+      # A domain nobody has proved is a claim, and joining strangers to a
+      # workspace on the strength of a claim is how one person ends up holding
+      # everybody else's colleagues. Until it is proved, people get in by
+      # invitation.
+      return nil unless company.domain_verified?
       return nil unless Auth::PolicyResolver.accepts?(company: company, provider: provider)
 
       if company.auto_accept_users

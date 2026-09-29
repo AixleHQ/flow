@@ -12,6 +12,7 @@ import {
   oidcStartPath,
 } from 'shared/routes';
 
+import { DomainVerification } from './DomainVerification';
 import { SettingsTabs } from './SettingsTabs';
 
 interface Provider {
@@ -36,6 +37,10 @@ interface ScimState {
 interface JoiningState {
   emailDomain: string | null;
   autoAcceptUsers: boolean;
+  /** Null until the DNS record has been found. */
+  domainVerifiedAt: string | null;
+  verificationHost: string;
+  verificationRecord: string;
 }
 
 interface PageProps {
@@ -262,12 +267,15 @@ export default function AccessPage({ providers }: PageProps) {
                     {joining.emailDomain ?? 'Not set'}
                   </Text>
                 </Box>
+                <DomainVerification joining={joining} isAdmin={isAdmin} />
                 <Switch
                   label="Accept new people automatically"
                   description={
-                    joining.emailDomain
-                      ? `Anyone signing in with an @${joining.emailDomain} address joins without an invitation.`
-                      : 'Needs an email domain — without one there is nothing to match a new person against, so everyone joins by invitation.'
+                    !joining.emailDomain
+                      ? 'Needs an email domain — without one there is nothing to match a new person against, so everyone joins by invitation.'
+                      : joining.domainVerifiedAt
+                        ? `Anyone signing in with an @${joining.emailDomain} address joins without an invitation.`
+                        : `Takes effect once ${joining.emailDomain} is verified. Until then everyone joins by invitation.`
                   }
                   disabled={!isAdmin || !joining.emailDomain}
                   checked={joining.autoAcceptUsers}

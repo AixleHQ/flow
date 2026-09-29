@@ -36,7 +36,13 @@ class Web::Company::AuthPoliciesController < Web::Company::ApplicationController
   def joining_state
     {
       email_domain: current_company.email_domain,
-      auto_accept_users: current_company.auto_accept_users
+      auto_accept_users: current_company.auto_accept_users,
+      # Signing up proved a mailbox at the domain. Joining strangers on the
+      # strength of it needs the domain itself proved, so the screen carries what
+      # to publish and whether it is there yet.
+      domain_verified_at: current_company.domain_verified_at,
+      verification_host: Domains::Verification.host_for(current_company),
+      verification_record: Domains::Verification.record_for(current_company)
     }
   end
 

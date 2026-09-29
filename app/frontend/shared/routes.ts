@@ -1202,6 +1202,11 @@ export function profilePath(options?: object): string {
   return "/" + "profile" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /workspace/confirm(.:format) */
+export function confirmWorkspacePath(options?: object): string {
+  return "/" + "workspace" + "/" + "confirm" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /workspace/new(.:format) */
 export function newWorkspacePath(options?: object): string {
   return "/" + "workspace" + "/" + "new" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
@@ -1285,6 +1290,11 @@ export function companySettingsAccessPath(options?: object): string {
 /** /company/auth_policies/:id(.:format) */
 export function companyAuthPolicyPath(id: ScalarType, options?: object): string {
   return "/" + "company" + "/" + "auth_policies" + "/" + id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["id","format"]);
+}
+
+/** /company/domain_verification(.:format) */
+export function companyDomainVerificationPath(options?: object): string {
+  return "/" + "company" + "/" + "domain_verification" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/identity_providers(.:format) */
