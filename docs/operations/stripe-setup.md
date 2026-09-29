@@ -3,11 +3,10 @@
 What has to exist in the Stripe account before metered capacity can be billed,
 and how to hand this application the credential it needs.
 
-> **Status: not yet implemented.** `Billing::Meter::Stripe` is a stub that logs
-> what a real send would carry. Nothing in this application calls Stripe today,
-> and there is nowhere for a customer to enter a card. This page is the setup that
-> has to come first, and the record of what the integration will expect. Steps 1–2
-> can be done now; steps 3–5 land with the integration.
+> **Status: built, and live mode not switched on.** The application creates
+> customers, opens Stripe Checkout, sends meter events and acts on webhooks. What
+> remains is a live-mode account: the objects below exist in test mode and do not
+> carry over.
 
 ---
 
@@ -41,6 +40,16 @@ attributable to the integration rather than to a person.
 > **Never a dashboard login.** A username and password is a named human's full
 > access to the account — live mode, payouts, team management — and Stripe
 > requires 2FA on it anyway. The key above is the credential for this job.
+
+> **Already created in test mode** (account `acct_1UIwA0RfWGHL113S`):
+>
+> | | |
+> | --- | --- |
+> | Meter | `mtr_test_61VUFBw05qIHrGlrX41RfWGHL113SAXI` |
+> | Product | `prod_VLYLkzDfhdW0A4` |
+> | Price | `price_1UKrEiRfWGHL113SKW7Snqaa` |
+>
+> Steps 3 and 4 are the record of how, and what to repeat in live mode.
 
 ## 3. The meter
 
@@ -90,9 +99,30 @@ The signing secret (`whsec_…`) is shown once on creation. For local developmen
 use `stripe listen --forward-to localhost:4000/webhooks/stripe` instead, which
 prints its own.
 
+**Not yet created:** the endpoint needs a public host, which is a deployment
+decision rather than a code one. Until it exists, a card added through Checkout
+is taken by Stripe and the company is not moved to `active` — the webhook is the
+only thing that does that.
+
+### What each event does
+
+| Event | Effect |
+| --- | --- |
+| `checkout.session.completed` | The company becomes `active`, and its subscription id is recorded |
+| `customer.subscription.updated` | Follows the status: `active`, `trialing` and `past_due` keep running; anything else stops |
+| `customer.subscription.deleted` | The company is stopped |
+| `invoice.payment_failed` | The company is stopped |
+
+`past_due` deliberately keeps running. A failed payment starts a dunning cycle
+that usually ends in payment, and stopping a customer's work on the first retry
+is a worse mistake than carrying them for a few days.
+
+A company stopped this way goes to `blocked`, not back to `trialing`: the free
+allowance was spent once and cancelling does not give it back.
+
 ---
 
-## What the application will read
+## What the application reads
 
 | Variable | Purpose |
 | --- | --- |
@@ -103,6 +133,28 @@ prints its own.
 A Stripe customer is created **lazily**, when a card is first added — not at
 signup. Signup already waits on an email round trip, and a Stripe outage must not
 be able to stop someone registering.
+
+Without all three, nothing calls Stripe at all: no card can be added, the banner
+offers no button, and capacity is still measured and recorded — only never sent.
+That is the state every self-hosted installation is in permanently.
+
+### Replays cannot bill twice
+
+Each meter event carries an identifier built from the company and the hour, and
+Stripe refuses a second event with an identifier it has already seen. That
+refusal is read as "recorded", not as a failure, which is what makes the capacity
+ledger's replay safe: an hour that failed halfway is resent in full and only the
+missing parts land.
+
+## Registration cannot open without this
+
+`REGISTRATION_ENABLED=true` on a hosted deployment with no Stripe key **refuses
+to boot** (`config/initializers/required_env.rb`). The two switches are the kind
+that drift apart quietly and are found out by a customer: people sign up, spend
+the free allowance, and reach a stop with no card to add and no button to press.
+
+So the order is: configure Stripe, then open registration. Never the other way,
+and the deploy will not let you.
 
 ## Before switching live mode on
 

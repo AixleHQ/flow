@@ -107,6 +107,11 @@ export function webhooksGitlabPath(options?: object): string {
   return "/" + "webhooks" + "/" + "gitlab" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /webhooks/stripe(.:format) */
+export function stripeWebhookPath(options?: object): string {
+  return "/" + "webhooks" + "/" + "stripe" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /webhooks/azure_devops/:endpoint_id(.:format) */
 export function azureDevopsWebhookPath(endpoint_id: ScalarType, options?: object): string {
   return "/" + "webhooks" + "/" + "azure_devops" + "/" + endpoint_id + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["endpoint_id","format"]);
@@ -1295,6 +1300,11 @@ export function companyAuthPolicyPath(id: ScalarType, options?: object): string 
 /** /company/domain_verification(.:format) */
 export function companyDomainVerificationPath(options?: object): string {
   return "/" + "company" + "/" + "domain_verification" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
+/** /company/billing_checkout(.:format) */
+export function companyBillingCheckoutPath(options?: object): string {
+  return "/" + "company" + "/" + "billing_checkout" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
 /** /company/identity_providers(.:format) */

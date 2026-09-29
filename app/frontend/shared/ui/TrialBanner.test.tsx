@@ -12,7 +12,10 @@ const trial = {
   remainingHours: 40,
   maxSessions: 10,
   hoursLeftAtCurrentRate: 4,
+  canPay: true,
 };
+
+const admin = { isAdmin: true, canManageMembers: true, canManageProjects: true };
 
 describe('TrialBanner', () => {
   // Sent only while an allowance is running or spent, so everyone else must see
@@ -57,6 +60,31 @@ describe('TrialBanner', () => {
     expect(screen.queryByText(/hours left/)).not.toBeInTheDocument();
   });
 
+  // ── Paying ──────────────────────────────────────────────────────────────
+
+  it('offers an administrator a card to add', () => {
+    renderPage(<TrialBanner />, { props: { trial, permissions: admin } });
+
+    expect(screen.getByRole('button', { name: 'Add a card' })).toBeInTheDocument();
+  });
+
+  // A member can see where the workspace stands without being offered a button
+  // the server would refuse.
+  it('offers no button to somebody who may not press it', () => {
+    renderPage(<TrialBanner />, { props: { trial, permissions: { ...admin, isAdmin: false } } });
+
+    expect(screen.queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
+  });
+
+  // An installation with no payment provider must not offer a button that leads
+  // nowhere.
+  it('offers no button where there is nowhere to pay', () => {
+    renderPage(<TrialBanner />, { props: { trial: { ...trial, canPay: false }, permissions: admin } });
+
+    expect(screen.queryByRole('button', { name: 'Add a card' })).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('60 of 100 queue-hours used');
+  });
+
   it('says plainly when the allowance is gone', () => {
     renderPage(<TrialBanner />, {
       props: { trial: { ...trial, state: 'blocked' as const, usedHours: 100, remainingHours: 0 } },
@@ -65,5 +93,23 @@ describe('TrialBanner', () => {
     const banner = screen.getByRole('status');
     expect(banner).toHaveTextContent('used all 100 of your free queue-hours');
     expect(banner).toHaveTextContent('Anything already running finishes');
+  });
+
+  // The way out has to match the button beside it: offering "talk to us" next to
+  // an "Add a card" button reads as two different answers.
+  it('points at the card when there is one to add', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial: { ...trial, state: 'blocked' as const }, permissions: admin },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Add a card to carry on');
+  });
+
+  it('points at us when there is not', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial: { ...trial, state: 'blocked' as const, canPay: false }, permissions: admin },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Talk to us to carry on');
   });
 });
