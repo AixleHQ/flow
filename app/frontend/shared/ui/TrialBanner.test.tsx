@@ -94,4 +94,22 @@ describe('TrialBanner', () => {
     expect(banner).toHaveTextContent('used all 100 of your free queue-hours');
     expect(banner).toHaveTextContent('Anything already running finishes');
   });
+
+  // The way out has to match the button beside it: offering "talk to us" next to
+  // an "Add a card" button reads as two different answers.
+  it('points at the card when there is one to add', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial: { ...trial, state: 'blocked' as const }, permissions: admin },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Add a card to carry on');
+  });
+
+  it('points at us when there is not', () => {
+    renderPage(<TrialBanner />, {
+      props: { trial: { ...trial, state: 'blocked' as const, canPay: false }, permissions: admin },
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Talk to us to carry on');
+  });
 });
