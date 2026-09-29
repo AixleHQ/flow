@@ -352,6 +352,12 @@ module Agents
           rejected[block_name] = block["refreshToken"]
         elsif new_block
           refreshed_blocks[block_name] = new_block
+          # A success leaves the only trace of which grant replaced which: without it a
+          # grant that later turns up dead (a session's 401 + a rejected refresh) cannot
+          # be told apart from one that aged out, because only failures were ever logged.
+          Rails.logger.info("[ClaudeCodeAdapter] Token refreshed (#{refresh_context(block_name, credential.id, block, now_ms)} " \
+                            "newExpiresAt=#{Time.zone.at(new_block['expiresAt'].to_i / 1000.0).utc.iso8601} " \
+                            "rotated=#{new_block['refreshToken'] != block['refreshToken']})")
         else
           error ||= "#{block_name} refresh failed"
         end

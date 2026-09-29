@@ -672,6 +672,21 @@ module Agents
       assert_operator block["expiresAt"], :>, soon
     end
 
+    test "refresh! logs a successful rotation with the credential and both expiries" do
+      soon = ms_from_now(5 * 60 * 1000)
+      cred = create(:agent_credential, :claude_code, user: @user, config_data: {
+        "claudeAiOauth" => { "accessToken" => "old-a", "refreshToken" => "old-r", "expiresAt" => soon }
+      })
+      stub_request(:post, ClaudeCodeAdapter::OAUTH_TOKEN_URL)
+        .to_return(status: 200, body: { access_token: "new-a", refresh_token: "new-r", expires_in: 28_800 }.to_json,
+                   headers: { "Content-Type" => "application/json" })
+      Rails.logger.stubs(:info)
+      Rails.logger.expects(:info)
+           .with(regexp_matches(/Token refreshed \(block=claudeAiOauth credential=#{cred.id} expiresAt=.*newExpiresAt=\S+ rotated=true\)/))
+
+      @adapter.refresh!(cred)
+    end
+
     test "refresh! uses the designOauth block's own clientId and preserves refreshToken/scopes when the server omits them" do
       soon = ms_from_now(5 * 60 * 1000)
       cred = create(:agent_credential, :claude_code, user: @user, config_data: {

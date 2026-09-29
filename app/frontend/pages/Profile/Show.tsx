@@ -33,7 +33,7 @@ import { AuthLayout } from 'layouts/AuthLayout';
 
 import { getConsumer } from 'shared/lib/actionCableConsumer';
 import { apiFetch, apiRequest } from 'shared/lib/apiFetch';
-import { formatDateMedium } from 'shared/lib/formatDate';
+import { formatDateMedium, formatDateTimeShort, formatExpiry } from 'shared/lib/formatDate';
 import { getInitials } from 'shared/lib/getInitials';
 import { useInertiaCableStream } from 'shared/lib/hooks/useInertiaCableStream';
 import { isWaitingForSlot, launchWaitMessage } from 'shared/lib/launchStatus';
@@ -1010,9 +1010,11 @@ function AgentRuntimesSection({ profile }: { profile: CurrentUser }) {
                   </Text>
                   {isConfigured && credential && (
                     <Text size="xs" c="dimmed" mt={4}>
-                      Configured {formatDateMedium(credential.createdAt)}
+                      {credential.signedInAt
+                        ? `Signed in ${formatDateTimeShort(credential.signedInAt)}`
+                        : `Configured ${formatDateMedium(credential.createdAt)}`}
                       {credential.lastUsedAt && ` · Last used ${formatDateMedium(credential.lastUsedAt)}`}
-                      {credential.expiresAt && ` · Expires ${formatDateMedium(credential.expiresAt)}`}
+                      {credential.loginExpiresAt && ` · Expires ${formatExpiry(credential.loginExpiresAt)}`}
                     </Text>
                   )}
                   {/* Why the platform gave up, in the vendor's words. Spelled out rather than
