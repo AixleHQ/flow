@@ -48,6 +48,8 @@ export interface SharedTrial {
   maxSessions: number | null;
   /** What is left, in wall-clock hours at that limit. Null without one. */
   hoursLeftAtCurrentRate: number | null;
+  /** False where this installation has no payment provider configured. */
+  canPay: boolean;
 }
 
 export interface SharedProps {

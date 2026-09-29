@@ -44,6 +44,10 @@ Rails.application.routes.draw do
   # GitLab webhook endpoint (public, no session auth — verified via per-repository secret)
   post "/webhooks/gitlab", to: "webhooks/gitlab#receive"
 
+  # Stripe's account of what happened to a subscription. The signature is the
+  # authentication; the URL is not a secret and grants nothing on its own.
+  post "/webhooks/stripe", to: "webhooks/stripe#receive", as: :stripe_webhook
+
   # Azure DevOps Service Hooks. The endpoint id ROUTES a delivery to one
   # subscription and is not a secret: Azure authenticates with HTTP basic auth
   # and sends no signature, so the subscription's own password is the credential.
@@ -434,6 +438,9 @@ Rails.application.routes.draw do
       # Checking the DNS record. A POST because it is what switches domain
       # auto-join on, not a question about the current state.
       resource :domain_verification, only: :create, controller: "domain_verifications"
+      # Card entry. Everything after it happens on Stripe's page and comes back
+      # as a webhook, so there is nothing here to show and nothing to update.
+      resource :billing_checkout, only: :create, controller: "billing_checkouts"
       # A company's own OIDC connections. Created disabled; enabling them goes
       # through the prove-before-enforce guard on auth_policies#update.
       resources :identity_providers, only: %i[create update destroy]
