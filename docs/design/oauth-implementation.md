@@ -184,7 +184,9 @@ option) is picked inside the terminal.
 
 Only the OAuth blocks (`claudeAiOauth`, `platformOauth`, `designOauth`) expire and refresh — `token_expires_at` reads only
 those, so API-key credentials get `expires_at = nil` (always active, never swept) and Bedrock has no stored
-credential at all. `AgentCredentialResource#connection_status` (active/expiring/expired, expiry-derived)
+credential at all. `AgentCredentialResource#connection_status` (active/expiring/expired, derived from the **base login's** expiry —
+`metadata.login_expires_at`, written beside `expires_at` by `sync_expires_at` — never from an add-on like `designOauth`;
+`expires_at` stays the soonest block expiry because it is what the sweep selects on)
 drives the badge on the profile page.
 
 Codex/Cursor tokens are JWTs — `token_expires_at` decodes their `exp` (`BaseAdapter#jwt_exp_ms`) so the sweep

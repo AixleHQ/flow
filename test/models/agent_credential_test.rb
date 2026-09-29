@@ -557,7 +557,47 @@ class AgentCredentialTest < ActiveSupport::TestCase
     assert_equal :refreshed, result[:status]
   end
 
+  # --- signed_in_at: a person signing in, not a token refresh ---
+
+  test "a new authorization records when the user signed in; a refresh does not move it" do
+    travel_to Time.zone.parse("2026-09-28 17:40:00 UTC") do
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_config(expires_at: 8.hours.from_now),
+                                     new_authorization: true)
+    end
+    travel_to Time.zone.parse("2026-09-29 01:30:00 UTC") do
+      AgentCredential.from_artifacts(@user.id, @company.id, "claude_code", claude_config(expires_at: 8.hours.from_now))
+    end
+
+    cred = AgentCredential.find_by!(user: @user, agent_type: "claude_code")
+    assert_equal Time.zone.parse("2026-09-28 17:40:00 UTC"), cred.signed_in_at
+  end
+
   # --- renew! (every refresh goes through here) ---
+
+  # An API key has nothing to refresh, so a failed attempt's error would otherwise stay
+  # forever — one transient failure away from condemning a working credential.
+  test "renew! clears a stale error from a credential with no expiry" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code", config_data: { "primaryApiKey" => "sk-ant" })
+    cred.mark_refresh_error!("PG::UndefinedColumn")
+    cred.mark_refresh_error!("PG::UndefinedColumn")
+
+    assert_equal :not_needed, cred.renew!(source: :sweep)[:status]
+
+    cred.reload
+    assert_equal "active", cred.status
+    assert_nil cred.refresh_error
+    assert_equal 0, cred.refresh_failure_count
+  end
+
+  test "renew! leaves the failure count of a token that simply is not due yet" do
+    cred = create(:agent_credential, user: @user, agent_type: "claude_code",
+                                     config_data: refreshable_claude_config(expires_at: 2.hours.from_now))
+    cred.mark_refresh_error!("network timeout")
+
+    assert_equal :not_needed, cred.renew!(source: :sweep)[:status]
+
+    assert_equal 1, cred.reload.refresh_failure_count
+  end
 
   test "renew! records a successful refresh and clears an earlier failure" do
     cred = create(:agent_credential, user: @user, agent_type: "claude_code",

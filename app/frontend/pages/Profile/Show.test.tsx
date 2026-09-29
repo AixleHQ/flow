@@ -51,6 +51,8 @@ const buildCredential = (overrides: Partial<AgentCredential> = {}): AgentCredent
   defaultModel: null,
   lastUsedAt: null,
   expiresAt: null,
+  loginExpiresAt: null,
+  signedInAt: null,
   connectionStatus: 'active',
   refreshError: null,
   reauthRequired: false,
@@ -408,6 +410,23 @@ describe('Profile/Show', () => {
     expect(screen.getByText('Connected')).toBeInTheDocument();
     // formatDate renders "Configured <date> · Last used <date>" inside one Text node.
     expect(screen.getByText(/Configured/)).toHaveTextContent(/Last used/);
+  });
+
+  // A subscription token lives 8 hours, so a date alone never changed after a re-login and
+  // users kept signing in again to make it move.
+  it('shows when the user signed in and how long the login itself has left', () => {
+    const inSevenHours = new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString();
+    const credential = buildCredential({
+      signedInAt: '2026-09-28T17:40:00Z',
+      loginExpiresAt: inSevenHours,
+      expiresAt: new Date(Date.now() - 60 * 1000).toISOString(),
+    });
+    const profile = buildProfile({ configuredAgents: ['claude_code'], agentCredentials: [credential] });
+    renderAuthedPage(<ProfilePage {...baseProps(profile)} />, { props: baseProps(profile) });
+
+    const meta = screen.getByText(/Signed in/);
+    expect(meta).toHaveTextContent(/Expires in 7 h/);
+    expect(meta).not.toHaveTextContent(/Configured/);
   });
 
   it('renders Authenticate (not Re-authenticate) for an agent that has no credential', () => {

@@ -16,6 +16,20 @@ class AgentCredentialResource < ApplicationResource
     credential.default_model
   end
 
+  # The login's own expiry, not the soonest across every token block (expires_at): an
+  # add-on such as Claude's design token must not make a working login read as expiring.
+  typelize "string | null"
+  attribute :login_expires_at do |credential|
+    credential.login_expires_at&.iso8601
+  end
+
+  # The last time the user actually signed in — not a token refresh, which happens every
+  # few hours on its own.
+  typelize "string | null"
+  attribute :signed_in_at do |credential|
+    credential.signed_in_at&.iso8601
+  end
+
   # Connection status.
   #
   # `error` comes first and is new: the refresh sweep has been able to condemn a
@@ -27,7 +41,7 @@ class AgentCredentialResource < ApplicationResource
   # agent whose token carries no exp) reads as "active" — expiry unknown, not past.
   typelize %w[active expiring expired error]
   attribute :connection_status do |credential|
-    exp = credential.expires_at
+    exp = credential.login_expires_at
     if credential.error? then "error"
     elsif exp.nil? then "active"
     elsif exp <= Time.current then "expired"

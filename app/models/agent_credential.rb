@@ -195,6 +195,9 @@ class AgentCredential < ApplicationRecord
       "collected_at" => Time.current,
       "artifact_keys" => artifacts_hash.keys
     )
+    # collected_at moves on every refresh and write-back; this is the last time a person
+    # actually signed in, which is what the profile has to show after a re-login.
+    credential.metadata = credential.metadata.merge("signed_in_at" => Time.current) if new_authorization
     credential.save!
     credential
   end
@@ -244,6 +247,20 @@ class AgentCredential < ApplicationRecord
   # written before the names were recorded still decrypts, until its next write.
   def config_keys
     metadata&.dig("config_keys") || config_data.keys
+  end
+
+  # When the login the CLI runs on expires. A row written before this was recorded falls
+  # back to the soonest expiry, which is what the profile used to show.
+  def login_expires_at
+    return expires_at unless metadata&.key?("login_expires_at")
+
+    raw = metadata["login_expires_at"]
+    raw.present? ? Time.zone.parse(raw) : nil
+  end
+
+  def signed_in_at
+    raw = metadata&.dig("signed_in_at")
+    raw.present? ? Time.zone.parse(raw.to_s) : nil
   end
 
   # Get adapter for this agent type
@@ -392,6 +409,11 @@ class AgentCredential < ApplicationRecord
     case result[:status]
     when :refreshed
       clear_refresh_error! if refresh_error.present? || error?
+    when :not_needed
+      # A credential with no expiry (an API key, a Bedrock connection) is never refreshed,
+      # so nothing else would ever clear an error a failed attempt left on it — and every
+      # sweep still selects it, one transient failure away from condemning it.
+      clear_refresh_error! if active? && expires_at.nil? && refresh_error.present?
     when :error
       permanent = self.class.permanent_failure?(result)
       mark_refresh_error!(result[:detail], permanent: permanent)
@@ -457,9 +479,16 @@ class AgentCredential < ApplicationRecord
   # Derive expires_at from the adapter's soonest token expiry (epoch ms → Time).
   # nil when the agent's tokens carry no expiry (e.g. codex/cursor today), which
   # keeps the credential always-active in `.active` (its expiry is unknown, not past).
+  #
+  # The base login's own expiry is recorded beside it: expires_at is the soonest across
+  # every block (it is when the sweep must wake up), so an add-on such as Claude's design
+  # token would otherwise decide what the profile says about the login itself. Kept in
+  # metadata, in the clear, for the same reason as config_keys.
   def sync_expires_at
     ms = adapter.token_expires_at(config_data)
     self.expires_at = ms ? Time.zone.at(ms / 1000.0) : nil
+    base_ms = adapter.base_token_expires_at(config_data)
+    self.metadata = (metadata || {}).merge("login_expires_at" => base_ms ? Time.zone.at(base_ms / 1000.0).iso8601 : nil)
   rescue StandardError => e
     Rails.logger.warn("[AgentCredential] sync_expires_at failed for #{id}: #{e.message}")
     self.expires_at = nil
