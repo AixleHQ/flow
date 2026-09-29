@@ -146,6 +146,16 @@ refusal is read as "recorded", not as a failure, which is what makes the capacit
 ledger's replay safe: an hour that failed halfway is resent in full and only the
 missing parts land.
 
+## Registration cannot open without this
+
+`REGISTRATION_ENABLED=true` on a hosted deployment with no Stripe key **refuses
+to boot** (`config/initializers/required_env.rb`). The two switches are the kind
+that drift apart quietly and are found out by a customer: people sign up, spend
+the free allowance, and reach a stop with no card to add and no button to press.
+
+So the order is: configure Stripe, then open registration. Never the other way,
+and the deploy will not let you.
+
 ## Before switching live mode on
 
 - [ ] The whole flow driven on test: signup → allowance spent → blocked → card
