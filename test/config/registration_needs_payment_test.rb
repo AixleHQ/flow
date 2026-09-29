@@ -68,10 +68,19 @@ class RegistrationNeedsPaymentTest < ActiveSupport::TestCase
   # The initializer is the thing that actually stops the deploy; this is what
   # keeps the two from drifting.
   test "the initializer checks exactly this" do
-    source = Rails.root.join("config/initializers/required_env.rb").read
-
-    assert_includes source, "Deployment.self_serve_signup?"
-    assert_includes source, "Billing::StripeClient.new.configured?"
-    assert_includes source, "REGISTRATION_ENABLED is on but Stripe is not configured"
+    assert_includes initializer, "Deployment.self_serve_signup?"
+    assert_includes initializer, "Billing::StripeClient.new.configured?"
+    assert_includes initializer, "REGISTRATION_ENABLED is on but Stripe is not configured"
   end
+
+  # Both predicates live in app/, and an initializer that names an autoloadable
+  # constant raises NameError before Zeitwerk is ready — which broke the image
+  # build rather than the deploy it was meant to guard.
+  test "the check waits until after initialization" do
+    assert_match(/after_initialize do\n\s*if Deployment\.self_serve_signup\?/, initializer)
+  end
+
+  private
+
+  def initializer = Rails.root.join("config/initializers/required_env.rb").read
 end

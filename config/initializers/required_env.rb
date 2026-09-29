@@ -20,11 +20,23 @@ unless Rails.env.local?
   # springs later: people sign up, spend the free allowance, and reach a stop
   # with no card to add and no button to press. The two switches must not be
   # able to drift apart, so the deploy refuses rather than the customers finding
-  # out. Checked here and not in Deployment, because a key that goes missing
-  # must fail loudly rather than quietly closing the door on new customers.
-  if Deployment.self_serve_signup? && !Billing::StripeClient.new.configured?
-    raise "REGISTRATION_ENABLED is on but Stripe is not configured: set STRIPE_SECRET_KEY and " \
-          "STRIPE_PRICE_ID, or close registration. A workspace that signs itself up spends its free " \
-          "capacity and then has nowhere to pay."
+  # out.
+  #
+  # AFTER INITIALIZATION, not here. Both predicates live in app/, and an
+  # initializer that names an autoloadable constant raises NameError before
+  # Zeitwerk is ready — which broke the image build rather than the deploy it was
+  # meant to guard. Asking the same two objects the rest of the application asks
+  # is worth the wait; a second copy of the rule in ENV terms would be a second
+  # thing to keep in step.
+  #
+  # Deliberately not inside Deployment.self_serve_signup?: a key that goes
+  # missing must fail loudly rather than quietly closing the door on new
+  # customers while the ones inside wonder what happened.
+  Rails.application.config.after_initialize do
+    if Deployment.self_serve_signup? && !Billing::StripeClient.new.configured?
+      raise "REGISTRATION_ENABLED is on but Stripe is not configured: set STRIPE_SECRET_KEY and " \
+            "STRIPE_PRICE_ID, or close registration. A workspace that signs itself up spends its free " \
+            "capacity and then has nowhere to pay."
+    end
   end
 end
