@@ -78,6 +78,7 @@ The active workflow: a research report in `research/` feeds a frozen-intent spec
 ## Product
 
 - **[product/user-guide-outline.md](./product/user-guide-outline.md)** — Outline of the end-user product guide: the board → workflow → agent → results loop, section-by-section skeleton following the product sidebar, two end-to-end stories, terminology notes
+- **[product/self-serve-signup.md](./product/self-serve-signup.md)** — How a stranger becomes a workspace and what it costs: the email-proved signup, what the form refuses, DNS domain verification and what it unlocks (auto-join) versus what works without it (invitations), queues and the list price, the free allowance and the fact that the workspace sets the rate it burns at, what happens when it runs out, and where a card will be asked for
 - **[product/changelog-product-areas.md](./product/changelog-product-areas.md)** — Frozen user-facing product map used as the changelog taxonomy: named product areas, changelog rules, area → guide-chapter map, snapshot baseline
 
 ## Operator documentation
@@ -99,6 +100,7 @@ running Flow — the product-level guide outlined above is a separate document s
 - **[user-guide/configuration.md](./user-guide/configuration.md)** — Env vars, OAuth, agent credentials, and other knobs
 - **[user-guide/signing-in.md](./user-guide/signing-in.md)** — Every way to prove who you are and which of them a workspace accepts: the two guards that stop an admin stranding anyone, connecting your own OpenID Connect provider and why it must be verified before it can be enabled, how members reach it by address rather than by a button, why entering a stricter workspace asks you to confirm instead of signing you out, and what SCIM does and deliberately does not do
 - **[user-guide/configuring-sso.md](./user-guide/configuring-sso.md)** — Operator side: why availability is derived from the credentials an installation holds rather than declared, registering Google and Entra (and why a Microsoft assertion never adopts an existing account while a Google one may), what per-company OIDC needs from the installation, and the `(provider, subject)` pair that identifies a person
+- **[operations/stripe-setup.md](./operations/stripe-setup.md)** — Operator runbook: the meter, product, metered price and webhook that have to exist in Stripe before capacity can be billed, which API key to issue and why never a dashboard login, and the checklist before live mode. The integration itself is not built yet
 - **[operations/azure-devops-app-registration.md](./operations/azure-devops-app-registration.md)** — Operator runbook: register the Entra application, give it a credential, and publish the client ID. Customers bind their own organizations from inside Flow by proving they administer them
 - **[quickstart.md](./quickstart.md)** — Get a local instance running and see one card move
 - **[reference/index.md](./reference/index.md)** — Reference set: [API](./reference/api.md), [CLI](./reference/cli.md), [configuration](./reference/configuration.md)
