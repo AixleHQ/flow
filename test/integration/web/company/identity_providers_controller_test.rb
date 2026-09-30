@@ -37,6 +37,16 @@ class Web::Company::IdentityProvidersControllerTest < ActionDispatch::Integratio
     refute CompanyAuthPolicy.find_by!(company: @company, identity_provider: provider).enabled
   end
 
+  test "a connection needs a verified domain first" do
+    @company.update!(domain_verified_at: nil)
+    sign_in_as(@admin)
+
+    assert_no_difference "IdentityProvider.count" do
+      post company_identity_providers_path, params: connection_params
+    end
+    assert_redirected_to company_settings_access_path
+  end
+
   test "the client secret is never serialized back to the browser" do
     sign_in_as(@admin)
     post company_identity_providers_path, params: connection_params

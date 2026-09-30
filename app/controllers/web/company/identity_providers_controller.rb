@@ -8,6 +8,11 @@
 # been proved to work.
 class Web::Company::IdentityProvidersController < Web::Company::ApplicationController
   def create
+    unless current_company.domain_verified?
+      return redirect_to company_settings_access_path,
+                         inertia: { errors: { base: "Verify #{current_company.name}'s email domain before adding a connection." } }
+    end
+
     provider = current_company.identity_providers.new(
       kind: "oidc",
       scope: "company",

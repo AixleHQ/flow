@@ -28,7 +28,12 @@ const connection = (over = {}) => ({
   ...over,
 });
 
-const joining = (over = {}) => ({ emailDomain: 'acme.com', autoAcceptUsers: false, ...over });
+const joining = (over = {}) => ({
+  emailDomain: 'acme.com',
+  autoAcceptUsers: false,
+  domainVerifiedAt: '2026-09-01T00:00:00Z',
+  ...over,
+});
 
 const renderPage = (providers: unknown[], isAdmin = true, joiningState: unknown = joining()) =>
   renderAuthedPage(<AccessPage providers={providers as never} />, {
@@ -54,6 +59,14 @@ describe('Company settings — Access', () => {
     expect(form).toHaveAttribute('method', 'post');
     expect(form).toHaveAttribute('action', '/auth/oidc/7/start');
     expect(form?.querySelector('input[name="authenticity_token"]')).toBeInTheDocument();
+  });
+
+  it('asks for a verified domain before offering a connection or its Verify', () => {
+    renderPage([deployment(), connection()], true, joining({ domainVerifiedAt: null }));
+
+    expect(screen.queryByRole('button', { name: 'Add connection' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Verify your email domain under Joining first/)).toBeInTheDocument();
   });
 
   it('holds an unverified connection switched off', () => {

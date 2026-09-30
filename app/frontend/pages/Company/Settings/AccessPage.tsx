@@ -122,6 +122,9 @@ export default function AccessPage({ providers }: PageProps) {
   const isAdmin = page.props.permissions?.isAdmin ?? false;
   const refusal = page.props.errors?.base;
   const joining = page.props.joining;
+  // A company's own connection only attaches to accounts inside a verified
+  // domain, so until then it could neither be verified nor enabled.
+  const domainVerified = Boolean(joining?.domainVerifiedAt);
 
   const toggle = (provider: Provider, enabled: boolean) => {
     router.put(companyAuthPolicyPath(provider.id), { enabled });
@@ -168,7 +171,7 @@ export default function AccessPage({ providers }: PageProps) {
                         </Badge>
                       </Tooltip>
                     )}
-                    {provider.scope === 'company' && !provider.proved && isAdmin && (
+                    {provider.scope === 'company' && !provider.proved && isAdmin && domainVerified && (
                       <VerifyConnectionButton providerId={provider.id} />
                     )}
                     <Switch
@@ -250,7 +253,11 @@ export default function AccessPage({ providers }: PageProps) {
                   A new connection arrives switched off. Verify it — that signs you in through it once — and only then
                   can it be enabled, so a misconfigured connection can never lock your workspace out.
                 </Text>
-                <ConnectionForm onDone={() => router.reload()} />
+                {domainVerified ? (
+                  <ConnectionForm onDone={() => router.reload()} />
+                ) : (
+                  <Alert color="yellow">Verify your email domain under Joining first — a connection needs it.</Alert>
+                )}
               </Stack>
             </Paper>
           )}

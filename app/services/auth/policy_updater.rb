@@ -66,8 +66,15 @@ module Auth
     # on once an admin of this company has completed a real sign-in through it.
     # Deployment-scoped providers are operator-configured and exempt.
     def guard_activation!(provider)
-      return if actor&.super_admin?
       return if provider.deployment?
+
+      unless company.domain_verified?
+        raise Refused.new(
+          "verify #{company.name}'s email domain before enabling #{provider.display_name}",
+          reason: :domain_unverified
+        )
+      end
+      return if actor&.super_admin?
 
       admin_user_ids = company.company_memberships.active.where(role: "admin").select(:user_id)
       proved = UserIdentity.where(identity_provider: provider, user_id: admin_user_ids).exists?
