@@ -22,6 +22,13 @@ export function runSessionId(run: TaskWorkflowRun): number | null {
   return last?.terminalSessionId ?? null;
 }
 
+// `completed` reads as "Succeeded" to match the card's own status chip.
+export function workflowRunStateLabel(state: string): string {
+  if (state === 'completed' || state === 'succeeded') return 'Succeeded';
+  const words = state.replaceAll('_', ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 // Helper to get workflow status indicator color
 export const workflowStatusColor = (state: string): string => {
   // Waiting for a session slot is in flight but not working, and it reads as
