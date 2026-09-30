@@ -120,7 +120,9 @@ the project level) and paste a token with `api` scope.
 Azure DevOps connects **per project**, not per company: one connection
 names one Azure organization and one or more Azure projects inside it.
 Agents clone, push, open and review pull requests, and read and write
-Azure Boards work items in those projects and nowhere else.
+Azure Boards work items in those projects and nowhere else. Each of those
+Azure projects is listed on the project's **Trackers** page, where it can be
+made the primary tracker, set read-only or detached.
 
 Connecting is self-service — someone who administers the organization
 pastes a personal access token once, and the connection runs on Aixle's

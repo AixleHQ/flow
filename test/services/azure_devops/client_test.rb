@@ -148,6 +148,24 @@ module AzureDevops
       assert_equal "Customer Platform", @integration.reload.azure_project_name
     end
 
+    # Regression: the name check compared every work item to the connection's
+    # FIRST project, so on a connection covering two projects every read in the
+    # second one was refused.
+    test "on a connection covering several Azure projects, a work item is checked against its own" do
+      second = SecureRandom.uuid
+      @integration.azure_devops_installation.update!(allowed_project_ids: [ @integration.azure_project_id, second ])
+      @integration.update!(settings: @integration.settings.merge(
+        "azure_project_ids" => [ @integration.azure_project_id, second ],
+        "azure_project_names" => { @integration.azure_project_id => "Customer Platform", second => "Ops" }
+      ))
+      stub_request(:get, %r{/#{second}/_apis/wit/workitems/12}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { id: 12, rev: 1, fields: { "System.TeamProject" => "Ops", "System.Title" => "t" } }.to_json
+      )
+
+      assert_equal 12, WorkItemService.new(@integration).get(12, project_id: second)[:id]
+    end
+
     test "a work item from a neighbouring Azure project is refused" do
       stub_request(:get, %r{/_apis/wit/workitems/11}).to_return(
         status: 200, headers: { "Content-Type" => "application/json" },

@@ -30,11 +30,10 @@ module Tools
         ctx.session.present? &&
           ctx.session.repositories.includes(:integration).any? { |repo| repo.integration&.azure_devops? }
       },
-      # azure_devops_* work item and build tools, plus list_connections. These
-      # are scoped by `integration_id` rather than by a repository, so the
-      # connection is the only thing they need — a project running Azure Boards
-      # against repositories hosted elsewhere still reaches them. Mirrors the
-      # Coder gating exactly.
+      # azure_devops_* build tools, plus list_connections. These are scoped by
+      # `integration_id` rather than by a repository, so the connection is the
+      # only thing they need. Mirrors the Coder gating exactly. Azure Boards work
+      # items go through the tracker_* tools instead.
       azure_integration_connected: ->(ctx) { ctx.connected?(:azure_devops) },
       # get_config_item — served only where an attachment already authorized it.
       # Resolved through SessionConfigResolver so a workflow step sees the items

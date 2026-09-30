@@ -46,7 +46,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
     # carry a rule and none may be attachable — a tool that fell out of this
     # would be unreachable: hidden from the picker AND never injected.
     azure = defs.select { |d| d.tags.include?(:azure_devops) }
-    assert_equal 24, azure.size
+    assert_equal 17, azure.size
     assert azure.none?(&:user_attachable), "Azure tools must not be offered in the picker"
     assert azure.all? { |d| d.inject_rules.intersect?(%i[azure_repositories_attached azure_integration_connected]) }
   end
@@ -54,7 +54,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
   test "ui_groups offer one entry per visible tag, session tools only" do
     groups = Tools::Registry.ui_groups
 
-    assert_equal %w[board slack coder assets session_supervision], groups.map { |g| g[:tag] }
+    assert_equal %w[board tracker slack coder assets session_supervision], groups.map { |g| g[:tag] }
     assert_equal "Slack", groups.find { |g| g[:tag] == "slack" }[:label]
     assert_equal %w[slack_delete_message slack_post_message slack_read_thread slack_update_message],
                  groups.find { |g| g[:tag] == "slack" }[:tool_names]

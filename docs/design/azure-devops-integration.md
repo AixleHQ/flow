@@ -373,9 +373,9 @@ Two injection rules, matching the two ways a tool is scoped:
 | Rule | Fires when | Covers |
 | ---- | ---------- | ------ |
 | `azure_repositories_attached` | the session holds a repository whose integration is Azure | the 13 tools taking a `repository_id` — pull requests, threads, reviewers, votes, policies, `link_work_item` |
-| `azure_integration_connected` | the project has an active Azure connection | the 10 tools taking an `integration_id` — work items, builds, `list_connections` |
+| `azure_integration_connected` | the project has an active Azure connection | the 2 tools taking an `integration_id` — `list_builds`, `list_connections` |
 
-The split is not cosmetic. A repository tool has nothing to act on without an attached clone, so injecting it would only produce a tool that answers "not attached to this session". A work item tool is scoped by the connection, so a project keeping its Boards in Azure while its code lives elsewhere still reaches it — a case a repository-only rule would make unreachable, with no picker left to work around it.
+The split is not cosmetic. A repository tool has nothing to act on without an attached clone, so injecting it would only produce a tool that answers "not attached to this session". A build tool is scoped by the connection, so it needs no clone. Boards work items are task tracker tools and follow the tracker rules instead: they are attached from the picker.
 
 `TagCatalog` therefore marks `:azure_devops` hidden and every handler declares `user_attachable false`. Availability still applies on top: `requires_integration :azure_devops` hides an injected tool whose connection is inactive, so a disabled integration is distinguishable from a missing entitlement.
 
@@ -397,15 +397,10 @@ All names below are proposed. `repository_id` always means an Aixle repository I
 | `azure_devops_create_pull_request_thread` | Repository/PR IDs, text, optional verified file/iteration context, `operation_key` | New discussion/inline thread                                                    |
 | `azure_devops_reply_pull_request_thread`  | Repository/PR/thread IDs, text, `operation_key`                                    | Reply in the same thread                                                        |
 | `azure_devops_update_pull_request_thread` | Repository/PR/thread IDs, supported status                                         | Resolve/reopen discussion                                                       |
-| `azure_devops_list_work_item_types`       | `integration_id`                                                                   | Available types, fields, allowed states/required-field metadata                 |
-| `azure_devops_query_work_items`           | `integration_id`, structured filters, `limit`, `cursor`                            | Project-restricted work item summaries                                          |
-| `azure_devops_get_work_item`              | Integration/work item IDs                                                          | Fields, revision, relations, browser URL                                        |
-| `azure_devops_list_work_item_comments`    | Integration/work item IDs, `limit`, `cursor`                                       | Comments, authors, timestamps, continuation                                     |
-| `azure_devops_create_work_item`           | Integration ID, type, allowed fields, `operation_key`                              | Created work item ID/URL                                                        |
-| `azure_devops_update_work_item`           | Integration/work item IDs, expected revision, allowed fields                       | Revision-checked update                                                         |
-| `azure_devops_add_work_item_comment`      | Integration/work item IDs, text, `operation_key`                                   | Added comment                                                                   |
 | `azure_devops_link_work_item`             | Repository/PR IDs, work item ID, expected revision                                 | Link within the selected project; duplicate relation is a no-op                 |
 | `azure_devops_add_pull_request_reviewer`  | Repository/PR IDs, `reviewer_id`, `required`                                       | Adds a reviewer, which is what makes voting reachable; optional by default       |
+
+Work items are no longer Azure-specific tools: Azure Boards is a task tracker, reached through the provider-neutral `tracker_*` tools over the same `WorkItemService` ([task-tracker-integrations.md](./task-tracker-integrations.md) §9.2). `azure_devops_link_work_item` stays here because it links a pull request, a code-host object.
 
 The parity extension adds reviewer lookup/assignment, votes, policy/build status, and `azure_devops_complete_pull_request`. Completion takes the expected source commit and explicit merge strategy, respects Azure branch policies, and never enables policy bypass or automatic work-item state transitions implicitly. Re-read the PR until completion is confirmed or report it as pending; a successful update response alone is not proof of a completed merge. [Update/complete PR](https://learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/update?view=azure-devops-rest-7.1).
 

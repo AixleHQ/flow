@@ -145,6 +145,16 @@ are what actually decide whether a merge may happen — Flow never asks to bypas
 one, and refuses to complete a pull request whose source branch moved after the
 agent read it.
 
+## Azure Boards
+
+Each Azure project a connection covers becomes a **tracker** on the project's
+**Trackers** page as soon as the connection is made; the first one is the
+project's primary tracker. Agents read and write work items through the task
+tracker tools — the same tools every tracker uses — once those tools are
+attached to a workflow or a step, and only in the Azure projects the connection
+covers. A tracker can be made read-only, or detached, without touching the
+connection.
+
 ## Adding Azure projects later
 
 The approved set of Azure projects belongs to the **organization binding**,

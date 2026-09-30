@@ -120,7 +120,9 @@ the project level) and paste a token with `api` scope.
 Azure DevOps is **project-scoped**: one connection names one Azure
 organization and one or more Azure projects inside it. Agents clone,
 push, open and review pull requests, and read and update Azure Boards
-work items — in those projects and nowhere else.
+work items — in those projects and nowhere else. Each of those Azure
+projects is listed on the project's **Trackers** page, where it can be
+made the primary tracker, set read-only or detached.
 
 Connecting is self-service, with one step outside Flow:
 

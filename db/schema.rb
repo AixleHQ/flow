@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_150200) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -564,6 +564,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
     t.check_constraint "number > 0", name: "entity_versions_number_positive"
   end
 
+  create_table "external_resources", force: :cascade do |t|
+    t.bigint "board_task_id", null: false
+    t.datetime "created_at", null: false
+    t.jsonb "data", default: {}, null: false
+    t.string "external_id", null: false
+    t.string "instance", null: false
+    t.string "kind", null: false
+    t.string "provider", null: false
+    t.datetime "updated_at", null: false
+    t.index ["board_task_id", "kind", "provider", "instance", "external_id"], name: "idx_external_resources_unique", unique: true
+    t.index ["kind", "provider", "instance", "external_id"], name: "idx_external_resources_identity"
+  end
+
   create_table "folders", force: :cascade do |t|
     t.bigint "company_id"
     t.datetime "created_at", null: false
@@ -778,6 +791,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
     t.index ["project_id"], name: "index_project_favorites_on_project_id"
     t.index ["user_id", "project_id"], name: "index_project_favorites_on_user_id_and_project_id", unique: true
     t.index ["user_id"], name: "index_project_favorites_on_user_id"
+  end
+
+  create_table "project_trackers", force: :cascade do |t|
+    t.string "access", default: "read_write", null: false
+    t.datetime "created_at", null: false
+    t.string "external_scope_id", null: false
+    t.string "external_scope_key"
+    t.string "handle", null: false
+    t.bigint "integration_id", null: false
+    t.string "name", null: false
+    t.boolean "primary", default: false, null: false
+    t.bigint "project_id", null: false
+    t.string "provider", null: false
+    t.jsonb "settings", default: {}, null: false
+    t.string "status", default: "active", null: false
+    t.datetime "updated_at", null: false
+    t.index ["integration_id"], name: "index_project_trackers_on_integration_id"
+    t.index ["project_id", "handle"], name: "idx_project_trackers_handle", unique: true
+    t.index ["project_id", "integration_id", "external_scope_id"], name: "idx_project_trackers_scope", unique: true
+    t.index ["project_id"], name: "idx_project_trackers_one_primary", unique: true, where: "\"primary\""
   end
 
   create_table "projects", force: :cascade do |t|
@@ -1387,6 +1420,28 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
   add_check_constraint "tools", "name::text !~~ 'mcp\\_\\_%'::text", name: "tools_name_not_managed_namespace", validate: false
   add_check_constraint "tools", "project_id IS NULL AND company_id IS NULL OR scope_type IS NULL AND scope_id IS NULL AND project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "tools_tenant_columns", validate: false
 
+  create_table "tracker_operations", force: :cascade do |t|
+    t.jsonb "chain", default: [], null: false
+    t.jsonb "change", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.string "error_code"
+    t.string "issue_id"
+    t.string "operation", null: false
+    t.string "operation_key", null: false
+    t.bigint "project_tracker_id", null: false
+    t.string "request_digest", null: false
+    t.jsonb "result", default: {}, null: false
+    t.string "result_ref"
+    t.string "state", default: "pending", null: false
+    t.bigint "terminal_session_id"
+    t.datetime "updated_at", null: false
+    t.bigint "user_id"
+    t.bigint "workflow_id"
+    t.bigint "workflow_run_id"
+    t.index ["project_tracker_id", "issue_id", "created_at"], name: "idx_tracker_operations_issue"
+    t.index ["project_tracker_id", "operation_key"], name: "idx_tracker_operations_key", unique: true
+  end
+
   create_table "trigger_bindings", force: :cascade do |t|
     t.integer "cooldown_seconds", default: 0, null: false
     t.datetime "created_at", null: false
@@ -1708,6 +1763,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
   add_foreign_key "entity_versions", "projects", on_delete: :cascade
   add_foreign_key "entity_versions", "terminal_sessions", on_delete: :nullify
   add_foreign_key "entity_versions", "users", column: "author_id", on_delete: :nullify
+  add_foreign_key "external_resources", "board_tasks", on_delete: :cascade
   add_foreign_key "folders", "companies", on_delete: :cascade, validate: false
   add_foreign_key "folders", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_folders_project_company", on_delete: :cascade, validate: false
   add_foreign_key "folders", "projects", on_delete: :cascade, validate: false
@@ -1732,6 +1788,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
   add_foreign_key "project_collaborators", "users"
   add_foreign_key "project_favorites", "projects", on_delete: :cascade
   add_foreign_key "project_favorites", "users"
+  add_foreign_key "project_trackers", "integrations", on_delete: :cascade
+  add_foreign_key "project_trackers", "projects", on_delete: :cascade
   add_foreign_key "projects", "companies"
   add_foreign_key "projects", "users", column: "owner_id"
   add_foreign_key "received_webhooks", "webhook_endpoints", on_delete: :cascade
@@ -1797,6 +1855,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
   add_foreign_key "tools", "companies", on_delete: :cascade, validate: false
   add_foreign_key "tools", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_tools_project_company", on_delete: :cascade, validate: false
   add_foreign_key "tools", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "tracker_operations", "project_trackers", on_delete: :cascade
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
   add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify

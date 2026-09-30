@@ -501,6 +501,7 @@ Rails.application.routes.draw do
           resources :assets, only: %i[index]
           resources :analytics, only: :index
           resources :repositories, only: %i[index create update destroy]
+          resources :trackers, only: %i[index create update destroy]
           # `update` edits provider settings only (Coder's template / prefix /
           # lock TTL) — credentials are replaced by reconnecting, which has to
           # re-verify them against the provider.

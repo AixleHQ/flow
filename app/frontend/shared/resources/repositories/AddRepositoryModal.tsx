@@ -299,7 +299,8 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
               {isAzure && (
                 <Text size="xs" c="dimmed">
                   Agents clone, fetch and push with a short-lived credential issued per operation — nothing is stored in
-                  the checkout. Pull requests and Boards work items are reached with the Azure DevOps tools.
+                  the checkout. Pull requests are reached with the Azure DevOps tools, Boards work items with the task
+                  tracker tools.
                 </Text>
               )}
               <Select

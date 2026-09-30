@@ -47,12 +47,12 @@ class Tools::ContextTest < ActiveSupport::TestCase
     assert ctx.connected?(:github)
   end
 
-  test "batches the integration lookup into one memoized query" do
+  test "batches the integration lookup into one memoized query, plus one for trackers" do
     create(:integration, company: @company, project: @project, provider: :slack,
                          status: :active, connected_by: @user)
     ctx = Tools::Context.new(project: @project, company: @company)
 
-    assert_queries_count(1) { ctx.connected?(:slack) }
+    assert_queries_count(2) { ctx.connected?(:slack) }
     assert_no_queries do
       ctx.connected?(:coder)
       ctx.connected?(:github)

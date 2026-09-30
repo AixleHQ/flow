@@ -4,7 +4,7 @@ require "test_helper"
 
 class Tools::TagCatalogTest < ActiveSupport::TestCase
   test "the picker-facing tags are visible with their labels" do
-    { board: "Board management", slack: "Slack", coder: "Coder",
+    { board: "Board management", tracker: "Task trackers", slack: "Slack", coder: "Coder",
       assets: "Assets", session_supervision: "Session supervision" }.each do |tag, label|
       assert Tools::TagCatalog.ui_visible?(tag), "#{tag} must be offered in the picker"
       assert_equal label, Tools::TagCatalog.label(tag)
@@ -24,6 +24,6 @@ class Tools::TagCatalogTest < ActiveSupport::TestCase
   end
 
   test "ui_entries lists only visible tags, in picker order" do
-    assert_equal %i[board slack coder assets session_supervision], Tools::TagCatalog.ui_entries.map(&:tag)
+    assert_equal %i[board tracker slack coder assets session_supervision], Tools::TagCatalog.ui_entries.map(&:tag)
   end
 end

@@ -211,7 +211,8 @@ repository. How the run started never changes this.
 **Tools, skills, MCP servers**: workflow base + step (+ every project resource
 with `inherit_all_project_resources`). The internal `aixle-tools` MCP server is
 always connected: session lifecycle, sub-steps, board tools, and integration
-tools (Slack, Azure DevOps, Coder) when connected.
+tools (Slack, Azure DevOps, Coder) when connected. Task tracker tools
+(`tracker_*`) are attached like other tools once the project has a tracker.
 
 **Secrets**: the step reads its config items with `get_config_item`; MCP
 credentials are resolved from config items at launch.
@@ -242,3 +243,7 @@ task, so tagged comments carry structured hand-offs.
 - Secrets: `get_config_item`
 - Async tools: `read_tool_result`
 - When connected: `slack_*`, `azure_devops_*`, `coder_*`, `refresh_github_token`
+- Task trackers (attached; the project needs a tracker): `tracker_list`, `tracker_describe`,
+  `tracker_search_issues`, `tracker_get_issue`, `tracker_list_comments`, `tracker_create_issue`,
+  `tracker_update_issue`, `tracker_transition_issue`, `tracker_assign_issue`, `tracker_add_comment`,
+  `tracker_link_task`

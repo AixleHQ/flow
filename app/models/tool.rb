@@ -74,10 +74,12 @@ class Tool < ApplicationRecord
   def self.active_integration_providers(project)
     return [] if project.nil?
 
-    Integration.active
-               .where("(project_id = :pid) OR (project_id IS NULL AND company_id = :cid)",
-                      pid: project.id, cid: project.company_id)
-               .distinct.pluck(:provider)
+    providers = Integration.active
+                           .where("(project_id = :pid) OR (project_id IS NULL AND company_id = :cid)",
+                                  pid: project.id, cid: project.company_id)
+                           .distinct.pluck(:provider)
+    providers << Trackers::CAPABILITY if ProjectTracker.usable.for_project(project).exists?
+    providers
   end
   # Projectless sessions can still attach platform (code) tools; custom tools
   # are Project-scoped only, so none surface at the company level.

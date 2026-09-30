@@ -273,9 +273,11 @@ module AzureDevops
     # returns nil rather than raising: an unverifiable name must not turn every
     # work-item read into an authorization error.
     def expected_project_name(resolved)
-      return @expected_project_name if defined?(@expected_project_name)
+      @expected_project_names ||= {}
+      return @expected_project_names[resolved.project_id] if @expected_project_names.key?(resolved.project_id)
 
-      @expected_project_name = integration.azure_project_name.presence || fetch_project_name(resolved)
+      @expected_project_names[resolved.project_id] =
+        integration.azure_project_names[resolved.project_id].presence || fetch_project_name(resolved)
     end
 
     def fetch_project_name(resolved)
@@ -283,7 +285,10 @@ module AzureDevops
       name = client.get("_apis", "projects", resolved.project_id, family: :core)["name"].presence
       # Cache it so the next read does not pay for the lookup, and so a renamed
       # project heals itself on first use.
-      integration.update_column(:settings, integration.settings.to_h.merge("azure_project_name" => name)) if name
+      if name
+        names = integration.azure_project_names.merge(resolved.project_id => name)
+        integration.update_column(:settings, integration.settings.to_h.merge("azure_project_names" => names))
+      end
       name
     rescue Error => e
       Rails.logger.warn("[AzureDevops::WorkItemService] could not resolve project name for " \
