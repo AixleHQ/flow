@@ -1,6 +1,6 @@
 # Task tracker integrations — technical design
 
-Status: **Proposal; decisions 1–3, 5 and 6 agreed 2026-09-30; 4 and 7 pending (§13)**
+Status: **Proposal; decisions 1–7 agreed 2026-09-30; open questions in §13.2**
 Date: 2026-09-30
 Related: PR #271 (YouTrack integration, unmerged) and its two design documents,
 `integration-abstractions-tech-design-v1.md` and `youtrack-integration-tech-design-v6.md`;
@@ -36,6 +36,7 @@ attachments, issue links and deletions. §12 says where each would attach later.
 | Events | Normalized `tracker.*` types, the same for all providers: `tracker.issue.created`, `tracker.issue.status_changed`, `tracker.issue.assigned`, `tracker.comment.created`. |
 | Event trust | A webhook is a **notification**. The payload is trusted only for IDs and change hints. Issue data is re-read through the API with our own credentials before anything is matched or shown to an agent. |
 | Triggers | One new trigger kind, `tracker`. The binding names a project tracker, or none for "any tracker in this project". Filters run on normalized event data through the existing `TriggerFilter`. |
+| Aixle-caused events | Attributed to the run that made the change, through the write ledger. A per-binding `aixle_changes` setting (`ignore` by default, `other_workflows`, `always`) enables chaining, and hard depth and per-issue limits stop loops (§6.6). |
 | Subject | Adds `find_or_create_task`, which becomes the default for tracker triggers. It reuses the task already linked to the issue, or creates one and links it. |
 | Tools | One global `tracker_*` set of code-first tools. An optional `tracker` argument selects the target. Resolution is deterministic and never falls back to "the first row" (§7.2). |
 | Tool availability | Attachable from the picker when the project has an active tracker. Injected automatically into runs that a tracker event started. |
@@ -164,11 +165,15 @@ external_resources
 
 trigger_bindings
   + project_tracker_id   FK project_trackers, NULL, ON DELETE RESTRICT
+  + aixle_changes        varchar NOT NULL DEFAULT 'ignore'   -- ignore | other_workflows | always (§6.6)
 
-tracker_operations          -- idempotency ledger, the azure_devops_operations shape
+tracker_operations          -- every tracker write: idempotency (§7.4) + causality (§6.6)
   integration_id, operation, operation_key, request_digest, state, target_kind, target_id,
-  result, terminal_session_id, user_id
+  result, terminal_session_id, user_id,
+  workflow_run_id, workflow_id, chain jsonb,         -- who made the write
+  issue_id, change jsonb, result_ref                 -- what it changed (field/to, created comment/issue id)
   UNIQUE (integration_id, operation, operation_key)
+  INDEX  (integration_id, issue_id, created_at)
 ```
 
 Notes:
@@ -363,7 +368,7 @@ every provider:
 ```
 
 `text` is the bounded title + description for created issues and the bounded comment body for
-comments. It keeps the Slack-style "text matches" control usable unchanged.
+comments. Events caused by Aixle also carry `origin` (§6.6). It keeps the Slack-style "text matches" control usable unchanged.
 
 `TriggerFilter` gains one operator, `includes` (array membership). `contains` stringifies its
 operand, so `labels contains "ai"` would also match `"main"`.
@@ -379,14 +384,8 @@ operand, so `labels contains "ai"` would also match `"main"`.
   `{"change.to.name": {"op": "in", "value": ["Ready for AI"]}}`,
   `{"change.to.category": "done"}`, `{"issue.type": "Bug"}`,
   `{"issue.labels": {"op": "includes", "value": "ai"}}`, `{"comment.mentions_me": true}`.
-- **Own changes.** For `tracker` bindings, `Creator` adds `{"actor.is_me": false}` unless the
-  caller set that key. A workflow that moves a ticket then does not retrigger itself, while
-  deliberate chaining ("when Aixle moves it to In Review, start review") stays possible by opting
-  in. Cooldown and session admission still bound any loop.
-  `actor.is_me` is true when the actor is the identity of **any** active connection of the company
-  to the same instance, not only the one that delivered the event. Otherwise two connections with
-  different bot users would trigger each other. The identity should be a dedicated automation
-  account: a permanent token owned by a person makes that person's own edits invisible to triggers.
+- **Changes made by Aixle** are governed by the binding's `aixle_changes` setting, not by a
+  filter. §6.6 covers it.
 - **Subject policies**: the existing three, plus `find_or_create_task`, the default for tracker
   triggers:
   - `existing_task` — the active board task in this project linked to the issue. Prefer a link
@@ -410,6 +409,89 @@ operand, so `labels contains "ai"` would also match `"main"`.
 
 Delivery stays best-effort in v1. The UI shows `last_event_at` and the subscription status, and
 never promises lossless delivery. A cursor-based gap sweep is an additive capability later (§12).
+
+### 6.6 Changes made by Aixle: chaining without loops
+
+An agent writes through the connection's identity, so its own actions come back as tracker events.
+Without a rule, this loops:
+
+- A "comment mentions @aixle" trigger starts a run. The agent's reply quotes `@aixle`, and the run
+  starts itself again.
+- A "status changed" trigger without a status filter starts a run. The agent moves the issue, and
+  the same workflow starts again.
+
+Some of those events are wanted: "when the dev workflow moves the issue to In Review, start the
+review workflow". The rule therefore tracks **which run caused a change**, not merely **that Aixle
+caused it**.
+
+**Attribution.**
+
+1. Every write a `tracker_*` tool makes is recorded in `tracker_operations` **before** the provider
+   call (state `pending`, then `succeeded`/`failed`). The row carries the run and workflow that
+   made it, the run's chain, and what it changes. A notification can arrive before the API call
+   returns, and it still finds the row.
+2. When a notification comes back, the job matches it to the ledger:
+   - created comments and issues: exact match on the returned id (`result_ref`);
+   - status and assignee changes: the same issue, field and `to` value, within a short window of
+     the write (10 minutes, to be tuned).
+3. A matched event carries its origin:
+
+   ```json
+   "origin": { "aixle": true, "attributed": true, "workflow_run_id": 881,
+               "workflow_id": 42, "chain": [42, 57], "depth": 2 }
+   ```
+
+   `chain` is the list of workflow ids that led here: the origin run's own chain plus its workflow.
+   A run started from such an event stores `chain` and `depth` in `shared_context["tracker"]`, and
+   its writes pass them on.
+4. A change by a connection identity that matches no ledger row (someone used the bot account by
+   hand, or another system shares the token) gets `{"aixle": true, "attributed": false, "chain":
+   [], "depth": 1}`.
+5. A person's change has no origin and starts a fresh chain.
+
+`actor.is_me` (and so `origin.aixle`) is true when the actor is the identity of **any** active
+connection of the company to the same instance, not only the one that delivered the event.
+Otherwise two connections with different bot users would trigger each other. The identity should be
+a dedicated automation account: a token owned by a person makes that person's own edits count as
+Aixle's.
+
+**Per-binding setting** — `aixle_changes`:
+
+| Value | Fires on an Aixle-caused event when | For |
+|---|---|---|
+| `ignore` (default) | never | triggers that react to people |
+| `other_workflows` | the binding's workflow is **not** in `origin.chain` | chaining: dev → review. Blocks a workflow starting itself and cycles such as A → B → A. |
+| `always` | always, including its own workflow | deliberate state machines that walk an issue through statuses one run at a time |
+
+**Hard limits**, project settings that no binding can switch off:
+
+- **Chain depth**, default 5. An Aixle-caused event at or beyond it fires nothing
+  (`chain_depth_limit`).
+- **Per-issue budget**, default 10 Aixle-caused runs per issue per rolling hour, across all
+  bindings (`issue_chain_budget`).
+- Existing cooldown and session admission.
+
+A skip is recorded on its `TriggerDispatch` (`status: skipped`, `detail.reason`), the way cooldown
+is recorded today, and shows in the trigger's activity.
+
+Example with `other_workflows` on both bindings:
+
+1. A person moves APP-1 to Ready. Dev workflow W1 starts: chain `[]`.
+2. W1 moves APP-1 to In Review. The event carries chain `[W1]`. Review workflow W2 fires, and its
+   run has chain `[W1]`.
+3. W2 moves APP-1 back to Ready. The event carries chain `[W1, W2]`. W1 is in the chain, so W1 does
+   not fire.
+4. Once a person touches APP-1 again, the chain starts over.
+
+With `always`, the same cycle runs until the depth or the per-issue budget stops it.
+
+### 6.7 Templates
+
+`Templates::Exporter` writes a tracker binding without its `project_tracker_id`. On install it
+becomes "any tracker" of the target project. Filters, `aixle_changes` and the subject policy
+travel as they are. Status **names** differ between trackers, so templates meant for sharing
+should filter on `change.to.category`. The installer already creates every trigger disabled, so a
+person reviews the filters before anything fires.
 
 ## 7. Agent tools
 
@@ -468,7 +550,8 @@ Then:
 
 ### 7.4 Idempotency
 
-`tracker_create_issue` and `tracker_add_comment` write through `tracker_operations`. The operation
+Every tracker write goes through `tracker_operations`, which also records causality (§6.6). For
+`tracker_create_issue` and `tracker_add_comment` the row is also an idempotency guard. The operation
 key is the caller's optional `operation_key`, or else is derived from `(session, tool,
 request_digest)`, so an agent's retry of an identical call does not file a second ticket. A timeout
 after dispatch is reported as `outcome_unknown` with a read-back hint, not blindly retried. The
@@ -484,7 +567,8 @@ A tracker-started run gets:
              "issue": { "id": "2-1234", "key": "APP-123", "url": "…", "title": "…",
                         "status": "Ready for AI" },
              "change": { "field": "status", "from": "Open", "to": "Ready for AI" },
-             "comment": { "id": "4-55", "text": "…" } }
+             "comment": { "id": "4-55", "text": "…" },
+             "chain": [42], "depth": 1 }
 ```
 
 A `ContextBuilders::TrackerContext` section (`applicable?` when the key is present) tells the
@@ -582,21 +666,27 @@ revision guards and the project-scope re-check:
   before acknowledging, as today. `ResolveAzureDevopsEventJob` gets one more branch: it builds a
   `Trackers::Notification` from a `workitem.*` delivery and hands it to the tracker pipeline.
   `tracker_subscriptions` and `/webhooks/trackers` are not used for Azure.
-- **Idempotency.** The Azure adapter keeps writing through `azure_devops_operations`. It is the
-  same ledger shape as `tracker_operations`, and merging the two tables is an optional cleanup.
+- **Ledger.** Work-item writes go through `tracker_operations` like every other provider's, so
+  they get the same causality tracking (§6.6). `azure_devops_operations` stays for pull-request
+  operations.
 - **Target resolution.** The Azure design refuses any default when more than one project is
   possible, because "the first connection" depends on row order. §7.2 keeps that rule: its only
   default is the **primary** tracker, which a person chose explicitly, and after that an error.
   Row order never decides.
-- **Tool overlap.** Once a project has an Azure Boards tracker, it could reach work items twice:
-  through `tracker_*` and through the injected `azure_devops_*work_item*` tools. That is one
-  operation with two names. After the adapter reaches parity:
-  1. Stop injecting `azure_devops_create_work_item`, `get_work_item`, `update_work_item`,
+- **Tool overlap: removed at once.** Two names for one operation are not kept side by side, and
+  there is no deprecation release. The change that ships the Azure Boards provider also:
+  1. **Deletes** `azure_devops_create_work_item`, `get_work_item`, `update_work_item`,
      `query_work_items`, `list_work_item_comments`, `add_work_item_comment` and
      `list_work_item_types`.
-  2. Keep them for one release for workflows that attached them explicitly.
-  3. Remove them, with a data migration of those attachments. Code-first tools only need a
-     migration for a rename or removal.
+  2. **Creates project trackers** for existing connections, with a data migration: one per
+     (Aixle project that sees the Azure connection × Azure project it covers). The handle is
+     derived from the Azure project name. When a project ends up with exactly one tracker, it is
+     primary.
+  3. **Re-points explicit attachments** of the deleted tools to their `tracker_*` equivalents in
+     the same migration. Code-first tools need a migration only for a rename or removal.
+  4. **Reports step instructions** that name a deleted tool (a list of workflow and step ids). The
+     argument shapes differ (`integration_id` + `azure_project_id` versus `tracker`), so text is not
+     rewritten automatically.
 
   `azure_devops_link_work_item` links a **pull request** to a work item, so it is a code-host
   operation and stays. `azure_devops_list_connections` also stays: the build and PR tools still
@@ -626,7 +716,7 @@ this provider is designed (phase 4). Repository and PR behaviour is untouched.
   size, TLS verification that cannot be disabled.
 - **Scope**: every returned entity is re-checked against the tracker's external project (§7.2).
   `read_only` is enforced in Rails, not in prompts.
-- **Loops**: own-change suppression (§6.4), cooldown, and session admission.
+- **Loops**: causality tracking with the per-binding `aixle_changes` setting and hard depth and per-issue limits (§6.6), cooldown, and session admission.
 - **Logs** carry IDs, event kind and disposition only. Tokens, headers, bodies and issue text are
   never logged.
 
@@ -642,7 +732,8 @@ this provider is designed (phase 4). Repository and PR behaviour is untouched.
   - event;
   - filters built from `describe` metadata: status from/to, category, type, labels, "only when
     Aixle is mentioned", text match;
-  - subject policy.
+  - subject policy;
+  - "Changes made by Aixle": ignore / only from other workflows / always.
 
   The form is the same for every provider.
 - **Task details**: linked issues (provider, key, link), read-only. This matches PR #271's
@@ -659,8 +750,9 @@ this provider is designed (phase 4). Repository and PR behaviour is untouched.
    the transition graph, `native_query` (JQL). This is the first test of the port against a
    provider it was not written for.
 3. **Azure Boards** as described in §9.2: the provider over `AzureDevops::WorkItemService`,
-   `workitem.*` Service Hook types, then deprecation of the duplicate work-item tools. Repository,
-   PR and CI tools are untouched.
+   `workitem.*` Service Hook types, and, in the same change, deletion of the duplicate work-item
+   tools with the project-tracker and attachment migration. Repository, PR and CI tools are
+   untouched.
 4. **GitHub Projects / Issues and Linear**, and the dead `linear` enum value and user-guide claim
    are either implemented or removed.
 
@@ -675,12 +767,29 @@ Later and additive:
 
 ## 13. Decisions
 
+### 13.1 Agreed
+
 | # | Question | Status |
 |---|---|---|
 | 1 | Common `tracker_*` tools and `tracker.*` events, or provider-named ones? | **Agreed: common.** Tool names and event types are persisted into workflows and templates, so renaming later is a data migration. Provider power goes through `native_query` and `fields`. |
 | 2 | Inject tracker tools into every session of a project with a tracker, or only tracker-started runs plus explicit attachment? | **Agreed: only tracker-started runs plus explicit attachment.** |
 | 3 | Make `find_or_create_task` the default subject policy for tracker triggers? | **Agreed: yes.** |
-| 4 | Suppress events caused by the connection's own identity by default? | **Pending.** Recommendation: yes, with opt-in for chaining (§6.4). |
+| 4 | Events caused by Aixle? | **Agreed: a per-binding setting.** `aixle_changes` = `ignore` (default) / `other_workflows` / `always`, with causality tracking and hard depth and per-issue limits (§6.6). |
 | 5 | Disconnect soft (inactive, credentials wiped, reconnectable) instead of destroy? | **Agreed: yes.** |
 | 6 | PR #271: close and salvage, or merge and migrate? | **Agreed: stays open for now.** This design is built on its own branch and copies PR #271's client and connect verification. |
-| 7 | Azure Boards: second set of work-item tools, or one tracker set? | **Recommendation: one set.** Azure Boards becomes a tracker provider over the existing connection, and the duplicate `azure_devops_*work_item*` tools are retired after parity (§9.2). |
+| 7 | Azure Boards: second set of work-item tools, or one tracker set? | **Agreed: one set, and the duplicates are deleted in the same change** that ships the Azure Boards provider, with no deprecation release (§9.2). |
+
+### 13.2 Open
+
+| # | Question | Recommendation |
+|---|---|---|
+| 8 | Who may map an external project into an Aixle project through a **company-wide** connection? Its token may see every external project, including sensitive ones. | A company admin keeps an allow-list of external projects per company connection; project admins pick from it. |
+| 9 | Whose run is a tracker-started run? Today a webhook-started run belongs to the trigger's creator (`TriggerEngine#fire_for_binding`). | v1: the trigger's creator. Mapping the tracker actor to an Aixle user (verified email) comes later and is shared with the Teams design. |
+| 10 | Which fields may agents write? | Everything the provider reports as editable, minus an optional per-tracker deny list. `read_only` covers the rest. |
+| 11 | Should a failed tracker-started run say so on the issue? `notify_on_failure` exists and is Slack-only today. | Yes: the same flag posts one short comment with a link to the run. The comment goes through the ledger like any Aixle write, so `aixle_changes` governs whether it starts anything. |
+| 12 | Phase order after YouTrack. | Azure Boards before Jira: the service and subscriptions already exist, and it removes the duplicate tools sooner. Jira then exercises API webhooks with refresh. |
+| 13 | Jira authentication. | Decide in Jira's phase: an Atlassian OAuth 2.0 app (API-registered webhooks, 30-day refresh, deployment-level configuration like Azure's Entra app) or an API token with a manually configured webhook. Not blocking. |
+| 14 | Self-hosted YouTrack older than 2026.2, which cannot run the stock Webhook Triggers app. | Not supported in v1; documented as a requirement. |
+| 15 | Loop-limit defaults: depth 5, 10 Aixle-caused runs per issue per hour. | Accept as starting values; tune from dispatch diagnostics. |
+| 16 | Scope cuts from §1: no mirroring, no polling, best-effort delivery. | Confirm for v1. |
+
