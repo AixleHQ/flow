@@ -109,6 +109,7 @@ session is running in it:
 | List price | `PRICING_QUEUE_HOURLY_RATE`, default **$5.00 per queue-hour** |
 | One queue, one month | 720 hours — **$3,600** at the default |
 | Metering | hourly, time-weighted, exact to the second |
+| Invoicing | whole queue-hours; the part hour left at the end of a period rounds **down** |
 
 Time-weighted means half an hour at one queue and half at three is two
 queue-hours, not three. Raising or lowering the limit takes effect immediately
