@@ -29,9 +29,20 @@ module Sessions
       @session = session
     end
 
+    # A live read execs into the container over a websocket, and a stored read
+    # pulls from object storage — both cross the network. This text is answered
+    # in-band to an MCP client, whose transport gives up around 300s, so a read
+    # that stalls (a container being torn down, a slow storage fetch) must return
+    # a note within a bounded time rather than hang the whole tool call.
+    READ_TIMEOUT = 45
+
     def call(lines:, raw: false)
-      payload = live? ? live(lines) : stored(lines, raw: raw)
+      payload = Timeout.timeout(READ_TIMEOUT) { live? ? live(lines) : stored(lines, raw: raw) }
       payload.merge(quota_verdict(payload[:log]))
+    rescue Timeout::Error
+      { source: "unreachable", log: "", truncated: false, last_output_at: nil, idle_seconds: nil,
+        note: "Reading this session's log timed out after #{READ_TIMEOUT}s. Its container is likely being torn " \
+              "down or unreachable; try again once the session has finished." }
     end
 
     private

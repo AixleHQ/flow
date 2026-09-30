@@ -141,6 +141,50 @@ class WorkflowServiceTest < ActiveSupport::TestCase
     assert_equal run.id, activity.metadata["workflow_run_id"]
   end
 
+  # A run fails when its Temporal execution crashes before the in-flight step
+  # could mark itself. Without the fan-out the step stays "running" behind a
+  # failed run, which get_workflow_run then shows as a live step on a dead run.
+  test "fail marks the run's still-active step runs failed" do
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run.start! if run.may_start?
+    step_run = run.step_runs.first
+    step_run.update!(state: "running")
+
+    WorkflowService.fail(run: run)
+
+    assert_equal "failed", run.reload.state
+    assert_equal "failed", step_run.reload.state
+    assert_equal "Run failed while this step was in flight", step_run.error_message
+  end
+
+  test "fail carries the session's diagnosed reason onto the orphaned step run" do
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run.start! if run.may_start?
+    step_run = run.step_runs.first
+    session = create(:terminal_session, :failed, user: @user, project: @project,
+                                        error_message: "Session terminated: no output for 30 minutes.")
+    step_run.update!(terminal_session: session, state: "running")
+
+    WorkflowService.fail(run: run)
+
+    assert_equal "failed", step_run.reload.state
+    assert_equal "Session terminated: no output for 30 minutes.", step_run.error_message
+  end
+
+  test "fail leaves an already-completed step run untouched" do
+    TemporalWorkflowRegistry.stubs(:start_workflow_execution).returns(ok: true)
+    run = WorkflowService.start(workflow: @workflow, project: @project, user: @user)
+    run.start! if run.may_start?
+    step_run = run.step_runs.first
+    step_run.mark_completed!
+
+    WorkflowService.fail(run: run)
+
+    assert_equal "completed", step_run.reload.state
+  end
+
   # == dispatch (transactional outbox) ==
 
   test "start marks the run dispatched once Temporal confirms the execution" do

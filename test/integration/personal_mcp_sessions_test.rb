@@ -29,6 +29,22 @@ class PersonalMCPSessionsTest < ActionDispatch::IntegrationTest
   def tool_error?(body) = body.dig("result", "isError")
   def text(body) = body.dig("result", "content").map { |c| c["text"] }.join(" ")
 
+  test "get_session_log answers for a stored log whose tail starts mid-character" do
+    session = create(:terminal_session, :failed, user: @user, project: @project, session_type: "workflow_step")
+    # A spinner glyph is 3 bytes; one leading byte puts the 256 KB tail window
+    # inside a glyph, the way a real pipe-pane capture usually lands.
+    content = "x#{'✻ Working… ' * 30_000}\nlast line\n"
+    create(:session_log, terminal_session: session, name: "terminal_output.log", file_size: content.bytesize,
+                         file: SessionLogUploader.upload(StringIO.new(content), :store))
+
+    body = call_tool("get_session_log", { session_id: session.id, lines: 5 })
+
+    assert_not tool_error?(body), text(body)
+    log = payload(body)["log"]
+    assert_equal Encoding::UTF_8, log.encoding
+    assert_match(/last line/, log)
+  end
+
   test "the session tools are served to a personal token" do
     post "/mcp",
          params: { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }.to_json,
