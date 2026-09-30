@@ -192,17 +192,7 @@ module ContainerStrategies
     end
 
     def rewrite_url_for_container(url)
-      host = Settings.container_asset_host
-      return url if host.blank?
-
-      override = URI.parse(host.start_with?("http") ? host : "http://#{host}")
-      uri = URI.parse(url)
-      uri.scheme = override.scheme
-      uri.host = override.host
-      uri.port = override.port
-      uri.to_s
-    rescue URI::InvalidURIError
-      url
+      ContainerAssetUrl.call(url, host: Settings.container_asset_host)
     end
 
     # Context from step_run (board task, run params) is injected by SessionContextConstructor,

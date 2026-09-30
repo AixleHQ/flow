@@ -24,19 +24,5 @@ class ToolResultResource
 
   private
 
-  def rewrite_host(url)
-    return url if url.blank?
-
-    host = params[:url_host]
-    return url if host.blank?
-
-    override = URI.parse(host.start_with?("http") ? host : "http://#{host}")
-    uri = URI.parse(url)
-    uri.scheme = override.scheme
-    uri.host = override.host
-    uri.port = override.port
-    uri.to_s
-  rescue URI::InvalidURIError
-    url
-  end
+  def rewrite_host(url) = ContainerAssetUrl.call(url, host: params[:url_host])
 end
