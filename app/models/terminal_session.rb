@@ -190,7 +190,6 @@ class TerminalSession < ApplicationRecord
   def visible_to?(viewer)
     return false if viewer.nil?
     return true if user_id == viewer.id
-    return true if session_type == "workflow_step"
     return false if session_type == "auth_setup"
     return false if user.nil?
 

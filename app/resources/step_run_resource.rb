@@ -72,6 +72,7 @@ class StepRunResource < ApplicationResource
     # "ready". Handing out the URL any earlier (e.g. "not_started"/"running")
     # points the terminal at a route that doesn't exist yet and it 404s.
     next nil unless ts&.route_token.present? && ts.ready?
+    next nil unless ts.visible_to?(params[:viewer])
 
     surface = owned_by_viewer?(ts) ? "tty" : "view"
     ContainerTicket.append("#{params.dig(:traefik, :ws_base)}/t/#{ts.route_token}/#{surface}/ws",

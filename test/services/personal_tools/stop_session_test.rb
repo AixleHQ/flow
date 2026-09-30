@@ -47,10 +47,8 @@ module PersonalTools
     end
 
     test "a member who may see the session may stop it" do
-      owner = create(:user)
+      owner = create(:user, share_active_sessions: true)
       create(:company_membership, user: owner, company: @company, role: :employee)
-      # workflow_step sessions are team automation — visible to everyone who can
-      # reach the project, regardless of the owner's sharing preferences.
       session = create(:terminal_session, :running, session_type: "workflow_step",
                        user: owner, project: @project)
 
@@ -61,6 +59,7 @@ module PersonalTools
     end
 
     test "a read-only member cannot stop a session they can see" do
+      @user.update!(share_active_sessions: true)
       viewer = create(:user)
       create(:company_membership, user: viewer, company: @company, role: :viewer)
       create(:project_collaborator, project: @project, user: viewer)

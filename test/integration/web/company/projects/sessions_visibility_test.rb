@@ -116,12 +116,16 @@ class Web::Company::Projects::SessionsVisibilityTest < ActionDispatch::Integrati
     assert_equal DENIAL_ALERT, flash[:alert]
   end
 
-  test "workflow-step sessions stay open to the project regardless of preferences" do
+  test "workflow-step sessions follow the run owner's preferences" do
     @owner.update!(share_active_sessions: false, share_completed_sessions: false)
     session = create(:terminal_session, :running, session_type: "workflow_step", user: @owner, project: @project)
 
     get company_project_session_path(@project, session)
+    assert_response :redirect
+    assert_equal DENIAL_ALERT, flash[:alert]
 
+    @owner.update!(share_active_sessions: true)
+    get company_project_session_path(@project, session)
     assert_inertia_page "Projects/Sessions/ShowPage"
   end
 end
