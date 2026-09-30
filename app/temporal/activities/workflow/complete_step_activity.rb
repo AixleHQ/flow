@@ -94,12 +94,21 @@ module Activities
       # so strip the full family of escape sequences a redrawing TUI emits — CSI (colors/cursor),
       # OSC (window title), and the 2-char charset/other escapes — before quota matching. Carriage
       # returns (in-place redraws) become newlines so overwritten phrases still match.
+      #
+      # Shrine opens the stored file in binary mode, so the bytes arrive as ASCII-8BIT.
+      # A pattern that is not pure ASCII cannot match that: AuthErrorDetector's "·"
+      # is a UTF-8 regexp, and String#match? raises Encoding::CompatibilityError as
+      # soon as the log holds a byte >= 128. Scrub, because a PTY stream is not
+      # guaranteed to be valid UTF-8 either — an invalid sequence would raise
+      # ArgumentError out of the same match.
       ANSI_CSI = /\e\[[0-9;?]*[ -\/]*[@-~]/
       ANSI_OSC = /\e\][^\a\e]*(?:\a|\e\\)/
       ANSI_OTHER = /\e[@-Z\\-_()][0-9A-Za-z]?/
 
       def strip_ansi(text)
-        text.to_s
+        text.to_s.dup
+            .force_encoding(Encoding::UTF_8)
+            .scrub
             .gsub(ANSI_OSC, "")
             .gsub(ANSI_CSI, "")
             .gsub(ANSI_OTHER, "")

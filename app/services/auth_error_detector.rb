@@ -40,6 +40,7 @@ class AuthErrorDetector
   end
 
   def self.detect(text)
+    text = normalize(text)
     return Result.new(auth_error: false) if text.blank?
     return Result.new(auth_error: false) unless PATTERNS.any? { |pat| text.match?(pat) }
 
@@ -47,7 +48,8 @@ class AuthErrorDetector
   end
 
   def self.extract_message(text)
-    lines = text.to_s.lines.map(&:strip).reject(&:empty?)
+    text = normalize(text)
+    lines = text.lines.map(&:strip).reject(&:empty?)
     matching_line = lines.find { |line| PATTERNS.any? { |pat| line.match?(pat) } }
     return truncate(matching_line) if matching_line
 
@@ -59,10 +61,18 @@ class AuthErrorDetector
     truncate(text)
   end
 
+  # Callers hand over terminal bytes, not text: a stored log is ASCII-8BIT, and a
+  # live pane can hold an invalid UTF-8 sequence. The "·" pattern above is a UTF-8
+  # regexp, so either input raises out of String#match? (CompatibilityError, or
+  # ArgumentError for an invalid sequence) before a verdict is reached.
+  def self.normalize(text)
+    text.to_s.dup.force_encoding(Encoding::UTF_8).scrub
+  end
+
   def self.truncate(message)
     return message if message.length <= MAX_MESSAGE_LENGTH
 
     "#{message[0, MAX_MESSAGE_LENGTH]}…"
   end
-  private_class_method :truncate
+  private_class_method :normalize, :truncate
 end

@@ -40,6 +40,8 @@ class Web::Company::Projects::WorkflowsControllerTest < ActionDispatch::Integrat
     assert_response :success
     assert_equal 1, queries.count { |sql| sql.match?(/FROM "steps"/) }, queries.grep(/FROM "steps"/).inspect
     assert_equal 1, queries.count { |sql| sql.match?(/FROM "sub_steps"/) }, queries.grep(/FROM "sub_steps"/).inspect
+    assert_equal 1, queries.count { |sql| sql.match?(/FROM "workflow_runs"/) },
+                 queries.grep(/FROM "workflow_runs"/).inspect
   end
 
   test "builder renders workflow builder" do

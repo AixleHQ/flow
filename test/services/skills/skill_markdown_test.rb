@@ -104,4 +104,19 @@ class Skills::SkillMarkdownTest < ActiveSupport::TestCase
     assert_nil Skills::SkillMarkdown.name("no frontmatter")
     assert_nil Skills::SkillMarkdown.description("---\n: : :\n---\nbody")
   end
+
+  # A NUL in someone else's SKILL.md is valid UTF-8, so it survives a scrub and then
+  # dies inside pg's exec_params ("string contains null byte") on the catalog write.
+  test "strips null bytes before reading or storing frontmatter" do
+    content = skill_md(name: "pdf\0-processing", description: "Extract\0 PDF text")
+
+    assert_equal "pdf-processing", Skills::SkillMarkdown.name(content)
+    assert_equal "Extract PDF text", Skills::SkillMarkdown.description(content)
+
+    result = Skills::SkillMarkdown.parse(content)
+    assert result.valid?, result.error_sentence
+    assert_equal "pdf-processing", result.name
+    assert_equal "Extract PDF text", result.description
+    assert_not result.content.include?("\0")
+  end
 end

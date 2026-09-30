@@ -169,6 +169,23 @@ class CompanyMembershipTest < ActiveSupport::TestCase
     assert_equal %w[claude_code cursor_cli], membership.configured_agents
   end
 
+  # An empty model list is not cached, so a credential the refresh sweep has
+  # already condemned used to 401, refresh, and report RefreshFailed on every
+  # builder load. Re-auth (status back to active) is what asks the vendor again.
+  test "agent_models_for_props does not refresh a credential already marked error" do
+    membership = create(:company_membership, user: @user, company: @company)
+    credential = create(:agent_credential, :cursor_cli, :errored, user: @user, company: @company,
+                        config_data: { "accessToken" => "stale", "refreshToken" => "r1" })
+
+    props = nil
+    assert_no_error_reported { props = membership.agent_models_for_props }
+
+    assert_equal [ { agent_type: "cursor_cli", models: [] } ], props
+    assert_equal 1, credential.reload.refresh_failure_count
+    assert_not_requested :post, Agents::CursorCliAdapter::CURSOR_MODELS_URL
+    assert_not_requested :post, Agents::CursorCliAdapter::CURSOR_AUTH_URL
+  end
+
   # === cable disconnect on revoke ===
 
   test "revoking a membership disconnects the user's cable connections" do

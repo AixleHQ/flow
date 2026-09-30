@@ -53,6 +53,49 @@ class Workflow < ApplicationRecord
     association(:steps).loaded? ? steps.reject(&:deleted?) : steps.not_deleted.to_a
   end
 
+  RunStats = Data.define(:count, :last_at, :last_state, :active)
+  EMPTY_RUN_STATS = RunStats.new(count: 0, last_at: nil, last_state: nil, active: false)
+
+  # One grouped read for a list. `runs.size` / `runs.max_by` is a COUNT plus a
+  # SELECT * per workflow and loads every historical run. List callers attach
+  # this before WorkflowResource; a single record loads its own row lazily.
+  def self.attach_run_stats(workflows)
+    list = workflows.to_a
+    indexed = load_run_stats(list.map(&:id))
+    list.each { |workflow| workflow.run_stats = indexed.fetch(workflow.id, EMPTY_RUN_STATS) }
+    list
+  end
+
+  def run_stats
+    return @run_stats if instance_variable_defined?(:@run_stats)
+
+    self.class.attach_run_stats([ self ])
+    @run_stats
+  end
+
+  attr_writer :run_stats
+
+  def self.load_run_stats(ids)
+    return {} if ids.empty?
+
+    boolean = ActiveModel::Type::Boolean.new
+    WorkflowRun.where(workflow_id: ids).group(:workflow_id).pluck(
+      :workflow_id,
+      Arel.sql("COUNT(*)"),
+      Arel.sql('MAX("workflow_runs"."created_at")'),
+      Arel.sql('(ARRAY_AGG("workflow_runs"."state" ORDER BY "workflow_runs"."created_at" DESC, "workflow_runs"."id" DESC))[1]'),
+      Arel.sql(%{BOOL_OR("workflow_runs"."state" IN ('running', 'paused'))})
+    ).to_h do |workflow_id, count, last_at, last_state, active|
+      [ workflow_id, RunStats.new(
+        count: count.to_i,
+        last_at: last_at,
+        last_state: last_state,
+        active: boolean.cast(active) || false
+      ) ]
+    end
+  end
+  private_class_method :load_run_stats
+
   # The one way a workflow is deleted — from the UI, the API and the personal MCP
   # alike. Refused while a run is live or a board column still starts it;
   # otherwise every trigger that could start it again is switched off (their

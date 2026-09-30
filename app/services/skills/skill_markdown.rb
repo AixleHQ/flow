@@ -137,8 +137,10 @@ module Skills
 
       private
 
+      # NUL is valid UTF-8, so scrub leaves it in place. A bind parameter that still
+      # contains one never reaches Postgres: pg raises ArgumentError inside exec_params.
       def normalize(content)
-        content.to_s.dup.force_encoding(Encoding::UTF_8).delete_prefix("\uFEFF").lstrip
+        content.to_s.b.delete("\0").force_encoding(Encoding::UTF_8).scrub.delete_prefix("\uFEFF").lstrip
       end
 
       def extract_frontmatter(content)

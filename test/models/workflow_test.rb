@@ -179,4 +179,57 @@ class WorkflowTest < ActiveSupport::TestCase
     assert_not workflow.valid?
     assert_match(/base_mcp_server_ids contains ids outside this project/, workflow.errors[:config].to_sentence)
   end
+
+  test "attach_run_stats reports count, latest run, and active runs in one query" do
+    busy = create(:workflow, scope: @project)
+    quiet = create(:workflow, scope: @project)
+    untouched = create(:workflow, scope: @project)
+    create(:workflow_run, workflow: busy, state: "paused").update_columns(created_at: 3.days.ago)
+    create(:workflow_run, :completed, workflow: busy).update_columns(created_at: 2.days.ago)
+    latest = create(:workflow_run, :running, workflow: busy)
+    latest.update_columns(created_at: 1.hour.ago)
+    create(:workflow_run, :completed, workflow: quiet).update_columns(created_at: 5.days.ago)
+
+    listed = Workflow.where(id: [ busy.id, quiet.id, untouched.id ]).to_a
+    stats = nil
+    assert_queries_count(1) do
+      stats = Workflow.attach_run_stats(listed).index_by(&:id)
+    end
+
+    assert_equal 3, stats[busy.id].run_stats.count
+    assert_equal "running", stats[busy.id].run_stats.last_state
+    assert_in_delta latest.reload.created_at, stats[busy.id].run_stats.last_at, 1
+    assert stats[busy.id].run_stats.active
+
+    assert_equal 1, stats[quiet.id].run_stats.count
+    assert_equal "completed", stats[quiet.id].run_stats.last_state
+    refute stats[quiet.id].run_stats.active
+
+    assert_equal 0, stats[untouched.id].run_stats.count
+    assert_nil stats[untouched.id].run_stats.last_at
+    assert_nil stats[untouched.id].run_stats.last_state
+    refute stats[untouched.id].run_stats.active
+  end
+
+  test "attach_run_stats breaks a created_at tie toward the higher id" do
+    workflow = create(:workflow, scope: @project)
+    stamp = Time.zone.parse("2026-03-01 12:00:00")
+    create(:workflow_run, :completed, workflow: workflow).update_columns(created_at: stamp)
+    later = create(:workflow_run, :failed, workflow: workflow)
+    later.update_columns(created_at: stamp)
+
+    stats = Workflow.attach_run_stats([ workflow.reload ]).first.run_stats
+
+    assert_operator later.id, :>, workflow.runs.minimum(:id)
+    assert_equal "failed", stats.last_state
+  end
+
+  test "run_stats loads a single workflow once and then reads the cache" do
+    workflow = create(:workflow, scope: @project)
+    create(:workflow_run, :running, workflow: workflow)
+    loaded = Workflow.find(workflow.id)
+
+    assert_queries_count(1) { assert_equal "running", loaded.run_stats.last_state }
+    assert_no_queries { assert_equal 1, loaded.run_stats.count }
+  end
 end

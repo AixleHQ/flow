@@ -89,6 +89,55 @@ module Activities
         assert_equal "completed", step_run.reload.state
       end
 
+      # Shrine reads the stored log as ASCII-8BIT. A byte >= 128 used to raise
+      # Encoding::CompatibilityError out of AuthErrorDetector before the step
+      # could be judged, and Temporal retried the activity.
+      test "fails the step for an expired login in a binary terminal log" do
+        log = "\xFFredraw\nLogin expired · Please run /login\n".b
+        session = create(:terminal_session, :failed,
+          user: @user,
+          agent_type: "claude_code",
+          error_message: "Session terminated: no output for 30 minutes.")
+        SessionLog.create!(
+          terminal_session: session,
+          name: "terminal_output.log",
+          file: StringIO.new(log),
+          file_size: log.bytesize,
+          content_type: "text/plain"
+        )
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert result["auth_error"]
+        assert result["failed"]
+        assert_equal "auth_expired", step_run.reload.error_category
+        assert_match(/Login expired/, step_run.error_message)
+      end
+
+      test "fails a session normally when its binary terminal log has no auth banner" do
+        log = "\xFFstill working on the task\n".b
+        session = create(:terminal_session, :failed,
+          user: @user,
+          agent_type: "claude_code",
+          error_message: "Session terminated: no output for 30 minutes.")
+        SessionLog.create!(
+          terminal_session: session,
+          name: "terminal_output.log",
+          file: StringIO.new(log),
+          file_size: log.bytesize,
+          content_type: "text/plain"
+        )
+        step_run = create(:step_run, workflow_run: @run, step: @step, terminal_session: session)
+
+        result = run_activity(CompleteStepActivity, { "step_run_id" => step_run.id })
+
+        assert_nil result["auth_error"]
+        assert result["failed"]
+        refute result["valid"]
+        assert_match(/no output/, step_run.reload.error_message)
+      end
+
       # --- cancelled session ---
 
       test "fails the step when its session was cancelled rather than failed" do

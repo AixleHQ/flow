@@ -35,6 +35,39 @@ module Api
             assert_response :created
           end
 
+          test "create attaches an uploaded file" do
+            post :create, params: {
+              project_id: @project.id,
+              task_id: @task.id,
+              task_asset: { name: "test_file.txt", file: fixture_file_upload("test_file.txt", "text/plain") }
+            }
+
+            assert_response :created
+            assert @task.task_assets.find(response.parsed_body["id"]).file.present?
+          end
+
+          test "create rejects a string in place of a file" do
+            assert_no_difference -> { TaskAsset.count } do
+              post :create, params: {
+                project_id: @project.id,
+                task_id: @task.id,
+                task_asset: { name: "notes.md", file: "undefined" }
+              }
+            end
+
+            assert_response :unprocessable_entity
+            assert_equal "file must be an uploaded file", response.parsed_body["error"]
+          end
+
+          test "create answers 422 when the asset fails validation" do
+            assert_no_difference -> { TaskAsset.count } do
+              post :create, params: { project_id: @project.id, task_id: @task.id, task_asset: { name: "" } }
+            end
+
+            assert_response :unprocessable_entity
+            assert_includes response.parsed_body["errors"], "Name can't be blank"
+          end
+
           test "destroy removes asset" do
             delete :destroy, params: { project_id: @project.id, task_id: @task.id, id: @asset.id }
 

@@ -437,6 +437,21 @@ class Skills::CatalogSyncTest < ActiveSupport::TestCase
                         "a row answered by raw must not spend a download request"
   end
 
+  # The demand sync died here: a raw SKILL.md whose description contained a NUL, and
+  # pg refuses that byte in a bind parameter before the UPDATE is sent.
+  test "backfills a description that arrived with a null byte" do
+    @registry.add("org/skills/hunt-file-upload", installs: 10)
+    @github.stub("org/skills", "hunt-file-upload",
+                 skill_md: "---\nname: hunt-file-upload\ndescription: Finds\0 upload bugs\n---\n\nbody")
+
+    result = sync
+
+    row = CatalogSkill.find_by(registry_id: "org/skills/hunt-file-upload")
+    assert_equal "Finds upload bugs", row.description
+    assert_not row.description.include?("\0")
+    assert result.backfilled.positive?
+  end
+
   # The cap exists so a bulk pass cannot make installing a skill fail while the catalog
   # prettied itself up.
   test "spends no more than its download budget on rows raw cannot answer" do

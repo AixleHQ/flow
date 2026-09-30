@@ -61,4 +61,16 @@ class AuthErrorDetectorTest < ActiveSupport::TestCase
     assert_equal AuthErrorDetector::MAX_MESSAGE_LENGTH + 1, result.message.length
     assert result.message.end_with?("…")
   end
+
+  test "matches an auth banner in a binary log" do
+    text = "\xFFnoise\nLogin expired · Please run /login\n".b
+    result = AuthErrorDetector.detect(text)
+
+    assert result.auth_error?
+    assert_equal "Login expired · Please run /login", result.message
+  end
+
+  test "does not raise on a binary log with no auth banner" do
+    assert_not AuthErrorDetector.detect("\xFFstill working\n".b).auth_error?
+  end
 end

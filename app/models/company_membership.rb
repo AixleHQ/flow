@@ -369,6 +369,11 @@ class CompanyMembership < ApplicationRecord
     cached = Rails.cache.read(cache_key)
     return cached if cached
 
+    # A condemned login stays condemned. An empty model list is not cached, so
+    # asking the vendor again would refresh and report RefreshFailed on every
+    # page that loads agent models. Re-auth is what clears the status.
+    return [] if cred.error?
+
     adapter = AgentCredentialsService.for(cred.agent_type).adapter
     result = adapter.fetch_available_models_with_source(cred.config_data, credential: cred)
     models = result[:models] || []

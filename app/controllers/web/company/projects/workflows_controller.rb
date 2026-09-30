@@ -4,8 +4,10 @@ class Web::Company::Projects::WorkflowsController < Web::Company::Projects::Appl
   def index
     # `steps: :sub_steps` because StepResource serializes the sub-steps of every step;
     # `visible_steps` filters in Ruby so the preload survives (see Workflow#visible_steps).
-    workflows = Workflow.visible_for_project(current_project)
-                        .includes(:runs, steps: :sub_steps)
+    # Run counts come from attach_run_stats: includes(:runs) would load every historical run.
+    workflows = Workflow.attach_run_stats(
+      Workflow.visible_for_project(current_project).includes(steps: :sub_steps)
+    )
     archived = Workflow.for_project(current_project).where.not(deleted_at: nil).order(deleted_at: :desc)
 
     render inertia: "Projects/Workflows/WorkflowsPage", props: {

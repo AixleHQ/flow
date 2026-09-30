@@ -13,8 +13,18 @@ module Api
             end
 
             def create
+              file = asset_params[:file]
+              if file.present? && !file.respond_to?(:read)
+                return render json: { error: "file must be an uploaded file" }, status: :unprocessable_entity
+              end
+
               asset = TaskService.add_asset(task: current_task, params: asset_params, actor: current_user)
-              render json: TaskAssetResource.new(asset).to_h, status: :created
+              if asset.persisted?
+                render json: TaskAssetResource.new(asset).to_h, status: :created
+              else
+                render json: { error: asset.errors.full_messages.to_sentence, errors: asset.errors.full_messages },
+                       status: :unprocessable_entity
+              end
             end
 
             def destroy

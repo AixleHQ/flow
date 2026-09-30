@@ -22,22 +22,22 @@ class WorkflowResource < ApplicationResource
 
   typelize :number
   attribute :runs_count do |workflow|
-    workflow.runs.size
+    workflow.run_stats.count
   end
 
   typelize "string | null"
   attribute :last_run_at do |workflow|
-    workflow.runs.max_by(&:created_at)&.created_at
+    workflow.run_stats.last_at
   end
 
   typelize "string | null"
   attribute :last_run_status do |workflow|
-    workflow.runs.max_by(&:created_at)&.state
+    workflow.run_stats.last_state
   end
 
   typelize :boolean
   attribute :has_active_runs do |workflow|
-    workflow.runs.any? { |r| %w[running paused].include?(r.state) }
+    workflow.run_stats.active
   end
 
   typelize "string | null"
