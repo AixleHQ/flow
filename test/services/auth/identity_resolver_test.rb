@@ -83,6 +83,27 @@ module Auth
       assert_equal insider, resolved
     end
 
+    test "a company provider on an unverified domain does not promote to an existing user" do
+      owner = create(:company, :domain_unverified, email_domain: "claimed-domain.test")
+      connection = create(:identity_provider, company: owner, kind: "oidc")
+      existing = create(:user, email: "alice@claimed-domain.test")
+
+      assert_raises(Auth::IdentityResolver::LinkRequiredError) do
+        Auth::IdentityResolver.new(
+          assertion_for(connection, subject: "sub-claimed", email: existing.email)
+        ).resolve
+      end
+      assert_equal 0, UserIdentity.where(identity_provider: connection).count
+
+      owner.update!(domain_verified_at: Time.current)
+      resolved = Auth::IdentityResolver.new(
+        assertion_for(connection, subject: "sub-claimed", email: existing.email)
+      ).resolve
+
+      assert_equal existing, resolved
+      assert_equal existing, UserIdentity.find_by(identity_provider: connection, subject: "sub-claimed").user
+    end
+
     test "a super admin may authenticate by password only" do
       super_admin = create(:user, :super_admin)
 

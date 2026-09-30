@@ -84,7 +84,7 @@ module Auth
       return true if provider.deployment?
 
       company = provider.company
-      company.present? && company.email_domain.to_s.casecmp?(email_domain)
+      company.present? && company.domain_verified? && company.email_domain.to_s.casecmp?(email_domain)
     end
 
     def email_domain
