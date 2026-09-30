@@ -333,7 +333,7 @@ flowchart LR
 | Credential | "Aixle Flow"'s existing certificate, held server-side, the one Azure DevOps already uses. Workload identity federation from the cluster's OIDC issuer is the later improvement: no secret at all | Certificate or client secret |
 | App package | Built by Aixle with the SaaS bot id | Built by the operator's Aixle with their bot id |
 | Who can connect | Any company, on proof (§6.2) | Companies of that deployment; `allowed_tenant_ids` can pin the operator's tenant |
-| Staging | The bot attaches to staging's own sign-in app, never to "Aixle Flow". Reusing production's would give staging a credential that can post into every customer's Teams | — |
+| Staging | Its own registration in the same tenant, "Aixle Flow (staging)", used for staging sign-in and the staging bot. Never "Aixle Flow". Reusing production's would give staging a credential that can post into every customer's Teams | — |
 
 **Why reuse "Aixle Flow" for the bot** (product owner's call, 2026-09-30):
 - Customers who already sign in with Microsoft or use Azure DevOps already have its enterprise
