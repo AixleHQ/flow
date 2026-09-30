@@ -158,6 +158,21 @@ class PersonalMCPTest < ActionDispatch::IntegrationTest
     assert_equal [ @project.id, other.id ].sort, projects.map { |p| p["id"] }.sort
   end
 
+  # Project.for_user spans every membership; the token reaches only the companies
+  # whose sign-in policy it was issued under.
+  test "list_projects leaves out a company the token was not issued for" do
+    sso_only = create(:company)
+    create(:company_membership, :admin, user: @user, company: sso_only)
+    create(:project, company: sso_only, owner: @user)
+    connection = create(:identity_provider, company: sso_only, kind: "oidc")
+    CompanyAuthPolicy.where(company: sso_only).update_all(enabled: false)
+    create(:company_auth_policy, company: sso_only, identity_provider: connection, enabled: true)
+
+    body = rpc("tools/call", { name: "list_projects", arguments: {} })
+    projects = JSON.parse(body.dig("result", "content").first["text"])["projects"]
+    assert_equal [ @project.id ], projects.map { |p| p["id"] }
+  end
+
   test "the guidance prompts are served" do
     names = rpc("prompts/list").dig("result", "prompts").map { |p| p["name"] }
     assert_equal %w[author_step build_workflow publish_template setup_project tool_catalog], names.sort
