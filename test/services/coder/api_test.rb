@@ -7,6 +7,10 @@ module Coder
     BASE  = "https://coder.example.com"
     TOKEN = "tok-abc"
 
+    setup do
+      resolve_hosts_publicly!
+    end
+
     test "verify_token returns a hash on 200" do
       stub_request(:get, "#{BASE}/api/v2/users/me")
         .with(headers: { "Coder-Session-Token" => TOKEN })

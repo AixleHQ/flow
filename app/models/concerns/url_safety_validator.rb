@@ -189,7 +189,7 @@ module UrlSafetyValidator
   end
 
   # Resolve a hostname using public DNS resolvers (Cloudflare/Google) and
-  # return the first IPv4 address that is not private/loopback/link-local.
+  # return the first IPv4 address that may be dialed (see #blocked_ip?).
   # Used by integrations that must reach a public hostname from inside a
   # cluster whose internal resolver returns a private/unreachable address
   # via split-horizon DNS. Returns nil when no public IPv4 can be found.
@@ -200,8 +200,7 @@ module UrlSafetyValidator
       dns.timeouts = PUBLIC_DNS_TIMEOUTS
       dns.getresources(host, Resolv::DNS::Resource::IN::A).each do |record|
         ip_str = record.address.to_s
-        addr = IPAddr.new(ip_str)
-        return ip_str unless addr.private? || addr.loopback? || addr.link_local?
+        return ip_str unless blocked_ip?(IPAddr.new(ip_str))
       end
     end
     nil

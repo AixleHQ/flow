@@ -5,6 +5,7 @@ require "test_helper"
 module Coder
   class IntegrationServiceTest < ActiveSupport::TestCase
     setup do
+      resolve_hosts_publicly!
       @company = create(:company)
       @user = create(:user, :admin, company: @company)
     end

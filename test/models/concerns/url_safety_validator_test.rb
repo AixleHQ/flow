@@ -271,6 +271,20 @@ class UrlSafetyValidatorTest < ActiveSupport::TestCase
     assert_nil UrlSafetyValidator.resolve_public_ipv4("split.example.test")
   end
 
+  test "resolve_public_ipv4 skips the unspecified address and the carrier-grade NAT range" do
+    records = %w[0.0.0.0 100.64.0.7].map { |ip| Resolv::DNS::Resource::IN::A.new(ip) }
+
+    dns = mock("dns")
+    dns.expects(:timeouts=).with(UrlSafetyValidator::PUBLIC_DNS_TIMEOUTS)
+    dns.expects(:getresources).with("special.example.test", Resolv::DNS::Resource::IN::A).returns(records)
+
+    Resolv::DNS.expects(:open)
+               .with(nameserver: UrlSafetyValidator::PUBLIC_DNS_NAMESERVERS)
+               .yields(dns)
+
+    assert_nil UrlSafetyValidator.resolve_public_ipv4("special.example.test")
+  end
+
   test "resolve_public_ipv4 swallows resolver errors and returns nil" do
     Resolv::DNS.expects(:open)
                .with(nameserver: UrlSafetyValidator::PUBLIC_DNS_NAMESERVERS)

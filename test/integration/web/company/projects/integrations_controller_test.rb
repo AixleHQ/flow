@@ -4,6 +4,7 @@ require "test_helper"
 
 class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::IntegrationTest
   setup do
+    resolve_hosts_publicly!
     @company = create(:company)
     @user = create(:user, :admin, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     @project = create(:project, company: @company, owner: @user)
