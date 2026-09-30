@@ -305,6 +305,9 @@ module Tools
           - `trigger_workflow` starts one by hand. `list_workflow_runs` /
             `get_workflow_run` report state; `get_step_run` is what explains a
             failure (error category, retries, session diagnostics).
+          - What the run produced: `get_workflow_run` lists the files its steps
+            wrote to /workspace/outputs, `get_board_task` the files attached to
+            a card; `read_asset` reads either.
           - `approve_step_run`, `retry_step_run`, `skip_step_run` and
             `cancel_workflow_run` drive a run in flight.
 
@@ -365,7 +368,7 @@ module Tools
           9. `trigger_workflow` — start a run by hand (interactive or non_interactive).
              Track it with `list_workflow_runs` / `get_workflow_run`; read a single
              step run's error, retries and session diagnostics with `get_step_run`;
-             stop a run with `cancel_workflow_run`.
+             read what it produced with `read_asset`; stop a run with `cancel_workflow_run`.
 
           Rules:
           - Ask the user before destructive actions (`delete_workflow`,

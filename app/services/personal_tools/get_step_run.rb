@@ -8,18 +8,25 @@ module PersonalTools
                   "category/message/history, skip reason and note, plus its terminal session's " \
                   "state, error and context metadata (where the BMAD install status lands). " \
                   "This is the tool for diagnosing a step that failed instead of just seeing " \
-                  "that it did — get_workflow_run only reports states."
+                  "that it did — get_workflow_run only reports states. The context builder's " \
+                  "per-section breakdown and resource resolution are left out unless include_context is true."
       audience :user
       tags :workflows
       read_only
       param :project_id, type: :integer, description: "Project id.", required: true
       param :step_run_id, type: :integer, description: "Step run id, from get_workflow_run.", required: true
+      param :include_context, type: :boolean,
+                              description: "Also return how the session's context was built: every section, and " \
+                                           "which tools, skills and repositories resolved from where (default false)."
     end
 
     # Diagnostics, not a log stream: a step's error text can carry a whole
     # container tail, and error_history grows one entry per retry.
     TEXT_LIMIT = 4_000
     HISTORY_LIMIT = 10
+    # A few kilobytes per call that only matter when the question is "why did
+    # this step see (or not see) that resource".
+    CONTEXT_DETAIL_KEYS = %w[sections config_resolution applied_builders skipped_builders].freeze
 
     def execute
       project = find_project!
@@ -62,7 +69,14 @@ module PersonalTools
 
       { id: session.id, state: session.state, session_type: session.session_type,
         agent_type: session.agent_type, started_at: session.started_at, finished_at: session.finished_at,
-        error_message: truncate(session.error_message), context_metadata: session.context_metadata }
+        error_message: truncate(session.error_message), context_metadata: context_metadata(session) }
+    end
+
+    def context_metadata(session)
+      metadata = session.context_metadata
+      return metadata if params[:include_context] == true || !metadata.is_a?(Hash)
+
+      metadata.except(*CONTEXT_DETAIL_KEYS)
     end
 
     def truncate(text)

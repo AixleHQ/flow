@@ -37,8 +37,10 @@ module PersonalTools
                          "get_workflow_step first.",
             items: { type: "integer" }
       param :depends_on_step_ids, type: :array,
-            description: "Step ids this step depends on. Replaces the whole list — read the current value " \
-                         "with get_workflow_step first.",
+            description: "Step ids this step depends on. " \
+                         "Only these steps' /workspace/outputs files are copied into this step's /workspace/assets — " \
+                         "list every earlier step whose files it reads, not just the last one. " \
+                         "Replaces the whole list — read the current value with get_workflow_step first.",
             items: { type: "integer" }
       param :bmad_enabled, type: :boolean, description: "Run this step with the BMAD method enabled."
       param :allow_non_interactive, type: :boolean, description: "Allow this step to run without a human in the loop."

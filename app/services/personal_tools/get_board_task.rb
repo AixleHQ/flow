@@ -4,7 +4,8 @@ module PersonalTools
   class GetBoardTask < Base
     tool do
       display_name "Get Board Task"
-      description "Return full details for a board task including description, tags and comment count."
+      description "Return full details for a board task including description, tags, comment count and " \
+                  "the files attached to it (read one with read_asset, source task)."
       audience :user
       tags :board
       read_only
@@ -18,10 +19,17 @@ module PersonalTools
       task = find_task(project)
       return error("Task not found on this project's board") unless task
 
-      success(BoardTaskResource.new(task, params: { snake_keys: true }).to_h)
+      success(BoardTaskResource.new(task, params: { snake_keys: true }).to_h.merge(assets: attached_files(task)))
     end
 
     private
+
+    def attached_files(task)
+      task.task_assets.order(created_at: :desc).map do |asset|
+        { id: asset.id, name: asset.name, size: asset.file&.size, content_type: asset.file&.mime_type,
+          tags: asset.tags, author_type: asset.author_type, created_at: asset.created_at }
+      end
+    end
 
     def find_task(project)
       project.board&.board_tasks
