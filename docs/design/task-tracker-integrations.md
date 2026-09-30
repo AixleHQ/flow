@@ -1,6 +1,6 @@
 # Task tracker integrations — technical design
 
-Status: **Proposal; decisions 1–7 agreed 2026-09-30; open questions in §13.2**
+Status: **Proposal; decisions 1–16 agreed 2026-09-30; one open question (§13.2)**
 Date: 2026-09-30
 Related: PR #271 (YouTrack integration, unmerged) and its two design documents,
 `integration-abstractions-tech-design-v1.md` and `youtrack-integration-tech-design-v6.md`;
@@ -122,7 +122,7 @@ project_trackers
   access               varchar NOT NULL DEFAULT 'read_write'   -- read_write | read_only
   status               varchar NOT NULL DEFAULT 'active'       -- active | error | detached
   settings             jsonb NOT NULL DEFAULT {}      -- status_field, status category overrides,
-                                                      -- default issue type
+                                                      -- default issue type, field deny list
   timestamps
   UNIQUE (project_id, integration_id, external_scope_id)
   UNIQUE (project_id, handle)
@@ -210,6 +210,32 @@ choose external projects from `list_scopes`, and set the handle, primary flag an
 `api` strategies the subscription is ensured at the same time. For `manual` ones, the UI shows the
 URL, header and token to paste into the tracker (YouTrack's Webhook Triggers app).
 
+### 4.4 Ownership and permissions: the GitHub model
+
+Trackers follow the rules the GitHub integration already uses:
+
+| | GitHub today | Trackers |
+|---|---|---|
+| Where a connection starts | From a project; there is no company-wide integrations screen (`Web::Company::Integrations::GithubSetupController`) | From a project |
+| Who connects, reconnects, disconnects | Project admin or project owner (`IntegrationsPolicy#manage_integrations?`) | Same policy |
+| Proof on first connect | Going through GitHub's install flow, plus OAuth installation ownership where configured | Entering working credentials, or completing the provider's OAuth consent |
+| What the connection can reach | Decided **on GitHub** by the org admin: all repositories or selected ones | Decided **in the tracker** by its admin: the projects the connection's identity (bot account, OAuth consenting user, approved Azure projects) can see |
+| Other projects in the company | Link an installation the company already holds, with no new proof (`Github::IntegrationService#create`, `github_installation_held_by?`) | Link the company's existing connection, with no new credentials |
+| Who picks what a project uses | Anyone with write access adds repositories from the installation's list (`RepositoriesPolicy#create?`) | Anyone with write access adds project trackers from the connection's `list_scopes` |
+| Removing | A project admin removes that project's row; a company-wide row needs a company admin (`IntegrationsController#destroy`) | A project admin or owner **unlinks** the connection from their project (its trackers are detached). Reconnecting or disconnecting the shared connection itself needs a company admin or the person who connected it. |
+
+There is no Aixle-side allow-list of external projects. The boundary is the tracker's own
+permissions, just as GitHub's is the App's repository selection. Operator docs and the connect
+screen say so: give the automation account access only to the projects Aixle should see.
+
+One difference is deliberate. GitHub keeps one `Integration` row per project for the same
+installation, because its credential is only an installation id and tokens are minted per request.
+A tracker credential is a secret (a permanent token, or OAuth tokens). Copying it per project
+would mean one rotation per project. So a tracker connection is **one** company-held row
+(`project_id` NULL, created from whichever project first connected it), and the per-project unit
+is the `ProjectTracker`. The connection's creator can instead keep it project-only (`project_id`
+set), and then no other project can link it.
+
 ## 5. Provider port
 
 ### 5.1 Interface
@@ -278,6 +304,7 @@ Status        id, name, category (todo | in_progress | done | canceled | nil)
 |---|---|---|---|---|---|
 | Scope unit | project | project | team | project (v2) | project |
 | Instance identity | normalized base URL | `cloudId` (survives site rename) | organization id | owner + project node id | organization id |
+| Auth | permanent token of an automation account | Atlassian OAuth 2.0 app, configured per deployment like Azure's Entra app; tokens go through the existing OAuth flow engine (`oauth-implementation.md`). It acts as the consenting user, so consent comes from a dedicated service account | API key or OAuth app | GitHub App (existing) | existing Azure connection |
 | Delivery | Webhook Triggers app (YouTrack 2026.2+), configured per project; one shared token header per YouTrack project | REST-registered webhooks (OAuth/Connect apps) expire after 30 days and need the refresh endpoint | webhooks with `Linear-Signature` HMAC-SHA256 and `webhookTimestamp` | `projects_v2_item` through the existing GitHub App receiver | Service Hooks through the existing Azure receiver |
 | Subscription strategy | manual | api + refresh sweep | api | GitHub App install | api (existing `SubscriptionService`) |
 | Change hints in payload | `changedFields[{name, oldValue, value}]` | `changelog.items` from/to | `updatedFrom` (previous values) | `changes` (to verify) | `fields.{name}.oldValue/newValue` |
@@ -386,6 +413,11 @@ operand, so `labels contains "ai"` would also match `"main"`.
   `{"issue.labels": {"op": "includes", "value": "ai"}}`, `{"comment.mentions_me": true}`.
 - **Changes made by Aixle** are governed by the binding's `aixle_changes` setting, not by a
   filter. §6.6 covers it.
+- **Run owner**: the binding's creator, as for webhook triggers today (`TriggerEngine#fire_for_binding`).
+  Mapping the tracker actor to an Aixle user comes later, together with the Teams design.
+- **Failure notice**: `notify_on_failure`, which is Slack-only today, also applies to tracker
+  bindings. A failed run posts one short comment with a link to the run on the issue that started
+  it. The comment is an attributed Aixle write (§6.6).
 - **Subject policies**: the existing three, plus `find_or_create_task`, the default for tracker
   triggers:
   - `existing_task` — the active board task in this project linked to the issue. Prefer a link
@@ -493,6 +525,36 @@ travel as they are. Status **names** differ between trackers, so templates meant
 should filter on `change.to.category`. The installer already creates every trigger disabled, so a
 person reviews the filters before anything fires.
 
+### 6.8 Board intake: one column
+
+Enterprise boards are owned by other teams, and Aixle has to fit into them without re-modelling
+them. The lightest adoption step is **one column**: the customer adds a status such as "Aixle" or
+"Ready for AI" to the board, and moving a ticket there starts a workflow.
+
+- **Setup.** "Connect a board column" on the project's Trackers page is a three-step shortcut:
+  pick the tracker, pick the column (statuses from `describe`), pick the workflow. It creates an
+  ordinary `tracker.issue.status_changed` binding with `change.to.name in [column]`,
+  `find_or_create_task` and `aixle_changes: ignore`. Nothing about it is special afterwards; it
+  can be edited like any trigger. A marketplace template ("Tracker intake") ships the same thing
+  with a starter workflow.
+- **When a column is expensive.** In Jira company-managed projects a new status means editing a
+  shared workflow, which needs a Jira administrator. Two entry points need no board change and use
+  the same shortcut:
+  - **assign to the automation account** — `tracker.issue.assigned`, filtered to the bot;
+  - **mention it in a comment** — `tracker.comment.created` with `comment.mentions_me`.
+
+  Azure boards can add a column without a new state, which the `System.BoardColumn` status field
+  covers (§5.4).
+- **Handoff statuses (open decision 17).** On its own, the intake column fills up, and the board
+  shows nothing about what Aixle is doing. Three optional binding settings would make the column
+  behave like a queue:
+  - `on_start_status` (for example "In Progress");
+  - `on_success_status` (for example "Review");
+  - `on_failure_status` (for example back to "To Do", plus the failure comment).
+
+  These are one transition per run event, not mirroring. They are attributed writes, so the
+  default `aixle_changes: ignore` keeps them from retriggering.
+
 ## 7. Agent tools
 
 ### 7.1 Tool set
@@ -506,7 +568,7 @@ person reviews the filters before anything fires.
 | `tracker_list_comments` | read | Paginated. |
 | `tracker_list_users` | read | Exact IDs/logins for assignment and mentions. |
 | `tracker_create_issue` | write | Title, description, type, labels, fields. Inside a task-scoped run, links the new issue to the run's board task. |
-| `tracker_update_issue` | write | Title, description, fields, labels add/remove. |
+| `tracker_update_issue` | write | Title, description, fields, labels add/remove. Any field the provider reports as editable, except those on the tracker's deny list. |
 | `tracker_transition_issue` | write | Target status by name or id; validated against allowed transitions where the provider has a workflow graph (Jira). |
 | `tracker_assign_issue` | write | Set or add assignees. |
 | `tracker_add_comment` | write | Comment body. |
@@ -726,7 +788,9 @@ this provider is designed (phase 4). Repository and PR behaviour is untouched.
   access, status, subscription health (`last_event_at`), and manual setup instructions (copy URL
   and token). "Add tracker" picks an existing visible connection or creates one. The credentials
   form is the only per-provider UI, rendered from provider-declared connection fields.
-- **Company → Integrations**: connections, with Reconnect, Test connection and Disconnect.
+- **Project → Integrations**: the connections this project uses, with Test connection and Unlink,
+  plus Reconnect and Disconnect for those allowed (§4.4). This follows GitHub; there is no
+  company-wide integrations screen.
 - **Trigger form**: kind "Tracker":
   - tracker picker, or "Any tracker";
   - event;
@@ -746,15 +810,17 @@ this provider is designed (phase 4). Repository and PR behaviour is untouched.
    injection, `TrackerContext`, Task Details links. The YouTrack provider uses the `manual`
    strategy and a copy of PR #271's client and connect verification. What happens to PR #271 is
    decided once this phase lands.
-2. **Jira Cloud**: the `api` strategy with the 30-day refresh sweep, `cloudId` instance identity,
-   the transition graph, `native_query` (JQL). This is the first test of the port against a
-   provider it was not written for.
-3. **Azure Boards** as described in §9.2: the provider over `AzureDevops::WorkItemService`,
+2. **Azure Boards** as described in §9.2: the provider over `AzureDevops::WorkItemService`,
    `workitem.*` Service Hook types, and, in the same change, deletion of the duplicate work-item
    tools with the project-tracker and attachment migration. Repository, PR and CI tools are
-   untouched.
-4. **GitHub Projects / Issues and Linear**, and the dead `linear` enum value and user-guide claim
-   are either implemented or removed.
+   untouched. It goes first because the service and the subscriptions already exist, and the
+   duplicate tools go away sooner.
+3. **Jira Cloud** (committed): an Atlassian OAuth 2.0 app, the `api` strategy with the 30-day
+   refresh sweep, `cloudId` instance identity, the transition graph, `native_query` (JQL). This is
+   the first provider that needs subscription refresh.
+4. **GitHub Projects** (committed): through the existing GitHub App and receiver (§9.3).
+5. **Linear** and GitHub Issues, when needed. The dead `linear` enum value and user-guide claim
+   are fixed in the meantime.
 
 Later and additive:
 
@@ -778,18 +844,18 @@ Later and additive:
 | 5 | Disconnect soft (inactive, credentials wiped, reconnectable) instead of destroy? | **Agreed: yes.** |
 | 6 | PR #271: close and salvage, or merge and migrate? | **Agreed: stays open for now.** This design is built on its own branch and copies PR #271's client and connect verification. |
 | 7 | Azure Boards: second set of work-item tools, or one tracker set? | **Agreed: one set, and the duplicates are deleted in the same change** that ships the Azure Boards provider, with no deprecation release (§9.2). |
+| 8 | Who may map an external project through a company connection? | **Agreed: the GitHub model** (§4.4). The tracker's own permissions for the connection's identity are the boundary, with no Aixle allow-list. Project admins and owners connect; anyone with write access adds project trackers. |
+| 9 | Whose run is a tracker-started run? | **Agreed: the trigger's creator**, as for webhooks. Actor-to-user mapping comes later. |
+| 10 | Which fields may agents write? | **Agreed:** everything the provider reports as editable, minus an optional per-tracker deny list. |
+| 11 | Failure notice on the issue? | **Agreed:** `notify_on_failure` posts one comment with a link to the run (§6.4). |
+| 12 | Phase order after YouTrack? | **Agreed:** Azure Boards, then Jira and GitHub Projects, both committed (§12). |
+| 13 | Jira authentication? | **Agreed: an Atlassian OAuth 2.0 app**, with consent from a dedicated service account (§5.3). |
+| 14 | YouTrack older than 2026.2? | **Agreed:** not supported in v1; documented as a requirement. |
+| 15 | Loop-limit defaults? | **Agreed:** depth 5, 10 Aixle-caused runs per issue per hour, tuned later. |
+| 16 | Scope cuts (no mirroring, no polling, best-effort delivery)? | **Agreed.** Adoption goes through one-column intake instead (§6.8). |
 
 ### 13.2 Open
 
 | # | Question | Recommendation |
 |---|---|---|
-| 8 | Who may map an external project into an Aixle project through a **company-wide** connection? Its token may see every external project, including sensitive ones. | A company admin keeps an allow-list of external projects per company connection; project admins pick from it. |
-| 9 | Whose run is a tracker-started run? Today a webhook-started run belongs to the trigger's creator (`TriggerEngine#fire_for_binding`). | v1: the trigger's creator. Mapping the tracker actor to an Aixle user (verified email) comes later and is shared with the Teams design. |
-| 10 | Which fields may agents write? | Everything the provider reports as editable, minus an optional per-tracker deny list. `read_only` covers the rest. |
-| 11 | Should a failed tracker-started run say so on the issue? `notify_on_failure` exists and is Slack-only today. | Yes: the same flag posts one short comment with a link to the run. The comment goes through the ledger like any Aixle write, so `aixle_changes` governs whether it starts anything. |
-| 12 | Phase order after YouTrack. | Azure Boards before Jira: the service and subscriptions already exist, and it removes the duplicate tools sooner. Jira then exercises API webhooks with refresh. |
-| 13 | Jira authentication. | Decide in Jira's phase: an Atlassian OAuth 2.0 app (API-registered webhooks, 30-day refresh, deployment-level configuration like Azure's Entra app) or an API token with a manually configured webhook. Not blocking. |
-| 14 | Self-hosted YouTrack older than 2026.2, which cannot run the stock Webhook Triggers app. | Not supported in v1; documented as a requirement. |
-| 15 | Loop-limit defaults: depth 5, 10 Aixle-caused runs per issue per hour. | Accept as starting values; tune from dispatch diagnostics. |
-| 16 | Scope cuts from §1: no mirroring, no polling, best-effort delivery. | Confirm for v1. |
-
+| 17 | Handoff statuses on the binding (`on_start_status`, `on_success_status`, `on_failure_status`, §6.8)? | Yes, optional. They are what makes a single intake column readable on an enterprise board, and they stop short of mirroring. |
