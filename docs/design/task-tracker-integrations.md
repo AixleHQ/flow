@@ -167,6 +167,7 @@ external_resources
 trigger_bindings
   + project_tracker_id   FK project_trackers, NULL, ON DELETE RESTRICT
   + aixle_changes        varchar NOT NULL DEFAULT 'ignore'   -- ignore | other_workflows | always (§6.6)
+  + tracker_handoff      jsonb NOT NULL DEFAULT {}           -- start / success / failure statuses (§6.9)
 
 tracker_operations          -- every tracker write: idempotency (§7.4) + causality (§6.6)
   integration_id, operation, operation_key, request_digest, state, target_kind, target_id,
@@ -390,7 +391,7 @@ every provider:
               "from": { "name": "Open", "category": "todo" },
               "to":   { "name": "Ready for AI", "category": "todo" } },
   "comment": { "id": "4-55", "author": "jdoe", "mentions_me": true, "text": "…" },
-  "actor": { "login": "jdoe", "is_me": false },
+  "actor": { "id": "…", "login": "jdoe", "name": "Jane Doe", "is_me": false },
   "text": "…"
 }
 ```
@@ -416,9 +417,13 @@ operand, so `labels contains "ai"` would also match `"main"`.
   filter. §6.6 covers it.
 - **Run owner**: the binding's creator, as for webhook triggers today (`TriggerEngine#fire_for_binding`).
   Mapping the tracker actor to an Aixle user comes later, together with the Teams design.
-- **Failure notice**: `notify_on_failure`, which is Slack-only today, also applies to tracker
-  bindings. A failed run posts one short comment with a link to the run on the issue that started
-  it. The comment is an attributed Aixle write (§6.6).
+- **Failure notice**: the binding's failure-reporting setting applies to tracker bindings too.
+  Today that setting is `notify_on_failure`, which is Slack-only. The Teams design replaces it
+  with `status_reporting` (`none | failures | lifecycle`); tracker bindings default to `failures`.
+  A failed run posts one short comment with a link to the run on the issue that started it. The
+  comment is an attributed Aixle write (§6.6).
+- **Actor shape**: `actor` matches the Teams design's `{id, name, aixle_user_id}`, plus `login` and
+  `is_me`. `aixle_user_id` stays empty until actor-to-user mapping exists.
 - **Subject policies**: the existing three, plus `find_or_create_task`, the default for tracker
   triggers:
   - `existing_task` — the active board task in this project linked to the issue. Prefer a link
@@ -546,15 +551,88 @@ them. The lightest adoption step is **one column**: the customer adds a status s
 
   Azure boards can add a column without a new state, which the `System.BoardColumn` status field
   covers (§5.4).
-- **Handoff statuses (open decision 17).** On its own, the intake column fills up, and the board
-  shows nothing about what Aixle is doing. Three optional binding settings would make the column
-  behave like a queue:
-  - `on_start_status` (for example "In Progress");
-  - `on_success_status` (for example "Review");
-  - `on_failure_status` (for example back to "To Do", plus the failure comment).
+- **Handoff statuses** (§6.9) make the intake column behave like a queue.
 
-  These are one transition per run event, not mirroring. They are attributed writes, so the
-  default `aixle_changes: ignore` keeps them from retriggering.
+### 6.9 Handoff statuses (proposed, open decision 17)
+
+On its own, an intake column fills up, and the board shows nothing about what Aixle is doing.
+Handoff statuses are optional binding settings. Each is **one transition at one moment of the
+run**, not mirroring:
+
+```text
+Ready for AI ──(run accepted)──▶ In Progress ──(run completed)──▶ Review
+                                     └──────(run failed / cancelled)──▶ To Do  + failure comment
+```
+
+**Settings.** A binding column `tracker_handoff jsonb`:
+
+```json
+{ "start":   { "id": "…", "name": "In Progress" },
+  "success": { "id": "…", "name": "Review" },
+  "failure": { "id": "…", "name": "To Do" } }
+```
+
+- Every key is optional. Statuses are picked from `describe` and stored by id **and** name:
+  the id survives a rename, and the name is the fallback when the id is gone.
+- On an "any tracker" binding, only names are stored, and each is resolved per tracker at run
+  time.
+
+**Moments.**
+
+| Hook | When | Why then |
+|---|---|---|
+| `start` | The run is created by the dispatch, after commit. | The ticket leaves the intake column **immediately**, so nobody picks it up twice. Time spent waiting in the admission queue is visible in Aixle, not on the tracker. |
+| `success` | The run transitions to `completed`. | |
+| `failure` | The run transitions to `failed` **or `cancelled`**. | A cancelled run did not do its job either. Leaving the ticket in "In Progress" forever is the worse outcome. The comment says "cancelled by …" instead of the failure reason. |
+
+The hooks hang off `WorkflowRunStateMachine` transitions, next to the existing `announce_failure`,
+for the same reason that code gives: the stale-run sweeper calls `fail!` directly, and that is
+exactly the failure nobody is watching. The transition only enqueues `Trackers::HandoffJob`. The
+job re-reads the run and does the work.
+
+**Rules that keep it safe.**
+
+1. **Compare-and-set, never force.** Before `success` or `failure`, the job re-reads the issue and
+   moves it only if its status is still the one the handoff expects:
+   - the `start` status, when the ledger shows that the start write succeeded;
+   - otherwise the status that triggered the run.
+
+   If a person or the agent moved the ticket in the meantime (to "Blocked", or to "Review" through
+   `tracker_transition_issue`), the handoff is skipped with `status_moved_elsewhere`. A workflow
+   that manages statuses itself therefore never fights its own handoff.
+2. **Snapshot at dispatch.** The handoff config is copied into the run's `shared_context["tracker"]`
+   (with `binding_id`). Editing the trigger never changes what an in-flight run does.
+3. **One active run per issue and binding.** A binding with handoff statuses skips an event while a
+   run it started for the same issue is still active (`already_running_for_issue`). Two runs that
+   both set "In Progress" would otherwise make the compare-and-set unable to tell them apart.
+4. **Attributed writes.** Handoff transitions and the failure comment go through
+   `tracker_operations` with the run's chain (§6.6), like any Aixle write.
+   - `aixle_changes: ignore` (the default) keeps them from triggering anything.
+   - With `other_workflows` on the **next** binding, a handoff becomes declarative chaining: dev
+     completes, the handoff moves the ticket to "Review", and the review workflow's trigger on
+     "Review" fires. Loop protection is unchanged.
+5. **Validation at save.**
+   - `start` differs from the intake status.
+   - A `read_only` tracker cannot have handoff statuses.
+   - With `aixle_changes: always`, no handoff status may equal the binding's own trigger status.
+     That is an immediate self-retrigger, and the limits would be the only thing stopping it.
+6. **Transitions the tracker refuses.** Jira workflows restrict which moves are allowed, and a
+   transition can require screen fields. At run time `transition_issue` looks for a transition from
+   the current status to the target. If none is allowed, or the tracker rejects it, the handoff is
+   skipped with `transition_not_allowed` and the tracker's message. It never takes a path through
+   intermediate statuses.
+7. **Delivery.** The job is idempotent, keyed by `(run, hook)` in the ledger. It retries transient
+   provider errors with backoff for about an hour, then gives up with `handoff_failed`. A handoff
+   failure never changes the run's own outcome.
+8. **Order on failure.** The comment is posted first and the transition second, so the ticket
+   arrives back in "To Do" with its explanation already on it.
+
+**Visibility.** Each hook's outcome is shown on the run page and in the trigger's activity: moved,
+skipped (with the reason) or failed.
+
+**Not included.** A `waiting` hook for runs that stop at an approval gate ("Waiting for approval in
+Aixle") is the natural next one. It is left out until gates report a run-level state. Reassigning
+the ticket, and custom comments per hook, are also left out.
 
 ## 7. Agent tools
 
@@ -879,4 +957,4 @@ Later and additive:
 
 | # | Question | Recommendation |
 |---|---|---|
-| 17 | Handoff statuses on the binding (`on_start_status`, `on_success_status`, `on_failure_status`, §6.8)? | Yes, optional. They are what makes a single intake column readable on an enterprise board, and they stop short of mirroring. |
+| 17 | Handoff statuses (§6.9)? | Yes, optional, with these sub-decisions: **17a** `start` fires when the run is accepted, not when the first agent starts; **17b** `cancelled` is handled as `failure`; **17c** one active run per issue and binding when handoff is set; **17d** compare-and-set: skip when someone moved the ticket, never force. |
