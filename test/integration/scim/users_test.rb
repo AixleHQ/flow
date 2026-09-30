@@ -121,6 +121,51 @@ class Scim::UsersTest < ActionDispatch::IntegrationTest
     assert_equal @existing, membership.reload.user
   end
 
+  test "a PUT carrying a different userName leaves the member's email alone" do
+    membership = @existing.company_memberships.find_by(company: @company)
+    original = @existing.email
+
+    put "/scim/Users/#{membership.id}", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+      userName: "renamed@#{@company.email_domain}", active: true
+    }.to_json
+
+    assert_response :success
+    assert_equal original, @existing.reload.email
+    assert_equal @existing, membership.reload.user
+    assert_nil User.find_by(email: "renamed@#{@company.email_domain}")
+  end
+
+  test "a PUT whose emails name another address leaves the member's email alone" do
+    membership = @existing.company_memberships.find_by(company: @company)
+    original = @existing.email
+
+    put "/scim/Users/#{membership.id}", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+      userName: "renamed@#{@company.email_domain}",
+      emails: [ { type: "work", value: "renamed@#{@company.email_domain}", primary: true } ],
+      active: true
+    }.to_json
+
+    assert_response :success
+    assert_equal original, @existing.reload.email
+    assert_equal @existing, membership.reload.user
+  end
+
+  test "a PUT that deactivates still applies when its userName differs" do
+    membership = @existing.company_memberships.find_by(company: @company)
+    original = @existing.email
+
+    put "/scim/Users/#{membership.id}", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+      userName: "renamed@#{@company.email_domain}", active: false
+    }.to_json
+
+    assert_response :success
+    assert_equal "revoked", membership.reload.state
+    assert_equal original, @existing.reload.email
+  end
+
   test "a directory cannot conscript an account outside the domain it owns" do
     outsider = create(:user, company: create(:company), email: "outsider@elsewhere.test")
 

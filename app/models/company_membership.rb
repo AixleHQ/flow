@@ -58,7 +58,8 @@ class CompanyMembership < ApplicationRecord
   # would let it repoint an existing membership — with whatever role that row
   # held — at an unrelated global account, and detach the original holder. The
   # address is set once, at provisioning; changing it is an account-level act
-  # that belongs to the person, not to a directory.
+  # that belongs to the person, not to a directory. This list alone does not
+  # enforce that — Scimitar never consults it on writes — #scim_user_name= does.
   def self.scim_mutable_attributes = %i[scim_given_name scim_family_name scim_active]
 
   def self.scim_queryable_attributes
@@ -81,27 +82,16 @@ class CompanyMembership < ApplicationRecord
   # them, and always creates the membership. It never creates an identity: the
   # first real sign-in does that (AD-10).
   #
-  # On an EXISTING membership this renames the person already on the row. It must
-  # never repoint the row at a different account: a directory that sent
-  # `userName: someone-else@elsewhere.com` in a PATCH would otherwise hand that
-  # stranger whatever role the row already held — including admin — in a company
-  # they have no relationship with, and detach the original holder from their own
-  # membership. The directory owns its members' presence here, not who they are.
+  # On an EXISTING membership the address is ignored: the person on the row and
+  # their global email stay as they are. Scimitar checks only the schema's
+  # mutability on writes, never ::scim_mutable_attributes, so a PUT (replace)
+  # reaches this setter with whatever userName the directory sent. Ignored
+  # rather than refused so the rest of a full-resource PUT (e.g. `active: false`)
+  # still applies.
   def scim_user_name=(value)
     email = value.to_s.strip.downcase
     return if email.blank?
-
-    if persisted? && user.present?
-      return if user.email.casecmp?(email)
-
-      if User.where(email: email).where.not(id: user_id).exists?
-        raise Scimitar::ResourceInvalidError,
-              "userName #{email} already belongs to another account; it cannot be moved onto this one"
-      end
-
-      user.update!(email: email)
-      return
-    end
+    return if persisted? && user.present?
 
     self.user = User.find_or_initialize_by(email: email).tap do |u|
       u.name = u.name.presence || email.split("@").first
