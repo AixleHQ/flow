@@ -58,6 +58,7 @@ export const NAV_STRUCTURE: NavSection[] = [
       { slug: 'triggers-and-gates', label: 'Triggers and gates' },
       { slug: 'integrations', label: 'Integrations' },
       { slug: 'azure-devops', label: 'Azure DevOps' },
+      { slug: 'jira', label: 'Jira' },
       { slug: 'configuration', label: 'Configuration' },
       { slug: 'configuring-sso', label: 'Configuring sign-in methods' },
     ],

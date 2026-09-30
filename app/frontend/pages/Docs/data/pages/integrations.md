@@ -137,6 +137,20 @@ on the [Azure DevOps](/docs/azure-devops) page.
   short-lived token per git operation, so nothing is stored in the
   checkout.
 
+### Jira
+
+Jira Cloud connects **per project**: one connection names one Jira site
+and the Jira projects picked on it, each of which becomes a tracker on
+the project's **Trackers** page — for tracker triggers and the
+`tracker_*` tools. It connects with an Atlassian account (through the
+deployment's Atlassian app) or with a service account's OAuth
+credential; the walkthrough is on the [Jira](/docs/jira) page.
+
+- An Atlassian-account connection registers its webhook itself; a
+  service-account connection needs a Jira admin to add one, from the
+  values **Webhook setup** shows.
+- A tracker's statuses are the columns of the Jira project's board.
+
 ### Public repositories (no integration)
 
 A project can also attach any **public** github.com or gitlab.com
@@ -195,8 +209,9 @@ the tools themselves are.
 | GitHub        | `POST /webhooks/github`                      | HMAC signature with `GITHUB_WEBHOOK_SECRET` |
 | GitLab        | `POST /webhooks/gitlab`                      | Per-repository secret                       |
 | Azure DevOps  | `POST /webhooks/azure_devops/<endpoint id>`  | HTTP Basic, one password per subscription   |
+| Jira          | `POST /webhooks/trackers/<endpoint token>`, or `/webhooks/trackers/app/jira` for the Atlassian app | HMAC signature per subscription; the app's signed JWT |
 
-All three are public (no session auth). GitHub and GitLab are verified by
+All of them are public (no session auth). GitHub, GitLab and Jira are verified by
 signature; Azure DevOps sends none, so the subscription's own password is
 the entire credential — which is why the endpoint id in the URL is a
 route, never a secret.

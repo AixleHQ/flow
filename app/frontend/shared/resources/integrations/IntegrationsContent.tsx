@@ -23,6 +23,7 @@ import { notifications } from '@mantine/notifications';
 import {
   IconBrandAzure,
   IconBrandGithub,
+  IconBrandJira,
   IconBrandSlack,
   IconCheck,
   IconChevronDown,
@@ -35,8 +36,9 @@ import {
   IconSearch,
   IconSettings,
   IconTrash,
+  IconWebhook,
 } from '@tabler/icons-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { Integration } from '@/types/generated';
 
@@ -50,9 +52,11 @@ import { StatusBadge } from 'shared/ui/StatusBadge';
 
 import { AzureDevopsConnectModal, type AzureDevopsProps } from './AzureDevopsConnectModal';
 import { GithubConnectModal, type GithubProps } from './GithubConnectModal';
+import { JiraConnectModal, JiraProjectsModal, type JiraProps, JiraWebhookModal } from './JiraConnectModal';
 
 export type { AzureDevopsProps } from './AzureDevopsConnectModal';
 export type { GithubProps } from './GithubConnectModal';
+export type { JiraProps } from './JiraConnectModal';
 
 interface IntegrationsContentProps {
   integrations: Integration[];
@@ -64,6 +68,8 @@ interface IntegrationsContentProps {
   // Absent on the company page. `appConfigured: false` is a deployment with no
   // GitHub App — the connect dialog then opens on the token path.
   github?: GithubProps;
+  // Absent on the company page: Jira connects to a project.
+  jira?: JiraProps;
 }
 
 const GitlabIcon = () => <img src="/images/gitlab.svg" alt="GitLab" width={20} height={20} />;
@@ -77,6 +83,7 @@ const ProviderIcon = ({ provider, size = 18 }: { provider: string; size?: number
   if (provider === 'coder') return <img src="/images/coder.svg" alt="Coder" width={size} height={size} />;
   if (provider === 'slack') return <IconBrandSlack size={size} />;
   if (provider === 'azure_devops') return <IconBrandAzure size={size} />;
+  if (provider === 'jira') return <IconBrandJira size={size} />;
   return <IconLink size={size} />;
 };
 
@@ -86,6 +93,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   coder: 'Coder',
   slack: 'Slack',
   azure_devops: 'Azure DevOps',
+  jira: 'Jira',
 };
 
 const SCOPE_COLORS: Record<string, string> = {
@@ -102,6 +110,7 @@ export const IntegrationsContent = ({
   title,
   azureDevops,
   github,
+  jira,
 }: IntegrationsContentProps) => {
   const { canExecute, canManageCompany } = useProjectPermissions();
   const isProjectContext = basePath.includes('projects');
@@ -113,6 +122,18 @@ export const IntegrationsContent = ({
   const azureAvailable = !!azureDevops?.enabled;
 
   const [githubOpen, setGithubOpen] = useState(false);
+
+  const [jiraOpen, setJiraOpen] = useState(false);
+  const [jiraProjectsTarget, setJiraProjectsTarget] = useState<Integration | null>(null);
+  const [jiraWebhookTarget, setJiraWebhookTarget] = useState<Integration | null>(null);
+  const jiraAvailable = isProjectContext && !!jira;
+
+  // The Atlassian app's callback lands here with the connection still to finish.
+  useEffect(() => {
+    const pendingId = Number(new URLSearchParams(window.location.search).get('jira_setup'));
+    const pending = pendingId ? integrations.find((i) => i.id === pendingId && i.provider === 'jira') : undefined;
+    if (pending) setJiraProjectsTarget(pending);
+  }, [integrations]);
 
   const [gitlabOpen, setGitlabOpen] = useState(false);
   const [gitlabPat, setGitlabPat] = useState('');
@@ -307,10 +328,10 @@ export const IntegrationsContent = ({
     );
   }, [basePath, coderEditPrefix, coderEditTarget, coderEditTemplate, coderEditTtl]);
 
-  // Re-verify an Azure connection. "Test" and "repair" are the same operation:
-  // the integration id and its repository attachments are kept either way, and a
-  // failed check never replaces a working credential.
-  const handleTestAzure = useCallback(
+  // Re-verify an Azure or Jira connection. "Test" and "repair" are the same
+  // operation: the integration id and what hangs off it are kept either way, and
+  // a failed check never replaces a working credential.
+  const handleTestConnection = useCallback(
     (integration: Integration) => {
       router.post(
         `${basePath}/${integration.id}/test_connection`,
@@ -371,6 +392,11 @@ export const IntegrationsContent = ({
                 {isProjectContext && azureAvailable && (
                   <Menu.Item leftSection={<IconBrandAzure size={16} />} onClick={() => setAzureOpen(true)}>
                     Azure DevOps
+                  </Menu.Item>
+                )}
+                {jiraAvailable && (
+                  <Menu.Item leftSection={<IconBrandJira size={16} />} onClick={() => setJiraOpen(true)}>
+                    Jira
                   </Menu.Item>
                 )}
                 {isProjectContext && (
@@ -450,6 +476,15 @@ export const IntegrationsContent = ({
                         onClick={() => setAzureOpen(true)}
                       >
                         Azure DevOps
+                      </Button>
+                    )}
+                    {jiraAvailable && (
+                      <Button
+                        variant="outline"
+                        leftSection={<IconBrandJira size={16} />}
+                        onClick={() => setJiraOpen(true)}
+                      >
+                        Jira
                       </Button>
                     )}
                     {isProjectContext && (
@@ -561,6 +596,17 @@ export const IntegrationsContent = ({
                                 : ''}
                             </Text>
                           )}
+                          {/* Whose identity it acts as matters most on a 3LO
+                              connection, which acts as the person who signed in. */}
+                          {integration.provider === 'jira' && (
+                            <Text fz={11} c="dimmed" truncate maw={260}>
+                              {integration.status === 'inactive'
+                                ? 'Choose the Jira projects to finish connecting'
+                                : `${integration.jiraProjects.map((p) => p.key).join(', ') || 'no projects'} · as ${
+                                    integration.jiraIdentity ?? integration.connectedBy.name
+                                  } (${integration.jiraAuthMode === 'oauth' ? 'Atlassian account' : 'service account'})`}
+                            </Text>
+                          )}
                           {integration.provider === 'coder' && integration.coderUrl && (
                             <Text fz={11} c="dimmed" truncate maw={200}>
                               {integration.coderUrl}
@@ -638,7 +684,7 @@ export const IntegrationsContent = ({
                               aria-label={`Test connection for ${integration.name}`}
                               variant="subtle"
                               size="sm"
-                              onClick={() => handleTestAzure(integration)}
+                              onClick={() => handleTestConnection(integration)}
                             >
                               <IconRefresh size={16} />
                             </ActionIcon>
@@ -652,6 +698,58 @@ export const IntegrationsContent = ({
                               size="sm"
                               component="a"
                               href={integration.azureUrl}
+                              target="_blank"
+                            >
+                              <IconSettings size={16} />
+                            </ActionIcon>
+                          </Tooltip>
+                        )}
+                        {integration.provider === 'jira' && canExecute && !readOnly && (
+                          <>
+                            {integration.status !== 'inactive' && (
+                              <Tooltip label="Test connection">
+                                <ActionIcon
+                                  aria-label={`Test connection for ${integration.name}`}
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => handleTestConnection(integration)}
+                                >
+                                  <IconRefresh size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                            <Tooltip label="Jira projects">
+                              <ActionIcon
+                                aria-label={`Jira projects for ${integration.name}`}
+                                variant="subtle"
+                                size="sm"
+                                onClick={() => setJiraProjectsTarget(integration)}
+                              >
+                                <IconPencil size={16} />
+                              </ActionIcon>
+                            </Tooltip>
+                            {integration.jiraAuthMode === 'service_account' && (
+                              <Tooltip label="Webhook setup">
+                                <ActionIcon
+                                  aria-label={`Webhook setup for ${integration.name}`}
+                                  variant="subtle"
+                                  size="sm"
+                                  onClick={() => setJiraWebhookTarget(integration)}
+                                >
+                                  <IconWebhook size={16} />
+                                </ActionIcon>
+                              </Tooltip>
+                            )}
+                          </>
+                        )}
+                        {integration.provider === 'jira' && integration.jiraSiteUrl && !readOnly && (
+                          <Tooltip label="Open in Jira">
+                            <ActionIcon
+                              aria-label={`Open ${integration.name} in Jira`}
+                              variant="subtle"
+                              size="sm"
+                              component="a"
+                              href={integration.jiraSiteUrl}
                               target="_blank"
                             >
                               <IconSettings size={16} />
@@ -691,6 +789,22 @@ export const IntegrationsContent = ({
             </Table.Tbody>
           </Table>
         </ResourceTableShell>
+      )}
+
+      {jira && (
+        <>
+          <JiraConnectModal opened={jiraOpen} onClose={() => setJiraOpen(false)} basePath={basePath} jira={jira} />
+          <JiraProjectsModal
+            integration={jiraProjectsTarget}
+            onClose={() => setJiraProjectsTarget(null)}
+            basePath={basePath}
+          />
+          <JiraWebhookModal
+            integration={jiraWebhookTarget}
+            onClose={() => setJiraWebhookTarget(null)}
+            basePath={basePath}
+          />
+        </>
       )}
 
       {azureDevops && (

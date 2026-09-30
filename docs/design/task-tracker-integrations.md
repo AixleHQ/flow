@@ -1,6 +1,6 @@
 # Task tracker integrations — technical design
 
-Status: **Agreed 2026-09-30; phase 1 (core + Azure Boards) implemented in #366**
+Status: **Agreed 2026-09-30; phase 1 (core + Azure Boards) and phase 2 (Jira Cloud) implemented in #366**
 Date: 2026-09-30
 Related: PR #271 (YouTrack integration, unmerged) and its two design documents,
 `integration-abstractions-tech-design-v1.md` and `youtrack-integration-tech-design-v6.md`;
@@ -306,9 +306,9 @@ Status        id, name, category (todo | in_progress | done | canceled | nil)
 |---|---|---|---|---|---|
 | Scope unit | project | project | team | project (v2) | project |
 | Instance identity | normalized base URL | `cloudId` (survives site rename) | organization id | owner + project node id | organization id |
-| Auth | permanent token of an automation account | Atlassian OAuth 2.0 app, configured per deployment like Azure's Entra app; tokens go through the existing OAuth flow engine (`oauth-implementation.md`). It acts as the consenting user, so consent comes from a dedicated service account | API key or OAuth app | GitHub App (existing) | existing Azure connection |
-| Delivery | Webhook Triggers app (YouTrack 2026.2+), configured per project; one shared token header per YouTrack project | REST-registered webhooks (OAuth/Connect apps) expire after 30 days and need the refresh endpoint | webhooks with `Linear-Signature` HMAC-SHA256 and `webhookTimestamp` | `projects_v2_item` through the existing GitHub App receiver | Service Hooks through the existing Azure receiver |
-| Subscription strategy | manual | api + refresh sweep | api | GitHub App install | api (existing `SubscriptionService`) |
+| Auth | permanent token of an automation account | Two ways (§12, phase 2): the deployment's Atlassian OAuth 2.0 (3LO) app, which acts as the consenting user, or a customer's service account through the client-credentials grant. Tokens live in the connection's encrypted credentials and are renewed under a row lock, since 3LO refresh tokens rotate | API key or OAuth app | GitHub App (existing) | existing Azure connection |
+| Delivery | Webhook Triggers app (YouTrack 2026.2+), configured per project; one shared token header per YouTrack project | 3LO: REST-registered webhooks, which expire after 30 days and need the refresh endpoint. Atlassian allows one URL per app, so they share `/webhooks/trackers/app/jira` and are routed by `matchedWebhookIds` plus a site check. Service account: only apps may register webhooks, so a Jira admin adds a system webhook signed with a per-subscription HMAC secret | webhooks with `Linear-Signature` HMAC-SHA256 and `webhookTimestamp` | `projects_v2_item` through the existing GitHub App receiver | Service Hooks through the existing Azure receiver |
+| Subscription strategy | manual | api + refresh sweep (3LO); manual (service account) | api | GitHub App install | api (existing `SubscriptionService`) |
 | Change hints in payload | `changedFields[{name, oldValue, value}]` | `changelog.items` from/to | `updatedFrom` (previous values) | `changes` (to verify) | `fields.{name}.oldValue/newValue` |
 | Status category source | `isResolved` only (todo/done); in-progress set by mapping | `statusCategory` | state `type` | none — mapping required | state category |
 
@@ -331,6 +331,10 @@ changed:
   (categorized by the state behind it), and a column move is the `status_changed` event, with the
   state change beside it as `change.state`. A state change alone counts only for a work item on no
   board. Transitions still set the state, since Azure moves a card through the state its column maps to.
+- Jira works the same way: the status is the column of the project's first board that holds the
+  issue's workflow status, categorized by the categories of the statuses in it. A move between two
+  statuses in one column is not a status change. The workflow status is `fields.state` and
+  `change.state`; a transition may name a column, a status or a Jira transition.
 
 Which field a provider reads as the status is the provider's decision (`Provider#status_change`):
 the board's columns wherever they exist. A per-tracker `settings.status_field` override is left for
@@ -375,8 +379,10 @@ fire every trigger, and a forged hint cannot invent a transition that never happ
 
 A provider whose deliveries are authenticated per subscription can skip the history check: forging
 a hint then takes that subscription's own secret. Azure qualifies (Service Hooks authenticate with a
-per-subscription basic-auth password), so phase 1 trusts its hints. The history check arrives with
-the first shared-token provider, YouTrack.
+per-subscription basic-auth password), so phase 1 trusts its hints. Jira qualifies too: an admin
+webhook signs its body with its subscription's secret, and an app webhook carries a JWT signed with
+the app's client secret, which only Atlassian holds. The history check arrives with the first
+shared-token provider, YouTrack.
 
 ### 6.3 Event vocabulary and data
 
@@ -872,12 +878,27 @@ for.
      receiver.
    - **Risk:** this phase changes the tools existing Azure customers have. It needs a live-tenant
      run on staging before release; CI alone cannot show it works.
-2. **Jira Cloud** (committed):
+2. **Jira Cloud** (committed; built in #366):
    - the tracker-native ingress: subscriptions, deliveries, `/webhooks/trackers`;
-   - `Trackers::ConnectionService` (connect, reconnect in place, verify, soft disconnect);
-   - the Atlassian OAuth 2.0 app through the OAuth flow engine;
-   - the `api` strategy with the 30-day refresh sweep;
-   - `cloudId` instance identity, the transition graph, and `native_query` (JQL).
+   - the Atlassian OAuth 2.0 app, and a service account as the second way in;
+   - the `api` strategy with the 30-day refresh sweep (`TrackerSubscriptionRefreshWorkflow`,
+     daily, which also renews 3LO grants idle for 30 days before Atlassian retires them at 90);
+   - `cloudId` instance identity, the transition graph, and `native_query` (JQL), which is ANDed
+     in brackets and whose results outside the tracker's project are dropped;
+   - `tracker_list_users`.
+
+   Where it settled differently:
+   - **No `Trackers::ConnectionService`.** Connecting stays with the provider's own
+     `Jira::IntegrationService`, like Azure's: connect, reconnect in place (the same site in the same
+     project renews that connection), verify, and changing the projects, which detaches the trackers
+     of projects dropped. Disconnecting is the existing integration removal.
+   - **Not the OAuth flow engine.** `OauthCredential` belongs to a user, company or project, and the
+     3LO callback has to end in a site and project picker, so Jira has its own callback over
+     `Oauth::State` and keeps its tokens with the connection.
+   - **Identity.** A 3LO connection acts as the person who connected it, so its changes are
+     attributed through the ledger only; the account counts as Aixle's own (mentions, the
+     actor fallback) only when it is marked as kept for Aixle. A service account always is.
+   - **REST v2** for issues and comments: v3 accepts and returns only Atlassian Document Format.
 3. **GitHub Projects** (committed), and GitHub Issues if they fall out cheaply: through the
    existing GitHub App and `Webhooks::GithubController` (§9.3). The scope unit is decided here.
 4. **Linear**: API-registered webhooks with `Linear-Signature` HMAC. Until then, the dead `linear`
@@ -915,7 +936,7 @@ Later and additive:
 | 10 | Which fields may agents write? | **Agreed:** everything the provider reports as editable, minus an optional per-tracker deny list. |
 | 11 | Failure notice on the issue? | **Agreed:** a failed or cancelled run posts one comment with a link to the run, governed by `status_reporting` (§6.9). |
 | 12 | Phase order? | **Agreed:** Azure Boards (with the core) → Jira → GitHub Projects → Linear → YouTrack. Jira and GitHub Projects are committed (§12). |
-| 13 | Jira authentication? | **Agreed: an Atlassian OAuth 2.0 app**, with consent from a dedicated service account (§5.3). |
+| 13 | Jira authentication? | **Agreed: both.** The Atlassian OAuth 2.0 app for SaaS, and a customer's service account with client credentials, which needs no app on the deployment (§5.3). |
 | 14 | YouTrack older than 2026.2? | **Agreed:** not supported in v1; documented as a requirement. |
 | 15 | Loop-limit defaults? | **Agreed:** depth 5, 10 Aixle-caused runs per issue per hour, tuned later. |
 | 16 | Scope cuts (no mirroring, no polling, best-effort delivery)? | **Agreed.** Adoption goes through one-column intake instead (§6.8). |

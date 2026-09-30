@@ -214,7 +214,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     render json: {
       url: subscription.callback_url(Jira::AppConfig.webhook_base_url), secret: subscription.secret,
       events: [ "Issue: created", "Issue: updated", "Comment: created" ],
-      jql: keys.any? ? "project IN (#{keys.join(', ')})" : nil, last_event_at: subscription.last_event_at
+      jql: keys.any? ? "project IN (#{keys.join(', ')})" : nil, lastEventAt: subscription.last_event_at
     }
   end
 
