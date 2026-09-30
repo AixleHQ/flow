@@ -22,13 +22,10 @@ class Web::ProfileUsageControllerTest < ActionDispatch::IntegrationTest
     session
   end
 
-  test "renders usage page with default period and self as target" do
+  test "renders usage page with default period" do
     get usage_profile_path
     assert_inertia_page "Profile/Usage"
-    assert_inertia_props period: "30d", viewerIsSelf: true
-    assert_inertia_props do |props|
-      props[:targetUser][:id] == @user.id
-    end
+    assert_inertia_props period: "30d"
   end
 
   test "passes custom period" do
@@ -91,60 +88,16 @@ class Web::ProfileUsageControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "cross-person same company member view is allowed and reflects target data" do
-    user_b = create(:user, :employee, :onboarding_completed, company: @company)
-    seed_session(user: user_b, project: @project, cost_cents: 300, tokens: 3000)
+  test "user_id cannot point the page at a colleague" do
+    colleague = create(:user, :employee, :onboarding_completed, company: @company)
+    seed_session(user: colleague, project: @project, cost_cents: 300, tokens: 3000)
+    create(:terminal_session, :agent_session, user: colleague, project: @project, initial_prompt: "private plan")
 
-    get usage_profile_path(user_id: user_b.id)
-    assert_inertia_props viewerIsSelf: false
-    assert_inertia_props do |props|
-      props[:targetUser][:id] == user_b.id
-    end
-
-    inertia_load_deferred_props("usage")
-    assert_inertia_props do |props|
-      props[:summary][:totalSessions] == 1 &&
-        props[:summary][:totalCostCents] == 300
-    end
-  end
-
-  test "a colleague's usage lists their sessions as a colleague sees them, not as the owner does" do
-    Settings.stubs(:domain).returns("flow.example.com")
-    Settings.traefik.stubs(:http_base).returns("https://t.flow.example.com")
-    Settings.traefik.stubs(:ws_base).returns("wss://t.flow.example.com")
-    create(:terminal_session, :agent_session, user: @user, project: @project, state: "ready",
-                                              initial_prompt: "private plan",
-                                              metadata: { "vscode_token" => "tkn-secret" })
-    member = create(:user, :viewer, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
-    delete logout_path
-    sign_in_as(member)
-
-    get usage_profile_path(user_id: @user.id)
+    get usage_profile_path(user_id: colleague.id)
     inertia_load_deferred_props("usage")
 
-    row = inertia.props[:sessions].sole
-    assert_nil row[:initialPrompt]
-    assert_not row.to_json.include?("tkn-secret")
-    assert_match %r{/view/ws\?}, row[:websocketUrl]
-    assert_nil row[:uploadUrl]
-    assert_nil row[:ideUrl]
-    ticket = Rack::Utils.parse_query(URI.parse(row[:websocketUrl]).query)[ContainerTicket::PARAM]
-    assert_equal member, ContainerTicket.user_for(ticket, session: TerminalSession.find(row[:id]))
-  end
-
-  test "cross-company target is forbidden with 404" do
-    other_company = create(:company)
-    user_c = create(:user, :employee, :onboarding_completed, company: other_company)
-
-    get usage_profile_path(user_id: user_c.id)
-    assert_response :not_found
-  end
-
-  test "self default when user_id is absent" do
-    get usage_profile_path
-    assert_inertia_props do |props|
-      props[:targetUser][:id] == @user.id && props[:viewerIsSelf] == true
-    end
+    assert_equal 0, inertia.props[:summary][:totalSessions]
+    assert_empty inertia.props[:sessions]
   end
 
   test "super_admin is redirected away from profile usage" do

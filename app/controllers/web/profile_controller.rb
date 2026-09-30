@@ -105,17 +105,14 @@ class Web::ProfileController < Web::ApplicationController
     # Usage is ALWAYS a current-company slice — a dual-membership user's other
     # companies' sessions/costs must never surface here.
     company = current_company or raise ActiveRecord::RecordNotFound
-    target     = resolve_target_user
-    period     = params.fetch(:period, "30d")
+    period = params.fetch(:period, "30d")
     project_id = params[:project_id].presence
 
     render inertia: "Profile/Usage", props: {
       period:,
       project_id:,
-      viewer_is_self: target.id == current_user.id,
-      target_user: { id: target.id, name: target.name, email: target.email },
       summary: InertiaRails.defer(group: "usage") {
-        r = UserAnalyticsService.new(user: target, company:, period:, project_id:).call
+        r = UserAnalyticsService.new(user: current_user, company:, period:, project_id:).call
         {
           totalSessions: r.total_sessions,
           totalCostCents: r.total_cost_cents,
@@ -128,20 +125,20 @@ class Web::ProfileController < Web::ApplicationController
         }
       },
       agent_activity: InertiaRails.defer(group: "usage") {
-        r = UserAgentActivityService.new(user: target, company:, period:, project_id:).call
+        r = UserAgentActivityService.new(user: current_user, company:, period:, project_id:).call
         { sessionsByAgent: r.sessions_by_agent.map { |a| { agentType: a.agent_type, sessions: a.sessions, costCents: a.cost_cents, tokens: a.tokens } } }
       },
       cost_token: InertiaRails.defer(group: "usage") {
-        r = UserSessionCostTokenUsageService.new(user: target, company:, period:, project_id:).call
+        r = UserSessionCostTokenUsageService.new(user: current_user, company:, period:, project_id:).call
         { timeSeries: r.time_series.map { |p| { date: p.date, costCents: p.cost_cents, totalTokens: p.total_tokens } } }
       },
       activity_heatmap: InertiaRails.defer(group: "usage") {
-        scope = target.terminal_sessions.joins(:project).where(projects: { company_id: company.id })
+        scope = current_user.terminal_sessions.joins(:project).where(projects: { company_id: company.id })
         scope = scope.where(project_id:) if project_id
         { days: ActivityHeatmapService.new(scope:).call.map { |d| { date: d.date, count: d.count } } }
       },
       sessions: InertiaRails.defer(group: "usage") {
-        target.terminal_sessions
+        current_user.terminal_sessions
               .joins(:project).where(projects: { company_id: company.id })
               .with_cached_resource_counts
               .includes(:user, :project, :session_admission,
@@ -212,17 +209,6 @@ class Web::ProfileController < Web::ApplicationController
     raise ActiveRecord::RecordNotFound unless current_membership
 
     current_membership.credentials_scope
-  end
-
-  # Same-company scope guard (NOT admin-gated): the target must have an ACTIVE
-  # membership in the CURRENT company. Foreign / unknown user_id → 404.
-  # user_id absent → current_user (self-view).
-  def resolve_target_user
-    return current_user if params[:user_id].blank?
-
-    raise ActiveRecord::RecordNotFound unless current_company
-
-    current_company.users.merge(CompanyMembership.active).find(params[:user_id])
   end
 
   # Session sharing is a GLOBAL user preference, not a per-company one: it says

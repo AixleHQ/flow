@@ -73,10 +73,7 @@ class Web::Company::UsersController < Web::Company::ApplicationController
   end
 
   # Aixle spend for this person in this company — the same four panels, the same
-  # services and the same deferral group as Profile -> Usage. Nothing new is
-  # exposed: /profile/usage?user_id= already answers this for any member of the
-  # company (see ProfileController#resolve_target_user); this only puts the
-  # answer on the page people actually open to ask it.
+  # services and the same deferral group as Profile -> Usage.
   def analytics_props(target)
     company = current_company
 

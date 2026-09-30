@@ -80,17 +80,6 @@ class Web::CrossCompanyIsolationTest < ActionDispatch::IntegrationTest
     assert_equal [ "Beta Project" ], props[:sessions].map { |s| s[:projectName] }.uniq
   end
 
-  test "usage colleague param for a user of the other company is a 404" do
-    # Current company is A; @colleague_b is only a member of B.
-    get usage_profile_path(user_id: @colleague_b.id)
-    assert_response :not_found
-
-    # In B the same colleague is visible.
-    switch_to(@company_b)
-    get usage_profile_path(user_id: @colleague_b.id)
-    assert_response :success
-  end
-
   # === members ===
 
   test "members index never lists the other company's users" do
