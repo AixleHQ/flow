@@ -25,19 +25,33 @@ class Auth::DomainAutoJoinTest < ActiveSupport::TestCase
     @company.update!(domain_verified_at: nil)
 
     assert_no_difference "CompanyMembership.count" do
-      assert_nil Auth::DomainAutoJoin.call(newcomer, provider: @google)
+      assert_nil Auth::DomainAutoJoin.call(newcomer, provider: @google, verified: true)
+    end
+  end
+
+  test "an address the method did not prove joins nobody, not even as a request" do
+    person = newcomer
+
+    assert_no_difference "CompanyMembership.count" do
+      assert_nil Auth::DomainAutoJoin.call(person, provider: @google, verified: false)
+    end
+
+    @company.update!(auto_accept_users: false)
+
+    assert_no_difference "CompanyMembership.count" do
+      assert_nil Auth::DomainAutoJoin.call(person, provider: @google, verified: false)
     end
   end
 
   test "proving the domain turns it on, with no other change" do
     @company.update!(domain_verified_at: nil)
     person = newcomer
-    assert_nil Auth::DomainAutoJoin.call(person, provider: @google)
+    assert_nil Auth::DomainAutoJoin.call(person, provider: @google, verified: true)
 
     @company.update!(domain_verified_at: Time.current)
 
     assert_difference "CompanyMembership.count", 1 do
-      Auth::DomainAutoJoin.call(person, provider: @google)
+      Auth::DomainAutoJoin.call(person, provider: @google, verified: true)
     end
   end
 
@@ -50,7 +64,7 @@ class Auth::DomainAutoJoinTest < ActiveSupport::TestCase
     user = newcomer
 
     assert_difference "CompanyMembership.count", 1 do
-      Auth::DomainAutoJoin.call(user, provider: @google)
+      Auth::DomainAutoJoin.call(user, provider: @google, verified: true)
     end
 
     assert_equal @company, user.company_memberships.sole.company
@@ -61,7 +75,7 @@ class Auth::DomainAutoJoinTest < ActiveSupport::TestCase
     user = newcomer
 
     assert_no_difference "CompanyMembership.count" do
-      Auth::DomainAutoJoin.call(user, provider: @google)
+      Auth::DomainAutoJoin.call(user, provider: @google, verified: true)
     end
   end
 
@@ -103,7 +117,7 @@ class Auth::DomainAutoJoinTest < ActiveSupport::TestCase
     create(:company_membership, user: user, company: other, state: "invited")
 
     assert_no_difference "CompanyMembership.count" do
-      Auth::DomainAutoJoin.call(user, provider: @google)
+      Auth::DomainAutoJoin.call(user, provider: @google, verified: true)
     end
   end
 
@@ -111,7 +125,7 @@ class Auth::DomainAutoJoinTest < ActiveSupport::TestCase
     user = create(:user, email: "someone@unclaimed-#{SecureRandom.hex(3)}.test")
 
     assert_no_difference "CompanyMembership.count" do
-      Auth::DomainAutoJoin.call(user, provider: @google)
+      Auth::DomainAutoJoin.call(user, provider: @google, verified: true)
     end
   end
 
@@ -119,7 +133,7 @@ class Auth::DomainAutoJoinTest < ActiveSupport::TestCase
     user = create(:user, :super_admin, email: "operator@autojoin-acme.test")
 
     assert_no_difference "CompanyMembership.count" do
-      Auth::DomainAutoJoin.call(user, provider: @google)
+      Auth::DomainAutoJoin.call(user, provider: @google, verified: true)
     end
   end
 
@@ -134,7 +148,7 @@ class Auth::DomainAutoJoinTest < ActiveSupport::TestCase
     create(:company_auth_policy, company: other, identity_provider: connection, enabled: true)
 
     assert_no_difference "CompanyMembership.count" do
-      Auth::DomainAutoJoin.call(newcomer, provider: connection)
+      Auth::DomainAutoJoin.call(newcomer, provider: connection, verified: true)
     end
   end
 end

@@ -33,14 +33,16 @@ module OmniAuthHelper
   # Entra sends the stable object id and the tenant id in the id_token, which the
   # strategy exposes as extra.raw_info. Both are load-bearing: `oid` is the
   # subject (AD-3) and `tid` is what a company connection is pinned to (AD-13).
-  def with_mocked_microsoft_auth(email:, name: "Entra User", oid: "entra-oid-1", tid: "tenant-abc")
+  # `upn` is what shows the tenant owns the address's domain; leave it out and
+  # the address is only the user's `mail` attribute, which proves nothing.
+  def with_mocked_microsoft_auth(email:, name: "Entra User", oid: "entra-oid-1", tid: "tenant-abc", upn: nil)
     OmniAuth.config.test_mode = true
     OmniAuth.config.mock_auth[:microsoft] = OmniAuth::AuthHash.new(
       provider: "microsoft",
       uid: "#{oid}##{tid}",
       info: { email: email, name: name },
       credentials: { token: "mock-token" },
-      extra: { raw_info: { oid: oid, tid: tid, email: email, name: name } }
+      extra: { raw_info: { oid: oid, tid: tid, email: email, name: name, upn: upn }.compact }
     )
     yield
   ensure

@@ -141,6 +141,14 @@ module Auth
       end
     end
 
+    test "a new user whose provider did not verify the address is not auto-joined" do
+      resolved = Auth::IdentityResolver.new(
+        assertion_for(@google, subject: "sub-unproved", email: "claimed@#{@company.email_domain}", email_verified: false)
+      ).resolve
+
+      assert_empty resolved.company_memberships
+    end
+
     test "a new user in an unknown domain raises rather than creating anything" do
       assert_no_difference "User.count" do
         assert_raises(Auth::IdentityResolver::NoWorkspaceError) do

@@ -66,13 +66,13 @@ class Web::Company::DomainVerificationsTest < ActionDispatch::IntegrationTest
     newcomer = create(:user, email: "newcomer@acme-robotics.example")
     google = IdentityProvider.deployment!("google")
 
-    assert_nil Auth::DomainAutoJoin.call(newcomer, provider: google)
+    assert_nil Auth::DomainAutoJoin.call(newcomer, provider: google, verified: true)
 
     published_txt_records(host => [ record ])
     post company_domain_verification_path
 
     assert_difference "CompanyMembership.count", 1 do
-      Auth::DomainAutoJoin.call(newcomer, provider: google)
+      Auth::DomainAutoJoin.call(newcomer, provider: google, verified: true)
     end
   end
 end

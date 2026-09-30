@@ -14,7 +14,7 @@ class Web::MicrosoftSignInTest < ActionDispatch::IntegrationTest
 
   test "a first-time Entra user in a matching domain is signed in and auto-joined" do
     assert_difference "User.count", 1 do
-      with_mocked_microsoft_auth(email: "new@entra-acme.test") do
+      with_mocked_microsoft_auth(email: "new@entra-acme.test", upn: "new@entra-acme.test") do
         get MICROSOFT_CALLBACK_PATH
       end
     end
@@ -24,6 +24,18 @@ class Web::MicrosoftSignInTest < ActionDispatch::IntegrationTest
     # Identity is keyed on the immutable object id, not the address.
     assert_equal "entra-oid-1", user.user_identities.for_kind("microsoft").first.subject
     assert UserSession.live.exists?(user: user)
+  end
+
+  test "an Entra address its tenant has not shown it owns joins nobody" do
+    # Any tenant can set a user's `mail` to an address at somebody else's
+    # domain; only a UPN at that domain shows the tenant verified it.
+    with_mocked_microsoft_auth(email: "newhire@entra-acme.test", upn: "newhire@attacker.onmicrosoft.com") do
+      get MICROSOFT_CALLBACK_PATH
+    end
+
+    user = User.find_by(email: "newhire@entra-acme.test")
+    assert_not_nil user, "the account itself may still be created"
+    assert_empty user.company_memberships
   end
 
   test "a returning user is matched by object id even after their address changes" do

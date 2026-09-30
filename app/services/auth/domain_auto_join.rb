@@ -19,7 +19,12 @@ module Auth
     # company's admins. A membership nobody can use is worse than no membership:
     # it reads as access, counts as a member, and quietly freezes the policy
     # screen.
-    def call(user, email = user.email, provider:)
+    #
+    # `verified:` is whether the method proved the address (or its domain). An
+    # unproved address is a claim, and a claim joins nobody, not even as a
+    # request awaiting approval.
+    def call(user, email = user.email, provider:, verified:)
+      return nil unless verified
       return nil if user.super_admin?
       return nil if user.company_memberships.exists?
 
