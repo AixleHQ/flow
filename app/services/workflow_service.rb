@@ -152,6 +152,12 @@ class WorkflowService
 
     def fail(run:)
       run.fail! if run.may_fail?
+      # A run fails when its Temporal execution crashes (e.g. an activity errored
+      # before it could mark its own step). Without this, the step that was in
+      # flight keeps its `running`/`pending` state forever while the run reads
+      # `failed` — get_workflow_run then shows a completed-but-failed run with a
+      # step still "running". Fan out the failure the same way #cancel does.
+      fail_active_step_runs(run)
       record_activity(run, :workflow_failed)
       broadcast_task_updated(run)
     end
@@ -275,6 +281,19 @@ class WorkflowService
         sr.mark_cancelled!(diagnosed_reason(session))
       rescue StandardError => e
         Rails.logger.warn("[WorkflowService] Failed to cancel step_run ##{sr.id}: #{e.message}")
+      end
+    end
+
+    # A crashed run's leftover steps are marked failed, not cancelled: the run
+    # failed, so an unfinished step failed with it. Its session is stopped first
+    # so the container is not left running behind a dead run.
+    def fail_active_step_runs(run)
+      run.step_runs.where(state: %w[pending running waiting_input]).find_each do |sr|
+        session = sr.terminal_session
+        SessionService.fail_session(session: session) if session && !session.state.in?(%w[failed cancelled finished])
+        sr.mark_failed!(diagnosed_reason(session) || "Run failed while this step was in flight")
+      rescue StandardError => e
+        Rails.logger.warn("[WorkflowService] Failed to fail step_run ##{sr.id}: #{e.message}")
       end
     end
 
