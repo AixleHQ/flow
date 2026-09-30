@@ -182,15 +182,12 @@ module Api
         (project ? Agent.visible_for_project(project) : Agent.none).find(id)
       end
 
-      # Viewer check against the target project's company; without a project
-      # (auth_setup flows), fall back to the global viewer-everywhere predicate.
+      # Viewer check against the company the session is billed to: the project's,
+      # or for a project-less session the one #auth_setup_company names.
       def viewer_for?(project)
-        if project
-          membership = current_user.company_memberships.active.find_by(company_id: project.company_id)
-          membership.nil? || membership.viewer?
-        else
-          current_user.active_memberships.none? || current_user.active_memberships.all?(&:viewer?)
-        end
+        company_id = project ? project.company_id : auth_setup_company&.id
+        membership = company_id && current_user.active_memberships.find { |m| m.company_id == company_id }
+        membership.nil? || membership.viewer?
       end
     end
   end
