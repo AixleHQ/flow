@@ -12,26 +12,42 @@ module Billing
     # DOWN, never up. The rounding direction is the one thing about it a customer
     # would notice, and charging for a minute that was not given is worse than
     # giving away one that was. In minutes rather than hours, so the most that
-    # can be lost is under a queue-minute an hour.
+    # can be lost is under a queue_minute an hour.
     #
-    # NOT IMPLEMENTED YET. The real call is `MeterUsage` from inside the buyer's
-    # cluster, signed with EKS IRSA or an ECS task role, and it carries
-    # constraints this stub does not yet honour — one record per dimension per
-    # hour PER POD, so a retry that lands on another replica bills twice; a
-    # six-hour ceiling on backfill; a region resolved at runtime. The activity is
-    # already built around those (single attempt, replay from the ledger), which
-    # is why this is safe to leave as a log line for now.
+    # ONE ATTEMPT, NOT A RETRY LOOP. AWS counts its once-per-hour budget per
+    # caller, so a retry landing on another replica would find an unused budget
+    # and bill the customer twice rather than meeting DuplicateRequestException.
+    # Recovery is the next run replaying the ledger, which is why this raises on
+    # failure instead of trying again, and why a duplicate is answered as
+    # recorded rather than as an error.
     class AwsMarketplace < Base
-      DIMENSION = "queue-minute"
+      # Must match the dimension's API identifier in the listing character for
+      # character. The listing spells it with an underscore because the portal
+      # accepts letters, digits and underscores and refuses the hyphen this was
+      # written with until 29 September 2026.
+      DIMENSION = "queue_minute"
+
+      def initialize(client: ::Billing::MarketplaceMeteringClient.new)
+        super()
+        @client = client
+      end
+
+      attr_reader :client
 
       def deliver(report)
-        Rails.logger.info(
-          "[Billing::Meter::AwsMarketplace] would meter #{quantity_for(report)} #{DIMENSION}(s) " \
-          "at #{report.period_start.utc.iso8601} (exact #{report.quantity_minutes.to_s('F')}), " \
-          "allocated as #{allocations_for(report).inspect}"
+        result = client.meter_usage(
+          dimension: DIMENSION,
+          quantity: quantity_for(report),
+          occurred_at: report.period_start,
+          allocations: allocations_for(report)
         )
 
-        "aws-pending-#{report.period_start.utc.iso8601}"
+        return result unless result == :duplicate
+
+        # AWS already holds this hour. Answering with an identifier settles the
+        # ledger row, which is the truth: the record exists, we simply are not
+        # the ones who were told its id.
+        "aws:already-recorded:#{report.period_start.utc.iso8601}"
       end
 
       # The integer AWS is given. Allocations have to sum to it exactly or the

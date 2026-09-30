@@ -631,6 +631,13 @@ trial:
 # Stripe, for the hosted product's metered capacity. Absent everywhere else, and
 # absent here until an operator sets it — nothing calls Stripe without all three,
 # and the metering ledger keeps recording either way.
+# The product an installation bought through AWS Marketplace meters against.
+# Empty everywhere else, and empty is what stops Billing::MarketplaceMeteringClient
+# from calling out at all. The installation puts it here from the code the
+# buyer's subscription issued.
+aws_marketplace:
+  product_code: <%= ENV['AWS_MARKETPLACE_PRODUCT_CODE'] %>
+
 stripe:
   secret_key: <%= ENV['STRIPE_SECRET_KEY'] %>
   # The metered price capacity is billed against. Its unit is a queue-MINUTE, so

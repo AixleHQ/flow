@@ -242,14 +242,28 @@ class Billing::CapacityMeterTest < ActiveSupport::TestCase
     assert @company.reload.billing_trialing?
   end
 
-  # Both real adapters are stubs today, so the contract they have to keep is
-  # narrow: answer with an identifier, never swallow a rejection silently.
+  # The contract every adapter keeps: answer with an identifier, never swallow a
+  # rejection silently. Stripe and Null can answer with nothing configured; the
+  # AWS one cannot, and what it does instead is the next test.
   test "the shipped adapters answer with an identifier for the hour" do
     report = CapacityMeterReport.new(period_start: Time.utc(2026, 9, 23, 10), quantity_seconds: 180,
                                      breakdown: { "1" => 180 })
 
     assert_match(/2026-09-23T10:00:00Z/, Billing::Meter::Stripe.new.deliver(report))
-    assert_match(/2026-09-23T10:00:00Z/, Billing::Meter::AwsMarketplace.new.deliver(report))
     assert_match(/2026-09-23T10:00:00Z/, Billing::Meter::Null.new.deliver(report))
+  end
+
+  # An installation in aws_marketplace mode that was not bought through
+  # Marketplace has no product code, and there is nothing to bill against. The
+  # hour is raised rather than reported, which leaves it on the ledger as failed
+  # and eventually skipped: visible, and never a record we did not send.
+  test "the AWS adapter refuses an hour it has no product code for" do
+    report = CapacityMeterReport.new(period_start: Time.utc(2026, 9, 23, 10), quantity_seconds: 180,
+                                     breakdown: { "1" => 180 })
+
+    error = assert_raises(Billing::MarketplaceMeteringClient::Error) do
+      Billing::Meter::AwsMarketplace.new.deliver(report)
+    end
+    assert_match(/product code/, error.message)
   end
 end
