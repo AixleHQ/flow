@@ -12,7 +12,8 @@ module Webhooks
       return if received.nil? || received.status == "processed"
 
       endpoint = received.webhook_endpoint
-      normalized = normalize(endpoint, received.raw_payload)
+      adapter = Webhooks::AdapterRegistry.for(endpoint.provider)
+      normalized = adapter ? adapter.normalize(received) : normalize(endpoint, received.raw_payload)
 
       if normalized.nil?
         received.update!(status: "skipped")

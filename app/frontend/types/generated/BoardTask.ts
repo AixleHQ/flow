@@ -23,6 +23,7 @@ type BoardTask = {
   recentWorkflowRuns: Array<{ id: number; state: string; createdAt: string; durationSeconds?: number | null; errorMessage?: string | null }>;
   pendingGates: Array<{ id: number; gateType: string; status: string; ciStatus: string; conclusion: string | null; metadata: Record<string, unknown> & { repoFullName?: string; prNumber?: number; runId?: number }; source: Record<string, unknown>; ageSeconds: number; expiresAt: string | null; expired: boolean; diagnosticReason: string | null; createdAt: string; resolvedAt: string | null }>;
   ciGates: Array<{ id: number; gateType: string; status: string; ciStatus: string; conclusion: string | null; metadata: Record<string, unknown> & { repoFullName?: string; prNumber?: number; runId?: number }; source: Record<string, unknown>; ageSeconds: number; expiresAt: string | null; expired: boolean; diagnosticReason: string | null; createdAt: string; resolvedAt: string | null }>;
+  externalResources: Array<{ type: string; readableId: string; url: string }>;
 }
 
 export default BoardTask;

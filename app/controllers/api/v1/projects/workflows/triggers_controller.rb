@@ -12,7 +12,7 @@ module Api
         # returns its URL + secret.
         class TriggersController < Workflows::ApplicationController
           def index
-            render json: { triggers: serialized_triggers }
+            render json: { triggers: serialized_triggers, youtrack_integrations: serialized_youtrack_integrations }
           end
 
           def create
@@ -99,6 +99,7 @@ module Api
             params.require(:trigger).permit(
               :name, :trigger_mode, :enabled, :cooldown_seconds, :notify_on_failure,
               :subject_policy, :subject_column_id, :subject_title_template,
+              :integration_id,
               filter_predicate: {}, schedule_config: %i[cron timezone]
             )
           end
@@ -112,6 +113,12 @@ module Api
           def serialized_triggers
             column_bindings.includes(:board_column, :created_by).map { |b| serialize_column(b) } +
               current_workflow.trigger_bindings.includes(:created_by).order(:created_at).map { |b| serialize_binding(b) }
+          end
+
+          def serialized_youtrack_integrations
+            Integration.youtrack_for_project(current_project).map do |integration|
+              { id: integration.id, name: integration.name, scope: integration.company_scope? ? "company" : "project" }
+            end
           end
 
           def column_bindings
@@ -145,6 +152,7 @@ module Api
               subject_policy: binding.subject_policy,
               subject_column_id: binding.subject_column_id,
               subject_title_template: binding.subject_title_template,
+              integration_id: binding.integration_id,
               schedule_config: binding.schedule_config,
               cooldown_seconds: binding.cooldown_seconds,
               notify_on_failure: binding.notify_on_failure,
@@ -166,6 +174,7 @@ module Api
             case event_type
             when "slack.message" then "slack"
             when "schedule.fired" then "schedule"
+            when /\Ayoutrack\./ then "youtrack"
             when /\Awebhook\./ then "webhook"
             else "event"
             end

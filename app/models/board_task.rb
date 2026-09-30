@@ -15,6 +15,7 @@ class BoardTask < ApplicationRecord
   has_many :board_activities, dependent: :delete_all
   has_many :gates, dependent: :destroy
   has_many :pending_gates, -> { pending }, class_name: "Gate", dependent: :destroy
+  has_many :external_resources, dependent: :destroy
 
   enumerize :task_type, in: %i[epic story bug not_specified], default: :not_specified, predicates: true
   enumerize :priority, in: %i[low medium high critical]

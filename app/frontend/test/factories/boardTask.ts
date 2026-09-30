@@ -21,5 +21,6 @@ export const buildBoardTask = (overrides: Partial<BoardTask> = {}): BoardTask =>
   recentWorkflowRuns: [],
   pendingGates: [],
   ciGates: [],
+  externalResources: [],
   ...overrides,
 });

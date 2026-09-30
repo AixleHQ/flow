@@ -12,6 +12,21 @@ class TriggerEngineTest < ActiveSupport::TestCase
 
   # == publish + dispatch (Slack / webhook path) ==
 
+  test "queued YouTrack event cannot launch after integration disconnect" do
+    integration = create(:integration, :active, provider: :youtrack, company: @company, project: @project,
+      connected_by: @user, settings: { "youtrack_project_id" => "0-1" })
+    create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "youtrack.issue.created", integration: integration)
+    event = TriggerEngine.record_event(event_type: "youtrack.issue.created", source: "youtrack:test",
+      data: { "integration_id" => integration.id, "issue_id" => "2-1" }, project: @project)
+
+    Integrations::DisconnectService.call(integration)
+    WorkflowService.expects(:start).never
+
+    assert_empty TriggerEngine.dispatch_pending(event)
+    assert_equal "dispatched", event.reload.relay_state
+  end
+
   test "publish dispatches to a matching binding and starts its workflow" do
     create(:trigger_binding,
       project: @project, workflow: @workflow, created_by: @user,

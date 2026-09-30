@@ -30,6 +30,12 @@ type Integration = {
   coderMachinePrefix: string | null;
   coderLockTtlMinutes: number | null;
   slackRequestUrl: string | null;
+  youtrackCallbackUrl?: string;
+  youtrackBaseUrl?: string;
+  youtrackProjectName?: string;
+  youtrackBotLogin?: string;
+  youtrackWebhookHeader?: string;
+  youtrackLastReceivedAt?: string;
 }
 
 export default Integration;
