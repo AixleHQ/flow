@@ -105,12 +105,12 @@ class CompanyMembership < ApplicationRecord
 
   def scim_given_name=(value)
     @scim_given = value
-    apply_scim_name
+    @scim_name_pending = true
   end
 
   def scim_family_name=(value)
     @scim_family = value
-    apply_scim_name
+    @scim_name_pending = true
   end
 
   # `active` is the whole deprovisioning story: a directory flips it to false
@@ -125,6 +125,11 @@ class CompanyMembership < ApplicationRecord
 
   # Applied after save so the state machine runs on a persisted row.
   after_save :apply_scim_active_target, if: -> { defined?(@scim_active_target) && !@scim_active_target.nil? }
+  # User#name is shared by every company the person belongs to, so only the
+  # directory that owns their verified domain, holding them as an active member,
+  # may write it. Declared after the active target so a provisioning that
+  # activates the member is seen as active here.
+  after_save :apply_scim_name, if: -> { @scim_name_pending }
 
   # Validations
   validates :user_id, uniqueness: { scope: :company_id, message: "already has a membership in this company" }
@@ -318,7 +323,8 @@ class CompanyMembership < ApplicationRecord
   private
 
   def apply_scim_name
-    return if user.nil?
+    @scim_name_pending = false
+    return unless user && active? && scim_domain_owned_by_company?
 
     full = [ @scim_given, @scim_family ].compact_blank.join(" ")
     user.update!(name: full) if full.present?
@@ -349,7 +355,7 @@ class CompanyMembership < ApplicationRecord
 
   def scim_domain_owned_by_company?
     domain = user&.email.to_s.split("@").last
-    domain.present? && company&.email_domain.to_s.casecmp?(domain)
+    domain.present? && company&.domain_verified? && company.email_domain.to_s.casecmp?(domain)
   end
 
   # Fetch the model list for a credential, caching per-credential (not globally —
