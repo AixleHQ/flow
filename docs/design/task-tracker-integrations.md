@@ -846,7 +846,7 @@ for.
      columns; `Trackers::Provider` and the DTOs; the pipeline from `Notification` onward (hydrate,
      verify hints, derive events, fan out, publish); the four events; the trigger kind and form;
      the one-column intake shortcut; the twelve tools with resolution, injection and the causality
-     ledger; `aixle_changes` and the limits; `TrackerContext`; `notify_on_failure` comments;
+     ledger; `aixle_changes` and the limits; `TrackerContext`; failure comments (§6.9);
      template export and install; Task Details links.
    - **Azure (§9.2):** the provider over `AzureDevops::WorkItemService`; `workitem.*` Service Hook
      types fed by the existing receiver; in the same change, the duplicate work-item tools are
@@ -897,7 +897,7 @@ Later and additive:
 | 8 | Who may map an external project through a company connection? | **Agreed: the GitHub model** (§4.4). The tracker's own permissions for the connection's identity are the boundary, with no Aixle allow-list. Project admins and owners connect; anyone with write access adds project trackers. |
 | 9 | Whose run is a tracker-started run? | **Agreed: the trigger's creator**, as for webhooks. Actor-to-user mapping comes later. |
 | 10 | Which fields may agents write? | **Agreed:** everything the provider reports as editable, minus an optional per-tracker deny list. |
-| 11 | Failure notice on the issue? | **Agreed:** `notify_on_failure` posts one comment with a link to the run (§6.4). |
+| 11 | Failure notice on the issue? | **Agreed:** a failed or cancelled run posts one comment with a link to the run, governed by `status_reporting` (§6.9). |
 | 12 | Phase order? | **Agreed:** Azure Boards (with the core) → Jira → GitHub Projects → Linear → YouTrack. Jira and GitHub Projects are committed (§12). |
 | 13 | Jira authentication? | **Agreed: an Atlassian OAuth 2.0 app**, with consent from a dedicated service account (§5.3). |
 | 14 | YouTrack older than 2026.2? | **Agreed:** not supported in v1; documented as a requirement. |
