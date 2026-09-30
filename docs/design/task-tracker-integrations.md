@@ -44,7 +44,7 @@ attachments, issue links and deletions. §12 says where each would attach later.
 | Connection lifecycle | Connect, reconnect (rotate credentials in place), verify, disconnect (soft). Integration IDs, webhook URLs and trigger bindings survive credential rotation. |
 | Issue ↔ task identity | Generic `external_resources` links keyed by the external system's identity, not by connection. They survive reconnects and second connections. |
 | Platform integrations | Azure DevOps and GitHub are platforms, not trackers: one connection serves code hosting, pull requests, CI *and* boards. The tracker port is one capability they implement over their existing connection, client and event receiver; their repository/PR/CI tools stay provider-specific (§9). |
-| First provider | YouTrack, built on this branch; PR #271 stays open until this lands, and its hardened client and connect verification are copied over rather than merged. Then Jira, then Azure Boards (moving the existing work-item tools onto the port), then GitHub Projects and Linear. |
+| Provider order | Azure Boards (with the core) → Jira → GitHub Projects → Linear → YouTrack (§12). PR #271 stays open; its hardened client and connect verification are copied over in the YouTrack phase rather than merged. |
 
 ## 3. What already exists
 
@@ -73,7 +73,8 @@ This design reuses, rather than re-derives:
   - a delivery is deduplicated before it is acknowledged, and its payload is treated as a
     notification to re-read authoritative state (`app/controllers/webhooks/azure_devops_controller.rb:18`);
   - creates and comments go through an idempotent operation ledger (`azure_devops_operations`).
-- **PR #271 (YouTrack)** stays open while this design is built on its own branch. Copied over:
+- **PR #271 (YouTrack)** stays open while this design is built on its own branch. YouTrack is the
+  last phase (§12), and these parts are copied over then:
   the SSRF-hardened client transport (DNS pinning, bounded
   responses, no redirects), connect-time identity and project verification, the operator setup
   documentation, and the `external_resources` idea. Not adopted: one connection per external
@@ -764,7 +765,7 @@ Same shape:
   existing `Webhooks::GithubController`.
 
 GitHub Issues belong to a repository and Projects to an owner, so the scope unit is decided when
-this provider is designed (phase 4). Repository and PR behaviour is untouched.
+this provider is designed (phase 3). Repository and PR behaviour is untouched.
 
 ## 10. Security
 
@@ -773,9 +774,12 @@ this provider is designed (phase 4). Repository and PR behaviour is untouched.
   The YouTrack token is shared by every consumer of that YouTrack project, so it is weak. Re-reading
   through the API (§6.1) is what makes a forged notification harmless: the most it can do is make
   us read a real issue that is really in the claimed state.
-- **Transport**: every outbound call uses the PR #271 client transport — `UrlSafetyValidator` on
-  save and on every request, the validated IP pinned, redirects not followed, bounded response
-  size, TLS verification that cannot be disabled.
+- **Transport**:
+  - Azure, Jira Cloud, GitHub and Linear call fixed vendor hosts through their clients.
+  - A customer-chosen base URL (YouTrack, possibly self-hosted) goes through the PR #271 transport:
+    `UrlSafetyValidator` on save and on every request, the validated IP pinned, redirects not
+    followed, bounded response size, TLS verification that cannot be disabled.
+  - Every client bounds response size and time.
 - **Scope**: every returned entity is re-checked against the tracker's external project (§7.2).
   `read_only` is enforced in Rails, not in prompts.
 - **Loops**: causality tracking with the per-binding `aixle_changes` setting and hard depth and per-issue limits (§6.6), cooldown, and session admission.
@@ -805,22 +809,39 @@ this provider is designed (phase 4). Repository and PR behaviour is untouched.
 
 ## 12. Phasing
 
-1. **Core + YouTrack**: the tables, `Trackers::Provider`, the connection lifecycle, the ingress
-   and job, the four events, the trigger kind and form, the twelve tools with resolution and
-   injection, `TrackerContext`, Task Details links. The YouTrack provider uses the `manual`
-   strategy and a copy of PR #271's client and connect verification. What happens to PR #271 is
-   decided once this phase lands.
-2. **Azure Boards** as described in §9.2: the provider over `AzureDevops::WorkItemService`,
-   `workitem.*` Service Hook types, and, in the same change, deletion of the duplicate work-item
-   tools with the project-tracker and attachment migration. Repository, PR and CI tools are
-   untouched. It goes first because the service and the subscriptions already exist, and the
-   duplicate tools go away sooner.
-3. **Jira Cloud** (committed): an Atlassian OAuth 2.0 app, the `api` strategy with the 30-day
-   refresh sweep, `cloudId` instance identity, the transition graph, `native_query` (JQL). This is
-   the first provider that needs subscription refresh.
-4. **GitHub Projects** (committed): through the existing GitHub App and receiver (§9.3).
-5. **Linear** and GitHub Issues, when needed. The dead `linear` enum value and user-guide claim
-   are fixed in the meantime.
+Each phase ships on its own. Every new provider tests the port against a shape it was not written
+for.
+
+1. **Core + Azure Boards.**
+   - **Core:** `project_trackers`, `external_resources`, `tracker_operations` and the binding
+     columns; `Trackers::Provider` and the DTOs; the pipeline from `Notification` onward (hydrate,
+     verify hints, derive events, fan out, publish); the four events; the trigger kind and form;
+     the one-column intake shortcut; the twelve tools with resolution, injection and the causality
+     ledger; `aixle_changes` and the limits; `TrackerContext`; `notify_on_failure` comments;
+     template export and install; Task Details links.
+   - **Azure (§9.2):** the provider over `AzureDevops::WorkItemService`; `workitem.*` Service Hook
+     types fed by the existing receiver; in the same change, the duplicate work-item tools are
+     deleted along with the project-tracker and attachment migration.
+   - **Not needed yet:** `tracker_subscriptions`, `tracker_deliveries`, `/webhooks/trackers` and
+     `Trackers::ConnectionService`, because Azure keeps its own connection, subscriptions and
+     receiver.
+   - **Risk:** this phase changes the tools existing Azure customers have. It needs a live-tenant
+     run on staging before release; CI alone cannot show it works.
+2. **Jira Cloud** (committed):
+   - the tracker-native ingress: subscriptions, deliveries, `/webhooks/trackers`;
+   - `Trackers::ConnectionService` (connect, reconnect in place, verify, soft disconnect);
+   - the Atlassian OAuth 2.0 app through the OAuth flow engine;
+   - the `api` strategy with the 30-day refresh sweep;
+   - `cloudId` instance identity, the transition graph, and `native_query` (JQL).
+3. **GitHub Projects** (committed), and GitHub Issues if they fall out cheaply: through the
+   existing GitHub App and `Webhooks::GithubController` (§9.3). The scope unit is decided here.
+4. **Linear**: API-registered webhooks with `Linear-Signature` HMAC. Until then, the dead `linear`
+   enum value and the user-guide claim that Linear is supported are corrected.
+5. **YouTrack**, last:
+   - the `manual` subscription strategy and shared-token authentication (the weakest one);
+   - the SSRF-hardened transport copied from PR #271. YouTrack is the only provider on this list
+     with customer-chosen, possibly self-hosted base URLs; the others call fixed vendor hosts.
+   - PR #271's fate is decided when this phase starts.
 
 Later and additive:
 
@@ -842,13 +863,13 @@ Later and additive:
 | 3 | Make `find_or_create_task` the default subject policy for tracker triggers? | **Agreed: yes.** |
 | 4 | Events caused by Aixle? | **Agreed: a per-binding setting.** `aixle_changes` = `ignore` (default) / `other_workflows` / `always`, with causality tracking and hard depth and per-issue limits (§6.6). |
 | 5 | Disconnect soft (inactive, credentials wiped, reconnectable) instead of destroy? | **Agreed: yes.** |
-| 6 | PR #271: close and salvage, or merge and migrate? | **Agreed: stays open for now.** This design is built on its own branch and copies PR #271's client and connect verification. |
+| 6 | PR #271: close and salvage, or merge and migrate? | **Agreed: stays open for now.** This design is built on its own branch; PR #271's client and connect verification are copied in the YouTrack phase. |
 | 7 | Azure Boards: second set of work-item tools, or one tracker set? | **Agreed: one set, and the duplicates are deleted in the same change** that ships the Azure Boards provider, with no deprecation release (§9.2). |
 | 8 | Who may map an external project through a company connection? | **Agreed: the GitHub model** (§4.4). The tracker's own permissions for the connection's identity are the boundary, with no Aixle allow-list. Project admins and owners connect; anyone with write access adds project trackers. |
 | 9 | Whose run is a tracker-started run? | **Agreed: the trigger's creator**, as for webhooks. Actor-to-user mapping comes later. |
 | 10 | Which fields may agents write? | **Agreed:** everything the provider reports as editable, minus an optional per-tracker deny list. |
 | 11 | Failure notice on the issue? | **Agreed:** `notify_on_failure` posts one comment with a link to the run (§6.4). |
-| 12 | Phase order after YouTrack? | **Agreed:** Azure Boards, then Jira and GitHub Projects, both committed (§12). |
+| 12 | Phase order? | **Agreed:** Azure Boards (with the core) → Jira → GitHub Projects → Linear → YouTrack. Jira and GitHub Projects are committed (§12). |
 | 13 | Jira authentication? | **Agreed: an Atlassian OAuth 2.0 app**, with consent from a dedicated service account (§5.3). |
 | 14 | YouTrack older than 2026.2? | **Agreed:** not supported in v1; documented as a requirement. |
 | 15 | Loop-limit defaults? | **Agreed:** depth 5, 10 Aixle-caused runs per issue per hour, tuned later. |
