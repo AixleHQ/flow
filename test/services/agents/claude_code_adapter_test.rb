@@ -349,6 +349,13 @@ module Agents
       assert_equal true, settings["bypassPermissionsWarningAccepted"] # rubocop:disable Minitest/AssertTruthy
     end
 
+    test "settings pre-answer the model switch a flagged request would otherwise ask about" do
+      files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "non_interactive" })
+      settings = JSON.parse(files["/home/claude/.claude/settings.json"])
+
+      assert_equal true, settings["switchModelsOnFlag"] # rubocop:disable Minitest/AssertTruthy
+    end
+
     test "settings let Claude Code follow the terminal's light or dark theme" do
       files = @adapter.config_files({ "primaryApiKey" => "sk" }, { mode: "interactive" })
       settings = JSON.parse(files["/home/claude/.claude/settings.json"])
