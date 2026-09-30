@@ -31,11 +31,11 @@ module WorkflowRunStateMachine
       end
 
       event :fail do
-        transitions from: %i[running paused], to: :failed, after: %i[on_completed announce_failure]
+        transitions from: %i[running paused], to: :failed, after: %i[on_completed announce_failure announce_failed]
       end
 
       event :cancel do
-        transitions from: %i[pending running paused], to: :cancelled, after: :on_cancelled
+        transitions from: %i[pending running paused], to: :cancelled, after: %i[on_cancelled announce_cancelled]
       end
     end
   end
@@ -62,5 +62,19 @@ module WorkflowRunStateMachine
     Slack::NotifyRunFailureJob.perform_later(id)
   rescue StandardError => e
     Rails.logger.error("[WorkflowRun] Failed to enqueue the Slack failure notice for run ##{id}: #{e.message}")
+  end
+
+  def announce_failed = announce_transition("failed")
+  def announce_cancelled = announce_transition("cancelled")
+
+  # The shared run-transition seam (Triggers::ORIGIN_REPORTERS): one job per
+  # dispatch that started this run. The Slack notice above predates it and moves
+  # onto it with the Teams work.
+  def announce_transition(transition)
+    TriggerDispatch.where(workflow_run_id: id).pluck(:id).each do |dispatch_id|
+      Triggers::ReportRunTransitionJob.perform_later(dispatch_id, transition)
+    end
+  rescue StandardError => e
+    Rails.logger.error("[WorkflowRun] Failed to announce #{transition} for run ##{id}: #{e.message}")
   end
 end

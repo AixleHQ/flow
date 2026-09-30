@@ -1762,6 +1762,27 @@ describe('Projects/Board/BoardPage', () => {
     expect(within(drawer).getByRole('combobox', { name: 'Parent Epic' })).toHaveValue('Checkout revamp');
   });
 
+  it('links the tracker issues a task is about from its detail view', () => {
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...epicProps,
+        tasks: [story],
+        selectedTask: {
+          ...story,
+          trackerIssues: [
+            { provider: 'azure_devops', key: '308', url: 'https://dev.azure.com/acme/p/_workitems/edit/308' },
+          ],
+        },
+      },
+    });
+
+    const drawer = screen.getAllByRole('dialog')[0];
+    expect(within(drawer).getByRole('link', { name: 'Azure Boards · 308' })).toHaveAttribute(
+      'href',
+      'https://dev.azure.com/acme/p/_workitems/edit/308',
+    );
+  });
+
   it('saves the epic picked in the task detail Parent Epic select', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
     const unparented = makeTask({ id: 51, title: 'Add card form', boardColumnId: 100, position: 1 });
