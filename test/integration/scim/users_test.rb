@@ -121,6 +121,51 @@ class Scim::UsersTest < ActionDispatch::IntegrationTest
     assert_equal @existing, membership.reload.user
   end
 
+  test "a PUT carrying a different userName leaves the member's email alone" do
+    membership = @existing.company_memberships.find_by(company: @company)
+    original = @existing.email
+
+    put "/scim/Users/#{membership.id}", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+      userName: "renamed@#{@company.email_domain}", active: true
+    }.to_json
+
+    assert_response :success
+    assert_equal original, @existing.reload.email
+    assert_equal @existing, membership.reload.user
+    assert_nil User.find_by(email: "renamed@#{@company.email_domain}")
+  end
+
+  test "a PUT whose emails name another address leaves the member's email alone" do
+    membership = @existing.company_memberships.find_by(company: @company)
+    original = @existing.email
+
+    put "/scim/Users/#{membership.id}", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+      userName: "renamed@#{@company.email_domain}",
+      emails: [ { type: "work", value: "renamed@#{@company.email_domain}", primary: true } ],
+      active: true
+    }.to_json
+
+    assert_response :success
+    assert_equal original, @existing.reload.email
+    assert_equal @existing, membership.reload.user
+  end
+
+  test "a PUT that deactivates still applies when its userName differs" do
+    membership = @existing.company_memberships.find_by(company: @company)
+    original = @existing.email
+
+    put "/scim/Users/#{membership.id}", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+      userName: "renamed@#{@company.email_domain}", active: false
+    }.to_json
+
+    assert_response :success
+    assert_equal "revoked", membership.reload.state
+    assert_equal original, @existing.reload.email
+  end
+
   test "a directory cannot conscript an account outside the domain it owns" do
     outsider = create(:user, company: create(:company), email: "outsider@elsewhere.test")
 
@@ -134,6 +179,69 @@ class Scim::UsersTest < ActionDispatch::IntegrationTest
     # But NOT active: acceptance is the person's, exactly as for a hand-written
     # invitation. The directory only proves it owns its own domain.
     assert_equal "invited", membership.state
+  end
+
+  test "provisioning a member of the owned domain names them" do
+    post "/scim/Users", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+      userName: "named@#{@company.email_domain}",
+      name: { givenName: "New", familyName: "Joiner" },
+      active: true
+    }.to_json
+
+    assert_response :created
+    assert_equal "New Joiner", User.find_by(email: "named@#{@company.email_domain}").name
+  end
+
+  test "a directory renames an active member of the domain it owns" do
+    membership = @existing.company_memberships.find_by(company: @company)
+
+    patch "/scim/Users/#{membership.id}", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:api:messages:2.0:PatchOp" ],
+      Operations: [ { op: "replace", path: "name.givenName", value: "Renamed" } ]
+    }.to_json
+
+    assert_response :success
+    assert_match(/\ARenamed/, @existing.reload.name)
+  end
+
+  test "provisioning an outsider leaves their name alone" do
+    outsider = create(:user, company: create(:company), email: "outsider@elsewhere.test", name: "Real Name")
+
+    post "/scim/Users", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+      userName: outsider.email, name: { givenName: "Evil", familyName: "Twin" }, active: true
+    }.to_json
+
+    assert_response :created
+    assert_equal "Real Name", outsider.reload.name
+  end
+
+  test "an active member outside the owned domain keeps their name" do
+    outsider = create(:user, company: @company, email: "member@elsewhere.test", name: "Real Name")
+    membership = outsider.company_memberships.find_by(company: @company)
+
+    patch "/scim/Users/#{membership.id}", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:api:messages:2.0:PatchOp" ],
+      Operations: [ { op: "replace", path: "name.givenName", value: "Evil" } ]
+    }.to_json
+
+    assert_equal "active", membership.reload.state
+    assert_equal "Real Name", outsider.reload.name
+  end
+
+  test "an unverified domain neither auto-accepts nor renames an existing account" do
+    @company.update!(domain_verified_at: nil)
+    claimed = create(:user, email: "someone@#{@company.email_domain}", name: "Real Name")
+
+    post "/scim/Users", headers: scim_headers, params: {
+      schemas: [ "urn:ietf:params:scim:schemas:core:2.0:User" ],
+      userName: claimed.email, name: { givenName: "Evil", familyName: "Twin" }, active: true
+    }.to_json
+
+    assert_response :created
+    assert_equal "invited", claimed.company_memberships.find_by(company: @company).state
+    assert_equal "Real Name", claimed.reload.name
   end
 
   test "a directory can write with no CSRF token, because it is not a browser" do

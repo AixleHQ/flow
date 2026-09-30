@@ -57,6 +57,19 @@ module Slack
       assert_equal 1, ids.size
     end
 
+    test "keeps only the last segment of a file name that carries a path" do
+      fake_slack.file_body = "BYTES"
+
+      names = [ "../../root/.bashrc", "dir/notes.txt", "..", "/" ].map do |name|
+        Asset.find(ingestor.ingest([ file(id: SecureRandom.hex(2), name: name) ]).first).name
+      end
+
+      assert_equal ".bashrc", names[0]
+      assert_equal "notes.txt", names[1]
+      assert_match(/\Aslack-file/, names[2])
+      assert_match(/\Aslack-file/, names[3])
+    end
+
     test "disambiguates a clashing asset name across messages" do
       fake_slack.file_body = "BYTES"
 

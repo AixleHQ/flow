@@ -54,6 +54,7 @@ module Templates
       check_mcp_values
       check_inputs
       check_files
+      check_asset_names
       check_authored_skills
       check_connector_targets
       @errors
@@ -198,12 +199,20 @@ module Templates
       end
     end
 
+    def check_asset_names
+      @package.section("assets").each do |asset|
+        next if SafeRelativePath.valid?(asset["name"])
+
+        @errors << "asset #{asset['key']}: name #{asset['name'].inspect} #{Asset::NAME_MESSAGE}"
+      end
+    end
+
     # An authored SKILL.md becomes a manual Skill at install, so it must parse and
     # carry a name that model accepts — or the install fails after review.
     def check_authored_skills
       @package.section("skills").each do |skill|
         Array(skill["files"]).each do |file|
-          next if Skill.safe_relative_path?(file["path"]) && file["path"] != "SKILL.md"
+          next if SafeRelativePath.valid?(file["path"]) && file["path"] != "SKILL.md"
 
           @errors << "skill #{skill['key']}: file path #{file['path'].inspect} must be relative, inside the skill, and not SKILL.md"
         end

@@ -75,6 +75,22 @@ module Api
         assert_equal @other_company.id, TerminalSession.find(response.parsed_body["id"]).company_id
       end
 
+      test "a viewer of the acting company may authenticate there but not launch a project-less session" do
+        @user.company_memberships.find_by!(company: @company).update!(role: "viewer")
+        agent_session = { agent_type: "claude_code", session_type: "agent_session", mode: "interactive" }
+
+        assert_no_difference "TerminalSession.count" do
+          post api_v1_terminal_sessions_path, params: { terminal_session: agent_session }.to_json,
+                                              headers: json_headers
+        end
+        assert_response :forbidden
+
+        post api_v1_terminal_sessions_path,
+             params: { terminal_session: agent_session.merge(session_type: "auth_setup") }.to_json,
+             headers: json_headers
+        assert_response :created
+      end
+
       private
 
       def json_headers

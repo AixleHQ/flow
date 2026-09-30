@@ -13,6 +13,7 @@ module Api
         # No browser session: OTLP ingest and Traefik ForwardAuth carry no CSRF token.
         skip_before_action :verify_authenticity_token, raise: false
         skip_before_action :authenticate_user!, raise: false
+        skip_before_action :enforce_company_auth_policy, raise: false
         skip_before_action :dynamic_authorize!, raise: false
         skip_before_action :deny_read_only_mutation!, raise: false
         skip_after_action :verify_authorized, raise: false

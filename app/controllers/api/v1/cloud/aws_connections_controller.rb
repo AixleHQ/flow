@@ -84,6 +84,10 @@ module Api
 
         private
 
+        def policy_context
+          BaseContext.new(current_user, params, company: current_company)
+        end
+
         # Scoped to the company the user is acting for: the connection lands on that
         # company's credential and its Bedrock spend is billed there.
         def flow

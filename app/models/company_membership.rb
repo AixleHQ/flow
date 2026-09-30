@@ -58,7 +58,8 @@ class CompanyMembership < ApplicationRecord
   # would let it repoint an existing membership — with whatever role that row
   # held — at an unrelated global account, and detach the original holder. The
   # address is set once, at provisioning; changing it is an account-level act
-  # that belongs to the person, not to a directory.
+  # that belongs to the person, not to a directory. This list alone does not
+  # enforce that — Scimitar never consults it on writes — #scim_user_name= does.
   def self.scim_mutable_attributes = %i[scim_given_name scim_family_name scim_active]
 
   def self.scim_queryable_attributes
@@ -81,27 +82,16 @@ class CompanyMembership < ApplicationRecord
   # them, and always creates the membership. It never creates an identity: the
   # first real sign-in does that (AD-10).
   #
-  # On an EXISTING membership this renames the person already on the row. It must
-  # never repoint the row at a different account: a directory that sent
-  # `userName: someone-else@elsewhere.com` in a PATCH would otherwise hand that
-  # stranger whatever role the row already held — including admin — in a company
-  # they have no relationship with, and detach the original holder from their own
-  # membership. The directory owns its members' presence here, not who they are.
+  # On an EXISTING membership the address is ignored: the person on the row and
+  # their global email stay as they are. Scimitar checks only the schema's
+  # mutability on writes, never ::scim_mutable_attributes, so a PUT (replace)
+  # reaches this setter with whatever userName the directory sent. Ignored
+  # rather than refused so the rest of a full-resource PUT (e.g. `active: false`)
+  # still applies.
   def scim_user_name=(value)
     email = value.to_s.strip.downcase
     return if email.blank?
-
-    if persisted? && user.present?
-      return if user.email.casecmp?(email)
-
-      if User.where(email: email).where.not(id: user_id).exists?
-        raise Scimitar::ResourceInvalidError,
-              "userName #{email} already belongs to another account; it cannot be moved onto this one"
-      end
-
-      user.update!(email: email)
-      return
-    end
+    return if persisted? && user.present?
 
     self.user = User.find_or_initialize_by(email: email).tap do |u|
       u.name = u.name.presence || email.split("@").first
@@ -115,12 +105,12 @@ class CompanyMembership < ApplicationRecord
 
   def scim_given_name=(value)
     @scim_given = value
-    apply_scim_name
+    @scim_name_pending = true
   end
 
   def scim_family_name=(value)
     @scim_family = value
-    apply_scim_name
+    @scim_name_pending = true
   end
 
   # `active` is the whole deprovisioning story: a directory flips it to false
@@ -135,6 +125,11 @@ class CompanyMembership < ApplicationRecord
 
   # Applied after save so the state machine runs on a persisted row.
   after_save :apply_scim_active_target, if: -> { defined?(@scim_active_target) && !@scim_active_target.nil? }
+  # User#name is shared by every company the person belongs to, so only the
+  # directory that owns their verified domain, holding them as an active member,
+  # may write it. Declared after the active target so a provisioning that
+  # activates the member is seen as active here.
+  after_save :apply_scim_name, if: -> { @scim_name_pending }
 
   # Validations
   validates :user_id, uniqueness: { scope: :company_id, message: "already has a membership in this company" }
@@ -328,7 +323,8 @@ class CompanyMembership < ApplicationRecord
   private
 
   def apply_scim_name
-    return if user.nil?
+    @scim_name_pending = false
+    return unless user && active? && scim_domain_owned_by_company?
 
     full = [ @scim_given, @scim_family ].compact_blank.join(" ")
     user.update!(name: full) if full.present?
@@ -359,7 +355,7 @@ class CompanyMembership < ApplicationRecord
 
   def scim_domain_owned_by_company?
     domain = user&.email.to_s.split("@").last
-    domain.present? && company&.email_domain.to_s.casecmp?(domain)
+    domain.present? && company&.domain_verified? && company.email_domain.to_s.casecmp?(domain)
   end
 
   # Fetch the model list for a credential, caching per-credential (not globally —

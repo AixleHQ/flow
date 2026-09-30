@@ -59,13 +59,27 @@ module Auth
       return true if user&.super_admin?
       return false if company.nil? || user_session.nil?
 
-      UserSessionProof
-        .where(user_session_id: user_session.id)
-        .joins(identity_provider: :company_auth_policies)
-        .where(identity_providers: { kind: deployment_allowlist_kinds })
-        .where(company_auth_policies: { company_id: company.id, enabled: true })
-        .where("identity_providers.scope = 'deployment' OR identity_providers.company_id = :id", id: company.id)
+      accepting_policies
+        .where(company_id: company.id)
+        .where(identity_provider_id: UserSessionProof.where(user_session_id: user_session.id).select(:identity_provider_id))
         .exists?
+    end
+
+    # The same rule as satisfied?, for a credential that outlives the session it
+    # was issued in and so carries the proofs it was issued with.
+    def satisfied_company_ids(company_ids:, provider_ids:)
+      accepting_policies
+        .where(company_id: company_ids, identity_provider_id: Array(provider_ids))
+        .distinct
+        .pluck(:company_id)
+    end
+
+    def accepting_policies
+      CompanyAuthPolicy
+        .enabled
+        .joins(:identity_provider)
+        .where(identity_providers: { kind: deployment_allowlist_kinds })
+        .where("identity_providers.scope = 'deployment' OR identity_providers.company_id = company_auth_policies.company_id")
     end
 
     # AD-7/AD-16: members who would have no usable method left if the company's

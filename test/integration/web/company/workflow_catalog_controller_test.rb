@@ -85,4 +85,21 @@ class Web::Company::WorkflowCatalogControllerTest < ActionDispatch::IntegrationT
     assert_response :redirect
     assert_match(/not found/, flash[:alert])
   end
+
+  test "another company's project is neither offered nor accepted as the copy's target" do
+    other_company = create(:company)
+    create(:company_membership, :viewer, user: @user, company: other_company,
+                                         onboarding_state: "completed", onboarding_completed_at: Time.current)
+    other_project = create(:project, company: other_company, owner: @user)
+    post company_switch_path, params: { company_id: @company.id }
+    workflow = create(:workflow, scope: @project, published_at: Time.current, published_by: @user)
+
+    get company_workflow_catalog_index_path
+    assert_equal [ @project.id ], inertia.props[:projectOptions].pluck(:id)
+
+    assert_no_difference "Workflow.count" do
+      post duplicate_company_workflow_catalog_path(workflow), params: { project_id: other_project.id }
+    end
+    assert_redirected_to company_workflow_catalog_index_path
+  end
 end

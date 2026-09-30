@@ -27,6 +27,22 @@ class AssetTest < ActiveSupport::TestCase
     assert { asset.errors[:name].present? }
   end
 
+  test "name accepts plain and nested relative paths" do
+    [ "spec.md", "notes (draft).md", "reports/q3/summary.md", "Отчёт.pdf" ].each do |name|
+      asset = build(:asset, name: name, scope: @company, created_by: @owner)
+      assert asset.valid?, "#{name.inspect}: #{asset.errors.full_messages.to_sentence}"
+    end
+  end
+
+  test "name rejects paths that could leave the assets directory" do
+    [ "../../etc/x", "..", "a/../../b", "/etc/passwd", "~/.bashrc", "back\\slash",
+      "line\nbreak", "a//b", "a/", "./a" ].each do |name|
+      asset = build(:asset, name: name, scope: @company, created_by: @owner)
+      assert_not asset.valid?, "#{name.inspect} should be invalid"
+      assert_includes asset.errors[:name], Asset::NAME_MESSAGE
+    end
+  end
+
   test "name must be unique within scope" do
     create(:asset, name: "duplicate.md", scope: @company, created_by: @owner)
     asset = build(:asset, name: "duplicate.md", scope: @company, created_by: @owner)

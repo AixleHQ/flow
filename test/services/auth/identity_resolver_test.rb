@@ -83,6 +83,27 @@ module Auth
       assert_equal insider, resolved
     end
 
+    test "a company provider on an unverified domain does not promote to an existing user" do
+      owner = create(:company, :domain_unverified, email_domain: "claimed-domain.test")
+      connection = create(:identity_provider, company: owner, kind: "oidc")
+      existing = create(:user, email: "alice@claimed-domain.test")
+
+      assert_raises(Auth::IdentityResolver::LinkRequiredError) do
+        Auth::IdentityResolver.new(
+          assertion_for(connection, subject: "sub-claimed", email: existing.email)
+        ).resolve
+      end
+      assert_equal 0, UserIdentity.where(identity_provider: connection).count
+
+      owner.update!(domain_verified_at: Time.current)
+      resolved = Auth::IdentityResolver.new(
+        assertion_for(connection, subject: "sub-claimed", email: existing.email)
+      ).resolve
+
+      assert_equal existing, resolved
+      assert_equal existing, UserIdentity.find_by(identity_provider: connection, subject: "sub-claimed").user
+    end
+
     test "a super admin may authenticate by password only" do
       super_admin = create(:user, :super_admin)
 
@@ -118,6 +139,34 @@ module Auth
         ).resolve
         assert_equal @company, resolved.company_memberships.first.company
       end
+    end
+
+    test "a new user whose provider did not verify the address is not auto-joined" do
+      resolved = Auth::IdentityResolver.new(
+        assertion_for(@google, subject: "sub-unproved", email: "claimed@#{@company.email_domain}", email_verified: false)
+      ).resolve
+
+      assert_empty resolved.company_memberships
+    end
+
+    test "a company provider creates accounts only inside its own verified domain" do
+      owner = create(:company, :domain_unverified, email_domain: "squatted.test")
+      connection = create(:identity_provider, company: owner, kind: "oidc")
+
+      [ "bob@squatted.test", "bob@#{@company.email_domain}" ].each_with_index do |email, i|
+        assert_no_difference [ "User.count", "UserIdentity.count" ] do
+          assert_raises(Auth::IdentityResolver::NoWorkspaceError) do
+            Auth::IdentityResolver.new(assertion_for(connection, subject: "sub-squat-#{i}", email: email)).resolve
+          end
+        end
+      end
+
+      owner.update!(domain_verified_at: Time.current)
+      created = Auth::IdentityResolver.new(
+        assertion_for(connection, subject: "sub-squat-0", email: "bob@squatted.test")
+      ).resolve
+
+      assert_equal "bob@squatted.test", created.email
     end
 
     test "a new user in an unknown domain raises rather than creating anything" do

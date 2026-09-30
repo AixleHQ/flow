@@ -11,6 +11,7 @@ class Web::StepUpsController < Web::ApplicationController
   skip_before_action :enforce_company_auth_policy
   skip_before_action :enforce_onboarding
   before_action :require_signed_in
+  before_action :follow_requested_company, only: :new
 
   def new
     company = target_company
@@ -64,6 +65,17 @@ class Web::StepUpsController < Web::ApplicationController
 
   def target_company
     current_company
+  end
+
+  # The JSON API names the company it refused (Api::V1::ApplicationController),
+  # which need not be the one this browser is on. It becomes the current one,
+  # as opening one of its projects would make it.
+  def follow_requested_company
+    wanted = params[:company_id].presence&.to_i
+    return unless wanted && current_user.active_memberships.any? { |m| m.company_id == wanted }
+
+    session[:current_company_id] = wanted
+    reset_membership_memoization
   end
 
   def allowed_provider_ids(company)

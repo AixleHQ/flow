@@ -990,6 +990,26 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     [ session, repos ]
   end
 
+  test "inject_assets downloads into the assets directory and skips a stored path that would leave it" do
+    runtime = stub_container_runtime
+    Thread.current[:session_context_runtime] = nil
+    session = create(:terminal_session, user: @user, project: @project, agent_type: "claude_code")
+    assets = { good: [ "spec.md", "docs" ], bad_name: [ "x", nil ], bad_folder: [ "y", nil ] }.transform_values do |(name, folder)|
+      create(:asset, scope: @project, created_by: @user, name: name, folder: folder).tap do |asset|
+        create(:asset_version, :with_file, asset: asset, version: 1, uploaded_by: @user)
+      end
+    end
+    assets[:bad_name].update_column(:name, "../../root/.claude/settings.json")
+    assets[:bad_folder].update_columns(folder: "..", name: "..")
+    session.input_assets << assets.values
+
+    SessionContextService.send(:inject_assets, "ctr1", session)
+
+    downloads = runtime.execs.map { |cmd| Array(cmd).join(" ") }.select { |c| c.include?("curl") }
+    assert_equal 1, downloads.size
+    assert_includes downloads.first, "/workspace/assets/docs/spec.md"
+  end
+
   test "inject_repositories clones GitHub repositories without the token in any command or remote" do
     session, (repo, *) = github_session("acme/my-app")
     runtime = stub_container_runtime

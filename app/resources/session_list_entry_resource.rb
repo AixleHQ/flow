@@ -51,7 +51,7 @@ class SessionListEntryResource < ApplicationResource
   private
 
   def viewable_for?(session)
-    return true unless params.key?(:viewer)
+    return false if params[:viewer].nil?
 
     @viewable ||= {}
     key = session.id

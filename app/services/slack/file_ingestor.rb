@@ -52,7 +52,8 @@ module Slack
     end
 
     def create_asset(file, body)
-      filename = file["name"].presence || "slack-file"
+      filename = File.basename(file["name"].to_s)
+      filename = "slack-file" unless SafeRelativePath.valid?(filename)
       tmp = Tempfile.new([ "slack-", File.extname(filename) ])
       tmp.binmode
       tmp.write(body)

@@ -134,7 +134,7 @@ module Api
             if result.is_a?(Hash) && result[:error]
               render json: { errors: [ result[:error] ] }, status: :unprocessable_entity
             else
-              render json: WorkflowRunResource.new(result).to_h
+              render json: WorkflowRunResource.new(result, params: { viewer: current_user }).to_h
             end
           end
 

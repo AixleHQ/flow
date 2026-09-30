@@ -25,10 +25,12 @@ module Auth
         tenant = raw["tid"].to_s
         verify_tenant!(tenant)
 
+        email = info["email"].presence || raw["email"].presence || raw["preferred_username"]
+
         Auth::Assertion.new(
           provider: provider,
           subject: subject.to_s,
-          email: info["email"].presence || raw["email"].presence || raw["preferred_username"],
+          email: email,
           # Entra sends NO `email_verified` claim, and — unlike Google Workspace —
           # a tenant admin can set an arbitrary `mail`/`preferred_username` without
           # proving they own that address's domain, on a tenant anyone can create
@@ -36,11 +38,27 @@ module Auth
           # and a Microsoft sign-in can create an account but never attach itself
           # to one that already exists (AD-3).
           email_verified: false,
+          email_domain_verified: domain_owned_by_tenant?(raw, email, tenant),
           name: info["name"].presence || raw["name"]
         )
       end
 
       private
+
+      # Evidence that the tenant owns the address's domain, which is all domain
+      # auto-join needs. `mail` and `preferred_username` carry none. Two claims do:
+      #   * `upn` — Entra only accepts a UPN whose suffix is a domain verified in
+      #     DNS by that tenant (or its *.onmicrosoft.com domain), and a domain is
+      #     verified in one tenant at a time;
+      #   * `xms_edov` — Entra's own statement that the `email` claim's domain
+      #     owner is verified (an optional claim the app registration requests).
+      # https://learn.microsoft.com/en-us/entra/identity-platform/migrate-off-email-claim-authorization
+      def domain_owned_by_tenant?(raw, email, tenant)
+        return false if email.blank? || tenant == PERSONAL_ACCOUNTS_TENANT
+        return true if raw["upn"].to_s.casecmp?(email)
+
+        (raw["xms_edov"] == true || raw["xms_edov"].to_s == "true") && raw["email"].to_s.casecmp?(email)
+      end
 
       # AD-13: a multi-tenant app registration will happily complete a sign-in
       # for ANY Entra directory, so an assertion must be checked against the row

@@ -7,8 +7,6 @@ import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import UsagePage from './Usage';
 
-const targetUser = { id: 7, name: 'Maria Sokolova', email: 'maria@acme.test' };
-
 const summary = {
   totalSessions: 1234,
   totalCostCents: 56789,
@@ -54,7 +52,7 @@ const sessions = [
   },
 ];
 
-const selfProps = { period: '30d' as const, viewerIsSelf: true, targetUser };
+const selfProps = { period: '30d' as const };
 
 describe('Profile/Usage', () => {
   it('renders summary stat values once the summary prop is present', () => {
@@ -123,18 +121,6 @@ describe('Profile/Usage', () => {
     expect(screen.getByText('Running')).toBeInTheDocument();
   });
 
-  it('shows the cross-person banner when viewing another user', () => {
-    renderAuthedPage(<UsagePage />, {
-      props: { period: '30d' as const, viewerIsSelf: false, targetUser },
-    });
-    expect(screen.getByText(/Viewing Maria Sokolova's usage/)).toBeInTheDocument();
-  });
-
-  it('hides the banner for the self view', () => {
-    renderAuthedPage(<UsagePage />, { props: selfProps });
-    expect(screen.queryByText(/'s usage/)).not.toBeInTheDocument();
-  });
-
   it('shows skeletons and no panels while deferred props are absent', () => {
     renderAuthedPage(<UsagePage />, { props: selfProps });
     expect(screen.queryByText('Total Sessions')).not.toBeInTheDocument();
@@ -152,7 +138,7 @@ describe('Profile/Usage', () => {
     expect(router.visit).toHaveBeenCalledWith('/profile');
   });
 
-  it('navigates with the chosen period when the period select changes (self)', async () => {
+  it('navigates with the chosen period when the period select changes', async () => {
     const user = userEvent.setup();
     renderAuthedPage(<UsagePage />, { props: selfProps });
 
@@ -163,23 +149,6 @@ describe('Profile/Usage', () => {
     expect(router.get).toHaveBeenCalledWith(
       window.location.pathname,
       { period: '7d' },
-      { preserveState: true, preserveScroll: true },
-    );
-  });
-
-  it('keeps the target user_id in the query when viewing another user', async () => {
-    const user = userEvent.setup();
-    renderAuthedPage(<UsagePage />, {
-      props: { period: '30d' as const, viewerIsSelf: false, targetUser },
-    });
-
-    const select = screen.getByDisplayValue('Last 30 days');
-    await user.click(select);
-    await user.click(await screen.findByText('Last 7 days'));
-
-    expect(router.get).toHaveBeenCalledWith(
-      window.location.pathname,
-      { period: '7d', user_id: 7 },
       { preserveState: true, preserveScroll: true },
     );
   });

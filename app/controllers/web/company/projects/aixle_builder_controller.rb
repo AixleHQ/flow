@@ -18,7 +18,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
     active_session = sessions.find { |s| %w[not_started queued running ready].include?(s.state) }
 
     render inertia: "Projects/AixleBuilder/LandingPage", props: {
-      sessions: -> { sessions.map { |s| TerminalSessionResource.new(s).to_h } },
+      sessions: -> { sessions.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h } },
       active_session_id: -> { active_session&.id },
       configured_agents: -> { current_project_membership&.configured_agents || [] },
       default_agent_runtime: -> { current_project_membership&.default_agent_runtime },
@@ -59,7 +59,7 @@ class Web::Company::Projects::AixleBuilderController < Web::Company::Projects::A
     return head :not_found unless ts
 
     render inertia: "Projects/AixleBuilder/SessionPage", props: {
-      session: -> { TerminalSessionResource.new(ts).to_h },
+      session: -> { TerminalSessionResource.new(ts, params: { viewer: current_user }).to_h },
       cable_stream: -> { inertia_cable_stream(ts) },
       builder_activities: InertiaRails.defer {
         ts.reload

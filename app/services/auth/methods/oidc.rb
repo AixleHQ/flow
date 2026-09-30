@@ -11,6 +11,7 @@ module Auth
     class Oidc < Auth::Method
       DISCOVERY_TTL = 12.hours
       DEFAULT_SCOPES = %w[openid email profile].freeze
+      TIMEOUT = 10
 
       class DiscoveryError < Auth::Method::Failure; end
 
@@ -25,7 +26,7 @@ module Auth
           code_challenge: code_challenge,
           code_challenge_method: "S256"
         }
-        uri = URI.parse(discovery.fetch("authorization_endpoint"))
+        uri = URI.parse(endpoint("authorization_endpoint"))
         uri.query = params.to_query
         uri.to_s
       end
@@ -60,7 +61,20 @@ module Auth
       end
 
       def discovery_url
-        "#{provider.issuer.to_s.chomp('/')}/.well-known/openid-configuration"
+        uri = URI.parse(provider.issuer.to_s)
+        uri.path = "#{uri.path.chomp('/')}/.well-known/openid-configuration"
+        uri.query = nil
+        uri.fragment = nil
+        uri.to_s
+      rescue URI::InvalidURIError
+        raise DiscoveryError, "issuer is not a valid URL"
+      end
+
+      def endpoint(key)
+        url = discovery.is_a?(Hash) ? discovery[key] : nil
+        raise DiscoveryError, "discovery document has no #{key}" unless url.is_a?(String) && url.present?
+
+        url
       end
 
       def discovery_cache_key
@@ -68,7 +82,7 @@ module Auth
       end
 
       def exchange_code(code:, redirect_uri:, code_verifier:)
-        response = Faraday.post(discovery.fetch("token_endpoint")) do |req|
+        response = connection(endpoint("token_endpoint")).post do |req|
           req.headers["Content-Type"] = "application/x-www-form-urlencoded"
           req.body = {
             grant_type: "authorization_code",
@@ -84,6 +98,8 @@ module Auth
         JSON.parse(response.body)
       rescue JSON::ParserError
         raise Auth::Method::Failure, "token endpoint returned a non-JSON body"
+      rescue Faraday::Error => e
+        raise Auth::Method::Failure, "token endpoint unreachable (#{e.class})"
       end
 
       # AD-13: the assertion is bound to the row that claims it. `iss` and `aud`
@@ -117,16 +133,34 @@ module Auth
       end
 
       def jwks
-        JSON::JWK::Set.new(fetch_json(discovery.fetch("jwks_uri")))
+        JSON::JWK::Set.new(fetch_json(endpoint("jwks_uri")))
       end
 
       def fetch_json(url)
-        response = Faraday.get(url)
+        response = connection(url).get
         raise DiscoveryError, "#{url} returned #{response.status}" unless response.success?
 
         JSON.parse(response.body)
       rescue JSON::ParserError
         raise DiscoveryError, "#{url} returned a non-JSON body"
+      rescue Faraday::Error => e
+        raise DiscoveryError, "#{url} unreachable (#{e.class})"
+      end
+
+      # The issuer and every URL its discovery document names are chosen by a
+      # tenant, so each is dialed only at the address SafeHttp vetted, and
+      # redirects are not followed.
+      def connection(url)
+        uri = URI.parse(url)
+        raise DiscoveryError, "#{url} must use https" unless uri.scheme == "https"
+
+        Faraday.new(url: uri.to_s, request: { open_timeout: TIMEOUT, timeout: TIMEOUT }) do |faraday|
+          SafeHttp.pin_faraday!(faraday, uri)
+        end
+      rescue URI::InvalidURIError
+        raise DiscoveryError, "#{url} is not a valid URL"
+      rescue SafeHttp::UnsafeUrl => e
+        raise DiscoveryError, "#{url} #{e.message}"
       end
     end
   end

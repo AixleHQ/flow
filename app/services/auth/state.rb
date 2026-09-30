@@ -14,6 +14,10 @@ module Auth
   # `code_verifier` and the OIDC `nonce` are NEVER in the URL — they live
   # server-side in a cache entry keyed by the state nonce, handed back exactly
   # once by #consume. A replayed link finds no entry and is refused.
+  #
+  # The state nonce is also what binds the flow to the browser that began it:
+  # the caller keeps it in that browser's session and refuses a callback whose
+  # state carries any other.
   module State
     TTL = 10.minutes
     PURPOSE = :auth_login
@@ -21,8 +25,7 @@ module Auth
 
     module_function
 
-    def encode(identity_provider_id:, return_to:, code_verifier:, oidc_nonce:)
-      state_nonce = SecureRandom.uuid
+    def encode(identity_provider_id:, return_to:, code_verifier:, oidc_nonce:, state_nonce: SecureRandom.uuid)
       Rails.cache.write(
         cache_key(state_nonce),
         { "code_verifier" => code_verifier, "oidc_nonce" => oidc_nonce },

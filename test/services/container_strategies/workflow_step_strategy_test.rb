@@ -175,6 +175,38 @@ module ContainerStrategies
         "expected the run input asset to be downloaded"
     end
 
+    test "inject_prior_step_outputs creates the parent of a nested output and skips a stored path that would leave the assets directory" do
+      fake = stub_container_runtime(agent_type: "claude_code")
+      Settings.stubs(:container_asset_host).returns(nil)
+
+      workflow = create(:workflow, scope: @project)
+      dep_step = create(:step, workflow: workflow, position: 1)
+      current_step = create(:step, workflow: workflow, position: 2, depends_on_step_ids: [ dep_step.id ])
+      workflow_run = create(:workflow_run, workflow: workflow, project: @project, user: @user)
+      dep_step_run = create(:step_run, workflow_run: workflow_run, step: dep_step)
+      session = create(:terminal_session, :agent_session, user: @user, project: @project, agent_type: "claude_code")
+      create(:step_run, workflow_run: workflow_run, step: current_step, terminal_session: session)
+
+      %w[reports/summary.md legacy.md].each do |name|
+        workflow_run.workflow_run_assets.create!(
+          name: name, produced_by_step_run: dep_step_run, content_type: "text/markdown", file_size: 5,
+          file: WorkflowRunAssetUploader.upload(StringIO.new("prior"), :store)
+        )
+      end
+      workflow_run.workflow_run_assets.find_by!(name: "legacy.md").update_column(:name, "../../root/.bashrc")
+
+      input_asset = create(:asset, scope: @project.company, name: "brief.md", created_by: @user)
+      create(:asset_version, :with_file, asset: input_asset, version: 1, uploaded_by: @user)
+      input_asset.update_column(:name, "../etc/profile")
+      workflow_run.update!(input_asset_ids: [ input_asset.id ])
+
+      build_strategy(session: session).send(:inject_prior_step_outputs, "abc123")
+
+      downloads = fake.execs.map { |c| Array(c).join(" ") }.select { |c| c.include?("curl") }
+      assert_equal 1, downloads.size
+      assert_includes downloads.first, "mkdir -p /workspace/assets/reports && curl -sSL -o /workspace/assets/reports/summary.md"
+    end
+
     # == rewrite_url_for_container ==
 
     test "rewrite_url_for_container swaps host/scheme/port when a container asset host is configured" do

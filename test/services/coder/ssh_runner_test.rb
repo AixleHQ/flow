@@ -6,6 +6,7 @@ require "tmpdir"
 module Coder
   class SshRunnerTest < ActiveSupport::TestCase
     setup do
+      resolve_hosts_publicly!
       @company     = create(:company)
       @user        = create(:user, :admin, company: @company)
       @integration = create(:integration, :coder, :active, company: @company, connected_by: @user)
@@ -65,6 +66,29 @@ module Coder
       assert_includes captured_args, "coder"
       assert_includes captured_args, "ws-1"
       assert_not_includes captured_args, @token
+    end
+
+    test "refuses to run the CLI once the Coder host resolves to an internal address" do
+      UrlSafetyValidator.stubs(:resolved_addresses).with("coder.example.com").returns([ IPAddr.new("10.0.0.5") ])
+      ran = false
+
+      Open3.stub(:popen3, popen3_stub { ran = true }) do
+        assert_raises(Coder::SshRunner::CommandError) do
+          Coder::SshRunner.new(@integration).exec(workspace_name: "ws-1", command: "echo hi")
+        end
+      end
+      refute ran, "the coder CLI must not be started"
+    end
+
+    test "runs the CLI against a trusted host that resolves internally" do
+      UrlSafetyValidator.stubs(:configured_trusted_hosts).returns([ "coder.example.com" ])
+      UrlSafetyValidator.stubs(:resolved_addresses).with("coder.example.com").returns([ IPAddr.new("10.0.0.5") ])
+
+      result = Open3.stub(:popen3, popen3_stub(out: "hi")) do
+        Coder::SshRunner.new(@integration).exec(workspace_name: "ws-1", command: "echo hi")
+      end
+
+      assert_equal "hi", result[:stdout]
     end
 
     # Regression guard: the canonical invocation is

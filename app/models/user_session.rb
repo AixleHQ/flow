@@ -28,12 +28,13 @@ class UserSession < ApplicationRecord
             ip_address: request&.remote_ip, user_agent: request&.user_agent.to_s.truncate(255).presence)
   end
 
-  # Ends every live sign-in of `user` (but `except`), and drops the live
-  # connections that were opened under them.
+  # Ends every live sign-in of `user` (but `except`), the personal MCP token, and
+  # the live connections that were opened under them.
   def self.revoke_all_for!(user, except: nil)
     # A cookie from before database sessions has no row here to revoke; the mark
     # is what stops it being adopted as a fresh session afterwards.
-    user.update_column(:sessions_revoked_at, Time.current)
+    user.update_columns(sessions_revoked_at: Time.current, mcp_token_digest: nil,
+                        mcp_token_last_used_at: nil, mcp_token_proof_provider_ids: nil)
     scope = where(user: user, revoked_at: nil)
     scope = scope.where.not(id: except.id) if except
     ended = scope.update_all(revoked_at: Time.current)

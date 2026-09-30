@@ -262,7 +262,7 @@ client id and one credential are present, or PAT mode is on.
 | `GOOGLE_CLIENT_ID`           | no       | unset              | Google SSO client ID.                                        |
 | `GOOGLE_CLIENT_SECRET`       | no       | unset              | Google SSO client secret.                                     |
 | `SUPER_ADMIN_EMAIL`          | no       | `admin@operator.example` | The super admin `db/seeds.rb` creates (development and test only). |
-| `MICROSOFT_CLIENT_ID`        | no       | unset              | Microsoft/Entra app registration client ID. A multi-tenant registration: one per deployment, any customer tenant. |
+| `MICROSOFT_CLIENT_ID`        | no       | unset              | Microsoft/Entra app registration client ID. A multi-tenant registration: one per deployment, any customer tenant. Domain auto-join trusts only an address its tenant shows it owns, so add the `upn` (or `xms_edov`) optional claim to the ID token; without it Microsoft sign-ins create accounts but join nobody. |
 | `MICROSOFT_CLIENT_SECRET`    | no       | unset              | Its client secret.                                            |
 | `MICROSOFT_TENANT_ID`        | no       | `common`           | Which Entra directory to accept. `common` accepts any work or school tenant; a GUID restricts sign-in to that one. |
 | `AUTH_ENABLED_KINDS`         | no       | unset              | Comma-separated allowlist narrowing which sign-in methods this deployment offers. Availability is already derived from which credentials are present, so this only ever offers LESS — an installation with no Microsoft credentials never offers Microsoft however this is set. |

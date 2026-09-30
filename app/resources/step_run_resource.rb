@@ -72,10 +72,11 @@ class StepRunResource < ApplicationResource
     # "ready". Handing out the URL any earlier (e.g. "not_started"/"running")
     # points the terminal at a route that doesn't exist yet and it 404s.
     next nil unless ts&.route_token.present? && ts.ready?
+    next nil unless ts.visible_to?(params[:viewer])
 
     surface = owned_by_viewer?(ts) ? "tty" : "view"
     ContainerTicket.append("#{params.dig(:traefik, :ws_base)}/t/#{ts.route_token}/#{surface}/ws",
-                           user: ticket_user(ts), session: ts)
+                           user: params[:viewer], session: ts)
   end
 
   typelize :string?
@@ -85,7 +86,7 @@ class StepRunResource < ApplicationResource
     next nil unless owned_by_viewer?(ts)
 
     ContainerTicket.append("#{params.dig(:traefik, :http_base)}/t/#{ts.route_token}/upload",
-                           user: ticket_user(ts), session: ts)
+                           user: params[:viewer], session: ts)
   end
 
   typelize :string?
@@ -103,7 +104,7 @@ class StepRunResource < ApplicationResource
     vscode_url = "#{http_base}/t/#{ts.route_token}/ide/?#{vscode_params.to_query}"
 
     ContainerTicket.append("#{http_base}/t/#{ts.route_token}/fs/preload?#{{ to: vscode_url }.to_query}",
-                           user: ticket_user(ts), session: ts)
+                           user: params[:viewer], session: ts)
   end
 
   typelize "SubStepRun[]"
@@ -115,14 +116,7 @@ class StepRunResource < ApplicationResource
 
   private
 
-  def ticket_user(session)
-    params.key?(:viewer) ? params[:viewer] : session.user
-  end
-
-  # No viewer param: an owner-scoped surface (see TerminalSessionResource).
   def owned_by_viewer?(session)
-    return true unless params.key?(:viewer)
-
     params[:viewer].present? && session.user_id == params[:viewer].id
   end
 end

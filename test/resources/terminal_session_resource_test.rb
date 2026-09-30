@@ -111,6 +111,24 @@ class TerminalSessionResourceTest < ActiveSupport::TestCase
     assert_equal @user, ContainerTicket.user_for(ticket, session: session)
   end
 
+  test "without a viewer the payload is a stranger's: redacted, read-only and without a ticket" do
+    Settings.stubs(:domain).returns("flow.example.com")
+    Settings.traefik.stubs(:http_base).returns("https://t.flow.example.com")
+    Settings.traefik.stubs(:ws_base).returns("wss://t.flow.example.com")
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, state: "ready",
+                                                        initial_prompt: "private plan",
+                                                        metadata: { "vscode_token" => "tkn-secret" })
+
+    anonymous = payload(session)
+
+    assert_nil anonymous["initialPrompt"]
+    assert_nil anonymous["metadata"]
+    assert_equal false, anonymous["ownedByViewer"] # rubocop:disable Minitest/RefuteFalse
+    assert_equal "wss://t.flow.example.com/t/#{session.route_token}/view/ws", anonymous["websocketUrl"]
+    assert_nil anonymous["uploadUrl"]
+    assert_nil anonymous["ideUrl"]
+  end
+
   test "config files keep their paths through every camelizing pass" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
                                                         session_config: { "config_files" => { "/workspace/.aixle/references/guide.md" => "# Guide" } })

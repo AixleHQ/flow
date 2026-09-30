@@ -47,6 +47,22 @@ module Api
           assert_response :forbidden
         end
 
+        test "a viewer of the acting company may not connect even while employed elsewhere" do
+          reset!
+          viewer = create(:user, :viewer, :onboarding_completed, company: @company,
+                                          password: AuthHelper::TEST_PASSWORD)
+          create(:company_membership, user: viewer, company: create(:company),
+                                      onboarding_state: "completed", onboarding_completed_at: Time.current)
+          sign_in_as viewer
+          post company_switch_path, params: { company_id: @company.id }
+
+          post api_v1_cloud_aws_connection_path, params: { start_url: START_URL, sso_region: "us-west-2" }
+          assert_response :forbidden
+
+          post health_api_v1_cloud_aws_connection_path
+          assert_response :forbidden
+        end
+
         # == show ==
 
         test "show reports no connection for a fresh user" do

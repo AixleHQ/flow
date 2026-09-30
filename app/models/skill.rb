@@ -85,14 +85,9 @@ class Skill < ApplicationRecord
       [ entry["path"].delete_prefix(root), entry["contents"] ]
     end.to_h
     return nil unless files.size <= MAX_FILES && files.sum { |_, c| c.bytesize } <= MAX_BUNDLE_BYTES
-    return nil unless files.keys.all? { |path| safe_relative_path?(path) }
+    return nil unless files.keys.all? { |path| SafeRelativePath.valid?(path) }
 
     files
-  end
-
-  def self.safe_relative_path?(path)
-    path.present? && !path.start_with?("/", "~") && !path.include?("\\") && !path.include?("\0") &&
-      path.split("/").none? { |part| part.empty? || part == "." || part == ".." }
   end
 
   scope :for_project, ->(project) { where(scope_type: "Project", scope_id: project.id) }

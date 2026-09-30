@@ -7,7 +7,7 @@ module Api
 
       def show
         session = find_session(params[:id])
-        render json: TerminalSessionResource.new(session).to_h
+        render json: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h
       end
 
       def create
@@ -43,7 +43,7 @@ module Api
           return render json: { errors: session.errors.full_messages }, status: :unprocessable_entity
         end
 
-        render json: TerminalSessionResource.new(session).to_h, status: :created
+        render json: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h, status: :created
       rescue Oauth::PreflightError, CloudAuth::PreflightError => e
         # Session-start preflight (§4.6): block launch with a "Connect …" CTA rather
         # than starting a session doomed to fail during provisioning. Both errors carry
@@ -76,7 +76,7 @@ module Api
       def finish
         session = current_user.terminal_sessions.find(params[:id])
         SessionService.finish(session: session)
-        render json: TerminalSessionResource.new(session).to_h
+        render json: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h
       rescue TerminalSession::InvalidStateError => e
         render json: { error: e.message }, status: :bad_request
       end
@@ -123,6 +123,18 @@ module Api
         end
 
         current_company
+      end
+
+      def auth_policy_company
+        if params[:id].present?
+          column = params[:id].to_s.match?(/\A\d+\z/) ? :id : :route_token
+          terminal_session = TerminalSession.readable_by(current_user).find_by(column => params[:id])
+          return SessionCompany.company_for(terminal_session) || current_company
+        end
+
+        project_id = params.dig(:terminal_session, :project_id)
+        project = Project.for_user(current_user).find_by(id: project_id) if project_id.present?
+        project ? project.company : (auth_setup_company || current_company)
       end
 
       # Read at most the last MAX_LOG_BYTES of the attachment. Seek to the tail on
@@ -182,15 +194,12 @@ module Api
         (project ? Agent.visible_for_project(project) : Agent.none).find(id)
       end
 
-      # Viewer check against the target project's company; without a project
-      # (auth_setup flows), fall back to the global viewer-everywhere predicate.
+      # Viewer check against the company the session is billed to: the project's,
+      # or for a project-less session the one #auth_setup_company names.
       def viewer_for?(project)
-        if project
-          membership = current_user.company_memberships.active.find_by(company_id: project.company_id)
-          membership.nil? || membership.viewer?
-        else
-          current_user.active_memberships.none? || current_user.active_memberships.all?(&:viewer?)
-        end
+        company_id = project ? project.company_id : auth_setup_company&.id
+        membership = company_id && current_user.active_memberships.find { |m| m.company_id == company_id }
+        membership.nil? || membership.viewer?
       end
     end
   end

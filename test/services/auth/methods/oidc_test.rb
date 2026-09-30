@@ -12,6 +12,7 @@ module Auth
       ISSUER = "https://idp.example.test"
 
       setup do
+        resolve_hosts_publicly!
         @company = create(:company, email_domain: "oidc-acme.test")
         @provider = create(:identity_provider, company: @company, kind: "oidc",
                                                config: { "issuer" => ISSUER, "client_id" => "our-client" })
@@ -135,6 +136,75 @@ module Auth
         stub_request(:post, "#{ISSUER}/token").to_return(status: 401, body: "nope")
 
         assert_raises(Auth::Method::Failure) { complete }
+      end
+
+      def stub_discovery(**overrides)
+        stub_request(:get, "#{ISSUER}/.well-known/openid-configuration").to_return(
+          status: 200, headers: { "Content-Type" => "application/json" },
+          body: { issuer: ISSUER, authorization_endpoint: "#{ISSUER}/authorize",
+                  token_endpoint: "#{ISSUER}/token", jwks_uri: "#{ISSUER}/jwks" }.merge(overrides).to_json
+        )
+      end
+
+      test "a token endpoint the discovery document puts on an internal address is never dialed" do
+        UrlSafetyValidator.stubs(:resolved_addresses).with("internal.idp.test").returns([ IPAddr.new("10.0.0.5") ])
+        stub_discovery(token_endpoint: "https://internal.idp.test/token")
+        internal = stub_request(:post, "https://internal.idp.test/token")
+
+        assert_raises(Auth::Methods::Oidc::DiscoveryError) { complete }
+        assert_not_requested internal
+      end
+
+      test "a jwks_uri on a literal metadata address is never dialed" do
+        stub_discovery(jwks_uri: "https://169.254.169.254/jwks")
+        stub_token(id_token)
+        metadata = stub_request(:get, "https://169.254.169.254/jwks")
+
+        assert_raises(Auth::Methods::Oidc::DiscoveryError) { complete }
+        assert_not_requested metadata
+      end
+
+      test "an endpoint over plain http is refused" do
+        stub_discovery(token_endpoint: "http://idp.example.test/token")
+        plain = stub_request(:post, "http://idp.example.test/token")
+
+        assert_raises(Auth::Methods::Oidc::DiscoveryError) { complete }
+        assert_not_requested plain
+      end
+
+      test "a redirect from the issuer is not followed" do
+        stub_request(:get, "#{ISSUER}/.well-known/openid-configuration")
+          .to_return(status: 302, headers: { "Location" => "http://10.0.0.5/" })
+
+        assert_raises(Auth::Methods::Oidc::DiscoveryError) do
+          Auth::Methods::Oidc.new(@provider).discovery
+        end
+      end
+
+      test "an unreachable issuer is a failure, not an exception the caller has to know about" do
+        stub_request(:get, "#{ISSUER}/.well-known/openid-configuration").to_raise(Errno::ECONNREFUSED)
+
+        assert_raises(Auth::Method::Failure) { Auth::Methods::Oidc.new(@provider).discovery }
+      end
+
+      test "a discovery document without the endpoint asked for is a failure" do
+        stub_request(:get, "#{ISSUER}/.well-known/openid-configuration").to_return(
+          status: 200, headers: { "Content-Type" => "application/json" }, body: { issuer: ISSUER }.to_json
+        )
+
+        assert_raises(Auth::Method::Failure) do
+          Auth::Methods::Oidc.new(@provider).authorize_url(
+            redirect_uri: "https://app.test/cb", state: "s", code_challenge: "c", nonce: "n"
+          )
+        end
+      end
+
+      test "a query or fragment on a stored issuer cannot displace the discovery path" do
+        @provider.update_column(:config, @provider.config.merge("issuer" => "#{ISSUER}/?x=#frag"))
+
+        discovery = Auth::Methods::Oidc.new(@provider).discovery
+
+        assert_equal "#{ISSUER}/token", discovery["token_endpoint"]
       end
     end
   end

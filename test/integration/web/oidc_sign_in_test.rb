@@ -13,6 +13,7 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
     # is :null_store — every login would look replayed. Same MemoryStore stub the
     # Oauth::State test uses.
     Rails.stubs(:cache).returns(ActiveSupport::Cache::MemoryStore.new)
+    resolve_hosts_publicly!
 
     @company = create(:company, :auto_accept, email_domain: "oidc-acme.test")
     @provider = create(:identity_provider, company: @company, kind: "oidc",
@@ -82,6 +83,25 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
     end
 
     assert_redirected_to login_path(error: "oauth_failed")
+  end
+
+  test "a callback opened in a browser that did not start the flow is refused" do
+    state, nonce = start_and_capture_state
+    build_token_stub(nonce)
+    elsewhere = open_session
+
+    assert_no_difference "User.count" do
+      elsewhere.get oidc_callback_path(code: "the-code", state: state)
+    end
+
+    assert_equal login_path(error: "oauth_failed"), URI.parse(elsewhere.response.location).request_uri
+    assert_not_requested :post, "#{ISSUER}/token"
+
+    # Refusing it burned nothing: the browser that began the flow still finishes.
+    get oidc_callback_path(code: "the-code", state: state)
+
+    assert_redirected_to company_projects_path
+    assert UserSession.live.exists?(user: User.find_by(email: "person@oidc-acme.test"))
   end
 
   test "a tampered state is refused before any code is exchanged" do
@@ -269,6 +289,32 @@ class Web::OidcSignInTest < ActionDispatch::IntegrationTest
 
     assert_not_includes inertia.props[:methods], "totp",
       "a six-digit code confirms a session; there is nobody to look up from it"
+  end
+
+  test "an issuer that cannot be reached ends the start as a failed sign-in" do
+    stub_request(:get, "#{ISSUER}/.well-known/openid-configuration").to_raise(Errno::ECONNREFUSED)
+
+    post oidc_start_path(id: @provider.id)
+
+    assert_redirected_to login_path(error: "oauth_failed")
+  end
+
+  test "an issuer that now resolves internally is not dialed and ends as a failed sign-in" do
+    UrlSafetyValidator.stubs(:resolved_addresses).with("idp.example.test").returns([ IPAddr.new("10.0.0.5") ])
+
+    post oidc_start_path(id: @provider.id)
+
+    assert_redirected_to login_path(error: "oauth_failed")
+    assert_not_requested :get, "#{ISSUER}/.well-known/openid-configuration"
+  end
+
+  test "a token endpoint that cannot be reached ends the callback as a failed sign-in" do
+    state, = start_and_capture_state
+    stub_request(:post, "#{ISSUER}/token").to_timeout
+
+    get oidc_callback_path(code: "the-code", state: state)
+
+    assert_redirected_to login_path(error: "oauth_failed")
   end
 
   test "an address that is not an address goes back rather than resolving" do

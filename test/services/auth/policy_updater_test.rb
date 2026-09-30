@@ -42,6 +42,19 @@ module Auth
       assert CompanyAuthPolicy.exists?(company: @company, identity_provider: @password)
     end
 
+    test "a company connection cannot be enabled while the domain is unverified, even once proved" do
+      connection = create(:identity_provider, company: @company, kind: "oidc")
+      create(:user_identity, user: @admin, identity_provider: connection, subject: "admin-sub")
+      @company.update!(domain_verified_at: nil)
+
+      error = assert_raises(Auth::PolicyUpdater::Refused) do
+        @updater.set(connection, enabled: true)
+      end
+
+      assert_equal :domain_unverified, error.reason
+      refute CompanyAuthPolicy.find_by(company: @company, identity_provider: connection)&.enabled
+    end
+
     test "a company connection cannot be enabled before an admin has proved it" do
       connection = create(:identity_provider, company: @company, kind: "oidc")
 

@@ -1,6 +1,5 @@
 import { Deferred, Head, router, usePage } from '@inertiajs/react';
-import { Alert, Badge, Box, Divider, Group, Paper, Select, Skeleton, Table, Text, Title, Tooltip } from '@mantine/core';
-import { IconInfoCircle } from '@tabler/icons-react';
+import { Badge, Box, Divider, Group, Paper, Select, Skeleton, Table, Text, Title, Tooltip } from '@mantine/core';
 import { formatDistanceToNow } from 'date-fns';
 
 import type { TerminalSession } from '@/types/generated';
@@ -17,8 +16,6 @@ import { ProfileTabs } from './ProfileTabs';
 interface Props {
   period: Period;
   projectId?: string | null;
-  viewerIsSelf: boolean;
-  targetUser: { id: number; name: string | null; email: string };
   sessions?: TerminalSession[];
 }
 
@@ -137,21 +134,14 @@ function SessionsPanel() {
 // --- Main page ---
 
 const UsagePage = () => {
-  const { period, viewerIsSelf, targetUser } = usePage<{ props: Props }>().props as unknown as Props;
+  const { period } = usePage<{ props: Props }>().props as unknown as Props;
   // Shared props (not this page's Props): only label the company when the user
   // actually belongs to more than one, so single-company users see no change.
   const { currentUser } = usePage<SharedProps>().props;
   const companyName = (currentUser?.memberships?.length ?? 0) > 1 ? currentUser?.currentCompany?.name : null;
 
   const navigate = (nextPeriod: string) => {
-    router.get(
-      window.location.pathname,
-      {
-        period: nextPeriod,
-        ...(viewerIsSelf ? {} : { user_id: targetUser.id }),
-      },
-      { preserveState: true, preserveScroll: true },
-    );
+    router.get(window.location.pathname, { period: nextPeriod }, { preserveState: true, preserveScroll: true });
   };
 
   return (
@@ -177,12 +167,6 @@ const UsagePage = () => {
         <Group justify="flex-end" mb="xl">
           <Select value={period} onChange={(v) => navigate(v ?? '30d')} data={PERIOD_OPTIONS} size="sm" w={140} />
         </Group>
-
-        {!viewerIsSelf && (
-          <Alert icon={<IconInfoCircle size={16} />} color="blue" mb="xl">
-            Viewing {targetUser.name ?? targetUser.email}&apos;s usage
-          </Alert>
-        )}
 
         <UsageAnalytics period={period} />
 

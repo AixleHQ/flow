@@ -39,10 +39,9 @@ class TerminalSessionResource < ApplicationResource
   end
 
   # Whether the REQUESTING user may open this session — see
-  # TerminalSession#visible_to?. Screens that can list other people's sessions
-  # pass `params: { viewer: current_user }`; without the param the payload is
-  # unredacted, which is what the owner-scoped surfaces (API, Aixle Builder,
-  # profile usage) want.
+  # TerminalSession#visible_to?. Every caller passes `params: { viewer: current_user }`;
+  # without it the payload is redacted as for a stranger and carries no container
+  # ticket, so a forgotten param cannot hand out someone else's session.
   #
   # What this redacts is CONTENT — the prompt and the metadata blobs, which say
   # what the person was working on. The route token and the URLs built from it
@@ -234,22 +233,17 @@ class TerminalSessionResource < ApplicationResource
   # Served from a host of their own, container URLs carry the viewer's pass
   # (ContainerTicket); on the app's host they are unchanged.
   def with_ticket(url, session)
-    ContainerTicket.append(url, user: params.key?(:viewer) ? params[:viewer] : session.user, session: session)
+    ContainerTicket.append(url, user: params[:viewer], session: session)
   end
 
   def owned_by_viewer?(session)
-    return true unless params.key?(:viewer)
-
     viewer = params[:viewer]
     viewer.present? && session.user_id == viewer.id
   end
 
-  # No `viewer` param at all means "not a shared surface" — the caller already
-  # scoped the query to the acting user (or to a screen that has no other
-  # viewer), so nothing is redacted. Memoized per session id because every
-  # redacted attribute asks again, once per row.
+  # Memoized per session id because every redacted attribute asks again, once per row.
   def viewable_for?(session)
-    return true unless params.key?(:viewer)
+    return false if params[:viewer].nil?
 
     @viewable ||= {}
     key = session.id

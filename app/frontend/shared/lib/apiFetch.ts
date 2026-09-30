@@ -14,7 +14,7 @@ export function getCsrfToken(): string {
  * Wrapper around `fetch` that automatically injects the CSRF token,
  * credentials, and JSON Accept header for Rails API calls.
  */
-export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const headers = new Headers(init?.headers);
 
   if (!headers.has('X-CSRF-Token')) {
@@ -24,11 +24,32 @@ export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
     headers.set('Accept', 'application/json');
   }
 
-  return fetch(input, {
+  const res = await fetch(input, {
     ...init,
     credentials: init?.credentials ?? 'include',
     headers,
   });
+
+  const stepUpUrl = await stepUpUrlOf(res);
+  if (stepUpUrl) {
+    window.location.assign(stepUpUrl);
+    // The page is leaving: settling would let the caller toast a refusal the step-up page explains.
+    return new Promise<Response>(() => {});
+  }
+
+  return res;
+}
+
+async function stepUpUrlOf(res: Response): Promise<string | null> {
+  if (res.status !== 403) return null;
+  try {
+    const body = (await res.clone().json()) as { error?: unknown; stepUpUrl?: unknown };
+    const url = body.stepUpUrl;
+    if (body.error !== 'step_up_required' || typeof url !== 'string') return null;
+    return url.startsWith('/') && !url.startsWith('//') ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 /** A non-2xx answer: `message` is the server's own explanation when it gave one. */

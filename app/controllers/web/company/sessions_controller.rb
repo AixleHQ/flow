@@ -110,13 +110,12 @@ class Web::Company::SessionsController < Web::Company::ApplicationController
   # join: the sessions of a deleted user stay findable where they are team work.
   def search_visible_scope
     own = TerminalSession.left_joins(:user).where(terminal_sessions: { user_id: current_user.id })
-    steps = TerminalSession.left_joins(:user).where(terminal_sessions: { session_type: "workflow_step" })
     shared = TerminalSession.left_joins(:user).where(
       "(terminal_sessions.state IN (:in_flight) AND users.share_active_sessions = TRUE) " \
       "OR (terminal_sessions.state NOT IN (:in_flight) AND users.share_completed_sessions = TRUE)",
       in_flight: SEARCH_IN_FLIGHT_STATES
     )
-    own.or(steps).or(shared)
+    own.or(shared)
   end
 
   # Distinct users who own a session in this company's list — the User filter's

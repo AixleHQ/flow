@@ -37,7 +37,9 @@ module Auth
       return user if user.deleted?
 
       link_identity(user)
-      Auth::DomainAutoJoin.call(user, assertion.email, provider: provider) if @auto_join && assertion.email.present?
+      if @auto_join && assertion.email.present?
+        Auth::DomainAutoJoin.call(user, assertion.email, provider: provider, verified: assertion.joinable_by_domain?)
+      end
       user
     end
 
@@ -81,10 +83,15 @@ module Auth
     def promotable?
       return false if assertion.email.blank?
       return false unless assertion.email_verified?
+
+      provider_vouches_for_email_domain?
+    end
+
+    def provider_vouches_for_email_domain?
       return true if provider.deployment?
 
       company = provider.company
-      company.present? && company.email_domain.to_s.casecmp?(email_domain)
+      company.present? && company.domain_verified? && company.email_domain.to_s.casecmp?(email_domain)
     end
 
     def email_domain
@@ -103,7 +110,7 @@ module Auth
       end
 
       company = Company.find_by_email_domain(assertion.email.to_s)
-      raise NoWorkspaceError if company.nil?
+      raise NoWorkspaceError if company.nil? || !provider_vouches_for_email_domain?
 
       user = User.new(
         email: assertion.email,

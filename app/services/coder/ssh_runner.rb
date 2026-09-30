@@ -127,7 +127,7 @@ module Coder
       status = nil
 
       env = {
-        "CODER_URL"           => @integration.coder_url.to_s,
+        "CODER_URL"           => vetted_coder_url,
         "CODER_SESSION_TOKEN" => session_token
       }
 
@@ -1071,6 +1071,17 @@ module Coder
 
     def session_token
       @integration.credentials_data["session_token"].to_s
+    end
+
+    # The CLI resolves the host itself and cannot be pinned, so the URL is
+    # re-checked right before each run: the saved one was only checked once, and
+    # its DNS may have moved to an internal address since.
+    def vetted_coder_url
+      url = @integration.coder_url.to_s
+      SafeHttp.vetted_address(URI.parse(url), trusted_hosts: UrlSafetyValidator.configured_trusted_hosts)
+      url
+    rescue URI::InvalidURIError, SafeHttp::UnsafeUrl => e
+      raise CommandError, "Coder URL refused: #{e.message}"
     end
 
     def redact(message)

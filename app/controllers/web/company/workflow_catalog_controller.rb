@@ -6,7 +6,7 @@ class Web::Company::WorkflowCatalogController < Web::Company::ApplicationControl
                         .includes(:steps, :published_by)
                         .order(published_at: :desc)
 
-    project_options = Project.for_user(current_user).order(:name)
+    project_options = Project.for_user(current_user).for_company(current_company).order(:name)
 
     render inertia: "Company/WorkflowCatalog/IndexPage", props: {
       workflows: -> { workflows.map { |w| catalog_workflow_props(w) } },
@@ -18,7 +18,7 @@ class Web::Company::WorkflowCatalogController < Web::Company::ApplicationControl
 
   def duplicate
     workflow = Workflow.published_in_company(current_company).find(params[:id])
-    project = Project.for_user(current_user).find(params[:project_id])
+    project = Project.for_user(current_user).for_company(current_company).find(params[:project_id])
 
     duplicator = WorkflowDuplicator.new(workflow, target_scope: project, actor: version_actor)
     copy = duplicator.duplicate!

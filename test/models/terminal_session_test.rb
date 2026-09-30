@@ -335,12 +335,15 @@ class TerminalSessionTest < ActiveSupport::TestCase
     assert session.visible_to?(other)
   end
 
-  test "workflow-step sessions are team automation and ignore the preferences" do
+  test "workflow-step sessions follow the run owner's preferences" do
     owner = create(:user, company: @company, share_active_sessions: false, share_completed_sessions: false)
     other = create(:user, company: @company)
     session = create(:terminal_session, :running, session_type: "workflow_step", user: owner, project: @project)
 
-    assert session.visible_to?(other)
+    assert_not session.visible_to?(other)
+
+    owner.update!(share_active_sessions: true)
+    assert session.reload.visible_to?(other)
   end
 
   test "auth_setup sessions stay owner-only even with both preferences on" do

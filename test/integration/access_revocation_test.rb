@@ -39,6 +39,16 @@ class AccessRevocationTest < ActionDispatch::IntegrationTest
     assert_nil @user.reload.mcp_token_digest
   end
 
+  test "signing out everywhere ends the personal MCP token" do
+    token = @user.regenerate_mcp_token!
+
+    UserSession.revoke_all_for!(@user)
+    personal_rpc(token)
+
+    assert_response :unauthorized
+    assert_nil @user.reload.mcp_token_digest
+  end
+
   test "a suspended user's personal MCP token stops working" do
     token = @user.regenerate_mcp_token!
 

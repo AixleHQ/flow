@@ -13,11 +13,13 @@ module Coder
   #   ApiError
   #   ├── HTTPError      — non-success HTTP status (`.status` populated)
   #   ├── TransportError — Faraday-level error (connection/SSL/etc.)
+  #   │   └── UnsafeUrlError — the host has no address we may dial
   #   ├── TimeoutError   — open/read timeout
   #   └── ParseError     — invalid JSON in a response body
   class Api
     class ApiError < StandardError; end
     class TransportError < ApiError; end
+    class UnsafeUrlError < TransportError; end
     class TimeoutError < ApiError; end
     class ParseError < ApiError; end
 
@@ -80,6 +82,19 @@ module Coder
         )
       end
 
+      # Where a request to `uri` is dialed.
+      # Trusted host  → nil: resolved by the system (internal) resolver, for our
+      #                 own hosts that only resolve privately inside the cluster.
+      # Non-trusted host → its public IPv4 from public DNS, or a refusal. Never
+      #                 the system resolver: its answer can differ from the one
+      #                 checked when the URL was saved.
+      def dial_address(uri)
+        trusted = UrlSafetyValidator.configured_trusted_hosts
+        return nil if UrlSafetyValidator.trusted_host?(uri.host.to_s, trusted_hosts_override: trusted)
+
+        public_address(uri)
+      end
+
       private
 
       def json_get(path, coder_url:, session_token:, op:)
@@ -137,44 +152,37 @@ module Coder
         raise ParseError, "#{op} failed: invalid JSON response"
       end
 
-      # Build the Faraday connection. The DNS path is chosen by the
-      # trusted-host check (see `resolve_target`): a trusted host is resolved
-      # normally through the system (internal) resolver, while a non-trusted
-      # host must not be resolved internally — it is looked up via public DNS
-      # and connected to by its public IP directly, preserving the original
-      # hostname for the Host header and TLS SNI.
+      # The socket goes to the address `dial_address` chose while the URL keeps
+      # the hostname, so the Host header, SNI and certificate check are the
+      # Coder instance's own.
       def build_conn(coder_url, session_token)
-        uri = URI.parse(coder_url)
-        target_url, sni_hostname, host_header = resolve_target(uri)
+        ip = dial_address(URI.parse(coder_url))
 
-        ssl_opts = sni_hostname ? { hostname: sni_hostname } : {}
-        Faraday.new(url: target_url, ssl: ssl_opts) do |f|
+        Faraday.new(url: coder_url) do |f|
           f.options.open_timeout = HTTP_TIMEOUTS[:open]
           f.options.timeout      = HTTP_TIMEOUTS[:read]
           f.headers[SESSION_TOKEN_HEADER] = session_token
           f.headers["Accept"] = "application/json"
-          f.headers["Host"] = host_header if host_header
+          f.adapter(:net_http) { |http| http.ipaddr = ip if ip }
         end
+      rescue URI::InvalidURIError
+        raise UnsafeUrlError, "Coder URL is not a valid URL"
       end
 
-      # Trusted host  → resolve normally (internal DNS allowed): return the
-      #                 URL unchanged so the system resolver is used.
-      # Non-trusted host → must not use internal DNS: resolve via public DNS
-      #                 and connect to the public IPv4 directly.
-      def resolve_target(uri)
-        return [ uri.to_s, nil, nil ] if UrlSafetyValidator.trusted_host?(
-          uri.host.to_s, trusted_hosts_override: UrlSafetyValidator.configured_trusted_hosts
-        )
+      def public_address(uri)
+        host = uri.host.to_s.downcase
+        raise UnsafeUrlError, "Coder URL must use http or https" unless %w[http https].include?(uri.scheme)
+        raise UnsafeUrlError, "Coder URL cannot point to internal services" if host.empty? || UrlSafetyValidator::BLOCKED_HOSTS.include?(host)
 
-        public_ip = UrlSafetyValidator.resolve_public_ipv4(uri.host)
-        return [ uri.to_s, nil, nil ] if public_ip.nil?
+        literal = UrlSafetyValidator.ip_or_nil(host)
+        if literal
+          raise UnsafeUrlError, "Coder URL cannot point to a private or internal address" if UrlSafetyValidator.blocked_ip?(literal)
 
-        rewritten = uri.dup
-        rewritten.host = public_ip
+          return literal.to_s
+        end
 
-        port = uri.port
-        host_header = port == uri.default_port ? uri.host : "#{uri.host}:#{port}"
-        [ rewritten.to_s, uri.host, host_header ]
+        UrlSafetyValidator.resolve_public_ipv4(host) ||
+          raise(UnsafeUrlError, "Coder host #{host} has no public address")
       end
     end
   end
