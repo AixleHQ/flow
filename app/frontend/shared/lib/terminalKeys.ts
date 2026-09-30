@@ -6,10 +6,24 @@ type KeyLike = Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'shiftKey' | 'al
 // which is what the agent CLIs' prompts understand. xterm.js sends nothing for them.
 const MAC_LINE_KEYS: Record<string, string> = { ArrowLeft: '\x01', ArrowRight: '\x05' };
 
+// ESC CR, which xterm.js sends for Alt+Enter: Claude Code, Codex and Gemini CLI break
+// the prompt's line on it. xterm.js sends Shift+, Ctrl+ and Cmd+Enter as a bare CR,
+// indistinguishable from Enter, so they would submit the prompt instead.
+const NEWLINE = '\x1b\r';
+
+// Off the Mac the Meta key is Windows', and Win+Enter belongs to the OS.
+function breaksLine(event: KeyLike, isMac: boolean): boolean {
+  if (event.key !== 'Enter' || event.altKey) return false;
+  if (event.metaKey) return isMac;
+  return event.shiftKey || event.ctrlKey;
+}
+
 /**
  * Keys the browser terminal handles itself instead of xterm.js's defaults.
  *
- * On the Mac: Cmd+←/→ go to the start or end of the line.
+ * Everywhere: Shift+Enter and Ctrl+Enter break the line, as Alt+Enter does.
+ *
+ * On the Mac: Cmd+Enter breaks the line too, and Cmd+←/→ go to the start or end of it.
  *
  * Elsewhere, clipboard keys as Windows Terminal and VS Code bind them. xterm.js
  * turns Ctrl+C and Ctrl+V into ^C and ^V, and ^V is Claude Code's "paste an image
@@ -22,6 +36,8 @@ export function terminalKeyAction(
   event: KeyLike,
   { isMac, hasSelection }: { isMac: boolean; hasSelection: boolean },
 ): TerminalKeyAction {
+  if (breaksLine(event, isMac)) return { type: 'send', data: NEWLINE };
+
   if (isMac) {
     const line = MAC_LINE_KEYS[event.key];
     if (line && event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey)
