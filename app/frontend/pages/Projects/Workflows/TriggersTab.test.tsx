@@ -332,6 +332,14 @@ describe('Projects/Workflows/TriggersTab', () => {
           aixle_changes: 'ignore',
           filter_predicate: { 'change.to.name': { op: 'in', value: ['Ready for AI'] } },
         },
+        {
+          id: 13,
+          kind: 'tracker',
+          event_type: 'tracker.comment.created',
+          project_tracker_id: null,
+          aixle_changes: 'other_workflows',
+          filter_predicate: { 'comment.mentions_me': true },
+        },
       ],
     });
 
@@ -343,6 +351,8 @@ describe('Projects/Workflows/TriggersTab', () => {
 
     expect(await screen.findByText('Issue moves to Ready for AI')).toBeInTheDocument();
     expect(screen.getByText('boards · ignores Aixle changes')).toBeInTheDocument();
+    expect(screen.getByText('Aixle is mentioned in a comment')).toBeInTheDocument();
+    expect(screen.getByText('any tracker · chains from other workflows')).toBeInTheDocument();
   });
 
   it('renders an unknown trigger kind with the raw event type badge and webhook-style title', async () => {

@@ -86,7 +86,9 @@ function triggerTitle(t: Trigger): string {
   if (t.kind === 'tracker') {
     const label = TRACKER_EVENT_OPTIONS.find((o) => o.value === t.event_type)?.label ?? t.event_type;
     const moves = (t.filter_predicate?.['change.to.name'] as { value?: unknown } | undefined)?.value;
-    return Array.isArray(moves) && moves.length > 0 ? `Issue moves to ${moves.join(', ')}` : label;
+    if (Array.isArray(moves) && moves.length > 0) return `Issue moves to ${moves.join(', ')}`;
+    if (t.filter_predicate?.['comment.mentions_me'] === true) return 'Aixle is mentioned in a comment';
+    return label;
   }
   return 'Incoming webhook';
 }
@@ -265,8 +267,8 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, trackers
           Triggers <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>— how this workflow launches</span>
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
-          Any enabled trigger can start a run. Off-board triggers (Slack, webhook) decide what task the run is about via{' '}
-          <strong style={{ color: 'var(--text-2)' }}>subject</strong>.
+          Any enabled trigger can start a run. Off-board triggers (Slack, webhook, tracker) decide what task the run is
+          about via <strong style={{ color: 'var(--text-2)' }}>subject</strong>.
         </div>
 
         {loading ? (
