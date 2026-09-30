@@ -27,6 +27,10 @@ Usage is measured **hourly and time-weighted**: half an hour at one queue and ha
 an hour at three is two queue-hours, not three. Raising or lowering your limit
 takes effect immediately, not next month.
 
+Your invoice is charged in **whole queue-hours**. A part hour left over at the end
+of a billing period is rounded down and not charged for — we never round a
+fraction up into a chargeable hour.
+
 ## Your first 100 queue-hours are free
 
 Every new workspace starts with **100 free queue-hours**, and nothing is charged

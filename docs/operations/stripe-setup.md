@@ -47,7 +47,7 @@ attributable to the integration rather than to a person.
 > | --- | --- |
 > | Meter | `mtr_test_61VUFBw05qIHrGlrX41RfWGHL113SAXI` |
 > | Product | `prod_VLYLkzDfhdW0A4` |
-> | Price | `price_1UKrEiRfWGHL113SKW7Snqaa` |
+> | Price | `price_1ULEYjRfWGHL113SJ5920DWf` |
 >
 > Steps 3 and 4 are the record of how, and what to repeat in live mode.
 
@@ -74,14 +74,49 @@ so minutes are sent unrounded and nothing is lost at this edge. One queue-hour i
 | Field | Value |
 | --- | --- |
 | Name | Aixle Flow capacity |
+| Unit label | `queue-minute` (Stripe allows twelve characters, and that is twelve) |
 | Pricing model | Usage-based, metered |
 | Meter | `queue_minutes` |
-| Price | `PRICING_QUEUE_HOURLY_RATE` ÷ 60 per unit — **$0.0833333** at the default $5/queue-hour |
+| Price | **$5.00** per package of **60** units — `PRICING_QUEUE_HOURLY_RATE` at the default |
+| Package pricing | `transform_quantity[divide_by]=60`, `transform_quantity[round]=down` |
 | Billing period | Monthly |
 
 Keep the price and `PRICING_QUEUE_HOURLY_RATE` in step: the second is what
 `/how-it-works` quotes to visitors, the first is what they are actually charged.
 They are two copies of one number and will drift if nobody is watching.
+
+### Sixty at a time, so the page reads like the price we quote
+
+Priced per unit, the metered price is `PRICING_QUEUE_HOURLY_RATE` ÷ 60 and Stripe
+Checkout prints it as it is: **$0.083333333333 per unit**, thirteen decimal places
+against a product nobody prices by the minute. Package pricing buys the minutes
+sixty at a time instead, and the same page reads **"$5.00 per 60 queue-minutes"**.
+
+Nothing about the measurement changes. The meter still counts queue-minutes,
+exact to the second, and the application still sends one event per company per
+hour — the package is arithmetic Stripe does at invoice time, on the total for
+the period.
+
+**It rounds down**, which is the whole of the difference it makes to money: a
+part queue-hour left over at the end of a billing period is not charged for.
+Stripe requires a direction and there is under $5 in it either way; down is the
+one that cannot start an argument, and it is what the `/docs` portal's **Plans &
+limits** page tells customers.
+
+Create it with the API rather than the dashboard, which has no field for the
+transformation:
+
+```bash
+curl https://api.stripe.com/v1/prices -u "$STRIPE_SECRET_KEY:" \
+  -d product=<product id> \
+  -d currency=usd \
+  -d unit_amount=500 \
+  -d "recurring[interval]=month" \
+  -d "recurring[usage_type]=metered" \
+  -d "recurring[meter]=<meter id>" \
+  -d "transform_quantity[divide_by]=60" \
+  -d "transform_quantity[round]=down"
+```
 
 ### Everyone pays in the price's currency
 
@@ -170,7 +205,7 @@ and the deploy will not let you.
 - [ ] The whole flow driven on test: signup → allowance spent → blocked → card
       added → running again
 - [ ] Meter, product and price recreated in live mode (test-mode objects do not
-      carry over)
+      carry over), the price carrying the same `transform_quantity`
 - [ ] Live webhook endpoint created and its secret deployed
 - [ ] `PRICING_QUEUE_HOURLY_RATE` and the live price checked against each other
 - [ ] A test invoice read end to end and its queue-minutes reconciled against
