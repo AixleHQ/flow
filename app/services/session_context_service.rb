@@ -300,7 +300,7 @@ class SessionContextService
     def write_skill_files(container_id, adapter, skill, files)
       dir = "#{adapter.skills_install_path}/#{skill.name}"
       failed = files.reject do |path, content|
-        Skill.safe_relative_path?(path) && write_file(container_id, "#{dir}/#{path}", content.to_s, adapter.container_uid)
+        SafeRelativePath.valid?(path) && write_file(container_id, "#{dir}/#{path}", content.to_s, adapter.container_uid)
       end.keys
 
       if failed.empty?
@@ -523,8 +523,12 @@ class SessionContextService
           next
         end
 
-        folder = asset.folder.present? ? "#{asset.folder}/" : ""
-        target_path = "/workspace/assets/#{folder}#{asset.name}"
+        target_path = SafeRelativePath.join(Asset::CONTAINER_DIR, [ asset.folder.presence, asset.name ].compact.join("/"))
+        unless target_path
+          Rails.logger.warn("[SessionContext] Asset #{asset.id} has an unsafe path, skipping")
+          next
+        end
+
         url = container_accessible_url(version.file.url)
 
         download_file_to_container(container_id, url, target_path, uid)

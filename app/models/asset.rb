@@ -5,6 +5,8 @@ class Asset < ApplicationRecord
   # segment may contain, and `Folder` for why paths (not a `parent_id`) are the source of truth
   # for nesting.
   FOLDER_MAX_LENGTH = 100
+  CONTAINER_DIR = "/workspace/assets"
+  NAME_MESSAGE = "must be a relative path with no backslashes or control characters, and no segment blank, \".\" or \"..\""
   UNSHARED = PubliclyShareable::UNSHARED.merge(public: false).freeze
 
   belongs_to :scope, polymorphic: true
@@ -19,6 +21,7 @@ class Asset < ApplicationRecord
   before_validation :normalize_folder
 
   validates :name, presence: true
+  validate :name_shape
   validates :name, uniqueness: { scope: %i[scope_type scope_id folder], message: "already exists in this scope",
                                  conditions: -> { where(deleted_at: nil) } }
   validates :scope_type, presence: true, inclusion: { in: %w[Company Project] }
@@ -135,6 +138,12 @@ class Asset < ApplicationRecord
 
   def normalize_folder
     self.folder = self.class.normalize_folder(folder)
+  end
+
+  def name_shape
+    return if name.blank? || SafeRelativePath.valid?(name)
+
+    errors.add(:name, NAME_MESSAGE)
   end
 
   # A blank folder means "root", so only a present one has a shape to check.

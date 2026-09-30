@@ -141,6 +141,13 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert(errors_for(files: unpinned, &retarget.call("package:npm:x")).any? { |e| e.include?("release is not pinned") })
   end
 
+  test "an asset name that could leave the assets directory is refused" do
+    errors = errors_for { |d| d["assets"].first["name"] = "../../root/.bashrc" }
+
+    assert(errors.any? { |e| e.start_with?("asset ") && e.include?("../../root/.bashrc") }, errors.inspect)
+    assert_empty(errors_for { |d| d["assets"].first["name"] = "guides/standards.md" })
+  end
+
   test "a referenced file missing from the package is refused" do
     files = Templates::Package.from_directory(FIXTURE).files.except("assets/coding-standards.md")
     assert_includes errors_for(files: files), "file assets/coding-standards.md is referenced but missing from the package"

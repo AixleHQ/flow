@@ -132,7 +132,7 @@ module ContainerStrategies
       step = step_run.step
       container = resolve_container(container_id)
 
-      runtime.exec(container, [ "mkdir", "-p", "/workspace/assets" ])
+      runtime.exec(container, [ "mkdir", "-p", Asset::CONTAINER_DIR ])
 
       injected_names = []
 
@@ -144,7 +144,8 @@ module ContainerStrategies
 
         prior_assets.each do |wra|
           next unless wra.file
-          download_to_container(container, wra.file.url, "/workspace/assets/#{wra.name}")
+          next unless download_to_container(container, wra.file.url, wra.name)
+
           injected_names << wra.name
         rescue StandardError => e
           Rails.logger.warn("[WorkflowStepStrategy] Failed to inject #{wra.name}: #{e.message}")
@@ -164,21 +165,30 @@ module ContainerStrategies
         version = asset.latest_version
         next unless version&.file
 
-        download_to_container(container, version.file.url, "/workspace/assets/#{asset.name}")
+        next unless download_to_container(container, version.file.url, asset.name)
+
         injected_names << asset.name
       rescue StandardError => e
         Rails.logger.warn("[WorkflowStepStrategy] Failed to inject run asset #{asset.name}: #{e.message}")
       end
     end
 
-    def download_to_container(container, url, target_path)
+    def download_to_container(container, url, name)
+      target_path = SafeRelativePath.join(Asset::CONTAINER_DIR, name)
+      unless target_path
+        Rails.logger.warn("[WorkflowStepStrategy] Skipped asset with an unsafe name: #{name.inspect}")
+        return false
+      end
+
       # Asset names are user-supplied and free-form (spaces and quotes included), so the path has
       # to be escaped rather than wrapped in quotes — a name carrying one would otherwise rewrite
       # this command instead of naming a file.
+      safe_dir = Shellwords.escape(File.dirname(target_path))
       safe_path = Shellwords.escape(target_path)
       safe_url = Shellwords.escape(rewrite_url_for_container(url))
-      runtime.exec(container, [ "sh", "-c", "curl -sSL -o #{safe_path} #{safe_url}" ])
+      runtime.exec(container, [ "sh", "-c", "mkdir -p #{safe_dir} && curl -sSL -o #{safe_path} #{safe_url}" ])
       Rails.logger.info("[WorkflowStepStrategy] Downloaded → #{target_path}")
+      true
     end
 
     def rewrite_url_for_container(url)

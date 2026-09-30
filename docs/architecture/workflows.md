@@ -356,12 +356,8 @@ class WorkflowRunAsset < ApplicationRecord
   belongs_to :workflow_run
   belongs_to :produced_by_step_run, class_name: 'StepRun', optional: true
 
-  # name: string (filename)
+  # name: string (relative path under /workspace/assets, see SafeRelativePath)
   # file_data: text (Shrine attachment metadata — storage key, mime, size)
-
-  def download_to(dir)  # materialise the file into a workspace dir
-    # ...
-  end
 end
 ```
 
