@@ -392,10 +392,16 @@ module Templates
       integrations = Tool.where(id: @tools.keys).filter_map(&:requires_integration)
       integrations += Repository.where(id: @repository_ids.to_a).filter_map { |r| r.integration&.provider&.to_s }
       repositories = Repository.where(id: @repository_ids.to_a).map do |repository|
-        { "key" => @keys["repositories"][repository.id], "purpose" => repository.purpose.presence }.compact
+        key = @keys["repositories"][repository.id]
+        @notes << "Repository #{key} is named after #{repository.full_name} and keeps this project's purpose text — " \
+                  "rename the key and rewrite the purpose to describe the role the installer's repository plays."
+        { "key" => key, "purpose" => repository.purpose.presence }.compact
       end
-      { "integrations" => integrations.uniq.presence, "repositories" => repositories.presence,
-        "secrets" => secrets.presence }.compact
+      requires = { "integrations" => integrations.uniq.presence, "repositories" => repositories.presence,
+                   "secrets" => secrets.presence }.compact
+      @notes << "Write README.md#{' and SETUP.md' if requires.any?} next to template.yaml — " \
+                "the catalog validator refuses the package without #{requires.any? ? 'them' : 'it'}."
+      requires
     end
 
     # ---- helpers ----------------------------------------------------------

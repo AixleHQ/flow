@@ -13,7 +13,11 @@ module PersonalTools
                   "and include_board: false with agent_ids / skill_ids. " \
                   "Secrets are exported by name only; variables with their values. Anything " \
                   "that cannot be carried faithfully (a literal MCP header, an unpinned image) aborts the export " \
-                  "with the reason. Follow the publish_template prompt to open the catalog pull request."
+                  "with the reason. Publishing is a pull request to the #{Templates::RepositoryClient::REPOSITORY} " \
+                  "repository (branch #{Templates::RepositoryClient::BRANCH}), opened with the user's own GitHub " \
+                  "access: the result's `publish` field names the repository, the directory and the steps, and " \
+                  "`notes` lists what to make portable first. Write every file byte for byte — `content` is exact " \
+                  "(add no trailing newline) and `base64` is decoded — or the skill snapshots fail their sha256."
       audience :user
       tags :templates
       read_only
@@ -45,13 +49,35 @@ module PersonalTools
         include_board: params[:include_board] != false,
         include_assets: params[:include_assets] == true
       ).call
-      success(directory: "templates/#{params[:namespace]}/#{params[:slug]}", template_yaml: result.template_yaml,
-              files: result.package.files.map { |path, bytes| file_entry(path, bytes) }, notes: result.notes)
+      directory = "templates/#{params[:namespace]}/#{params[:slug]}"
+      success(directory: directory, template_yaml: result.template_yaml,
+              files: result.package.files.map { |path, bytes| file_entry(path, bytes) }, notes: result.notes,
+              publish: publish_steps(directory))
     rescue Templates::Exporter::ExportError => e
       error("Export refused:\n- #{e.errors.join("\n- ")}")
     end
 
     private
+
+    # The publish_template prompt carries the same steps, but a prompt is
+    # something the user invokes; an agent that only holds the tool result
+    # would otherwise not know where the package goes.
+    def publish_steps(directory)
+      repository = Templates::RepositoryClient::REPOSITORY
+      branch = Templates::RepositoryClient::BRANCH
+      {
+        repository: repository, branch: branch, directory: directory,
+        steps: [
+          "Fork #{repository} (or branch from #{branch} when the user can push to it).",
+          "Check namespaces.yaml: the user's GitHub login must be in the owners of namespace " \
+          "#{params[:namespace]}, or add a new entry for it in the same pull request.",
+          "Write template.yaml from template_yaml and every entry of files under #{directory}/.",
+          "Resolve every note, and write README.md (and SETUP.md when the template has requirements).",
+          "Run bin/validate in the repository and fix what it reports.",
+          "Commit, push, and open the pull request against #{branch}; give the user its URL."
+        ]
+      }
+    end
 
     def file_entry(path, bytes)
       text = bytes.dup.force_encoding(Encoding::UTF_8)

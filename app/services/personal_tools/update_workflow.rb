@@ -32,7 +32,7 @@ module PersonalTools
                          "get_workflow first.",
             items: { type: "integer" }
       param :base_repository_ids, type: :array,
-            description: "Repository ids cloned into /workspace/repo for every step of this workflow. " \
+            description: "Repository ids cloned for every step of this workflow, each into /workspace/repo/<name>/. " \
                          "Replaces the whole list — read the current value with get_workflow first. " \
                          "Set repositories on the step instead when only some steps need code.",
             items: { type: "integer" }

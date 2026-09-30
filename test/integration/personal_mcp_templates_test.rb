@@ -67,6 +67,9 @@ class PersonalMCPTemplatesTest < ActionDispatch::IntegrationTest
     assert_equal "templates/acme/my-delivery", exported["directory"]
     assert_match(/slug: my-delivery/, exported["template_yaml"])
     assert_includes exported["files"].pluck("path"), "snapshots/skills/code_review.md"
+    assert_equal({ "repository" => "AixleHQ/flow-templates", "branch" => "main", "directory" => "templates/acme/my-delivery" },
+                 exported["publish"].slice("repository", "branch", "directory"))
+    assert(exported["notes"].any? { |note| note.include?("README.md and SETUP.md") })
 
     project.mcp_servers.find_by!(name: "Sentry").update!(headers: { "X-Org" => "acme" })
     refused = call_tool("export_template", { project_id: project.id, namespace: "acme", slug: "my-delivery", name: "My delivery",

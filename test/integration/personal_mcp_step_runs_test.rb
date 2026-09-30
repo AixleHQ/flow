@@ -75,6 +75,21 @@ class PersonalMCPStepRunsTest < ActionDispatch::IntegrationTest
     assert_equal "npm registry unreachable", detail["terminal_session"]["context_metadata"]["bmad_install_error"]
   end
 
+  test "get_step_run leaves the context build breakdown out unless asked for it" do
+    session = failed_session(context_metadata: { "bmad_install_status" => "ok",
+                                                 "sections" => [ { "tag" => "workspace" } ],
+                                                 "config_resolution" => { "tools" => { "resolved" => [ 8 ] } } })
+    step_run = @run.step_runs.create!(step: @step, state: "failed", terminal_session: session)
+
+    slim = payload(call_tool("get_step_run", { project_id: @project.id, step_run_id: step_run.id }))
+    assert_equal({ "bmad_install_status" => "ok" }, slim["terminal_session"]["context_metadata"])
+
+    full = payload(call_tool("get_step_run", { project_id: @project.id, step_run_id: step_run.id,
+                                               include_context: true }))
+    assert_equal [ { "tag" => "workspace" } ], full["terminal_session"]["context_metadata"]["sections"]
+    assert_equal [ 8 ], full["terminal_session"]["context_metadata"].dig("config_resolution", "tools", "resolved")
+  end
+
   test "get_step_run truncates an error message big enough to be a log dump" do
     step_run = @run.step_runs.create!(step: @step, state: "failed", error_message: "x" * 9000)
 
