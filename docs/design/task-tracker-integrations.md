@@ -600,10 +600,19 @@ The mapping is `dispatched` → `start`, `completed` → `success`, and `failed`
 `failure`; `started` and `skipped` are ignored. Each reporter runs as its own job, with its own
 idempotency key `(dispatch, transition, reporter)` and its own retries. A tracker transition
 retrying for an hour must never re-post a chat message. The reporter re-reads the run, so a job
-that runs before the transition's transaction commits sees the old state and retries.
+that runs before the transition's transaction commits sees the old state and retries. (Today
+Solid Queue shares the primary database, so an enqueue from the transition commits with it. The
+contract holds even if the queue database is split later.)
 
 **Rules that keep it safe.**
 
+0. **Monotonic.** Reporter jobs can run out of order, so the job treats its transition as a
+   wake-up and acts on the run's current state:
+   - `start` is a no-op once the run is terminal, or once a `success` or `failure` handoff is
+     recorded for the dispatch;
+   - `success` and `failure` are mutually exclusive, because a run ends once;
+   - `start` also runs the compare-and-set below: it moves the ticket only if it is still in the
+     status that triggered the run.
 1. **Compare-and-set, never force.** Before `success` or `failure`, the job re-reads the issue and
    moves it only if its status is still the one the handoff expects:
    - the `start` status, when the ledger shows that the start write succeeded;
