@@ -36,6 +36,7 @@ class IdentityProvider < ApplicationRecord
   validates :kind, presence: true
   validates :scope, presence: true
   validate :company_matches_scope
+  validate :issuer_is_safe, if: :issuer_changed?
 
   scope :deployment_scoped, -> { where(scope: "deployment") }
   scope :for_company, ->(company) { where(company: company) }
@@ -94,6 +95,17 @@ class IdentityProvider < ApplicationRecord
   def tenant_id = config["tenant_id"]
 
   private
+
+  def issuer_changed?
+    issuer.present? && issuer != config_in_database.to_h["issuer"]
+  end
+
+  def issuer_is_safe
+    UrlSafetyValidator.errors_for(issuer, require_https: true).each { |message| errors.add(:issuer, message) }
+
+    uri = UrlSafetyValidator.safe_parse(issuer)
+    errors.add(:issuer, "must not contain a query or fragment") if uri && (uri.query || uri.fragment)
+  end
 
   # Mirrors the database check constraint; the constraint is the enforcement,
   # this is the readable error.

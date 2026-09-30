@@ -127,6 +127,7 @@ class Auth::DomainAutoJoinTest < ActiveSupport::TestCase
     # A company-scoped connection is only ever in its OWN company's allowed set,
     # so it cannot be the method that admits someone to a company that never
     # agreed to it.
+    resolve_hosts_publicly!
     other = create(:company, email_domain: "other-tenant.test")
     connection = create(:identity_provider, company: other, kind: "oidc", name: "Other SSO",
                                             config: { "issuer" => "https://other.test", "client_id" => "c" })

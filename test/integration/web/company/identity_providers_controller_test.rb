@@ -8,6 +8,7 @@ require "test_helper"
 # out.
 class Web::Company::IdentityProvidersControllerTest < ActionDispatch::IntegrationTest
   setup do
+    resolve_hosts_publicly!
     @company = create(:company)
     @admin = create(:user, :onboarding_completed, company: @company, membership_role: "admin",
                            password: AuthHelper::TEST_PASSWORD, password_confirmation: AuthHelper::TEST_PASSWORD)
@@ -52,6 +53,20 @@ class Web::Company::IdentityProvidersControllerTest < ActionDispatch::Integratio
     assert_no_difference "IdentityProvider.count" do
       post company_identity_providers_path, params: connection_params
     end
+  end
+
+  test "an issuer on an internal address is refused at connect and at edit" do
+    sign_in_as(@admin)
+
+    assert_no_difference "IdentityProvider.count" do
+      post company_identity_providers_path, params: connection_params.merge(issuer: "http://169.254.169.254")
+    end
+
+    post company_identity_providers_path, params: connection_params
+    provider = @company.identity_providers.order(:id).last
+    patch company_identity_provider_path(provider), params: { issuer: "http://10.0.0.1" }
+
+    assert_equal "https://idp.acme.test", provider.reload.issuer
   end
 
   test "an update with a blank secret leaves the stored one alone" do

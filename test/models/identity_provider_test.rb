@@ -27,6 +27,31 @@ class IdentityProviderTest < ActiveSupport::TestCase
     assert_includes provider.errors[:company], "is required for a company-scoped provider"
   end
 
+  test "an issuer on an internal or plain-http address is refused" do
+    %w[http://169.254.169.254 http://10.0.0.1 https://10.0.0.1 https://127.0.0.1 https://localhost].each do |issuer|
+      provider = build(:identity_provider, config: { "issuer" => issuer })
+
+      refute_predicate provider, :valid?, "#{issuer} should be refused"
+      assert_predicate provider.errors[:issuer], :any?
+    end
+  end
+
+  test "an issuer carrying a query or fragment is refused" do
+    [ "https://93.184.215.14/?x=", "https://93.184.215.14/#frag" ].each do |issuer|
+      provider = build(:identity_provider, config: { "issuer" => issuer })
+
+      provider.validate
+
+      assert_includes provider.errors[:issuer], "must not contain a query or fragment"
+    end
+  end
+
+  test "a public https issuer is accepted" do
+    provider = build(:identity_provider, company: create(:company), config: { "issuer" => "https://93.184.215.14/tenant" })
+
+    assert_predicate provider, :valid?
+  end
+
   test "the database refuses an inconsistent scope even when validations are skipped" do
     provider = IdentityProvider.new(kind: "oidc", scope: "company")
 
