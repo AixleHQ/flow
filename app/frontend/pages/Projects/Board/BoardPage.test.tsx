@@ -1263,6 +1263,44 @@ describe('Projects/Board/BoardPage', () => {
     expect(await screen.findByText(/^#1 · Wire up authentication · Status: paused · Waiting — /)).toBeInTheDocument();
   });
 
+  it('lists each recent run with its outcome, age, duration and failure reason on the workflow chip', async () => {
+    const hoursAgo = (h: number) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+    renderAuthedPage(<BoardPage />, {
+      props: {
+        ...populatedProps,
+        tasks: [
+          makeTask({
+            id: 1,
+            title: 'Wire up authentication',
+            boardColumnId: 100,
+            // The chip itself only names the latest run; the tooltip is what covers the rest.
+            recentWorkflowRuns: [
+              runOf({ id: 2, state: 'completed', createdAt: hoursAgo(1), durationSeconds: 252 }),
+              {
+                ...runOf({ id: 1, state: 'failed', createdAt: hoursAgo(3), durationSeconds: 45 }),
+                errorMessage: 'Quota exceeded',
+              },
+            ],
+          }),
+        ],
+      },
+    });
+
+    await userEvent.hover(screen.getByText('Succeeded'));
+
+    const tooltip = within(await screen.findByRole('tooltip'));
+    expect(tooltip.getByText('Recent runs')).toBeInTheDocument();
+    // A completed run reads "Succeeded" here too, the word the chip itself uses.
+    expect(tooltip.getByText('Succeeded')).toBeInTheDocument();
+    expect(tooltip.getByText('1h ago')).toBeInTheDocument();
+    expect(tooltip.getByText('4m 12s')).toBeInTheDocument();
+    // An older failure is not on the card any more; the tooltip is the only place its reason survives.
+    expect(tooltip.getByText('Failed')).toBeInTheDocument();
+    expect(tooltip.getByText('3h ago')).toBeInTheDocument();
+    expect(tooltip.getByText('45s')).toBeInTheDocument();
+    expect(tooltip.getByText('Quota exceeded')).toBeInTheDocument();
+  });
+
   it('colors a collapsed column chip by the ticket’s latest run state', async () => {
     const chip = await collapseBacklogAndGetChip(
       makeTask({ id: 1, title: 'Failing task', boardColumnId: 100, recentWorkflowRuns: [runOf({ state: 'failed' })] }),
@@ -1564,27 +1602,6 @@ describe('Projects/Board/BoardPage', () => {
     // the shape that caused it: the room the column reserves must be a floor and not a cap.
     expect(column.style.minWidth).toBe(rem(GATE_CHIP_WIDTH));
     expect(column.style.width).toBe('');
-  });
-
-  it('lists every recent run state in the card status chip tooltip', async () => {
-    renderAuthedPage(<BoardPage />, {
-      props: {
-        ...populatedProps,
-        tasks: [
-          makeTask({
-            id: 1,
-            title: 'Wire up authentication',
-            boardColumnId: 100,
-            // The chip itself only names the latest run; the tooltip is what covers the rest.
-            recentWorkflowRuns: [runOf({ id: 1, state: 'failed' }), runOf({ id: 2, state: 'completed' })],
-          }),
-        ],
-      },
-    });
-
-    await userEvent.hover(screen.getByText('Failed'));
-
-    expect(await screen.findByText('failed, completed')).toBeInTheDocument();
   });
 
   it('shows a column’s purpose in a tooltip on its header name', async () => {

@@ -14,6 +14,7 @@ import {
 import { formatDuration } from './boardFormat';
 import styles from './BoardPage.module.css';
 import { ciGateSummary } from './gates';
+import { RecentRunsTooltip } from './RecentRunsTooltip';
 import { WORKFLOW_ACTIVE_STATES } from './taskRuns';
 import { PRIORITY_COLORS, TASK_TYPE_COLORS, type Task } from './types';
 
@@ -193,9 +194,9 @@ export function TaskCardUI({
       </Group>
 
       {/* Workflow status chip — filled colored badge (AC-11). The chip names only the latest run,
-          so the tooltip keeps listing every recent run's state as it did before the board redesign. */}
+          so the tooltip keeps listing every recent run as it did before the board redesign. */}
       {latestRun && dotColor && runLabel && (
-        <Tooltip label={(task.recentWorkflowRuns ?? []).map((r) => r.state).join(', ')}>
+        <RecentRunsTooltip runs={task.recentWorkflowRuns ?? []}>
           <Group gap={4} mt={6} align="center">
             <ActionIcon size="xs" variant="subtle" color="orange" style={{ cursor: 'default', flexShrink: 0 }}>
               <IconBolt size={11} />
@@ -217,7 +218,7 @@ export function TaskCardUI({
               {isFailed ? 'Failed' : isRunning ? 'Running' : 'Succeeded'}
             </Badge>
           </Group>
-        </Tooltip>
+        </RecentRunsTooltip>
       )}
 
       {/* CI chip — the card's own answer to "what is CI doing?", kept separate from the workflow
