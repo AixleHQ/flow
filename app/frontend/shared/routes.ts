@@ -1122,6 +1122,11 @@ export function logoutPath(options?: object): string {
   return "/" + "logout" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
 }
 
+/** /admin/login(.:format) */
+export function adminLoginPath(options?: object): string {
+  return "/" + "admin" + "/" + "login" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);
+}
+
 /** /step_up(.:format) */
 export function stepUpPath(options?: object): string {
   return "/" + "step_up" + ($hasPresentOwnProperty(options, "format") ? "." + (options as any).format : "") + $buildOptions(options, ["format"]);

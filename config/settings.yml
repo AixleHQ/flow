@@ -112,10 +112,12 @@ docs:
 
 admin:
   password: <%= ENV['ADMIN_PASSWORD'] %>
-  # Seeded super admin (development and test only). A reserved example.com
+  # Seeded super admin (development and test only). A reserved .example
   # address: the old default was a real mailbox, and Google sign-in binds an
   # account by email — whoever owned it would have signed in as super admin.
-  email: <%= ENV['SUPER_ADMIN_EMAIL'] || "admin@example.com" %>
+  # Not example.com: that is the seeded company's domain, and an operator on a
+  # claimed domain hides what /login does to one on a domain nobody claims.
+  email: <%= ENV['SUPER_ADMIN_EMAIL'] || "admin@operator.example" %>
 
 aws:
   access_key_id:     <%= ENV['AWS_ACCESS_KEY_ID']%>

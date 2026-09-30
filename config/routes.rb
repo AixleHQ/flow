@@ -354,6 +354,12 @@ Rails.application.routes.draw do
     post "login", to: "sessions#create"
     delete "logout", to: "sessions#destroy", as: :logout
 
+    # The platform operator's own door. /login decides what to offer by the
+    # address's domain, and the operator's domain belongs to no workspace, so
+    # that screen never reaches a password for them (AD-19: password only).
+    get "admin/login", to: "admin_sessions#new", as: :admin_login
+    post "admin/login", to: "admin_sessions#create"
+
     # Step-up re-authentication (AD-5). Reached when a live session does not
     # satisfy the company it is trying to enter; never a sign-out.
     get "step_up", to: "step_ups#new", as: :step_up

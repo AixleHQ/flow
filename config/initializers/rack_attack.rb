@@ -12,8 +12,10 @@ class Rack::Attack
     (req.params["email"] || req.params.dig("user", "email")).to_s.downcase.presence
   end
 
+  LOGIN_PATHS = %w[/login /admin/login].freeze
+
   def self.login_request?(req)
-    req.post? && req.path == "/login"
+    req.post? && LOGIN_PATHS.include?(req.path)
   end
 
   MCP_PATHS = %w[/mcp /action_mcp].freeze

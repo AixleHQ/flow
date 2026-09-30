@@ -158,6 +158,8 @@ A `super_admin` is outside the company model entirely — no memberships, its ow
 
 The exchange is that the operator account holds exactly one key: **password only** (AD-19). An assertion from any other provider is refused before a session is minted, whatever the deployment allowlist or a company policy allows. The highest-privilege account in the installation should not depend on an external identity provider, and certainly not on a company-scoped connection that the customer themselves administers.
 
+The operator signs in at `/admin/login`, an address-and-password form that admits only a `super_admin`. `/login` cannot serve them: it offers methods by the address's domain, and the operator's domain belongs to no workspace, so it answers `no_workspace` before any password step. Every other account is refused there with the same error as a wrong password.
+
 ## 4.9 What it looks like
 
 Captured from a running build. `super_admin` is omitted deliberately: it bypasses

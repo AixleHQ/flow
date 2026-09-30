@@ -15,6 +15,15 @@ class RackAttackTest < ActionDispatch::IntegrationTest
     Rack::Attack.cache.store = @previous_store
   end
 
+  test "guessing the operator's password is cut off like any other sign-in" do
+    5.times { post "/admin/login", params: { email: "admin@operator.example", password: "guess" } }
+    assert_not_equal 429, response.status
+
+    post "/admin/login", params: { email: "admin@operator.example", password: "guess" }
+
+    assert_response :too_many_requests
+  end
+
   test "guessing invitation tokens from one address is cut off" do
     30.times { get "/invitations/not-a-token" }
     assert_not_equal 429, response.status

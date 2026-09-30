@@ -261,7 +261,7 @@ client id and one credential are present, or PAT mode is on.
 | ---------------------------- | -------- | ------------------ | ------------------------------------------------------------ |
 | `GOOGLE_CLIENT_ID`           | no       | unset              | Google SSO client ID.                                        |
 | `GOOGLE_CLIENT_SECRET`       | no       | unset              | Google SSO client secret.                                     |
-| `SUPER_ADMIN_EMAIL`          | no       | `admin@example.com` | The super admin `db/seeds.rb` creates (development and test only). |
+| `SUPER_ADMIN_EMAIL`          | no       | `admin@operator.example` | The super admin `db/seeds.rb` creates (development and test only). |
 | `MICROSOFT_CLIENT_ID`        | no       | unset              | Microsoft/Entra app registration client ID. A multi-tenant registration: one per deployment, any customer tenant. |
 | `MICROSOFT_CLIENT_SECRET`    | no       | unset              | Its client secret.                                            |
 | `MICROSOFT_TENANT_ID`        | no       | `common`           | Which Entra directory to accept. `common` accepts any work or school tenant; a GUID restricts sign-in to that one. |
