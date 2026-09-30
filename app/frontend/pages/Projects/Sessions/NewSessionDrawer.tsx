@@ -1,6 +1,7 @@
-import { Center, Drawer, Loader } from '@mantine/core';
+import { Center, Loader } from '@mantine/core';
 
 import { SessionNewForm } from 'shared/components/SessionNewForm';
+import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 import { useCreateOptions } from './useCreateOptions';
 
@@ -19,15 +20,7 @@ export function NewSessionDrawer({ projectId, opened, onClose }: Props) {
   const options = useCreateOptions(opened);
 
   return (
-    <Drawer
-      opened={opened}
-      onClose={onClose}
-      position="right"
-      size={460}
-      title="New session"
-      padding={0}
-      styles={{ body: { padding: 0, height: 'calc(100% - 60px)' } }}
-    >
+    <ResourceDrawer opened={opened} onClose={onClose} title="New session" bare>
       {options ? (
         <SessionNewForm
           layout="drawer"
@@ -50,6 +43,6 @@ export function NewSessionDrawer({ projectId, opened, onClose }: Props) {
           <Loader size="sm" />
         </Center>
       )}
-    </Drawer>
+    </ResourceDrawer>
   );
 }

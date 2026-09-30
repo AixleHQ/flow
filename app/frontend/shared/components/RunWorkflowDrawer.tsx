@@ -1,10 +1,11 @@
 import { router } from '@inertiajs/react';
-import { Box, Button, Drawer, MultiSelect, Select, Stack, Switch, Text } from '@mantine/core';
+import { Box, Button, MultiSelect, Select, Stack, Switch, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAdjustments, IconPlayerPlay, IconRobot, IconSitemap } from '@tabler/icons-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { AssetPicker, type AssetPickerItem } from 'shared/components/AssetPicker';
+import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 import { FormSection, ModeCards, RuntimeTiles, StatusTag } from 'shared/ui/sessions';
 
 import classes from './RunWorkflowDrawer.module.css';
@@ -157,143 +158,134 @@ export function RunWorkflowDrawer({
   };
 
   return (
-    <Drawer
+    <ResourceDrawer
       opened={opened}
       onClose={onClose}
-      position="right"
-      size={460}
       // The drawer names what you are about to run as soon as you have chosen.
       title={workflow ? `Run: ${workflow.name}` : 'Run workflow'}
-      padding={0}
-      styles={{ body: { padding: 0, height: 'calc(100% - 60px)' } }}
+      footer={
+        <Button
+          fullWidth
+          size="md"
+          leftSection={<IconPlayerPlay size={18} />}
+          onClick={handleSubmit}
+          loading={starting}
+          disabled={!canSubmit}
+        >
+          Run workflow
+        </Button>
+      }
     >
-      <div className={classes.layout}>
-        <div className={classes.body}>
+      <Stack gap="md">
+        <Box>
+          <FormSection icon={<IconSitemap size={14} />} first>
+            Workflow
+          </FormSection>
+          <Select
+            aria-label="Workflow"
+            placeholder="Select a workflow…"
+            data={workflows.map((w) => ({ value: String(w.id), label: w.name }))}
+            value={workflowId ? String(workflowId) : null}
+            onChange={(v) => setWorkflowId(v ? Number(v) : null)}
+            searchable
+          />
+        </Box>
+
+        <Box>
+          <FormSection icon={<IconRobot size={14} />}>Fallback agent runtime</FormSection>
+          <RuntimeTiles value={agentRuntime} configured={configuredAgents} onChange={setAgentRuntime} />
+          {configuredAgents.length === 0 && (
+            <Text size="xs" c="dimmed" mt={8}>
+              No connected runtimes — connect one in your profile before running a workflow.
+            </Text>
+          )}
+        </Box>
+
+        <Box>
+          <FormSection icon={<IconPlayerPlay size={14} />}>Execution mode</FormSection>
+          <ModeCards aria-label="Execution mode" options={MODE_OPTIONS} value={mode} onChange={setMode} />
+
+          {mode !== 'custom' && (
+            <p className={classes.note}>
+              {mode === 'automatic'
+                ? "All sessions run automatically end-to-end. You'll get the finished run and its assets when it's done."
+                : "You'll be prompted to review and approve each session before it continues."}
+            </p>
+          )}
+
+          {mode === 'custom' && steps.length > 0 && (
+            <div className={classes.stepCard}>
+              <div className={classes.stepCardHead}>Sessions</div>
+              <Stack gap="xs">
+                {steps.map((step) => {
+                  const forced = !step.allowNonInteractive;
+                  const autoRun = forced ? false : !!customAutoRun[step.id];
+                  return (
+                    <div className={classes.stepRow} key={step.id}>
+                      <Switch
+                        size="sm"
+                        checked={autoRun}
+                        disabled={forced}
+                        aria-label={`Run "${step.name}" automatically`}
+                        onChange={(e) => {
+                          const checked = e.currentTarget.checked;
+                          setCustomAutoRun((prev) => ({ ...prev, [step.id]: checked }));
+                        }}
+                      />
+                      <span className={classes.stepName}>{step.name}</span>
+                      <StatusTag plain className={classes.stepTag}>
+                        {forced ? 'Requires input' : autoRun ? 'Auto' : 'Interactive'}
+                      </StatusTag>
+                    </div>
+                  );
+                })}
+              </Stack>
+            </div>
+          )}
+        </Box>
+
+        <Box>
+          <FormSection icon={<IconAdjustments size={14} />}>Configuration</FormSection>
           <Stack gap="md">
-            <Box>
-              <FormSection icon={<IconSitemap size={14} />} first>
-                Workflow
-              </FormSection>
+            {modelOptions.length > 0 && (
               <Select
-                aria-label="Workflow"
-                placeholder="Select a workflow…"
-                data={workflows.map((w) => ({ value: String(w.id), label: w.name }))}
-                value={workflowId ? String(workflowId) : null}
-                onChange={(v) => setWorkflowId(v ? Number(v) : null)}
+                label="Fallback model"
+                description="Used for steps without a preferred model"
+                placeholder="Default (per-step or credential)"
+                value={requestedModel}
+                onChange={setRequestedModel}
+                data={modelOptions}
+                clearable
                 searchable
               />
-            </Box>
-
+            )}
+            <MultiSelect
+              label="Repositories"
+              description="Overrides the repositories chosen on the workflow, for this run only"
+              placeholder="Select repositories to mount…"
+              value={selectedRepoIds}
+              onChange={setSelectedRepoIds}
+              data={repositories.map((r) => ({ value: String(r.id), label: r.name }))}
+              searchable
+            />
             <Box>
-              <FormSection icon={<IconRobot size={14} />}>Fallback agent runtime</FormSection>
-              <RuntimeTiles value={agentRuntime} configured={configuredAgents} onChange={setAgentRuntime} />
-              {configuredAgents.length === 0 && (
-                <Text size="xs" c="dimmed" mt={8}>
-                  No connected runtimes — connect one in your profile before running a workflow.
-                </Text>
-              )}
-            </Box>
-
-            <Box>
-              <FormSection icon={<IconPlayerPlay size={14} />}>Execution mode</FormSection>
-              <ModeCards aria-label="Execution mode" options={MODE_OPTIONS} value={mode} onChange={setMode} />
-
-              {mode !== 'custom' && (
-                <p className={classes.note}>
-                  {mode === 'automatic'
-                    ? "All sessions run automatically end-to-end. You'll get the finished run and its assets when it's done."
-                    : "You'll be prompted to review and approve each session before it continues."}
-                </p>
-              )}
-
-              {mode === 'custom' && steps.length > 0 && (
-                <div className={classes.stepCard}>
-                  <div className={classes.stepCardHead}>Sessions</div>
-                  <Stack gap="xs">
-                    {steps.map((step) => {
-                      const forced = !step.allowNonInteractive;
-                      const autoRun = forced ? false : !!customAutoRun[step.id];
-                      return (
-                        <div className={classes.stepRow} key={step.id}>
-                          <Switch
-                            size="sm"
-                            checked={autoRun}
-                            disabled={forced}
-                            aria-label={`Run "${step.name}" automatically`}
-                            onChange={(e) => {
-                              const checked = e.currentTarget.checked;
-                              setCustomAutoRun((prev) => ({ ...prev, [step.id]: checked }));
-                            }}
-                          />
-                          <span className={classes.stepName}>{step.name}</span>
-                          <StatusTag plain className={classes.stepTag}>
-                            {forced ? 'Requires input' : autoRun ? 'Auto' : 'Interactive'}
-                          </StatusTag>
-                        </div>
-                      );
-                    })}
-                  </Stack>
-                </div>
-              )}
-            </Box>
-
-            <Box>
-              <FormSection icon={<IconAdjustments size={14} />}>Configuration</FormSection>
-              <Stack gap="md">
-                {modelOptions.length > 0 && (
-                  <Select
-                    label="Fallback model"
-                    description="Used for steps without a preferred model"
-                    placeholder="Default (per-step or credential)"
-                    value={requestedModel}
-                    onChange={setRequestedModel}
-                    data={modelOptions}
-                    clearable
-                    searchable
-                  />
-                )}
-                <MultiSelect
-                  label="Repositories"
-                  description="Overrides the repositories chosen on the workflow, for this run only"
-                  placeholder="Select repositories to mount…"
-                  value={selectedRepoIds}
-                  onChange={setSelectedRepoIds}
-                  data={repositories.map((r) => ({ value: String(r.id), label: r.name }))}
-                  searchable
-                />
-                <Box>
-                  <Text size="sm" fw={500} mb={2}>
-                    Input assets
-                  </Text>
-                  <Text size="xs" c="dimmed" mb={4}>
-                    Project assets available as inputs to workflow steps
-                  </Text>
-                  <AssetPicker
-                    assets={assets}
-                    value={selectedAssetIds}
-                    onChange={setSelectedAssetIds}
-                    placeholder="Select assets to include…"
-                    aria-label="Input assets"
-                  />
-                </Box>
-              </Stack>
+              <Text size="sm" fw={500} mb={2}>
+                Input assets
+              </Text>
+              <Text size="xs" c="dimmed" mb={4}>
+                Project assets available as inputs to workflow steps
+              </Text>
+              <AssetPicker
+                assets={assets}
+                value={selectedAssetIds}
+                onChange={setSelectedAssetIds}
+                placeholder="Select assets to include…"
+                aria-label="Input assets"
+              />
             </Box>
           </Stack>
-        </div>
-
-        <div className={classes.footer}>
-          <Button
-            fullWidth
-            size="md"
-            leftSection={<IconPlayerPlay size={18} />}
-            onClick={handleSubmit}
-            loading={starting}
-            disabled={!canSubmit}
-          >
-            Run workflow
-          </Button>
-        </div>
-      </div>
-    </Drawer>
+        </Box>
+      </Stack>
+    </ResourceDrawer>
   );
 }

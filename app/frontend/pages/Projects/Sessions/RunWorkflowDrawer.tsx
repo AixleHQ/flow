@@ -1,6 +1,7 @@
-import { Center, Drawer, Loader } from '@mantine/core';
+import { Center, Loader } from '@mantine/core';
 
 import { RunWorkflowDrawer as RunWorkflowDrawerForm } from 'shared/components/RunWorkflowDrawer';
+import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 import { useCreateOptions } from './useCreateOptions';
 
@@ -19,11 +20,11 @@ export function RunWorkflowDrawer({ projectId, opened, onClose }: Props) {
 
   if (!options) {
     return (
-      <Drawer opened={opened} onClose={onClose} position="right" size={460} title="Run workflow">
+      <ResourceDrawer opened={opened} onClose={onClose} title="Run workflow">
         <Center h={200}>
           <Loader size="sm" />
         </Center>
-      </Drawer>
+      </ResourceDrawer>
     );
   }
 
