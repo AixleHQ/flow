@@ -71,6 +71,9 @@ class Web::OidcSessionsController < Web::ApplicationController
 
     payload = Auth::State.decode(params[:state])
     return redirect_to(login_path(error: "oauth_failed")) if payload.nil?
+    # A state is only good in the browser that began the flow; otherwise a
+    # callback link from someone else's login signs this browser in as them.
+    return redirect_to(login_path(error: "oauth_failed")) unless started_here?(payload["nonce"])
 
     side_data = Auth::State.consume(payload["nonce"])
     # nil means replayed or expired. Refusing to exchange the code is the whole
@@ -105,12 +108,15 @@ class Web::OidcSessionsController < Web::ApplicationController
   def begin_authorization(provider, company:)
     code_verifier = SecureRandom.urlsafe_base64(64)
     oidc_nonce = SecureRandom.uuid
+    state_nonce = SecureRandom.uuid
     state = Auth::State.encode(
       identity_provider_id: provider.id,
       return_to: return_to_for(provider, company),
       code_verifier: code_verifier,
-      oidc_nonce: oidc_nonce
+      oidc_nonce: oidc_nonce,
+      state_nonce: state_nonce
     )
+    session[:oidc_state_nonce] = state_nonce
 
     redirect_to Auth::Registry.for(provider).authorize_url(
       redirect_uri: callback_url,
@@ -152,6 +158,11 @@ class Web::OidcSessionsController < Web::ApplicationController
     return company_settings_access_path unless Auth::PolicyResolver.accepts?(company: company, provider: provider)
 
     params[:return_to].presence
+  end
+
+  def started_here?(state_nonce)
+    expected = session.delete(:oidc_state_nonce).to_s
+    expected.present? && ActiveSupport::SecurityUtils.secure_compare(expected, state_nonce.to_s)
   end
 
   def verifying_own_connection?(provider)
