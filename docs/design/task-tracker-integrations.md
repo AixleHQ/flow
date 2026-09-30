@@ -585,10 +585,22 @@ Ready for AI ──(run accepted)──▶ In Progress ──(run completed)─�
 | `success` | The run transitions to `completed`. | |
 | `failure` | The run transitions to `failed` **or `cancelled`**. | A cancelled run did not do its job either. Leaving the ticket in "In Progress" forever is the worse outcome. The comment says "cancelled by …" instead of the failure reason. |
 
-The hooks hang off `WorkflowRunStateMachine` transitions, next to the existing `announce_failure`,
-for the same reason that code gives: the stale-run sweeper calls `fail!` directly, and that is
-exactly the failure nobody is watching. The transition only enqueues `Trackers::HandoffJob`. The
-job re-reads the run and does the work.
+The hooks use the run-transition seam shared with the Teams design
+(`docs/design/teams-integration.md` §17, on its own branch):
+
+- `WorkflowRunStateMachine#announce_transition` replaces `announce_failure` and fires on
+  start/complete/fail/cancel. It stays on the state machine for the reason `announce_failure`
+  gives: the stale-run sweeper calls `fail!` directly.
+- `TriggerEngine` fires it for `dispatched` and `skipped` too.
+- It enqueues `Triggers::ReportRunTransitionJob(dispatch_id, transition)`, which calls every
+  registered origin reporter. `Chat::RunStatusReporter` is one of them; `Trackers::HandoffReporter`
+  is ours.
+
+The mapping is `dispatched` → `start`, `completed` → `success`, and `failed` or `cancelled` →
+`failure`; `started` and `skipped` are ignored. Each reporter runs as its own job, with its own
+idempotency key `(dispatch, transition, reporter)` and its own retries. A tracker transition
+retrying for an hour must never re-post a chat message. The reporter re-reads the run, so a job
+that runs before the transition's transaction commits sees the old state and retries.
 
 **Rules that keep it safe.**
 
@@ -621,7 +633,7 @@ job re-reads the run and does the work.
    the current status to the target. If none is allowed, or the tracker rejects it, the handoff is
    skipped with `transition_not_allowed` and the tracker's message. It never takes a path through
    intermediate statuses.
-7. **Delivery.** The job is idempotent, keyed by `(run, hook)` in the ledger. It retries transient
+7. **Delivery.** The reporter job is idempotent, keyed by `(dispatch, transition)` in the ledger. It retries transient
    provider errors with backoff for about an hour, then gives up with `handoff_failed`. A handoff
    failure never changes the run's own outcome.
 8. **Order on failure.** The comment is posted first and the transition second, so the ticket
