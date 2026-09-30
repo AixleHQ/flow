@@ -32,6 +32,23 @@ module Api
             assert_equal %w[column slack], kinds
           end
 
+          test "create tracker trigger stores its tracker and how it treats Aixle's own changes" do
+            integration = create(:integration, :azure_devops, :active, company: @company, project: @project)
+            tracker = create(:project_tracker, integration: integration)
+
+            post :create, params: { project_id: @project.id, workflow_id: @workflow.id, trigger: {
+              kind: "tracker", event_type: "tracker.issue.status_changed", project_tracker_id: tracker.id,
+              aixle_changes: "other_workflows", subject_policy: "find_or_create_task", subject_column_id: @column.id,
+              filter_predicate: { "change.to.name" => { op: "in", value: [ "Ready for AI" ] } }
+            } }, as: :json
+
+            assert_response :created
+            assert_equal [ "tracker", tracker.id, "other_workflows" ],
+                         [ json["kind"], json["project_tracker_id"], json["aixle_changes"] ]
+            assert_equal({ "op" => "in", "value" => [ "Ready for AI" ] },
+                         TriggerBinding.sole.filter_predicate["change.to.name"])
+          end
+
           test "create slack trigger persists a TriggerBinding" do
             assert_difference -> { TriggerBinding.count }, 1 do
               post :create, params: {

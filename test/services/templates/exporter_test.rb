@@ -98,4 +98,17 @@ class Templates::ExporterTest < ActiveSupport::TestCase
     assert_equal [ "schedule" ], result.package.section("triggers").pluck("kind")
     assert_equal "workflow", result.package.kind
   end
+
+  test "a tracker trigger exports for any tracker of the installing project" do
+    integration = create(:integration, :azure_devops, :active, company: @company, project: @source)
+    tracker = create(:project_tracker, integration: integration)
+    create(:trigger_binding, project: @source, workflow: @source.workflows.first, project_tracker: tracker,
+                             event_type: "tracker.issue.status_changed", aixle_changes: "other_workflows", enabled: false)
+
+    result = export
+
+    entry = result.package.definition["triggers"].find { |t| t["kind"] == "tracker" }
+    assert_equal [ "tracker.issue.status_changed", "other_workflows" ], [ entry["event_type"], entry["aixle_changes"] ]
+    assert_match(/any tracker of the installing project/, result.notes.join)
+  end
 end

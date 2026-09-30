@@ -128,4 +128,35 @@ class ResolveAzureDevopsEventJobTest < ActiveSupport::TestCase
     perform(event_type: "build.complete",
             resource: { "id" => 55, "repository" => { "id" => @repository.external_id } })
   end
+
+  test "a work item event goes to the tracker pipeline, which re-reads the work item" do
+    tracker = create(:project_tracker, integration: @integration)
+    workflow = create(:workflow, scope: @integration.project)
+    create(:trigger_binding, project: @integration.project, workflow: workflow, event_type: "tracker.issue.status_changed")
+    subscription = create(:azure_devops_subscription, integration: @integration, event_type: "workitem.updated",
+                                                      azure_project_id: tracker.external_scope_id)
+    read = stub_request(:get, %r{/_apis/wit/workitems/308}).to_return(
+      status: 200, headers: { "Content-Type" => "application/json" },
+      body: { id: 308, rev: 2, fields: { "System.TeamProject" => "Customer Platform", "System.Title" => "Sample task",
+                                          "System.State" => "Approved", "System.WorkItemType" => "Task" } }.to_json
+    )
+    stub_request(:get, %r{/_apis/wit/workitemtypes}).to_return(
+      status: 200, headers: { "Content-Type" => "application/json" },
+      body: { value: [ { name: "Task", states: [ { name: "New", category: "Proposed" },
+                                                  { name: "Approved", category: "InProgress" } ] } ] }.to_json
+    )
+    WorkflowService.stubs(:enqueue).returns(build(:workflow_run))
+
+    ResolveAzureDevopsEventJob.new.perform(
+      subscription_id: subscription.id, event_type: "workitem.updated",
+      resource: { "id" => 5, "workItemId" => 308, "rev" => 2,
+                  "fields" => { "System.State" => { "oldValue" => "New", "newValue" => "Approved" } } }
+    )
+
+    assert_requested read
+    event = TriggerEvent.sole
+    assert_equal [ "tracker.issue.status_changed", "Approved", "in_progress", "Sample task" ],
+                 [ event.event_type, event.data.dig("change", "to", "name"), event.data.dig("change", "to", "category"),
+                   event.data.dig("issue", "title") ]
+  end
 end

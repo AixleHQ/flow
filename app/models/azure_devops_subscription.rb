@@ -28,11 +28,19 @@ class AzureDevopsSubscription < ApplicationRecord
   # re-read authoritative state — `git.pullrequest.merged` in particular reports
   # a merge ATTEMPT, and treating it as a completed pull request is how a gate
   # resolves on a merge that actually failed.
-  EVENT_TYPES = %w[
+  GATE_EVENT_TYPES = %w[
     build.complete
     git.pullrequest.merged
     git.pullrequest.updated
   ].freeze
+  # Subscribed only once a tracker trigger is waiting for them: every work item
+  # edit in a covered project would otherwise post here.
+  TRACKER_EVENT_TYPES = %w[
+    workitem.created
+    workitem.updated
+    workitem.commented
+  ].freeze
+  EVENT_TYPES = (GATE_EVENT_TYPES + TRACKER_EVENT_TYPES).freeze
 
   belongs_to :integration
   has_many :azure_devops_deliveries, dependent: :delete_all

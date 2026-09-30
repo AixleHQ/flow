@@ -11,6 +11,7 @@ module InternalTools
                   "set. Call it before creating or transitioning issues. Returns JSON: {statuses, issue_types, " \
                   "fields, supports}."
       tags :tracker
+      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       read_only

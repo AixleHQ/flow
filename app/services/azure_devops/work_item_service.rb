@@ -240,8 +240,15 @@ module AzureDevops
         description: item.dig("fields", "System.Description"),
         iteration_path: item.dig("fields", "System.IterationPath"),
         relations: Array(item["relations"]).map { |r| { rel: r["rel"], url: r["url"] } },
-        url: item.dig("_links", "html", "href")
+        url: item.dig("_links", "html", "href"),
+        changed_by: identity(item.dig("fields", "System.ChangedBy"))
       ).compact
+    end
+
+    def identity(value)
+      return unless value.is_a?(Hash)
+
+      { id: value["id"], display_name: value["displayName"], unique_name: value["uniqueName"] }.compact.presence
     end
 
     # A work item id is unique per organization, not per project, so an id from a

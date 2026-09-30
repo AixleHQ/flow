@@ -217,7 +217,7 @@ class TriggerEngine
             workflow: workflow, project: project, user: actor,
             task: subject, mode: :non_interactive,
             input_asset_ids: input_asset_ids_for(event, project),
-            shared_context: slack_run_context(event)
+            shared_context: slack_run_context(event).merge(Trackers::TriggerSupport.run_context(event))
           )
           started = result.try(:persisted?)
           dispatch.update!(
@@ -322,9 +322,15 @@ class TriggerEngine
 
     # Resolve the board task a binding's run should be about, per subject_policy.
     def resolve_subject(binding:, event:, fallback_task:)
+      tracker = Trackers::TriggerSupport.event?(event)
       case binding.subject_policy.to_s
-      when "existing_task" then event.board_task || fallback_task
-      when "create_task"   then create_subject_task(binding, event)
+      when "existing_task"
+        (tracker && Trackers::TriggerSupport.linked_task(binding, event)) || event.board_task || fallback_task
+      when "create_task" then create_subject_task(binding, event)
+      when "find_or_create_task"
+        return create_subject_task(binding, event) unless tracker
+
+        Trackers::TriggerSupport.find_or_create_task(binding, event) { create_subject_task(binding, event) }
       else nil # none → task-less, project-level run
       end
     end
@@ -333,12 +339,16 @@ class TriggerEngine
       column = binding.subject_column
       return nil if column.nil?
 
+      tracker = Trackers::TriggerSupport.event?(event)
+      template = binding.subject_title_template.presence || (Trackers::TriggerSupport::DEFAULT_TITLE if tracker)
       # Create directly (not via TaskService) so we don't re-enter check_auto_trigger.
-      column.board.board_tasks.create!(
+      task = column.board.board_tasks.create!(
         board_column: column,
-        title: render_title(binding.subject_title_template, event),
-        description: render_subject_body(event)
+        title: render_title(template, event),
+        description: tracker ? Trackers::TriggerSupport.task_body(event) : render_subject_body(event)
       )
+      Trackers::TriggerSupport.link!(task, binding, event) if tracker
+      task
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error("[TriggerEngine] create_task failed for binding ##{binding.id}: #{e.message}")
       nil
@@ -358,12 +368,14 @@ class TriggerEngine
       "Triggered by `#{event.event_type}`\n\n```json\n#{JSON.pretty_generate(payload)}\n```"
     end
 
-    # Minimal title templating: {{date}} and {{<top-level event.data key>}}.
+    # Minimal title templating: {{date}} and {{<event.data key or dot-path>}}.
     def render_title(template, event)
       tpl = template.presence || "#{event.event_type} — {{date}}"
       tpl.gsub(/\{\{\s*([\w.]+)\s*\}\}/) do
         key = Regexp.last_match(1)
-        key == "date" ? (event.occurred_at || Time.current).to_date.to_s : event.data[key].to_s
+        next (event.occurred_at || Time.current).to_date.to_s if key == "date"
+
+        key.split(".").reduce(event.data.to_h) { |value, part| value.is_a?(Hash) ? value[part] : nil }.to_s
       end.strip.presence || event.event_type
     end
 

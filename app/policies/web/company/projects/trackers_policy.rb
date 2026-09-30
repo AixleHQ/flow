@@ -9,6 +9,7 @@ module Web
       # connection itself stays with IntegrationsPolicy.
       class TrackersPolicy < Web::Company::ApplicationPolicy
         def index? = project_accessible?
+        def statuses? = project_accessible?
         def create? = project_writable?
         def update? = project_writable?
         def destroy? = project_writable?

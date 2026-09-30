@@ -426,8 +426,8 @@ module Tools
           - `depends_on_step_ids` builds the DAG: a step runs after every step it
             depends on. A step can't be deleted while others depend on it.
           - `allow_non_interactive` lets the step run unattended. Every step needs it
-            before a slack / schedule / webhook trigger can be attached to the
-            workflow.
+            before a slack / schedule / webhook / tracker trigger can be attached to
+            the workflow.
           - Each of those id lists is REPLACED wholesale by an update — read the
             current value with `get_workflow_step` before changing one.
 

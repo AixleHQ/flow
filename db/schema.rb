@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_150200) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_160000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1443,6 +1443,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_150200) do
   end
 
   create_table "trigger_bindings", force: :cascade do |t|
+    t.string "aixle_changes", default: "ignore", null: false
     t.integer "cooldown_seconds", default: 0, null: false
     t.datetime "created_at", null: false
     t.bigint "created_by_id"
@@ -1452,6 +1453,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_150200) do
     t.string "name"
     t.boolean "notify_on_failure", default: true, null: false
     t.bigint "project_id", null: false
+    t.bigint "project_tracker_id"
     t.jsonb "schedule_config", default: {}, null: false
     t.bigint "subject_column_id"
     t.string "subject_policy", default: "none", null: false
@@ -1462,6 +1464,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_150200) do
     t.index ["created_by_id"], name: "index_trigger_bindings_on_created_by_id"
     t.index ["project_id", "event_type", "enabled"], name: "idx_on_project_id_event_type_enabled_44a9c97a71"
     t.index ["project_id"], name: "index_trigger_bindings_on_project_id"
+    t.index ["project_tracker_id"], name: "index_trigger_bindings_on_project_tracker_id"
     t.index ["subject_column_id"], name: "index_trigger_bindings_on_subject_column_id"
     t.index ["workflow_id"], name: "index_trigger_bindings_on_workflow_id"
   end
@@ -1857,6 +1860,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_150200) do
   add_foreign_key "tools", "projects", on_delete: :cascade, validate: false
   add_foreign_key "tracker_operations", "project_trackers", on_delete: :cascade
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
+  add_foreign_key "trigger_bindings", "project_trackers", on_delete: :restrict
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade
   add_foreign_key "trigger_bindings", "users", column: "created_by_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "workflows", on_delete: :cascade

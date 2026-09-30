@@ -15,6 +15,10 @@ class ProjectTracker < ApplicationRecord
   belongs_to :project
   belongs_to :integration
   has_many :tracker_operations, dependent: :delete_all
+  has_many :trigger_bindings, dependent: :nullify
+  # Only a hard delete (its connection removed) gets here; a person detaches. The
+  # triggers stop first, so none is left enabled and widened to "any tracker".
+  before_destroy(prepend: true) { trigger_bindings.update_all(enabled: false) }
 
   validates :name, :external_scope_id, presence: true
   validates :handle, presence: true, format: { with: HANDLE_FORMAT, message: "must be lowercase letters, digits and dashes" },

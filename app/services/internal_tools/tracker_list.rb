@@ -11,6 +11,7 @@ module InternalTools
                   "`handle` as `tracker` when the project has more than one. Returns JSON: {trackers: [{handle, " \
                   "provider, name, external_project, primary, access, usable, started_this_run}]}."
       tags :tracker
+      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       read_only

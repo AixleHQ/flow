@@ -9,6 +9,13 @@ import { TIMEZONE_OPTIONS } from 'shared/lib/timezones';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 import type { SharedProps } from 'shared/ui';
 
+import {
+  trackerTriggerPayload,
+  trackerValueFromTrigger,
+  type TrackerOption,
+  type TrackerTriggerValue,
+} from './trackerTrigger';
+import { TrackerTriggerFields } from './TrackerTriggerFields';
 import type { Trigger } from './types';
 
 interface ColumnOption {
@@ -27,18 +34,19 @@ interface TriggerFormPanelProps {
   workflowId: number;
   columns: ColumnOption[];
   sessions: StepOption[];
+  trackers?: TrackerOption[];
   editing: Trigger | null;
   defaultKind: string;
   onClose: () => void;
   onSaved: () => void;
 }
 
-type Kind = 'column' | 'slack' | 'webhook' | 'schedule';
+type Kind = 'column' | 'slack' | 'webhook' | 'schedule' | 'tracker';
 
 // Off-board triggers fire unattended: the run belongs to whoever added the
 // trigger and uses their credentials. A column trigger's run belongs to the
 // person the card puts on it, so its creator is provenance, not identity.
-const OFF_BOARD_KINDS: Kind[] = ['slack', 'webhook', 'schedule'];
+const OFF_BOARD_KINDS: Kind[] = ['slack', 'webhook', 'schedule', 'tracker'];
 
 function describeCron(expr: string): { ok: boolean; text: string } {
   const value = expr.trim();
@@ -103,6 +111,7 @@ export function TriggerFormPanel({
   projectId,
   workflowId,
   columns,
+  trackers = [],
   editing,
   defaultKind,
   onClose,
@@ -149,6 +158,9 @@ export function TriggerFormPanel({
     editing?.subject_column_id?.toString() ?? columns[0]?.id?.toString() ?? null,
   );
   const [subjectTitleTemplate, setSubjectTitleTemplate] = useState(editing?.subject_title_template ?? '');
+  const [trackerValue, setTrackerValue] = useState<TrackerTriggerValue>(() =>
+    trackerValueFromTrigger(editing?.kind === 'tracker' ? editing : null, columns[0]?.id?.toString() ?? null),
+  );
 
   const columnData = columns.map((c) => ({ value: c.id.toString(), label: c.name }));
   const columnBindingData = columns.map((c) => ({
@@ -171,6 +183,9 @@ export function TriggerFormPanel({
       if (!isEdit) trigger.board_column_id = columnId;
       trigger.trigger_mode = mode;
       trigger.cooldown_seconds = cooldown;
+    } else if (kind === 'tracker') {
+      Object.assign(trigger, trackerTriggerPayload(trackerValue, isEdit));
+      if (isEdit) trigger.enabled = enabled;
     } else {
       const filter: Record<string, unknown> = {};
       if (kind === 'slack') {
@@ -260,6 +275,7 @@ export function TriggerFormPanel({
     subjectPolicy,
     subjectColumnId,
     subjectTitleTemplate,
+    trackerValue,
     projectId,
     workflowId,
     onSaved,
@@ -289,6 +305,7 @@ export function TriggerFormPanel({
     { value: 'schedule', label: 'On schedule' },
     { value: 'slack', label: 'Slack message' },
     { value: 'webhook', label: 'Incoming webhook' },
+    ...(trackers.length > 0 || kind === 'tracker' ? [{ value: 'tracker', label: 'Task tracker event' }] : []),
   ];
 
   return (
@@ -679,6 +696,17 @@ export function TriggerFormPanel({
                     </>
                   )}
                 </>
+              )}
+
+              {kind === 'tracker' && (
+                <TrackerTriggerFields
+                  projectId={projectId}
+                  trackers={trackers}
+                  columns={columnData}
+                  value={trackerValue}
+                  isEdit={isEdit}
+                  onChange={setTrackerValue}
+                />
               )}
 
               {/* Slack fields */}

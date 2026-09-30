@@ -39,6 +39,44 @@ module Trackers
     # True when `ref` (a URL or key) unmistakably names an issue in `scope_id`.
     def owns_reference?(_scope_id, _ref) = false
 
+    # Who this connection acts as in the tracker ({ "id", "name" }), once known.
+    def identity
+      integration.settings.to_h["tracker_identity"].presence
+    end
+
+    def own_actor?(actor)
+      me = identity
+      return false if me.blank? || actor.blank?
+
+      (actor[:id].present? && actor[:id].to_s == me["id"].to_s) ||
+        (actor[:name].present? && actor[:name].to_s.casecmp?(me["name"].to_s))
+    end
+
+    def mentions_self?(text)
+      me = identity
+      return false if me.blank? || text.blank?
+
+      (me["id"].present? && text.include?(me["id"].to_s)) ||
+        (me["name"].present? && text.downcase.include?("@#{me['name'].downcase}"))
+    end
+
+    # Portable category of a status name, from describe(), cached briefly: every
+    # event needs it and the process metadata rarely changes.
+    def status_category(scope_id, name)
+      return if name.blank?
+
+      categories = Rails.cache.fetch([ "trackers", integration.id, scope_id.to_s, "status_categories" ], expires_in: 10.minutes) do
+        describe(scope_id)[:statuses].to_h { |status| [ status.name.downcase, status.category ] }
+      end
+      categories[name.to_s.downcase]
+    rescue Error
+      nil
+    end
+
+    # Make sure the tracker delivers the events tracker triggers wait for.
+    # Best effort; a provider whose events arrive without a subscription does nothing.
+    def ensure_event_delivery! = nil
+
     def describe(_scope_id) = raise NotImplementedError
     def get_issue(_scope_id, _ref) = raise NotImplementedError
     def search_issues(_scope_id, _filter, cursor: nil, limit: nil) = raise NotImplementedError

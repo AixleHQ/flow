@@ -10,6 +10,7 @@ module InternalTools
                   "the issue's type allows (tracker_describe lists them); the error names the allowed ones. Returns " \
                   "JSON: the updated issue plus `operation_key`."
       tags :tracker
+      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       param :tracker, type: :string, description: Concerns::TrackerContext::TRACKER_PARAM

@@ -20,6 +20,13 @@ class Web::Company::Projects::TrackersAuthorizationTest < ActionDispatch::Integr
     assert_project_read { get company_project_trackers_path(@project) }
   end
 
+  test "statuses is a project read" do
+    with_azure_devops_enabled
+    stub_azure_devops!(integration: @integration)
+
+    assert_project_read { get statuses_company_project_tracker_path(@project, @tracker), as: :json }
+  end
+
   test "create is a project write" do
     assert_project_write do
       post company_project_trackers_path(@project),

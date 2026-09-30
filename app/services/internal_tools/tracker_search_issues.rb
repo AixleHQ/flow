@@ -10,6 +10,7 @@ module InternalTools
                   "Paginated: pass `next_cursor` back as `cursor`. Returns JSON: {tracker, issues: [{id, key, url, " \
                   "title, type, status, assignees, labels}], has_more, next_cursor}."
       tags :tracker
+      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       read_only

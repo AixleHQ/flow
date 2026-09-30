@@ -8,6 +8,7 @@ module InternalTools
       display_name "Tracker: Add Comment"
       description "Post a comment on an issue. Returns JSON: {id, issue_id, body, created_at, operation_key}."
       tags :tracker
+      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       param :tracker, type: :string, description: Concerns::TrackerContext::TRACKER_PARAM

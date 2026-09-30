@@ -60,4 +60,26 @@ class Web::Company::Projects::TrackersControllerTest < ActionDispatch::Integrati
     patch company_project_tracker_path(@project, @tracker), params: { tracker: { status: "active" } }
     assert @tracker.reload.active?
   end
+
+  test "statuses lists the tracker's board columns for the pickers" do
+    with_azure_devops_enabled
+    stub_azure_devops!(integration: @integration)
+
+    get statuses_company_project_tracker_path(@project, @tracker), as: :json
+
+    assert_response :success
+    assert_equal [ { "name" => "Active", "category" => "in_progress" }, { "name" => "Resolved", "category" => "in_progress" } ],
+                 response.parsed_body["statuses"]
+  end
+
+  test "the intake shortcut gets the project's workflows and board columns" do
+    create(:board_column, board: create(:board, project: @project), name: "Inbox", position: 1)
+    create(:workflow, scope: @project, name: "Intake")
+
+    get company_project_trackers_path(@project)
+
+    assert_inertia_props do |props|
+      props[:workflows].map { |w| w[:name] } == [ "Intake" ] && props[:boardColumns].map { |c| c[:name] } == [ "Inbox" ]
+    end
+  end
 end

@@ -10,6 +10,7 @@ module InternalTools
                   "find the task. Defaults to this run's task. Changes nothing in the tracker. Returns JSON: {task_id, " \
                   "tracker, issue: {id, key, url}}."
       tags :tracker
+      inject_when :tracker_run
       requires_integration :tracker
       unavailable_message "No task tracker is connected to this project. Add one on the project's Trackers page."
       idempotent

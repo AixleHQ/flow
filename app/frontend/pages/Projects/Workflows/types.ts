@@ -14,6 +14,10 @@ export interface Trigger {
   subject_title_template?: string | null;
   filter_predicate?: Record<string, unknown>;
   schedule_config?: { cron?: string; timezone?: string };
+  // Tracker triggers: the tracker listened to (null = any), and what a change
+  // Aixle itself made does.
+  project_tracker_id?: number | null;
+  aixle_changes?: string;
   // Who added the trigger. Off-board kinds run as this user and use their
   // credentials; null on rows created before the creator was recorded (or whose
   // account was deleted), and those are skipped instead of firing unattended.

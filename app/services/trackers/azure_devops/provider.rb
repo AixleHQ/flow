@@ -31,6 +31,12 @@ module Trackers
         "#{::AzureDevops::AppConfig.api_host}/#{integration.azure_organization_slug}".downcase
       end
 
+      def ensure_event_delivery!
+        return unless ::AzureDevops::AppConfig.webhooks_enabled?
+
+        ::AzureDevops::SubscriptionService.new(integration).ensure_all!(event_types: AzureDevopsSubscription::TRACKER_EVENT_TYPES)
+      end
+
       def owns_reference?(scope_id, ref)
         match = ISSUE_URL.match(ref.to_s)
         return false unless match
@@ -73,7 +79,7 @@ module Trackers
         raise Error.new("type is required — tracker_describe lists this project's issue types", code: "validation_failed") unless type
 
         translate do
-          issue_from(work_items.create(type: type, fields: write_fields(attributes), project_id: scope_id), scope_id)
+          written(work_items.create(type: type, fields: write_fields(attributes), project_id: scope_id), scope_id)
         end
       end
 
@@ -85,7 +91,7 @@ module Trackers
 
           updated = work_items.update(current[:id], fields: fields, expected_revision: attributes[:expected_revision],
                                                     project_id: scope_id)
-          issue_from(updated, scope_id)
+          written(updated, scope_id)
         end
       end
 
@@ -99,14 +105,14 @@ module Trackers
                             code: "validation_failed", details: { allowed: allowed })
           end
 
-          issue_from(work_items.update(current[:id], fields: { state: target }, project_id: scope_id), scope_id)
+          written(work_items.update(current[:id], fields: { state: target }, project_id: scope_id), scope_id)
         end
       end
 
       def assign_issue(scope_id, ref, assignee)
         translate do
           current = work_items.get(work_item_id!(ref), project_id: scope_id)
-          issue_from(work_items.update(current[:id], fields: { assigned_to: assignee.to_s }, project_id: scope_id), scope_id)
+          written(work_items.update(current[:id], fields: { assigned_to: assignee.to_s }, project_id: scope_id), scope_id)
         end
       end
 
@@ -133,6 +139,22 @@ module Trackers
 
       def work_items
         @work_items ||= ::AzureDevops::WorkItemService.new(integration)
+      end
+
+      # Azure offers no reliable "who am I" call for a service principal, so the
+      # identity is learned from the connection's own writes: System.ChangedBy on
+      # what it just changed. Until the first write, mentions of it go unnoticed.
+      def remember_identity(item)
+        by = item[:changed_by]
+        return if by.blank? || by[:id].blank? || identity&.dig("id") == by[:id]
+
+        me = { "id" => by[:id], "name" => by[:display_name] }.compact
+        integration.update_column(:settings, integration.settings.to_h.merge("tracker_identity" => me))
+      end
+
+      def written(item, scope_id)
+        remember_identity(item)
+        issue_from(item, scope_id)
       end
 
       def translate

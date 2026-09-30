@@ -2,7 +2,16 @@ import { router } from '@inertiajs/react';
 import { ActionIcon, Badge, Box, Button, Group, Table, Text, Tooltip } from '@mantine/core';
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
-import { IconLink, IconLock, IconLockOpen, IconPlus, IconStar, IconTicket, IconUnlink } from '@tabler/icons-react';
+import {
+  IconColumns,
+  IconLink,
+  IconLock,
+  IconLockOpen,
+  IconPlus,
+  IconStar,
+  IconTicket,
+  IconUnlink,
+} from '@tabler/icons-react';
 import { useState } from 'react';
 
 import type { ProjectTracker } from '@/types/generated';
@@ -13,10 +22,14 @@ import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceCount, ResourceTableShell, ResourceTh } from 'shared/ui/ResourceTable';
 
 import { AddTrackerDrawer, type AvailableScopeGroup } from './AddTrackerDrawer';
+import { ConnectColumnDrawer, type IntakeOption } from './ConnectColumnDrawer';
 
 interface Props {
+  projectId: number;
   trackers: ProjectTracker[];
   availableScopes: AvailableScopeGroup[];
+  workflows?: IntakeOption[];
+  boardColumns?: IntakeOption[];
   basePath: string;
 }
 
@@ -44,9 +57,18 @@ const statusBadge = (tracker: ProjectTracker) => {
   );
 };
 
-export const TrackersContent = ({ trackers, availableScopes, basePath }: Props) => {
+export const TrackersContent = ({
+  projectId,
+  trackers,
+  availableScopes,
+  workflows = [],
+  boardColumns = [],
+  basePath,
+}: Props) => {
   const { canExecute } = useProjectPermissions();
   const [addOpen, setAddOpen] = useState(false);
+  const [intakeFor, setIntakeFor] = useState<ProjectTracker | null>(null);
+  const canConnectColumn = workflows.length > 0 && boardColumns.length > 0;
 
   const update = (tracker: ProjectTracker, changes: TrackerChanges, message: string) => {
     router.patch(
@@ -177,6 +199,18 @@ export const TrackersContent = ({ trackers, availableScopes, basePath }: Props) 
                               </Tooltip>
                             ) : (
                               <>
+                                {tracker.usable && canConnectColumn && (
+                                  <Tooltip label="Connect a board column">
+                                    <ActionIcon
+                                      aria-label="Connect a board column"
+                                      variant="subtle"
+                                      size="sm"
+                                      onClick={() => setIntakeFor(tracker)}
+                                    >
+                                      <IconColumns size={16} />
+                                    </ActionIcon>
+                                  </Tooltip>
+                                )}
                                 {!tracker.primary && (
                                   <Tooltip label="Make primary">
                                     <ActionIcon
@@ -230,6 +264,13 @@ export const TrackersContent = ({ trackers, availableScopes, basePath }: Props) 
         </>
       )}
 
+      <ConnectColumnDrawer
+        projectId={projectId}
+        tracker={intakeFor}
+        workflows={workflows}
+        boardColumns={boardColumns}
+        onClose={() => setIntakeFor(null)}
+      />
       <AddTrackerDrawer
         opened={addOpen}
         onClose={() => setAddOpen(false)}

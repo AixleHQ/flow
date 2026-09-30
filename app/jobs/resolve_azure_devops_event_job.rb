@@ -20,8 +20,9 @@ class ResolveAzureDevopsEventJob < ApplicationJob
     case event_type
     when "build.complete" then resolve_build(integration, resource)
     when "git.pullrequest.merged", "git.pullrequest.updated" then resolve_pull_request(integration, resource)
+    when *AzureDevopsSubscription::TRACKER_EVENT_TYPES then publish_tracker_event(subscription, event_type, resource)
     end
-  rescue AzureDevops::Error => e
+  rescue AzureDevops::Error, Trackers::Error => e
     # A transient Azure failure leaves the gate pending, which the reconciliation
     # sweep picks up later. Raising here would only retry the whole job against a
     # provider that is already unhappy.
@@ -29,6 +30,11 @@ class ResolveAzureDevopsEventJob < ApplicationJob
   end
 
   private
+
+  def publish_tracker_event(subscription, event_type, resource)
+    notification = Trackers::AzureDevops::Notifications.parse(event_type, resource, scope_id: subscription.azure_project_id)
+    Trackers::EventPipeline.new(subscription.integration).process(notification) if notification
+  end
 
   def resolve_build(integration, resource)
     build_id = resource["id"]

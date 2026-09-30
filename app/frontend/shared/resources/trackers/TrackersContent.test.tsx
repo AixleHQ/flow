@@ -16,6 +16,7 @@ describe('TrackersContent', () => {
   it('shows each tracker with its handle, role and status', () => {
     renderPage(
       <TrackersContent
+        projectId={7}
         trackers={[
           buildProjectTracker(),
           buildProjectTracker({
@@ -45,6 +46,7 @@ describe('TrackersContent', () => {
   it('makes another tracker primary and toggles read-only through the tracker endpoint', async () => {
     renderPage(
       <TrackersContent
+        projectId={7}
         trackers={[
           buildProjectTracker(),
           buildProjectTracker({ id: 6, name: 'Legacy', handle: 'legacy', primary: false }),
@@ -73,6 +75,7 @@ describe('TrackersContent', () => {
   it('detaches only after confirmation, and offers to attach a detached tracker again', async () => {
     renderPage(
       <TrackersContent
+        projectId={7}
         trackers={[
           buildProjectTracker(),
           buildProjectTracker({ id: 6, name: 'Legacy', status: 'detached', primary: false }),
@@ -101,19 +104,24 @@ describe('TrackersContent', () => {
   });
 
   it('offers adding a tracker only when a connection has an unmapped project and the user can write', () => {
-    const { unmount } = renderPage(<TrackersContent trackers={[]} availableScopes={scopes} basePath={basePath} />);
+    const { unmount } = renderPage(
+      <TrackersContent projectId={7} trackers={[]} availableScopes={scopes} basePath={basePath} />,
+    );
     expect(screen.getAllByRole('button', { name: 'Add tracker' }).length).toBeGreaterThan(0);
     unmount();
 
-    renderPage(<TrackersContent trackers={[]} availableScopes={[]} basePath={basePath} />);
+    renderPage(<TrackersContent projectId={7} trackers={[]} availableScopes={[]} basePath={basePath} />);
     expect(screen.queryByRole('button', { name: 'Add tracker' })).not.toBeInTheDocument();
     expect(screen.getByText('No trackers')).toBeInTheDocument();
   });
 
   it('hides every mutation from a read-only viewer', () => {
-    renderPage(<TrackersContent trackers={[buildProjectTracker()]} availableScopes={scopes} basePath={basePath} />, {
-      props: { projectPermissions: { canExecute: false, canManage: false } },
-    });
+    renderPage(
+      <TrackersContent projectId={7} trackers={[buildProjectTracker()]} availableScopes={scopes} basePath={basePath} />,
+      {
+        props: { projectPermissions: { canExecute: false, canManage: false } },
+      },
+    );
 
     expect(screen.queryByRole('button', { name: 'Add tracker' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Detach' })).not.toBeInTheDocument();

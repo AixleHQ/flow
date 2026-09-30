@@ -33,7 +33,7 @@ class Tools::RegistryTest < ActiveSupport::TestCase
 
     assert_equal %i[azure_integration_connected azure_repositories_attached coder_integration_connected
                     config_items_attached container_tools_present github_repositories_attached
-                    non_interactive_session workflow_step_session], rules
+                    non_interactive_session tracker_run workflow_step_session], rules
   end
 
   test "grouping axes cover every definition" do

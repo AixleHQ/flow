@@ -174,6 +174,18 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     assert_includes session.reload.available_tools.map(&:name), "tracker_get_issue"
   end
 
+  test "a run a tracker event started gets the tracker tools without anyone attaching them" do
+    integration = create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
+    tracker = create(:project_tracker, :primary, integration: integration)
+    workflow = create(:workflow, scope: @project)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user,
+                                shared_context: { "tracker" => { "project_tracker_id" => tracker.id } })
+    step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow))
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
+
+    assert_includes session.available_tools.map(&:name), "tracker_transition_issue"
+  end
+
   test "no Azure tool reaches a project without an Azure connection" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
 

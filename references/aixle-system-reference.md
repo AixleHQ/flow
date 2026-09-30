@@ -123,19 +123,23 @@ a pending gate or an active run.
 | `schedule` | cron — `schedule_config: {cron, timezone}` |
 | `webhook` | an inbound HTTP call; the response carries the URL and a secret shown once |
 | `event` | a custom platform event |
+| `tracker` | a task tracker event: `tracker.issue.created`, `tracker.issue.status_changed`, `tracker.issue.assigned`, `tracker.comment.created`; `project_tracker_id` picks a tracker, none means any |
 
 Fields: `name`, `event_type`, `filter_predicate` (JSON the event must contain;
 supports `{"op", "value"}` operators and dot-paths), `subject_policy` (`none`,
-`existing_task`, `create_task`) with `subject_column_id` and
+`existing_task`, `create_task`, `find_or_create_task`) with `subject_column_id` and
 `subject_title_template`, `trigger_mode`, `cooldown_seconds` (default 0),
-`enabled`, `notify_on_failure`.
+`enabled`, `notify_on_failure`. Tracker triggers also take `aixle_changes`
+(`ignore`, `other_workflows`, `always`): what a change Aixle itself made does.
+Filter tracker events on `change.to.name` (the column), `change.to.category`,
+`issue.type`, `issue.labels` (`includes`), `comment.mentions_me`, `text`.
 
 Rules enforced on save:
-- Slack, schedule, webhook and event triggers need `allow_non_interactive` on
-  every step.
+- Slack, schedule, webhook, event and tracker triggers need `allow_non_interactive`
+  on every step.
 - `schedule` needs a cron expression; give a timezone too, or it runs in UTC and
   drifts an hour across daylight saving.
-- `create_task` needs `subject_column_id`.
+- `create_task` and `find_or_create_task` need `subject_column_id`.
 
 ---
 

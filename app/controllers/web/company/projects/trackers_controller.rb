@@ -7,7 +7,12 @@ class Web::Company::Projects::TrackersController < Web::Company::Projects::Appli
     render inertia: "Projects/Trackers/TrackersPage", props: {
       project: project_props,
       trackers: trackers.map { |t| ProjectTrackerResource.new(t).to_h },
-      available_scopes: available_scopes(trackers)
+      available_scopes: available_scopes(trackers),
+      # For the one-column intake shortcut, which wires a tracker trigger to a
+      # workflow and a board column for its tasks.
+      workflows: Workflow.visible_for_project(current_project).where(deleted_at: nil).order(:name)
+                         .map { |w| { id: w.id, name: w.name } },
+      board_columns: current_project.board&.board_columns&.order(:position)&.map { |c| { id: c.id, name: c.name } } || []
     }
   end
 
@@ -40,6 +45,16 @@ class Web::Company::Projects::TrackersController < Web::Company::Projects::Appli
   def destroy
     ProjectTracker.for_project(current_project).find(params[:id]).detach!
     redirect_to company_project_trackers_path(current_project), notice: "Tracker detached"
+  end
+
+  # The statuses a trigger can filter on — the columns of the tracker's board.
+  # JSON, like the Azure connect endpoints: the pickers ask for it on demand.
+  def statuses
+    tracker = ProjectTracker.for_project(current_project).find(params[:id])
+    description = tracker.tracker_provider.describe(tracker.external_scope_id)
+    render json: { statuses: description[:statuses].map { |s| { name: s.name, category: s.category } } }
+  rescue Trackers::Error => e
+    render json: { error: e.message }, status: :unprocessable_entity
   end
 
   private
