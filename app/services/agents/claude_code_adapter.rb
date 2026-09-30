@@ -1376,6 +1376,11 @@ module Agents
         # bypassPermissionsWarningAccepted alone does NOT suppress the prompt.
         "bypassPermissionsWarningAccepted" => true,
         "skipDangerousModePermissionPrompt" => true,
+        # When a safety classifier flags a request and the preference is unset,
+        # Claude Code asks once whether to switch to the fallback model and waits.
+        # Nobody answers in a container, so the session idled until the watchdog
+        # killed it. true switches and continues; false would pause the same way.
+        "switchModelsOnFlag" => true,
         **THEME_SETTINGS,
         "enableAllProjectMcpServers" => true,
         "env" => {
