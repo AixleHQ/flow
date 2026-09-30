@@ -33,6 +33,8 @@ module PersonalTools
                      "pass force: true to cancel it and start a new one")
       end
 
+      find_controllable_run!(project, active_run.id) if active_run
+
       # Not just a state change: WorkflowService.cancel drives each active step's
       # session through SessionService.cancel, and that Temporal cancellation
       # still runs the container workflow's cleanup phase — so the pod is

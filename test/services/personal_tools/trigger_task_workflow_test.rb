@@ -115,6 +115,7 @@ module PersonalTools
     # A task already launched under the wrong account must not have that account
     # re-derived from its own history, or the repair reproduces the bug.
     test "a previous run's owner is not inherited on a forced retrigger" do
+      @user.company_memberships.find_by!(company: @company).update!(role: "admin")
       stale_owner = member
       create(:workflow_run, workflow: @workflow, project: @project, user: stale_owner,
              board_task_id: @task.id, state: "running")
@@ -124,6 +125,18 @@ module PersonalTools
 
       assert_equal @user.email, body["runs_as"]
       assert_not_equal stale_owner.email, body["runs_as"]
+    end
+
+    test "force does not cancel a run the caller may not control" do
+      starter = member
+      blocking = create(:workflow_run, workflow: @workflow, project: @project, user: starter,
+                        board_task_id: @task.id, state: "running")
+      error = assert_no_difference "WorkflowRun.count" do
+        assert_raises(PersonalTools::Base::UnauthorizedError) { execute(force: true) }
+      end
+
+      assert_match(/only they or a company admin can control it/, error.message)
+      assert_equal "running", blocking.reload.state
     end
 
     test "a column with no binding is refused" do
