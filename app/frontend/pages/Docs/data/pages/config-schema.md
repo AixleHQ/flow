@@ -255,6 +255,18 @@ client id and one credential are present, or PAT mode is on.
 | `AZURE_DEVOPS_OPEN_TIMEOUT`             | no       | `5`                                            | Connection open timeout, in seconds.                       |
 | `AZURE_DEVOPS_READ_TIMEOUT`             | no       | `30`                                           | Response read timeout, in seconds.                         |
 
+### Jira
+
+One Atlassian OAuth 2.0 (3LO) app per deployment, shared by every customer site
+(see `docs/user-guide/jira.md`). Optional: without it Jira connects with a
+customer's service account only, which needs nothing here.
+
+| Variable                    | Required | Default                 | Purpose |
+| --------------------------- | -------- | ----------------------- | ------- |
+| `JIRA_OAUTH_CLIENT_ID`      | no       | unset                   | Client id of the deployment's Atlassian app. With the secret, it turns on connecting with an Atlassian account. |
+| `JIRA_OAUTH_CLIENT_SECRET`  | no       | unset                   | The app's secret. It also verifies the JWT on the app's webhook deliveries. |
+| `JIRA_WEBHOOK_BASE_URL`     | no       | `<protocol>://<domain>` | Where Jira posts webhooks. Set it only when the deployment's domain is not reachable from Atlassian (a tunnel in development); a loopback or private host registers no webhooks. |
+
 ## Auth & OAuth providers
 
 | Variable                     | Required | Default            | Purpose                                                      |

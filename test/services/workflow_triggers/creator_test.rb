@@ -82,4 +82,21 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
   test "an unknown kind raises UnsupportedKindError" do
     assert_raises(WorkflowTriggers::Creator::UnsupportedKindError) { create_trigger("carrier_pigeon") }
   end
+
+  test "a tracker trigger names its tracker event, and with a column defaults to reusing the issue's task" do
+    column = create(:board_column, board: create(:board, project: @project))
+
+    binding = create_trigger("tracker", event_type: "tracker.issue.status_changed", subject_column_id: column.id,
+                                        aixle_changes: "other_workflows").trigger
+
+    assert_equal [ "tracker.issue.status_changed", "find_or_create_task", "other_workflows" ],
+                 [ binding.event_type, binding.subject_policy, binding.aixle_changes ]
+  end
+
+  test "a tracker trigger without a known tracker event type is refused, never turned into a webhook" do
+    error = assert_raises(ActiveRecord::RecordInvalid) { create_trigger("tracker") }
+    assert_match(/Event type/, error.message)
+
+    assert_raises(ActiveRecord::RecordInvalid) { create_trigger("tracker", event_type: "tracker.issue.deleted") }
+  end
 end

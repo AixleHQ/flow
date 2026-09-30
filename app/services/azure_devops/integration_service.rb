@@ -139,8 +139,10 @@ module AzureDevops
       # connect time, and best-effort — so a connection made while webhooks were
       # switched off, or while this identity could not yet create them, would
       # otherwise never get them at all and CI gates would fall back to the
-      # five-minute sweep forever. `ensure_all!` is idempotent.
+      # five-minute sweep forever. `ensure_all!` is idempotent, and so is the
+      # tracker provisioning after it.
       provision_subscriptions(integration)
+      Trackers::Provisioning.ensure_for!(integration)
       { status: :active, project: project_info }
     rescue Error => e
       record_error(integration, e.code)
@@ -202,6 +204,7 @@ module AzureDevops
       integration.name = "#{integration.settings['organization_slug']}/#{info[:name]}"
       apply_verified(integration, info)
       provision_subscriptions(integration)
+      Trackers::Provisioning.ensure_for!(integration)
       integration
     rescue Error => e
       # Persist the failure so the card can explain it, but keep the connection

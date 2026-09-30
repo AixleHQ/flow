@@ -1,6 +1,6 @@
 # Task tracker integrations — technical design
 
-Status: **Proposal; decisions 1–17 agreed 2026-09-30; no open questions**
+Status: **Agreed 2026-09-30; phase 1 (core + Azure Boards) and phase 2 (Jira Cloud) implemented in #366**
 Date: 2026-09-30
 Related: PR #271 (YouTrack integration, unmerged) and its two design documents,
 `integration-abstractions-tech-design-v1.md` and `youtrack-integration-tech-design-v6.md`;
@@ -306,9 +306,9 @@ Status        id, name, category (todo | in_progress | done | canceled | nil)
 |---|---|---|---|---|---|
 | Scope unit | project | project | team | project (v2) | project |
 | Instance identity | normalized base URL | `cloudId` (survives site rename) | organization id | owner + project node id | organization id |
-| Auth | permanent token of an automation account | Atlassian OAuth 2.0 app, configured per deployment like Azure's Entra app; tokens go through the existing OAuth flow engine (`oauth-implementation.md`). It acts as the consenting user, so consent comes from a dedicated service account | API key or OAuth app | GitHub App (existing) | existing Azure connection |
-| Delivery | Webhook Triggers app (YouTrack 2026.2+), configured per project; one shared token header per YouTrack project | REST-registered webhooks (OAuth/Connect apps) expire after 30 days and need the refresh endpoint | webhooks with `Linear-Signature` HMAC-SHA256 and `webhookTimestamp` | `projects_v2_item` through the existing GitHub App receiver | Service Hooks through the existing Azure receiver |
-| Subscription strategy | manual | api + refresh sweep | api | GitHub App install | api (existing `SubscriptionService`) |
+| Auth | permanent token of an automation account | Two ways (§12, phase 2): the deployment's Atlassian OAuth 2.0 (3LO) app, which acts as the consenting user, or a customer's service account through the client-credentials grant. Tokens live in the connection's encrypted credentials and are renewed under a row lock, since 3LO refresh tokens rotate | API key or OAuth app | GitHub App (existing) | existing Azure connection |
+| Delivery | Webhook Triggers app (YouTrack 2026.2+), configured per project; one shared token header per YouTrack project | 3LO: REST-registered webhooks, which expire after 30 days and need the refresh endpoint. Atlassian allows one URL per app, so they share `/webhooks/trackers/app/jira` and are routed by `matchedWebhookIds` plus a site check. Service account: only apps may register webhooks, so a Jira admin adds a system webhook signed with a per-subscription HMAC secret | webhooks with `Linear-Signature` HMAC-SHA256 and `webhookTimestamp` | `projects_v2_item` through the existing GitHub App receiver | Service Hooks through the existing Azure receiver |
+| Subscription strategy | manual | api + refresh sweep (3LO); manual (service account) | api | GitHub App install | api (existing `SubscriptionService`) |
 | Change hints in payload | `changedFields[{name, oldValue, value}]` | `changelog.items` from/to | `updatedFrom` (previous values) | `changes` (to verify) | `fields.{name}.oldValue/newValue` |
 | Status category source | `isResolved` only (todo/done); in-progress set by mapping | `statusCategory` | state `type` | none — mapping required | state category |
 
@@ -324,10 +324,21 @@ changed:
 - A Jira column holds one or more statuses.
 - Linear boards use workflow states.
 - A GitHub project board uses a single-select field, `Status` by default.
-- Azure has both `System.State` and `System.BoardColumn`.
+- Azure has both `System.State` and `System.BoardColumn`, and they differ: a team adds a column
+  ("Ready for AI") without adding a state, and several columns can map onto one state. The Azure
+  provider therefore treats the **board column** as the status: `describe` lists the boards'
+  columns (categorized by column type), an issue's status is the column its card sits in
+  (categorized by the state behind it), and a column move is the `status_changed` event, with the
+  state change beside it as `change.state`. A state change alone counts only for a work item on no
+  board. Transitions still set the state, since Azure moves a card through the state its column maps to.
+- Jira works the same way: the status is the column of the project's first board that holds the
+  issue's workflow status, categorized by the categories of the statuses in it. A move between two
+  statuses in one column is not a status change. The workflow status is `fields.state` and
+  `change.state`; a transition may name a column, a status or a Jira transition.
 
-Each project tracker stores `settings.status_field`. The provider supplies the default and the
-tracker UI can override it. `describe` returns the status values with a category where the
+Which field a provider reads as the status is the provider's decision (`Provider#status_change`):
+the board's columns wherever they exist. A per-tracker `settings.status_field` override is left for
+a provider that needs one (GitHub Projects, where the board can be built on any single-select field). `describe` returns the status values with a category where the
 provider has one, and the project tracker can override categories. Triggers can then filter on
 either the exact status name (`"In Review"`) or the portable category (`done`).
 
@@ -365,6 +376,13 @@ equals the hint's `to`. When it differs (the issue already moved on), `change_re
 provider's history (YouTrack activities, Jira changelog, Linear history, Azure updates). An
 unconfirmed hint is skipped with an `unconfirmed_change` diagnostic. Fast consecutive moves still
 fire every trigger, and a forged hint cannot invent a transition that never happened.
+
+A provider whose deliveries are authenticated per subscription can skip the history check: forging
+a hint then takes that subscription's own secret. Azure qualifies (Service Hooks authenticate with a
+per-subscription basic-auth password), so phase 1 trusts its hints. Jira qualifies too: an admin
+webhook signs its body with its subscription's secret, and an app webhook carries a JWT signed with
+the app's client secret, which only Atlassian holds. The history check arrives with the first
+shared-token provider, YouTrack.
 
 ### 6.3 Event vocabulary and data
 
@@ -498,7 +516,8 @@ Aixle's.
 | `other_workflows` | the binding's workflow is **not** in `origin.chain` | chaining: dev → review. Blocks a workflow starting itself and cycles such as A → B → A. |
 | `always` | always, including its own workflow | deliberate state machines that walk an issue through statuses one run at a time |
 
-**Hard limits**, project settings that no binding can switch off:
+**Hard limits**, which no binding can switch off (constants in `Trackers::EventPipeline` for now;
+project settings once they need tuning):
 
 - **Chain depth**, default 5. An Aixle-caused event at or beyond it fires nothing
   (`chain_depth_limit`).
@@ -506,8 +525,8 @@ Aixle's.
   bindings (`issue_chain_budget`).
 - Existing cooldown and session admission.
 
-A skip is recorded on its `TriggerDispatch` (`status: skipped`, `detail.reason`), the way cooldown
-is recorded today, and shows in the trigger's activity.
+An event over a limit is not published at all, and the skip is logged with its reason
+(`chain_depth_limit`, `issue_chain_budget`). Surfacing it in the trigger's activity is a follow-up.
 
 Example with `other_workflows` on both bindings:
 
@@ -562,7 +581,7 @@ cancelled**. A failed agent cannot report its own failure, so this is the one wr
 with its tools.
 
 - **Setting.** The binding's `status_reporting`, from the Teams design, replaces
-  `notify_on_failure`. Tracker bindings offer `none` and `failures`, with `failures` as the
+  `notify_on_failure` (which governs the comment until that lands). Tracker bindings offer `none` and `failures`, with `failures` as the
   default. `lifecycle` is not offered for trackers: progress on the issue is the agent's job.
 - **Seam.** `Trackers::RunStatusReporter` is one of the origin reporters behind the shared
   run-transition seam (`docs/design/teams-integration.md` §17, on its own branch):
@@ -596,7 +615,7 @@ with its tools.
 | `tracker_search_issues` | read | Structured filter (`text`, `status`, `category`, `type`, `assignee`, `labels`, `updated_since`) plus an optional `native_query` (JQL, YouTrack query) where the provider supports it. Paginated. |
 | `tracker_get_issue` | read | By id, key or URL. |
 | `tracker_list_comments` | read | Paginated. |
-| `tracker_list_users` | read | Exact IDs/logins for assignment and mentions. |
+| `tracker_list_users` | read | Exact IDs/logins for assignment and mentions. Arrives with the first provider that can list users (Jira); Azure assigns by email or display name. |
 | `tracker_create_issue` | write | Title, description, type, labels, fields. Inside a task-scoped run, links the new issue to the run's board task. |
 | `tracker_update_issue` | write | Title, description, fields, labels add/remove. Any field the provider reports as editable, except those on the tracker's deny list. |
 | `tracker_transition_issue` | write | Target status by name or id; validated against allowed transitions where the provider has a workflow graph (Jira). |
@@ -758,6 +777,9 @@ revision guards and the project-scope re-check:
   before acknowledging, as today. `ResolveAzureDevopsEventJob` gets one more branch: it builds a
   `Trackers::Notification` from a `workitem.*` delivery and hands it to the tracker pipeline.
   `tracker_subscriptions` and `/webhooks/trackers` are not used for Azure.
+- **Identity.** Azure offers no reliable "who am I" call for a service principal, so the provider
+  learns the connection's identity from its own first write (`System.ChangedBy`) and keeps it in the
+  integration's settings. Until then, a mention of it is not recognised.
 - **Ledger.** Work-item writes go through `tracker_operations` like every other provider's, so
   they get the same causality tracking (§6.6). `azure_devops_operations` stays for pull-request
   operations.
@@ -856,12 +878,27 @@ for.
      receiver.
    - **Risk:** this phase changes the tools existing Azure customers have. It needs a live-tenant
      run on staging before release; CI alone cannot show it works.
-2. **Jira Cloud** (committed):
+2. **Jira Cloud** (committed; built in #366):
    - the tracker-native ingress: subscriptions, deliveries, `/webhooks/trackers`;
-   - `Trackers::ConnectionService` (connect, reconnect in place, verify, soft disconnect);
-   - the Atlassian OAuth 2.0 app through the OAuth flow engine;
-   - the `api` strategy with the 30-day refresh sweep;
-   - `cloudId` instance identity, the transition graph, and `native_query` (JQL).
+   - the Atlassian OAuth 2.0 app, and a service account as the second way in;
+   - the `api` strategy with the 30-day refresh sweep (`TrackerSubscriptionRefreshWorkflow`,
+     daily, which also renews 3LO grants idle for 30 days before Atlassian retires them at 90);
+   - `cloudId` instance identity, the transition graph, and `native_query` (JQL), which is ANDed
+     in brackets and whose results outside the tracker's project are dropped;
+   - `tracker_list_users`.
+
+   Where it settled differently:
+   - **No `Trackers::ConnectionService`.** Connecting stays with the provider's own
+     `Jira::IntegrationService`, like Azure's: connect, reconnect in place (the same site in the same
+     project renews that connection), verify, and changing the projects, which detaches the trackers
+     of projects dropped. Disconnecting is the existing integration removal.
+   - **Not the OAuth flow engine.** `OauthCredential` belongs to a user, company or project, and the
+     3LO callback has to end in a site and project picker, so Jira has its own callback over
+     `Oauth::State` and keeps its tokens with the connection.
+   - **Identity.** A 3LO connection acts as the person who connected it, so its changes are
+     attributed through the ledger only; the account counts as Aixle's own (mentions, the
+     actor fallback) only when it is marked as kept for Aixle. A service account always is.
+   - **REST v2** for issues and comments: v3 accepts and returns only Atlassian Document Format.
 3. **GitHub Projects** (committed), and GitHub Issues if they fall out cheaply: through the
    existing GitHub App and `Webhooks::GithubController` (§9.3). The scope unit is decided here.
 4. **Linear**: API-registered webhooks with `Linear-Signature` HMAC. Until then, the dead `linear`
@@ -899,7 +936,7 @@ Later and additive:
 | 10 | Which fields may agents write? | **Agreed:** everything the provider reports as editable, minus an optional per-tracker deny list. |
 | 11 | Failure notice on the issue? | **Agreed:** a failed or cancelled run posts one comment with a link to the run, governed by `status_reporting` (§6.9). |
 | 12 | Phase order? | **Agreed:** Azure Boards (with the core) → Jira → GitHub Projects → Linear → YouTrack. Jira and GitHub Projects are committed (§12). |
-| 13 | Jira authentication? | **Agreed: an Atlassian OAuth 2.0 app**, with consent from a dedicated service account (§5.3). |
+| 13 | Jira authentication? | **Agreed: both.** The Atlassian OAuth 2.0 app for SaaS, and a customer's service account with client credentials, which needs no app on the deployment (§5.3). |
 | 14 | YouTrack older than 2026.2? | **Agreed:** not supported in v1; documented as a requirement. |
 | 15 | Loop-limit defaults? | **Agreed:** depth 5, 10 Aixle-caused runs per issue per hour, tuned later. |
 | 16 | Scope cuts (no mirroring, no polling, best-effort delivery)? | **Agreed.** Adoption goes through one-column intake instead (§6.8). |

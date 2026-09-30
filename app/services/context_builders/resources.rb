@@ -62,8 +62,8 @@ module ContextBuilders
         lines << "Azure DevOps repositories authenticate through a credential helper configured in each " \
                  "checkout, so ordinary `git fetch` and `git push` work without any extra step and keep " \
                  "working after the underlying token expires. Do not add credentials to the remote URL. " \
-                 "Pull requests, review threads and Boards work items are reached with the " \
-                 "`azure_devops_*` tools, not with `gh`."
+                 "Pull requests and review threads are reached with the `azure_devops_*` tools, " \
+                 "not with `gh`; Boards work items with the `tracker_*` tools."
       end
       if cloned.any?(&:public_source?)
         lines << ""

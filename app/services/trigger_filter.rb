@@ -9,7 +9,7 @@
 # All conditions are AND-ed. An empty predicate matches any event.
 # Field names may be dot-paths into nested data, e.g. "repository.name", "ref".
 class TriggerFilter
-  OPERATORS = %w[eq ne contains not_contains starts_with ends_with gt gte lt lte present blank in regex].freeze
+  OPERATORS = %w[eq ne contains not_contains starts_with ends_with gt gte lt lte present blank in includes regex].freeze
 
   def self.match?(predicate, data)
     new(predicate, data).match?
@@ -53,6 +53,8 @@ class TriggerFilter
     when "present"      then actual.present?
     when "blank"        then actual.blank?
     when "in"           then Array(expected).map(&:to_s).include?(actual.to_s)
+    # Array membership: `contains` compares strings, so "ai" would match "main".
+    when "includes"     then actual.is_a?(Array) && actual.map(&:to_s).include?(expected.to_s)
     when "regex"        then safe_regex(expected) { |re| actual.to_s.match?(re) }
     else false
     end

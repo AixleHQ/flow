@@ -98,7 +98,7 @@ module Api
           def trigger_binding_params
             params.require(:trigger).permit(
               :name, :trigger_mode, :enabled, :cooldown_seconds, :notify_on_failure,
-              :subject_policy, :subject_column_id, :subject_title_template,
+              :subject_policy, :subject_column_id, :subject_title_template, :project_tracker_id, :aixle_changes,
               filter_predicate: {}, schedule_config: %i[cron timezone]
             )
           end
@@ -148,6 +148,8 @@ module Api
               schedule_config: binding.schedule_config,
               cooldown_seconds: binding.cooldown_seconds,
               notify_on_failure: binding.notify_on_failure,
+              project_tracker_id: binding.project_tracker_id,
+              aixle_changes: binding.aixle_changes,
               created_by: serialize_creator(binding.created_by),
               enabled: binding.enabled
             }
@@ -167,6 +169,7 @@ module Api
             when "slack.message" then "slack"
             when "schedule.fired" then "schedule"
             when /\Awebhook\./ then "webhook"
+            when /\Atracker\./ then "tracker"
             else "event"
             end
           end

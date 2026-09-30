@@ -30,12 +30,16 @@ module Tools
         ctx.session.present? &&
           ctx.session.repositories.includes(:integration).any? { |repo| repo.integration&.azure_devops? }
       },
-      # azure_devops_* work item and build tools, plus list_connections. These
-      # are scoped by `integration_id` rather than by a repository, so the
-      # connection is the only thing they need — a project running Azure Boards
-      # against repositories hosted elsewhere still reaches them. Mirrors the
-      # Coder gating exactly.
+      # azure_devops_* build tools, plus list_connections. These are scoped by
+      # `integration_id` rather than by a repository, so the connection is the
+      # only thing they need. Mirrors the Coder gating exactly. Azure Boards work
+      # items go through the tracker_* tools instead.
       azure_integration_connected: ->(ctx) { ctx.connected?(:azure_devops) },
+      # tracker_* tools — a run a tracker event started has its tracker's tools
+      # without anyone attaching them (docs/design/task-tracker-integrations.md §7.3).
+      tracker_run: lambda { |ctx|
+        ctx.session&.step_run&.workflow_run&.shared_context.to_h.key?("tracker")
+      },
       # get_config_item — served only where an attachment already authorized it.
       # Resolved through SessionConfigResolver so a workflow step sees the items
       # its workflow/step named, not just the (empty) session association.

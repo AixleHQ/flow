@@ -205,6 +205,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'Connect an Azure DevOps organization: the Entra service principal step, the personal access token and its three scopes, choosing Azure projects, and how SaaS differs from self-hosted.',
   },
   {
+    slug: 'jira',
+    title: 'Jira',
+    section: 'User guide',
+    desc: 'Connect Jira Cloud with an Atlassian account or a service account, add the admin webhook tracker triggers need, and how board columns become statuses.',
+  },
+  {
     slug: 'configuration',
     title: 'Configuration',
     section: 'User guide',

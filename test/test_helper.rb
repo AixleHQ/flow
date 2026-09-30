@@ -92,6 +92,7 @@ class ActiveSupport::TestCase
   include StubSupport
   include SlackTestHelper
   include AzureDevopsTestHelper
+  include JiraTestHelper
   include TemporalActivityHelper
   include TemporalWorkflowHelper
   # Add more helper methods to be used by all tests here...

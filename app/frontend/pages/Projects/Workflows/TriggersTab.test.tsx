@@ -321,6 +321,40 @@ describe('Projects/Workflows/TriggersTab', () => {
     expect(await screen.findByText('verification: none')).toBeInTheDocument();
   });
 
+  it('describes a tracker trigger by the column it waits for and the tracker it listens to', async () => {
+    installFetch({
+      triggers: [
+        {
+          id: 12,
+          kind: 'tracker',
+          event_type: 'tracker.issue.status_changed',
+          project_tracker_id: 5,
+          aixle_changes: 'ignore',
+          filter_predicate: { 'change.to.name': { op: 'in', value: ['Ready for AI'] } },
+        },
+        {
+          id: 13,
+          kind: 'tracker',
+          event_type: 'tracker.comment.created',
+          project_tracker_id: null,
+          aixle_changes: 'other_workflows',
+          filter_predicate: { 'comment.mentions_me': true },
+        },
+      ],
+    });
+
+    renderPage(
+      <TriggersTab
+        {...baseProps({ trackers: [{ id: 5, handle: 'boards', name: 'Customer Platform', provider: 'azure_devops' }] })}
+      />,
+    );
+
+    expect(await screen.findByText('Issue moves to Ready for AI')).toBeInTheDocument();
+    expect(screen.getByText('boards · ignores Aixle changes')).toBeInTheDocument();
+    expect(screen.getByText('Aixle is mentioned in a comment')).toBeInTheDocument();
+    expect(screen.getByText('any tracker · chains from other workflows')).toBeInTheDocument();
+  });
+
   it('renders an unknown trigger kind with the raw event type badge and webhook-style title', async () => {
     installFetch({ triggers: [{ id: 9, kind: 'custom', event_type: 'CUSTOM.EVENT', filter_predicate: {} }] });
 

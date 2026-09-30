@@ -4,19 +4,21 @@ module PersonalTools
   # Shared lookup and serialization for the workflow-trigger tools, mirroring
   # Api::V1::Projects::Workflows::TriggersController — one surface over two
   # record kinds:
-  #   column                             → ColumnWorkflowBinding (card enters a board column)
-  #   slack / schedule / webhook / event → TriggerBinding
+  #   column                                       → ColumnWorkflowBinding (card enters a board column)
+  #   slack / schedule / webhook / event / tracker → TriggerBinding
   # The UI and the personal MCP must describe the same trigger the same way, so
   # the field sets below stay in step with the controller's serializers.
   module WorkflowTriggerSupport
-    KINDS = %w[column slack schedule webhook event].freeze
+    KINDS = %w[column slack schedule webhook event tracker].freeze
     TRIGGER_MODES = %w[auto manual].freeze
-    SUBJECT_POLICIES = %w[none existing_task create_task].freeze
+    SUBJECT_POLICIES = %w[none existing_task create_task find_or_create_task].freeze
+    AIXLE_CHANGES = %w[ignore other_workflows always].freeze
     VERIFICATION_STRATEGIES = %w[none slack_v0 hmac_sha256 shared_token].freeze
 
     # Mutable fields, mirroring the controller's permit lists.
     BINDING_FIELDS = %i[name trigger_mode enabled cooldown_seconds notify_on_failure
-                        subject_policy subject_column_id subject_title_template].freeze
+                        subject_policy subject_column_id subject_title_template
+                        project_tracker_id aixle_changes].freeze
     COLUMN_FIELDS = %i[trigger_mode cooldown_seconds].freeze
     SCHEDULE_KEYS = %w[cron timezone].freeze
 
@@ -90,6 +92,8 @@ module PersonalTools
         schedule_config: trigger.schedule_config,
         cooldown_seconds: trigger.cooldown_seconds,
         notify_on_failure: trigger.notify_on_failure,
+        project_tracker_id: trigger.project_tracker_id,
+        aixle_changes: trigger.aixle_changes,
         created_by: serialize_creator(trigger.created_by),
         enabled: trigger.enabled
       }
@@ -109,6 +113,7 @@ module PersonalTools
       when "slack.message" then "slack"
       when "schedule.fired" then "schedule"
       when /\Awebhook\./ then "webhook"
+      when /\Atracker\./ then "tracker"
       else "event"
       end
     end

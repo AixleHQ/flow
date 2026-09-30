@@ -153,4 +153,42 @@ class IntegrationResource < ApplicationResource
   attribute :slack_request_url do |integration|
     integration.slack? ? integration.settings&.dig("request_url") : nil
   end
+
+  # ----- Jira -----
+
+  # "oauth" (Aixle's Atlassian app) or "service_account".
+  typelize "string | null"
+  attribute :jira_auth_mode do |integration|
+    integration.jira? ? integration.settings&.dig("auth_mode") : nil
+  end
+
+  typelize "string | null"
+  attribute :jira_site_url do |integration|
+    integration.jira? ? integration.settings&.dig("site_url") : nil
+  end
+
+  typelize "Array<{ id: string; key: string; name: string }>"
+  attribute :jira_projects do |integration|
+    next [] unless integration.jira?
+
+    Array(integration.settings&.dig("jira_projects")).map { |p| p.to_h.slice("id", "key", "name") }
+  end
+
+  # The sites a 3LO grant covers, to pick from while the connection is pending.
+  typelize "Array<{ id: string; name: string; url: string }>"
+  attribute :jira_sites do |integration|
+    next [] unless integration.jira?
+
+    Array(integration.settings&.dig("sites")).map { |s| s.to_h.slice("id", "name", "url") }
+  end
+
+  typelize "string | null"
+  attribute :jira_identity do |integration|
+    integration.jira? ? integration.settings&.dig("identity_display_name") : nil
+  end
+
+  typelize "boolean"
+  attribute :jira_dedicated_identity do |integration|
+    integration.jira? && integration.settings&.dig("dedicated_identity") == true
+  end
 end

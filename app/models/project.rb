@@ -26,6 +26,7 @@ class Project < ApplicationRecord
   has_many :folders, as: :scope, dependent: :destroy
   has_many :repositories, as: :scope, dependent: :destroy
   has_many :integrations, dependent: :destroy
+  has_many :project_trackers, dependent: :destroy
   # Board must be destroyed before workflows: Workflow#check_column_bindings aborts
   # while ColumnWorkflowBindings exist, and column_transitions.workflow_run_id is RESTRICT.
   has_one :board, dependent: :destroy

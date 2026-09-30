@@ -350,6 +350,7 @@ module Templates
       when "slack.message" then "slack"
       when "schedule.fired" then "schedule"
       when /\Awebhook\./ then "webhook"
+      when /\Atracker\./ then "tracker"
       else "event"
       end
       entry = { "kind" => kind, "workflow" => @keys["workflows"][binding.workflow_id], "name" => binding.name,
@@ -357,7 +358,13 @@ module Templates
                 "subject_title_template" => binding.subject_title_template,
                 "filter_predicate" => binding.filter_predicate.presence, "cooldown_seconds" => binding.cooldown_seconds,
                 "notify_on_failure" => binding.notify_on_failure }
-      entry["event_type"] = binding.event_type if kind == "event"
+      entry["event_type"] = binding.event_type if %w[event tracker].include?(kind)
+      # A tracker is this project's, so the exported trigger listens to any
+      # tracker of the installing project; status names differ between trackers.
+      entry["aixle_changes"] = binding.aixle_changes.to_s if kind == "tracker"
+      if kind == "tracker" && binding.project_tracker_id
+        @notes << "Tracker trigger #{binding.name || binding.id}: exported for any tracker of the installing project."
+      end
       entry["cron"] = binding.schedule_config["cron"] if kind == "schedule"
       entry["timezone"] = binding.schedule_config["timezone"].presence if kind == "schedule"
       entry["subject_column"] = @keys["columns"][binding.subject_column_id] if binding.subject_column_id && @include_board

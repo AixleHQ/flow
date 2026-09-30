@@ -128,9 +128,8 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
   #
   # Two rules rather than one. The repository tools all take a `repository_id`
   # that must already be attached, so a session without an Azure clone has
-  # nothing to point them at; the work item and build tools are scoped by
-  # connection, so a project keeping its Boards in Azure while its code lives
-  # elsewhere still reaches them.
+  # nothing to point them at; the build tools are scoped by connection. Boards
+  # work items are tracker tools, which are attached, not injected.
 
   test "Azure repository tools are injected for a session holding an Azure repository" do
     integration = create(:integration, :azure_devops, :active, company: @company,
@@ -153,15 +152,38 @@ class TerminalSessionAvailableToolsTest < ActiveSupport::TestCase
     refute_includes session.available_tools.map(&:name), "azure_devops_create_pull_request"
   end
 
-  test "Azure work item tools follow the connection, not the repositories" do
+  test "Azure build tools follow the connection, not the repositories" do
     create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
     session = create(:terminal_session, :agent_session, user: @user, project: @project)
 
     names = session.available_tools.map(&:name)
 
-    assert_includes names, "azure_devops_create_work_item"
+    assert_includes names, "azure_devops_list_builds"
     assert_includes names, "azure_devops_list_connections"
     refute_includes names, "azure_devops_create_pull_request"
+  end
+
+  test "tracker tools are attached, never injected by a connection alone" do
+    integration = create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
+    create(:project_tracker, :primary, integration: integration)
+    session = create(:terminal_session, :agent_session, user: @user, project: @project)
+
+    refute session.available_tools.map(&:name).any? { |n| n.start_with?("tracker_") }
+
+    session.tools << Tool.shadow_for(Tools::Registry.fetch("tracker_get_issue"))
+    assert_includes session.reload.available_tools.map(&:name), "tracker_get_issue"
+  end
+
+  test "a run a tracker event started gets the tracker tools without anyone attaching them" do
+    integration = create(:integration, :azure_devops, :active, company: @company, project: @project, connected_by: @user)
+    tracker = create(:project_tracker, :primary, integration: integration)
+    workflow = create(:workflow, scope: @project)
+    run = create(:workflow_run, workflow: workflow, project: @project, user: @user,
+                                shared_context: { "tracker" => { "project_tracker_id" => tracker.id } })
+    step_run = create(:step_run, workflow_run: run, step: create(:step, workflow: workflow))
+    session = create(:terminal_session, :agent_session, user: @user, project: @project, step_run: step_run)
+
+    assert_includes session.available_tools.map(&:name), "tracker_transition_issue"
   end
 
   test "no Azure tool reaches a project without an Azure connection" do

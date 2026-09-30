@@ -52,6 +52,14 @@ class TriggerFilterTest < ActiveSupport::TestCase
     assert_not TriggerFilter.match?({ "text" => { "op" => "regex", "value" => "[" } }, { "text" => "anything" })
   end
 
+  test "includes is array membership, not a substring match" do
+    predicate = { "issue.labels" => { "op" => "includes", "value" => "ai" } }
+
+    assert TriggerFilter.match?(predicate, { "issue" => { "labels" => %w[ai urgent] } })
+    refute TriggerFilter.match?(predicate, { "issue" => { "labels" => %w[main] } })
+    refute TriggerFilter.match?(predicate, { "issue" => { "labels" => "ai" } })
+  end
+
   test "unknown operator does not match" do
     assert_not TriggerFilter.match?({ "x" => { "op" => "nonsense", "value" => 1 } }, { "x" => 1 })
   end

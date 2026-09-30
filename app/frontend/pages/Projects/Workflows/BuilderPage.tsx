@@ -24,6 +24,7 @@ import { SessionEditorPanel } from './SessionEditorPanel';
 import { SessionTreeNav } from './SessionTreeNav';
 import type { Selection } from './SessionTreeNav';
 import { StepEditorPanel } from './StepEditorPanel';
+import type { TrackerOption } from './trackerTrigger';
 import { TriggersTab } from './TriggersTab';
 
 type ProjectOrNull = Project | null;
@@ -54,6 +55,7 @@ interface Props {
   configuredAgents: string[];
   defaultAgentRuntime?: string | null;
   boardColumns?: { id: number; name: string; boundWorkflowName?: string | null }[];
+  trackers?: TrackerOption[];
 }
 
 interface AggregateResponse {
@@ -81,6 +83,7 @@ const BuilderPage = () => {
     configuredAgents,
     defaultAgentRuntime,
     boardColumns,
+    trackers,
   } = usePage<{ props: Props }>().props as unknown as Props;
 
   const agents = rawAgents ?? [];
@@ -529,6 +532,7 @@ const BuilderPage = () => {
               workflowId={workflow.id}
               columns={boardColumns ?? []}
               sessions={sortedSteps.map((s) => ({ id: s.id, name: s.name }))}
+              trackers={trackers ?? []}
               readOnly={readOnly}
             />
           )}

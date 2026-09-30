@@ -2,11 +2,11 @@
 
 module Tools
   # Per-request evaluation context for tool availability and injection rules.
-  # Batches the integration lookup into ONE query and memoizes it on the
-  # context object itself — deliberately not CurrentAttributes: MCP requests
-  # can outlive the Rack executor (SSE streams) and Temporal activity threads
-  # never enter it, so object-scoped memoization is the only shape that can't
-  # leak across requests.
+  # Batches the integration lookup into one query (plus one for trackers) and
+  # memoizes it on the context object itself — deliberately not
+  # CurrentAttributes: MCP requests can outlive the Rack executor (SSE streams)
+  # and Temporal activity threads never enter it, so object-scoped memoization
+  # is the only shape that can't leak across requests.
   class Context
     attr_reader :project, :company, :session, :mode, :session_type
     attr_accessor :candidate_tools # set during the available_tools base phase
@@ -50,7 +50,9 @@ module Tools
           else
             scope.where(project_id: nil)
           end
-          Set.new(scope.distinct.pluck(:provider).map(&:to_s))
+          providers = Set.new(scope.distinct.pluck(:provider).map(&:to_s))
+          providers << Trackers::CAPABILITY if project && ProjectTracker.usable.for_project(project).exists?
+          providers
         end
       end
     end

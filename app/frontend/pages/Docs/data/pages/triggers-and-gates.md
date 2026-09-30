@@ -34,9 +34,10 @@ shared path (`WorkflowService.start`). A `trigger_dispatches` ledger records
 | **Schedule** *(planned)* | a timer fires (interval / cron / calendar) | the workflow's Triggers |
 | **Slack message** | a message / mention / reaction matches | the workflow's Triggers |
 | **Inbound webhook** | an external system POSTs to the endpoint | the workflow's Triggers |
+| **Task tracker event** | an issue is created, moves to a status (a column on the tracker's board), is assigned, or gets a comment | the workflow's Triggers, or *Connect a board column* on the Trackers page |
 
 Column binding and manual are **board-native** — the task already exists.
-Schedule, Slack and webhook originate **off the board** and must therefore
+Schedule, Slack, webhook and tracker events originate **off the board** and must therefore
 answer "what task, if any, is this run about?" — that is [`subject_policy`](#subjectpolicy).
 
 > **tip** Column bindings stay configured on the Board (one workflow per column, see [Board](/docs/board)). The other sources live on the workflow, so a workflow declares how it launches — like `on:` in CI.
@@ -71,6 +72,7 @@ policy** — the single field that decides the run's board context:
 | `existing_task` | attaches to the task from context | an existing card | column binding, manual |
 | `none` | runs with no card | nothing (`board_task_id` is null) | a scheduled background job |
 | `create_task` | creates a card first, then runs on it | a fresh card | a schedule/Slack/webhook that should appear on the board |
+| `find_or_create_task` | reuses the card linked to the tracker issue, or creates and links one | the issue's card | every tracker event about one issue landing on one card |
 
 A scheduled trigger therefore **starts a workflow, not a task** by default
 (`subject_policy: none`) — a project-level run you'll find under Workflow Runs,

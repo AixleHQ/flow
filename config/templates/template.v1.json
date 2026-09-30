@@ -1040,7 +1040,8 @@
                   "slack",
                   "schedule",
                   "webhook",
-                  "event"
+                  "event",
+                  "tracker"
                 ]
               },
               "workflow": {
@@ -1074,7 +1075,8 @@
                 "enum": [
                   "none",
                   "existing_task",
-                  "create_task"
+                  "create_task",
+                  "find_or_create_task"
                 ]
               },
               "subject_column": {
@@ -1102,6 +1104,13 @@
                   "slack_v0",
                   "hmac_sha256",
                   "shared_token"
+                ]
+              },
+              "aixle_changes": {
+                "enum": [
+                  "ignore",
+                  "other_workflows",
+                  "always"
                 ]
               }
             },

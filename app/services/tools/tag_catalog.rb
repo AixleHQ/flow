@@ -24,13 +24,15 @@ module Tools
 
     ENTRIES = [
       Entry.new(tag: :board, label: "Board management", ui_visible: true),
+      Entry.new(tag: :tracker, label: "Task trackers", ui_visible: true),
       Entry.new(tag: :slack, label: "Slack", ui_visible: true),
       Entry.new(tag: :coder, label: "Coder", ui_visible: true),
       # Hidden because the Azure tools are not chosen — they auto-inject.
       # The repository ones arrive when an Azure repository is attached to the
-      # session and the rest when the project has an Azure connection, so a
-      # picker entry would only offer a second, weaker way to say the same
-      # thing — and let someone attach half a working set by hand.
+      # session and the build ones when the project has an Azure connection, so
+      # a picker entry would only offer a second, weaker way to say the same
+      # thing — and let someone attach half a working set by hand. Azure Boards
+      # work items are reached through the :tracker tools.
       Entry.new(tag: :azure_devops, label: "Azure DevOps", ui_visible: false),
       Entry.new(tag: :assets, label: "Assets", ui_visible: true),
       # Read-only supervision of the OTHER sessions in the project. Its own tag

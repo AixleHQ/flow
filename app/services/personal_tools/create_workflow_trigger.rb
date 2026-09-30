@@ -8,8 +8,11 @@ module PersonalTools
       display_name "Create Workflow Trigger"
       description "Connect a trigger to a workflow so it launches on its own: a card entering a " \
                   "board column (kind=column), a Slack message (slack), a cron schedule (schedule), " \
-                  "an inbound webhook (webhook), or a custom platform event (event). " \
-                  "IMPORTANT: the off-board kinds (slack, schedule, webhook, event) fire unattended, " \
+                  "an inbound webhook (webhook), an event in a task tracker connected to the project " \
+                  "(tracker: event_type tracker.issue.created, tracker.issue.status_changed, " \
+                  "tracker.issue.assigned or tracker.comment.created; project_tracker_id picks one tracker, " \
+                  "none means any), or a custom platform event (event). " \
+                  "IMPORTANT: the off-board kinds (slack, schedule, webhook, event, tracker) fire unattended, " \
                   "so EVERY step of the workflow must have auto-run (allow_non_interactive) enabled — " \
                   "otherwise this call is rejected and the error names the steps still waiting on a " \
                   "human. Column triggers are exempt: their manual mode puts a person on the button. " \
@@ -24,8 +27,8 @@ module PersonalTools
       param :board_column_id, type: :integer,
                               description: "Board column whose incoming cards fire the workflow. Required for kind=column."
       param :event_type, type: :string,
-                         description: "Platform event name for kind=event (e.g. 'github.push'). Ignored for the " \
-                                      "other kinds, which set their own event type."
+                         description: "Event name for kind=event (e.g. 'github.push') and kind=tracker (one of the " \
+                                      "tracker.* types). Ignored for the other kinds, which set their own event type."
       param :name, type: :string, description: "Human-readable label for this trigger."
       param :trigger_mode, type: :string, enum: WorkflowTriggerSupport::TRIGGER_MODES,
                            description: "auto starts the run immediately; manual only offers it. Defaults to auto."
@@ -34,10 +37,16 @@ module PersonalTools
       param :notify_on_failure, type: :boolean,
             description: "Post to the triggering Slack thread when a run from this trigger fails, with the error (default true; Slack triggers only)."
       param :subject_policy, type: :string, enum: WorkflowTriggerSupport::SUBJECT_POLICIES,
-                             description: "Which board task the run is about: none, existing_task, or create_task " \
-                                          "(create_task also needs subject_column_id)."
+                             description: "Which board task the run is about: none, existing_task, create_task, or " \
+                                          "find_or_create_task (tracker triggers: reuse the task linked to the " \
+                                          "issue, else create one). The last two need subject_column_id."
       param :subject_column_id, type: :integer, description: "Board column the new card lands in when subject_policy is create_task."
       param :subject_title_template, type: :string, description: "Title template for the card created by subject_policy=create_task."
+      param :project_tracker_id, type: :integer,
+                                 description: "kind=tracker: the project tracker to listen to. Omit for any tracker in the project."
+      param :aixle_changes, type: :string, enum: WorkflowTriggerSupport::AIXLE_CHANGES,
+                            description: "kind=tracker: what to do with changes Aixle itself made. ignore (default), " \
+                                         "other_workflows (chain workflows, never re-enter one), or always."
       param :filter_predicate, type: :object,
                                description: "Only fire when the event data contains these key/value pairs, " \
                                             "e.g. {\"channel\": \"C123\"}. Empty means every event of this type."

@@ -5,6 +5,9 @@ require "test_helper"
 # Rack::Attack is off in the test env; these turn it on against a private store.
 class RackAttackTest < ActionDispatch::IntegrationTest
   setup do
+    # Throttles count in fixed windows of Time.now / period; a burst that
+    # straddles a boundary on a slow runner is split across two counters.
+    freeze_time
     @previous_store = Rack::Attack.cache.store
     Rack::Attack.cache.store = ActiveSupport::Cache::MemoryStore.new
     Rack::Attack.enabled = true

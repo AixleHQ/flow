@@ -733,4 +733,68 @@ describe('Projects/Workflows/TriggerFormPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Close' }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  // -------------------------------------------------------------------------
+  // Tracker kind
+  // -------------------------------------------------------------------------
+  describe('tracker kind', () => {
+    const trackers: NonNullable<PanelProps['trackers']> = [
+      { id: 5, handle: 'boards', name: 'Customer Platform', provider: 'azure_devops' },
+    ];
+
+    it('is offered only once the project has a tracker', async () => {
+      renderPage(<TriggerFormPanel {...baseProps()} />);
+      await userEvent.click(screen.getByDisplayValue('Task enters column'));
+      expect(screen.queryByRole('option', { name: 'Task tracker event' })).not.toBeInTheDocument();
+    });
+
+    it("posts a status-change trigger for any tracker that reuses the issue's task", async () => {
+      const fetchSpy = installFetch();
+      renderPage(<TriggerFormPanel {...baseProps({ defaultKind: 'tracker', trackers })} />);
+
+      await userEvent.type(screen.getByRole('combobox', { name: 'Moves to' }), 'Ready for AI{enter}');
+      await userEvent.click(screen.getByRole('button', { name: 'Add trigger' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' })),
+      );
+      expect(bodyOf(fetchSpy, 'POST').trigger).toEqual({
+        kind: 'tracker',
+        event_type: 'tracker.issue.status_changed',
+        project_tracker_id: null,
+        aixle_changes: 'ignore',
+        filter_predicate: { 'change.to.name': { op: 'in', value: ['Ready for AI'] } },
+        subject_policy: 'find_or_create_task',
+        subject_column_id: '1',
+      });
+    });
+
+    it('edits a tracker trigger without resending its event type', async () => {
+      const fetchSpy = installFetch();
+      const editing: Trigger = {
+        id: 21,
+        kind: 'tracker',
+        event_type: 'tracker.comment.created',
+        project_tracker_id: 5,
+        aixle_changes: 'other_workflows',
+        subject_policy: 'none',
+        filter_predicate: { 'comment.mentions_me': true },
+        enabled: true,
+      };
+      renderPage(<TriggerFormPanel {...baseProps({ editing, trackers })} />);
+
+      await userEvent.click(screen.getByRole('button', { name: 'Update trigger' }));
+
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'PATCH' })),
+      );
+      expect(bodyOf(fetchSpy, 'PATCH').trigger).toEqual({
+        project_tracker_id: '5',
+        aixle_changes: 'other_workflows',
+        filter_predicate: { 'comment.mentions_me': true },
+        subject_policy: 'none',
+        enabled: true,
+      });
+    });
+  });
 });

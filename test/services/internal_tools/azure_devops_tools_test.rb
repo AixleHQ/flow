@@ -54,17 +54,17 @@ class InternalTools::AzureDevopsToolsTest < ActiveSupport::TestCase
     assert_match(/another project/, result[:stderr])
   end
 
-  test "a work item tool requires an explicit connection rather than picking one" do
-    result = run_tool(InternalTools::AzureDevopsGetWorkItem, { work_item_id: 5 })
+  test "a connection-scoped tool requires an explicit connection rather than picking one" do
+    result = run_tool(InternalTools::AzureDevopsListBuilds, {})
 
     assert_equal 1, result[:exit_code]
     assert_match(/integration_id is required/, result[:stderr])
   end
 
-  test "a work item tool refuses a connection from another project" do
+  test "a connection-scoped tool refuses a connection from another project" do
     foreign = create(:integration, :azure_devops, :active)
 
-    result = run_tool(InternalTools::AzureDevopsGetWorkItem, { integration_id: foreign.id, work_item_id: 5 })
+    result = run_tool(InternalTools::AzureDevopsListBuilds, { integration_id: foreign.id })
 
     # Not even found: a connection outside this project's tenant resolves to nothing.
     assert_equal 1, result[:exit_code]
@@ -76,11 +76,10 @@ class InternalTools::AzureDevopsToolsTest < ActiveSupport::TestCase
     @integration.settings = @integration.settings.merge("enabled_capabilities" => [ "repositories.read" ])
     @integration.save!
 
-    result = run_tool(InternalTools::AzureDevopsAddWorkItemComment,
-                      { integration_id: @integration.id, work_item_id: 5, text: "hi", operation_key: "k1" })
+    result = run_tool(InternalTools::AzureDevopsListBuilds, { integration_id: @integration.id })
 
     assert_equal 1, result[:exit_code]
-    assert_match(/work_items.write/, result[:stderr])
+    assert_match(/builds.read/, result[:stderr])
   end
 
   # == list_connections ==
@@ -191,41 +190,6 @@ class InternalTools::AzureDevopsToolsTest < ActiveSupport::TestCase
   end
 
   # == work items ==
-
-  # The WIQL text itself — the pinned project predicate, the quote escaping, the
-  # deterministic order — is asserted in the adapter's own unit test. Here the
-  # tool's job is to pass the caller's structured filters through untouched.
-  test "a work item query passes structured filters to the adapter" do
-    run_tool(InternalTools::AzureDevopsQueryWorkItems,
-             { integration_id: @integration.id, title_contains: "it's broken", open_only: true })
-
-    call = @fakes.work_items.last_call
-    assert_equal :query, call[:method]
-    assert_equal "it's broken", call[:filters][:title_contains]
-    assert call[:filters][:open_only]
-  end
-
-  # The JSON Patch shape (the `test` on /rev, the json-patch content type) is
-  # pinned by the adapter's contract test; the tool's job is to forward the
-  # expected revision rather than dropping it.
-  test "a work item update forwards the expected revision" do
-    run_tool(InternalTools::AzureDevopsUpdateWorkItem,
-             { integration_id: @integration.id, work_item_id: 11, expected_revision: 3, state: "Active" })
-
-    call = @fakes.work_items.last_call
-    assert_equal :update, call[:method]
-    assert_equal 3, call[:expected_revision]
-    assert_equal "Active", call[:fields][:state]
-  end
-
-  test "a work item update rejects a field the tool does not expose" do
-    result = InternalTools::AzureDevopsUpdateWorkItem.new(
-      params: { integration_id: @integration.id, work_item_id: 11 }, session: @session
-    ).execute
-
-    assert_equal 1, result[:exit_code]
-    assert_match(/No fields to update/, result[:stderr])
-  end
 
   test "linking a pull request reads the pull request first and never sends a state change" do
     run_tool(InternalTools::AzureDevopsLinkWorkItem,

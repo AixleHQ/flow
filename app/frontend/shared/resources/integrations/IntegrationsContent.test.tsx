@@ -145,6 +145,62 @@ describe('IntegrationsContent', () => {
     );
   });
 
+  // == Jira ==
+
+  const jiraIntegration = (overrides: Partial<Integration> = {}): Integration =>
+    makeIntegration({
+      id: 8,
+      name: 'Jira · acme.atlassian.net',
+      provider: 'jira',
+      scopeIndicator: 'project',
+      jiraAuthMode: 'service_account',
+      jiraSiteUrl: 'https://acme.atlassian.net',
+      jiraProjects: [
+        { id: '10000', key: 'ENG', name: 'Engineering' },
+        { id: '10001', key: 'OPS', name: 'Operations' },
+      ],
+      jiraIdentity: 'Aixle Bot',
+      ...overrides,
+    });
+
+  it('offers Jira in a project, and says which projects a connection covers and as whom', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[jiraIntegration()]}
+        jira={{ oauthEnabled: true }}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.getByText('ENG, OPS · as Aixle Bot (service account)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Webhook setup for Jira/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Open Jira · acme.atlassian.net in Jira/ })).toHaveAttribute(
+      'href',
+      'https://acme.atlassian.net',
+    );
+  });
+
+  it('opens the project picker for the connection the Atlassian app just made', async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValue({ ok: true, json: async () => ({ projects: [] }) } as Response);
+    window.history.pushState({}, '', '/company/projects/1/integrations?jira_setup=8');
+    renderPage(
+      <IntegrationsContent
+        title="Integrations"
+        basePath="/company/projects/1/integrations"
+        integrations={[jiraIntegration({ status: 'inactive', jiraAuthMode: 'oauth', jiraProjects: [], jiraSites: [] })]}
+        jira={{ oauthEnabled: true }}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(await screen.findByRole('dialog', { name: 'Jira projects' })).toBeInTheDocument();
+    expect(screen.getByText('Choose the Jira projects to finish connecting')).toBeInTheDocument();
+    window.history.pushState({}, '', '/');
+    vi.mocked(globalThis.fetch).mockReset();
+  });
+
   it('shows the empty state when there are no integrations', () => {
     renderPage(
       <IntegrationsContent title="Company Integrations" basePath="/company/integrations" integrations={[]} />,

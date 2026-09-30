@@ -33,4 +33,13 @@ class TaskDetailResource < BoardTaskResource
       { id: child.id, title: child.title, task_type: child.task_type.to_s }
     end
   end
+
+  # The tracker issues this task is about, read-only. Only the detail view needs
+  # them, so the board's task list does not pay for the lookup.
+  typelize "Array<{ provider: string; key: string | null; url: string | null }>"
+  attribute :tracker_issues do |task|
+    task.external_resources.tracker_issues.order(:created_at).map do |link|
+      { provider: link.provider, key: link.key || link.external_id, url: link.url }
+    end
+  end
 end

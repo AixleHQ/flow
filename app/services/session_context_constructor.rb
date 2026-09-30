@@ -8,6 +8,7 @@ class SessionContextConstructor
     ContextBuilders::SessionInfo,
     ContextBuilders::Workspace,
     ContextBuilders::WorkflowContext,
+    ContextBuilders::TrackerContext,
     ContextBuilders::BoardContext,
     ContextBuilders::Tools,
     ContextBuilders::Resources,

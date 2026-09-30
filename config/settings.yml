@@ -353,6 +353,16 @@ slack:
   # Bot scopes requested at install time (space-separated per Slack's OAuth spec).
   scopes: <%= ENV['SLACK_SCOPES'] || 'app_mentions:read,channels:history,groups:history,files:read,files:write,chat:write' %>
 
+jira:
+  # One Atlassian OAuth 2.0 (3LO) app per deployment, shared by every customer
+  # site: Atlassian's terms do not allow an app per customer. Optional — without
+  # it Jira connects with a customer's service account only.
+  client_id: "<%= ENV['JIRA_OAUTH_CLIENT_ID'] %>"
+  client_secret: "<%= ENV['JIRA_OAUTH_CLIENT_SECRET'] %>"
+  # Where Jira posts webhooks, when DOMAIN is not reachable from Atlassian (a
+  # tunnel in development). A loopback or private host registers no webhooks.
+  webhook_base_url: "<%= ENV['JIRA_WEBHOOK_BASE_URL'] %>"
+
 coder:
   # Operator-configurable knobs for the Coder MCP services (workspace
   # allocation, health gating, ssh runner).

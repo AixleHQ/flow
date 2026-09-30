@@ -50,6 +50,21 @@ module AzureDevops
       end
     end
 
+    # The columns of the project's boards, which are what people move cards
+    # between. A column is not a state: several can map onto one state, and a
+    # team adds a column ("Ready for AI") without touching the process. The
+    # column type gives the portable category.
+    COLUMN_CATEGORIES = { "incoming" => "todo", "inProgress" => "in_progress", "outgoing" => "done" }.freeze
+
+    def board_columns(project_id: nil)
+      client, resolved = client_for(:"work_items.read", project_id: project_id)
+      boards = Array(client.get("_apis", "work", "boards", project: resolved.project_id)["value"])
+      boards.flat_map do |board|
+        columns = client.get("_apis", "work", "boards", board["id"].to_s, "columns", project: resolved.project_id)
+        Array(columns["value"]).map { |c| { name: c["name"], category: COLUMN_CATEGORIES[c["columnType"]], board: board["name"] } }
+      end.uniq { |c| c[:name].to_s.downcase }
+    end
+
     # Structured filters only. WIQL is built here with the selected project
     # pinned as a predicate and every value bound through an escaper — a
     # caller-supplied WIQL fragment cannot be made safe by appending a project
@@ -228,6 +243,7 @@ module AzureDevops
         type: fields["System.WorkItemType"],
         title: fields["System.Title"],
         state: fields["System.State"],
+        board_column: fields["System.BoardColumn"],
         assigned_to: fields.dig("System.AssignedTo", "displayName"),
         tags: fields["System.Tags"],
         area_path: fields["System.AreaPath"],
@@ -240,8 +256,15 @@ module AzureDevops
         description: item.dig("fields", "System.Description"),
         iteration_path: item.dig("fields", "System.IterationPath"),
         relations: Array(item["relations"]).map { |r| { rel: r["rel"], url: r["url"] } },
-        url: item.dig("_links", "html", "href")
+        url: item.dig("_links", "html", "href"),
+        changed_by: identity(item.dig("fields", "System.ChangedBy"))
       ).compact
+    end
+
+    def identity(value)
+      return unless value.is_a?(Hash)
+
+      { id: value["id"], display_name: value["displayName"], unique_name: value["uniqueName"] }.compact.presence
     end
 
     # A work item id is unique per organization, not per project, so an id from a
@@ -273,9 +296,11 @@ module AzureDevops
     # returns nil rather than raising: an unverifiable name must not turn every
     # work-item read into an authorization error.
     def expected_project_name(resolved)
-      return @expected_project_name if defined?(@expected_project_name)
+      @expected_project_names ||= {}
+      return @expected_project_names[resolved.project_id] if @expected_project_names.key?(resolved.project_id)
 
-      @expected_project_name = integration.azure_project_name.presence || fetch_project_name(resolved)
+      @expected_project_names[resolved.project_id] =
+        integration.azure_project_names[resolved.project_id].presence || fetch_project_name(resolved)
     end
 
     def fetch_project_name(resolved)
@@ -283,7 +308,10 @@ module AzureDevops
       name = client.get("_apis", "projects", resolved.project_id, family: :core)["name"].presence
       # Cache it so the next read does not pay for the lookup, and so a renamed
       # project heals itself on first use.
-      integration.update_column(:settings, integration.settings.to_h.merge("azure_project_name" => name)) if name
+      if name
+        names = integration.azure_project_names.merge(resolved.project_id => name)
+        integration.update_column(:settings, integration.settings.to_h.merge("azure_project_names" => names))
+      end
       name
     rescue Error => e
       Rails.logger.warn("[AzureDevops::WorkItemService] could not resolve project name for " \

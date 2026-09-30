@@ -16,6 +16,7 @@ import configuringSso from './configuring-sso.md?raw';
 import examples from './examples.md?raw';
 import gettingStarted from './getting-started.md?raw';
 import integrations from './integrations.md?raw';
+import jira from './jira.md?raw';
 import mcp from './mcp.md?raw';
 import peopleAndAccess from './people-and-access.md?raw';
 import personas from './personas.md?raw';
@@ -275,6 +276,12 @@ export const DOC_PAGES: Record<string, DocPage & { toc: TocItem[] }> = {
     section: 'User guide',
     content: azureDevops,
     toc: extractToc(azureDevops),
+  },
+  jira: {
+    title: 'Jira',
+    section: 'User guide',
+    content: jira,
+    toc: extractToc(jira),
   },
   configuration: {
     title: 'Configuration',

@@ -33,7 +33,7 @@ module AzureDevops
       IntegrationService.new(company: @integration.company, connected_by: @integration.connected_by,
                              project: @integration.project).test(@integration)
 
-      assert_equal AzureDevopsSubscription::EVENT_TYPES.sort,
+      assert_equal AzureDevopsSubscription::GATE_EVENT_TYPES.sort,
                    @integration.azure_devops_subscriptions.reload.pluck(:event_type).sort
     end
 

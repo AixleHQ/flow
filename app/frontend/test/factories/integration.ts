@@ -26,6 +26,12 @@ export const buildIntegration = (overrides: Partial<Integration> = {}): Integrat
   coderMachinePrefix: null,
   coderLockTtlMinutes: null,
   slackRequestUrl: null,
+  jiraAuthMode: null,
+  jiraSiteUrl: null,
+  jiraProjects: [],
+  jiraSites: [],
+  jiraIdentity: null,
+  jiraDedicatedIdentity: false,
   // Always present, empty for every provider but Azure DevOps: the operation
   // profile and the covered projects are lists the server always serializes,
   // not optional fields.

@@ -3,14 +3,14 @@
 module WorkflowTriggers
   # Creates a workflow trigger of any kind. One home for what the triggers API,
   # the personal MCP and the template installer all do:
-  #   column                             → ColumnWorkflowBinding
-  #   slack / schedule / webhook / event → TriggerBinding (+ WebhookEndpoint for webhook)
+  #   column                                       → ColumnWorkflowBinding
+  #   slack / schedule / webhook / event / tracker → TriggerBinding (+ WebhookEndpoint for webhook)
   #
   # Callers serialize the result themselves; the web and MCP surfaces format it
   # differently. ActiveRecord::RecordInvalid and Temporalio::Error (a schedule
   # reconciles onto Temporal after commit) propagate to the caller.
   class Creator
-    KINDS = %w[column slack schedule webhook event].freeze
+    KINDS = %w[column slack schedule webhook event tracker].freeze
 
     BoardMissingError = Class.new(StandardError)
     UnsupportedKindError = Class.new(StandardError)
@@ -18,7 +18,8 @@ module WorkflowTriggers
     Result = Struct.new(:kind, :trigger, :webhook_endpoint, keyword_init: true)
 
     BINDING_KEYS = %i[name trigger_mode enabled cooldown_seconds notify_on_failure subject_policy
-                      subject_column_id subject_title_template filter_predicate schedule_config].freeze
+                      subject_column_id subject_title_template filter_predicate schedule_config
+                      project_tracker_id aixle_changes].freeze
 
     def self.call(...) = new(...).call
 
@@ -37,7 +38,7 @@ module WorkflowTriggers
       case @kind
       when "column" then create_column_trigger
       when "webhook" then create_webhook_trigger
-      when "slack", "schedule", "event" then Result.new(kind: @kind, trigger: create_binding!(event_type))
+      when "slack", "schedule", "event", "tracker" then Result.new(kind: @kind, trigger: create_binding!(event_type))
       else raise UnsupportedKindError, "Unsupported trigger kind: #{@kind}"
       end
     end
@@ -81,12 +82,21 @@ module WorkflowTriggers
       case @kind
       when "slack" then "slack.message"
       when "schedule" then "schedule.fired"
+      # No default: falling through to webhook.received would build a webhook
+      # trigger. The binding validates the tracker event type.
+      when "tracker" then @attributes[:event_type].to_s
       else @attributes[:event_type].to_s.presence || "webhook.received"
       end
     end
 
+    # A tracker trigger given a column for its tasks defaults to reusing the
+    # task already linked to the issue (docs/design/task-tracker-integrations.md §6.4).
     def binding_attributes
-      @attributes.slice(*BINDING_KEYS)
+      attributes = @attributes.slice(*BINDING_KEYS)
+      if @kind == "tracker" && attributes[:subject_policy].blank? && attributes[:subject_column_id].present?
+        attributes[:subject_policy] = "find_or_create_task"
+      end
+      attributes
     end
   end
 end

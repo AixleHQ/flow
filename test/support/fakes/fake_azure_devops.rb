@@ -34,10 +34,10 @@ module FakeAzureDevops
       @calls << { method: method }.merge(args)
     end
 
-    def authorize!(capability)
+    def authorize!(capability, project_id: nil)
       return if @integration.nil?
 
-      AzureDevops::CredentialProvider.resolve!(@integration, capability: capability)
+      AzureDevops::CredentialProvider.resolve!(@integration, capability: capability, project_id: project_id)
     end
 
     def called?(method)
@@ -323,8 +323,8 @@ module FakeAzureDevops
     end
 
     def work_item_types(project_id: nil)
-      authorize!(:"work_items.read")
-      record(:work_item_types)
+      authorize!(:"work_items.read", project_id: project_id)
+      record(:work_item_types, project_id: project_id)
       raise @error if @error
 
       [ { name: "Bug", reference_name: "Microsoft.VSTS.WorkItemTypes.Bug",
@@ -332,33 +332,48 @@ module FakeAzureDevops
           required_fields: [ "System.Title" ] } ]
     end
 
+    COLUMNS = [
+      { name: "New", category: "todo", board: "Stories" },
+      { name: "Ready for AI", category: "todo", board: "Stories" },
+      { name: "Active", category: "in_progress", board: "Stories" },
+      { name: "Closed", category: "done", board: "Stories" }
+    ].freeze
+
+    def board_columns(project_id: nil)
+      authorize!(:"work_items.read", project_id: project_id)
+      record(:board_columns, project_id: project_id)
+      raise @error if @error
+
+      COLUMNS
+    end
+
     def query(filters: {}, limit: 50, cursor: nil, project_id: nil)
-      authorize!(:"work_items.read")
-      record(:query, filters: filters, limit: limit, cursor: cursor)
+      authorize!(:"work_items.read", project_id: project_id)
+      record(:query, filters: filters, limit: limit, cursor: cursor, project_id: project_id)
       raise @error if @error
 
       { work_items: [ @work_item ], total_matched: 1, has_more: false }
     end
 
     def get(work_item_id, project_id: nil)
-      authorize!(:"work_items.read")
-      record(:get, work_item_id: work_item_id)
+      authorize!(:"work_items.read", project_id: project_id)
+      record(:get, work_item_id: work_item_id, project_id: project_id)
       raise @error if @error
 
       @work_item
     end
 
     def comments(work_item_id, limit: 50, cursor: nil, project_id: nil)
-      authorize!(:"work_items.read")
-      record(:comments, work_item_id: work_item_id, limit: limit, cursor: cursor)
+      authorize!(:"work_items.read", project_id: project_id)
+      record(:comments, work_item_id: work_item_id, limit: limit, cursor: cursor, project_id: project_id)
       raise @error if @error
 
       { comments: [ { id: 1, author: "Ada", text: "looking" } ], has_more: false }
     end
 
     def add_comment(work_item_id, text:, project_id: nil)
-      authorize!(:"work_items.write")
-      record(:add_comment, work_item_id: work_item_id, text: text)
+      authorize!(:"work_items.write", project_id: project_id)
+      record(:add_comment, work_item_id: work_item_id, text: text, project_id: project_id)
       raise @error if @error
 
       { id: 2, created_at: Time.current.iso8601 }
@@ -367,23 +382,24 @@ module FakeAzureDevops
     def create(type:, fields: {}, project_id: nil)
       raise AzureDevops::ValidationFailed, "At least System.Title is required" if fields.blank?
 
-      authorize!(:"work_items.write")
-      record(:create, type: type, fields: fields)
+      authorize!(:"work_items.write", project_id: project_id)
+      record(:create, type: type, fields: fields, project_id: project_id)
       raise @error if @error
 
       @work_item.merge(type: type, title: fields[:title])
     end
 
     def update(work_item_id, fields: {}, expected_revision: nil, project_id: nil)
-      authorize!(:"work_items.write")
-      record(:update, work_item_id: work_item_id, fields: fields, expected_revision: expected_revision)
+      authorize!(:"work_items.write", project_id: project_id)
+      record(:update, work_item_id: work_item_id, fields: fields, expected_revision: expected_revision,
+                     project_id: project_id)
       raise @error if @error
 
       @work_item.merge(fields).merge(rev: @work_item[:rev] + 1)
     end
 
     def link_pull_request(work_item_id, artifact_id:, expected_revision: nil, comment: nil, project_id: nil)
-      authorize!(:"work_items.write")
+      authorize!(:"work_items.write", project_id: project_id)
       record(:link_pull_request, work_item_id: work_item_id, artifact_id: artifact_id,
                                  expected_revision: expected_revision, comment: comment)
       raise @error if @error

@@ -8,12 +8,12 @@ module InternalTools
     # connection present in this project" — it is an availability predicate, and
     # MCP's readOnlyHint/destructiveHint annotations are display hints the spec
     # itself calls untrusted. Neither decides whether THIS call may touch THIS
-    # repository or work item. That is decided here, in the order the design
+    # repository or build. That is decided here, in the order the design
     # sets out:
     #
     #   1. an authorized, active project session
     #   2. repository tools: the local id must be in session.repositories
-    #   3. work-item tools: an EXPLICIT integration_id — never "the first Azure
+    #   3. build tools: an EXPLICIT integration_id — never "the first Azure
     #      connection in the project", which would silently pick a target
     #   4. the connection, its installation binding and its capability profile
     #   5. every fetched entity re-checked against that scope before it is
@@ -41,9 +41,9 @@ module InternalTools
         [ repository, integration ]
       end
 
-      # Work items belong to an Azure project, not to a repository, so there is
+      # Builds belong to an Azure project, not to a repository, so there is
       # nothing to derive the connection from. Requiring the id is the point:
-      # defaulting would make "which project did the agent just file a bug in"
+      # defaulting would make "which project's pipeline did the agent read"
       # depend on row order.
       def resolve_integration!
         id = params[:integration_id]

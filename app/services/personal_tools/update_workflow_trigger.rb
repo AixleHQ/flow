@@ -26,10 +26,14 @@ module PersonalTools
       param :notify_on_failure, type: :boolean,
             description: "Post to the triggering Slack thread when a run from this trigger fails, with the error (default true; Slack triggers only)."
       param :subject_policy, type: :string, enum: WorkflowTriggerSupport::SUBJECT_POLICIES,
-                             description: "Which board task the run is about: none, existing_task, or create_task " \
-                                          "(create_task also needs subject_column_id)."
+                             description: "Which board task the run is about: none, existing_task, create_task, or " \
+                                          "find_or_create_task. The last two need subject_column_id."
       param :subject_column_id, type: :integer, description: "Board column the new card lands in when subject_policy is create_task."
       param :subject_title_template, type: :string, description: "Title template for the card created by subject_policy=create_task."
+      param :project_tracker_id, type: :integer,
+                                 description: "kind=tracker: the project tracker to listen to; null for any tracker."
+      param :aixle_changes, type: :string, enum: WorkflowTriggerSupport::AIXLE_CHANGES,
+                            description: "kind=tracker: ignore, other_workflows or always — what to do with changes Aixle made."
       param :filter_predicate, type: :object,
                                description: "Replaces the whole predicate: only fire when the event data contains " \
                                             "these key/value pairs. Pass {} to clear it."

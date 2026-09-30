@@ -79,4 +79,26 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
       )
     end
   end
+
+  test "jira_oauth_start is admin-or-owner (redirects to Atlassian)" do
+    with_jira_oauth_app
+    assert_role_matrix(MANAGE, transport: :web) do
+      get jira_oauth_start_company_project_integrations_path(@project)
+    end
+  end
+
+  # A missing credential is refused in the body, after authorization passed.
+  test "jira_inspect is admin-or-owner" do
+    assert_role_matrix(MANAGE, transport: :web, allowed_status: :unprocessable_content) do
+      post jira_inspect_company_project_integrations_path(@project), params: { site_url: "acme.atlassian.net" }, as: :json
+    end
+  end
+
+  # It answers with the webhook secret.
+  test "jira_webhook is admin-or-owner" do
+    jira = create(:integration, :jira, :active, project: @project, company: @company, connected_by: @owner)
+    assert_role_matrix(MANAGE, transport: :web, allowed_status: :success) do
+      get jira_webhook_company_project_integration_path(@project, jira), as: :json
+    end
+  end
 end

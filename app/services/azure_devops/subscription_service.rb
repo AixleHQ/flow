@@ -26,7 +26,7 @@ module AzureDevops
     # several needs one set of subscriptions per project. One project failing
     # does not stop the others: partial event coverage plus the recovery sweep
     # beats none.
-    def ensure_all!(event_types: AzureDevopsSubscription::EVENT_TYPES, base_url: nil)
+    def ensure_all!(event_types: AzureDevopsSubscription::GATE_EVENT_TYPES, base_url: nil)
       integration.azure_project_ids.flat_map do |project_id|
         event_types.filter_map do |event_type|
           # ANY existing row, not only a live one: the unique index is on

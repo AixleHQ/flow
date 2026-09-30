@@ -13,7 +13,7 @@ module InternalTools
 
     tool do
       display_name "Azure DevOps List Connections"
-      description "List this project's Azure DevOps connections: connection id, organization, the Azure projects it covers, auth mode and enabled capabilities. Call this first — the work item and build tools need an explicit `integration_id`, and an explicit `azure_project_id` whenever a connection covers more than one project. Returns JSON: {connections: [{integration_id, organization, azure_projects: [{id, name}], auth_mode, capabilities, status}]}. No credentials are ever returned."
+      description "List this project's Azure DevOps connections: connection id, organization, the Azure projects it covers, auth mode and enabled capabilities. Call this first — the build tools need an explicit `integration_id`, and an explicit `azure_project_id` whenever a connection covers more than one project. Azure Boards work items are reached through the tracker_* tools. Returns JSON: {connections: [{integration_id, organization, azure_projects: [{id, name}], auth_mode, capabilities, status}]}. No credentials are ever returned."
       tags :azure_devops
       inject_when :azure_integration_connected
       user_attachable false

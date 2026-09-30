@@ -6,6 +6,7 @@ import {
   IconColumns,
   IconPencil,
   IconPlus,
+  IconTicket,
   IconTrash,
   IconUser,
   IconWebhook,
@@ -16,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiFetch } from 'shared/lib/apiFetch';
 import { apiV1ProjectWorkflowTriggerPath, apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 
+import { TRACKER_EVENT_OPTIONS, type TrackerOption } from './trackerTrigger';
 import { TriggerFormPanel } from './TriggerFormPanel';
 import type { Trigger } from './types';
 
@@ -37,6 +39,7 @@ interface TriggersTabProps {
   workflowId: number;
   columns: ColumnOption[];
   sessions: StepOption[];
+  trackers?: TrackerOption[];
   readOnly: boolean;
 }
 
@@ -45,6 +48,7 @@ const TG_ICONS: Record<string, typeof IconBolt> = {
   schedule: IconClock,
   slack: IconBrandSlack,
   webhook: IconWebhook,
+  tracker: IconTicket,
 };
 
 const TG_EVENTS: Record<string, string> = {
@@ -79,13 +83,20 @@ function triggerTitle(t: Trigger): string {
     }
     return 'Any Slack message';
   }
+  if (t.kind === 'tracker') {
+    const label = TRACKER_EVENT_OPTIONS.find((o) => o.value === t.event_type)?.label ?? t.event_type;
+    const moves = (t.filter_predicate?.['change.to.name'] as { value?: unknown } | undefined)?.value;
+    if (Array.isArray(moves) && moves.length > 0) return `Issue moves to ${moves.join(', ')}`;
+    if (t.filter_predicate?.['comment.mentions_me'] === true) return 'Aixle is mentioned in a comment';
+    return label;
+  }
   return 'Incoming webhook';
 }
 
 // Off-board triggers fire unattended, so the run belongs to — and uses the
 // credentials of — whoever added the trigger. A column trigger's run belongs to
 // the person the card puts on it, so its creator is shown as provenance only.
-const OFF_BOARD_KINDS = new Set(['slack', 'schedule', 'webhook', 'event']);
+const OFF_BOARD_KINDS = new Set(['slack', 'schedule', 'webhook', 'event', 'tracker']);
 
 function creatorLabel(t: Trigger): string {
   const name = t.created_by?.name;
@@ -101,7 +112,18 @@ function creatorTone(t: Trigger): string {
   return OFF_BOARD_KINDS.has(t.kind) ? 'var(--err)' : 'var(--text-3)';
 }
 
-function triggerMeta(t: Trigger): string {
+const AIXLE_CHANGE_LABELS: Record<string, string> = {
+  ignore: 'ignores Aixle changes',
+  other_workflows: 'chains from other workflows',
+  always: 'follows Aixle changes',
+};
+
+function triggerMeta(t: Trigger, trackers: TrackerOption[] = []): string {
+  if (t.kind === 'tracker') {
+    const tracker = trackers.find((tr) => tr.id === t.project_tracker_id);
+    const scope = t.project_tracker_id ? (tracker?.handle ?? 'detached tracker') : 'any tracker';
+    return `${scope} · ${AIXLE_CHANGE_LABELS[t.aixle_changes ?? 'ignore'] ?? t.aixle_changes}`;
+  }
   if (t.kind === 'column') return `${t.trigger_mode ?? 'auto'} · cooldown ${t.cooldown_seconds ?? 0}s`;
   if (t.kind === 'schedule') {
     const cfg = t.schedule_config ?? {};
@@ -127,7 +149,7 @@ function triggerMeta(t: Trigger): string {
   return base;
 }
 
-export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly }: TriggersTabProps) {
+export function TriggersTab({ projectId, workflowId, columns, sessions, trackers = [], readOnly }: TriggersTabProps) {
   const [triggers, setTriggers] = useState<Trigger[]>([]);
   const [loading, setLoading] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -245,8 +267,8 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
           Triggers <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>— how this workflow launches</span>
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 20 }}>
-          Any enabled trigger can start a run. Off-board triggers (Slack, webhook) decide what task the run is about via{' '}
-          <strong style={{ color: 'var(--text-2)' }}>subject</strong>.
+          Any enabled trigger can start a run. Off-board triggers (Slack, webhook, tracker) decide what task the run is
+          about via <strong style={{ color: 'var(--text-2)' }}>subject</strong>.
         </div>
 
         {loading ? (
@@ -300,6 +322,16 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
                     name: 'Incoming webhook',
                     desc: 'When an authenticated request arrives',
                   },
+                  ...(trackers.length > 0
+                    ? [
+                        {
+                          kind: 'tracker',
+                          icon: IconTicket,
+                          name: 'Task tracker event',
+                          desc: 'When an issue is created, moves to a status or gets a comment',
+                        },
+                      ]
+                    : []),
                 ].map((opt) => {
                   const Icon = opt.icon;
                   return (
@@ -420,7 +452,7 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {triggerMeta(t)}
+                        {triggerMeta(t, trackers)}
                       </div>
                     </div>
                   </div>
@@ -584,6 +616,7 @@ export function TriggersTab({ projectId, workflowId, columns, sessions, readOnly
           workflowId={workflowId}
           columns={columns}
           sessions={sessions}
+          trackers={trackers}
           editing={editingTrigger}
           defaultKind={defaultKind}
           onClose={closePanel}

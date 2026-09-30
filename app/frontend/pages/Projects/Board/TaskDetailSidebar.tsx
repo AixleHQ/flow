@@ -42,6 +42,7 @@ import {
   IconPlayerPlay,
   IconSend,
   IconTag,
+  IconTicket,
   IconTrash,
   IconWorld,
   IconWorldOff,
@@ -95,6 +96,8 @@ import { TaskDetailSkeleton } from './TaskDetailSkeleton';
 import { WORKFLOW_ACTIVE_STATES } from './taskRuns';
 import { TaskRunsPanel } from './TaskRunsPanel';
 import { jsonHeaders, TASK_TYPE_COLORS, type Column, type Gate, type Task } from './types';
+
+const TRACKER_LABELS: Record<string, string> = { azure_devops: 'Azure Boards', jira: 'Jira' };
 
 const COMMENT_TAG_SUGGESTIONS = ['feedback', 'tech_design', 'code_review', 'qa_report', 'implementation_notes'];
 const AUTHOR_TYPES = [
@@ -963,6 +966,40 @@ export function TaskDetailSidebar({
                 // board card to open, so it is plain text rather than a dead link.
                 <Text size="sm">{parentTaskTitle ?? `#${task.parentTaskId}`}</Text>
               )}
+            </Box>
+          )}
+
+          {task.trackerIssues && task.trackerIssues.length > 0 && (
+            <Box>
+              <Group gap={6} mb={4}>
+                <ThemeIcon size={18} variant="light" color="blue" radius="xl">
+                  <IconTicket size={12} />
+                </ThemeIcon>
+                <Text size="xs" c="dimmed" fw={600} tt="uppercase">
+                  Tracker issues ({task.trackerIssues.length})
+                </Text>
+              </Group>
+              <Stack gap={4}>
+                {task.trackerIssues.map((issue) => {
+                  const label = `${TRACKER_LABELS[issue.provider] ?? issue.provider} · ${issue.key}`;
+                  return issue.url ? (
+                    <Text
+                      key={`${issue.provider}:${issue.key}`}
+                      component="a"
+                      href={issue.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      size="sm"
+                    >
+                      {label}
+                    </Text>
+                  ) : (
+                    <Text key={`${issue.provider}:${issue.key}`} size="sm">
+                      {label}
+                    </Text>
+                  );
+                })}
+              </Stack>
             </Box>
           )}
 
