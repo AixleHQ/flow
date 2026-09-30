@@ -81,7 +81,7 @@ module AuthConcern
   end
 
   def authenticate_admin!
-    redirect_to("/login") unless signed_in? && true_user&.super_admin?
+    redirect_to(admin_login_path) unless signed_in? && true_user&.super_admin?
   end
 
   # The signed-in user: the owner of a live UserSession who is still

@@ -28,7 +28,7 @@ class Web::ImpersonationSessionHygieneTest < ActionDispatch::IntegrationTest
 
     get admin_root_path
 
-    assert_redirected_to "/login"
+    assert_redirected_to admin_login_path
   end
 
   test "stop_impersonating returns to the account that actually authenticated" do
@@ -55,7 +55,7 @@ class Web::ImpersonationSessionHygieneTest < ActionDispatch::IntegrationTest
 
     get admin_root_path
 
-    assert_redirected_to "/login"
+    assert_redirected_to admin_login_path
   end
 
   test "suspending the operator mid-impersonation ends their admin access" do
@@ -66,6 +66,6 @@ class Web::ImpersonationSessionHygieneTest < ActionDispatch::IntegrationTest
 
     get admin_root_path
 
-    assert_redirected_to "/login"
+    assert_redirected_to admin_login_path
   end
 end

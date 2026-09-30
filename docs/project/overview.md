@@ -124,7 +124,7 @@ Merge logic: `visible_for_project` unions code/platform + company-scoped + proje
 /mcp, /action_mcp     MCP server (containers are configured with /action_mcp): session keys and personal MCP tokens
 /cable                Action Cable (Inertia Cable streams)
 /webhooks/...         GitHub, GitLab, Azure DevOps, Slack, and the generic /webhooks/in/:slug
-/admin/               Administrate panel (super admins)
+/admin/               Administrate panel (super admins; they sign in at /admin/login)
 /docs                 In-app documentation portal
 ```
 
