@@ -43,6 +43,15 @@ module GitCredentials
       assert_not git_clone_ran?
     end
 
+    test "a gh wrapper that could not be written leaves the clone to run, since git does not need it" do
+      @runtime.fail_write(SessionGitSetup::GH_WRAPPER)
+
+      _stdout, _stderr, exit_code = @setup.clone(@repository, "/workspace/repo/my-app", 1001)
+
+      assert_equal 0, exit_code
+      assert git_clone_ran?
+    end
+
     test "installing the helper on its own says so when it cannot be written" do
       @runtime.fail_write(SessionGitSetup::HELPER)
 
@@ -51,6 +60,6 @@ module GitCredentials
 
     private
 
-    def git_clone_ran? = @runtime.execs.any? { |cmd| Array(cmd).join(" ").include?("clone --depth=1") }
+    def git_clone_ran? = @runtime.execs.any? { |cmd| Array(cmd).join(" ").include?("clone --filter=blob:none") }
   end
 end

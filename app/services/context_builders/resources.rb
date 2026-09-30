@@ -55,7 +55,13 @@ module ContextBuilders
         lines << ""
         lines << "GitHub and GitLab repositories authenticate through a credential helper configured in " \
                  "each checkout, which fetches a fresh token for every `git fetch` and `git push`. Do not " \
-                 "add credentials to the remote URL."
+                 "add credentials to the remote URL. Each checkout carries every branch and the full commit " \
+                 "history (`git branch -r` lists them all); file contents of other revisions download on first use."
+      end
+      if cloned.any? { |repo| repo.integration&.github? }
+        lines << ""
+        lines << "`gh` authenticates the same way, per call, for the repository it targets: run it inside the " \
+                 "checkout or pass `-R <owner>/<repo>`. Do not run `gh auth login` or export a token."
       end
       if cloned.any?(&:azure_devops?)
         lines << ""

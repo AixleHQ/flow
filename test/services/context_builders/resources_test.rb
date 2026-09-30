@@ -84,6 +84,22 @@ class ContextBuilders::ResourcesTest < ActiveSupport::TestCase
     assert_includes content, "cloned anonymously"
   end
 
+  test "build tells the agent every branch is fetched and that gh authenticates only for GitHub" do
+    gitlab = create(:integration, :gitlab, company: @company, connected_by: @user)
+    github_session = create(:terminal_session, :agent_session, user: @user, project: @project, mode: "interactive")
+    github_session.repositories << create(:repository, scope: @project, integration: @integration, full_name: "acme/api")
+    gitlab_session = create(:terminal_session, :agent_session, user: @user, project: @project, mode: "interactive")
+    gitlab_session.repositories << create(:repository, scope: @project, integration: gitlab, full_name: "team/service")
+
+    github_content = ContextBuilders::Resources.new(github_session.reload).build.first.content
+    gitlab_content = ContextBuilders::Resources.new(gitlab_session.reload).build.first.content
+
+    assert_includes github_content, "`git branch -r` lists them all"
+    assert_includes github_content, "`gh` authenticates the same way"
+    assert_includes gitlab_content, "`git branch -r` lists them all"
+    assert_not_includes gitlab_content, "`gh`"
+  end
+
   test "build shows an em dash for repositories without a purpose" do
     session = create(:terminal_session, :agent_session, user: @user, project: @project,
       mode: "interactive")

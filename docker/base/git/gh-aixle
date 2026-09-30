@@ -1,0 +1,108 @@
+#!/bin/bash
+# `gh` for a session with GitHub repositories attached, installed ahead of the
+# real one on PATH (GitCredentials::SessionGitSetup).
+#
+# No token sits in the environment or on disk for gh to find — that is the point
+# of git-credential-aixle. So each call asks git's credential helper for a fresh
+# credential and hands it to this one gh process only. The credential is narrowed
+# to a single repository, so the call's repository decides which checkout's
+# configuration is asked: `-R/--repo`, GH_REPO or a `gh api repos/<owner>/<repo>`
+# path, else the checkout the call runs in, else the session's only GitHub
+# checkout.
+set -uo pipefail
+
+self="$(readlink -f "${BASH_SOURCE[0]}")"
+real=""
+IFS=: read -ra path_dirs <<<"${PATH:-}"
+for dir in "${path_dirs[@]}"; do
+  candidate="${dir:-.}/gh"
+  if [ -x "$candidate" ] && [ "$(readlink -f "$candidate")" != "$self" ]; then
+    real="$candidate"
+    break
+  fi
+done
+if [ -z "$real" ]; then
+  echo "gh: the GitHub CLI is not installed in this container" >&2
+  exit 127
+fi
+
+if [ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ] || [ -z "${AIXLE_GIT_KEY:-}" ]; then
+  exec "$real" "$@"
+fi
+case "${1:-}" in
+  "" | help | version | completion | --help | -h | --version) exec "$real" "$@" ;;
+esac
+
+root="${AIXLE_REPO_ROOT:-/workspace/repo}"
+
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+
+origin_url() { git -C "$1" remote get-url origin 2>/dev/null; }
+
+github_checkout() {
+  local url
+  url="$(origin_url "$1")" || return 1
+  case "$url" in https://github.com/*) ;; *) return 1 ;; esac
+  [ -n "$(git -C "$1" config --get "credential.${url}.aixleRepositoryId" 2>/dev/null)" ]
+}
+
+target="${GH_REPO:-}"
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case "${args[i]}" in
+    --) break ;;
+    -R | --repo) target="${args[i + 1]:-}" ;;
+    --repo=*) target="${args[i]#--repo=}" ;;
+    -R?*) target="${args[i]#-R}" ;;
+  esac
+done
+if [ -z "$target" ] && [ "$1" = api ]; then
+  for arg in "${args[@]:1}"; do
+    if [[ "$arg" =~ ^/?repos/([^/?]+/[^/?]+) ]]; then
+      target="${BASH_REMATCH[1]}"
+      break
+    fi
+  done
+fi
+target="${target#https://}"
+target="${target#github.com/}"
+target="${target%/}"
+target="${target%.git}"
+
+checkout=""
+if [ -n "$target" ]; then
+  for dir in "$root"/*/; do
+    [ -d "$dir" ] || continue
+    if github_checkout "$dir" && [ "$(lower "$(origin_url "$dir")")" = "$(lower "https://github.com/${target}.git")" ]; then
+      checkout="$dir"
+      break
+    fi
+  done
+else
+  top="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+  if [ -n "$top" ] && github_checkout "$top"; then
+    checkout="$top"
+  else
+    found=()
+    for dir in "$root"/*/; do
+      [ -d "$dir" ] && github_checkout "$dir" && found+=("$dir")
+    done
+    [ "${#found[@]}" -eq 1 ] && checkout="${found[0]}"
+  fi
+fi
+
+if [ -z "$checkout" ]; then
+  echo "gh: no platform credential for this call — run it inside a checkout under ${root}, or pass -R <owner>/<repo> for a repository attached to this session" >&2
+  exec "$real" "$@"
+fi
+
+url="$(origin_url "$checkout")"
+token="$(printf 'protocol=https\nhost=github.com\npath=%s\n\n' "${url#https://github.com/}" |
+  GIT_TERMINAL_PROMPT=0 git -C "$checkout" credential fill 2>/dev/null | sed -n 's/^password=//p')"
+
+if [ -z "$token" ]; then
+  echo "gh: the platform returned no credential for ${url} — the session may have ended or lost access" >&2
+  exec "$real" "$@"
+fi
+
+GH_TOKEN="$token" exec "$real" "$@"

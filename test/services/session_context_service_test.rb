@@ -1020,7 +1020,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
     clone = commands.find { |c| c.include?("clone") }
-    assert_includes clone, "git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --depth=1 --branch=main " \
+    assert_includes clone, "git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --filter=blob:none --branch=main " \
                            "https://github.com/acme/my-app.git /workspace/repo/my-app"
     assert_includes clone, "credential.https://github.com/acme/my-app.git.helper /workspace/.aixle/git-credential-aixle"
     assert_includes clone, "chown -R 1001:1001 /workspace/repo/my-app"
@@ -1030,6 +1030,8 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     assert_equal 0o600, runtime.file_attributes(header_file)[:mode]
     assert_equal "Authorization: Basic #{Base64.strict_encode64('x-access-token:ghs_test_token')}", runtime.fs[header_file]
     assert runtime.fs["/workspace/.aixle/git-credential-aixle"].present?
+    assert_equal Rails.root.join("docker/base/git/gh-aixle").read, runtime.fs["/usr/local/bin/gh"]
+    assert_equal({ mode: 0o755, uid: 0, gid: 0 }, runtime.file_attributes("/usr/local/bin/gh").slice(:mode, :uid, :gid))
     assert_not_nil repo.reload.last_fetched_at
   end
 
@@ -1055,7 +1057,7 @@ class SessionContextServiceTest < ActiveSupport::TestCase
 
     SessionContextService.send(:inject_repositories, "ctr1", session)
 
-    assert_equal 2, runtime.execs.count { |cmd| Array(cmd).join(" ").include?("clone --depth=1 --branch=main https://github.com/acme/bad.git") }
+    assert_equal 2, runtime.execs.count { |cmd| Array(cmd).join(" ").include?("clone --filter=blob:none --branch=main https://github.com/acme/bad.git") }
     failed = session.reload.metadata["failed_repos"]
     assert_equal [ repo_bad.id ], failed.map { |f| f["id"] }
     assert_match(/Authentication failed/, failed.first["error"])
@@ -1089,8 +1091,9 @@ class SessionContextServiceTest < ActiveSupport::TestCase
     SessionContextService.send(:inject_repositories, "ctr1", session)
 
     commands = runtime.execs.map { |cmd| Array(cmd).join(" ") }
-    assert commands.any? { |c| c.include?("clone --depth=1 --branch=main https://gitlab.example.com/team/service.git") }
+    assert commands.any? { |c| c.include?("clone --filter=blob:none --branch=main https://gitlab.example.com/team/service.git") }
     assert commands.none? { |c| c.include?("gitlab.com") || c.include?("glpat-secret") }
+    assert_nil runtime.fs["/usr/local/bin/gh"], "the gh wrapper only knows github.com"
   end
 
   test "inject_repositories clones a public repository anonymously" do
