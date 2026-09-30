@@ -14,6 +14,7 @@ module Trackers
           "id" => 5, "workItemId" => 308, "rev" => 2,
           "revisedBy" => { "id" => "11bb", "displayName" => "Chuck Reinhart" },
           "fields" => {
+            "System.BoardColumn" => { "oldValue" => "New", "newValue" => "Ready for AI" },
             "System.State" => { "oldValue" => "New", "newValue" => "Approved" },
             "System.AssignedTo" => { "oldValue" => nil, "newValue" => "Ada Lovelace <ada@example.com>" },
             "System.Reason" => { "oldValue" => "New", "newValue" => "Approved" },
@@ -25,7 +26,8 @@ module Trackers
 
         assert_equal [ :issue_updated, "308", SCOPE, 2 ],
                      [ notification.kind, notification.issue_id, notification.scope_id, notification.revision ]
-        assert_equal [ { field: "status", from: "New", to: "Approved" },
+        assert_equal [ { field: "board_column", from: "New", to: "Ready for AI" },
+                       { field: "state", from: "New", to: "Approved" },
                        { field: "assignee", from: nil, to: "Ada Lovelace <ada@example.com>" } ], notification.changes
         assert_equal({ id: "11bb", name: "Chuck Reinhart" }, notification.actor)
       end

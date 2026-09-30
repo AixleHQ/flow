@@ -60,6 +60,24 @@ module Trackers
         (me["name"].present? && text.downcase.include?("@#{me['name'].downcase}"))
     end
 
+    # The status change a notification's hints describe, as event data
+    # ({ "from" => {name, category}, "to" => {...} }), or nil when the status did
+    # not change. The status is what the tracker's board shows; a provider whose
+    # board columns differ from its workflow states decides here which one counts.
+    def status_change(changes, issue)
+      change = changes.find { |c| c[:field] == "status" }
+      return unless change
+
+      { "field" => "status", "from" => status_value(issue.scope_id, change[:from]),
+        "to" => status_value(issue.scope_id, change[:to]) }.compact
+    end
+
+    def status_value(scope_id, name, category: nil)
+      return if name.blank?
+
+      { "name" => name, "category" => category || status_category(scope_id, name) }.compact
+    end
+
     # Portable category of a status name, from describe(), cached briefly: every
     # event needs it and the process metadata rarely changes.
     def status_category(scope_id, name)

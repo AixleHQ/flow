@@ -332,6 +332,21 @@ module FakeAzureDevops
           required_fields: [ "System.Title" ] } ]
     end
 
+    COLUMNS = [
+      { name: "New", category: "todo", board: "Stories" },
+      { name: "Ready for AI", category: "todo", board: "Stories" },
+      { name: "Active", category: "in_progress", board: "Stories" },
+      { name: "Closed", category: "done", board: "Stories" }
+    ].freeze
+
+    def board_columns(project_id: nil)
+      authorize!(:"work_items.read", project_id: project_id)
+      record(:board_columns, project_id: project_id)
+      raise @error if @error
+
+      COLUMNS
+    end
+
     def query(filters: {}, limit: 50, cursor: nil, project_id: nil)
       authorize!(:"work_items.read", project_id: project_id)
       record(:query, filters: filters, limit: limit, cursor: cursor, project_id: project_id)

@@ -111,7 +111,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
         {entry === 'status' && (
           <Autocomplete
             label="Column"
-            description="The status the column shows. Add one column such as “Ready for AI” to the board."
+            description="A column on the tracker's board. Add one such as “Ready for AI” for Aixle."
             placeholder="Ready for AI"
             data={statuses}
             value={status}

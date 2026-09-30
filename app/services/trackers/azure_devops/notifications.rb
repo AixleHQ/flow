@@ -15,7 +15,7 @@ module Trackers
         "workitem.updated" => :issue_updated,
         "workitem.commented" => :comment_created
       }.freeze
-      FIELDS = { "System.State" => "status", "System.AssignedTo" => "assignee" }.freeze
+      FIELDS = { "System.BoardColumn" => "board_column", "System.State" => "state", "System.AssignedTo" => "assignee" }.freeze
 
       def self.parse(event_type, resource, scope_id:)
         kind = EVENT_KINDS[event_type.to_s]

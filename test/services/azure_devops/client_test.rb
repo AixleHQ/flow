@@ -166,6 +166,22 @@ module AzureDevops
       assert_equal 12, WorkItemService.new(@integration).get(12, project_id: second)[:id]
     end
 
+    test "board columns come from every board of the project, typed into categories" do
+      stub_request(:get, %r{/#{@integration.azure_project_id}/_apis/work/boards\?}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { value: [ { id: "b1", name: "Stories" } ] }.to_json
+      )
+      stub_request(:get, %r{/#{@integration.azure_project_id}/_apis/work/boards/b1/columns}).to_return(
+        status: 200, headers: { "Content-Type" => "application/json" },
+        body: { value: [ { name: "New", columnType: "incoming" }, { name: "Ready for AI", columnType: "inProgress" },
+                         { name: "Closed", columnType: "outgoing" } ] }.to_json
+      )
+
+      columns = WorkItemService.new(@integration).board_columns
+
+      assert_equal [ %w[New todo], [ "Ready for AI", "in_progress" ], %w[Closed done] ], columns.map { |c| [ c[:name], c[:category] ] }
+    end
+
     test "a work item from a neighbouring Azure project is refused" do
       stub_request(:get, %r{/_apis/wit/workitems/11}).to_return(
         status: 200, headers: { "Content-Type" => "application/json" },

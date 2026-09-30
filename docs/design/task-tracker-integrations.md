@@ -324,10 +324,17 @@ changed:
 - A Jira column holds one or more statuses.
 - Linear boards use workflow states.
 - A GitHub project board uses a single-select field, `Status` by default.
-- Azure has both `System.State` and `System.BoardColumn`.
+- Azure has both `System.State` and `System.BoardColumn`, and they differ: a team adds a column
+  ("Ready for AI") without adding a state, and several columns can map onto one state. The Azure
+  provider therefore treats the **board column** as the status: `describe` lists the boards'
+  columns (categorized by column type), an issue's status is the column its card sits in
+  (categorized by the state behind it), and a column move is the `status_changed` event, with the
+  state change beside it as `change.state`. A state change alone counts only for a work item on no
+  board. Transitions still set the state, since Azure moves a card through the state its column maps to.
 
-Each project tracker stores `settings.status_field`. The provider supplies the default and the
-tracker UI can override it. `describe` returns the status values with a category where the
+Which field a provider reads as the status is the provider's decision (`Provider#status_change`):
+the board's columns wherever they exist. A per-tracker `settings.status_field` override is left for
+a provider that needs one (GitHub Projects, where the board can be built on any single-select field). `describe` returns the status values with a category where the
 provider has one, and the project tracker can override categories. Triggers can then filter on
 either the exact status name (`"In Review"`) or the portable category (`done`).
 

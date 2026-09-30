@@ -68,8 +68,7 @@ class Web::Company::Projects::TrackersControllerTest < ActionDispatch::Integrati
     get statuses_company_project_tracker_path(@project, @tracker), as: :json
 
     assert_response :success
-    assert_equal [ { "name" => "Active", "category" => "in_progress" }, { "name" => "Resolved", "category" => "in_progress" } ],
-                 response.parsed_body["statuses"]
+    assert_equal [ "New", "Ready for AI", "Active", "Closed" ], response.parsed_body["statuses"].pluck("name")
   end
 
   test "the intake shortcut gets the project's workflows and board columns" do

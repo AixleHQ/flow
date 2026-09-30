@@ -50,6 +50,21 @@ module AzureDevops
       end
     end
 
+    # The columns of the project's boards, which are what people move cards
+    # between. A column is not a state: several can map onto one state, and a
+    # team adds a column ("Ready for AI") without touching the process. The
+    # column type gives the portable category.
+    COLUMN_CATEGORIES = { "incoming" => "todo", "inProgress" => "in_progress", "outgoing" => "done" }.freeze
+
+    def board_columns(project_id: nil)
+      client, resolved = client_for(:"work_items.read", project_id: project_id)
+      boards = Array(client.get("_apis", "work", "boards", project: resolved.project_id)["value"])
+      boards.flat_map do |board|
+        columns = client.get("_apis", "work", "boards", board["id"].to_s, "columns", project: resolved.project_id)
+        Array(columns["value"]).map { |c| { name: c["name"], category: COLUMN_CATEGORIES[c["columnType"]], board: board["name"] } }
+      end.uniq { |c| c[:name].to_s.downcase }
+    end
+
     # Structured filters only. WIQL is built here with the selected project
     # pinned as a predicate and every value bound through an escaper — a
     # caller-supplied WIQL fragment cannot be made safe by appending a project
@@ -228,6 +243,7 @@ module AzureDevops
         type: fields["System.WorkItemType"],
         title: fields["System.Title"],
         state: fields["System.State"],
+        board_column: fields["System.BoardColumn"],
         assigned_to: fields.dig("System.AssignedTo", "displayName"),
         tags: fields["System.Tags"],
         area_path: fields["System.AreaPath"],

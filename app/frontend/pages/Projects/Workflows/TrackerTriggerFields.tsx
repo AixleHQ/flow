@@ -86,7 +86,7 @@ export function TrackerTriggerFields({ projectId, trackers, columns, value, isEd
             onChange={(v) => set({ statuses: v })}
             styles={inputStyles}
           />
-          <Hint>A status is a column on the tracker&apos;s board. Adding one column for Aixle is enough to start.</Hint>
+          <Hint>A column on the tracker&apos;s board. Adding one column for Aixle is enough to start.</Hint>
         </div>
       )}
 

@@ -21,7 +21,7 @@ module Trackers
         assert_equal "Active", issue.status.name
         assert_equal [ "Ada" ], issue.assignees
         assert_equal @scope, issue.scope_id
-        assert_equal @scope, @fakes.work_items.last_call[:project_id]
+        assert_equal @scope, @fakes.work_items.calls_to(:get).last[:project_id]
       end
 
       test "accepts a work item as #id or as its browser URL" do
@@ -52,7 +52,7 @@ module Trackers
         page = @provider.search_issues(@scope, { text: "breaks", status: "Active", labels: %w[ai urgent], open_only: true })
 
         assert_equal({ title_contains: "breaks", state: "Active", tag: "ai", open_only: true },
-                     @fakes.work_items.last_call[:filters])
+                     @fakes.work_items.calls_to(:query).last[:filters])
         assert_equal [ "11" ], page.items.map(&:id)
         refute_predicate page, :has_more?
       end
@@ -69,7 +69,7 @@ module Trackers
 
         @provider.create_issue(@scope, { type: "Bug", title: "It breaks", labels: %w[ai triage], fields: { "priority" => 2 } })
 
-        create = @fakes.work_items.last_call
+        create = @fakes.work_items.calls_to(:create).last
         assert_equal "Bug", create[:type]
         assert_equal({ title: "It breaks", tags: "ai; triage", priority: 2 }, create[:fields])
       end
@@ -92,12 +92,40 @@ module Trackers
         assert_equal "Resolved", issue.status.name
       end
 
-      test "describe reports statuses with portable categories" do
+      test "describe reports the board's columns as statuses, and the states transitions set" do
         description = @provider.describe(@scope)
 
-        assert_equal [ %w[Active in_progress], %w[Resolved in_progress] ],
+        assert_equal [ %w[New todo], [ "Ready for AI", "todo" ], %w[Active in_progress], %w[Closed done] ],
                      description[:statuses].map { |s| [ s.name, s.category ] }
+        assert_equal [ %w[Active in_progress], %w[Resolved in_progress] ],
+                     description[:states].map { |s| [ s.name, s.category ] }
         assert_equal "Bug", description[:issue_types].first[:name]
+      end
+
+      test "an issue's status is the column its card sits in, categorized by the state behind it" do
+        @fakes.work_items.instance_variable_set(:@work_item,
+                                                FakeAzureDevops::WorkItemService::DEFAULT_ITEM.merge(board_column: "Ready for AI"))
+
+        issue = @provider.get_issue(@scope, "11")
+
+        assert_equal [ "Ready for AI", "in_progress" ], [ issue.status.name, issue.status.category ]
+        assert_equal({ "state" => "Active", "board_column" => "Ready for AI", "area_path" => "Customer Platform" }, issue.fields)
+      end
+
+      test "a column move is the status change; a state change alone counts only off the board" do
+        on_board = Trackers::Issue.new(id: "11", key: "11", url: nil, title: "t", description: nil, type: "Bug",
+                                       status: Trackers::Status.new(id: "Ready for AI", name: "Ready for AI", category: "in_progress"),
+                                       assignees: [], labels: [], revision: 4, scope_id: @scope, updated_at: nil,
+                                       fields: { "state" => "Active", "board_column" => "Ready for AI" })
+        moved = @provider.status_change([ { field: "board_column", from: "New", to: "Ready for AI" },
+                                          { field: "state", from: "New", to: "Active" } ], on_board)
+
+        assert_equal [ "Ready for AI", "in_progress", { "from" => "New", "to" => "Active" } ],
+                     [ moved.dig("to", "name"), moved.dig("to", "category"), moved["state"] ]
+        assert_nil @provider.status_change([ { field: "state", from: "New", to: "Active" } ], on_board)
+
+        off_board = on_board.with(fields: { "state" => "Active" })
+        assert_equal "Active", @provider.status_change([ { field: "state", from: "New", to: "Active" } ], off_board).dig("to", "name")
       end
 
       test "a comment is read back through the issue, so its scope is checked first" do

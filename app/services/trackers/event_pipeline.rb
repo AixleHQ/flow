@@ -53,28 +53,14 @@ module Trackers
       when :issue_created then [ [ "tracker.issue.created", {} ] ]
       when :comment_created then [ [ "tracker.comment.created", { "comment" => comment_data(notification) } ] ]
       when :issue_updated
-        notification.changes.filter_map do |change|
-          case change[:field]
-          when "status" then [ "tracker.issue.status_changed", { "change" => status_change(change, issue) } ]
-          when "assignee" then [ "tracker.issue.assigned", { "change" => change.transform_keys(&:to_s).merge("field" => "assignee") } ]
-          end
-        end
+        status = @provider.status_change(notification.changes, issue)
+        assignee = notification.changes.find { |c| c[:field] == "assignee" }
+        [
+          (status && [ "tracker.issue.status_changed", { "change" => status } ]),
+          (assignee && [ "tracker.issue.assigned", { "change" => assignee.transform_keys(&:to_s).merge("field" => "assignee") } ])
+        ].compact
       else []
       end
-    end
-
-    def status_change(change, issue)
-      {
-        "field" => "status",
-        "from" => status_value(issue.scope_id, change[:from]),
-        "to" => status_value(issue.scope_id, change[:to])
-      }
-    end
-
-    def status_value(scope_id, name)
-      return if name.blank?
-
-      { "name" => name, "category" => @provider.status_category(scope_id, name) }.compact
     end
 
     def comment_data(notification)
@@ -110,8 +96,12 @@ module Trackers
       when :issue_created then recent.find_by(operation: "create_issue")
       when :comment_created then recent.find_by(operation: "add_comment")
       when :issue_updated
-        status = events.find { |type, _| type == "tracker.issue.status_changed" }&.dig(1, "change", "to", "name")
-        by_status = status && recent.where(operation: "transition_issue").detect { |op| op.change["to"].to_s.casecmp?(status) }
+        change = events.find { |type, _| type == "tracker.issue.status_changed" }&.dig(1, "change").to_h
+        # A transition sets the state; on Azure the event names the column the card moved to.
+        targets = [ change.dig("to", "name"), change.dig("state", "to") ].compact_blank
+        by_status = targets.any? && recent.where(operation: "transition_issue").detect do |op|
+          targets.any? { |target| op.change["to"].to_s.casecmp?(target) }
+        end
         assigned = events.any? { |type, _| type == "tracker.issue.assigned" }
         by_status || (assigned ? recent.find_by(operation: "assign_issue") : nil)
       end
@@ -164,7 +154,7 @@ module Trackers
     def issue_data(issue)
       {
         "id" => issue.id, "key" => issue.key, "url" => issue.url, "title" => issue.title, "type" => issue.type,
-        "status" => status_value(issue.scope_id, issue.status&.name), "assignees" => issue.assignees,
+        "status" => issue.status&.as_json&.slice("name", "category")&.compact, "assignees" => issue.assignees,
         "labels" => issue.labels
       }.compact
     end

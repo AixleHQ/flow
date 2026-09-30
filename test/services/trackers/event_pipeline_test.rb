@@ -21,7 +21,7 @@ class Trackers::EventPipelineTest < ActiveSupport::TestCase
 
   def status_change(to: "Resolved", from: "Active", actor: { id: "u1", name: "Ada" }, revision: 4)
     Trackers::Notification.build(kind: :issue_updated, scope_id: @scope, issue_id: "11", revision: revision,
-                                 changes: [ { field: "status", from: from, to: to } ], actor: actor)
+                                 changes: [ { field: "board_column", from: from, to: to } ], actor: actor)
   end
 
   def intake_binding(workflow: @workflow, **attributes)
@@ -138,5 +138,21 @@ class Trackers::EventPipelineTest < ActiveSupport::TestCase
     event = pipeline.process(notification).sole
 
     assert_equal [ true, "@Aixle please look" ], [ event.data.dig("comment", "mentions_me"), event.data.dig("comment", "text") ]
+  end
+
+  test "an agent's transition sets the state, and the column move it causes is still attributed to its run" do
+    intake_binding
+    create(:tracker_operation, project_tracker: @tracker, issue_id: "11", workflow_id: @workflow.id,
+                               change: { "field" => "status", "to" => "Active" })
+    notification = Trackers::Notification.build(
+      kind: :issue_updated, scope_id: @scope, issue_id: "11", revision: 9, actor: { name: "Aixle" },
+      changes: [ { field: "board_column", from: "New", to: "Resolved" }, { field: "state", from: "New", to: "Active" } ]
+    )
+    WorkflowService.expects(:enqueue).never
+
+    event = pipeline.process(notification).sole
+
+    assert_equal [ true, true ], [ event.data.dig("origin", "aixle"), event.data.dig("origin", "attributed") ]
+    assert_equal({ "from" => "New", "to" => "Active" }, event.data.dig("change", "state"))
   end
 end
