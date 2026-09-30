@@ -53,7 +53,7 @@ A company that connects Microsoft Teams gets:
 |---|---|
 | Shape | A **messaging port** (`Chat::`) with two providers, Slack and Teams. It covers event normalization, run context, replies, help and status reporting. Slack moves onto it first, with no behavior change (phase 0). The alternative, a Teams copy of every Slack branch, is rejected in §5.1. |
 | Transport | A Teams **bot** speaking the Bot Framework Connector REST protocol from Rails. No SDK and no Node/.NET/Python sidecar (§5.4). Outgoing webhooks, Workflows webhooks and Graph change notifications cannot do the job (§4, F12). |
-| Bot identity (SaaS) | A **single-tenant Azure Bot** attached to the existing multi-tenant **"Aixle Flow"** Entra app, which production already uses for Microsoft sign-in and Azure DevOps. The bot authenticates with that app's certificate. Multi-tenant bot creation was deprecated after 2025-07-31 (F3). Tenant-wide file access lives on a **separate** app (§6.1). |
+| Bot identity (SaaS) | A **single-tenant Azure Bot** attached to the existing multi-tenant **"Aixle Flow"** Entra app, which production already uses for Microsoft sign-in and Azure DevOps. The bot authenticates with that app's certificate. Multi-tenant bot creation was deprecated after 2025-07-31 (F3). The same app also carries the file permission: **one Entra app per environment for everything** (§6.1). |
 | Bot identity (self-hosted) | Each operator registers their own Entra app and Azure Bot. The same code runs with a different configuration (§6.1). |
 | Connection | Company-wide `Integration(provider: teams)`, one per Entra tenant. **One tenant belongs to exactly one company**, which is the Slack workspace rule. Routing uses a `WebhookEndpoint` slug, as Slack does. |
 | Binding proof | A tenant is bound to a company only when a directory administrator of that tenant signs in with Microsoft, inside a flow an admin of that company started (§6.2). A tenant id in a redirect is never evidence. |
@@ -329,7 +329,6 @@ flowchart LR
 | | Managed SaaS | Self-hosted |
 |---|---|---|
 | Bot's Entra app | The existing multi-tenant **"Aixle Flow"** registration in Aixle's tenant, which the deployment already uses for Microsoft sign-in and Azure DevOps | Operator's own registration; single-tenant is enough. It may be the one they use for sign-in |
-| File-access Entra app | A **separate** registration, "Aixle Flow Files", multi-tenant. It carries only `Files.ReadWrite.All` and has its own certificate | The same split, recommended but optional |
 | Azure Bot resource | A subscription **in the app's home tenant**: a SingleTenant bot must sit in its app's home tenant (F3). Teams channel enabled, messaging endpoint `https://<domain>/webhooks/teams/activities`. F0/S1 cost nothing for Teams | Operator's subscription, same settings |
 | Credential | "Aixle Flow"'s existing certificate, held server-side, the one Azure DevOps already uses. Workload identity federation from the cluster's OIDC issuer is the later improvement: no secret at all | Certificate or client secret |
 | App package | Built by Aixle with the SaaS bot id | Built by the operator's Aixle with their bot id |
@@ -343,20 +342,53 @@ flowchart LR
 - Nothing new has to be registered or rotated.
 - Teams' rule of one Entra app per Teams app still holds, because no other Teams app uses "Aixle Flow".
 
-**The cost is a larger blast radius.** Anyone holding that app's credential could already push code into
-every onboarded Azure DevOps organization. With the bot attached, they could also post as Aixle into every
-connected Teams. That is acceptable for messages. It is not acceptable for everyone's files, so two rules
-keep the worst case bounded:
-- **"Aixle Flow" carries no tenant-wide application permission.** `Files.ReadWrite.All` lives on "Aixle
-  Flow Files", with its own certificate. That app is used only by `Chat::Teams::GraphClient` for file
-  calls. It is consented separately (§8.5), and it can be revoked or rotated without touching sign-in,
-  Azure DevOps or the bot.
+**The file permission goes on the same app** (product owner's call, 2026-09-30). One registration per
+environment carries everything: sign-in, Azure DevOps, the bot and `Files.ReadWrite.All`. A separate
+file-only app was considered and declined, as one more registration to run for a limit the rules below
+already give.
+
+**The cost is the blast radius.** The certificate of "Aixle Flow" becomes the most sensitive secret the
+deployment holds. Whoever has it can:
+- push code into every onboarded Azure DevOps organization;
+- post as Aixle into every connected Teams;
+- read and write the files of every organization that granted file access.
+
+So the credential rules are strict:
 - **Every credential on "Aixle Flow" is a certificate.** Sign-in is configured with a client secret
   (`microsoft_oauth.client_secret`). A client secret authenticates the registration for every flow it
   serves, not just the flow it was created for. On a shared registration, the certificate-only rule
   therefore holds only once no secret remains. Phase 1 depends on:
-  1. moving sign-in to the certificate (private_key_jwt);
+  1. moving sign-in to the certificate. `omniauth-entra-id` supports private_key_jwt through
+     `certificate_path` (a PKCS#12 file) plus `tenant_id`. Whether that works with the multi-tenant
+     `common` authority is checked in spike 8;
   2. removing any client secret from the registration.
+- **The certificate stays server-side,** in the secret store, and is never copied to a laptop or to
+  staging. Workload identity federation, which leaves no secret at all, is the first hardening after
+  phase 1.
+- **Consent keeps file access separate even on one app.**
+  - The binding sign-in requests only `openid profile`, so it grants no application permission.
+  - File access is a second, explicit admin consent (§6.2, §8.5).
+  - Revoking file access in a customer tenant removes that grant and leaves the connection working.
+
+**Naming.** A customer sees the Entra app as "Aixle Flow": on consent screens and under Enterprise
+applications. That name is already product-neutral, so the registration is not renamed. What changes is
+the presentation around it:
+- **In Entra.** The registration's description and branding say what it is for: "Sign-in, Azure DevOps and
+  Microsoft Teams for Aixle Flow". Publisher verification is done once, so consent screens show a verified
+  publisher rather than an "unverified" warning. That warning matters most for an admin consenting to
+  `Files.ReadWrite.All`, and the Store requires verification anyway (F13).
+- **In Aixle.** Azure DevOps and Microsoft Teams stay **separate integrations**, with separate cards,
+  separate connect flows and separate disconnects. A company can use one without the other, and
+  connecting one must never switch the other on. Both cards sit under one "Microsoft" heading, and each
+  says it uses the organization's "Aixle Flow" app.
+- **In code and configuration.** Today the app is configured as if Azure DevOps owned it:
+  `azure_devops.apps.default` holds the certificate, and sign-in has its own `microsoft_oauth` block.
+  Phase 1 moves the registration into a shared `entra.apps.<key>` block (§13). Azure DevOps, Teams and
+  sign-in each name the key they use, `default` unless an operator splits them.
+  - `AzureDevops::AppConfig` becomes `Entra::AppConfig`. Its "an installation stores the key, never the
+    secret" rule carries over unchanged.
+  - The old variable names stay readable as fallbacks for one release, so infrastructure can switch
+    without a gap.
 
 The operator runbook is `docs/operations/teams-app-registration.md` (phase 1), written in the same shape
 as the Azure DevOps runbook.
@@ -382,7 +414,7 @@ sequenceDiagram
   E-->>F: id_token (tid, oid, wids) + code
   F->>F: verify id_token for tid; require an admin role in wids;<br/>tid not bound to another company; tid in allowed_tenant_ids when set
   F-->>M: Tenant bound. Next: grant file access (checked by default, may be declined)
-  M->>E: admin consent to "Aixle Flow Files" (Files.ReadWrite.All)
+  M->>E: admin consent for Files.ReadWrite.All on "Aixle Flow"
   E-->>F: consent result; F confirms it with a client-credentials Graph token for tid
   F-->>M: Connected. Download the app package → upload it in Teams admin center
   F-->>A: Integration active (tenant name, approved by, file access on/off)
@@ -402,9 +434,9 @@ sequenceDiagram
   of the signed-in user's directory roles in the same flow.
 - **Consent has a side effect we rely on.** The consent in this flow creates Aixle's service principal in
   the customer tenant, and the client-credentials Graph token for §8.3 needs that principal (spike 2).
-- **File access is a second, separate consent, to a second app** ("Aixle Flow Files", §6.1). It is
-  granted only after the binding succeeded, for the tenant just bound. It is confirmed by checking that
-  that app's client-credentials Graph token for the tenant carries `Files.ReadWrite.All` in its `roles`. The consent callback's own parameters are not trusted.
+- **File access is a second, separate admin consent** on the same app (§6.1). It is granted only after
+  the binding succeeded, for the tenant just bound. It is confirmed by checking that the app's
+  client-credentials Graph token for the tenant carries `Files.ReadWrite.All` in its `roles`. The consent callback's own parameters are not trusted.
   Declining it leaves a working connection without files (§8.5).
 - **Uniqueness.** One tenant is bound to one company. It is enforced by the unique `teams-tenant-<tid>`
   endpoint slug, exactly as `slack-team-<team_id>` does it. A second company asking for a bound tenant is
@@ -771,9 +803,8 @@ section.
 **File access.** Channel and group-chat files live in SharePoint and OneDrive. Reaching them needs the
 Graph application permission `Files.ReadWrite.All`, which is tenant-wide and needs admin consent. No
 narrower permission and no RSC permission covers them.
-- **Which app holds it.** It lives on its own app, "Aixle Flow Files" (§6.1), never on the app the bot and
-  sign-in use. That makes the consent separate by construction, and lets the most dangerous grant be
-  revoked on its own.
+- **Which app holds it.** "Aixle Flow", the same app as the bot and sign-in (§6.1). The binding sign-in
+  grants no application permission, so file access is consented, and can be revoked, on its own.
 - **When it is asked for.** The §6.2 flow asks the Microsoft 365 admin for it as its own consent step,
   right after binding. It is checked by default and explained on the page. The admin may decline: the
   connection then works without files, and the connection page shows "File access: not granted" with a
@@ -872,14 +903,15 @@ renamed, are the regression net.
    (§6.1).
    - Production uses certificates only, or workload identity federation later. Removing the sign-in
      client secret is a phase-1 prerequisite.
-   - The file permission sits on "Aixle Flow Files", with its own certificate.
-   - Staging never uses either production app.
-   - Rotation follows the Azure DevOps certificate procedure, and rotating "Aixle Flow" now touches all
-     three features at once.
+   - It also carries `Files.ReadWrite.All` for every organization that granted file access. That grant
+     is consented separately and can be revoked per tenant.
+   - Staging never uses the production app, and the certificate never leaves the secret store.
+   - Rotation follows the Azure DevOps certificate procedure. Rotating "Aixle Flow" now touches sign-in,
+     Azure DevOps, the bot and files at once.
 5. **Least privilege.**
    - Messages and threads are read with RSC only, per team or chat, consented by its owner.
-   - The one tenant-wide permission, `Files.ReadWrite.All`, lives on its own app and is a separate
-     consent the admin may decline.
+   - The one tenant-wide permission, `Files.ReadWrite.All`, is a separate consent the admin may decline,
+     even though it sits on the shared app.
      The connection page shows it as on or off, with who granted it.
    - Code, not the grant, limits its use: reads are limited to the triggering message's attachments,
      writes to the channel's `Aixle/` folder, no tool takes a file location, and every call is audited
@@ -902,7 +934,8 @@ renamed, are the regression net.
 ## 12. UI
 
 - **Company → Integrations → Microsoft Teams** (and the same entry under Project → Integrations, as Slack
-  has):
+  has). It sits next to the Azure DevOps card under one "Microsoft" heading. The two stay separate
+  integrations (§6.1):
   - "Connect Microsoft Teams" creates the pending connection and shows the approval link, with "Copy link
     for your Microsoft 365 admin".
   - Once connected, the page shows:
@@ -927,27 +960,31 @@ renamed, are the regression net.
 ## 13. Configuration
 
 ```yaml
+entra:                                              # the deployment's Entra registrations, by key
+  apps:
+    default:
+      client_id: <%= ENV['ENTRA_CLIENT_ID'] || ENV['AZURE_DEVOPS_CLIENT_ID'] %>
+      home_tenant_id: <%= ENV['ENTRA_HOME_TENANT_ID'] %>
+      private_key: <%= (ENV['ENTRA_PRIVATE_KEY'] || ENV['AZURE_DEVOPS_PRIVATE_KEY']).to_json %>
+      certificate_thumbprint: <%= ENV['ENTRA_CERT_THUMBPRINT'] || ENV['AZURE_DEVOPS_CERT_THUMBPRINT'] %>
+      client_secret: <%= ENV['ENTRA_CLIENT_SECRET'] %> # development / pilot only
+
+microsoft_oauth: { app: default }                   # sign-in
+azure_devops:    { app: default }                   # plus its existing non-credential settings
 teams:
-  app_id: <%= ENV['TEAMS_APP_ID'] %>                 # Entra application (client) id = bot id
-  home_tenant_id: <%= ENV['TEAMS_HOME_TENANT_ID'] %> # tenant holding the Entra app and the Azure Bot
-  private_key: <%= ENV['TEAMS_PRIVATE_KEY'].to_json %> # production credential (with the thumbprint)
-  certificate_thumbprint: <%= ENV['TEAMS_CERT_THUMBPRINT'] %>
-  client_secret: <%= ENV['TEAMS_CLIENT_SECRET'] %>   # development / pilot only
+  app: default                                      # bot id = entra.apps.<app>.client_id
   manifest_id: <%= ENV['TEAMS_MANIFEST_ID'] %>       # the Teams app id; must never change once published
   cloud: <%= ENV['TEAMS_CLOUD'] || 'public' %>       # public | gcc | gcc_high | dod → endpoint set
   allowed_tenant_ids: <%= ENV['TEAMS_ALLOWED_TENANT_IDS'] %> # optional; self-hosters pin their tenant
   dev_auth_bypass: false                            # Agents Playground; refused outside development
-  files_app:                                        # "Aixle Flow Files": Files.ReadWrite.All only
-    client_id: <%= ENV['TEAMS_FILES_CLIENT_ID'] %>
-    private_key: <%= ENV['TEAMS_FILES_PRIVATE_KEY'].to_json %>
-    certificate_thumbprint: <%= ENV['TEAMS_FILES_CERT_THUMBPRINT'] %>
 ```
 
-- **With a shared registration, `TEAMS_APP_ID` equals `MICROSOFT_CLIENT_ID` and `AZURE_DEVOPS_CLIENT_ID`,**
-  and the certificate is the same one.
-- **The settings stay separate in code anyway.** A self-hoster may keep the apps apart, and the reuse is
-  an operations choice, not a code dependency.
-- **Without `files_app`,** Teams works without file access.
+- **Expand/contract.** `ENTRA_*` falls back to the Azure DevOps variable names for one release, and
+  `MICROSOFT_CLIENT_ID` keeps working the same way. Infrastructure switches to the new names, and the
+  fallbacks are removed afterwards.
+- **A self-hoster** may define more than one key and point the features at different apps. One app is the
+  default, not a requirement.
+- **Teams is offered** exactly when its app has a client id and a credential.
 
 - `private_key` goes through `.to_json`, because YAML folds the newlines of a double-quoted PEM (the Azure
   DevOps trap).
@@ -994,7 +1031,7 @@ data counts.
 - Prerequisites (§6.1):
   - "Aixle Flow" holds certificates only, and sign-in moves off its client secret;
   - the Azure Bot is created in a subscription in the app's home tenant;
-  - "Aixle Flow Files" is registered.
+  - the registration moves into the shared `entra` configuration (§13).
 - `Settings.teams`, the token service, the authenticator, and the Connector and Graph clients.
 - Tenant binding (§6.2), the app package, the connection UI, and the operator runbook.
 - The activities endpoint, routing and normalization; the conversation registry, welcome message and
@@ -1034,7 +1071,8 @@ data counts.
 | 4 | How long does a 1:1 `downloadUrl` stay valid, and do pasted images read through `hostedContents` under RSC alone? | §7.4, §8.5, and whether file ingestion can wait until fire time | Ingest in the job before publishing, then fan the asset out to projects; pasted images need file access |
 | 5 | Are slash commands and targeted messages live in a fresh tenant today? **[C]** in F15 | The `/help` UX and private link prompts | Mention plus `help`; public link prompts in 1:1 chats only |
 | 6 | Job-queue latency from activity to first `typing` in production-like load | Store 2 s rule; perceived responsiveness | The controller sends `typing` inline |
-| 7 | Does admin consent to "Aixle Flow Files" work from inside the binding flow (v2 `adminconsent`), and does that app's Graph token then carry `Files.ReadWrite.All` in `roles`? | Decision 5 with a working connection when an admin says no | The connection page links the admin to Entra admin center → Enterprise applications → "Aixle Flow Files" → Grant admin consent, then re-checks |
+| 7 | Can `Files.ReadWrite.All` on "Aixle Flow" be admin-consented after, and separately from, a binding sign-in that requested only `openid profile` (v2 `adminconsent`)? Does the Graph token's `roles` then show it? | Decision 5 with a working connection when an admin says no | The connection page links the admin to Entra admin center → Enterprise applications → "Aixle Flow" → Grant admin consent, then re-checks |
+| 8 | Does `omniauth-entra-id`'s certificate flow (`certificate_path` + `tenant_id`) complete a multi-tenant sign-in against the `common` / `organizations` authority? | Removing the sign-in client secret from the shared app (§6.1) | Sign-in exchanges the code itself, with `Entra::ClientAssertion` against the signed-in tenant's token endpoint |
 
 ## 17. Coordination with the task-tracker design
 
@@ -1095,6 +1133,8 @@ Taken by the product owner on 2026-09-30.
 | 6 | Distribution for SaaS | **Phased:** org-catalog upload of a generated package in v1; Teams Store listing in phase 3 |
 | 7 | One tenant, one company | **Yes**, as in Slack |
 | 8 | RSC, which also delivers unaddressed channel messages | **Accepted.** Unaddressed messages are dropped in the controller, unpersisted (§7.2) |
+| 9 | Which Entra app the bot and the file permission use | **One app per environment for everything.** Production: "Aixle Flow" (sign-in, Azure DevOps, bot, `Files.ReadWrite.All`); staging: its own sign-in app. No separate file-only app. Certificates only on the shared app (§6.1) |
+| 10 | Rename anything because the app now also serves Teams? | **Not the Entra app:** "Aixle Flow" is already neutral, so only its description and branding change, plus publisher verification. **Not the integrations:** Azure DevOps and Microsoft Teams stay separate cards under one "Microsoft" heading. **Yes in configuration:** the app moves from `azure_devops.apps` to a shared `entra.apps` block (§13) |
 
 ## Sources
 
