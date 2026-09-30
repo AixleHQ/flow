@@ -83,6 +83,11 @@ module Auth
     def promotable?
       return false if assertion.email.blank?
       return false unless assertion.email_verified?
+
+      provider_vouches_for_email_domain?
+    end
+
+    def provider_vouches_for_email_domain?
       return true if provider.deployment?
 
       company = provider.company
@@ -105,7 +110,7 @@ module Auth
       end
 
       company = Company.find_by_email_domain(assertion.email.to_s)
-      raise NoWorkspaceError if company.nil?
+      raise NoWorkspaceError if company.nil? || !provider_vouches_for_email_domain?
 
       user = User.new(
         email: assertion.email,

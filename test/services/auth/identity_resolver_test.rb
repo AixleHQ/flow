@@ -149,6 +149,26 @@ module Auth
       assert_empty resolved.company_memberships
     end
 
+    test "a company provider creates accounts only inside its own verified domain" do
+      owner = create(:company, :domain_unverified, email_domain: "squatted.test")
+      connection = create(:identity_provider, company: owner, kind: "oidc")
+
+      [ "bob@squatted.test", "bob@#{@company.email_domain}" ].each_with_index do |email, i|
+        assert_no_difference [ "User.count", "UserIdentity.count" ] do
+          assert_raises(Auth::IdentityResolver::NoWorkspaceError) do
+            Auth::IdentityResolver.new(assertion_for(connection, subject: "sub-squat-#{i}", email: email)).resolve
+          end
+        end
+      end
+
+      owner.update!(domain_verified_at: Time.current)
+      created = Auth::IdentityResolver.new(
+        assertion_for(connection, subject: "sub-squat-0", email: "bob@squatted.test")
+      ).resolve
+
+      assert_equal "bob@squatted.test", created.email
+    end
+
     test "a new user in an unknown domain raises rather than creating anything" do
       assert_no_difference "User.count" do
         assert_raises(Auth::IdentityResolver::NoWorkspaceError) do
