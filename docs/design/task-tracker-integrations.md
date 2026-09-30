@@ -1,6 +1,6 @@
 # Task tracker integrations — technical design
 
-Status: **Proposal; decisions 1–17 agreed 2026-09-30; no open questions**
+Status: **Agreed 2026-09-30; phase 1 (core + Azure Boards) implemented in #366**
 Date: 2026-09-30
 Related: PR #271 (YouTrack integration, unmerged) and its two design documents,
 `integration-abstractions-tech-design-v1.md` and `youtrack-integration-tech-design-v6.md`;
@@ -366,6 +366,11 @@ provider's history (YouTrack activities, Jira changelog, Linear history, Azure u
 unconfirmed hint is skipped with an `unconfirmed_change` diagnostic. Fast consecutive moves still
 fire every trigger, and a forged hint cannot invent a transition that never happened.
 
+A provider whose deliveries are authenticated per subscription can skip the history check: forging
+a hint then takes that subscription's own secret. Azure qualifies (Service Hooks authenticate with a
+per-subscription basic-auth password), so phase 1 trusts its hints. The history check arrives with
+the first shared-token provider, YouTrack.
+
 ### 6.3 Event vocabulary and data
 
 | Event type | Source | Emitted when |
@@ -498,7 +503,8 @@ Aixle's.
 | `other_workflows` | the binding's workflow is **not** in `origin.chain` | chaining: dev → review. Blocks a workflow starting itself and cycles such as A → B → A. |
 | `always` | always, including its own workflow | deliberate state machines that walk an issue through statuses one run at a time |
 
-**Hard limits**, project settings that no binding can switch off:
+**Hard limits**, which no binding can switch off (constants in `Trackers::EventPipeline` for now;
+project settings once they need tuning):
 
 - **Chain depth**, default 5. An Aixle-caused event at or beyond it fires nothing
   (`chain_depth_limit`).
@@ -506,8 +512,8 @@ Aixle's.
   bindings (`issue_chain_budget`).
 - Existing cooldown and session admission.
 
-A skip is recorded on its `TriggerDispatch` (`status: skipped`, `detail.reason`), the way cooldown
-is recorded today, and shows in the trigger's activity.
+An event over a limit is not published at all, and the skip is logged with its reason
+(`chain_depth_limit`, `issue_chain_budget`). Surfacing it in the trigger's activity is a follow-up.
 
 Example with `other_workflows` on both bindings:
 
@@ -562,7 +568,7 @@ cancelled**. A failed agent cannot report its own failure, so this is the one wr
 with its tools.
 
 - **Setting.** The binding's `status_reporting`, from the Teams design, replaces
-  `notify_on_failure`. Tracker bindings offer `none` and `failures`, with `failures` as the
+  `notify_on_failure` (which governs the comment until that lands). Tracker bindings offer `none` and `failures`, with `failures` as the
   default. `lifecycle` is not offered for trackers: progress on the issue is the agent's job.
 - **Seam.** `Trackers::RunStatusReporter` is one of the origin reporters behind the shared
   run-transition seam (`docs/design/teams-integration.md` §17, on its own branch):
@@ -596,7 +602,7 @@ with its tools.
 | `tracker_search_issues` | read | Structured filter (`text`, `status`, `category`, `type`, `assignee`, `labels`, `updated_since`) plus an optional `native_query` (JQL, YouTrack query) where the provider supports it. Paginated. |
 | `tracker_get_issue` | read | By id, key or URL. |
 | `tracker_list_comments` | read | Paginated. |
-| `tracker_list_users` | read | Exact IDs/logins for assignment and mentions. |
+| `tracker_list_users` | read | Exact IDs/logins for assignment and mentions. Arrives with the first provider that can list users (Jira); Azure assigns by email or display name. |
 | `tracker_create_issue` | write | Title, description, type, labels, fields. Inside a task-scoped run, links the new issue to the run's board task. |
 | `tracker_update_issue` | write | Title, description, fields, labels add/remove. Any field the provider reports as editable, except those on the tracker's deny list. |
 | `tracker_transition_issue` | write | Target status by name or id; validated against allowed transitions where the provider has a workflow graph (Jira). |
@@ -758,6 +764,9 @@ revision guards and the project-scope re-check:
   before acknowledging, as today. `ResolveAzureDevopsEventJob` gets one more branch: it builds a
   `Trackers::Notification` from a `workitem.*` delivery and hands it to the tracker pipeline.
   `tracker_subscriptions` and `/webhooks/trackers` are not used for Azure.
+- **Identity.** Azure offers no reliable "who am I" call for a service principal, so the provider
+  learns the connection's identity from its own first write (`System.ChangedBy`) and keeps it in the
+  integration's settings. Until then, a mention of it is not recognised.
 - **Ledger.** Work-item writes go through `tracker_operations` like every other provider's, so
   they get the same causality tracking (§6.6). `azure_devops_operations` stays for pull-request
   operations.
