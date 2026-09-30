@@ -9,7 +9,7 @@ FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
 # ships 3.3a, which neither asks the browser terminal for its background nor tells
 # the agent CLI when the app switches theme.
 # =============================================================================
-FROM node:24-slim AS tmux-builder
+FROM node:26-slim AS tmux-builder
 ARG TMUX_VERSION=3.7c
 ARG TMUX_SHA256=7c60cae9a0e25288e2e24750aafc9e8800fc7fd4555e447e1b29ee4201cfb3bf
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -37,7 +37,7 @@ RUN curl -fsSL -o /tmp/tmux.tar.gz \
 #   - MITM proxy for request/response logging
 #   - Common development tools (uv/uvx and pipx for Python MCP servers)
 # =============================================================================
-FROM node:24-slim
+FROM node:26-slim
 
 # -----------------------------------------------------------------------------
 # System dependencies
