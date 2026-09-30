@@ -55,8 +55,7 @@ module ContextBuilders
         lines << ""
         lines << "GitHub and GitLab repositories authenticate through a credential helper configured in " \
                  "each checkout, which fetches a fresh token for every `git fetch` and `git push`. Do not " \
-                 "add credentials to the remote URL. Each checkout carries every branch and the full commit " \
-                 "history (`git branch -r` lists them all); file contents of other revisions download on first use."
+                 "add credentials to the remote URL."
       end
       if cloned.any? { |repo| repo.integration&.github? }
         lines << ""
@@ -70,6 +69,11 @@ module ContextBuilders
                  "working after the underlying token expires. Do not add credentials to the remote URL. " \
                  "Pull requests and review threads are reached with the `azure_devops_*` tools, " \
                  "not with `gh`; Boards work items with the `tracker_*` tools."
+      end
+      unless cloned.all?(&:public_source?)
+        lines << ""
+        lines << "Each checkout of a connected repository carries every branch and the full commit history " \
+                 "(`git branch -r` lists them all); file contents of other revisions download on first use."
       end
       if cloned.any?(&:public_source?)
         lines << ""

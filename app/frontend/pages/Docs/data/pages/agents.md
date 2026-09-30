@@ -48,9 +48,10 @@ layout:
 └── references/         ← reference docs (only in Aixle Builder sessions)
 ```
 
-A checkout carries every branch and the full commit history, so an agent can
-find and diff work already in flight; the contents of other revisions download
-the first time they are needed. `git fetch`, `git push` and `gh` authenticate
+A checkout of a connected repository (GitHub, GitLab or Azure DevOps) carries
+every branch and the full commit history, so an agent can find and diff work
+already in flight; the contents of other revisions download the first time they
+are needed. A public repository cloned anonymously is the default branch only. `git fetch`, `git push` and `gh` authenticate
 on every call with a short-lived token narrowed to that one repository, and
 nothing is stored in the container — the agent can push, open PRs and trigger
 CI as far as the connection's GitHub permissions allow.

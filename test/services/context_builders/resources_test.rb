@@ -82,6 +82,7 @@ class ContextBuilders::ResourcesTest < ActiveSupport::TestCase
 
     assert_includes content, "| #{repo.id} | rails/rails | /workspace/repo/rails | main | public, read-only | Reference |"
     assert_includes content, "cloned anonymously"
+    assert_not_includes content, "`git branch -r`", "an anonymous clone stays shallow"
   end
 
   test "build tells the agent every branch is fetched and that gh authenticates only for GitHub" do
