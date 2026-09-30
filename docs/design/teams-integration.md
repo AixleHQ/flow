@@ -695,8 +695,11 @@ into the triggering thread. It then edits that card in place (F6):
 |---|---|---|
 | Dispatch started a run | "Accepted — *Onboarding* · run #128" + Open run | `dispatched`, after `TriggerEngine.fire_workflow` |
 | Dispatch did not start one | "Not started — cooldown / needs an interactive step / workflow archived" | `skipped`, with the dispatch's reason |
-| Run started | "Running since 12:04" | `started`, from `WorkflowRunStateMachine` `start` |
+| Run started | "Running since 12:04" | `running`, from `WorkflowRunStateMachine` `start` |
 | Run ended | "Completed in 4 m", "Failed: <summary>" or "Cancelled", each with a link | `completed` / `failed` / `cancelled` |
+
+A run-level transition is named after the state the run entered, so `run.state == transition` holds
+for each of them. Only `dispatched` and `skipped` describe the dispatch rather than the run.
 
 - **One enqueue point for every origin.** `WorkflowRunStateMachine#announce_transition` replaces
   `announce_failure` and runs on `start`, `complete`, `fail` and `cancel`. `TriggerEngine` calls the same
@@ -719,7 +722,7 @@ into the triggering thread. It then edits that card in place (F6):
 - **Reporters re-read.** A reporter loads the run and dispatch when it runs. It never relies on the state
   at the moment the job was enqueued.
   - A state that has not caught up with the transition yet is a retryable condition.
-  - Reporters are monotonic: jobs can run out of order, and a late `started` must not turn a "Completed"
+  - Reporters are monotonic: jobs can run out of order, and a late `running` must not turn a "Completed"
     card back into "Running". `Chat::RunStatusReporter` therefore renders the run's current state and
     uses the transition only as a wake-up.
   - In production today the enqueue commits with the transition anyway: Solid Queue's tables sit in the
@@ -1104,7 +1107,7 @@ far:
   - The run-transition enqueue point, `announce_transition` → `Triggers::ReportRunTransitionJob` (§8.2).
     - `Trackers::RunStatusReporter` registers in `Triggers::ORIGIN_REPORTERS`. It acts on `failed` and
       `cancelled` only: one comment on the originating issue with the reason, or "cancelled by …", and a
-      link to the run. It ignores `dispatched`, `skipped`, `started` and `completed`.
+      link to the run. It ignores `dispatched`, `skipped`, `running` and `completed`.
     - The platform never moves a ticket itself; the agent does that with its tools.
     - The contract both reporters follow:
       - one job per reporter, with its own retries;
