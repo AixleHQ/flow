@@ -61,23 +61,28 @@ module PersonalTools
     # A personal-MCP call carries no web session, so there is no
     # `session[:current_company_id]` to lean on: the company is always derived
     # from the target resource, across every company the user actively belongs
-    # to. An empty list yields `where(company_id: [])` — i.e. nothing.
+    # to whose sign-in policy the token's proofs satisfy. The Aixle Builder
+    # (pinned project) runs inside a session the web gate already admitted.
+    # An empty list yields `where(company_id: [])` — i.e. nothing.
     def membership_company_ids
-      @membership_company_ids ||= begin
-        memberships = user.company_memberships.active
-        memberships = memberships.where(company_id: pinned_project.company_id) if pinned_project
-        memberships.pluck(:company_id)
-      end
+      @membership_company_ids ||=
+        if pinned_project
+          user.company_memberships.active.where(company_id: pinned_project.company_id).pluck(:company_id)
+        else
+          user.mcp_token_company_ids
+        end
     end
 
     # The single company to act in when a tool has no project to derive one
     # from. Unambiguous only with exactly one active membership; otherwise the
     # caller must name it explicitly.
     def resolve_company!(id = params[:company_id])
-      memberships = user.company_memberships.active
-      memberships = memberships.where(company_id: pinned_project.company_id) if pinned_project
+      memberships = user.company_memberships.active.where(company_id: membership_company_ids)
       membership = id.present? ? memberships.find_by(company_id: id) : sole_membership!(memberships)
-      raise NotFoundError, "You are not an active member of company #{id}" unless membership
+      unless membership
+        refuse_unproven_company!(id)
+        raise NotFoundError, "You are not an active member of company #{id}"
+      end
 
       membership.company
     end
@@ -89,9 +94,29 @@ module PersonalTools
       scope = Project.where(company_id: membership_company_ids)
       scope = scope.where(id: pinned_project.id) if pinned_project
       project = scope.find_by(id: id)
-      raise NotFoundError, "Project #{id} not found" unless project&.accessible_by?(user)
+      unless project&.accessible_by?(user)
+        refuse_unproven_company!(Project.for_user(user).where(id: id).pick(:company_id)) unless project
+        raise NotFoundError, "Project #{id} not found"
+      end
 
       project
+    end
+
+    def refuse_unproven_company!(company_id)
+      return if pinned_project || company_id.blank?
+      return unless user.company_memberships.active.exists?(company_id: company_id)
+
+      raise UnauthorizedError,
+            "Company #{company_id} requires a sign-in method this MCP token was not issued with — " \
+            "sign in to that company, then regenerate the token from your profile"
+    end
+
+    def readable_sessions
+      TerminalSession.readable_by(user).where(
+        "terminal_sessions.company_id IN (:ids) OR " \
+        "(terminal_sessions.company_id IS NULL AND terminal_sessions.project_id IN (SELECT id FROM projects WHERE company_id IN (:ids)))",
+        ids: membership_company_ids.presence || [ nil ]
+      )
     end
 
     def accessible_projects
@@ -106,7 +131,7 @@ module PersonalTools
     # session someone keeps private is indistinguishable from one that does not
     # exist — the same rule Api::V1::TerminalSessionsController applies.
     def find_session!(id = params[:session_id])
-      scope = TerminalSession.readable_by(user)
+      scope = readable_sessions
       scope = scope.where(project_id: pinned_project.id) if pinned_project
       session = scope.find_by(id: id)
       raise NotFoundError, "Session #{id} not found" unless session&.visible_to?(user)

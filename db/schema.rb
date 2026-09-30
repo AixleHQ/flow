@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_090000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1521,6 +1521,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_090000) do
     t.jsonb "mcp_enabled_tools"
     t.string "mcp_token_digest"
     t.datetime "mcp_token_last_used_at"
+    t.bigint "mcp_token_proof_provider_ids", array: true
     t.string "name", null: false
     t.string "password_digest"
     t.string "provider"

@@ -77,7 +77,9 @@ class Web::ProfileController < Web::ApplicationController
   # Enable / rotate in one action: the previous token stops working the
   # moment a new digest lands.
   def regenerate_mcp_token
-    session[:mcp_token_plaintext] = current_user.regenerate_mcp_token!
+    session[:mcp_token_plaintext] = current_user.regenerate_mcp_token!(
+      proof_provider_ids: current_user_session&.proved_provider_ids || []
+    )
     redirect_to mcp_profile_path, notice: "MCP token generated — copy it now, it won't be shown again"
   end
 

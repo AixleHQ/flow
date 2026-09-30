@@ -76,6 +76,22 @@ module Auth
       refute Auth::PolicyResolver.satisfied?(company: @company, user_session: user_session, user: @user)
     end
 
+    test "satisfied_company_ids keeps the companies that accept one of the given proofs" do
+      sso_only = create(:company)
+      connection = create(:identity_provider, company: sso_only, kind: "oidc")
+      CompanyAuthPolicy.where(company: sso_only).update_all(enabled: false)
+      create(:company_auth_policy, company: sso_only, identity_provider: connection, enabled: true)
+      foreign = create(:company)
+      create(:company_auth_policy, company: foreign, identity_provider: connection, enabled: true)
+      ids = [ @company.id, sso_only.id, foreign.id ]
+
+      assert_equal [ @company.id, foreign.id ].sort,
+                   Auth::PolicyResolver.satisfied_company_ids(company_ids: ids, provider_ids: [ @password.id ]).sort
+      assert_equal [ sso_only.id ],
+                   Auth::PolicyResolver.satisfied_company_ids(company_ids: ids, provider_ids: [ connection.id ])
+      assert_empty Auth::PolicyResolver.satisfied_company_ids(company_ids: ids, provider_ids: [])
+    end
+
     test "a super admin bypasses every company policy surface" do
       super_admin = create(:user, :super_admin)
       user_session = begin
