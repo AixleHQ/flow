@@ -1,5 +1,5 @@
 import { notifications } from '@mantine/notifications';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError, apiMutate, apiRequest } from './apiFetch';
 
@@ -77,5 +77,59 @@ describe('apiMutate', () => {
       apiMutate('/api/v1/projects/7/tasks/3', { method: 'DELETE' }, 'The task was not deleted'),
     ).resolves.toBe(false);
     expect(show).toHaveBeenCalledWith(expect.objectContaining({ message: 'The task was not deleted' }));
+  });
+});
+
+describe('apiFetch step-up', () => {
+  const originalLocation = window.location;
+  const assign = vi.fn();
+
+  beforeEach(() => {
+    assign.mockReset();
+    Object.defineProperty(window, 'location', { configurable: true, writable: true, value: { assign } });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, writable: true, value: originalLocation });
+    vi.restoreAllMocks();
+  });
+
+  const settles = async (promise: Promise<unknown>) => {
+    let done = false;
+    void promise.then(
+      () => (done = true),
+      () => (done = true),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return done;
+  };
+
+  it("goes to the company's step-up page instead of reporting the refusal", async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json({ error: 'step_up_required', stepUpUrl: '/step_up?company_id=4' }, 403),
+    );
+    const show = vi.spyOn(notifications, 'show').mockImplementation(() => '');
+
+    const saved = apiMutate('/api/v1/projects/7/tasks/3', { method: 'PATCH' });
+
+    expect(await settles(saved)).toBe(false);
+    expect(assign).toHaveBeenCalledWith('/step_up?company_id=4');
+    expect(show).not.toHaveBeenCalled();
+  });
+
+  it('reports any other refusal as before', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ error: 'Not authorized' }, 403));
+
+    await expect(apiRequest('/api/v1/projects/7/board/tasks')).rejects.toThrow('Not authorized');
+    expect(assign).not.toHaveBeenCalled();
+  });
+
+  it('does not follow a step-up address off this site', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json({ error: 'step_up_required', stepUpUrl: '//elsewhere.example/step_up' }, 403),
+    );
+
+    await expect(apiRequest('/api/v1/projects/7/board/tasks')).rejects.toBeInstanceOf(ApiError);
+    expect(assign).not.toHaveBeenCalled();
   });
 });

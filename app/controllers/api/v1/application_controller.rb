@@ -14,6 +14,9 @@ module Api
       # every call. Machine endpoints opt out in Api::V1::Internal.
       protect_from_forgery with: :exception
       before_action :authenticate_user!
+      # The web tree's company sign-in gate, answered for the company this
+      # request acts in rather than the one the browser happens to be on.
+      before_action :enforce_company_auth_policy
       # Authorize-by-default: every action in the api/v1 tree is Pundit-checked.
       before_action :dynamic_authorize!
       # Defense-in-depth verb backstop: a read-only client may only issue safe requests.
@@ -69,6 +72,20 @@ module Api
       def backstop_company
         ctx = policy_context
         ctx.respond_to?(:company) ? ctx.company : nil
+      end
+
+      def enforce_company_auth_policy
+        return unless current_user
+        return if current_user.super_admin?
+
+        company = auth_policy_company
+        return if company_auth_policy_satisfied?(company)
+
+        render json: { error: "step_up_required", stepUpUrl: step_up_path(company_id: company.id) }, status: :forbidden
+      end
+
+      def auth_policy_company
+        backstop_company || current_company
       end
 
       def user_not_authorized

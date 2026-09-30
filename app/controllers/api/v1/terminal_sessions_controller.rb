@@ -125,6 +125,18 @@ module Api
         current_company
       end
 
+      def auth_policy_company
+        if params[:id].present?
+          column = params[:id].to_s.match?(/\A\d+\z/) ? :id : :route_token
+          terminal_session = TerminalSession.readable_by(current_user).find_by(column => params[:id])
+          return SessionCompany.company_for(terminal_session) || current_company
+        end
+
+        project_id = params.dig(:terminal_session, :project_id)
+        project = Project.for_user(current_user).find_by(id: project_id) if project_id.present?
+        project ? project.company : (auth_setup_company || current_company)
+      end
+
       # Read at most the last MAX_LOG_BYTES of the attachment. Seek to the tail on
       # the underlying IO so large files are not fully loaded; fall back to a
       # read-then-slice if the storage IO is not seekable.
