@@ -5,7 +5,8 @@ module Trackers
   # Integration provider => tracker provider class. Kept as names so this file
   # never forces a provider class to load.
   PROVIDERS = {
-    "azure_devops" => "Trackers::AzureDevops::Provider"
+    "azure_devops" => "Trackers::AzureDevops::Provider",
+    "jira" => "Trackers::Jira::Provider"
   }.freeze
 
   # What tracker tools declare as `requires_integration`: not an Integration

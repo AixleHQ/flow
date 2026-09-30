@@ -11,7 +11,7 @@ module Trackers
       return unless tracker&.usable?
 
       tracker.tracker_provider.ensure_event_delivery!
-    rescue Trackers::Error, ::AzureDevops::Error => e
+    rescue Trackers::Error, ::AzureDevops::Error, ::Jira::Error => e
       Rails.logger.warn("[Trackers::EnsureEventDeliveryJob] tracker #{project_tracker_id}: #{e.message}")
     end
   end

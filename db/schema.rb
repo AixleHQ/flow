@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "citext"
   enable_extension "pg_catalog.plpgsql"
@@ -1420,6 +1420,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_160000) do
   add_check_constraint "tools", "name::text !~~ 'mcp\\_\\_%'::text", name: "tools_name_not_managed_namespace", validate: false
   add_check_constraint "tools", "project_id IS NULL AND company_id IS NULL OR scope_type IS NULL AND scope_id IS NULL AND project_id IS NULL AND company_id IS NULL OR scope_type::text = 'Project'::text AND project_id = scope_id AND company_id IS NOT NULL", name: "tools_tenant_columns", validate: false
 
+  create_table "tracker_deliveries", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "dedup_key", null: false
+    t.jsonb "detail", default: {}, null: false
+    t.jsonb "notifications", default: [], null: false
+    t.string "status", default: "received", null: false
+    t.bigint "tracker_subscription_id", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_tracker_deliveries_on_created_at"
+    t.index ["tracker_subscription_id", "dedup_key"], name: "idx_tracker_deliveries_dedup", unique: true
+  end
+
   create_table "tracker_operations", force: :cascade do |t|
     t.jsonb "chain", default: [], null: false
     t.jsonb "change", default: {}, null: false
@@ -1440,6 +1452,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_160000) do
     t.bigint "workflow_run_id"
     t.index ["project_tracker_id", "issue_id", "created_at"], name: "idx_tracker_operations_issue"
     t.index ["project_tracker_id", "operation_key"], name: "idx_tracker_operations_key", unique: true
+  end
+
+  create_table "tracker_subscriptions", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.text "encrypted_secret"
+    t.string "endpoint_token", null: false
+    t.datetime "expires_at"
+    t.string "external_scope_id"
+    t.bigint "integration_id", null: false
+    t.string "last_error"
+    t.datetime "last_event_at"
+    t.string "provider_subscription_id"
+    t.jsonb "settings", default: {}, null: false
+    t.string "status", default: "pending", null: false
+    t.string "strategy", null: false
+    t.datetime "updated_at", null: false
+    t.index ["endpoint_token"], name: "index_tracker_subscriptions_on_endpoint_token", unique: true
+    t.index ["expires_at"], name: "index_tracker_subscriptions_on_expires_at"
+    t.index ["integration_id", "external_scope_id"], name: "idx_tracker_subscriptions_scope", unique: true, nulls_not_distinct: true
+    t.index ["provider_subscription_id"], name: "index_tracker_subscriptions_on_provider_subscription_id"
   end
 
   create_table "trigger_bindings", force: :cascade do |t|
@@ -1858,7 +1890,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_160000) do
   add_foreign_key "tools", "companies", on_delete: :cascade, validate: false
   add_foreign_key "tools", "projects", column: ["project_id", "company_id"], primary_key: ["id", "company_id"], name: "fk_tools_project_company", on_delete: :cascade, validate: false
   add_foreign_key "tools", "projects", on_delete: :cascade, validate: false
+  add_foreign_key "tracker_deliveries", "tracker_subscriptions", on_delete: :cascade
   add_foreign_key "tracker_operations", "project_trackers", on_delete: :cascade
+  add_foreign_key "tracker_subscriptions", "integrations", on_delete: :cascade
   add_foreign_key "trigger_bindings", "board_columns", column: "subject_column_id", on_delete: :nullify
   add_foreign_key "trigger_bindings", "project_trackers", on_delete: :restrict
   add_foreign_key "trigger_bindings", "projects", on_delete: :cascade

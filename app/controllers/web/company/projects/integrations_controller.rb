@@ -10,7 +10,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       project: project_props,
       integrations: integrations.map { |i| IntegrationResource.new(i).to_h },
       azure_devops: azure_devops_props,
-      github: github_props
+      github: github_props,
+      jira: { oauth_enabled: Jira::AppConfig.oauth_enabled? }
     }
   end
 
@@ -40,6 +41,8 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       )
     when "azure_devops"
       return create_azure_devops
+    when "jira"
+      return create_jira
     end
     # Slack connects via OAuth (see #slack_oauth_start + Web::Integrations::SlackOauthController),
     # not this paste-credentials path.
@@ -64,6 +67,7 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     # replacement PAT), so it routes away from the Coder path rather than being
     # refused by it.
     return update_azure_devops(integration) if integration.azure_devops?
+    return update_jira(integration) if integration.jira?
 
     Coder::IntegrationService.new(
       company: current_company,
@@ -99,14 +103,14 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # operation: repair keeps the integration id and its repository attachments.
   def test_connection
     integration = Integration.for_project(current_project).find(params[:id])
-    unless integration.azure_devops?
+    service_class = { "azure_devops" => AzureDevops::IntegrationService, "jira" => Jira::IntegrationService }[integration.provider.to_s]
+    unless service_class
       return redirect_to company_project_integrations_path(current_project),
                          alert: "This integration has no connection test"
     end
 
-    result = AzureDevops::IntegrationService.new(
-      company: current_company, connected_by: current_user, project: current_project
-    ).test(integration)
+    result = service_class.new(company: current_company, connected_by: current_user, project: current_project)
+                          .test(integration)
 
     if result[:status] == :active
       redirect_to company_project_integrations_path(current_project), notice: "Connection verified"
@@ -165,6 +169,53 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     # allow_other_host: the target is Slack's hardcoded authorize URL built from
     # deployment Settings.slack.* — never user-supplied.
     redirect_to Slack::Oauth.authorize_url(project: current_project, user: current_user), allow_other_host: true
+  end
+
+  # Jira through Aixle's Atlassian OAuth app. A plain link, like Slack's: the
+  # browser has to leave for Atlassian's consent screen.
+  def jira_oauth_start
+    unless Jira::AppConfig.oauth_enabled?
+      return redirect_to company_project_integrations_path(current_project), alert: "Jira's OAuth app is not configured"
+    end
+
+    # allow_other_host: auth.atlassian.com, built from deployment Settings.
+    redirect_to Jira::Oauth.authorize_url(project: current_project, user: current_user), allow_other_host: true
+  end
+
+  # What a service account's credential reaches on a site, before anything is
+  # saved: the dialog shows the projects to pick from.
+  def jira_inspect
+    inspection = jira_service.inspect_service_account(
+      site_url: params[:site_url].to_s, client_id: params[:client_id].to_s, client_secret: params[:client_secret].to_s
+    )
+    render json: { site: inspection.site, identity: inspection.identity.slice(:id, :name), projects: inspection.projects }
+  rescue Jira::Error, Jira::IntegrationService::ConfigurationError => e
+    render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
+  end
+
+  # The projects a Jira connection can see — the picker that finishes a 3LO
+  # connection, or changes one.
+  def jira_projects
+    integration = Integration.for_project(current_project).where(provider: :jira).find(params[:id])
+    render json: { projects: jira_service.available_projects(integration, cloud_id: params[:cloud_id].presence) }
+  rescue Jira::Error, Jira::IntegrationService::ConfigurationError => e
+    render json: { error: e.try(:code) || "validation_failed", message: e.message }, status: :unprocessable_content
+  end
+
+  # What a Jira admin enters as a system webhook for a service-account
+  # connection. The secret is shown to the people who manage integrations and
+  # never goes into settings, which every viewer of the page receives.
+  def jira_webhook
+    integration = Integration.for_project(current_project).where(provider: :jira).find(params[:id])
+    return head :not_found unless integration.settings.to_h["auth_mode"] == "service_account"
+
+    subscription = Trackers::Jira::Subscriptions.new(integration).ensure!
+    keys = Array(integration.settings.to_h["jira_projects"]).pluck("key").compact
+    render json: {
+      url: subscription.callback_url(Jira::AppConfig.webhook_base_url), secret: subscription.secret,
+      events: [ "Issue: created", "Issue: updated", "Comment: created" ],
+      jql: keys.any? ? "project IN (#{keys.join(', ')})" : nil, last_event_at: subscription.last_event_at
+    }
   end
 
   # Kick off a GitHub App installation for this project. The GitHub App "Setup URL"
@@ -277,6 +328,36 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     when nil then []
     else [ raw.to_s ]
     end
+  end
+
+  def jira_service
+    Jira::IntegrationService.new(company: current_company, connected_by: current_user, project: current_project)
+  end
+
+  def create_jira
+    integration = jira_service.connect_service_account(
+      site_url: params[:site_url].to_s, client_id: params[:client_id].to_s, client_secret: params[:client_secret].to_s,
+      project_ids: jira_project_id_params
+    )
+    redirect_to company_project_integrations_path(current_project), notice: "#{integration.name} connected"
+  rescue Jira::Error, Jira::IntegrationService::ConfigurationError => e
+    redirect_to company_project_integrations_path(current_project), alert: "Jira connection failed: #{e.message}"
+  end
+
+  # The site (a 3LO grant's pick) and the projects. The credential itself is
+  # replaced by reconnecting, which verifies it.
+  def update_jira(integration)
+    integration = jira_service.configure(
+      integration, project_ids: jira_project_id_params, cloud_id: params[:cloud_id].presence,
+                   dedicated_identity: params.key?(:dedicated_identity) ? params[:dedicated_identity] : nil
+    )
+    redirect_to company_project_integrations_path(current_project), notice: "#{integration.name} saved"
+  rescue Jira::Error, Jira::IntegrationService::ConfigurationError => e
+    redirect_to company_project_integrations_path(current_project), alert: "Jira: #{e.message}"
+  end
+
+  def jira_project_id_params
+    Array(params[:project_ids]).map(&:to_s).compact_blank.uniq
   end
 
   def azure_onboarding

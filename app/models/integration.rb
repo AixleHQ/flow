@@ -7,7 +7,7 @@ class Integration < ApplicationRecord
   encrypted_column :credentials
   extend Enumerize
 
-  enumerize :provider, in: %i[github gitlab linear coder slack azure_devops], predicates: true
+  enumerize :provider, in: %i[github gitlab linear coder slack azure_devops jira], predicates: true
   enumerize :status, in: %i[active inactive error], default: :inactive, predicates: true, scope: true
 
   belongs_to :company
@@ -21,6 +21,7 @@ class Integration < ApplicationRecord
   has_many :azure_devops_operations, dependent: :delete_all
   has_many :azure_devops_subscriptions, dependent: :destroy
   has_many :project_trackers, dependent: :destroy
+  has_many :tracker_subscriptions, dependent: :destroy
   # A removed Slack install stops claiming its workspace, so another company
   # (or this one, later) can connect it.
   after_destroy :release_slack_workspace, if: :slack?

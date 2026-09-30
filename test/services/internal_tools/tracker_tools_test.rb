@@ -172,4 +172,8 @@ class InternalTools::TrackerToolsTest < ActiveSupport::TestCase
     refute_includes Tool.visible_for_project(@project), tool
     refute tool.available?(Tools::Context.for_session(@session))
   end
+
+  test "tracker_list_users says so on a tracker that cannot list its users" do
+    assert_equal "unsupported", tool_error(run_tool(InternalTools::TrackerListUsers, query: "ada"))["error"]
+  end
 end

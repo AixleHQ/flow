@@ -185,8 +185,9 @@ Azure DevOps through an integration, or a public URL cloned read-only. Fields:
 **Config items**: `secret` (stored encrypted) or `variable`. Values are entered
 by users in the UI and never returned by any tool.
 
-**Integrations**: `github`, `gitlab`, `slack`, `azure_devops`, `coder`, `linear`.
-Users connect them in the browser (`get_integration_setup_url`).
+**Integrations**: `github`, `gitlab`, `slack`, `azure_devops`, `jira`, `coder`, `linear`.
+Users connect them in the browser (`get_integration_setup_url`). Azure DevOps and
+`jira` connections map their projects in as task trackers.
 
 **Assets**: project or company files. Board-task attachments are separate
 files that live on the task.
@@ -250,4 +251,4 @@ task, so tagged comments carry structured hand-offs.
 - Task trackers (attached; the project needs a tracker): `tracker_list`, `tracker_describe`,
   `tracker_search_issues`, `tracker_get_issue`, `tracker_list_comments`, `tracker_create_issue`,
   `tracker_update_issue`, `tracker_transition_issue`, `tracker_assign_issue`, `tracker_add_comment`,
-  `tracker_link_task`
+  `tracker_link_task`, `tracker_list_users` (Jira)

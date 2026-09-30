@@ -137,6 +137,12 @@ workflows:
       - name: oauth_refresh_expiring_tokens_activity
         task_queue: aixle_ruby
 
+  - name: tracker_subscription_refresh_workflow
+    owner: aixle_ruby
+    activities:
+      - name: trackers_refresh_subscriptions_activity
+        task_queue: aixle_ruby
+
   - name: workflow_execution_workflow
     owner: aixle_ruby
     activities:

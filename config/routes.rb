@@ -57,6 +57,8 @@ Rails.application.routes.draw do
   # Generic inbound webhook gateway (arbitrary sources, public — verified
   # per-endpoint via WebhookEndpoint#verification_strategy on the raw body).
   post "/webhooks/in/:slug", to: "webhooks/ingress#receive", as: :webhook_ingress
+  post "/webhooks/trackers/app/jira", to: "webhooks/trackers#receive_app", as: :tracker_app_webhook
+  post "/webhooks/trackers/:endpoint_token", to: "webhooks/trackers#receive", as: :tracker_webhook
 
   # Multi-workspace Slack Events API endpoint (public — verified centrally with
   # the app signing secret, then routed by team_id to the workspace's install).
@@ -406,6 +408,8 @@ Rails.application.routes.draw do
     # Slack OAuth callback — one deployment-wide redirect URI registered on the
     # Slack app; the project is carried in the signed `state`, not the path.
     get "integrations/slack/oauth/callback", to: "integrations/slack_oauth#callback", as: :slack_oauth_callback
+    # The one redirect URI registered on Aixle's Atlassian OAuth app.
+    get "integrations/jira/oauth/callback", to: "integrations/jira_oauth#callback", as: :jira_oauth_callback
 
     # Unified OAuth (RFC oauth-unification §4.2). One deployment-wide callback for
     # every provider; the provider + all routing data are carried in a signed,
@@ -518,9 +522,15 @@ Rails.application.routes.draw do
               # `connect` entitles the application and records the binding.
               post :azure_devops_inspect
               post :azure_devops_connect
+              # Jira: the OAuth app redirect, and the service-account check
+              # that lists what a credential can see before it is saved.
+              get :jira_oauth_start
+              post :jira_inspect
             end
             member do
               post :test_connection
+              get :jira_projects
+              get :jira_webhook
             end
           end
           resources :agents, only: %i[index create update destroy]

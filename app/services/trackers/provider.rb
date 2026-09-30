@@ -91,6 +91,12 @@ module Trackers
       nil
     end
 
+    # Deliveries through /webhooks/trackers (providers without a receiver of their own).
+    def authentic_delivery?(_request, _raw_body, _subscription) = false
+    def parse_delivery(_payload, _subscription) = []
+    # The provider's own id for a delivery, when it has one, for deduplication.
+    def delivery_id(_request, _payload) = nil
+
     # Make sure the tracker delivers the events tracker triggers wait for.
     # Best effort; a provider whose events arrive without a subscription does nothing.
     def ensure_event_delivery! = nil
@@ -104,5 +110,11 @@ module Trackers
     def assign_issue(_scope_id, _ref, _assignee) = raise NotImplementedError
     def list_comments(_scope_id, _ref, cursor: nil, limit: nil) = raise NotImplementedError
     def add_comment(_scope_id, _ref, _body) = raise NotImplementedError
+
+    # People an issue in the scope can be assigned to: [{ id:, name: }].
+    def list_users(_scope_id, query:)
+      raise Error.new("#{integration.provider} cannot list its users here; assign by the name the tracker shows",
+                      code: "unsupported")
+    end
   end
 end

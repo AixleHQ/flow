@@ -195,6 +195,13 @@ schedules:
     overlap: skip
     enabled: true
 
+  # Extends tracker webhooks that expire (Jira's dynamic webhooks last 30 days)
+  # a week ahead, and keeps idle Jira 3LO grants alive. Daily is plenty for both.
+  - workflow: tracker_subscription_refresh_workflow
+    cron: "41 4 * * *"
+    overlap: skip
+    enabled: true
+
   # Reminds invitees whose invitation is unaccepted and within 2 days of the
   # 7-day expiry. Hourly is plenty: `reminded_at` makes it idempotent, so the
   # cadence only affects how promptly the single reminder goes out.

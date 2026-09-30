@@ -122,6 +122,43 @@ FactoryBot.define do
       end
     end
 
+    # A service-account connection to one site, covering ENG and OPS (the
+    # projects FakeJira::Api knows). `:jira_oauth` is the 3LO one.
+    trait :jira do
+      provider { :jira }
+      name { "Jira · acme.atlassian.net" }
+      project { association(:project, company: company, owner: association(:user, company: company)) }
+
+      transient do
+        auth_mode { "service_account" }
+        jira_projects do
+          [ { "id" => "10000", "key" => "ENG", "name" => "Engineering" },
+            { "id" => "10001", "key" => "OPS", "name" => "Operations" } ]
+        end
+      end
+
+      after(:build) do |integration, evaluator|
+        token = { "access_token" => "jira-token", "expires_at" => 1.hour.from_now.iso8601 }
+        integration.credentials_data =
+          if evaluator.auth_mode == "service_account"
+            token.merge("client_id" => "sa-client", "client_secret" => "sa-secret")
+          else
+            token.merge("refresh_token" => "jira-refresh")
+          end
+        integration.settings = {
+          "auth_mode" => evaluator.auth_mode, "cloud_id" => "cloud-acme", "site_url" => "https://acme.atlassian.net",
+          "site_name" => "acme.atlassian.net", "jira_projects" => evaluator.jira_projects,
+          "identity_display_name" => "Aixle Bot", "dedicated_identity" => evaluator.auth_mode == "service_account",
+          "tracker_identity" => { "id" => FakeJira::Api::BOT_ID, "name" => "Aixle Bot" }
+        }
+      end
+    end
+
+    trait :jira_oauth do
+      jira
+      auth_mode { "oauth" }
+    end
+
     trait :active do
       status { :active }
     end

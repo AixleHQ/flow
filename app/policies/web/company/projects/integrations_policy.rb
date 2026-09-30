@@ -18,6 +18,11 @@ module Web
         def azure_devops_connect? = manage_integrations?
         def slack_oauth_start? = manage_integrations?
         def github_app_install? = manage_integrations?
+        def jira_oauth_start? = manage_integrations?
+        def jira_inspect? = manage_integrations?
+        def jira_projects? = manage_integrations?
+        # Returns the webhook secret.
+        def jira_webhook? = manage_integrations?
 
         private
 
