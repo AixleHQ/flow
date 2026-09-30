@@ -108,6 +108,30 @@ class Web::ProfileUsageControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "a colleague's usage lists their sessions as a colleague sees them, not as the owner does" do
+    Settings.stubs(:domain).returns("flow.example.com")
+    Settings.traefik.stubs(:http_base).returns("https://t.flow.example.com")
+    Settings.traefik.stubs(:ws_base).returns("wss://t.flow.example.com")
+    create(:terminal_session, :agent_session, user: @user, project: @project, state: "ready",
+                                              initial_prompt: "private plan",
+                                              metadata: { "vscode_token" => "tkn-secret" })
+    member = create(:user, :viewer, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
+    delete logout_path
+    sign_in_as(member)
+
+    get usage_profile_path(user_id: @user.id)
+    inertia_load_deferred_props("usage")
+
+    row = inertia.props[:sessions].sole
+    assert_nil row[:initialPrompt]
+    assert_not row.to_json.include?("tkn-secret")
+    assert_match %r{/view/ws\?}, row[:websocketUrl]
+    assert_nil row[:uploadUrl]
+    assert_nil row[:ideUrl]
+    ticket = Rack::Utils.parse_query(URI.parse(row[:websocketUrl]).query)[ContainerTicket::PARAM]
+    assert_equal member, ContainerTicket.user_for(ticket, session: TerminalSession.find(row[:id]))
+  end
+
   test "cross-company target is forbidden with 404" do
     other_company = create(:company)
     user_c = create(:user, :employee, :onboarding_completed, company: other_company)

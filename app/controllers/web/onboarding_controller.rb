@@ -30,7 +30,7 @@ class Web::OnboardingController < Web::ApplicationController
     viewer_preview = build_viewer_workflow_preview(current_membership.company) if current_membership.viewer?
 
     render inertia: "Onboarding/OnboardingPage", props: {
-      auth_sessions: -> { active_auth_sessions.map { |s| TerminalSessionResource.new(s).to_h } },
+      auth_sessions: -> { active_auth_sessions.map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h } },
       cable_stream: -> { inertia_cable_stream(current_user) },
       viewer_workflow_preview: -> { viewer_preview }
     }

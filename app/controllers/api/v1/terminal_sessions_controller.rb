@@ -7,7 +7,7 @@ module Api
 
       def show
         session = find_session(params[:id])
-        render json: TerminalSessionResource.new(session).to_h
+        render json: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h
       end
 
       def create
@@ -43,7 +43,7 @@ module Api
           return render json: { errors: session.errors.full_messages }, status: :unprocessable_entity
         end
 
-        render json: TerminalSessionResource.new(session).to_h, status: :created
+        render json: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h, status: :created
       rescue Oauth::PreflightError, CloudAuth::PreflightError => e
         # Session-start preflight (§4.6): block launch with a "Connect …" CTA rather
         # than starting a session doomed to fail during provisioning. Both errors carry
@@ -76,7 +76,7 @@ module Api
       def finish
         session = current_user.terminal_sessions.find(params[:id])
         SessionService.finish(session: session)
-        render json: TerminalSessionResource.new(session).to_h
+        render json: TerminalSessionResource.new(session, params: { viewer: current_user }).to_h
       rescue TerminalSession::InvalidStateError => e
         render json: { error: e.message }, status: :bad_request
       end

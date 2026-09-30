@@ -147,7 +147,7 @@ class Web::ProfileController < Web::ApplicationController
               .where.not(session_type: "auth_setup")
               .order(created_at: :desc)
               .limit(per_page)
-              .map { |s| TerminalSessionResource.new(s).to_h }
+              .map { |s| TerminalSessionResource.new(s, params: { viewer: current_user }).to_h }
       }
     }
   end
