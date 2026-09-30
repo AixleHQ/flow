@@ -48,6 +48,23 @@ describe('terminalKeyAction', () => {
     expect(terminalKeyAction(key({ key: 'ArrowLeft' }), mac)).toBeNull();
   });
 
+  it('breaks the line on Shift+Enter and Ctrl+Enter the way Alt+Enter does, instead of submitting', () => {
+    const newline = { type: 'send', data: '\x1b\r' };
+    for (const platform of [windows, { isMac: true, hasSelection: false }]) {
+      expect(terminalKeyAction(key({ key: 'Enter', shiftKey: true }), platform)).toEqual(newline);
+      expect(terminalKeyAction(key({ key: 'Enter', ctrlKey: true }), platform)).toEqual(newline);
+      expect(terminalKeyAction(key({ key: 'Enter' }), platform)).toBeNull();
+      expect(terminalKeyAction(key({ key: 'Enter', altKey: true }), platform)).toBeNull();
+    }
+  });
+
+  it('breaks the line on Cmd+Enter on the Mac, and leaves Win+Enter to the OS elsewhere', () => {
+    const mac = { isMac: true, hasSelection: false };
+    expect(terminalKeyAction(key({ key: 'Enter', metaKey: true }), mac)).toEqual({ type: 'send', data: '\x1b\r' });
+    expect(terminalKeyAction(key({ key: 'Enter', metaKey: true }), windows)).toBeNull();
+    expect(terminalKeyAction(key({ key: 'Enter', metaKey: true, shiftKey: true }), windows)).toBeNull();
+  });
+
   it('leaves other Ctrl keys to the CLI', () => {
     expect(terminalKeyAction(key({ key: 'b', code: 'KeyB', ctrlKey: true }), withSelection)).toBeNull();
     expect(terminalKeyAction(key({ key: 'v', code: 'KeyV', ctrlKey: true, altKey: true }), windows)).toBeNull();
