@@ -138,12 +138,15 @@ class Web::Company::Projects::SessionsController < Web::Company::Projects::Appli
   end
 
   # The Run Workflow drawer needs each workflow's steps to render the Custom
-  # execution mode, so the list is shallow-serialized with them.
+  # execution mode. It reads id, name, and those step fields only — WorkflowResource
+  # would count and load every run of every workflow.
   def runnable_workflows
     Workflow.visible_for_project(current_project).includes(steps: :sub_steps).map do |workflow|
-      WorkflowResource.new(workflow).to_h.merge(
-        steps: workflow.visible_steps.map { |s| StepResource.new(s).to_h }
-      )
+      {
+        id: workflow.id,
+        name: workflow.name,
+        steps: workflow.visible_steps.map { |step| StepResource.new(step).to_h }
+      }
     end
   end
 
