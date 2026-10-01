@@ -7,6 +7,11 @@ module Github
     setup do
       @company = create(:company)
       @user = create(:user, :admin, company: @company)
+      @project = create(:project, company: @company, owner: @user)
+    end
+
+    def service(company: @company, connected_by: @user, project: @project)
+      Github::IntegrationService.new(company: company, connected_by: connected_by, project: project)
     end
 
     # Fake at the app-owned GitHub boundary (testing doctrine R3): stub the real
@@ -18,13 +23,12 @@ module Github
       fake
     end
 
-    test "happy path: persists an active company-wide integration from the verified installation" do
+    test "happy path: persists an active project integration from the verified installation" do
       fake = stub_token_service
 
       integration = nil
       assert_difference("Integration.count", 1) do
-        integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-          .create(installation_id: "12345", via_setup: true)
+        integration = service.create(installation_id: "12345")
       end
 
       assert integration.persisted?
@@ -34,7 +38,7 @@ module Github
       assert_equal "acme-corp", integration.name
       assert_equal @company.id, integration.company_id
       assert_equal @user.id, integration.connected_by_id
-      assert_nil integration.project_id
+      assert_equal @project.id, integration.project_id
       assert_equal "12345", integration.credentials_data["installation_id"]
       assert_equal "Organization", integration.settings["account_type"]
       assert_equal "Organization", integration.settings["target_type"]
@@ -50,8 +54,7 @@ module Github
         permissions: { contents: "read" }
       })
 
-      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-        .create(installation_id: "67890", via_setup: true)
+      integration = service.create(installation_id: "67890")
 
       assert integration.active?
       assert_equal "octocat", integration.name
@@ -61,18 +64,6 @@ module Github
       # attached repo's owner against it, because a clone token is scoped by
       # repo NAME within this account.
       assert_equal "octocat", integration.reload.github_account_login
-    end
-
-    test "scoping: project-scoped integration is persisted with the project" do
-      stub_token_service
-      project = create(:project, company: @company, owner: @user)
-
-      integration = Github::IntegrationService.new(
-        company: @company, connected_by: @user, project: project
-      ).create(installation_id: "12345", via_setup: true)
-
-      assert integration.active?
-      assert_equal project.id, integration.project_id
     end
 
     # ----- PAT mode -----
@@ -103,8 +94,7 @@ module Github
     test "create_with_pat records no token_scopes for a fine-grained token" do
       stub_token_service(identity: { id: 7, account_login: "octodev", account_type: "User", scopes: nil })
 
-      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-        .create_with_pat(personal_access_token: "github_pat_x")
+      integration = service.create_with_pat(personal_access_token: "github_pat_x")
 
       assert integration.active?
       assert_nil integration.settings["token_scopes"]
@@ -119,8 +109,7 @@ module Github
         .to_return(status: 200, headers: { "Content-Type" => "application/json", "X-OAuth-Scopes" => "repo" },
                    body: { id: 4_242, login: "octodev", type: "User" }.to_json)
 
-      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-        .create_with_pat(personal_access_token: "ghp_developer_token")
+      integration = service.create_with_pat(personal_access_token: "ghp_developer_token")
 
       assert integration.active?
       assert_equal "octodev", integration.name
@@ -131,8 +120,7 @@ module Github
 
       integration = nil
       assert_no_difference("Integration.count") do
-        integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-          .create_with_pat(personal_access_token: "ghp_revoked")
+        integration = service.create_with_pat(personal_access_token: "ghp_revoked")
       end
 
       refute_predicate integration, :persisted?
@@ -183,7 +171,7 @@ module Github
       stub_token_service
       project = create(:project, company: @company, owner: @user)
       service = Github::IntegrationService.new(company: @company, connected_by: @user, project: project)
-      app_integration = service.create(installation_id: "12345", via_setup: true)
+      app_integration = service.create(installation_id: "12345")
 
       assert_difference("Integration.count", 1) do
         service.create_with_pat(personal_access_token: "ghp_developer_token")
@@ -195,8 +183,7 @@ module Github
     test "coerces a non-string installation_id to a string in credentials" do
       stub_token_service
 
-      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-        .create(installation_id: 12_345, via_setup: true)
+      integration = service.create(installation_id: 12_345)
 
       assert integration.persisted?
       assert_equal "12345", integration.credentials_data["installation_id"]
@@ -207,41 +194,11 @@ module Github
     # Every customer installs the same App and its JWT can read every
     # installation, so "it exists" says nothing about whose it is.
 
-    test "link to project refuses an installation the company does not hold" do
-      stub_token_service
-      project = create(:project, company: @company, owner: @user)
-
-      integration = nil
-      assert_no_difference("Integration.count") do
-        integration = Github::IntegrationService.new(company: @company, connected_by: @user, project: project)
-          .create(installation_id: "55555")
-      end
-
-      assert_not integration.persisted?
-      assert_match(/not connected to this workspace/, integration.settings["error"])
-    end
-
-    test "link to project reuses an installation the company already holds" do
-      stub_token_service
-      Github::IntegrationService.new(company: @company, connected_by: @user).create(installation_id: "55555", via_setup: true)
-      project = create(:project, company: @company, owner: @user)
-
-      integration = Github::IntegrationService.new(company: @company, connected_by: @user, project: project)
-        .create(installation_id: "55555")
-
-      assert integration.persisted?
-      assert integration.active?
-      assert_equal project.id, integration.project_id
-    end
-
     test "an installation another company has connected cannot be connected again" do
       stub_token_service
-      other_company = create(:company)
-      Github::IntegrationService.new(company: other_company, connected_by: create(:user, :admin, company: other_company))
-        .create(installation_id: "77777", via_setup: true)
+      connect_elsewhere("77777")
 
-      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-        .create(installation_id: "77777", via_setup: true)
+      integration = service.create(installation_id: "77777")
 
       assert_not integration.persisted?
       assert_includes integration.errors.full_messages, "This GitHub installation is already connected to another workspace"
@@ -249,16 +206,13 @@ module Github
 
     test "with the installer confirmed by GitHub, one installation can serve two companies" do
       stub_token_service
-      other_company = create(:company)
-      Github::IntegrationService.new(company: other_company, connected_by: create(:user, :admin, company: other_company))
-        .create(installation_id: "77777", via_setup: true)
+      other_company = connect_elsewhere("77777")
       Github::InstallationOwnership.stubs(:enforced?).returns(true)
       ownership = mock("ownership")
       ownership.stubs(:includes?).with("77777").returns(true)
       Github::InstallationOwnership.stubs(:new).with(code: "oauth-code").returns(ownership)
 
-      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-        .create(installation_id: "77777", via_setup: true, oauth_code: "oauth-code")
+      integration = service.create(installation_id: "77777", oauth_code: "oauth-code")
 
       assert integration.persisted?
       assert integration.active?
@@ -273,11 +227,88 @@ module Github
       ownership.stubs(:includes?).with("88888").returns(false)
       Github::InstallationOwnership.stubs(:new).with(code: nil).returns(ownership)
 
-      integration = Github::IntegrationService.new(company: @company, connected_by: @user)
-        .create(installation_id: "88888", via_setup: true)
+      integration = service.create(installation_id: "88888")
 
       assert_not integration.persisted?
       assert_match(/Could not confirm/, integration.settings["error"])
+    end
+
+    # ----- Test connection -----
+
+    test "test repairs a connection GitHub still answers for" do
+      stub_token_service
+      integration = service.create(installation_id: "12345")
+      integration.update_columns(status: "error", settings: integration.settings.merge("error" => "Bad credentials"))
+
+      result = service.test(integration)
+
+      assert_equal :active, result[:status]
+      integration.reload
+      assert integration.active?
+      assert_nil integration.settings["error"]
+      assert_equal "acme-corp", integration.github_account_login
+    end
+
+    test "test takes down a connection whose installation is gone" do
+      stub_token_service
+      integration = service.create(installation_id: "12345")
+      stub_token_service(verify_error: Github::TokenService::AuthenticationError.new("it was uninstalled"))
+
+      result = service.test(integration)
+
+      assert_equal :error, result[:status]
+      assert_equal "it was uninstalled", result[:message]
+      assert_equal "error", integration.reload.status.to_s
+      assert_equal "it was uninstalled", integration.settings["error"]
+    end
+
+    test "test reports a suspended installation and records why" do
+      stub_token_service
+      integration = service.create(installation_id: "12345")
+      stub_token_service(installation: FakeGithub::TokenService::DEFAULT_INSTALLATION
+                                         .merge(suspended_at: "2026-09-30T12:00:00Z"))
+
+      result = service.test(integration)
+
+      assert_equal :error, result[:status]
+      integration.reload
+      assert_equal "error", integration.status.to_s
+      assert_equal "suspended", integration.settings["installation_state"]
+      assert_equal Github::InstallationEvents::SUSPENDED, integration.settings["error"]
+    end
+
+    # An outage says nothing about the credential, so it must not take a
+    # working connection down.
+    test "test leaves the status alone when GitHub does not answer" do
+      stub_token_service
+      integration = service.create(installation_id: "12345")
+      stub_token_service(verify_error: Github::TokenService::UnavailableError.new("GitHub did not answer: 502"))
+
+      result = service.test(integration)
+
+      assert_equal :error, result[:status]
+      assert integration.reload.active?
+    end
+
+    test "test checks a token connection's token" do
+      fake = stub_token_service
+      integration = service.create_with_pat(personal_access_token: "ghp_developer_token")
+
+      result = service.test(integration)
+
+      assert_equal :active, result[:status]
+      assert_equal 2, fake.calls_to(:verify_token).size
+      assert_equal %w[repo], integration.reload.settings["token_scopes"]
+    end
+
+    private
+
+    def connect_elsewhere(installation_id)
+      other_company = create(:company)
+      admin = create(:user, :admin, company: other_company)
+      service(company: other_company, connected_by: admin, project: create(:project, company: other_company, owner: admin))
+        .create(installation_id: installation_id)
+      other_company
     end
   end
 end

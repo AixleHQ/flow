@@ -14,6 +14,8 @@ module Github
   class TokenService
     class ConfigurationError < StandardError; end
     class AuthenticationError < StandardError; end
+    # GitHub answered with a server error: says nothing about the credential.
+    class UnavailableError < AuthenticationError; end
 
     # Either one lets the token read repositories; `repo` additionally covers
     # private ones. Anything narrower cannot clone.
@@ -25,6 +27,16 @@ module Github
     # needed it.
     TOKENS = ActiveSupport::Cache::MemoryStore.new(size: 1.megabyte)
     TOKEN_MARGIN = 5.minutes
+
+    # Whether the App path can work on this deployment: an App to install and
+    # the key to act as it. Presence only — a key that does not parse still
+    # fails at verification, with the reason.
+    def self.app_configured?
+      github = Settings.github
+      return false if github.app_id.blank? || github.app_slug.blank?
+
+      github.private_key.present? || (github.private_key_path.present? && File.exist?(github.private_key_path))
+    end
 
     def initialize(integration)
       @integration = integration
@@ -59,8 +71,13 @@ module Github
         account_login: installation.account.login,
         account_type: installation.account.type,
         target_type: installation.target_type,
-        permissions: installation.permissions.to_h
+        permissions: installation.permissions.to_h,
+        suspended_at: installation.suspended_at
       }
+    rescue Octokit::NotFound
+      raise AuthenticationError, "GitHub has no installation #{installation_id} of this app — it was uninstalled"
+    rescue Octokit::ServerError => e
+      raise UnavailableError, "GitHub did not answer: #{e.message}"
     rescue Octokit::Error => e
       raise AuthenticationError, "Failed to verify installation: #{e.message}"
     end
@@ -90,6 +107,8 @@ module Github
       { id: user.id, account_login: user.login, account_type: user.type, scopes: scopes }
     rescue Octokit::Unauthorized
       raise AuthenticationError, "GitHub rejected this token — it is invalid, revoked or expired."
+    rescue Octokit::ServerError => e
+      raise UnavailableError, "GitHub did not answer: #{e.message}"
     rescue Octokit::Error => e
       raise AuthenticationError, "GitHub token verification failed: #{e.message}"
     end

@@ -28,6 +28,12 @@ class Web::Company::Integrations::GithubSetupController < Web::Company::Applicat
       return
     end
 
+    if target_project.blank? && Oauth::State.expired?(params[:state])
+      redirect_to company_projects_path,
+                  alert: "The GitHub setup link expired — open the project's Integrations page and connect GitHub again."
+      return
+    end
+
     if target_project.blank? || !target_project.accessible_by?(current_user)
       redirect_to company_projects_path,
                   alert: "Connect a GitHub integration from within a project."
@@ -47,7 +53,7 @@ class Web::Company::Integrations::GithubSetupController < Web::Company::Applicat
     # have switched away since starting the install.
     integration = Github::IntegrationService.new(
       company: target_project.company, connected_by: current_user, project: target_project
-    ).create(installation_id: installation_id, via_setup: true, oauth_code: params[:code])
+    ).create(installation_id: installation_id, oauth_code: params[:code])
     if integration.persisted? && integration.active?
       redirect_to github_setup_redirect_path(target_project), notice: "GitHub connected"
     else
@@ -65,7 +71,8 @@ class Web::Company::Integrations::GithubSetupController < Web::Company::Applicat
 
   # Resolve the originating project from the verified, signed state payload. Returns
   # nil for a missing/tampered/expired state or a payload that isn't a github_setup
-  # project state — the caller treats nil as a misroute.
+  # project state — the caller treats nil as a misroute, or as expiry when the state
+  # is ours but out of date.
   def resolve_github_setup_project(payload)
     return nil if payload.blank?
     return nil unless payload["provider"] == "github_setup"

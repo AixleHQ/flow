@@ -22,7 +22,8 @@ module FakeGithub
       account_login: "acme-corp",
       account_type: "Organization",
       target_type: "Organization",
-      permissions: { contents: "read", pull_requests: "write" }
+      permissions: { contents: "read", pull_requests: "write" },
+      suspended_at: nil
     }.freeze
     # PAT mode's counterpart: what #verify_token answers.
     DEFAULT_TOKEN_IDENTITY = {

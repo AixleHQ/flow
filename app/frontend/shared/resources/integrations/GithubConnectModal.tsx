@@ -4,7 +4,7 @@ import { IconAlertCircle, IconExternalLink } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
 export interface GithubProps {
-  /** False on a deployment with no GITHUB_APP_ID / GITHUB_APP_SLUG — typically a local one. */
+  /** False on a deployment missing GITHUB_APP_ID, GITHUB_APP_SLUG or the private key — typically a local one. */
   appConfigured: boolean;
 }
 

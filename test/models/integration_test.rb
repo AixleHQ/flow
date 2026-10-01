@@ -108,14 +108,15 @@ class IntegrationTest < ActiveSupport::TestCase
     assert second.save!
   end
 
-  test "find_or_build_github_for_installation returns existing row when installation_id matches" do
-    first = create(:integration, :github, company: @company, connected_by: @user, name: "org-a", project_id: nil)
+  test "find_or_build_github_for_installation returns the project's row when installation_id matches" do
+    project = create(:project, company: @company, owner: @user)
+    first = create(:integration, :github, company: @company, connected_by: @user, name: "org-a", project: project)
     first.update!(credentials_data: { "installation_id" => "111" })
 
     found = Integration.find_or_build_github_for_installation(
       company: @company,
       connected_by: @user,
-      project: nil,
+      project: project,
       installation_id: "111"
     )
 
@@ -123,17 +124,31 @@ class IntegrationTest < ActiveSupport::TestCase
   end
 
   test "find_or_build_github_for_installation builds new when installation_id unknown" do
-    create(:integration, :github, company: @company, connected_by: @user, name: "org-a", project_id: nil)
+    project = create(:project, company: @company, owner: @user)
+    create(:integration, :github, company: @company, connected_by: @user, name: "org-a", project: project)
 
     built = Integration.find_or_build_github_for_installation(
       company: @company,
       connected_by: @user,
-      project: nil,
+      project: project,
       installation_id: "999"
     )
 
     assert built.new_record?
     assert_equal @user, built.connected_by
+    assert_equal project, built.project
+  end
+
+  test "find_or_build_github_for_installation does not reach into another project" do
+    project = create(:project, company: @company, owner: @user)
+    other = create(:project, company: @company, owner: @user)
+    held = create(:integration, :github, company: @company, connected_by: @user, project: other)
+
+    built = Integration.find_or_build_github_for_installation(
+      company: @company, connected_by: @user, project: project, installation_id: held.installation_id
+    )
+
+    assert built.new_record?
   end
 
   test "find_or_build_github_for_pat returns the project's existing PAT row" do

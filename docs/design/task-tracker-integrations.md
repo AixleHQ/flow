@@ -222,7 +222,7 @@ Trackers follow the rules the GitHub integration already uses:
 | Who connects, reconnects, disconnects | Project admin or project owner (`IntegrationsPolicy#manage_integrations?`) | Same policy |
 | Proof on first connect | Going through GitHub's install flow, plus OAuth installation ownership where configured | Entering working credentials, or completing the provider's OAuth consent |
 | What the connection can reach | Decided **on GitHub** by the org admin: all repositories or selected ones | Decided **in the tracker** by its admin: the projects the connection's identity (bot account, OAuth consenting user, approved Azure projects) can see |
-| Other projects in the company | Link an installation the company already holds, with no new proof (`Github::IntegrationService#create`, `github_installation_held_by?`) | Link the company's existing connection, with no new credentials |
+| Other projects in the company | Connect again from that project through GitHub's install flow; the project gets its own row for the installation (`Github::IntegrationService#create`) | Link the company's existing connection, with no new credentials |
 | Who picks what a project uses | Anyone with write access adds repositories from the installation's list (`RepositoriesPolicy#create?`) | Anyone with write access adds project trackers from the connection's `list_scopes` |
 | Removing | A project admin removes that project's row; a company-wide row needs a company admin (`IntegrationsController#destroy`) | A project admin or owner **unlinks** the connection from their project (its trackers are detached). Reconnecting or disconnecting the shared connection itself needs a company admin or the person who connected it. |
 

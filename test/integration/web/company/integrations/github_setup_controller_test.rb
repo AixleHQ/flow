@@ -67,6 +67,26 @@ class Web::Company::Integrations::GithubSetupControllerTest < ActionDispatch::In
     assert_redirected_to company_projects_path
   end
 
+  test "a link older than ten minutes says it expired" do
+    state = signed_state(project: @project, user: @user)
+
+    travel 11.minutes do
+      assert_no_difference("Integration.count") do
+        get company_integrations_github_setup_path, params: { state: state, installation_id: "12345" }
+      end
+    end
+
+    assert_redirected_to company_projects_path
+    assert_match(/GitHub setup link expired/, flash[:alert])
+  end
+
+  test "a state that is not ours is a misroute, not an expiry" do
+    get company_integrations_github_setup_path, params: { state: "forged--signature", installation_id: "12345" }
+
+    assert_redirected_to company_projects_path
+    assert_equal "Connect a GitHub integration from within a project.", flash[:alert]
+  end
+
   test "inaccessible project redirects to the projects list and creates nothing" do
     foreign_owner = create(:user, company: @company)
     foreign_project = create(:project, company: @company, owner: foreign_owner)
@@ -116,8 +136,10 @@ class Web::Company::Integrations::GithubSetupControllerTest < ActionDispatch::In
                                                    target_type: "Organization" })
     )
     victim_company = create(:company)
-    Github::IntegrationService.new(company: victim_company, connected_by: create(:user, :admin, company: victim_company))
-      .create(installation_id: "424242", via_setup: true)
+    victim_admin = create(:user, :admin, company: victim_company)
+    Github::IntegrationService.new(company: victim_company, connected_by: victim_admin,
+                                   project: create(:project, company: victim_company, owner: victim_admin))
+      .create(installation_id: "424242")
 
     assert_no_difference("Integration.count") do
       get company_integrations_github_setup_path,

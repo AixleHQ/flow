@@ -77,11 +77,6 @@ class IntegrationResource < ApplicationResource
     integration.project_id.present? ? "project" : "company"
   end
 
-  typelize "string | null"
-  attribute :installation_id do |integration|
-    integration.credentials_data_for_display["installation_id"]
-  end
-
   # ----- GitHub -----
 
   # "app" or "pat" — which credential this connection runs on. Null for every
@@ -98,6 +93,11 @@ class IntegrationResource < ApplicationResource
   typelize "string[]"
   attribute :github_token_scopes do |integration|
     integration.github? ? Array(integration.settings&.dig("token_scopes")) : []
+  end
+
+  typelize "string | null"
+  attribute :github_error do |integration|
+    integration.github? && !integration.active? ? integration.settings&.dig("error").presence : nil
   end
 
   # Where "Manage on GitHub" goes. An App installation has a settings page;

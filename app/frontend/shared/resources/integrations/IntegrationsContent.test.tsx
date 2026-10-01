@@ -406,6 +406,74 @@ describe('IntegrationsContent', () => {
     expect(screen.getByText('Error')).toBeInTheDocument();
   });
 
+  it('tests a GitHub connection from its row', async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Project Integrations"
+        basePath="/projects/42/integrations"
+        integrations={[makeIntegration({ id: 5, name: 'acme', githubAuthMode: 'app', scopeIndicator: 'project' })]}
+      />,
+      { props: settingsProps },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Test connection for acme' }));
+
+    await waitFor(() =>
+      expect(router.post).toHaveBeenCalledWith('/projects/42/integrations/5/test_connection', {}, expect.anything()),
+    );
+  });
+
+  // An uninstall on GitHub has to read as one, not as a bare "Error".
+  it('says why a GitHub connection is not working', () => {
+    renderPage(
+      <IntegrationsContent
+        title="Project Integrations"
+        basePath="/projects/42/integrations"
+        integrations={[
+          makeIntegration({
+            id: 5,
+            name: 'acme',
+            status: 'error',
+            githubAuthMode: 'app',
+            scopeIndicator: 'project',
+            githubError: 'The GitHub App was uninstalled on GitHub. Install it again, or remove this connection.',
+          }),
+        ]}
+      />,
+      { props: settingsProps },
+    );
+
+    expect(screen.getByText(/The GitHub App was uninstalled on GitHub/)).toBeInTheDocument();
+  });
+
+  it('warns that removing an App connection leaves the app installed on GitHub', async () => {
+    renderPage(
+      <IntegrationsContent
+        title="Project Integrations"
+        basePath="/projects/42/integrations"
+        integrations={[
+          makeIntegration({
+            id: 5,
+            name: 'acme',
+            githubAuthMode: 'app',
+            scopeIndicator: 'project',
+            githubUrl: 'https://github.com/apps/aixle-app/installations/55',
+          }),
+        ]}
+      />,
+      { props: settingsProps },
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Remove Integration/i });
+    expect(within(dialog).getByText(/stays installed on GitHub/)).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Uninstall it on GitHub' })).toHaveAttribute(
+      'href',
+      'https://github.com/apps/aixle-app/installations/55',
+    );
+  });
+
   it('renders a Settings link to the github management URL when present', () => {
     renderPage(
       <IntegrationsContent
@@ -460,84 +528,6 @@ describe('IntegrationsContent', () => {
 
       expect(screen.queryByText('Org Wide')).not.toBeInTheDocument();
       expect(screen.getByText('No integrations in this scope.')).toBeInTheDocument();
-    });
-
-    it('linking a company integration to the project posts the installation id', async () => {
-      renderPage(
-        <IntegrationsContent
-          title="Project Integrations"
-          basePath="/projects/42/integrations"
-          integrations={[
-            makeIntegration({
-              id: 2,
-              name: 'Org Wide',
-              scopeIndicator: 'company',
-              status: 'active',
-              installationId: 'inst-123',
-            }),
-          ]}
-        />,
-        { props: settingsProps },
-      );
-
-      await userEvent.click(screen.getByRole('button', { name: /Link to project/i }));
-
-      expect(router.post).toHaveBeenCalledWith(
-        '/projects/42/integrations',
-        expect.objectContaining({ provider: 'github', installationId: 'inst-123' }),
-        expect.objectContaining({ preserveScroll: true }),
-      );
-    });
-
-    it('hides the Link button when the installation is already linked at the project scope', () => {
-      renderPage(
-        <IntegrationsContent
-          title="Project Integrations"
-          basePath="/projects/42/integrations"
-          integrations={[
-            makeIntegration({
-              id: 1,
-              name: 'Already Linked',
-              scopeIndicator: 'project',
-              status: 'active',
-              installationId: 'inst-dup',
-            }),
-            makeIntegration({
-              id: 2,
-              name: 'Company Copy',
-              scopeIndicator: 'company',
-              status: 'active',
-              installationId: 'inst-dup',
-            }),
-          ]}
-        />,
-        { props: settingsProps },
-      );
-
-      // The same installation already exists at project scope, so the company copy's Link button is suppressed.
-      expect(screen.queryByRole('button', { name: /Link to project/i })).not.toBeInTheDocument();
-    });
-
-    it('clicking Link on a company integration with no installation id is a no-op', async () => {
-      renderPage(
-        <IntegrationsContent
-          title="Project Integrations"
-          basePath="/projects/42/integrations"
-          integrations={[
-            makeIntegration({
-              id: 2,
-              name: 'Org Wide',
-              scopeIndicator: 'company',
-              status: 'active',
-              // No installationId: the Link action does not render at all.
-            }),
-          ]}
-        />,
-        { props: settingsProps },
-      );
-
-      expect(screen.queryByRole('button', { name: /Link to project/i })).not.toBeInTheDocument();
-      expect(router.post).not.toHaveBeenCalled();
     });
   });
 

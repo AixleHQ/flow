@@ -58,6 +58,7 @@ function makeSession(overrides: Partial<TerminalSession> = {}): TerminalSession 
     configItemIds: [],
     inputAssetIds: [],
     repositoryIds: [],
+    failedRepositories: [],
     userName: null,
     userEmail: null,
     projectName: null,
@@ -121,6 +122,23 @@ describe('SessionShowContent', () => {
       />,
     );
     expect(screen.getByText('GitHub token expired; reconnect the integration')).toBeInTheDocument();
+  });
+
+  // The agent's context leaves a failed clone out, so the session page is the
+  // only place the user learns why a repository is missing.
+  it('lists the repositories that did not clone, and why', () => {
+    renderPage(
+      <SessionShowContent
+        session={makeSession({
+          failedRepositories: [{ id: 3, fullName: 'acme/api', error: 'Integration not active' }],
+        })}
+        cableStream="signed-stream"
+        context={ctx}
+      />,
+    );
+    expect(screen.getByText('A repository did not clone')).toBeInTheDocument();
+    expect(screen.getByText('acme/api')).toBeInTheDocument();
+    expect(screen.getByText(/Integration not active/)).toBeInTheDocument();
   });
 
   it('names cluster capacity as the reason when that is what it is', () => {

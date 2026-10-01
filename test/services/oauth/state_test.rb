@@ -109,6 +109,17 @@ class Oauth::StateTest < ActiveSupport::TestCase
     end
   end
 
+  test "expired? tells a state that ran out of time from one that was never ours" do
+    state = encode
+
+    assert_not Oauth::State.expired?(state)
+    travel(Oauth::State::TTL + 1.minute) do
+      assert Oauth::State.expired?(state)
+    end
+    assert_not Oauth::State.expired?("#{state}x")
+    assert_not Oauth::State.expired?(nil)
+  end
+
   test "decode does NOT consume the nonce (cancel/error branch can still retry)" do
     state = encode
     nonce = Oauth::State.decode(state)["nonce"]

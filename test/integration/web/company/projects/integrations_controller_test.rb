@@ -68,8 +68,15 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_not_includes response.location.to_s, Slack::Oauth::AUTHORIZE_URL
   end
 
+  def stub_github_app(app_slug: "aixle-app", app_id: "999", private_key: "-----BEGIN RSA PRIVATE KEY-----")
+    Settings.github.stubs(:app_slug).returns(app_slug)
+    Settings.github.stubs(:app_id).returns(app_id)
+    Settings.github.stubs(:private_key).returns(private_key)
+    Settings.github.stubs(:private_key_path).returns(nil)
+  end
+
   test "github_app_install redirects to GitHub with a signed state" do
-    Settings.github.stubs(:app_slug).returns("aixle-app")
+    stub_github_app
 
     get github_app_install_company_project_integrations_path(@project)
 
@@ -81,7 +88,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   end
 
   test "github_app_install alerts when the GitHub App is not configured" do
-    Settings.github.stubs(:app_slug).returns(nil)
+    stub_github_app(app_slug: nil)
 
     get github_app_install_company_project_integrations_path(@project)
 
@@ -90,8 +97,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   end
 
   test "index tells the page whether the GitHub App is configured" do
-    Settings.github.stubs(:app_slug).returns("aixle-app")
-    Settings.github.stubs(:app_id).returns("999")
+    stub_github_app
 
     get company_project_integrations_path(@project)
 
@@ -99,11 +105,47 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   end
 
   test "index reports the GitHub App as unconfigured when the deployment has none" do
-    Settings.github.stubs(:app_slug).returns(nil)
+    stub_github_app(app_slug: nil)
 
     get company_project_integrations_path(@project)
 
     assert_inertia_props { |props| props[:github][:appConfigured] == false }
+  end
+
+  # Without the key every installation would only end up as a connection in error.
+  test "index reports the GitHub App as unconfigured without its private key" do
+    stub_github_app(private_key: "")
+
+    get company_project_integrations_path(@project)
+
+    assert_inertia_props { |props| props[:github][:appConfigured] == false }
+  end
+
+  # App installations arrive only on GitHub's post-install redirect.
+  test "create github outside PAT mode connects nothing" do
+    other = create(:project, company: @company, owner: @user)
+    held = create(:integration, :github, :active, company: @company, connected_by: @user, project: other)
+
+    assert_no_difference("Integration.count") do
+      post company_project_integrations_path(@project), params: {
+        provider: "github", installationId: held.installation_id
+      }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_match(/install on GitHub/, flash[:alert])
+  end
+
+  test "test_connection re-verifies a GitHub connection" do
+    integration = create(:integration, :github, company: @company, connected_by: @user, project: @project,
+                                                status: :error, settings: { "error" => "Bad credentials" })
+    Github::TokenService.stubs(:new).returns(FakeGithub::TokenService.new)
+
+    post test_connection_company_project_integration_path(@project, integration)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "Connection verified", flash[:notice]
+    assert integration.reload.active?
   end
 
   test "create github in PAT mode activates without an App or an installation" do

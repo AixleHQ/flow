@@ -56,6 +56,7 @@ function buildSession(overrides: Partial<TerminalSession> = {}): TerminalSession
     configItemIds: [],
     inputAssetIds: [],
     repositoryIds: [],
+    failedRepositories: [],
     userName: null,
     userEmail: null,
     projectName: null,

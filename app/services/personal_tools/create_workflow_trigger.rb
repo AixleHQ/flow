@@ -27,8 +27,11 @@ module PersonalTools
       param :board_column_id, type: :integer,
                               description: "Board column whose incoming cards fire the workflow. Required for kind=column."
       param :event_type, type: :string,
-                         description: "Event name for kind=event (e.g. 'github.push') and kind=tracker (one of the " \
-                                      "tracker.* types). Ignored for the other kinds, which set their own event type."
+                         description: "Event name for kind=event — one the platform emits: 'slack.message', or an " \
+                                      "inbound webhook's own 'webhook.<token>' (list_workflow_triggers shows it). " \
+                                      "Nothing emits GitHub events; start a workflow from GitHub with kind=webhook. " \
+                                      "For kind=tracker, one of the tracker.* types. Ignored for the other kinds, " \
+                                      "which set their own event type."
       param :name, type: :string, description: "Human-readable label for this trigger."
       param :trigger_mode, type: :string, enum: WorkflowTriggerSupport::TRIGGER_MODES,
                            description: "auto starts the run immediately; manual only offers it. Defaults to auto."
