@@ -14,6 +14,8 @@ module AzureDevops
   #   the credential helper, because nothing can inject a per-command header
   #   into a command the agent types. The helper asks the platform each time,
   #   which is also what makes an hour-long Entra token survive a long session.
+  #   So does every blob the clone skipped: it is blobless, for the reason
+  #   GitCredentials::SessionGitSetup gives.
   #
   # Modern Git (2.46+) can carry a bearer credential through the helper protocol
   # itself (`authtype`/`credential`/`ephemeral`). That is better and is
@@ -101,13 +103,13 @@ module AzureDevops
         AIXLE_GIT_AUTH_HEADER="$(cat #{header_file})"
         export AIXLE_GIT_AUTH_HEADER
         rm -f #{header_file}
-        git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --depth=1 --branch=#{branch} #{url} #{path}
+        git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --filter=blob:none --branch=#{branch} #{url} #{path}
         unset AIXLE_GIT_AUTH_HEADER
         #{configure_helper_script(repository, target_path)}
         chown -R #{uid}:#{uid} #{path}
       SH
 
-      runtime.exec(container_id, [ "sh", "-c", script ])
+      runtime.exec(container_id, [ "sh", "-c", script ], timeout: GitCredentials::SessionGitSetup::CLONE_TIMEOUT)
     ensure
       # A failed clone leaves the file behind; remove it rather than trusting the
       # script's own rm to have run.

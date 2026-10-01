@@ -73,7 +73,7 @@ module AzureDevops
       @setup.clone(@repository, "/workspace/repo/api", 1001)
 
       commands = @runtime.execs.map { |c| Array(c).join(" ") }
-      assert commands.any? { |c| c.include?("git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone") }
+      assert commands.any? { |c| c.include?("git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --filter=blob:none") }
       assert commands.none? { |c| c.include?("clone-token") }, "the token must not reach argv"
     end
 
@@ -89,7 +89,7 @@ module AzureDevops
 
         assert_equal 1, exit_code
         assert_match(/could not write/, Array(stderr).join)
-        assert runtime.execs.none? { |c| Array(c).join(" ").include?("clone --depth=1") }, "git ran without #{unwritable}"
+        assert runtime.execs.none? { |c| Array(c).join(" ").include?("clone --filter=blob:none") }, "git ran without #{unwritable}"
       end
     end
 

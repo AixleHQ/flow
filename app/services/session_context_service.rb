@@ -159,7 +159,7 @@ class SessionContextService
       measure_step("assets") { inject_assets(container_id, session) }
       context_log.record(:assets, session.input_asset_ids || [])
 
-      # Step 6: Repositories (shallow clone from GitHub)
+      # Step 6: Repositories
       measure_step("repositories") { inject_repositories(container_id, session) }
       context_log.record(:repositories, session.repositories.pluck(:full_name))
 

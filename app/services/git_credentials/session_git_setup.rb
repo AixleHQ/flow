@@ -9,11 +9,21 @@ module GitCredentials
   #   environment through `--config-env`, filled from a 0600 file that is deleted
   #   before git runs; never from argv (the Kubernetes exec API carries argv in its
   #   query string, which the apiserver logs) and never in the remote URL;
-  # - every later `git fetch`/`git push` the agent runs goes through the credential
-  #   helper, which asks the platform each time.
+  # - the clone is blobless, not shallow: every branch and the whole commit history,
+  #   so an agent can find and diff unpromoted branches, at about a shallow clone's
+  #   size — a full clone is what a large repository cannot afford at session start;
+  # - every later `git fetch`/`git push` the agent runs, every blob the clone skipped,
+  #   and every `gh` call (through the wrapper ahead of it on PATH) goes through the
+  #   credential helper, which asks the platform each time.
   class SessionGitSetup
     HELPER = "/workspace/.aixle/git-credential-aixle"
     HELPER_SOURCE = Rails.root.join("docker/base/git/git-credential-aixle")
+    # Ahead of the image's /usr/bin/gh on PATH.
+    GH_WRAPPER = "/usr/local/bin/gh"
+    GH_WRAPPER_SOURCE = Rails.root.join("docker/base/git/gh-aixle")
+    # The runtime's exec default (30 s on Kubernetes) is shorter than a large
+    # repository takes to clone.
+    CLONE_TIMEOUT = 120
     HelperNotInstalled = Class.new(StandardError)
 
     def self.container_env(session)
@@ -38,6 +48,7 @@ module GitCredentials
       header = "Authorization: Basic #{Base64.strict_encode64("#{credential.username}:#{credential.password}")}"
       return not_written("the clone credential") unless @runtime.write_file(@container_id, header_path, header, mode: 0o600, uid: uid, gid: uid)
       return not_written("the git credential helper") unless place_helper(uid)
+      place_gh_wrapper if repository.integration&.github?
 
       url = Vendor.clone_url(repository)
       script = <<~SH.strip
@@ -45,12 +56,12 @@ module GitCredentials
         AIXLE_GIT_AUTH_HEADER="$(cat #{Shellwords.escape(header_path)})"
         export AIXLE_GIT_AUTH_HEADER
         rm -f #{Shellwords.escape(header_path)}
-        git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --depth=1 --branch=#{Shellwords.escape(repository.source_branch)} #{Shellwords.escape(url)} #{Shellwords.escape(target_path)}
+        git --config-env=http.extraheader=AIXLE_GIT_AUTH_HEADER clone --filter=blob:none --branch=#{Shellwords.escape(repository.source_branch)} #{Shellwords.escape(url)} #{Shellwords.escape(target_path)}
         unset AIXLE_GIT_AUTH_HEADER
         #{configure_helper_script(url, repository, target_path)}
         chown -R #{uid}:#{uid} #{Shellwords.escape(target_path)}
       SH
-      @runtime.exec(@container_id, [ "sh", "-c", script ])
+      @runtime.exec(@container_id, [ "sh", "-c", script ], timeout: CLONE_TIMEOUT)
     ensure
       begin
         @runtime.exec(@container_id, [ "sh", "-c", "rm -f #{Shellwords.escape(header_path)}" ]) if header_path
@@ -83,6 +94,13 @@ module GitCredentials
     def place_helper(uid)
       @runtime.exec(@container_id, [ "sh", "-c", "mkdir -p #{Shellwords.escape(File.dirname(HELPER))}" ])
       @runtime.write_file(@container_id, HELPER, File.read(HELPER_SOURCE), mode: 0o700, uid: uid, gid: uid)
+    end
+
+    # Best effort: without it gh is merely unauthenticated, and git still works.
+    def place_gh_wrapper
+      return if @runtime.write_file(@container_id, GH_WRAPPER, File.read(GH_WRAPPER_SOURCE), mode: 0o755, uid: 0, gid: 0)
+
+      Rails.logger.warn("[GitCredentials] session=#{@session.id} could not install the gh wrapper")
     end
 
     # A failed clone in the runtime's own shape, so the caller's retry and
