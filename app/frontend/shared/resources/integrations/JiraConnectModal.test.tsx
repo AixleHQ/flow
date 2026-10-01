@@ -3,7 +3,7 @@ import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildIntegration } from 'test/factories/integration';
-import { renderPage, screen, userEvent } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
 
 import { JiraConnectModal, JiraProjectsModal, JiraWebhookModal } from './JiraConnectModal';
 
@@ -120,6 +120,9 @@ describe('JiraProjectsModal', () => {
     });
     renderPage(<JiraProjectsModal integration={jiraIntegration()} onClose={() => {}} basePath={BASE} />);
 
+    // The modal focuses its close button on a timer after opening, and since Mantine 9.6.3 a
+    // non-searchable Select closes its dropdown on blur: open it only once focus has settled.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Clear' })).toHaveFocus());
     await user.click(screen.getByRole('combobox', { name: 'Jira site' }));
     await user.click(await screen.findByRole('option', { name: 'beta (https://beta.atlassian.net)' }));
     expect(await screen.findByRole('combobox', { name: /Jira projects/ })).toBeInTheDocument();

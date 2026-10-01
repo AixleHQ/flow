@@ -9,18 +9,43 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
 // authorization code. They are replaced before anything leaves the browser.
 const TOKEN_PATH = /\/(invitations|share)\/[^/?#]+/g;
 const SECRET_QUERY_PARAMS = ['code', 'state', 'token', 'tkn', 'session_key', 'ticket'];
+const PII_NAME_FRAGMENTS = ['forwarded', '-ip', 'remote-', 'via', '-user'];
+
+const scrubQuery = (query: string): string => {
+  const params = new URLSearchParams(query);
+  SECRET_QUERY_PARAMS.forEach((name) => {
+    if (params.has(name)) params.set(name, '[filtered]');
+  });
+  return params.toString();
+};
 
 export const scrubUrl = (url: string): string => {
   const [beforeHash] = url.split('#');
   const [path, query] = beforeHash.split('?');
   const cleanPath = path.replace(TOKEN_PATH, (_match, kind: string) => `/${kind}/[token]`);
-  if (!query) return cleanPath;
+  return query ? `${cleanPath}?${scrubQuery(query)}` : cleanPath;
+};
 
-  const params = new URLSearchParams(query);
-  SECRET_QUERY_PARAMS.forEach((name) => {
-    if (params.has(name)) params.set(name, '[filtered]');
+type StreamedSpan = Parameters<NonNullable<Sentry.BrowserOptions['beforeSendSpan']>>[0];
+
+// `url.query` holds a bare query string, which scrubUrl would read as a path.
+const scrubUrlAttribute = (key: string, value: string): string =>
+  key === 'url.query' ? scrubQuery(value) : scrubUrl(value);
+
+const isStringAttribute = (attribute: unknown): attribute is { value: string } =>
+  typeof attribute === 'object' && attribute !== null && typeof (attribute as { value?: unknown }).value === 'string';
+
+const scrubSpan = (span: StreamedSpan): StreamedSpan => {
+  span.name = scrubUrl(span.name);
+  Object.entries(span.attributes).forEach(([key, attribute]) => {
+    if (!key.startsWith('url.') && key !== 'sentry.segment.name') return;
+    if (typeof attribute === 'string') {
+      span.attributes[key] = scrubUrlAttribute(key, attribute);
+    } else if (isStringAttribute(attribute)) {
+      attribute.value = scrubUrlAttribute(key, attribute.value);
+    }
   });
-  return `${cleanPath}?${params.toString()}`;
+  return span;
 };
 
 const scrubEvent = <T extends Sentry.Event>(event: T): T => {
@@ -59,8 +84,20 @@ export const initSentry = (settings: SharedSettings): void => {
     tracePropagationTargets: [/^\//, new RegExp(`^https?://${escapeRegExp(domain)}(?=[/:?#]|$)`)],
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
-    sendDefaultPii: false,
+    // Unset, Sentry 11 collects user info, cookies, headers and bodies. This is the
+    // `sendDefaultPii: false` baseline of Sentry 10, as its migration guide spells it out.
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: { request: { deny: PII_NAME_FRAGMENTS }, response: { deny: PII_NAME_FRAGMENTS } },
+      httpBodies: [],
+      urlQueryParams: { deny: PII_NAME_FRAGMENTS },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      graphQL: { document: false, variables: false },
+    },
     beforeSend: (event) => scrubEvent(event),
-    beforeSendTransaction: (event) => scrubEvent(event),
+    beforeSendSpan: scrubSpan,
   });
 };

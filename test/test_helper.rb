@@ -76,12 +76,15 @@ class ActiveSupport::TestCase
   # results don't clobber one another, then flush each worker's result at teardown.
   # The parent process merges all worker results and enforces the floor on the merged
   # total. No-op when coverage is skipped (non-develop CI branches, see Makefile).
+  # Since Rails 8.1.4 the teardown hook also runs in the parent, with no worker;
+  # taking the result there stops Coverage early and simplecov 1.3.1 then skips the
+  # floor without failing (simplecov-ruby/simplecov#1308).
   parallelize_setup do |worker|
     SimpleCov.command_name "#{SimpleCov.command_name}-#{worker}" if COVERAGE_ENABLED
   end
 
-  parallelize_teardown do |_worker|
-    SimpleCov.result if COVERAGE_ENABLED
+  parallelize_teardown do |worker|
+    SimpleCov.result if COVERAGE_ENABLED && worker
   end
 
   # Include FactoryBot methods
