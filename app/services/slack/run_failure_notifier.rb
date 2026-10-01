@@ -47,23 +47,14 @@ module Slack
         binding.present? && binding.notify_on_failure?
       end
 
-      # Reply through the SAME workspace that triggered the run — its install is
-      # named in shared_context — so a company with several connected workspaces
-      # answers in the right one. Mirrors InternalTools::SlackPostMessage
-      # #slack_integration, including its project-first fallback.
+      # Reply through the workspace that triggered the run, named in shared_context.
       def integration_for(run, slack)
         return nil if run.project.nil?
 
-        scope = Integration.active.where(provider: :slack, company_id: run.project.company_id)
-
-        if (id = slack["integration_id"]).present?
-          by_id = scope.find_by(id: id)
-          return by_id if by_id
-        end
-
-        scope.where("project_id = :pid OR project_id IS NULL", pid: run.project_id)
-             .order(Arel.sql("project_id IS NULL"))
-             .first
+        Slack::InstallResolver.call(
+          company_id: run.project.company_id, project_id: run.project_id,
+          integration_id: slack["integration_id"], team_id: slack["team"]
+        )
       end
 
       def message_for(run)
@@ -90,7 +81,8 @@ module Slack
       def run_url(run)
         return nil if run.project_id.blank?
 
-        "https://#{Settings.domain}/company/projects/#{run.project_id}/workflow_runs/#{run.id}"
+        path = Rails.application.routes.url_helpers.company_project_workflow_run_path(run.project_id, run.id)
+        "#{Settings.protocol}://#{Settings.domain}#{path}"
       end
     end
   end

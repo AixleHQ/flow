@@ -354,9 +354,10 @@ class TriggerEngine
       nil
     end
 
-    # Internal routing/transport keys that aren't part of the user-facing payload
-    # and shouldn't leak into the created card's body.
-    INTERNAL_DATA_KEYS = %w[channel ts thread_ts team integration_id input_asset_ids files].freeze
+    # Routing/transport keys (and Slack's raw markup of a text the card already
+    # shows) that aren't part of the user-facing payload and shouldn't leak into
+    # the created card's body.
+    INTERNAL_DATA_KEYS = %w[channel ts thread_ts team integration_id input_asset_ids files raw_text].freeze
 
     # Renders the triggering payload into the created card's description so the
     # run's input is visible on the board. Returns nil when there's nothing useful
@@ -406,7 +407,7 @@ class TriggerEngine
         "thread_ts" => event.data["thread_ts"] || event.data["ts"],
         "team" => event.data["team"],
         "integration_id" => event.data["integration_id"],
-        "text" => event.data["text"],
+        "text" => event.data["raw_text"] || event.data["text"],
         "user" => event.data["user"]
       }.compact
       slack.present? ? { "slack" => slack } : {}

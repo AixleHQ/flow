@@ -14,7 +14,7 @@
 # ActiveSupport::TestCase), so it is auto-reset just like a Mocha stub.
 module SlackTestHelper
   SLACK_CLIENT_METHODS = %i[
-    exchange_code auth_test post_message update_message delete_message
+    exchange_code post_message update_message delete_message
     conversation_replies upload_files download_file
   ].freeze
 

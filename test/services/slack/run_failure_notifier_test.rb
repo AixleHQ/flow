@@ -52,6 +52,14 @@ module Slack
       assert_match(%r{/workflow_runs/}, msg[:text])
     end
 
+    test "links the run on the deployment's own protocol and domain" do
+      run = failed_run
+
+      assert Slack::RunFailureNotifier.call(run)
+      assert_includes fake_slack.last_posted_message[:text],
+                      "#{Settings.protocol}://#{Settings.domain}/company/projects/#{@project.id}/workflow_runs/#{run.id}"
+    end
+
     test "says the account ran out of credits when that is why the run failed" do
       run = failed_run
       run.update_columns(failure_reason: "quota_exceeded")

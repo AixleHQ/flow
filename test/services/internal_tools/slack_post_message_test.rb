@@ -302,6 +302,19 @@ class InternalTools::SlackPostMessageTest < ActiveSupport::TestCase
     assert_equal "9.9", msg[:thread_ts]
   end
 
+  test "a run not started from Slack posts through the company's earliest-connected workspace" do
+    @integration.update!(project: nil)
+    newer = Integration.create!(provider: :slack, company: @company, project: nil,
+      connected_by: @user, name: "WS Two", status: :active)
+    newer.update!(credentials_data: { "bot_token" => "xoxb-NEWER", "team_id" => "T2" })
+    @integration.update!(name: "Acme renamed")
+    @workflow_run.update!(shared_context: {})
+
+    assert_equal 0, run_tool(text: "hi", channel: "C7")[:exit_code]
+
+    assert_equal "xoxb-1", fake_slack.last_posted_message[:token]
+  end
+
   # --- outside a workflow run ------------------------------------------------
   #
   # The tool auto-injects into workflow steps only, but a user can attach it to a

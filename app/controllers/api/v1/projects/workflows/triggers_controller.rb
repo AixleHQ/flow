@@ -46,7 +46,8 @@ module Api
               render json: serialize_column(binding)
             else
               binding = current_workflow.trigger_bindings.find(params[:id])
-              binding.update!(trigger_binding_params)
+              binding.assign_attributes(trigger_binding_params)
+              binding.save_checking_slack!
               render json: serialize_binding(binding)
             end
           rescue ActiveRecord::RecordInvalid => e

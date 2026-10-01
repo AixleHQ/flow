@@ -36,17 +36,10 @@ module Slack
       private
 
       def integration_for(event)
-        company_id = event.company_id || event.project&.company_id
-        return nil if company_id.blank?
-
-        scope = Integration.active.where(provider: :slack, company_id: company_id)
-
-        if (id = event.data.to_h["integration_id"]).present?
-          by_id = scope.find_by(id: id)
-          return by_id if by_id
-        end
-
-        scope.order(Arel.sql("project_id IS NULL")).first
+        Slack::InstallResolver.call(
+          company_id: event.company_id || event.project&.company_id, project_id: event.project_id,
+          integration_id: event.data.to_h["integration_id"], team_id: event.data.to_h["team"]
+        )
       end
 
       def channel_bindings(event, channel)

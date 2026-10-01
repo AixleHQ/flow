@@ -8,25 +8,28 @@
 #
 # All conditions are AND-ed. An empty predicate matches any event.
 # Field names may be dot-paths into nested data, e.g. "repository.name", "ref".
+# Fields named in `ignore_case` compare without regard to case, regex included.
 class TriggerFilter
   OPERATORS = %w[eq ne contains not_contains starts_with ends_with gt gte lt lte present blank in includes regex].freeze
 
-  def self.match?(predicate, data)
-    new(predicate, data).match?
+  def self.match?(predicate, data, ignore_case: [])
+    new(predicate, data, ignore_case: ignore_case).match?
   end
 
-  def initialize(predicate, data)
+  def initialize(predicate, data, ignore_case: [])
     @predicate = predicate || {}
     @data = data || {}
+    @ignore_case = Array(ignore_case).map(&:to_s)
   end
 
   def match?
     @predicate.all? do |field, spec|
+      fold = @ignore_case.include?(field.to_s)
       actual = dig_path(field)
       if spec.is_a?(Hash) && spec.key?("op")
-        evaluate(spec["op"].to_s, actual, spec["value"])
+        evaluate(spec["op"].to_s, actual, spec["value"], fold)
       else
-        actual == spec
+        fold_case(actual, fold) == fold_case(spec, fold)
       end
     end
   end
@@ -38,7 +41,22 @@ class TriggerFilter
     keys.reduce(@data) { |acc, k| acc.is_a?(Hash) ? acc[k] : nil }
   end
 
-  def evaluate(op, actual, expected)
+  def fold_case(value, fold)
+    return value unless fold
+
+    case value
+    when String then value.downcase
+    when Array then value.map { |v| fold_case(v, true) }
+    else value
+    end
+  end
+
+  def evaluate(op, actual, expected, fold)
+    # A regex folds through its flag: downcasing the pattern would turn \D into \d.
+    return safe_regex(expected, fold) { |re| actual.to_s.match?(re) } if op == "regex"
+
+    actual = fold_case(actual, fold)
+    expected = fold_case(expected, fold)
     case op
     when "eq"           then actual == expected
     when "ne"           then actual != expected
@@ -55,7 +73,6 @@ class TriggerFilter
     when "in"           then Array(expected).map(&:to_s).include?(actual.to_s)
     # Array membership: `contains` compares strings, so "ai" would match "main".
     when "includes"     then actual.is_a?(Array) && actual.map(&:to_s).include?(expected.to_s)
-    when "regex"        then safe_regex(expected) { |re| actual.to_s.match?(re) }
     else false
     end
   end
@@ -64,8 +81,8 @@ class TriggerFilter
     values.all? { |v| v.to_s.match?(/\A-?\d+(\.\d+)?\z/) }
   end
 
-  def safe_regex(pattern)
-    yield Regexp.new(pattern.to_s)
+  def safe_regex(pattern, ignore_case)
+    yield Regexp.new(pattern.to_s, ignore_case ? Regexp::IGNORECASE : 0)
   rescue RegexpError
     false
   end

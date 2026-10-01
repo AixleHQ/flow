@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 # In-memory fake for the Slack boundary. A real object implementing
-# Slack::Client's public class-method interface (exchange_code, auth_test,
-# post_message, update_message, delete_message, conversation_replies,
-# upload_files, download_file) as INSTANCE methods (R3, docs/testing.md §4).
+# Slack::Client's public class-method interface (exchange_code, post_message,
+# update_message, delete_message, conversation_replies, upload_files,
+# download_file) as INSTANCE methods (R3, docs/testing.md §4).
 # Callers stub Slack::Client onto one of these via
 # SlackTestHelper#stub_slack_client!.
 #
 # Every method records its call so tests can assert what was sent
-# (`oauth_exchanges`, `auth_tests`, `posted_messages`, `updated_messages`,
+# (`oauth_exchanges`, `posted_messages`, `updated_messages`,
 # `deleted_messages`, `replies_reads`, `uploaded_files`, `downloads`) and returns
 # a realistic canned response whose SHAPE matches what
 # the real Slack::Client parses out of the Slack Web API — string-keyed hashes
@@ -38,7 +38,7 @@ class FakeSlackClient
     "ts" => "1700000000.000200", "thread_ts" => "1700000000.000100", "bot_id" => DEFAULT_BOT_ID
   }.freeze
 
-  attr_reader :oauth_exchanges, :auth_tests, :posted_messages, :uploaded_files, :downloads,
+  attr_reader :oauth_exchanges, :posted_messages, :uploaded_files, :downloads,
               :updated_messages, :deleted_messages, :replies_reads
   # Let a test tailor the shared canned values (e.g. a specific team_id) without
   # reaching into the response builders.
@@ -49,7 +49,6 @@ class FakeSlackClient
 
   def initialize
     @oauth_exchanges  = []
-    @auth_tests       = []
     @posted_messages  = []
     @uploaded_files   = []
     @downloads        = []
@@ -84,22 +83,6 @@ class FakeSlackClient
       "team"         => { "id" => team_id, "name" => team_name },
       "enterprise"   => nil,
       "authed_user"  => { "id" => "U00USER000" }
-    }
-  end
-
-  # auth.test — identity of a bot token. Not consumed by the four production
-  # callers today, but part of the adapter's public interface, so the fake and
-  # its contract test cover it.
-  def auth_test(token:)
-    @auth_tests << { token: token }
-    {
-      "ok"      => true,
-      "url"     => "https://#{WORKSPACE_HOST}/",
-      "team"    => team_name,
-      "user"    => "aixle",
-      "team_id" => team_id,
-      "user_id" => bot_user_id,
-      "bot_id"  => DEFAULT_BOT_ID
     }
   end
 

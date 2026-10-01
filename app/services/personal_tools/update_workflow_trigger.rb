@@ -75,7 +75,8 @@ module PersonalTools
       attrs = trigger_binding_attrs
       return error("No fields to update") if attrs.empty?
 
-      trigger.update!(attrs)
+      trigger.assign_attributes(attrs)
+      trigger.save_checking_slack!
       success(serialize_binding(trigger))
     end
   end

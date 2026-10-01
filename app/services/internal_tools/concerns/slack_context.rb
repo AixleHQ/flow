@@ -57,23 +57,15 @@ module InternalTools
         workflow_run&.shared_context.to_h["slack"] || {}
       end
 
-      # Reply through the SAME workspace that triggered this run (its integration is
-      # carried in shared_context), so with several connected workspaces the message
-      # goes back to the right one. Falls back to any active install for the company
-      # (e.g. a run not started from Slack).
+      # Reply through the workspace that triggered this run; a run not started
+      # from Slack gets the company's install that Slack::InstallResolver picks.
       def slack_integration
         return nil if project.nil?
 
-        scope = Integration.active.where(provider: :slack, company_id: project.company_id)
-
-        if (id = slack_context["integration_id"]).present?
-          by_id = scope.find_by(id: id)
-          return by_id if by_id
-        end
-
-        scope.where("project_id = :pid OR project_id IS NULL", pid: project.id)
-          .order(Arel.sql("project_id IS NULL"))
-          .first
+        Slack::InstallResolver.call(
+          company_id: project.company_id, project_id: project.id,
+          integration_id: slack_context["integration_id"], team_id: slack_context["team"]
+        )
       end
 
       # The install and channel a call acts on, defaulting the channel to the one

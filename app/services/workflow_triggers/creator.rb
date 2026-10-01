@@ -73,9 +73,9 @@ module WorkflowTriggers
     end
 
     def create_binding!(binding_event_type)
-      @workflow.trigger_bindings.create!(
+      @workflow.trigger_bindings.build(
         binding_attributes.merge(project: @project, created_by: @user, event_type: binding_event_type)
-      )
+      ).tap(&:save_checking_slack!)
     end
 
     def event_type

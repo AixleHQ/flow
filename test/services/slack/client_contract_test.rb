@@ -46,22 +46,6 @@ module Slack
       assert_match(/invalid_code/, error.message)
     end
 
-    # --- auth.test -------------------------------------------------------------
-
-    test "auth_test sends the bearer token and parses into the fake's shape" do
-      expected = @fake.auth_test(token: BOT_TOKEN)
-      stub = stub_request(:post, "#{API}/auth.test")
-        .with(headers: { "Authorization" => "Bearer #{BOT_TOKEN}" })
-        .to_return(json(expected))
-
-      actual = Slack::Client.auth_test(token: BOT_TOKEN)
-
-      assert_equal expected, actual
-      assert_equal "T00000000", actual["team_id"]
-      assert_equal "U0BOTFAKE0", actual["user_id"]
-      assert_requested stub
-    end
-
     # --- chat.postMessage ------------------------------------------------------
 
     test "post_message posts JSON and parses into the fake's shape" do

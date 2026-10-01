@@ -68,6 +68,9 @@ choose **Slack message** and fill in:
 - **Text match** and **Pattern** limit the trigger to some messages. The match
   options are **contains**, **equals**, **regex** and **starts with**. Leave
   **Pattern** blank to accept every mention.
+- **Cooldown (s)** is the shortest gap between two runs of this trigger. A
+  mention that matches during the cooldown starts nothing. It is `0` by
+  default: every matching mention starts a run.
 - **Report failures back to Slack** is on by default. See
   [Failure notices](#failure-notices).
 - **Subject (what the run is about)** decides whether the run gets a card:
@@ -77,16 +80,28 @@ choose **Slack message** and fill in:
 Select **Add trigger**. Then, in a channel the trigger accepts, mention the
 app: `@<app> ship it`.
 
+A Slack trigger needs a connected workspace. Until the company has an active
+Slack install, Flow refuses to add a Slack trigger, or to switch one on, with
+*"Slack is not connected for this company…"*. You can still add one switched
+off and turn it on after connecting.
+
 ### What the pattern is matched against
 
 Only messages that @mention the app are matched. Flow ignores plain channel
 messages, reactions and mentions written by other bots.
 
-The pattern sees the message text exactly as Slack sends it. Matching is
-case-sensitive, and the text includes the mention as a user ID:
-`@Flow ship it` arrives as `<@U0ABC123> ship it`. As a result, **equals** and
-**starts with** almost never match a mention. Use **contains**, or a **regex**
-such as `(?i)ship it` for a case-insensitive match.
+The pattern is matched against what was typed after the mention, and case
+does not matter. Slack sends `@Flow Ship it` as `<@U0ABC123> Ship it`; Flow
+drops that leading mention of the app and the spaces around the rest, then
+matches `Ship it`. So **equals** `ship it` and **starts with** `ship` both
+match it.
+
+- Only a leading mention of the app is dropped. A message that starts with
+  someone else's mention keeps it, written as their user ID: `<@U0ABC123>`.
+- Slack escapes `&`, `<` and `>` in message text. They are matched as the
+  characters you typed.
+- **regex** ignores case too. Start the pattern with `(?-i)` to make it
+  case-sensitive.
 
 ### Who the run belongs to
 
@@ -100,20 +115,19 @@ when every step of the workflow has auto-run switched on.
 
 ### One mention, every project
 
-One workspace serves every project in the company. So a mention is matched
-against the Slack triggers of all those projects, and it can start one run in
-each project that matches. To keep projects apart, give each trigger a
+One workspace serves every project in the company, by design. So a mention is
+matched against the Slack triggers of all those projects, and it can start one
+run in each project that matches. To keep projects apart, give each trigger a
 **Channel id**.
 
-The form sets no cooldown, so every matching mention starts a run. You can set
-`cooldown_seconds` through the API or the personal MCP's
-`create_workflow_trigger`. Slack's own retries of one message never start a
-second run.
+Slack's own retries of one message never start a second run. To limit how
+often people can start one, set the trigger's **Cooldown (s)**.
 
 ### What the run receives
 
-- **The message.** The agent's context includes the triggering message, with
-  its author's Slack ID, and tells the agent to treat it as the request.
+- **The message.** The agent's context includes the triggering message as
+  Slack sent it, mention included, with its author's Slack ID, and tells the
+  agent to treat it as the request.
 - **Where to reply.** Flow records the channel and thread for the whole run.
   The `slack_*` tools reply there by default. A top-level mention gets its
   replies in a new thread under it.
@@ -121,8 +135,9 @@ second run.
   project's assets, in a `slack` folder, and passed to the run as input. Flow
   takes the first 10 files and skips any file over 50 MB.
 - **A card**, if the trigger creates one. The title template accepts
-  `{{date}}` and the event's fields, such as `{{text}}`, `{{user}}` and
-  `{{channel}}`. The default is `slack.message — {{date}}`.
+  `{{date}}` and the event's fields, such as `{{text}}` (the message without
+  the mention), `{{user}}` and `{{channel}}`. The default is
+  `slack.message — {{date}}`.
 
 ### Asking what is available: /help
 
@@ -175,8 +190,10 @@ Some details:
 - **Interactive blocks.** Flow rejects `actions` and `input` blocks. This
   deployment runs no Slack interactivity endpoint, so a click on them would go
   nowhere.
-- **Which workspace.** Replies go through the workspace the run came from. A run
-  that did not start from Slack uses one of the company's installs.
+- **Which workspace.** Replies go through the workspace the run came from. If
+  that workspace was removed or uninstalled, the tools say Slack is not
+  connected rather than post through another one. A run that did not start
+  from Slack uses the workspace the company connected first.
 
 ---
 
@@ -207,7 +224,8 @@ installs that same app into its own workspace.
 3. Under **Event Subscriptions**:
    - Turn events on.
    - Set the Request URL to `https://<DOMAIN>/webhooks/slack/events`. Flow
-     answers Slack's verification challenge on its own.
+     answers Slack's verification challenge on its own. Each Slack row on the
+     **Integrations** page shows this URL, with a copy button.
    - Subscribe to the bot events `app_mention`, `app_uninstalled` and
      `tokens_revoked`. The last two let Flow see when a workspace removes the
      app.
@@ -231,7 +249,7 @@ and accepts commas or spaces. If you drop a scope, the feature that needs it
 stops working.
 
 Slack has to reach the Request URL, and nothing in Flow overrides that host.
-The link in failure notices always uses `https://<DOMAIN>`.
+The link in failure notices is built from `PROTOCOL` and `DOMAIN`.
 
 ---
 
@@ -239,7 +257,7 @@ The link in failure notices always uses `https://<DOMAIN>`.
 
 - Only @mentions start anything. Flow does not react to plain messages,
   reactions, slash commands or buttons.
-- Patterns are case-sensitive and include the mention token. See
+- Only a leading mention of the app is dropped before matching. See
   [What the pattern is matched against](#what-the-pattern-is-matched-against).
 - Thread reading works in public and private channels, not in DMs. Slack
   rate-limits it heavily for newer apps outside its Marketplace, so read a
@@ -247,7 +265,7 @@ The link in failure notices always uses `https://<DOMAIN>`.
 - Attachments: Flow takes 10 files per message, up to 50 MB each.
 - Each workspace belongs to one company.
 - If a company connects several workspaces, a run that did not start from Slack
-  cannot choose which one it posts through.
+  always posts through the one connected first. It cannot pick another.
 
 ## When something goes wrong
 
@@ -263,7 +281,9 @@ The link in failure notices always uses `https://<DOMAIN>`.
 | The row is **inactive** | The app was uninstalled in Slack, or its tokens were revoked | **Connect → Slack** again |
 | A mention gets no reply at all | The row is not active, the app is not in the channel, or (self-hosted) the signing secret or event subscription is wrong | Check the row; invite the app; check step 3 and `SLACK_SIGNING_SECRET` |
 | *"No Slack triggers configured for this channel."* | No enabled Slack trigger, in any of the company's projects, accepts this channel | Check the trigger's **Channel id** (an ID, not a name) and that it is enabled |
-| The app replies with *"Available commands"* instead of starting a run | The mention matched no pattern | Match on what Slack sends: case-sensitive, with `<@U…>` in front. Use **contains** |
+| The app replies with *"Available commands"* instead of starting a run | The mention matched no pattern | Compare the pattern with what follows the mention. A message that starts with someone else's mention keeps it, so use **contains** for those |
+| A matching mention starts nothing and gets no reply | The trigger's **Cooldown (s)** has not passed since its last run | Wait, or lower the cooldown |
+| Saving a trigger fails with *"Slack is not connected for this company…"* | The company has no active Slack install | Connect Slack, or reconnect an inactive row, then save again. Or save the trigger switched off |
 | Saving a trigger fails with *"can't use help — that word lists available commands"* | `help` is reserved | Choose another pattern |
 | Saving a trigger fails with *"can't run unattended — enable auto-run on these steps first: …"* | A step needs a person to start it | Turn on auto-run for the steps named |
 | The trigger shows *"No creator — this trigger cannot start a run"* | It was added before creators were recorded | Re-create the trigger |

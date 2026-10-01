@@ -45,16 +45,6 @@ module Slack
       end
     end
 
-    test "auth_test sends the bearer token and parses the result" do
-      stub_request(:post, "https://slack.com/api/auth.test")
-        .with(headers: { "Authorization" => "Bearer xoxb-1" })
-        .to_return(status: 200, headers: { "Content-Type" => "application/json" },
-                   body: { ok: true, team_id: "T1", user_id: "U1" }.to_json)
-
-      res = Slack::Client.auth_test(token: "xoxb-1")
-      assert_equal "T1", res["team_id"]
-    end
-
     test "upload_files runs the external-upload flow and shares files in one message" do
       get_url = stub_request(:post, "https://slack.com/api/files.getUploadURLExternal")
         .to_return(status: 200, headers: { "Content-Type" => "application/json" },

@@ -40,6 +40,7 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
   end
 
   test "slack and schedule triggers get their fixed event types" do
+    create(:integration, provider: :slack, status: :active, company: @project.company, project: nil)
     slack = create_trigger("slack", name: "standup")
     schedule = create_trigger("schedule", enabled: false, schedule_config: { "cron" => "0 9 * * 1-5", "timezone" => "UTC" })
 
@@ -48,6 +49,13 @@ class WorkflowTriggers::CreatorTest < ActiveSupport::TestCase
     assert_equal "schedule.fired", schedule.trigger.event_type
     assert_equal false, schedule.trigger.enabled # rubocop:disable Minitest/RefuteFalse
     assert_equal @project, schedule.trigger.project
+  end
+
+  test "a slack trigger needs a connected workspace, unless it is created switched off" do
+    error = assert_raises(ActiveRecord::RecordInvalid) { create_trigger("slack") }
+    assert_includes error.record.errors.full_messages, TriggerBinding::SLACK_NOT_CONNECTED
+
+    assert create_trigger("slack", enabled: false).trigger.persisted?
   end
 
   test "event trigger falls back to webhook.received without an event type" do

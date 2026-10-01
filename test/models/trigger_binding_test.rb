@@ -162,6 +162,59 @@ class TriggerBindingTest < ActiveSupport::TestCase
     assert webhook.valid?
   end
 
+  test "a slack binding matches its text condition without regard to case; other kinds keep case" do
+    slack = build(:trigger_binding, event_type: "slack.message",
+      filter_predicate: { "text" => { "op" => "starts_with", "value" => "deploy" } })
+    webhook = build(:trigger_binding, event_type: "webhook.received",
+      filter_predicate: { "text" => { "op" => "starts_with", "value" => "deploy" } })
+
+    assert slack.matches?("text" => "Deploy staging")
+    assert_not webhook.matches?("text" => "Deploy staging")
+  end
+
+  def slack_binding(**attrs)
+    build(:trigger_binding, project: @project, workflow: @workflow, created_by: @user, event_type: "slack.message", **attrs)
+  end
+
+  test "save_checking_slack! refuses to create or switch on a slack trigger until the company connects Slack" do
+    error = assert_raises(ActiveRecord::RecordInvalid) { slack_binding.save_checking_slack! }
+    assert_includes error.record.errors.full_messages, TriggerBinding::SLACK_NOT_CONNECTED
+    assert_equal 0, TriggerBinding.count
+
+    off = slack_binding(enabled: false)
+    off.save_checking_slack!
+    assert off.persisted?, "a disabled slack trigger hears nothing, so it can wait for Slack"
+
+    off.enabled = true
+    assert_raises(ActiveRecord::RecordInvalid) { off.save_checking_slack! }
+    assert_equal false, off.reload.enabled # rubocop:disable Minitest/RefuteFalse
+
+    create(:integration, provider: :slack, status: :active, company: @company, project: nil)
+    off.enabled = true
+    off.save_checking_slack!
+    assert off.reload.enabled
+  end
+
+  test "save_checking_slack! still saves other edits of a slack trigger whose workspace went away" do
+    binding = create(:trigger_binding, project: @project, workflow: @workflow, created_by: @user,
+      event_type: "slack.message", name: "before")
+
+    binding.name = "after"
+    binding.save_checking_slack!
+
+    assert_equal "after", binding.reload.name
+  end
+
+  test "save_checking_slack! reports the binding's other errors alongside the missing connection" do
+    create(:step, workflow: @workflow, name: "Review copy", allow_non_interactive: false)
+
+    error = assert_raises(ActiveRecord::RecordInvalid) { slack_binding.save_checking_slack! }
+
+    messages = error.record.errors.full_messages.join(" ")
+    assert_match(/can't run unattended/, messages)
+    assert_includes messages, TriggerBinding::SLACK_NOT_CONNECTED
+  end
+
   def schedule_binding(enabled:)
     TriggerBinding.create!(project: @project, workflow: @workflow, created_by: @user, event_type: "schedule.fired",
                            enabled: enabled, schedule_config: { "cron" => "0 9 * * *", "timezone" => "UTC" })
