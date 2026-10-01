@@ -22,6 +22,7 @@ export interface TrackerTriggerValue {
   subjectPolicy: string;
   subjectColumnId: string | null;
   subjectTitleTemplate: string;
+  notifyOnFailure: boolean;
 }
 
 export const TRACKER_EVENT_OPTIONS: { value: TrackerEventType; label: string }[] = [
@@ -61,6 +62,7 @@ export function trackerValueFromTrigger(trigger: Trigger | null, defaultColumnId
     subjectPolicy: trigger?.subject_policy ?? 'find_or_create_task',
     subjectColumnId: trigger?.subject_column_id?.toString() ?? defaultColumnId,
     subjectTitleTemplate: trigger?.subject_title_template ?? '',
+    notifyOnFailure: trigger?.notify_on_failure ?? true,
   };
 }
 
@@ -78,6 +80,7 @@ export function trackerTriggerPayload(value: TrackerTriggerValue, isEdit: boolea
     aixle_changes: value.aixleChanges,
     filter_predicate: filter,
     subject_policy: value.subjectPolicy,
+    notify_on_failure: value.notifyOnFailure,
   };
   if (!isEdit) payload.event_type = value.eventType;
   if (value.subjectPolicy !== 'none') {
