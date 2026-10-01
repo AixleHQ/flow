@@ -5,7 +5,7 @@ source "https://rubygems.org"
 ruby file: ".ruby-version"
 
 # Bundle edge Rails instead: gem "rails", github: "rails/rails", branch: "main"
-gem "rails", "~> 8.1.3"
+gem "rails", "~> 8.1.4"
 # Use postgresql as the database for Active Record
 gem "pg", "~> 1.6"
 # Use the Puma web server [https://github.com/puma/puma]
@@ -72,10 +72,11 @@ gem "rails-i18n"
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 # gem "tzinfo-data", platforms: %i[ windows jruby ]
 
-# Action Cable's Redis adapter asks for redis >= 4, < 6 when it loads (until Rails
-# 8.2 moves it onto redis-client), and only production loads it: the test env's
-# cable adapter is `test`, so a redis 6 bump passed CI and would have failed at
-# boot. test/config/action_cable_redis_test.rb loads the adapter to catch that.
+# Only deployed environments load Action Cable's Redis adapter — the test env's
+# cable adapter is `test`, so CI never runs cable pub/sub. The adapter accepts
+# redis < 7 since Rails 8.1.4, but redis 6 defaults to RESP3: held below 6 until
+# a bump is checked against real pub/sub. test/config/action_cable_redis_test.rb
+# loads the adapter to catch a redis version it rejects.
 gem "redis", ">= 4", "< 6"
 
 # Temporal workflow orchestration (official SDK)

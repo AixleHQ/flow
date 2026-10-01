@@ -23,8 +23,9 @@ updates:
       # Drop both once the Temporal SDK switches to keywords.
       - dependency-name: "json"
         update-types: ["version-update:semver-major"]
-      # Held below 6 by the Gemfile for Action Cable's Redis adapter; drop with
-      # the pin once Rails 8.2 moves the adapter onto redis-client.
+      # Held below 6 by the Gemfile: Action Cable accepts redis 6 since Rails
+      # 8.1.4, but its RESP3 default is unverified against cable pub/sub, which
+      # CI never runs. Drop with the pin once a redis 6 bump is checked by hand.
       - dependency-name: "redis"
         update-types: ["version-update:semver-major"]
     groups:
