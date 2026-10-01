@@ -44,8 +44,15 @@ Any member who can change the project connects it; viewers cannot.
 
 Flow checks the token against Coder and names the connection after the
 account, for example **Coder (alice)**. The row shows the URL, the template,
-the prefix and the lock TTL. A failed check still saves a row, named **Coder
-(unverified)** and in status **Error**, and Flow says why.
+the prefix and the lock TTL. If the check fails, the dialog stays open, says
+why, and nothing is saved.
+
+A project has at most one active Coder connection. Connecting again with the
+same URL and the same Coder account updates that connection: the new token
+replaces the old one, and the pool settings you fill in replace theirs, while
+blank ones are kept. Connecting another URL or account while the project has an
+active Coder connection is refused: replace that connection's token, or remove
+it first.
 
 ## Changing the settings
 
@@ -54,9 +61,14 @@ fields. Clearing **Default template** stops Flow creating workspaces. Clearing
 **Machine name prefix** widens the pool to every workspace the token's account
 owns, and stops Flow deleting dead ones.
 
-The URL and the token cannot be changed in place. Connecting again adds a
-second connection instead of replacing the first, so remove the old row
-afterwards.
+**Replace token** on the row swaps the session token in place, once Coder
+accepts the new one; the settings and the locks stay. The URL cannot be
+changed: remove the connection and connect again.
+
+**Test connection** on the row asks Coder about the stored token and changes
+nothing else. If Coder refuses it, the row turns **Error** and sessions lose
+the tools until you replace the token. If Coder does not answer, the row stays
+as it was.
 
 Removing a connection deletes nothing in Coder. It drops Flow's locks, and
 sessions in the project lose the tools.
@@ -130,9 +142,11 @@ whose delete build failed is left alone for you to deal with.
   `coder_job_status`.
 - One `coder_ssh_exec` call returns at most 256 KiB of output. Anything past
   that is cut, and the result says `truncated: true` and gives the full sizes.
-- Flow checks the token only when you connect. There is no connection test
-  for Coder, and a token that later expires leaves the row **Active**.
-- Keep one Coder connection per project. With two active ones, which one the
+- Flow checks the token when you connect, replace it, or select **Test
+  connection**. A token that expires in between leaves the row **Active**
+  until then.
+- A project gets one active Coder connection; Flow refuses a second. A project
+  that already had two from before should remove one: with two, which one the
   tools use is not defined.
 - Coder connections made before integrations moved to projects may be
   company-wide. They show **Company** scope, serve every project that has no
@@ -176,9 +190,12 @@ environment variables. The full list is in the
 
 ## When something goes wrong
 
-- **"Coder token verification failed: … HTTP 401"** when connecting — the
-  token is wrong or expired. Remove the **Coder (unverified)** row and connect
-  again.
+- **"Coder token verification failed: … HTTP 401"** when connecting or
+  replacing the token — the token is wrong or expired. Nothing was saved;
+  paste a working one.
+- **"Coder (…) is already connected here."** — the project already has an
+  active Coder connection. Replace its token, or remove it before connecting
+  another account.
 - **"Coder URL cannot point to private or internal network addresses"**, or
   **"Coder host … has no public address"** — see *Private Coder deployments*
   above.
@@ -186,7 +203,7 @@ environment variables. The full list is in the
   project has no active Coder connection, or its only one is in **Error**.
 - **"… list workspaces failed: … HTTP 401"** from a tool while the row still
   says **Active** — the token expired or was revoked after you connected.
-  Connect again with a new token, then remove the old row.
+  **Replace token** on the row. **Test connection** marks such a row **Error**.
 - **`coder_allocate_machine: ExhaustedError: …`** — no workspace could be
   handed out. The message says why: the token's account owns no workspaces
   matching the prefix, they are held by other sessions, they failed to start,

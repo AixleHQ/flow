@@ -66,7 +66,7 @@ module Gitlab
       error = assert_raises(Gitlab::TokenService::AuthenticationError) do
         Gitlab::TokenService.new(@integration).verify_token
       end
-      assert_match(/GitLab token verification failed/, error.message)
+      assert_match(/GitLab rejected this token/, error.message)
     end
 
     test "raises AuthenticationError on 403 Forbidden" do
@@ -74,7 +74,45 @@ module Gitlab
         .to_return(status: 403, headers: { "Content-Type" => "application/json" },
           body: { message: "403 Forbidden" }.to_json)
 
-      assert_raises(Gitlab::TokenService::AuthenticationError) do
+      error = assert_raises(Gitlab::TokenService::AuthenticationError) do
+        Gitlab::TokenService.new(@integration).verify_token
+      end
+      assert_match(/api scope/, error.message)
+    end
+
+    test "raises ConnectionError when GitLab cannot be reached" do
+      stub_request(:get, "#{GITLAB_API}/user").to_raise(SocketError.new("getaddrinfo: Name or service not known"))
+
+      error = assert_raises(Gitlab::TokenService::ConnectionError) do
+        Gitlab::TokenService.new(@integration).verify_token
+      end
+      assert_equal "Could not reach GitLab at #{GITLAB_API} (SocketError).", error.message
+    end
+
+    test "raises ConnectionError when the request times out" do
+      stub_request(:get, "#{GITLAB_API}/user").to_timeout
+
+      assert_raises(Gitlab::TokenService::ConnectionError) do
+        Gitlab::TokenService.new(@integration).verify_token
+      end
+    end
+
+    # GITLAB_ENDPOINT without /api/v4 reaches GitLab's web pages, not its API.
+    test "raises ConnectionError when the endpoint answers with something other than the API" do
+      stub_request(:get, "#{GITLAB_API}/user")
+        .to_return(status: 200, headers: { "Content-Type" => "text/html" }, body: "<!DOCTYPE html><html></html>")
+
+      error = assert_raises(Gitlab::TokenService::ConnectionError) do
+        Gitlab::TokenService.new(@integration).verify_token
+      end
+      assert_match(/did not answer as a GitLab API/, error.message)
+    end
+
+    test "raises ConnectionError when the endpoint has no such path" do
+      stub_request(:get, "#{GITLAB_API}/user")
+        .to_return(status: 404, headers: { "Content-Type" => "application/json" }, body: { message: "404 Not Found" }.to_json)
+
+      assert_raises(Gitlab::TokenService::ConnectionError) do
         Gitlab::TokenService.new(@integration).verify_token
       end
     end

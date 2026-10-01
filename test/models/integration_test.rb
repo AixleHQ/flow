@@ -234,19 +234,6 @@ class IntegrationTest < ActiveSupport::TestCase
 
   # ====== Enumerize ======
 
-  test "find_or_build_gitlab_for_token builds new integration" do
-    built = Integration.find_or_build_gitlab_for_token(
-      company: @company,
-      connected_by: @user,
-      project: nil
-    )
-
-    assert built.new_record?
-    assert_equal :gitlab, built.provider.to_sym
-    assert_equal @user, built.connected_by
-    assert_equal @company, built.company
-  end
-
   test "provider enumerize values" do
     assert_equal %w[github gitlab linear coder slack azure_devops jira], Integration.provider.values.map(&:to_s)
   end

@@ -28,6 +28,9 @@ a company admin can remove it.
 3. You return to Flow with *"Slack connected to &lt;workspace&gt;"*. The new row
    is named after the workspace, with provider **Slack** and scope **company**.
 
+**Slack** is offered only on a deployment that has a Slack app (see
+[Self-hosted: the Slack app](#self-hosted-the-slack-app)).
+
 Finish within ten minutes, signed in to Flow as the same person who started.
 Otherwise the authorization is refused and you start again.
 
@@ -241,6 +244,9 @@ installs that same app into its own workspace.
    SLACK_SIGNING_SECRET=<signing secret>
    ```
 
+Until `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` are both set, projects are
+not offered Slack.
+
 Flow checks every event against `SLACK_SIGNING_SECRET`. If the secret is wrong
 or unset, Flow refuses every event and mentions do nothing.
 
@@ -277,7 +283,7 @@ The link in failure notices is built from `PROTOCOL` and `DOMAIN`.
 | *"Slack connection was cancelled"* | You declined on Slack's consent screen | Connect again |
 | *"This Slack workspace is already connected to another organization"* | Another company holds the workspace | That company removes it, or uninstalls the app in Slack |
 | *"Slack OAuth failed: …"* | Slack refused the token exchange. The rest is Slack's error code, such as `bad_redirect_uri` or `bad_client_secret` | Self-hosted: check `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET` and the redirect URL on the app |
-| A **Slack** row with status **error** | A connection refused after Slack's consent screen (the two rows above) leaves one behind, every time | A company admin removes it |
+| **Connect** has no **Slack** entry | The deployment has no Slack app | Operator: set `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` |
 | The row is **inactive** | The app was uninstalled in Slack, or its tokens were revoked | **Connect → Slack** again |
 | A mention gets no reply at all | The row is not active, the app is not in the channel, or (self-hosted) the signing secret or event subscription is wrong | Check the row; invite the app; check step 3 and `SLACK_SIGNING_SECRET` |
 | *"No Slack triggers configured for this channel."* | No enabled Slack trigger, in any of the company's projects, accepts this channel | Check the trigger's **Channel id** (an ID, not a name) and that it is enabled |

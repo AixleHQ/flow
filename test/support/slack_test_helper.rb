@@ -58,6 +58,12 @@ module SlackTestHelper
     @slack_client_stubbed = false
   end
 
+  # A deployment with a Slack app — what makes Slack offered at all.
+  def with_slack_app(client_id: "1234.5678", client_secret: "slack-app-secret")
+    Settings.slack.stubs(:client_id).returns(client_id)
+    Settings.slack.stubs(:client_secret).returns(client_secret)
+  end
+
   private
 
   def orig_alias(method_name)

@@ -16,6 +16,25 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_inertia_page "Projects/Integrations/IntegrationsPage"
   end
 
+  test "slack_oauth_start refuses on a deployment with no Slack app" do
+    with_slack_app(client_id: "")
+
+    get slack_oauth_start_company_project_integrations_path(@project)
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "Slack's app is not configured", flash[:alert]
+  end
+
+  test "index offers Slack only when the deployment has a Slack app" do
+    with_slack_app(client_id: "")
+    get company_project_integrations_path(@project)
+    assert_inertia_props { |props| props[:slack][:enabled] == false }
+
+    with_slack_app
+    get company_project_integrations_path(@project)
+    assert_inertia_props { |props| props[:slack][:enabled] == true }
+  end
+
   # A company-wide install serves every project and has no page of its own.
   test "a company admin removes a company-wide integration from a project page" do
     slack = create(:integration, provider: :slack, company: @company, project: nil, connected_by: @user)
@@ -39,6 +58,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   end
 
   test "slack_oauth_start authorizes an admin and redirects to Slack consent" do
+    with_slack_app
     get slack_oauth_start_company_project_integrations_path(@project)
 
     assert_response :redirect
@@ -46,6 +66,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   end
 
   test "slack_oauth_start is allowed for a non-admin project owner" do
+    with_slack_app
     owner = create(:user, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     project = create(:project, company: @company, owner: owner)
     sign_in_as(owner)
@@ -57,6 +78,7 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
   end
 
   test "slack_oauth_start is denied for a non-admin, non-owner member" do
+    with_slack_app
     member = create(:user, :onboarding_completed, company: @company, password: AuthHelper::TEST_PASSWORD)
     sign_in_as(member)
 
@@ -214,6 +236,99 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_nil integration.installation_id
   end
 
+  def stub_gitlab(user: { id: 152, username: "alice", name: "Alice", email: nil }, verify_error: nil)
+    Gitlab::TokenService.stubs(:new).returns(Fakes::FakeGitlabService.new(user: user, verify_error: verify_error))
+  end
+
+  test "create gitlab connects and names the account" do
+    stub_gitlab
+
+    assert_difference("Integration.count", 1) do
+      post company_project_integrations_path(@project), params: { provider: "gitlab", personalAccessToken: "glpat-ok" }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "GitLab connected as alice", flash[:notice]
+    assert_equal @project.id, Integration.last.project_id
+  end
+
+  test "create gitlab again for the same account renews the connection" do
+    stub_gitlab
+    post company_project_integrations_path(@project), params: { provider: "gitlab", personalAccessToken: "glpat-1" }
+
+    assert_no_difference("Integration.count") do
+      post company_project_integrations_path(@project), params: { provider: "gitlab", personalAccessToken: "glpat-2" }
+    end
+    assert_equal "glpat-2", Integration.last.credentials_data["personal_access_token"]
+  end
+
+  # The dialog stays open on a validation error; a flash would close it.
+  test "create gitlab answers a refused token with a field error and saves nothing" do
+    stub_gitlab(verify_error: Gitlab::TokenService::AuthenticationError.new("GitLab rejected this token."))
+
+    assert_no_difference("Integration.count") do
+      post company_project_integrations_path(@project), params: { provider: "gitlab", personalAccessToken: "glpat-bad" }
+    end
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_equal "GitLab rejected this token.", Array(session["inertia_errors"][:personal_access_token]).to_sentence
+  end
+
+  test "create gitlab reports an unreachable GitLab instead of failing" do
+    stub_gitlab(verify_error: Gitlab::TokenService::ConnectionError.new("Could not reach GitLab at https://gitlab.example.com/api/v4 (SocketError)."))
+
+    post company_project_integrations_path(@project), params: { provider: "gitlab", personalAccessToken: "glpat-x" }
+
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_match(/Could not reach GitLab/, Array(session["inertia_errors"][:personal_access_token]).to_sentence)
+  end
+
+  test "update replaces a gitlab token in place" do
+    stub_gitlab
+    integration = create(:integration, :gitlab, :error, company: @company, project: @project, name: "alice")
+
+    patch company_project_integration_path(@project, integration), params: { personalAccessToken: "glpat-new" }
+
+    assert_redirected_to company_project_integrations_path(@project)
+    integration.reload
+    assert integration.active?
+    assert_equal "glpat-new", integration.credentials_data["personal_access_token"]
+  end
+
+  test "update keeps the gitlab token GitLab refuses to replace it with" do
+    stub_gitlab(verify_error: Gitlab::TokenService::AuthenticationError.new("GitLab rejected this token."))
+    integration = create(:integration, :gitlab, :active, company: @company, project: @project, name: "alice")
+    token = integration.credentials_data["personal_access_token"]
+
+    patch company_project_integration_path(@project, integration), params: { personalAccessToken: "glpat-bad" }
+
+    assert_equal "GitLab rejected this token.", Array(session["inertia_errors"][:personal_access_token]).to_sentence
+    assert_equal token, integration.reload.credentials_data["personal_access_token"]
+  end
+
+  test "test_connection marks a gitlab connection whose token GitLab refuses" do
+    stub_gitlab(verify_error: Gitlab::TokenService::AuthenticationError.new("GitLab rejected this token."))
+    integration = create(:integration, :gitlab, :active, company: @company, project: @project, name: "alice")
+
+    post test_connection_company_project_integration_path(@project, integration)
+
+    assert_equal "Connection failed: GitLab rejected this token.", flash[:alert]
+    assert integration.reload.error?
+  end
+
+  test "test_connection verifies a coder connection" do
+    integration = create_coder_integration
+    stub_request(:get, "https://coder.example.com/api/v2/users/me").to_return(
+      status: 200, body: { id: integration.coder_user_id, username: "test-user" }.to_json,
+      headers: { "Content-Type" => "application/json" }
+    )
+
+    post test_connection_company_project_integration_path(@project, integration)
+
+    assert_equal "Connection verified", flash[:notice]
+    assert integration.reload.settings["last_verified_at"].present?
+  end
+
   test "destroy removes integration" do
     integration = create(:integration, company: @company, connected_by: @user, project: @project)
 
@@ -244,10 +359,10 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_response :redirect
   end
 
-  test "create coder integration sad path persists in error state" do
+  test "create coder integration sad path saves nothing and keeps the dialog open" do
     stub_request(:get, "https://coder.example.com/api/v2/users/me").to_return(status: 401)
 
-    assert_difference("Integration.count", 1) do
+    assert_no_difference("Integration.count") do
       post company_project_integrations_path(@project), params: {
         provider: "coder",
         coderUrl: "https://coder.example.com",
@@ -256,9 +371,8 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
       }
     end
 
-    integration = Integration.last
-    assert_equal "error", integration.status.to_s
-    assert_response :redirect
+    assert_redirected_to company_project_integrations_path(@project)
+    assert_match(/HTTP 401/, Array(session["inertia_errors"][:coder]).to_sentence)
   end
 
   test "create coder integration allows http URL" do
@@ -307,6 +421,22 @@ class Web::Company::Projects::IntegrationsControllerTest < ActionDispatch::Integ
     assert_equal "aixle-prod", integration.coder_machine_prefix
     assert_equal 120, integration.coder_lock_ttl_minutes
     assert_equal credentials_before, integration.credentials_data
+  end
+
+  test "update replaces a coder session token without touching the pool settings" do
+    integration = create_coder_integration("machine_prefix" => "aixle-prod")
+    stub_request(:get, "https://coder.example.com/api/v2/users/me").to_return(
+      status: 200, body: { id: integration.coder_user_id, username: "test-user" }.to_json,
+      headers: { "Content-Type" => "application/json" }
+    )
+
+    patch company_project_integration_path(@project, integration), params: { sessionToken: "tok-new" }
+
+    assert_equal "Token replaced on Coder (test-user)", flash[:notice]
+    integration.reload
+    assert_equal "tok-new", integration.credentials_data["session_token"]
+    assert_equal "aixle-prod", integration.coder_machine_prefix
+    assert_equal 60, integration.coder_lock_ttl_minutes
   end
 
   test "update clears a blank template so the pool stops growing" do

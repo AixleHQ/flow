@@ -11,10 +11,22 @@ module Coder
   #   - ConfigurationError when URL or token is missing from credentials.
   #   - AuthenticationError on any failure from the API layer (HTTP error,
   #     transport error, timeout, invalid JSON), with the integration's
-  #     session token redacted from the message.
+  #     session token redacted from the message. `rejected?` tells a token
+  #     Coder refused from Coder not answering.
   class TokenService
     class ConfigurationError < StandardError; end
-    class AuthenticationError < StandardError; end
+    class AuthenticationError < StandardError
+      attr_reader :status
+
+      def initialize(message = nil, status: nil)
+        super(message)
+        @status = status
+      end
+
+      def rejected?
+        [ 401, 403 ].include?(status)
+      end
+    end
 
     def initialize(integration)
       @integration = integration
@@ -23,7 +35,7 @@ module Coder
     def verify_token
       Coder::Api.verify_token(coder_url: coder_url, session_token: session_token)
     rescue Coder::Api::ApiError => e
-      raise AuthenticationError, "Coder token verification failed: #{redact(e.message)}"
+      raise AuthenticationError.new("Coder token verification failed: #{redact(e.message)}", status: e.try(:status))
     end
 
     def coder_url

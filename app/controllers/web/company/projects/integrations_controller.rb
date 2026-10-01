@@ -11,49 +11,22 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
       integrations: integrations.map { |i| IntegrationResource.new(i).to_h },
       azure_devops: azure_devops_props,
       github: github_props,
-      jira: { oauth_enabled: Jira::AppConfig.oauth_enabled? }
+      jira: { oauth_enabled: Jira::AppConfig.oauth_enabled? },
+      slack: { enabled: Slack::Oauth.enabled? }
     }
   end
 
+  # Slack connects via OAuth (see #slack_oauth_start + Web::Integrations::SlackOauthController),
+  # not this paste-credentials path.
   def create
-    provider = params[:provider].to_s
-
-    integration = case provider
-    when "github"
-      return create_github
-    when "gitlab"
-      Gitlab::IntegrationService.new(
-        company: current_company,
-        connected_by: current_user,
-        project: current_project
-      ).create(personal_access_token: params[:personal_access_token].to_s)
-    when "coder"
-      Coder::IntegrationService.new(
-        company: current_company,
-        connected_by: current_user,
-        project: current_project
-      ).create(
-        coder_url:        params[:coder_url].to_s,
-        session_token:    params[:session_token].to_s,
-        default_template: params[:default_template].presence,
-        machine_prefix:   params[:machine_prefix].presence,
-        lock_ttl_minutes: params[:lock_ttl_minutes].presence
-      )
-    when "azure_devops"
-      return create_azure_devops
-    when "jira"
-      return create_jira
-    end
-    # Slack connects via OAuth (see #slack_oauth_start + Web::Integrations::SlackOauthController),
-    # not this paste-credentials path.
-
-    if integration.nil?
-      redirect_to company_project_integrations_path(current_project), alert: "Unsupported provider: #{provider}"
-    elsif integration.persisted? && integration.active?
-      redirect_to company_project_integrations_path(current_project), notice: "#{provider.capitalize} integration connected"
+    case params[:provider].to_s
+    when "github" then create_github
+    when "gitlab" then create_gitlab
+    when "coder" then create_coder
+    when "azure_devops" then create_azure_devops
+    when "jira" then create_jira
     else
-      error_msg = integration.settings&.dig("error") || "Failed to connect #{provider.capitalize}"
-      redirect_to company_project_integrations_path(current_project), alert: error_msg
+      redirect_to company_project_integrations_path(current_project), alert: "Unsupported provider: #{params[:provider]}"
     end
   end
 
@@ -63,17 +36,15 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   def update
     integration = Integration.for_project(current_project).find(params[:id])
 
-    # Azure has its own editable settings (the operation profile, and a
-    # replacement PAT), so it routes away from the Coder path rather than being
-    # refused by it.
+    # Each provider has its own editable part: Azure its operation profile and
+    # a replacement PAT, Jira its projects, GitLab its token, Coder its token
+    # or its pool settings.
     return update_azure_devops(integration) if integration.azure_devops?
     return update_jira(integration) if integration.jira?
+    return replace_gitlab_token(integration) if integration.gitlab?
+    return replace_coder_token(integration) if params.key?(:session_token)
 
-    Coder::IntegrationService.new(
-      company: current_company,
-      connected_by: current_user,
-      project: current_project
-    ).update_settings(
+    coder_service.update_settings(
       integration:      integration,
       default_template: params[:default_template],
       machine_prefix:   params[:machine_prefix],
@@ -98,13 +69,16 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     redirect_to company_project_integrations_path(current_project), notice: "Integration removed"
   end
 
-  # Re-verify a connection without mutating anything in Azure. Used by the
+  # Re-verify a connection without changing anything at the provider. Used by the
   # card's "Test connection" and "Repair connection" buttons, which are the same
   # operation: repair keeps the integration id and its repository attachments.
   def test_connection
     integration = Integration.for_project(current_project).find(params[:id])
-    service_class = { "azure_devops" => AzureDevops::IntegrationService, "jira" => Jira::IntegrationService,
-                      "github" => Github::IntegrationService }[integration.provider.to_s]
+    service_class = {
+      "azure_devops" => AzureDevops::IntegrationService, "jira" => Jira::IntegrationService,
+      "github" => Github::IntegrationService, "gitlab" => Gitlab::IntegrationService,
+      "coder" => Coder::IntegrationService
+    }[integration.provider.to_s]
     unless service_class
       return redirect_to company_project_integrations_path(current_project),
                          alert: "This integration has no connection test"
@@ -179,6 +153,10 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
   # screen with a signed `state` that carries the project. Slack redirects back to
   # the deployment-wide callback (Web::Integrations::SlackOauthController#callback).
   def slack_oauth_start
+    unless Slack::Oauth.enabled?
+      return redirect_to company_project_integrations_path(current_project), alert: "Slack's app is not configured"
+    end
+
     # allow_other_host: the target is Slack's hardcoded authorize URL built from
     # deployment Settings.slack.* — never user-supplied.
     redirect_to Slack::Oauth.authorize_url(project: current_project, user: current_user), allow_other_host: true
@@ -331,6 +309,52 @@ class Web::Company::Projects::IntegrationsController < Web::Company::Projects::A
     when nil then []
     else [ raw.to_s ]
     end
+  end
+
+  # A refused token answers with an Inertia validation error, like GitHub's
+  # token path, so the dialog stays open and says why.
+  def create_gitlab
+    integration = gitlab_service.create(personal_access_token: params[:personal_access_token].to_s)
+    redirect_to company_project_integrations_path(current_project), notice: "GitLab connected as #{integration.name}"
+  rescue Gitlab::IntegrationService::ConnectionError => e
+    redirect_to company_project_integrations_path(current_project),
+                inertia: { errors: { personal_access_token: e.message } }
+  end
+
+  def replace_gitlab_token(integration)
+    integration = gitlab_service.replace_token(integration, personal_access_token: params[:personal_access_token].to_s)
+    redirect_to company_project_integrations_path(current_project), notice: "Token replaced on #{integration.name}"
+  rescue Gitlab::IntegrationService::ConnectionError => e
+    redirect_to company_project_integrations_path(current_project),
+                inertia: { errors: { personal_access_token: e.message } }
+  end
+
+  def create_coder
+    integration = coder_service.create(
+      coder_url:        params[:coder_url].to_s,
+      session_token:    params[:session_token].to_s,
+      default_template: params[:default_template].presence,
+      machine_prefix:   params[:machine_prefix].presence,
+      lock_ttl_minutes: params[:lock_ttl_minutes].presence
+    )
+    redirect_to company_project_integrations_path(current_project), notice: "#{integration.name} connected"
+  rescue Coder::IntegrationService::ConnectionError => e
+    redirect_to company_project_integrations_path(current_project), inertia: { errors: { coder: e.message } }
+  end
+
+  def replace_coder_token(integration)
+    integration = coder_service.replace_token(integration, session_token: params[:session_token].to_s)
+    redirect_to company_project_integrations_path(current_project), notice: "Token replaced on #{integration.name}"
+  rescue Coder::IntegrationService::ConnectionError => e
+    redirect_to company_project_integrations_path(current_project), inertia: { errors: { session_token: e.message } }
+  end
+
+  def gitlab_service
+    Gitlab::IntegrationService.new(company: current_company, connected_by: current_user, project: current_project)
+  end
+
+  def coder_service
+    Coder::IntegrationService.new(company: current_company, connected_by: current_user, project: current_project)
   end
 
   def jira_service

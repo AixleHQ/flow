@@ -42,9 +42,11 @@ made as the token's owner, with that person's permissions. Prefer a token from
 an account kept for Flow, with access to the projects you mean to attach and
 nothing else.
 
-Flow never checks the token again after you connect. Once it expires or is
-revoked, the row still says **Active** but clones start failing. Keep track of
-the expiry date.
+Flow checks the token when you connect, when you replace it, and when you
+select **Test connection** on the row. In between, a token that expires or is
+revoked goes unnoticed: the row still says **Active** while clones fail.
+**Test connection** then marks the row **Error**. Keep track of the expiry
+date.
 
 ## Connect
 
@@ -53,12 +55,12 @@ the expiry date.
 
 Flow asks GitLab who the token belongs to. If GitLab accepts the token, the
 connection appears under that GitLab username with status **Active**. If GitLab
-refuses it, the page shows `GitLab token verification failed: …` and leaves a
-row named **GitLab (unverified)** in error. Remove that row and connect again
-with a token that works.
+refuses the token, or cannot be reached, the dialog stays open, says why, and
+nothing is saved.
 
-If you connect again, Flow adds a second connection and leaves the first one in
-place. See [Replacing the token](#replacing-the-token).
+Connecting again with a token for the same GitLab account updates that
+account's connection: the new token replaces the old one, and its repositories
+stay attached. A token for another account adds a second connection.
 
 ## Attaching repositories
 
@@ -144,10 +146,21 @@ Flow uses them only for gates. There is no GitLab trigger.
 
 ## Replacing the token
 
-A GitLab connection has no edit and no **Test connection**. A new token means a
-new connection, and its repositories have to move to that connection:
+Select **Replace token** on the row and paste the new token. Flow asks GitLab
+about it first, and only a token GitLab accepts replaces the old one. The
+connection keeps its repositories, their hooks and the steps that use them. If
+the new token belongs to another GitLab account, the connection acts as that
+account from then on and takes its name; an account that already has another
+connection in the project is refused.
 
-1. Connect again with the new token.
+**Test connection** on the row asks GitLab about the stored token and changes
+nothing else. If GitLab refuses it, the row turns **Error** with *GitLab no
+longer accepts this connection's token. Replace the token.* If GitLab cannot be
+reached, the row stays as it was.
+
+To move the repositories to another account's connection instead:
+
+1. Connect GitLab with that account's token.
 2. On **Repositories**, remove the repositories attached through the old
    connection. Each removal deletes its GitLab hook.
 3. Remove the old connection on **Integrations**.
@@ -207,8 +220,9 @@ because each request carries a key for that session. See
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `GitLab token verification failed: …` and a **GitLab (unverified)** row in error | GitLab refused the token because it was mistyped, has expired or was revoked | Remove the row. Connect with a new token that has the `api` scope |
-| Connect fails with a server error and no row is saved | Flow could not reach GitLab, or `GITLAB_ENDPOINT` is not a GitLab API URL | Operator: check `GITLAB_ENDPOINT`, including `/api/v4` |
+| *GitLab rejected this token* or *GitLab refused this token* in the dialog | The token was mistyped, has expired, was revoked, or lacks the `api` scope | Create a token with the `api` scope and paste it again |
+| *Could not reach GitLab at …* or *… did not answer as a GitLab API* in the dialog | Flow could not reach GitLab, or `GITLAB_ENDPOINT` is not a GitLab API URL | Operator: check `GITLAB_ENDPOINT`, including `/api/v4` |
+| A row in **Error** saying *GitLab no longer accepts this connection's token* | **Test connection** found the token expired or revoked | **Replace token** on the row |
 | The **Repository** picker is empty | The token's user is not a member of any project, or GitLab refused the token | Check the user's project memberships. Replace an expired token |
 | An agent says a repository is missing from its session | The clone failed. Flow leaves failed clones out of what it tells the agent; the session page lists them under *did not clone*, with the reason. Usual causes: the token expired or was revoked, the user lost access, the source branch is gone, or the container cannot reach the GitLab host | Fix the cause. The next session clones again |
 | `git fetch` or `git push` fails to authenticate mid-session | The token expired or was revoked. On self-managed GitLab, GitLab may be served over HTTP | Replace the token. Serve GitLab over HTTPS |

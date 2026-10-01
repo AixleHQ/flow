@@ -32,12 +32,14 @@ module Coder
       assert_equal "alice@example.com", info[:email]
     end
 
-    test "raises AuthenticationError on 401" do
+    test "raises AuthenticationError on 401, marked as a refused token" do
       stub_request(:get, "https://coder.example.com/api/v2/users/me").to_return(status: 401)
 
-      assert_raises(Coder::TokenService::AuthenticationError) do
+      error = assert_raises(Coder::TokenService::AuthenticationError) do
         Coder::TokenService.new(@integration).verify_token
       end
+      assert_equal 401, error.status
+      assert error.rejected?
     end
 
     test "raises AuthenticationError on 403" do
@@ -48,12 +50,14 @@ module Coder
       end
     end
 
-    test "raises AuthenticationError on timeout" do
+    test "raises AuthenticationError on timeout, not marked as a refused token" do
       stub_request(:get, "https://coder.example.com/api/v2/users/me").to_timeout
 
-      assert_raises(Coder::TokenService::AuthenticationError) do
+      error = assert_raises(Coder::TokenService::AuthenticationError) do
         Coder::TokenService.new(@integration).verify_token
       end
+      assert_nil error.status
+      assert_not error.rejected?
     end
 
     test "raises AuthenticationError on invalid JSON" do

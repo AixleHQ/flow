@@ -17,6 +17,17 @@ module Slack
       assert decoded["nonce"].present?
     end
 
+    test "is enabled only when the deployment has the Slack app's client id and secret" do
+      with_slack_app(client_id: "", client_secret: "slack-app-secret")
+      assert_not Slack::Oauth.enabled?
+
+      with_slack_app(client_id: "1234.5678", client_secret: "")
+      assert_not Slack::Oauth.enabled?
+
+      with_slack_app
+      assert Slack::Oauth.enabled?
+    end
+
     test "verify_state returns nil for a tampered or garbage state" do
       assert_nil Slack::Oauth.verify_state("not-a-real-state")
       assert_nil Slack::Oauth.verify_state(nil)

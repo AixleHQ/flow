@@ -6,8 +6,8 @@ module Slack
   # company installs it into its own workspace with one click, yielding a
   # per-workspace bot token. The install is keyed by `team_id` (stored in
   # `settings` for inbound routing) and the bot token lives in encrypted
-  # `credentials_data`. Persists :active on success or :error otherwise, so the
-  # user can repair from the integrations page (mirrors GitLab/Coder).
+  # `credentials_data`. A refused install saves nothing: the returned record is
+  # unsaved, in :error, and carries the reason in `settings["error"]`.
   class IntegrationService
     def initialize(company:, connected_by:, project: nil)
       @company = company
@@ -20,13 +20,13 @@ module Slack
       data = Slack::Client.exchange_code(code: code, redirect_uri: redirect_uri)
       team = data["team"].to_h
       team_id = team["id"].to_s
-      return save_error(build_integration, "Slack did not return a workspace id") if team_id.blank?
+      return refused("Slack did not return a workspace id") if team_id.blank?
 
       # Enforce 1 workspace : 1 company. The Slack events endpoint is keyed by
       # team_id (globally unique slug), so a workspace must belong to exactly one
       # company — otherwise a second install would hijack the first's event routing.
       if foreign_company_owns_workspace?(team_id)
-        return save_error(build_integration, "This Slack workspace is already connected to another organization")
+        return refused("This Slack workspace is already connected to another organization")
       end
 
       integration = find_or_build_for_team(team_id)
@@ -44,16 +44,18 @@ module Slack
         .merge("team_id" => team_id, "team_name" => team["name"])
         .except("error")
       integration.status = :active
-      integration.save!
-      provision_endpoint(integration, team_id)
+      Integration.transaction do
+        integration.save!
+        provision_endpoint(integration, team_id)
+      end
       integration
     rescue Slack::Client::Error => e
-      save_error(build_integration, "Slack OAuth failed: #{e.message}")
+      refused("Slack OAuth failed: #{e.message}")
     rescue ActiveRecord::RecordNotUnique
       # Lost a race to another company claiming the same workspace's endpoint slug.
-      save_error(build_integration, "This Slack workspace is already connected to another organization")
+      refused("This Slack workspace is already connected to another organization")
     rescue ActiveRecord::RecordInvalid => e
-      save_error(build_integration, e.message)
+      refused(e.message)
     end
 
     private
@@ -106,12 +108,9 @@ module Slack
         .find { |i| i.settings.to_h["team_id"].to_s == team_id } || build_integration
     end
 
-    def save_error(integration, message)
-      integration.name = integration.name.presence || "Slack"
-      integration.status = :error
-      integration.settings = integration.settings.to_h.merge("error" => message)
-      integration.save
-      integration
+    def refused(message)
+      Integration.new(company: @company, provider: :slack, connected_by: @connected_by, name: "Slack",
+                      status: :error, settings: { "error" => message })
     end
   end
 end
