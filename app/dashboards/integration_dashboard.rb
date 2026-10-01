@@ -8,7 +8,7 @@ class IntegrationDashboard < Administrate::BaseDashboard
     name: Field::String,
     provider: Field::Select.with_options(
       include_blank: false,
-      collection: %w[github linear]
+      collection: Integration::CONNECTABLE_PROVIDERS
     ),
     status: Field::Select.with_options(
       include_blank: false,

@@ -50,6 +50,23 @@ class Templates::ValidatorTest < ActiveSupport::TestCase
     assert_match(%r{\A/surprise: .*disallowed additional property}, errors.first)
   end
 
+  test "a template may require only an integration a user can connect" do
+    Integration::CONNECTABLE_PROVIDERS.each do |provider|
+      errors = errors_for do |d|
+        d["requires"]["integrations"] = [ provider ]
+        d["tools"].first["requires_integration"] = provider
+      end
+      assert_empty errors, provider
+    end
+
+    errors = errors_for do |d|
+      d["requires"]["integrations"] = [ "linear" ]
+      d["tools"].first["requires_integration"] = "linear"
+    end
+    assert_match(%r{/requires/integrations/0}, errors.join)
+    assert_match(%r{/tools/0/requires_integration}, errors.join)
+  end
+
   test "a docker image without a digest is refused" do
     errors = errors_for { |d| d["tools"].first["docker_image"] = "ghcr.io/acme/runner:latest" }
     assert_match(%r{/tools/0}, errors.join)
