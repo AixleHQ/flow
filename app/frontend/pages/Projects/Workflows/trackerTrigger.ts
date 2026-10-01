@@ -19,10 +19,10 @@ export interface TrackerTriggerValue {
   mentionOnly: boolean;
   textContains: string;
   aixleChanges: AixleChanges;
+  notifyOnFailure: boolean;
   subjectPolicy: string;
   subjectColumnId: string | null;
   subjectTitleTemplate: string;
-  notifyOnFailure: boolean;
 }
 
 export const TRACKER_EVENT_OPTIONS: { value: TrackerEventType; label: string }[] = [
@@ -58,11 +58,11 @@ export function trackerValueFromTrigger(trigger: Trigger | null, defaultColumnId
     statuses: Array.isArray(status?.value) ? status.value.map(String) : [],
     mentionOnly: trigger ? predicate[MENTION_FIELD] === true : true,
     textContains: typeof text?.value === 'string' ? text.value : '',
+    notifyOnFailure: trigger?.notify_on_failure ?? true,
     aixleChanges: (trigger?.aixle_changes as AixleChanges | undefined) ?? 'ignore',
     subjectPolicy: trigger?.subject_policy ?? 'find_or_create_task',
     subjectColumnId: trigger?.subject_column_id?.toString() ?? defaultColumnId,
     subjectTitleTemplate: trigger?.subject_title_template ?? '',
-    notifyOnFailure: trigger?.notify_on_failure ?? true,
   };
 }
 
