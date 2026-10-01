@@ -37,8 +37,8 @@ One Step = one agent session = one container = one major deliverable.
 | `repository_ids`       | Repos cloned under `/workspace/repo/` (merged with workflow base).       |
 | `depends_on_step_ids`  | DAG dependencies — enables parallel execution.                           |
 | `preferred_model`      | LLM model override for this step.                                        |
-| `input_asset_specs`    | Documented expected inputs (informational).                              |
-| `output_asset_specs`   | Documented expected outputs (informational).                             |
+| `input_asset_specs`    | Expected inputs. A required one is checked before the step starts; a missing one fails the step ("Required input missing"). |
+| `output_asset_specs`   | Expected outputs. A required one is checked when the step ends; a missing one fails the step ("Output validation failed"). |
 
 ## DAG and parallelism
 
@@ -113,7 +113,9 @@ Three sources of input assets, all merged additively:
 1. **Workflow base assets** (`workflow.config.base_asset_ids`) — always.
 2. **Run-time assets** (`workflow_run.input_asset_ids`) — chosen when
    the run starts.
-3. **Board task assets** — when triggered from a card.
+3. **Outputs of the steps in Run after** (`depends_on_step_ids`), placed at `/workspace/assets/<name>`.
+
+Files attached to a board card are **not** mounted; the agent fetches them with `board_get_task_assets`.
 
 Everything lands under `/workspace/assets/`. Agents write outputs to
 `/workspace/outputs/` — those files become `WorkflowRunAssets` you can
@@ -167,3 +169,5 @@ links for you. Open it from the project sidebar (Workflows → "Build with AI").
 - **Parallel steps share the workflow run** but not their containers —
   they cannot read each other's `/workspace/` directly. Use
   `output_asset_specs` to hand artifacts forward.
+
+Writing the instructions themselves: see the [Prompt guide](/docs/prompt-guide).

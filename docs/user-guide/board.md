@@ -11,7 +11,7 @@ where every card represents a unit of work — and where automation lives.
 | **Task**            | A card with title, description (markdown), type, priority, tags. |
 | **Subtask**         | One level of nesting (epic → story).                              |
 | **Comment**         | Threaded discussion; agents can tag comments (`code_review`, `qa_report`). |
-| **Asset**           | File attached to a task; passed to the agent at `/workspace/assets/`. |
+| **Asset**           | File attached to a task; the agent fetches it with `board_get_task_assets` (not mounted in the container). |
 | **Wait**            | External blocker — e.g. waiting for a GitHub PR check.            |
 | **Activity log**    | Immutable event stream — every move, comment, run.                |
 
@@ -56,8 +56,8 @@ a project created there has no board until it runs.
 When a board-triggered workflow run starts, the agent receives:
 
 - Task title, description, type, priority, tags.
-- All task comments (most recent first), with their tags.
-- All task assets, downloaded to `/workspace/assets/`.
+- The five most recent comments (first 200 characters each); the full thread through `board_get_comments`.
+- The task's attachments, through `board_get_task_assets` (they are not mounted in the container).
 - Task transitions (movement history).
 - Column purpose (so the agent knows the stage it's working in).
 

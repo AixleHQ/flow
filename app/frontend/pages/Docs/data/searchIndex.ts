@@ -187,6 +187,12 @@ export const SEARCH_INDEX: SearchResult[] = [
     desc: 'A DAG of steps orchestrated by Temporal — each step is one agent session in one container.',
   },
   {
+    slug: 'prompt-guide',
+    title: 'Prompt guide',
+    section: 'User guide',
+    desc: 'How to write session instructions an agent can run: what it sees, where its files are, and what belongs on the step form.',
+  },
+  {
     slug: 'triggers-and-gates',
     title: 'Triggers and Gates',
     section: 'User guide',

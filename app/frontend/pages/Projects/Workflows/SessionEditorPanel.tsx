@@ -254,23 +254,21 @@ export function SessionEditorPanel({
           <label className={classes.fieldLabel}>
             Instructions
             <span className={classes.instrDot} title="Required" />
-            <span
-              className={classes.instrInfoIcon}
-              title="The prompt the AI agent receives. Use {{artifact_name}} to reference assets."
-            >
+            <span className={classes.instrInfoIcon} title="The prompt the AI agent receives, exactly as written.">
               <IconInfoCircle size={12} />
             </span>
           </label>
           <p className={classes.fieldHelp}>
-            Use <code>{'{{artifact_name}}'}</code> to reference workflow assets.{' '}
-            <a href="#" onClick={(e) => e.preventDefault()}>
+            The agent receives these instructions exactly as written. Point it at files by path, e.g.{' '}
+            <code>/workspace/assets/…</code>.{' '}
+            <a href="/docs/prompt-guide" target="_blank" rel="noopener noreferrer">
               Prompt guide <IconArrowUpRight size={11} style={{ display: 'inline', verticalAlign: 'middle' }} />
             </a>
           </p>
           <textarea
             className={classes.instrTa}
             style={instructionsExpanded ? { minHeight: 400 } : undefined}
-            placeholder="Enter instructions… Use {{artifact_name}} for variable references."
+            placeholder="Enter instructions… What should the agent do, and when is it done?"
             aria-label="Session instructions"
             value={step.instructions ?? ''}
             onChange={(e) => onFieldChange('instructions', e.currentTarget.value)}
