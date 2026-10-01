@@ -75,7 +75,7 @@ module AzureDevops
         .to_return(status: 302, headers: { "Content-Type" => "text/html" }, body: "<html>sign in</html>")
 
       error = assert_raises(NotAuthorized) do
-        @onboarding.inspect!(organization: "contoso", personal_access_token: "bogus")
+        @onboarding.inspect!(organization: "contoso", admin: AdminCredential.pat("bogus"))
       end
       assert_match(/not valid for organization/, error.message)
     end
@@ -87,7 +87,7 @@ module AzureDevops
       stub_admin_probe(status: 403, body: {})
 
       error = assert_raises(NotAuthorized) do
-        @onboarding.inspect!(organization: "contoso", personal_access_token: "valid-but-not-admin")
+        @onboarding.inspect!(organization: "contoso", admin: AdminCredential.pat("valid-but-not-admin"))
       end
       assert_match(/cannot administer/, error.message)
       assert_match(/Member Entitlement Management/, error.message)
@@ -97,7 +97,7 @@ module AzureDevops
       stub_request(:get, %r{#{AZURE_API_HOST}/msaorg/_apis/git/repositories}).to_return(status: 302, headers: {})
 
       error = assert_raises(TenantDiscovery::NoTenant) do
-        @onboarding.inspect!(organization: "msaorg", personal_access_token: "x")
+        @onboarding.inspect!(organization: "msaorg", admin: AdminCredential.pat("x"))
       end
       assert_equal "organization_has_no_tenant", error.code
       assert_match(/personal access token instead/, error.message)
@@ -110,7 +110,7 @@ module AzureDevops
       stub_admin_probe
       stub_admin_project_list
 
-      result = @onboarding.inspect!(organization: "contoso", personal_access_token: "admin-pat")
+      result = @onboarding.inspect!(organization: "contoso", admin: AdminCredential.pat("admin-pat"))
 
       assert_equal "contoso", result.organization
       assert_equal @tenant, result.tenant_id
@@ -134,7 +134,7 @@ module AzureDevops
 
       stub_service_hook_grant
 
-      installation = @onboarding.complete!(organization: "contoso", personal_access_token: "admin-pat",
+      installation = @onboarding.complete!(organization: "contoso", admin: AdminCredential.pat("admin-pat"),
                                            project_ids: [ @project_id ])
 
       assert installation.active?
@@ -166,7 +166,7 @@ module AzureDevops
       stub_service_hook_grant(descriptor: sp_descriptor("oid-1"))
 
       error = assert_raises(Error) do
-        @onboarding.complete!(organization: "contoso", personal_access_token: "admin-pat",
+        @onboarding.complete!(organization: "contoso", admin: AdminCredential.pat("admin-pat"),
                               project_ids: [ @project_id ])
       end
       assert_equal "entitlement_not_effective", error.code
@@ -184,7 +184,7 @@ module AzureDevops
         .to_return(status: 401, headers: { "Content-Type" => "application/json" }, body: "{}")
 
       error = assert_raises(NotAuthorized) do
-        @onboarding.inspect!(organization: "contoso", personal_access_token: "admin-pat")
+        @onboarding.inspect!(organization: "contoso", admin: AdminCredential.pat("admin-pat"))
       end
 
       assert_match(/Project and team \(read\)/, error.message)
@@ -206,7 +206,7 @@ module AzureDevops
                    body: { value: [ { id: @project_id, name: "Customer Platform" },
                                     { id: second, name: "Payments" } ] }.to_json)
 
-      result = @onboarding.inspect!(organization: "contoso", personal_access_token: "admin-pat")
+      result = @onboarding.inspect!(organization: "contoso", admin: AdminCredential.pat("admin-pat"))
 
       assert result.already_bound
       assert_equal [ @project_id, second ].sort, result.projects.map { |p| p[:id] }.sort
@@ -226,7 +226,7 @@ module AzureDevops
                    body: { value: [ { id: @project_id, name: "Customer Platform" } ] }.to_json)
       stub_service_hook_grant
 
-      @onboarding.complete!(organization: "contoso", personal_access_token: "admin-pat",
+      @onboarding.complete!(organization: "contoso", admin: AdminCredential.pat("admin-pat"),
                             project_ids: [ @project_id ])
 
       assert_requested(:post, %r{/_apis/accesscontrolentries/#{ServiceHookGrant::NAMESPACE_ID}}) do |req|
@@ -261,7 +261,7 @@ module AzureDevops
       stub_request(:post, %r{/_apis/accesscontrolentries/#{ServiceHookGrant::NAMESPACE_ID}})
         .to_return(status: 403, headers: { "Content-Type" => "application/json" }, body: "{}")
 
-      installation = @onboarding.complete!(organization: "contoso", personal_access_token: "admin-pat",
+      installation = @onboarding.complete!(organization: "contoso", admin: AdminCredential.pat("admin-pat"),
                                            project_ids: [ @project_id ])
 
       assert installation.active?
@@ -296,7 +296,7 @@ module AzureDevops
       error = assert_raises(ValidationFailed) do
         @onboarding.complete!(organization: "contoso", project_ids: [ SecureRandom.uuid ])
       end
-      assert_match(/personal access token is required/, error.message)
+      assert_match(/sign in with Microsoft, or their personal access token/, error.message)
     end
 
     # The bind belongs to one company. Another company naming the same
@@ -306,6 +306,36 @@ module AzureDevops
       stub_tenant
 
       assert_raises(ValidationFailed) { @onboarding.inspect!(organization: "contoso") }
+    end
+
+    # == signing in with Microsoft ==
+
+    def signed_in(tid: @tenant, upn: "grace@contoso.com")
+      payload = Base64.urlsafe_encode64({ tid: tid, upn: upn, oid: SecureRandom.uuid }.to_json, padding: false)
+      AdminCredential.sign_in("header.#{payload}.signature")
+    end
+
+    test "a Microsoft sign-in proves control with its own token, and names who signed in" do
+      stub_tenant
+      probe = stub_admin_probe.with(headers: { "Authorization" => /\ABearer header\./ })
+      stub_admin_project_list
+
+      result = @onboarding.inspect!(organization: "contoso", admin: signed_in)
+
+      assert_requested probe
+      assert_equal [ "grace@contoso.com", [ @project_id ] ], [ result.identity, result.projects.pluck(:id) ]
+    end
+
+    test "a sign-in from another Microsoft directory proves nothing about this organization" do
+      stub_tenant
+      probe = stub_admin_probe
+
+      error = assert_raises(NotAuthorized) do
+        @onboarding.inspect!(organization: "contoso", admin: signed_in(tid: SecureRandom.uuid))
+      end
+
+      assert_match(/different Microsoft directory/, error.message)
+      assert_not_requested probe
     end
 
     private

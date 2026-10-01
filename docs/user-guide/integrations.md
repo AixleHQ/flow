@@ -124,37 +124,34 @@ work items — in those projects and nowhere else. Each of those Azure
 projects is listed on the project's **Trackers** page, where it can be
 made the primary tracker, set read-only or detached.
 
-Connecting is self-service, with one step outside Flow:
+Connecting is self-service. In **Project → Integrations → Connect → Azure
+DevOps**, type your organization name and **Sign in with Microsoft** as
+someone who administers it; approving Aixle there also adds its application
+to your directory. Where a directory does not let you approve applications,
+the alternative is a personal access token from an administrator, after a
+directory administrator has run `az ad sp create --id <client id>` once:
 
-1. **Once per directory,** an Entra administrator instantiates Aixle's
-   application in your tenant: `az ad sp create --id <client id>`, with
-   the client id your Aixle operator publishes. Nothing is consented to
-   and no permission is granted — it only makes the application nameable
-   in your organization. Aixle's private key is never shared, and you do
-   not register an application of your own.
-2. **In Flow,** open **Project → Integrations → Connect → Azure DevOps**,
-   type your organization name, and paste a personal access token from
-   someone who can administer it. The token needs three scopes:
-   **Member Entitlement Management (read & write)**, **Project and team
-   (read)**, and **Security (manage)**. They are not in the short list the
-   token form shows first — click **Show all scopes**.
+- The token needs three scopes: **Member Entitlement Management (read &
+  write)**, **Project and team (read)**, and **Security (manage)**. They are
+  not in the short list the token form shows first — click **Show all
+  scopes**.
 
-The second scope is spent on a single permission: it lets Aixle create
+The Security scope (or the sign-in) is spent on a single permission: it lets Aixle create
 its own Service Hooks, which is how a CI gate on a board task closes the
 moment a build finishes instead of on the next five-minute sweep. Without
 it the connection still works — gates just resolve more slowly. Aixle
 does not create the hooks *with* your token on purpose: a subscription
 made that way belongs to you, and stops firing when you leave.
 
-That token is used once, in that request: it proves the organization is
+The sign-in or the token is used once: it proves the organization is
 yours, and it adds Aixle to it with a **Basic** access level and
 Contributor rights on the project you pick. It is never stored, and the
-connection runs on Aixle's own identity afterwards — not on your token.
+connection runs on Aixle's own identity afterwards — not on your sign-in or token.
 Colleagues connecting further Flow projects against the same organization
 are not asked for one, because the first connection already established
 it — they choose from the Azure projects that connection approved.
 
-Reaching an Azure project outside that set needs a token again: the
+Reaching an Azure project outside that set needs a sign-in or a token again: the
 approved list is the company's boundary on the organization, not a
 per-connection preference, so widening it is the same act as
 establishing it. Paste one and the full list of projects you can

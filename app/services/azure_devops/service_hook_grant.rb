@@ -49,10 +49,10 @@ module AzureDevops
     # rather than as an ACE that quietly grants nothing.
     def self.token_for(project_id) = "PublisherSecurity/#{project_id}"
 
-    def initialize(organization:, personal_access_token:, tenant_id:, principal_object_id:,
+    def initialize(organization:, admin:, tenant_id:, principal_object_id:,
                    logger: Rails.logger)
       @organization = organization.to_s.strip
-      @pat = personal_access_token.to_s
+      @admin = admin
       @tenant_id = tenant_id.to_s
       @principal_object_id = principal_object_id.to_s
       @logger = logger
@@ -61,7 +61,7 @@ module AzureDevops
     # Grants the two permissions on each project. Returns the descriptor it
     # granted to, so a caller can log what it did.
     def call(project_ids)
-      raise ValidationFailed, "A personal access token is required" if @pat.blank?
+      raise ValidationFailed, "Sign in with Microsoft or give a personal access token" if @admin.nil?
       raise ValidationFailed, "The application has no service principal id yet" if @principal_object_id.blank?
 
       descriptor = identity_descriptor
@@ -122,7 +122,7 @@ module AzureDevops
       # Same browser-shaped refusal as everywhere else in onboarding: Azure
       # answers a bad credential with a redirect to a sign-in page.
       if (300..399).cover?(response.status) || html?(response)
-        raise NotAuthorized, "That personal access token is not valid for '#{@organization}'"
+        raise NotAuthorized, "That #{@admin.describe} is not accepted by '#{@organization}'"
       end
       if [ 401, 403 ].include?(response.status)
         raise NotAuthorized,
@@ -144,7 +144,7 @@ module AzureDevops
 
     def html?(response) = response.headers["content-type"].to_s.include?("text/html")
 
-    def authorization = "Basic #{Base64.strict_encode64(":#{@pat}")}"
+    def authorization = @admin.authorization
 
     def transport(faraday)
       faraday.options.open_timeout = AppConfig.open_timeout

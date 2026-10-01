@@ -35,8 +35,11 @@ module Oauth
     # fields used only by the MCP connect flow. Static providers pass neither and
     # keep the exact Phase-1 payload shape. Both are signed; the callback trusts
     # `oauth_client_id` for routing but still constrains the lookup to source:"dcr".
+    #
+    # `context` is a small hash of non-secret routing data a provider's own
+    # callback needs back (the Azure DevOps organization being connected).
     def encode(owner_type:, owner_id:, user_id:, return_to:, code_verifier:, provider:,
-               mcp_server_id: nil, resource: nil, oauth_client_id: nil)
+               mcp_server_id: nil, resource: nil, oauth_client_id: nil, context: nil)
       nonce = SecureRandom.uuid
       Rails.cache.write(
         cache_key(nonce),
@@ -54,7 +57,7 @@ module Oauth
           "oauth_client_id" => oauth_client_id,
           "return_to" => return_to,
           "nonce" => nonce
-        },
+        }.merge(context ? { "context" => context } : {}),
         expires_in: TTL,
         purpose: PURPOSE
       )

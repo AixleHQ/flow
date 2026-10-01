@@ -101,4 +101,13 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
       get jira_webhook_company_project_integration_path(@project, jira), as: :json
     end
   end
+
+  test "azure_devops_sign_in is admin-or-owner (redirects to Microsoft)" do
+    with_azure_devops_enabled
+    stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/git/repositories})
+      .to_return(status: 302, headers: { "WWW-Authenticate" => "Bearer authorization_uri=#{AZURE_TOKEN_HOST}/#{SecureRandom.uuid}" })
+    assert_role_matrix(MANAGE, transport: :web) do
+      get azure_devops_sign_in_company_project_integrations_path(@project, organization: "contoso")
+    end
+  end
 end

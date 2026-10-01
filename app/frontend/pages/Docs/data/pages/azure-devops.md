@@ -12,11 +12,11 @@ Microsoft Entra application** Flow authenticates as.
 | --- | --- | --- |
 | The Entra application | Already registered. Aixle owns it and holds its key | You register your own, once |
 | Its credential | Aixle's, never shared | Yours: a certificate you generate |
-| One step in **your** Entra directory | Yes — `az ad sp create` | Yes — the same step |
+| One step in **your** Entra directory | Approving Aixle when you sign in (or `az ad sp create` on the token path) | The same |
 | Connecting inside Flow | Identical | Identical |
 
 Everything below the application is the same on both. If you are on SaaS, skip
-to [Step 1](#step-1-let-the-application-exist-in-your-directory).
+to [Connecting](#connecting-sign-in-with-microsoft).
 
 ---
 
@@ -42,8 +42,12 @@ the short version:
    AZURE_DEVOPS_CREDENTIAL_GENERATION=v1
    ```
 
-4. Publish the client id to whoever will connect organizations. It is not a
-   secret; it is how they name the application in step 1 below.
+4. For **Sign in with Microsoft**: under **Authentication**, add the web
+   redirect URI `https://<your domain>/integrations/azure_devops/oauth/callback`,
+   and under **API permissions** add **Azure DevOps → user_impersonation**
+   (delegated).
+5. Publish the client id to whoever will connect organizations with a token. It
+   is not a secret; it is how they name the application in `az ad sp create`.
 
 Why a certificate: the application is multi-tenant, so one leaked client secret
 is every connected organization at once. With a certificate the private key
@@ -56,16 +60,46 @@ There is no separate feature flag: availability is derived from the credential.
 
 ---
 
-## Step 1: let the application exist in your directory
+## Connecting: sign in with Microsoft
 
-Required on both deployments, once per Entra directory.
+**Project → Integrations → Connect → Azure DevOps**, and keep **I administer the
+organization and can sign in with Microsoft**.
 
-A multi-tenant application has to be instantiated in each directory that uses
-it. Flow's application requests no Microsoft Graph permissions, so there is no
-consent screen to click through — which also means nothing creates the service
-principal for you.
+1. Type the organization name — the one in `https://dev.azure.com/<organization>`.
+   Flow does not list organizations: what is not listed cannot be browsed by a
+   project member, and a list would reveal which organizations the deployment
+   can already reach.
+2. Press **Sign in with Microsoft** and sign in with an account that
+   administers the organization (a member of **Project Collection
+   Administrators**). Microsoft signs you in to that organization's own
+   directory, and the first time asks you to approve Aixle — that approval is
+   what adds Aixle's application to your directory.
+3. Back in Flow, pick one or more Azure projects.
+4. Review **What agents may do** — see below — and press **Connect**.
 
-A directory administrator runs:
+In that one request Flow proves the organization is yours, adds its identity to
+it with a **Basic** access level and Contributor rights on the projects you
+picked, grants itself permission to manage its own Service Hooks, and confirms
+it can actually read every project you selected before recording anything. Your
+sign-in is held for a few minutes between the redirect and **Connect**, never
+stored, and not what the connection runs on afterwards.
+
+If your directory lets only administrators approve applications, Microsoft says
+so: ask a Cloud Application Administrator to sign in, or use the token path.
+
+Colleagues connecting further Flow projects against the same organization do
+not sign in — they choose from the Azure projects this connection approved
+(**Already connected for your company? Continue without signing in**).
+
+## Or: an administrator personal access token
+
+For a directory where you cannot approve applications yourself. Choose **I'll
+prove it with an administrator personal access token** in the dialog.
+
+### Let the application exist in your directory
+
+Once per Entra directory, unless someone has already signed in with Microsoft
+for it. A directory administrator runs:
 
 ```bash
 az ad sp create --id <client id>
@@ -78,10 +112,10 @@ and a literal here would send half its readers to create a service principal for
 somebody else's application.
 
 This grants nothing and consents to nothing. It makes the application
-*nameable* in your directory — without it, the next step fails with
+*nameable* in your directory — without it, connecting fails with
 `The client application {appId} is missing a service principal in the tenant`.
 
-## Step 2: create a personal access token
+### Create the token
 
 Used once, in one request. It is never stored, never logged, and is not what the
 connection runs on afterwards.
@@ -98,9 +132,10 @@ need are not in the short list:
 
 The person creating it must be an organization administrator — scopes are a
 ceiling, not a grant. A token with all three from someone outside **Project
-Collection Administrators** is still refused, and says so.
+Collection Administrators** is still refused, and says so. Paste it, press
+**Verify organization**, then pick projects and connect as above.
 
-### Why a token at all
+### Why prove anything at all
 
 An application token proves that *the application* can reach an organization.
 With one multi-tenant application serving many customers, that is legitimately
@@ -108,30 +143,10 @@ true for every one of them — so it proves nothing about whether **your** compa
 may bind **this** organization. Organization names are short and often public,
 so knowing one proves nothing either.
 
-The token closes that gap: it calls an endpoint only an organization
-administrator can call. What survives the request is the binding it justified,
-not the token.
-
-## Step 3: connect
-
-**Project → Integrations → Connect → Azure DevOps.**
-
-1. Type the organization name — the one in `https://dev.azure.com/<organization>`.
-   Flow does not list organizations: what is not listed cannot be browsed by a
-   project member, and a list would reveal which organizations the deployment
-   can already reach.
-2. Paste the token and press **Verify organization**.
-3. Pick one or more Azure projects.
-4. Review **What agents may do** — see below — and press **Connect**.
-
-In that one request Flow proves the organization is yours, adds its identity to
-it with a **Basic** access level and Contributor rights on the projects you
-picked, grants itself permission to manage its own Service Hooks, and confirms
-it can actually read every project you selected before recording anything.
-
-Colleagues connecting further Flow projects against the same organization are
-not asked for a token — they choose from the Azure projects this connection
-approved.
+A Microsoft sign-in or a token closes that gap: both can call an endpoint only an
+organization administrator can call, and a sign-in also has to come from the
+organization's own directory. What survives is the binding it justified, not the
+credential.
 
 ## Capabilities
 
@@ -218,7 +233,7 @@ subscription, report it healthy, and fail every delivery in silence.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `missing a service principal in the tenant` | Step 1 was skipped, or run in the wrong directory | `az ad sp create --id <client id>` in *that* directory |
+| `missing a service principal in the tenant` | Token path without the directory step, or it ran in the wrong directory | Sign in with Microsoft instead, or `az ad sp create --id <client id>` in *that* directory |
 | *"not valid for organization"* | Wrong, expired, or foreign token. Azure answers a bad token with a redirect to a sign-in page rather than a 401 | A fresh token in that organization |
 | *"cannot administer"* | A real token from someone who is not an organization administrator | A token from someone who can add users to it |
 | *"cannot list its projects"* | The token has no project scope | Add **Project and team (read)** — it is behind *Show all scopes* |
