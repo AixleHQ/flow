@@ -163,8 +163,12 @@ group :development do
   # Security tools
   gem "brakeman", require: false
 
-  # Dependency license reports
-  gem "license_finder", require: false
+  # Dependency license reports. Upstream license_finder (last release 7.2.1,
+  # May 2024) caps rubyzip below 3, which holds us on a rubyzip with
+  # GHSA-47m2-wp7j-p9vc. This fork is upstream 7.2.1 with only that cap raised
+  # (pivotal/LicenseFinder#1063); pinned exactly because a single person
+  # publishes it. Return to "license_finder" once upstream ships rubyzip 3.
+  gem "license_finder-rubyzip3", "7.2.1.1", require: false
 end
 
 group :test do
