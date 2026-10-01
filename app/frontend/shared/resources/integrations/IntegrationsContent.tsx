@@ -1,7 +1,6 @@
 import { router } from '@inertiajs/react';
 import {
   ActionIcon,
-  Alert,
   Anchor,
   Badge,
   Box,
@@ -23,7 +22,6 @@ import {
 import { modals } from '@mantine/modals';
 import { notifications } from '@mantine/notifications';
 import {
-  IconAlertCircle,
   IconBrandAzure,
   IconBrandGithub,
   IconBrandJira,
@@ -380,7 +378,7 @@ export const IntegrationsContent = ({
     );
   }, [basePath, coderEditPrefix, coderEditTarget, coderEditTemplate, coderEditTtl]);
 
-  // Re-verify a connection. "Test" and "repair" are the same
+  // Re-verify an Azure or Jira connection. "Test" and "repair" are the same
   // operation: the integration id and what hangs off it are kept either way, and
   // a failed check never replaces a working credential.
   const handleTestConnection = useCallback(
@@ -927,9 +925,9 @@ export const IntegrationsContent = ({
             autoFocus
           />
           {gitlabError && (
-            <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            <Text size="sm" c="var(--app-danger-fg)">
               {gitlabError}
-            </Alert>
+            </Text>
           )}
           <Group justify="flex-end">
             <Button variant="default" onClick={closeGitlabModal}>
@@ -1040,9 +1038,9 @@ export const IntegrationsContent = ({
             autoFocus
           />
           {tokenError && (
-            <Alert color="red" icon={<IconAlertCircle size={16} />}>
+            <Text size="sm" c="var(--app-danger-fg)">
               {tokenError}
-            </Alert>
+            </Text>
           )}
           <Group justify="flex-end">
             <Button variant="default" onClick={closeTokenModal}>
