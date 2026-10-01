@@ -11,17 +11,41 @@ const TOKEN_PATH = /\/(invitations|share)\/[^/?#]+/g;
 const SECRET_QUERY_PARAMS = ['code', 'state', 'token', 'tkn', 'session_key', 'ticket'];
 const PII_NAME_FRAGMENTS = ['forwarded', '-ip', 'remote-', 'via', '-user'];
 
-export const scrubUrl = (url: string): string => {
-  const [beforeHash] = url.split('#');
-  const [path, query] = beforeHash.split('?');
-  const cleanPath = path.replace(TOKEN_PATH, (_match, kind: string) => `/${kind}/[token]`);
-  if (!query) return cleanPath;
-
+const scrubQuery = (query: string): string => {
   const params = new URLSearchParams(query);
   SECRET_QUERY_PARAMS.forEach((name) => {
     if (params.has(name)) params.set(name, '[filtered]');
   });
-  return `${cleanPath}?${params.toString()}`;
+  return params.toString();
+};
+
+export const scrubUrl = (url: string): string => {
+  const [beforeHash] = url.split('#');
+  const [path, query] = beforeHash.split('?');
+  const cleanPath = path.replace(TOKEN_PATH, (_match, kind: string) => `/${kind}/[token]`);
+  return query ? `${cleanPath}?${scrubQuery(query)}` : cleanPath;
+};
+
+type StreamedSpan = Parameters<NonNullable<Sentry.BrowserOptions['beforeSendSpan']>>[0];
+
+// `url.query` holds a bare query string, which scrubUrl would read as a path.
+const scrubUrlAttribute = (key: string, value: string): string =>
+  key === 'url.query' ? scrubQuery(value) : scrubUrl(value);
+
+const isStringAttribute = (attribute: unknown): attribute is { value: string } =>
+  typeof attribute === 'object' && attribute !== null && typeof (attribute as { value?: unknown }).value === 'string';
+
+const scrubSpan = (span: StreamedSpan): StreamedSpan => {
+  span.name = scrubUrl(span.name);
+  Object.entries(span.attributes).forEach(([key, attribute]) => {
+    if (!key.startsWith('url.') && key !== 'sentry.segment.name') return;
+    if (typeof attribute === 'string') {
+      span.attributes[key] = scrubUrlAttribute(key, attribute);
+    } else if (isStringAttribute(attribute)) {
+      attribute.value = scrubUrlAttribute(key, attribute.value);
+    }
+  });
+  return span;
 };
 
 const scrubEvent = <T extends Sentry.Event>(event: T): T => {
@@ -73,10 +97,7 @@ export const initSentry = (settings: SharedSettings): void => {
       queues: false,
       graphQL: { document: false, variables: false },
     },
-    // Span streaming, Sentry 11's default, never calls beforeSendTransaction, and that
-    // hook is what keeps invitation and share tokens out of transaction names.
-    traceLifecycle: 'static',
     beforeSend: (event) => scrubEvent(event),
-    beforeSendTransaction: (event) => scrubEvent(event),
+    beforeSendSpan: scrubSpan,
   });
 };

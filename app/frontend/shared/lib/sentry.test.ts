@@ -35,22 +35,27 @@ describe('initSentry', () => {
 
   afterEach(async () => {
     await Sentry.getClient()?.close();
+    window.history.replaceState({}, '', '/');
   });
 
-  it('sends transactions with the token scrubbed and without inferring the IP', async () => {
+  it('keeps credentials out of the errors and spans it sends, and does not infer the IP', async () => {
     const sent: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
       sent.push(String(init?.body));
       return new Response('{}');
     });
+    window.history.replaceState({}, '', '/invitations/s3cr3t?code=c0de');
     initSentry(settings);
 
-    Sentry.startSpan({ name: '/invitations/s3cr3t', forceTransaction: true }, () => {});
+    Sentry.captureException(new Error('boom'));
+    Sentry.getActiveSpan()?.end();
     await Sentry.flush(2000);
 
     const envelopes = sent.join('\n');
-    expect(envelopes).toContain('"transaction":"/invitations/[token]"');
+    expect(envelopes).toContain('"type":"event"');
+    expect(envelopes).toContain('"type":"span"');
+    expect(envelopes).toContain('/invitations/[token]?code=%5Bfiltered%5D');
     expect(envelopes).toContain('"infer_ip":"never"');
-    expect(envelopes).not.toContain('s3cr3t');
+    expect(envelopes).not.toMatch(/s3cr3t|c0de/);
   });
 });
