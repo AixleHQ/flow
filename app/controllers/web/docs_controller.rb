@@ -34,7 +34,7 @@ class Web::DocsController < Web::ApplicationController
              sessions-and-runs session-queues plans-and-limits aws-marketplace-billing assets personas
              agent-capabilities repositories ai-builder
              people-and-access signing-in secrets templates analytics company-workspace examples
-             user-guide quick-start agents runtimes tools mcp board workflows
+             user-guide prompt-guide quick-start agents runtimes tools mcp board workflows
              triggers-and-gates integrations github gitlab azure-devops jira trackers slack coder
              configuration configuring-sso reference cli-ref
              api-guide config-schema user-guide-outline changelog-product-areas].freeze
