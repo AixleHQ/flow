@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { makeFormStub, renderPage, screen, userEvent } from 'test/renderPage';
@@ -81,6 +82,74 @@ describe('New workspace page', () => {
       renderPage(<NewWorkspacePage />, { props: signedIn });
 
       expect(screen.getByLabelText(/Concurrent sessions/)).toHaveValue('4');
+    });
+
+    // They have no address field, so a refusal about their address used to be
+    // drawn nowhere and the form just sat there.
+    it('shows a refusal about the address they were not asked for', () => {
+      renderPage(<NewWorkspacePage />, {
+        props: { ...signedIn, errors: { emailDomain: ['Email domain is a public email service'] } },
+      });
+
+      expect(screen.getByText('Email domain is a public email service')).toBeInTheDocument();
+    });
+  });
+
+  describe('someone whose domain already has a workspace', () => {
+    const claimed = (over = {}) => ({
+      ...signedIn,
+      claimedDomain: {
+        domain: 'northwind-robotics.example',
+        workspaceName: 'Northwind',
+        joinMethods: ['Google', 'Northwind SSO'],
+        approvalRequired: false,
+        ...over,
+      },
+    });
+
+    it('names the workspace and the way in, instead of a form that can only be refused', () => {
+      renderPage(<NewWorkspacePage />, { props: claimed() });
+
+      expect(screen.getByRole('heading', { name: 'Your domain already has a workspace' })).toBeInTheDocument();
+      expect(screen.getByText(/belongs to the/)).toHaveTextContent(
+        'northwind-robotics.example belongs to the Northwind workspace.',
+      );
+      expect(screen.getByText(/^Sign in with/)).toHaveTextContent(
+        'Sign in with Google or Northwind SSO and you join Northwind straight away.',
+      );
+      expect(screen.getByText(/to invite you/)).toHaveTextContent(
+        'Or ask an administrator of Northwind to invite you.',
+      );
+      expect(screen.queryByRole('button', { name: 'Create workspace' })).not.toBeInTheDocument();
+    });
+
+    it('says when joining waits for an administrator', () => {
+      renderPage(<NewWorkspacePage />, { props: claimed({ approvalRequired: true }) });
+
+      expect(screen.getByText(/^Sign in with/)).toHaveTextContent(
+        'Sign in with Google or Northwind SSO to ask to join Northwind; one of its administrators approves the request.',
+      );
+    });
+
+    it('names no workspace for a domain it has not proved, and offers only an invitation', () => {
+      renderPage(<NewWorkspacePage />, { props: claimed({ workspaceName: null, joinMethods: [] }) });
+
+      expect(screen.getByText(/already uses/)).toHaveTextContent(
+        'A workspace already uses northwind-robotics.example.',
+      );
+      expect(screen.getByText(/to invite you/)).toHaveTextContent(
+        'Ask an administrator of that workspace to invite you.',
+      );
+      expect(screen.queryByText(/^Sign in with/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Northwind/)).not.toBeInTheDocument();
+    });
+
+    it('signs out, which is the way to the methods it names', async () => {
+      renderPage(<NewWorkspacePage />, { props: claimed() });
+
+      await userEvent.click(screen.getByRole('button', { name: 'Sign out to sign in another way' }));
+
+      expect(router.delete).toHaveBeenCalledWith('/logout');
     });
   });
 

@@ -53,7 +53,8 @@ class Web::SessionsController < Web::ApplicationController
       # Passwordless methods this installation offers. Passkey and magic link
       # need no credentials, so they are on unless an operator narrows the
       # allowlist.
-      passwordless_methods: Auth::PolicyResolver.deployment_allowlist_kinds & %w[passkey magic_link]
+      passwordless_methods: Auth::PolicyResolver.deployment_allowlist_kinds & %w[passkey magic_link],
+      claimed_domain: flash[:claimed_domain]
     }
   end
 
@@ -114,6 +115,14 @@ class Web::SessionsController < Web::ApplicationController
     # it by email, but AuthConcern#current_user filters it out, so signing it in
     # produces a redirect loop instead of a refusal.
     return redirect_to login_path(error: "account_deleted") if user.deleted?
+
+    # Ahead of the signup below, which cannot succeed for a domain that already
+    # has a workspace, and of pending_approval, which is untrue: nothing awaits
+    # approval. Carried in the flash rather than the URL so a link cannot make
+    # the page name a workspace.
+    if (claimed = Auth::ClaimedDomain.for(user, tried: provider))
+      return redirect_to(login_path(error: "domain_has_workspace"), flash: { claimed_domain: claimed.to_h })
+    end
 
     if may_sign_up_a_workspace?(user)
       sign_in(user)

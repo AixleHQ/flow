@@ -1,11 +1,14 @@
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Anchor, Button, Group, NumberInput, Stack, Text, TextInput } from '@mantine/core';
 import { IconArrowRight, IconCalculator, IconCheck, IconMail } from '@tabler/icons-react';
 
-import { howItWorksPath, workspacePath } from 'shared/routes';
-import { BrandLockup } from 'shared/ui';
+import { type ClaimedDomain, ClaimedDomainNotice } from 'shared/components/ClaimedDomainNotice';
+import { howItWorksPath, logoutPath, workspacePath } from 'shared/routes';
+import { BrandLockup, PageShell } from 'shared/ui';
 
 import classes from './NewPage.module.css';
+
+type Refusal = string | string[];
 
 interface PageProps {
   suggestedDomain: string | null;
@@ -19,13 +22,16 @@ interface PageProps {
   needsEmail: boolean;
   /** Queue-hours the workspace may spend before anyone asks it for a card. */
   freeQueueHours: number;
+  /** Set when a signed-in person's domain already has a workspace, so there is nothing here to create. */
+  claimedDomain?: ClaimedDomain | null;
   /**
    * Server-side refusals. The keys arrive camelCased — the Inertia
    * prop_transformer runs over every prop, errors included — while the form's
    * own data keys are the snake_case ones the controller reads. The two do not
    * line up, so the errors are read from here rather than from form.errors.
+   * A form's refusals arrive as lists of messages, the controller's own as one.
    */
-  errors?: Record<string, string>;
+  errors?: Record<string, Refusal>;
   [key: string]: unknown;
 }
 
@@ -43,6 +49,8 @@ const POINTS = [
     body: 'No seats and no per-token charge — you are billed for the queues you keep open, by the hour.',
   },
 ];
+
+const joined = (...refusals: (Refusal | undefined)[]) => refusals.flat().filter(Boolean).join(' ') || undefined;
 
 const domainOf = (email: string | null) => email?.split('@')[1]?.trim().toLowerCase() ?? '';
 
@@ -97,6 +105,27 @@ const SentScreen = ({ address }: { address: string }) => (
   </section>
 );
 
+// Signing out is the way to the sign-in screen, where the methods named here
+// are offered.
+const ClaimedScreen = ({ claim }: { claim: ClaimedDomain }) => (
+  <PageShell variant="centered">
+    <Head title="Your domain already has a workspace" />
+    <div className={classes.form}>
+      <Group mb="xl">
+        <BrandLockup />
+      </Group>
+      <h2 className={classes.formTitle}>Your domain already has a workspace</h2>
+      <Text size="sm" c="var(--app-text-secondary)" mb="md">
+        Each domain has one workspace, so there is no second one to create for yours.
+      </Text>
+      <ClaimedDomainNotice claim={claim} />
+      <Button fullWidth size="md" mt="lg" variant="default" onClick={() => router.delete(logoutPath())}>
+        {claim.joinMethods.length > 0 ? 'Sign out to sign in another way' : 'Sign out'}
+      </Button>
+    </div>
+  </PageShell>
+);
+
 const NewWorkspacePage = () => {
   const {
     suggestedDomain,
@@ -106,7 +135,8 @@ const NewWorkspacePage = () => {
     needsEmail,
     suggestedEmail,
     freeQueueHours,
-    errors,
+    claimedDomain,
+    errors = {},
   } = usePage<PageProps>().props;
 
   const form = useForm({
@@ -127,6 +157,15 @@ const NewWorkspacePage = () => {
   // The domain is never typed. It is whatever the address says it is, because a
   // workspace may only claim the domain of the person claiming it.
   const domain = needsEmail ? domainOf(form.data.email) : (suggestedDomain ?? '');
+
+  // A refusal for a field this page does not draw — the address of someone
+  // signed in — would otherwise vanish, and the form would just sit there.
+  const drawnFields = needsEmail ? ['name', 'email', 'emailDomain', 'maxSessions'] : ['name', 'maxSessions'];
+  const undrawn = Object.entries(errors)
+    .filter(([key]) => !drawnFields.includes(key))
+    .flatMap(([, refusal]) => refusal);
+
+  if (claimedDomain) return <ClaimedScreen claim={claimedDomain} />;
 
   return (
     <div className={classes.page}>
@@ -152,11 +191,11 @@ const NewWorkspacePage = () => {
               </span>
             </Text>
 
-            {errors?.base && (
-              <Text size="sm" c="var(--app-danger-fg)" mb="md">
-                {errors.base}
+            {undrawn.map((message) => (
+              <Text key={message} size="sm" c="var(--app-danger-fg)" mb="md">
+                {message}
               </Text>
-            )}
+            ))}
 
             <form onSubmit={submit}>
               <Stack gap="md">
@@ -167,7 +206,7 @@ const NewWorkspacePage = () => {
                   size="md"
                   value={form.data.name}
                   onChange={(event) => form.setData('name', event.currentTarget.value)}
-                  error={errors?.name}
+                  error={joined(errors.name)}
                 />
                 {needsEmail && (
                   <TextInput
@@ -179,7 +218,7 @@ const NewWorkspacePage = () => {
                     size="md"
                     value={form.data.email}
                     onChange={(event) => form.setData('email', event.currentTarget.value)}
-                    error={errors?.email ?? errors?.emailDomain}
+                    error={joined(errors.email, errors.emailDomain)}
                   />
                 )}
                 <NumberInput
@@ -192,7 +231,7 @@ const NewWorkspacePage = () => {
                   size="md"
                   value={form.data.max_sessions}
                   onChange={(value) => form.setData('max_sessions', value === '' || value == null ? '' : String(value))}
-                  error={errors?.maxSessions}
+                  error={joined(errors.maxSessions)}
                 />
                 <Button
                   type="submit"

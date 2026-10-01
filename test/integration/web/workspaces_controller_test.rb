@@ -193,6 +193,28 @@ class Web::WorkspacesControllerTest < ActionDispatch::IntegrationTest
     assert_nil Company.find_by(email_domain: "northwind.example")
   end
 
+  # The form could only refuse their domain, and the refusal was about a field a
+  # signed-in person is never shown — so the page names the workspace instead.
+  test "someone whose domain already has a workspace is shown the way into it" do
+    create(:company, :auto_accept, name: "Acme Robotics", email_domain: "acme-robotics.example")
+    sign_in_as(create(:user, email: "dana@acme-robotics.example", password: AuthHelper::TEST_PASSWORD))
+
+    get new_workspace_path
+
+    assert_inertia_props do |props|
+      assert_equal "Acme Robotics", props.dig(:claimedDomain, :workspaceName)
+      assert_includes props.dig(:claimedDomain, :joinMethods), "Google"
+    end
+  end
+
+  test "a free domain gets the form" do
+    sign_in_as(create(:user, email: "dana@acme-robotics.example", password: AuthHelper::TEST_PASSWORD))
+
+    get new_workspace_path
+
+    assert_inertia_props { |props| assert_nil props[:claimedDomain] }
+  end
+
   test "someone who already belongs somewhere is sent away" do
     user = create(:user, password: AuthHelper::TEST_PASSWORD)
     create(:company_membership, user: user, company: create(:company), state: "active")
