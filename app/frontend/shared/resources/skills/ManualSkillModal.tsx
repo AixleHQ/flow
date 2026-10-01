@@ -5,7 +5,7 @@ import { useEffect, useState, type FC } from 'react';
 
 import type { Skill } from '@/types/generated';
 
-import { UNSAVED_CHANGES_PROMPT } from 'shared/lib/hooks/useUnsavedChangesGuard';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 interface ManualSkillModalProps {
@@ -76,16 +76,14 @@ export const ManualSkillModal: FC<ManualSkillModalProps> = ({ opened, onClose, b
     }
   };
 
-  const unsaved = editing && content !== (skill.content ?? STARTER);
-  const handleClose = () => {
-    if (unsaved && !window.confirm(UNSAVED_CHANGES_PROMPT)) return;
-    onClose();
-  };
+  const dirty = content !== (skill?.content ?? STARTER);
+  const unsaved = editing && dirty;
+  const requestClose = useConfirmClose(dirty, onClose);
 
   return (
     <Modal
       opened={opened}
-      onClose={handleClose}
+      onClose={requestClose}
       title={editing ? `Edit ${skill.name}` : 'Add a skill by hand'}
       size="lg"
     >
@@ -118,7 +116,7 @@ export const ManualSkillModal: FC<ManualSkillModalProps> = ({ opened, onClose, b
 
         <Group justify="flex-end">
           <UnsavedChangesNotice visible={unsaved} />
-          <Button variant="default" onClick={handleClose} disabled={submitting}>
+          <Button variant="default" onClick={requestClose} disabled={submitting}>
             Cancel
           </Button>
           <Button onClick={submit} loading={submitting} disabled={!content.trim()}>

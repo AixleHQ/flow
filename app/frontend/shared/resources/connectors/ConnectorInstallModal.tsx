@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState, type FC } from 'react';
 
 import type { Connector } from '@/types/generated';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+
 import { ConfigItemValueField } from '../mcp-servers/ConfigItemValueField';
 
 import type { ConnectorTarget } from './types';
@@ -21,6 +23,9 @@ const targetLabel = (target: ConnectorTarget): string => {
   if (target.kind === 'remote') return `Hosted endpoint (${target.transport})`;
   return `${target.registryType ?? 'package'} package${target.runtime ? ` via ${target.runtime}` : ''}`;
 };
+
+const declaredDefaults = (target: ConnectorTarget | undefined): Record<string, string> =>
+  Object.fromEntries((target?.inputs ?? []).filter((i) => i.default != null).map((i) => [i.key, String(i.default)]));
 
 export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
   connector,
@@ -42,18 +47,17 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
     if (!connector) return;
     const first = installable[0];
     setTargetId(first?.id ?? '');
-    setValues(
-      Object.fromEntries((first?.inputs ?? []).filter((i) => i.default != null).map((i) => [i.key, String(i.default)])),
-    );
+    setValues(declaredDefaults(first));
   }, [connector, installable]);
 
   const selectTarget = (id: string) => {
     setTargetId(id);
-    const next = installable.find((t) => t.id === id);
-    setValues(
-      Object.fromEntries((next?.inputs ?? []).filter((i) => i.default != null).map((i) => [i.key, String(i.default)])),
-    );
+    setValues(declaredDefaults(installable.find((t) => t.id === id)));
   };
+
+  const prefilled = declaredDefaults(target);
+  const dirty = Object.keys({ ...prefilled, ...values }).some((key) => (values[key] ?? '') !== (prefilled[key] ?? ''));
+  const requestClose = useConfirmClose(dirty, onClose);
 
   const missingRequired = (target?.inputs ?? []).filter((i) => i.required && !values[i.key]?.trim());
 
@@ -72,7 +76,7 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
   return (
     <Drawer
       opened={!!connector}
-      onClose={onClose}
+      onClose={requestClose}
       title={`Install · ${connector?.pickerName ?? ''}`}
       position="right"
       size={460}
@@ -180,7 +184,7 @@ export const ConnectorInstallModal: FC<ConnectorInstallModalProps> = ({
           )}
 
           <Group justify="flex-end" mt="sm">
-            <Button variant="default" onClick={onClose}>
+            <Button variant="default" onClick={requestClose}>
               Cancel
             </Button>
             <Button

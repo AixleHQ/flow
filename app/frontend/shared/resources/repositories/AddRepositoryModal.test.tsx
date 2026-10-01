@@ -204,6 +204,71 @@ describe('AddRepositoryModal', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it('closes without asking when only the sole integration was preselected', async () => {
+    const onClose = vi.fn();
+    renderPage(
+      <AddRepositoryModal
+        opened
+        onClose={onClose}
+        basePath="/projects/1/repositories"
+        existingRepoNames={new Set<string>()}
+      />,
+      { props: { integrations: [integration] } },
+    );
+    await waitFor(() => expect(router.reload).toHaveBeenCalled());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('asks before closing over a started draft, and closes once the user discards', async () => {
+    const onClose = vi.fn();
+    renderPage(
+      <AddRepositoryModal
+        opened
+        onClose={onClose}
+        basePath="/projects/1/repositories"
+        existingRepoNames={new Set<string>()}
+      />,
+      { props: { integrations: [integration] } },
+    );
+
+    await userEvent.type(screen.getByRole('textbox', { name: /purpose/i }), 'Main Rails app');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts over after a discarded draft: empty fields, sole integration selected and its repos reloaded', async () => {
+    const modal = (opened: boolean) => (
+      <AddRepositoryModal
+        opened={opened}
+        onClose={vi.fn()}
+        basePath="/projects/1/repositories"
+        existingRepoNames={new Set<string>()}
+      />
+    );
+    const { rerender } = renderPage(modal(true), { props: { integrations: [integration] } });
+
+    await userEvent.type(screen.getByRole('textbox', { name: /purpose/i }), 'Main Rails app');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    rerender(modal(false));
+    rerender(modal(true));
+
+    expect(await screen.findByRole('textbox', { name: /purpose/i })).toHaveValue('');
+    await waitFor(() => expect(router.reload).toHaveBeenCalledTimes(2));
+    expect(router.reload).toHaveBeenLastCalledWith(
+      expect.objectContaining({ data: { integration_id: '7' }, only: ['available_repos'] }),
+    );
+  });
+
   it('renders a server-error alert when page errors are present', () => {
     renderPage(
       <AddRepositoryModal

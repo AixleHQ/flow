@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent } from 'test/renderPage';
+import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
 import { AddTrackerDrawer } from './AddTrackerDrawer';
 
@@ -59,5 +59,33 @@ describe('AddTrackerDrawer', () => {
 
     expect(await screen.findByText('Lowercase letters, digits and dashes')).toBeInTheDocument();
     expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('closes without asking when only the preselected connection is filled in', async () => {
+    const onClose = vi.fn();
+    renderPage(
+      <AddTrackerDrawer opened onClose={onClose} basePath="/company/projects/7/trackers" availableScopes={scopes} />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('asks before closing over a picked project, and closes once the user discards', async () => {
+    const onClose = vi.fn();
+    renderPage(
+      <AddTrackerDrawer opened onClose={onClose} basePath="/company/projects/7/trackers" availableScopes={scopes} />,
+    );
+
+    await userEvent.click(screen.getByRole('combobox', { name: /project/i }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Ops Board' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

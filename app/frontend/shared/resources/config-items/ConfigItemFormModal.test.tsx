@@ -2,11 +2,13 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { ConfigItemFormModal } from './ConfigItemFormModal';
 
 const basePath = '/projects/1/config_items';
+const editDialogX = () =>
+  within(screen.getByRole('dialog', { name: 'Edit secret' })).getByRole('button', { name: 'Clear' });
 
 describe('ConfigItemFormModal', () => {
   it('renders the create-mode title and fields when no item is given', () => {
@@ -64,12 +66,50 @@ describe('ConfigItemFormModal', () => {
     expect(router.post).not.toHaveBeenCalled();
   });
 
-  it('clicking Cancel calls onClose', async () => {
+  it('clicking Cancel on an untouched form closes it without asking', async () => {
     const onClose = vi.fn();
     renderPage(<ConfigItemFormModal opened onClose={onClose} basePath={basePath} />);
 
     await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('closes an untouched edit without asking', async () => {
+    const onClose = vi.fn();
+    const item = { id: 7, name: 'REGION', value: 'eu-west-1', description: 'Deploy region', itemType: 'variable' };
+    renderPage(<ConfigItemFormModal opened onClose={onClose} basePath={basePath} item={item} />);
+
+    expect(screen.getByDisplayValue('eu-west-1')).toBeInTheDocument();
+    await userEvent.click(editDialogX());
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('asks before closing over a typed value, and closes once the user discards', async () => {
+    const onClose = vi.fn();
+    renderPage(<ConfigItemFormModal opened onClose={onClose} basePath={basePath} />);
+
+    await userEvent.type(screen.getByPlaceholderText('API_KEY'), 'MY_VAR');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before closing an edit through its X once the value changed', async () => {
+    const onClose = vi.fn();
+    const item = { id: 8, name: 'API_KEY', value: '••••••••', description: null, itemType: 'secret' };
+    renderPage(<ConfigItemFormModal opened onClose={onClose} basePath={basePath} item={item} />);
+
+    await userEvent.type(screen.getByPlaceholderText('Enter secret value...'), 'rotated');
+    await userEvent.click(editDialogX());
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

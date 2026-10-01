@@ -3,7 +3,7 @@ import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildRepository } from 'test/factories/repository';
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { EditRepositoryModal } from './EditRepositoryModal';
 
@@ -61,7 +61,7 @@ describe('EditRepositoryModal', () => {
     expect(router.patch).not.toHaveBeenCalled();
   });
 
-  it('clicking the drawer close button calls onClose without hitting the backend', async () => {
+  it('closes an untouched edit without asking and without hitting the backend', async () => {
     const onClose = vi.fn();
     renderPage(
       <EditRepositoryModal
@@ -75,7 +75,28 @@ describe('EditRepositoryModal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
     expect(router.patch).not.toHaveBeenCalled();
+  });
+
+  it('asks before closing over an edited field, and closes once the user discards', async () => {
+    const onClose = vi.fn();
+    renderPage(
+      <EditRepositoryModal
+        repo={buildRepository()}
+        branches={['main', 'develop']}
+        basePath="/projects/7/repositories"
+        onClose={onClose}
+      />,
+    );
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'Purpose' }), ' and refunds');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('shows the AI helper description and placeholder for the Purpose field', () => {

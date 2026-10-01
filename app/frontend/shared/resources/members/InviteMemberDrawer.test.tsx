@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { InviteMemberDrawer } from './InviteMemberDrawer';
 
@@ -57,14 +57,28 @@ describe('InviteMemberDrawer', () => {
     );
   });
 
-  it('clicking the close button calls onClose and does not hit the backend', async () => {
+  it('closes an untouched invite without asking and without hitting the backend', async () => {
     const onClose = vi.fn();
     renderPage(<InviteMemberDrawer opened onClose={onClose} basePath="/companies/1/members" />);
 
-    await userEvent.click(screen.getByRole('button', { name: /close/i }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
     expect(router.post).not.toHaveBeenCalled();
+  });
+
+  it('asks before closing over a started invite, and closes once the user discards', async () => {
+    const onClose = vi.fn();
+    renderPage(<InviteMemberDrawer opened onClose={onClose} basePath="/companies/1/members" />);
+
+    await userEvent.type(screen.getByLabelText(/email/i), 'jane@company.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('offers Viewer as a role option', async () => {

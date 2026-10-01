@@ -105,7 +105,8 @@ export const ConnectorCatalogModal: FC<ConnectorCatalogModalProps> = ({
 
   return (
     <>
-      <Modal opened={opened} onClose={onClose} title="Browse connectors" fullScreen>
+      {/* Escape reaches every open Mantine modal; while the install drawer is up it is that drawer's to handle. */}
+      <Modal opened={opened} onClose={onClose} closeOnEscape={!installing} title="Browse connectors" fullScreen>
         <TextInput
           placeholder="Search connectors — try 'issue tracker' or 'database'"
           aria-label="Search connectors"

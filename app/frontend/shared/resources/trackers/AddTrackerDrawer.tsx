@@ -5,6 +5,7 @@ import { zod4Resolver as zodResolver } from 'mantine-form-zod-resolver';
 import { useEffect, useMemo, useState } from 'react';
 import { z } from 'zod';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 export interface AvailableScopeGroup {
@@ -32,6 +33,8 @@ const schema = z.object({
 });
 type FormData = z.infer<typeof schema>;
 
+const EMPTY_VALUES: FormData = { integrationId: '', externalScopeId: '', handle: '', readOnly: false, primary: false };
+
 const suggestHandle = (name: string) =>
   name
     .toLowerCase()
@@ -45,13 +48,17 @@ export const AddTrackerDrawer = ({ opened, onClose, basePath, availableScopes }:
   const [loading, setLoading] = useState(false);
   const form = useForm<FormData>({
     validate: zodResolver(schema),
-    initialValues: { integrationId: '', externalScopeId: '', handle: '', readOnly: false, primary: false },
+    initialValues: EMPTY_VALUES,
   });
 
   useEffect(() => {
     if (!opened) return;
+    form.setInitialValues(
+      availableScopes.length === 1
+        ? { ...EMPTY_VALUES, integrationId: String(availableScopes[0].integrationId) }
+        : EMPTY_VALUES,
+    );
     form.reset();
-    if (availableScopes.length === 1) form.setFieldValue('integrationId', String(availableScopes[0].integrationId));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened]);
 
@@ -84,11 +91,12 @@ export const AddTrackerDrawer = ({ opened, onClose, basePath, availableScopes }:
   };
 
   const serverError = errors && Object.values(errors)[0];
+  const requestClose = useConfirmClose(form.isDirty(), onClose);
 
   return (
     <ResourceDrawer
       opened={opened}
-      onClose={onClose}
+      onClose={requestClose}
       title="Add tracker"
       footer={
         <Button type="submit" form="add-tracker-form" fullWidth loading={loading}>

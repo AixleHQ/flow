@@ -2,6 +2,8 @@ import { Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core';
 import { IconCheck } from '@tabler/icons-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+
 export interface FolderFormModalProps {
   opened: boolean;
   onClose: () => void;
@@ -38,17 +40,18 @@ export function FolderFormModal({
   const [name, setName] = useState('');
   const [touched, setTouched] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const seededName = mode === 'rename' ? (initialName ?? '') : '';
 
   useEffect(() => {
     if (!opened) return;
-    setName(mode === 'rename' ? (initialName ?? '') : '');
+    setName(seededName);
     setTouched(false);
     const id = setTimeout(() => {
       inputRef.current?.focus();
       if (mode === 'rename') inputRef.current?.select();
     }, 50);
     return () => clearTimeout(id);
-  }, [opened, mode, initialName]);
+  }, [opened, mode, seededName]);
 
   const trimmed = name.trim();
   const clientError = !touched
@@ -66,6 +69,7 @@ export function FolderFormModal({
               : null;
 
   const errorText = clientError ?? serverError ?? null;
+  const requestClose = useConfirmClose(trimmed !== seededName, onClose);
 
   const submit = () => {
     setTouched(true);
@@ -78,7 +82,7 @@ export function FolderFormModal({
   return (
     <Modal
       opened={opened}
-      onClose={onClose}
+      onClose={requestClose}
       title={mode === 'create' ? 'New folder' : 'Rename folder'}
       centered
       size="sm"
@@ -118,7 +122,7 @@ export function FolderFormModal({
         </div>
       </Stack>
       <Group justify="flex-end" mt="lg">
-        <Button variant="default" onClick={onClose} disabled={submitting}>
+        <Button variant="default" onClick={requestClose} disabled={submitting}>
           Cancel
         </Button>
         <Button leftSection={<IconCheck size={16} />} onClick={submit} loading={submitting}>

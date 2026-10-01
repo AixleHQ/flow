@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent } from 'test/renderPage';
+import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
 import { FolderFormModal } from './FolderFormModal';
 
@@ -243,5 +243,76 @@ describe('FolderFormModal', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('asks before discarding a typed folder name, and closes on Discard', async () => {
+    const onClose = vi.fn();
+    renderPage(
+      <FolderFormModal
+        opened
+        onClose={onClose}
+        mode="create"
+        existingNames={[]}
+        submitting={false}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    await userEvent.type(screen.getByPlaceholderText('e.g. specs'), 'specs');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(screen.getByRole('dialog', { name: 'New folder' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks before the X discards a changed name in a rename', async () => {
+    const onClose = vi.fn();
+    renderPage(
+      <FolderFormModal
+        opened
+        onClose={onClose}
+        mode="rename"
+        initialName="dashboard"
+        existingNames={['dashboard']}
+        submitting={false}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    const field = screen.getByDisplayValue('dashboard');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'reports');
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: 'Rename folder' })).getByRole('button', { name: 'Clear' }),
+    );
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes an untouched rename without asking', async () => {
+    const onClose = vi.fn();
+    renderPage(
+      <FolderFormModal
+        opened
+        onClose={onClose}
+        mode="rename"
+        initialName="dashboard"
+        existingNames={['dashboard']}
+        submitting={false}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: 'Rename folder' })).getByRole('button', { name: 'Clear' }),
+    );
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
   });
 });

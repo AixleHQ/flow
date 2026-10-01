@@ -408,6 +408,40 @@ describe('Projects/Board/BoardPage', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('heading', { name: 'Create task' })).toBeInTheDocument();
   });
+
+  it('closes a create-task drawer opened from a column without asking when nothing was entered', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add task to Backlog' }));
+    const drawer = await screen.findByRole('dialog', { name: 'Create task' });
+    expect(within(drawer).getByDisplayValue('Backlog')).toBeInTheDocument();
+
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create task' })).not.toBeInTheDocument());
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('asks before discarding a task typed into the create drawer, and starts blank after Discard', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add task to Backlog' }));
+    const drawer = await screen.findByRole('dialog', { name: 'Create task' });
+    await userEvent.type(within(drawer).getByPlaceholderText('Task title'), 'Half a thought');
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Clear' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(screen.getByRole('dialog', { name: 'Create task' })).toBeInTheDocument();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create task' })).not.toBeInTheDocument());
+
+    await userEvent.keyboard('n');
+    const reopened = await screen.findByRole('dialog', { name: 'Create task' });
+    expect(within(reopened).getByPlaceholderText('Task title')).toHaveValue('');
+    expect(within(reopened).queryByDisplayValue('Backlog')).not.toBeInTheDocument();
+  });
+
   it('opens the Board Settings dialog via the column ⋯ menu settings action', async () => {
     renderAuthedPage(<BoardPage />, { props: populatedProps });
 
@@ -999,6 +1033,68 @@ describe('Projects/Board/BoardPage', () => {
     await waitFor(() => expect(router.get).toHaveBeenCalledWith('/company/projects/7/board', {}, expect.anything()));
 
     fetchSpy.mockRestore();
+  });
+
+  // --- closing the task drawer over a comment draft ---
+
+  const openTaskProps = {
+    ...populatedProps,
+    selectedTask: makeTask({ id: 1, title: 'Wire up authentication', boardColumnId: 100 }),
+    taskComments: [],
+    taskAssets: [],
+    taskActivities: [],
+    taskWorkflowRuns: [],
+  };
+
+  it('asks before closing the task drawer over an unsent comment, and Discard closes it', async () => {
+    renderAuthedPage(<BoardPage />, { props: openTaskProps });
+
+    await userEvent.click(screen.getByRole('tab', { name: /Comments/ }));
+    await userEvent.type(screen.getByPlaceholderText(/Write a comment/), 'Half a thought');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(router.get).not.toHaveBeenCalled();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(router.get).toHaveBeenCalledWith('/company/projects/7/board', {}, expect.anything());
+  });
+
+  it('asks on Escape with focus outside the comment box, and Escape again keeps the draft', async () => {
+    renderAuthedPage(<BoardPage />, { props: openTaskProps });
+
+    const commentsTab = screen.getByRole('tab', { name: /Comments/ });
+    await userEvent.click(commentsTab);
+    await userEvent.type(screen.getByPlaceholderText(/Write a comment/), 'Half a thought');
+    await userEvent.click(commentsTab);
+    await userEvent.keyboard('{Escape}');
+
+    await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument(),
+    );
+    expect(router.get).not.toHaveBeenCalled();
+    expect(screen.getByPlaceholderText(/Write a comment/)).toHaveValue('Half a thought');
+  });
+
+  it('closes the task drawer straight away when no comment is being written', async () => {
+    renderAuthedPage(<BoardPage />, { props: openTaskProps });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(router.get).toHaveBeenCalledWith('/company/projects/7/board', {}, expect.anything());
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('closes the task drawer once on Escape', async () => {
+    renderAuthedPage(<BoardPage />, { props: openTaskProps });
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(router.get).toHaveBeenCalledTimes(1);
+    expect(router.get).toHaveBeenCalledWith('/company/projects/7/board', {}, expect.anything());
   });
 
   // --- archive feature ---
@@ -2557,6 +2653,23 @@ describe('Projects/Board/BoardPage', () => {
     // Bar and checkboxes remain — the user opted out of the selection, not out of the mode.
     expect(screen.getByText('0 selected')).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Select Wire up authentication' })).toBeInTheDocument();
+  });
+
+  it('keeps the Add tag prompt and bulk mode when Escape asks about a typed tag', async () => {
+    renderAuthedPage(<BoardPage />, { props: populatedProps });
+
+    await armBulkMode();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Select Wire up authentication' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add tag' }));
+    const prompt = await screen.findByRole('dialog', { name: 'Add tag' });
+    await userEvent.type(within(prompt).getByRole('textbox', { name: 'Tag name' }), 'needs-review');
+    // Off the text field, where the board's own Escape shortcut would otherwise leave bulk mode.
+    await userEvent.tab();
+    await userEvent.keyboard('{Escape}');
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Add tag' })).toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
   });
 
   it('POSTs to bulk_actions when Archive is confirmed', async () => {

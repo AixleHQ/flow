@@ -346,4 +346,50 @@ describe('SessionNewForm', () => {
 
     fetchSpy.mockRestore();
   });
+
+  it('reports a pristine form as clean, even with a default runtime and a preselected project', async () => {
+    const user = userEvent.setup();
+    const onDirtyChange = vi.fn();
+    renderAuthedPage(
+      <SessionNewForm
+        {...makeProps({
+          projects: [
+            { id: 1, name: 'Alpha' },
+            { id: 2, name: 'Beta' },
+          ],
+          preSelectedProjectId: 1,
+          onDirtyChange,
+        })}
+      />,
+      {
+        props: {
+          currentUser: buildSharedUser({ configuredAgents: ['claude_code'], defaultAgentRuntime: 'claude_code' }),
+        },
+      },
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Project' })).toHaveValue('Alpha');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+
+    await user.click(screen.getByRole('combobox', { name: 'Project' }));
+    await user.click(await screen.findByRole('option', { name: 'Beta' }));
+
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it('reports a typed prompt as unsaved, and clean again once the form unmounts', async () => {
+    const user = userEvent.setup();
+    const onDirtyChange = vi.fn();
+    const { unmount } = renderAuthedPage(<SessionNewForm {...makeProps({ onDirtyChange })} />, {
+      props: authProps(['claude_code']),
+    });
+
+    await user.click(screen.getByRole('radio', { name: /Automatic/ }));
+    await user.type(screen.getByRole('textbox', { name: /initial prompt/i }), 'Refactor the auth module');
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+
+    unmount();
+
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
 });

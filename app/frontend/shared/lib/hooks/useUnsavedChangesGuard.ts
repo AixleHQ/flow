@@ -1,7 +1,7 @@
 import { router } from '@inertiajs/react';
 import { useEffect } from 'react';
 
-export const UNSAVED_CHANGES_PROMPT = 'You have unsaved changes. Leave without saving?';
+const UNSAVED_CHANGES_PROMPT = 'You have unsaved changes. Leave without saving?';
 
 /**
  * While `dirty`, asks before the page is left: a browser unload (tab close,

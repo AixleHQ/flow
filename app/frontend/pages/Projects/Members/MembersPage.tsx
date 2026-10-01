@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import type { Project, User } from '@/types/generated';
 
 import { getInitials } from 'shared/lib/getInitials';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { EmptyState } from 'shared/ui/EmptyState';
 import { PageHeader } from 'shared/ui/PageHeader';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
@@ -59,6 +60,7 @@ const MembersPage = () => {
     setAddOpen(false);
     setSelectedUserId(null);
   };
+  const requestClose = useConfirmClose(selectedUserId !== null, handleClose);
 
   const handleAdd = () => {
     if (!selectedUserId) return;
@@ -236,7 +238,7 @@ const MembersPage = () => {
 
         <ResourceDrawer
           opened={addOpen}
-          onClose={handleClose}
+          onClose={requestClose}
           title="Add Collaborator"
           footer={
             <Button fullWidth onClick={handleAdd} loading={loading} disabled={!selectedUserId}>

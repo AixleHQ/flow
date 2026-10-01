@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 
 import type { ProjectTracker } from '@/types/generated';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 import { HANDLE_FORMAT } from './AddTrackerDrawer';
@@ -29,6 +30,7 @@ export const EditHandleDrawer = ({ tracker, basePath, onClose }: Props) => {
   const value = handle.trim().toLowerCase();
   const invalid = value !== '' && !HANDLE_FORMAT.test(value);
   const ready = Boolean(tracker && value && !invalid && value !== tracker.handle);
+  const requestClose = useConfirmClose(tracker !== null && handle !== tracker.handle, onClose);
 
   const submit = () => {
     if (!tracker || !ready) return;
@@ -52,7 +54,7 @@ export const EditHandleDrawer = ({ tracker, basePath, onClose }: Props) => {
   return (
     <ResourceDrawer
       opened={Boolean(tracker)}
-      onClose={onClose}
+      onClose={requestClose}
       title="Edit handle"
       footer={
         <Button fullWidth loading={saving} disabled={!ready} onClick={submit}>

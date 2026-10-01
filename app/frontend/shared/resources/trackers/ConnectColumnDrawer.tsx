@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import type { ProjectTracker } from '@/types/generated';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { apiV1ProjectWorkflowTriggersPath } from 'shared/routes';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
@@ -51,6 +52,12 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
   }, [tracker, workflows, boardColumns]);
 
   const ready = Boolean(workflowId && columnId && (entry === 'mention' ? !mentionReason : status.trim()));
+  const dirty =
+    entry !== 'status' ||
+    status !== '' ||
+    workflowId !== (workflows[0]?.id.toString() ?? null) ||
+    columnId !== (boardColumns[0]?.id.toString() ?? null);
+  const requestClose = useConfirmClose(dirty, onClose);
 
   const submit = async () => {
     if (!tracker || !workflowId) return;
@@ -93,7 +100,7 @@ export const ConnectColumnDrawer = ({ projectId, tracker, workflows, boardColumn
   return (
     <ResourceDrawer
       opened={Boolean(tracker)}
-      onClose={onClose}
+      onClose={requestClose}
       title={`Connect ${tracker?.name ?? 'a tracker'}`}
       footer={
         <Button fullWidth loading={saving} disabled={!ready} onClick={submit}>

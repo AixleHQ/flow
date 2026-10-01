@@ -6,12 +6,23 @@ import { IconPlus } from '@tabler/icons-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { apiMutate, apiRequest, notifyApiFailure } from 'shared/lib/apiFetch';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { apiV1ProjectColumnPath, apiV1ProjectColumnsPath, reorderApiV1ProjectColumnsPath } from 'shared/routes';
 
 import { SortableColumnRow } from './SortableColumnRow';
 import { jsonHeaders, type ColState, type Column } from './types';
 
 // --- Board Settings Dialog (with drag-to-reorder columns) ---
+
+const toColState = (c: Column): ColState => ({
+  id: c.id,
+  name: c.name,
+  purpose: c.purpose ?? '',
+  workflowId: c.workflowBinding?.workflowId ? String(c.workflowBinding.workflowId) : null,
+  triggerMode: c.workflowBinding?.triggerMode ?? 'auto',
+  bindingId: c.workflowBinding?.id ?? null,
+  bindingChanged: false,
+});
 
 export function BoardSettingsDialog({
   opened,
@@ -28,22 +39,16 @@ export function BoardSettingsDialog({
   const [saving, setSaving] = useState(false);
   const [deletedIds, setDeletedIds] = useState<number[]>([]);
 
+  const savedCols = useMemo(() => initialColumns.map(toColState), [initialColumns]);
+
   useEffect(() => {
     if (opened) {
-      setCols(
-        initialColumns.map((c) => ({
-          id: c.id,
-          name: c.name,
-          purpose: c.purpose ?? '',
-          workflowId: c.workflowBinding?.workflowId ? String(c.workflowBinding.workflowId) : null,
-          triggerMode: c.workflowBinding?.triggerMode ?? 'auto',
-          bindingId: c.workflowBinding?.id ?? null,
-          bindingChanged: false,
-        })),
-      );
+      setCols(savedCols);
       setDeletedIds([]);
     }
-  }, [opened, initialColumns]);
+  }, [opened, savedCols]);
+
+  const requestClose = useConfirmClose(JSON.stringify(cols) !== JSON.stringify(savedCols), onClose);
 
   const addColumn = () =>
     setCols((prev) => [
@@ -147,7 +152,7 @@ export function BoardSettingsDialog({
   return (
     <Modal
       opened={opened}
-      onClose={onClose}
+      onClose={requestClose}
       title="Board Settings"
       centered
       size="xl"
@@ -181,7 +186,7 @@ export function BoardSettingsDialog({
           Add Column
         </Button>
         <Group gap="sm">
-          <Button variant="outline" size="sm" onClick={onClose}>
+          <Button variant="outline" size="sm" onClick={requestClose}>
             Cancel
           </Button>
           <Button size="sm" loading={saving} onClick={handleSave}>

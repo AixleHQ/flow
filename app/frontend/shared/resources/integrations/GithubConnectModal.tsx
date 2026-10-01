@@ -3,6 +3,8 @@ import { Alert, Anchor, Button, Code, Group, Modal, PasswordInput, Radio, Stack,
 import { IconAlertCircle, IconExternalLink } from '@tabler/icons-react';
 import { useCallback, useEffect, useState } from 'react';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+
 export interface GithubProps {
   /** False on a deployment missing GITHUB_APP_ID, GITHUB_APP_SLUG or the private key — typically a local one. */
   appConfigured: boolean;
@@ -43,6 +45,8 @@ export const GithubConnectModal = ({ opened, onClose, basePath, github }: Props)
     setError(null);
   }, [onClose]);
 
+  const requestClose = useConfirmClose(pat !== '', close);
+
   const installApp = useCallback(() => {
     // Server-side endpoint mints a SIGNED state (Oauth::State) and redirects to GitHub's
     // app-install URL — the state is never built or forgeable client-side (§7).
@@ -74,7 +78,7 @@ export const GithubConnectModal = ({ opened, onClose, basePath, github }: Props)
   }, [basePath, close, pat]);
 
   return (
-    <Modal opened={opened} onClose={close} title="Connect GitHub" centered size="lg">
+    <Modal opened={opened} onClose={requestClose} title="Connect GitHub" centered size="lg">
       <Stack gap="md">
         <Radio.Group value={authMode} onChange={(value) => setAuthMode(value as AuthMode)}>
           <Stack gap="sm">
@@ -151,7 +155,7 @@ export const GithubConnectModal = ({ opened, onClose, basePath, github }: Props)
         )}
 
         <Group justify="flex-end">
-          <Button variant="default" onClick={close}>
+          <Button variant="default" onClick={requestClose}>
             Cancel
           </Button>
           {authMode === 'app' ? (

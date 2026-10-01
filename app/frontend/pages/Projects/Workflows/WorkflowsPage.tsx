@@ -26,6 +26,7 @@ import { RunWorkflowDrawer } from 'shared/components/RunWorkflowDrawer';
 import { ArchivedList } from 'shared/components/versions/ArchivedList';
 import { ArchiveSwitch, type ArchiveView } from 'shared/components/versions/ArchiveSwitch';
 import { HistoryButton } from 'shared/components/versions/HistoryButton';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { builderCompanyProjectWorkflowPath } from 'shared/routes';
 import { PageHeader } from 'shared/ui/PageHeader';
@@ -174,9 +175,12 @@ const WorkflowsPage = () => {
   };
 
   const openEdit = (wf: WorkflowWithSteps) => {
-    editForm.setValues({ name: wf.name, description: wf.description ?? '' });
+    editForm.setInitialValues({ name: wf.name, description: wf.description ?? '' });
+    editForm.reset();
     setEditWorkflow(wf);
   };
+
+  const requestCloseEdit = useConfirmClose(editForm.isDirty(), () => setEditWorkflow(null));
 
   return (
     <>
@@ -506,13 +510,13 @@ const WorkflowsPage = () => {
       </Modal>
 
       {/* Edit Modal */}
-      <Modal opened={!!editWorkflow} onClose={() => setEditWorkflow(null)} title="Edit Workflow" centered>
+      <Modal opened={!!editWorkflow} onClose={requestCloseEdit} title="Edit Workflow" centered>
         <form onSubmit={editForm.onSubmit(handleEdit)}>
           <Stack gap="md">
             <TextInput label="Name" required {...editForm.getInputProps('name')} />
             <Textarea label="Description" autosize minRows={2} {...editForm.getInputProps('description')} />
             <Group justify="flex-end">
-              <Button variant="outline" onClick={() => setEditWorkflow(null)}>
+              <Button variant="outline" onClick={requestCloseEdit}>
                 Cancel
               </Button>
               <Button type="submit" loading={loading}>

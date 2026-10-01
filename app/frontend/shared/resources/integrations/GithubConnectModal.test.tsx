@@ -2,15 +2,15 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import type { GithubProps } from './GithubConnectModal';
 import { GithubConnectModal } from './GithubConnectModal';
 
 const BASE = '/company/projects/1/integrations';
 
-const renderModal = (github: GithubProps = { appConfigured: true }) =>
-  renderPage(<GithubConnectModal opened onClose={() => {}} basePath={BASE} github={github} />);
+const renderModal = (github: GithubProps = { appConfigured: true }, onClose = () => {}) =>
+  renderPage(<GithubConnectModal opened onClose={onClose} basePath={BASE} github={github} />);
 
 const APP_MODE = /I own the organization/;
 const PAT_MODE = /just want to try it/;
@@ -141,5 +141,34 @@ describe('GithubConnectModal', () => {
 
     expect(screen.getByText(/This acts as you, not as Aixle/)).toBeInTheDocument();
     expect(screen.getByText(/no webhooks to a token/)).toBeInTheDocument();
+  });
+
+  it('asks before closing over a typed token, and clears it once discarded', async () => {
+    const onClose = vi.fn();
+    renderModal({ appConfigured: true }, onClose);
+
+    await userEvent.click(screen.getByRole('radio', { name: PAT_MODE }));
+    await userEvent.type(screen.getByLabelText('Personal access token'), 'ghp_half_pasted');
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Connect GitHub' })).toBeInTheDocument();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Personal access token')).toHaveValue('');
+  });
+
+  it('closes without asking when nothing was typed, whichever path is picked', async () => {
+    const onClose = vi.fn();
+    renderModal({ appConfigured: true }, onClose);
+
+    await userEvent.click(screen.getByRole('radio', { name: PAT_MODE }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
   });
 });

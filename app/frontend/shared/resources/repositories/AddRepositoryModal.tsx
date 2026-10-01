@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import type { Integration } from '@/types/generated';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { ResourceDrawer } from 'shared/ui/ResourceDrawer';
 
 const schema = z
@@ -44,6 +45,16 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
+const EMPTY_VALUES: FormData = {
+  mode: 'integration',
+  integrationId: '',
+  fullName: '',
+  externalId: '',
+  sourceBranch: '',
+  publicUrl: '',
+  purpose: '',
+};
+
 const PROVIDER_LABELS: Record<string, string> = {
   github: 'GitHub',
   gitlab: 'GitLab',
@@ -78,15 +89,7 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
 
   const form = useForm<FormData>({
     validate: zodResolver(schema),
-    initialValues: {
-      mode: 'integration',
-      integrationId: '',
-      fullName: '',
-      externalId: '',
-      sourceBranch: '',
-      publicUrl: '',
-      purpose: '',
-    },
+    initialValues: EMPTY_VALUES,
   });
 
   const isPublicMode = form.values.mode === 'public';
@@ -175,15 +178,20 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
     if (opened && !isPublicMode && integrationOptions.length === 1 && !form.values.integrationId) {
       const onlyIntegrationId = integrationOptions[0].value;
       form.setFieldValue('integrationId', onlyIntegrationId);
+      form.resetDirty({ ...form.getInitialValues(), integrationId: onlyIntegrationId });
       loadRepos(onlyIntegrationId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, isPublicMode, integrationOptions]);
 
+  // reset() returns to the last snapshot, which holds the auto-selected integration. The next open
+  // must start with none chosen, or it skips the selection and the repository reload.
   const handleClose = () => {
+    form.setInitialValues(EMPTY_VALUES);
     form.reset();
     onClose();
   };
+  const requestClose = useConfirmClose(form.isDirty(), handleClose);
 
   const pageErrors = usePage().props.errors as Record<string, string> | undefined;
   const serverErrors = useMemo(() => {
@@ -223,7 +231,7 @@ export const AddRepositoryModal: FC<Props> = ({ opened, onClose, basePath, exist
   return (
     <ResourceDrawer
       opened={opened}
-      onClose={handleClose}
+      onClose={requestClose}
       title="Add Repository"
       footer={
         <Button type="submit" form="add-repository-form" fullWidth loading={loading}>

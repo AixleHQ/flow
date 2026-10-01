@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildProjectTracker } from 'test/factories/projectTracker';
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { ConnectColumnDrawer } from './ConnectColumnDrawer';
 
@@ -131,5 +131,52 @@ describe('ConnectColumnDrawer', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Connect' }));
 
     expect(await screen.findByText("Workflow can't run unattended")).toBeInTheDocument();
+  });
+
+  it('closes without asking while only the defaults are chosen', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(json({ statuses: [{ name: 'Ready for AI', category: 'todo' }] })),
+    );
+    const onClose = vi.fn();
+    renderPage(
+      <ConnectColumnDrawer
+        projectId={7}
+        tracker={buildProjectTracker()}
+        workflows={workflows}
+        boardColumns={boardColumns}
+        onClose={onClose}
+      />,
+    );
+
+    expect(screen.getByRole('combobox', { name: 'Workflow' })).toHaveValue('Intake');
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('asks before closing over a changed choice, and closes once the user discards', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() =>
+      Promise.resolve(json({ statuses: [{ name: 'Ready for AI', category: 'todo' }] })),
+    );
+    const onClose = vi.fn();
+    renderPage(
+      <ConnectColumnDrawer
+        projectId={7}
+        tracker={buildProjectTracker()}
+        workflows={workflows}
+        boardColumns={boardColumns}
+        onClose={onClose}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('combobox', { name: 'Workflow' }));
+    await userEvent.click(await screen.findByRole('option', { name: 'Review' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

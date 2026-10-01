@@ -15,6 +15,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { apiFetch } from 'shared/lib/apiFetch';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import {
   apiV1CloudAwsConnectionPath,
   completeApiV1CloudAwsConnectionPath,
@@ -171,6 +172,9 @@ export function AwsConnectionModal({ opened, onClose, onConnected, embedded = fa
 
   const selectedAccount = accounts.find((a) => a.account_id === accountId);
 
+  // Only the sign-in is lost on close: the typed fields are never reset and are still there on reopen.
+  const requestClose = useConfirmClose(phase !== 'form', onClose);
+
   const body = (
     <Stack gap="md">
       <>
@@ -309,7 +313,7 @@ export function AwsConnectionModal({ opened, onClose, onConnected, embedded = fa
   return embedded ? (
     body
   ) : (
-    <Modal opened={opened} onClose={onClose} title="Connect AWS Bedrock" size="lg">
+    <Modal opened={opened} onClose={requestClose} title="Connect AWS Bedrock" size="lg">
       {body}
     </Modal>
   );

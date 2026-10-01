@@ -71,6 +71,7 @@ import type TaskWorkflowRun from 'types/generated/TaskWorkflowRun';
 
 import { apiMutate } from 'shared/lib/apiFetch';
 import { formatDateTime } from 'shared/lib/formatDate';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import {
   apiV1ProjectTaskPath,
   apiV1ProjectTaskCommentsPath,
@@ -220,6 +221,10 @@ export function TaskDetailSidebar({
   const [deletingGateId, setDeletingGateId] = useState<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Only the comment draft is at stake: the title and description save on blur, which a click on
+  // the X or the overlay triggers before the close, and Escape in them means "cancel this edit".
+  const requestClose = useConfirmClose(commentBody.trim() !== '', onClose);
 
   // Clear optimistic overrides when cable brings fresh task data
   useEffect(() => {
@@ -463,7 +468,7 @@ export function TaskDetailSidebar({
   return (
     <Drawer
       opened={!!task}
-      onClose={onClose}
+      onClose={requestClose}
       position="right"
       size={wide ? '50vw' : 620}
       withCloseButton={false}
@@ -536,7 +541,7 @@ export function TaskDetailSidebar({
             <IconTrash size={16} />
           </ActionIcon>
         )}
-        <ActionIcon variant="subtle" size="sm" title="Close" onClick={onClose}>
+        <ActionIcon variant="subtle" size="sm" title="Close" onClick={requestClose}>
           <IconX size={16} />
         </ActionIcon>
       </Box>

@@ -2,7 +2,7 @@ import { router, usePage } from '@inertiajs/react';
 import { Badge, Box, Button, Card, Group, MultiSelect, Select, Stack, Switch, Text, Textarea } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { IconAdjustments, IconPlayerPlay, IconRobot, IconSparkles } from '@tabler/icons-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { ConfigItemPicker } from '@/types/generated';
 
@@ -63,6 +63,8 @@ export interface SessionNewFormProps {
    * footer, so the 460px side panel matches the Run Workflow drawer exactly.
    */
   layout?: 'page' | 'drawer';
+  /** Reports whether the form holds input that unmounting it would throw away; false again on unmount. */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 const formatCents = (cents: number): string => `$${(cents / 100).toFixed(2)}`;
@@ -94,6 +96,7 @@ export const SessionNewForm = ({
   preSelectedProjectId,
   costHint,
   layout = 'page',
+  onDirtyChange,
 }: SessionNewFormProps) => {
   const { currentUser } = usePage().props as unknown as SharedProps;
   const { canExecute } = useProjectPermissions();
@@ -101,10 +104,12 @@ export const SessionNewForm = ({
   const defaultRuntime = currentUser?.defaultAgentRuntime;
   const initialAgent = defaultRuntime && configuredAgents.includes(defaultRuntime) ? defaultRuntime : '';
 
-  const [projectId, setProjectId] = useState<string | null>(
-    fixedProjectId ? String(fixedProjectId) : preSelectedProjectId ? String(preSelectedProjectId) : null,
-  );
-  const [agentType, setAgentType] = useState<string>(initialAgent);
+  const [seed] = useState(() => ({
+    projectId: fixedProjectId ? String(fixedProjectId) : preSelectedProjectId ? String(preSelectedProjectId) : null,
+    agentType: initialAgent,
+  }));
+  const [projectId, setProjectId] = useState<string | null>(seed.projectId);
+  const [agentType, setAgentType] = useState<string>(seed.agentType);
   const [mode, setMode] = useState('interactive');
   const [initialPrompt, setInitialPrompt] = useState('');
   const [bmadEnabled, setBmadEnabled] = useState(false);
@@ -167,6 +172,15 @@ export const SessionNewForm = ({
     selectedConfigItems,
     bmadEnabled,
   ]);
+
+  const dirty =
+    projectId !== seed.projectId || agentType !== seed.agentType || mode !== 'interactive' || configCount > 0;
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const handleStart = useCallback(async () => {
     if (!canSubmit) return;

@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent, waitFor } from 'test/renderPage';
+import { renderPage, screen, userEvent, waitFor, within } from 'test/renderPage';
 
 import { McpServerFormModal } from './McpServerFormModal';
 
@@ -482,6 +482,94 @@ describe('McpServerFormModal', () => {
       expect(payload).toMatchObject({
         mcpServer: { oauthClientId: 'cl_new', oauthClientSecret: 'sh_new' },
       });
+    });
+  });
+
+  describe('closing over unsaved input', () => {
+    const discardDialog = () => screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+
+    it('asks before closing a new server the user has started filling in, and closes on Discard', async () => {
+      const onClose = vi.fn();
+      renderPage(<McpServerFormModal opened onClose={onClose} {...baseProps} />);
+
+      await userEvent.type(screen.getByRole('textbox', { name: 'Name' }), 'context7');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      const discard = await discardDialog();
+      expect(screen.getByRole('dialog', { name: 'Add MCP Server' })).toBeInTheDocument();
+      expect(screen.queryByText(/Unsaved changes/)).not.toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+
+      await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a typed header as unsaved input', async () => {
+      const onClose = vi.fn();
+      renderPage(<McpServerFormModal opened onClose={onClose} {...baseProps} />);
+
+      await userEvent.click(screen.getByRole('button', { name: /Add Header/i }));
+      await userEvent.type(screen.getByRole('textbox', { name: 'Key' }), 'Authorization');
+      await userEvent.click(
+        within(screen.getByRole('dialog', { name: 'Add MCP Server' })).getByRole('button', { name: 'Clear' }),
+      );
+
+      expect(await discardDialog()).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('closes an untouched new server without asking', async () => {
+      const onClose = vi.fn();
+      renderPage(<McpServerFormModal opened onClose={onClose} {...baseProps} />);
+
+      await userEvent.click(
+        within(screen.getByRole('dialog', { name: 'Add MCP Server' })).getByRole('button', { name: 'Clear' }),
+      );
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+    });
+
+    it('asks before closing over an edited server', async () => {
+      const onClose = vi.fn();
+      renderPage(<McpServerFormModal opened onClose={onClose} editServer={editServer} {...baseProps} />);
+
+      await userEvent.type(await screen.findByDisplayValue('Browser automation'), ' and scraping');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(await discardDialog()).toBeInTheDocument();
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it('closes an untouched edit without asking', async () => {
+      const onClose = vi.fn();
+      renderPage(<McpServerFormModal opened onClose={onClose} editServer={editServer} {...baseProps} />);
+
+      expect(await screen.findByDisplayValue('Authorization')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+    });
+
+    it('opens a new server empty and pristine after an edit was closed', async () => {
+      const onClose = vi.fn();
+      const { rerender } = renderPage(
+        <McpServerFormModal opened onClose={onClose} editServer={editServer} {...baseProps} />,
+      );
+      expect(await screen.findByDisplayValue('Authorization')).toBeInTheDocument();
+
+      rerender(<McpServerFormModal opened={false} onClose={onClose} editServer={null} {...baseProps} />);
+      rerender(<McpServerFormModal opened onClose={onClose} editServer={null} {...baseProps} />);
+
+      expect(await screen.findByRole('textbox', { name: 'Name' })).toHaveValue('');
+      expect(screen.getByRole('textbox', { name: 'URL' })).toHaveValue('');
+      expect(screen.getByRole('textbox', { name: 'Description' })).toHaveValue('');
+      expect(screen.getByText('No headers configured')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
     });
   });
 });

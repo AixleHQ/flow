@@ -7,6 +7,8 @@ import { z } from 'zod';
 
 import type { ConfigItem } from '@/types/generated';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+
 const createSchema = z.object({
   name: z.string().min(1, 'Name is required'),
   value: z.string().min(1, 'Value is required'),
@@ -22,6 +24,8 @@ const editSchema = z.object({
 });
 
 type FormData = z.infer<typeof createSchema>;
+
+const EMPTY_VALUES: FormData = { name: '', value: '', description: '', itemType: 'variable' };
 
 interface Props {
   opened: boolean;
@@ -41,28 +45,24 @@ export const ConfigItemFormModal: FC<Props> = ({ opened, onClose, item, basePath
 
   const form = useForm<FormData>({
     validate: zodResolver(isEditing ? editSchema : createSchema),
-    initialValues: {
-      name: '',
-      value: '',
-      description: '',
-      itemType: 'variable',
-    },
+    initialValues: EMPTY_VALUES,
   });
 
   useEffect(() => {
     if (opened) {
-      if (item) {
-        form.setValues({
-          name: item.name,
-          // A variable's value is shown and editable in place; a secret's never
-          // reaches the browser, so its field starts empty and empty keeps it.
-          value: item.itemType === 'secret' ? '' : item.value,
-          description: item.description ?? '',
-          itemType: item.itemType,
-        });
-      } else {
-        form.reset();
-      }
+      form.setInitialValues(
+        item
+          ? {
+              name: item.name,
+              // A variable's value is shown and editable in place; a secret's never
+              // reaches the browser, so its field starts empty and empty keeps it.
+              value: item.itemType === 'secret' ? '' : item.value,
+              description: item.description ?? '',
+              itemType: item.itemType,
+            }
+          : EMPTY_VALUES,
+      );
+      form.reset();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, item]);
@@ -83,8 +83,10 @@ export const ConfigItemFormModal: FC<Props> = ({ opened, onClose, item, basePath
     }
   };
 
+  const requestClose = useConfirmClose(form.isDirty(), onClose);
+
   return (
-    <Modal opened={opened} onClose={onClose} title={isEditing ? 'Edit secret' : 'Add secret'} centered>
+    <Modal opened={opened} onClose={requestClose} title={isEditing ? 'Edit secret' : 'Add secret'} centered>
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="md">
           <TextInput
@@ -117,7 +119,7 @@ export const ConfigItemFormModal: FC<Props> = ({ opened, onClose, item, basePath
           )}
           <Textarea label="Description" placeholder="Optional description..." {...form.getInputProps('description')} />
           <Group justify="flex-end" mt="sm">
-            <Button variant="default" onClick={onClose} disabled={loading}>
+            <Button variant="default" onClick={requestClose} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" loading={loading}>

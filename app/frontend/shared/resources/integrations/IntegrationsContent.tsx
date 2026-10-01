@@ -45,6 +45,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Integration } from '@/types/generated';
 
 import { formatDateMedium } from 'shared/lib/formatDate';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { useProjectPermissions } from 'shared/lib/hooks/useProjectPermissions';
 import { isValidHttpUrl } from 'shared/lib/urlValidation';
 import { EmptyState } from 'shared/ui/EmptyState';
@@ -177,6 +178,7 @@ export const IntegrationsContent = ({
     setGitlabPat('');
     setGitlabError(null);
   }, []);
+  const requestCloseGitlab = useConfirmClose(gitlabPat !== '', closeGitlabModal);
 
   const [tokenTarget, setTokenTarget] = useState<Integration | null>(null);
   const [replacementToken, setReplacementToken] = useState('');
@@ -188,6 +190,7 @@ export const IntegrationsContent = ({
     setReplacementToken('');
     setTokenError(null);
   }, []);
+  const requestCloseToken = useConfirmClose(replacementToken !== '', closeTokenModal);
 
   const [coderOpen, setCoderOpen] = useState(false);
   const [coderUrl, setCoderUrl] = useState('');
@@ -219,6 +222,23 @@ export const IntegrationsContent = ({
     setCoderOpen(false);
     resetCoderForm();
   }, [resetCoderForm]);
+  const requestCloseCoder = useConfirmClose(
+    coderUrl !== '' ||
+      coderToken !== '' ||
+      coderDefaultTemplate !== '' ||
+      coderMachinePrefix !== '' ||
+      coderLockTtlMinutes !== DEFAULT_CODER_LOCK_TTL,
+    closeCoderModal,
+  );
+
+  const closeCoderSettings = useCallback(() => setCoderEditTarget(null), []);
+  const requestCloseCoderSettings = useConfirmClose(
+    !!coderEditTarget &&
+      (coderEditTemplate !== (coderEditTarget.coderDefaultTemplate ?? '') ||
+        coderEditPrefix !== (coderEditTarget.coderMachinePrefix ?? '') ||
+        coderEditTtl !== (coderEditTarget.coderLockTtlMinutes ?? DEFAULT_CODER_LOCK_TTL)),
+    closeCoderSettings,
+  );
 
   const filtered = useMemo(() => {
     let result = integrations;
@@ -909,7 +929,7 @@ export const IntegrationsContent = ({
         github={github}
       />
 
-      <Modal opened={gitlabOpen} onClose={closeGitlabModal} title="Connect GitLab" centered size="sm">
+      <Modal opened={gitlabOpen} onClose={requestCloseGitlab} title="Connect GitLab" centered size="sm">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             Enter a GitLab Personal Access Token with <b>api</b> scope to connect your GitLab account.
@@ -930,7 +950,7 @@ export const IntegrationsContent = ({
             </Text>
           )}
           <Group justify="flex-end">
-            <Button variant="default" onClick={closeGitlabModal}>
+            <Button variant="default" onClick={requestCloseGitlab}>
               Cancel
             </Button>
             <Button onClick={handleConnectGitlab} loading={gitlabLoading} disabled={!gitlabPat.trim()}>
@@ -940,7 +960,7 @@ export const IntegrationsContent = ({
         </Stack>
       </Modal>
 
-      <Modal opened={coderOpen} onClose={closeCoderModal} title="Connect Coder" centered size="sm">
+      <Modal opened={coderOpen} onClose={requestCloseCoder} title="Connect Coder" centered size="sm">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             Enter your Coder instance URL and a session token with full workspace permissions.
@@ -1001,7 +1021,7 @@ export const IntegrationsContent = ({
           )}
 
           <Group justify="flex-end">
-            <Button variant="default" onClick={closeCoderModal}>
+            <Button variant="default" onClick={requestCloseCoder}>
               Cancel
             </Button>
             <Button
@@ -1020,7 +1040,7 @@ export const IntegrationsContent = ({
         </Stack>
       </Modal>
 
-      <Modal opened={!!tokenTarget} onClose={closeTokenModal} title="Replace token" centered size="sm">
+      <Modal opened={!!tokenTarget} onClose={requestCloseToken} title="Replace token" centered size="sm">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             {tokenTarget?.provider === 'coder'
@@ -1043,7 +1063,7 @@ export const IntegrationsContent = ({
             </Text>
           )}
           <Group justify="flex-end">
-            <Button variant="default" onClick={closeTokenModal}>
+            <Button variant="default" onClick={requestCloseToken}>
               Cancel
             </Button>
             <Button onClick={handleReplaceToken} loading={tokenLoading} disabled={!replacementToken.trim()}>
@@ -1053,13 +1073,7 @@ export const IntegrationsContent = ({
         </Stack>
       </Modal>
 
-      <Modal
-        opened={!!coderEditTarget}
-        onClose={() => setCoderEditTarget(null)}
-        title="Coder settings"
-        centered
-        size="sm"
-      >
+      <Modal opened={!!coderEditTarget} onClose={requestCloseCoderSettings} title="Coder settings" centered size="sm">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
             Without a default template the allocator can only hand out workspaces that already exist — it never creates
@@ -1087,7 +1101,7 @@ export const IntegrationsContent = ({
             error={typeof coderEditTtl === 'number' && coderEditTtl > 0 ? undefined : 'Required'}
           />
           <Group justify="flex-end">
-            <Button variant="default" onClick={() => setCoderEditTarget(null)}>
+            <Button variant="default" onClick={requestCloseCoderSettings}>
               Cancel
             </Button>
             <Button

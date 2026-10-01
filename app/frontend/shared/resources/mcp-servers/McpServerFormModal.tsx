@@ -24,7 +24,7 @@ import { z } from 'zod';
 
 import type { MCPServer } from '@/types/generated';
 
-import { UNSAVED_CHANGES_PROMPT } from 'shared/lib/hooks/useUnsavedChangesGuard';
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
 import { UnsavedChangesNotice } from 'shared/ui/UnsavedChangesNotice';
 
 import { ConfigItemValueField } from './ConfigItemValueField';
@@ -92,6 +92,19 @@ const schema = z
 
 type FormData = z.infer<typeof schema>;
 
+const EMPTY_VALUES: FormData = {
+  name: '',
+  transport: 'http',
+  url: '',
+  command: '',
+  description: '',
+  enabled: true,
+  authType: 'none',
+  credentialScope: 'shared',
+  oauthClientId: '',
+  oauthClientSecret: '',
+};
+
 // Stands in for a stored client secret the browser is never sent, and is resubmitted verbatim when
 // the field is left alone. Must match SECRET_MASK in Web::Company::Projects::MCPServersController.
 const SECRET_MASK = '\u2022'.repeat(6);
@@ -149,18 +162,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
 
   const form = useForm<FormData>({
     validate: zodResolver(schema),
-    initialValues: {
-      name: '',
-      transport: 'http',
-      url: '',
-      command: '',
-      description: '',
-      enabled: true,
-      authType: 'none',
-      credentialScope: 'shared',
-      oauthClientId: '',
-      oauthClientSecret: '',
-    },
+    initialValues: EMPTY_VALUES,
   });
 
   const transport = form.values.transport;
@@ -203,8 +205,8 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
           oauthClientId: editServer.oauthClientId ?? '',
           oauthClientSecret: editServer.oauthClientSecretPresent ? SECRET_MASK : '',
         };
-        form.setValues(values);
-        form.resetDirty(values);
+        form.setInitialValues(values);
+        form.reset();
         // Reveal the advanced scope control up-front only when it's already non-default.
         setShowScopeOptions(editServer.credentialScope === 'per_user');
         setShowClientOptions(!!editServer.oauthClientId);
@@ -213,6 +215,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
         setEnvList([]);
         setShowScopeOptions(false);
         setShowClientOptions(false);
+        form.setInitialValues(EMPTY_VALUES);
         form.reset();
       }
     }
@@ -290,17 +293,14 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
   const kvChanged = (list: KVPair[], original: Record<string, unknown> | null | undefined) =>
     JSON.stringify(kvToObj(list)) !==
     JSON.stringify(Object.fromEntries(Object.entries(original ?? {}).map(([k, v]) => [k, String(v)])));
-  const unsaved =
-    isEdit && (form.isDirty() || kvChanged(headersList, editServer?.headers) || kvChanged(envList, editServer?.env));
-  const handleClose = () => {
-    if (unsaved && !window.confirm(UNSAVED_CHANGES_PROMPT)) return;
-    onClose();
-  };
+  const dirty = form.isDirty() || kvChanged(headersList, editServer?.headers) || kvChanged(envList, editServer?.env);
+  const unsaved = isEdit && dirty;
+  const requestClose = useConfirmClose(dirty, onClose);
 
   return (
     <Drawer
       opened={opened}
-      onClose={handleClose}
+      onClose={requestClose}
       title={isEdit ? 'Edit MCP Server' : 'Add MCP Server'}
       position="right"
       size={460}
@@ -569,7 +569,7 @@ export const McpServerFormModal: FC<McpServerFormModalProps> = ({
 
           <Group justify="flex-end" mt="sm">
             <UnsavedChangesNotice visible={unsaved} />
-            <Button variant="default" onClick={handleClose} disabled={loading}>
+            <Button variant="default" onClick={requestClose} disabled={loading}>
               Cancel
             </Button>
             <Button type="submit" loading={loading}>

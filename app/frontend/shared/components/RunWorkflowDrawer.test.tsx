@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderAuthedPage, screen, userEvent } from 'test/renderPage';
+import { renderAuthedPage, screen, userEvent, within } from 'test/renderPage';
 
 import { RunWorkflowDrawer, type RunWorkflowOption } from './RunWorkflowDrawer';
 
@@ -119,5 +119,85 @@ describe('RunWorkflowDrawer', () => {
       }),
       expect.any(Object),
     );
+  });
+
+  it('asks before closing a run the user has changed, and closes once they discard it', async () => {
+    const onClose = vi.fn();
+    renderDrawer({ initialWorkflowId: 9, onClose });
+
+    await userEvent.click(screen.getByRole('radio', { name: /Interactive/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Run: Weekly GA report' })).toBeInTheDocument();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts picking a workflow as unsaved input', async () => {
+    const onClose = vi.fn();
+    renderDrawer({ onClose });
+
+    await userEvent.click(screen.getByPlaceholderText('Select a workflow…'));
+    await userEvent.click(await screen.findByRole('option', { name: 'Release notes digest' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('closes an untouched drawer opened on a preselected workflow without asking', async () => {
+    const onClose = vi.fn();
+    renderDrawer({ initialWorkflowId: 9, onClose });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('starts clean again when reopened after a discarded change', async () => {
+    const onClose = vi.fn();
+    const drawer = (opened: boolean) => (
+      <RunWorkflowDrawer
+        opened={opened}
+        onClose={onClose}
+        projectId={7}
+        workflows={workflows}
+        initialWorkflowId={9}
+        configuredAgents={['claude_code']}
+        repositories={[]}
+        assets={[]}
+      />
+    );
+    const { rerender } = renderAuthedPage(drawer(true));
+
+    await userEvent.click(screen.getByRole('radio', { name: /Custom/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    rerender(drawer(false));
+    rerender(drawer(true));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(onClose).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('closes without asking once the run has started', async () => {
+    vi.mocked(router.post).mockImplementationOnce((_url, _data, options) => {
+      (options as { onSuccess?: () => void }).onSuccess?.();
+    });
+    const onClose = vi.fn();
+    renderDrawer({ initialWorkflowId: 9, onClose });
+
+    await userEvent.click(screen.getByRole('radio', { name: /Interactive/ }));
+    await userEvent.click(screen.getByRole('button', { name: /run workflow/i }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
   });
 });

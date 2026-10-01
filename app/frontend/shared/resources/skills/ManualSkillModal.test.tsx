@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 import { router } from '@inertiajs/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { renderPage, screen, userEvent } from 'test/renderPage';
+import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
 import { ManualSkillModal } from './ManualSkillModal';
 
@@ -11,6 +11,15 @@ const baseProps = {
   onClose: vi.fn(),
   basePath: '/company/projects/1/skills',
 };
+
+const editedSkill = {
+  id: 3,
+  name: 'release-notes',
+  content: '---\nname: release-notes\n---\n',
+  currentVersionNumber: 2,
+};
+
+const discardDialog = () => screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
 
 describe('ManualSkillModal', () => {
   // The form IS the file: a skill is a SKILL.md, and its name has to come from the
@@ -72,5 +81,58 @@ describe('ManualSkillModal', () => {
     expect(screen.getByText('name must use lowercase letters')).toBeInTheDocument();
     expect((screen.getByLabelText('SKILL.md content') as HTMLTextAreaElement).value).toBe('my precious draft');
     expect(baseProps.onClose).not.toHaveBeenCalled();
+  });
+
+  it('asks before closing a new skill the user has started writing, and closes on Discard', async () => {
+    const onClose = vi.fn();
+    renderPage(<ManualSkillModal {...baseProps} onClose={onClose} />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'SKILL.md content' }), 'More steps.');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const discard = await discardDialog();
+    expect(screen.getByRole('dialog', { name: 'Add a skill by hand' })).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes an untouched new skill without asking', async () => {
+    const onClose = vi.fn();
+    renderPage(<ManualSkillModal {...baseProps} onClose={onClose} />);
+
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: 'Add a skill by hand' })).getByRole('button', { name: 'Clear' }),
+    );
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+
+  it('asks before closing over an edited skill', async () => {
+    const onClose = vi.fn();
+    renderPage(<ManualSkillModal {...baseProps} onClose={onClose} skill={editedSkill} />);
+
+    await userEvent.type(screen.getByRole('textbox', { name: 'SKILL.md content' }), 'Use it for changelogs.');
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: 'Edit release-notes' })).getByRole('button', { name: 'Clear' }),
+    );
+
+    const discard = await discardDialog();
+    expect(onClose).not.toHaveBeenCalled();
+
+    await userEvent.click(within(discard).getByRole('button', { name: 'Discard' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes an untouched edit without asking', async () => {
+    const onClose = vi.fn();
+    renderPage(<ManualSkillModal {...baseProps} onClose={onClose} skill={editedSkill} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
   });
 });
