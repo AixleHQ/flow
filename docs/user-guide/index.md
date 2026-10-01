@@ -22,8 +22,8 @@ Read in any order:
 - **[MCP servers](mcp.md)** — transports, the internal `aixle-tools` server,
   Config Items credentials, and the personal token that turns Aixle itself
   into an MCP server.
-- **[Integrations](integrations.md)** — GitHub, GitLab, Linear,
-  Google OAuth, and webhooks.
+- **[Integrations](integrations.md)** — GitHub, GitLab, Azure DevOps,
+  Jira, Slack, Coder and the trackers they provide, and webhooks.
 - **[Configuration](configuration.md)** — env vars, OAuth, agent
   credentials, and other knobs.
 

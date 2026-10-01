@@ -6,15 +6,13 @@ require "test_helper"
 # via the shared AuthorizationMatrix harness (docs/testing.md §2).
 #
 # Policy (Web::Company::Projects::IntegrationsPolicy):
-#   index?                                   => project_accessible?   (read)
-#   create? / destroy? / slack_oauth_start?  => manage_integrations?  (write)
-#     manage_integrations? = project_writable? && (current_user.admin? || project_owner?)
+#   index?          => project_accessible?   (read)
+#   every write     => manage_integrations? = project_writable?
 #
-# DIVERGENCE from the generic project-write preset: writes require admin OR the
-# project owner, so the employee *collaborator* — writable in the generic sense —
-# is DENIED here alongside the read-only viewer. Only the owner and a company
-# admin may manage integrations, hence the custom MANAGE matrix below instead of
-# assert_project_write. Non-members are still scoped out to 404 before the policy.
+# Any member who can write to the project manages its integrations: owner, admin
+# and the employee collaborator are allowed, the read-only viewer is denied, and
+# non-members are scoped out to 404 before the policy runs. Removing a
+# company-wide install stays a company admin's (IntegrationsControllerTest).
 #
 # Allowed-write response shapes (no vendor stubbing — every real provider path in
 # #create hits an external API, so we exercise the only vendor-free branches):
@@ -23,19 +21,11 @@ require "test_helper"
 #   create (unsupported provider) -> 302 redirect carrying flash[:alert]
 #     "Unsupported provider: ..." — a deterministic body-level guard that proves
 #     authorization already passed (denied roles never reach the body). Because
-#     that alert is NOT the authz denial, we assert it with allowed_status: :redirect
+#     that alert is NOT the authz denial, we assert it with allowed: :redirect
 #     to skip the default "no alert" check.
 #   destroy -> 302 redirect with flash[:notice] (not :alert), so the default holds.
 class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::IntegrationTest
   include AuthorizationMatrix
-
-  # Writes are admin-or-owner (manage_integrations?): collaborator + viewer denied,
-  # non-members scoped out to 404 before the policy runs.
-  MANAGE = {
-    owner: :allowed_write, admin: :allowed_write,
-    collaborator: :denied, viewer: :denied,
-    stranger: :not_found, foreign_admin: :not_found
-  }.freeze
 
   setup do
     setup_project_authz_personas
@@ -48,16 +38,16 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
     assert_project_read { get company_project_integrations_path(@project) }
   end
 
-  test "slack_oauth_start is admin-or-owner (redirects to Slack; collaborator/viewer denied)" do
-    assert_role_matrix(MANAGE, transport: :web) do
+  test "slack_oauth_start is a project write (redirects to Slack)" do
+    assert_project_write do
       get slack_oauth_start_company_project_integrations_path(@project)
     end
   end
 
   # An unsupported provider hits the nil-integration branch => 302 + a non-authz
   # alert, proving the allowed role passed authorization and reached the body.
-  test "create is admin-or-owner (collaborator/viewer denied)" do
-    assert_role_matrix(MANAGE, transport: :web, allowed_status: :redirect) do
+  test "create is a project write" do
+    assert_project_write(allowed: :redirect) do
       post company_project_integrations_path(@project), params: { provider: "unsupported" }
     end
   end
@@ -65,48 +55,48 @@ class Web::Company::Projects::IntegrationsAuthorizationTest < ActionDispatch::In
   # update carries a non-authz alert for a provider without editable settings
   # (the seeded integration is a GitHub one), which proves the allowed role got
   # past the policy — same shape as the #create case above.
-  test "update is admin-or-owner (collaborator/viewer denied)" do
-    assert_role_matrix(MANAGE, transport: :web, allowed_status: :redirect) do
+  test "update is a project write" do
+    assert_project_write(allowed: :redirect) do
       patch company_project_integration_path(@project, @integration), params: { lockTtlMinutes: "120" }
     end
   end
 
   # destroy mutates, so build a throwaway integration per allowed-role iteration.
-  test "destroy is admin-or-owner (collaborator/viewer denied)" do
-    assert_role_matrix(MANAGE, transport: :web) do
+  test "destroy is a project write" do
+    assert_project_write do
       delete company_project_integration_path(
         @project, create(:integration, project: @project, company: @company, connected_by: @owner)
       )
     end
   end
 
-  test "jira_oauth_start is admin-or-owner (redirects to Atlassian)" do
+  test "jira_oauth_start is a project write (redirects to Atlassian)" do
     with_jira_oauth_app
-    assert_role_matrix(MANAGE, transport: :web) do
+    assert_project_write do
       get jira_oauth_start_company_project_integrations_path(@project)
     end
   end
 
   # A missing credential is refused in the body, after authorization passed.
-  test "jira_inspect is admin-or-owner" do
-    assert_role_matrix(MANAGE, transport: :web, allowed_status: :unprocessable_content) do
+  test "jira_inspect is a project write" do
+    assert_project_write(allowed: :unprocessable_content) do
       post jira_inspect_company_project_integrations_path(@project), params: { site_url: "acme.atlassian.net" }, as: :json
     end
   end
 
   # It answers with the webhook secret.
-  test "jira_webhook is admin-or-owner" do
+  test "jira_webhook is a project write" do
     jira = create(:integration, :jira, :active, project: @project, company: @company, connected_by: @owner)
-    assert_role_matrix(MANAGE, transport: :web, allowed_status: :success) do
+    assert_project_write(allowed: :success) do
       get jira_webhook_company_project_integration_path(@project, jira), as: :json
     end
   end
 
-  test "azure_devops_sign_in is admin-or-owner (redirects to Microsoft)" do
+  test "azure_devops_sign_in is a project write (redirects to Microsoft)" do
     with_azure_devops_enabled
     stub_request(:get, %r{#{AZURE_API_HOST}/contoso/_apis/git/repositories})
       .to_return(status: 302, headers: { "WWW-Authenticate" => "Bearer authorization_uri=#{AZURE_TOKEN_HOST}/#{SecureRandom.uuid}" })
-    assert_role_matrix(MANAGE, transport: :web) do
+    assert_project_write do
       get azure_devops_sign_in_company_project_integrations_path(@project, organization: "contoso")
     end
   end

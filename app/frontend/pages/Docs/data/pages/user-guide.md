@@ -21,7 +21,7 @@ Read in any order:
 - **Runtimes** — the seven LLM CLIs (Claude Code, Cursor CLI, Codex, Gemini CLI, Antigravity CLI, Grok, Kiro CLI), their images, credentials, and cost tracking.
 - **Tools** — tool kinds, execution modes, the built-in board tools, and resource resolution.
 - **MCP servers** — transports, the internal `aixle-tools` server, and Config Items credentials.
-- **Integrations** — GitHub, GitLab, Linear, Google OAuth, and webhooks.
+- **Integrations** — GitHub, GitLab, Azure DevOps, Jira, Slack, Coder and the trackers they provide, and webhooks.
 - **Configuration** — env vars, OAuth, agent credentials, and other knobs.
 
 If you've just installed Aixle Flow and want to see something move, see the Quick start page first.

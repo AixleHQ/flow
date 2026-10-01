@@ -68,7 +68,12 @@ export const TrackersContent = ({
   const { canExecute } = useProjectPermissions();
   const [addOpen, setAddOpen] = useState(false);
   const [intakeFor, setIntakeFor] = useState<ProjectTracker | null>(null);
-  const canConnectColumn = workflows.length > 0 && boardColumns.length > 0;
+  const connectColumnBlocker =
+    boardColumns.length === 0
+      ? 'Add a board to this project first: the issue gets a task in one of its columns'
+      : workflows.length === 0
+        ? 'Create a workflow first: moving an issue to the column starts it'
+        : null;
 
   const update = (tracker: ProjectTracker, changes: TrackerChanges, message: string) => {
     router.patch(
@@ -199,13 +204,16 @@ export const TrackersContent = ({
                               </Tooltip>
                             ) : (
                               <>
-                                {tracker.usable && canConnectColumn && (
-                                  <Tooltip label="Connect a board column">
+                                {/* data-disabled, not disabled: a disabled button gets no hover, so the tooltip could not say why. */}
+                                {tracker.usable && (
+                                  <Tooltip label={connectColumnBlocker ?? 'Connect a board column'}>
                                     <ActionIcon
                                       aria-label="Connect a board column"
+                                      aria-disabled={connectColumnBlocker ? true : undefined}
+                                      data-disabled={connectColumnBlocker ? true : undefined}
                                       variant="subtle"
                                       size="sm"
-                                      onClick={() => setIntakeFor(tracker)}
+                                      onClick={() => !connectColumnBlocker && setIntakeFor(tracker)}
                                     >
                                       <IconColumns size={16} />
                                     </ActionIcon>

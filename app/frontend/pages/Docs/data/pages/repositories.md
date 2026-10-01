@@ -5,9 +5,10 @@ Two pages that together decide what an agent can touch outside Flow.
 ## Integrations
 
 An **integration** is an account Flow connects to on the team's behalf:
-GitHub, GitLab, Linear, Slack, and Coder. Connect one from the page's
-**Connect** menu — GitHub through its app install, GitLab with a token, and so
-on.
+GitHub, GitLab, Azure DevOps, Jira, Slack and Coder. Connect one from the
+page's **Connect** menu — GitHub through its app or a token, GitLab with a
+token, and so on. Each has its own page, listed on
+[Integrations](/docs/integrations).
 
 The table lists project integrations and company-wide ones together, each with
 a **Scope** badge, so it is always clear whether a connection is yours alone or
