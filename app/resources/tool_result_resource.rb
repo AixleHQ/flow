@@ -24,5 +24,7 @@ class ToolResultResource
 
   private
 
-  def rewrite_host(url) = ContainerAssetUrl.call(url, host: params[:url_host])
+  def rewrite_host(url)
+    ContainerAssetUrl.call(url, host: params[:url_host])
+  end
 end

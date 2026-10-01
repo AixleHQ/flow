@@ -52,7 +52,9 @@ module Billing
 
       # The integer AWS is given. Allocations have to sum to it exactly or the
       # call is refused, so the largest-remainder split below is not cosmetic.
-      def quantity_for(report) = report.quantity_minutes.floor
+      def quantity_for(report)
+        report.quantity_minutes.floor
+      end
 
       # Each company's share, rounded so the parts still add up to the whole.
       def allocations_for(report)

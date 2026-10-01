@@ -7,8 +7,6 @@ class ContainerAssetUrlTest < ActiveSupport::TestCase
   SIGNED = "https://bucket.s3.amazonaws.com/store/out.txt" \
            "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc123&X-Amz-Expires=3600"
 
-  # What the rewriting is for: the application serves its own files on the
-  # Docker runtime, and the address it writes is the one a browser uses.
   test "an address of ours is moved to one the container can reach" do
     assert_equal "http://web:4000/store/out.txt", ContainerAssetUrl.call(OURS, host: "web:4000")
   end
@@ -19,7 +17,7 @@ class ContainerAssetUrlTest < ActiveSupport::TestCase
   end
 
   # The signature covers the host. Moving it produces a link that looks right
-  # and answers 403, which reads as a broken tool rather than a broken URL.
+  # and answers 403.
   test "a presigned URL is left exactly as it was signed" do
     assert_equal SIGNED, ContainerAssetUrl.call(SIGNED, host: "https://bucket.s3.us-east-1.amazonaws.com")
   end

@@ -22,7 +22,9 @@ class FakeMarketplaceMeteringClient
     @records = []
   end
 
-  def configured? = @configured
+  def configured?
+    @configured
+  end
 
   # One record per hour, as AWS counts them: a second for an hour already sent
   # answers :duplicate rather than raising, because the record exists.
@@ -36,7 +38,9 @@ class FakeMarketplaceMeteringClient
     "record-#{records.size}"
   end
 
-  def last_record = records.last
+  def last_record
+    records.last
+  end
 
   private
 

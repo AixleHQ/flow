@@ -11,9 +11,6 @@ class ToolResultResourceTest < ActiveSupport::TestCase
     JSON.parse(ToolResultResource.new(@result, params: { url_host: url_host }).to_json)
   end
 
-  # The Docker runtime serves its own files, and the address written into the URL
-  # is the one a browser uses. Inside the container network it resolves to
-  # nothing, which is what this rewriting is for.
   test "an address of ours is moved to one the container can reach" do
     @result.stubs(:stdout).returns(stub(url: "https://aixle.example.com/store/out.txt", metadata: {}))
 
@@ -22,8 +19,8 @@ class ToolResultResourceTest < ActiveSupport::TestCase
     assert_equal "http://web:4000/store/out.txt", url
   end
 
-  # A presigned URL's signature covers its host. Moving the host produces a link
-  # that looks right and answers 403, which reads as a broken tool.
+  # The signature covers the host. Moving it produces a link that looks right
+  # and answers 403.
   test "a presigned URL is left exactly as AWS signed it" do
     signed = "https://bucket.s3.amazonaws.com/store/out.txt" \
              "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=abc123&X-Amz-Expires=3600"

@@ -4,10 +4,8 @@ module Billing
   # The one place this application talks to AWS Marketplace metering.
   #
   # An adapter for the same reason Billing::StripeClient is one: the tests below
-  # it drive a fake of this rather than the vendor's classes, and "is this
-  # installation entitled to meter at all" is asked once instead of at every call
-  # site. Outside an installation bought through AWS Marketplace nothing here is
-  # ever reached.
+  # it drive a fake of this rather than the vendor's classes. Outside an
+  # installation bought through AWS Marketplace nothing here is ever reached.
   #
   # NOT Billing::AwsMarketplace: a module of that name would make every bare
   # `Aws` inside Billing::Meter::AwsMarketplace resolve to it rather than to the
@@ -15,24 +13,18 @@ module Billing
   class MarketplaceMeteringClient
     class Error < StandardError; end
 
-    # Which product the record is billed against. It reaches the pod as an
-    # environment variable, put there by the installation from the code the
-    # buyer's subscription issued; an installation that was not bought through
-    # Marketplace has none, and nothing here may be called.
-    def configured? = product_code.present?
+    # An installation not bought through Marketplace has no product code, and
+    # nothing here may be called.
+    def configured?
+      product_code.present?
+    end
 
     # One closed hour of the whole installation, as one record.
     #
     # AWS accepts one record per product per account per hour and answers a
-    # second with DuplicateRequestException. That refusal means "recorded", not
-    # "failed", so it is answered with :duplicate rather than an exception —
-    # otherwise the ledger would replay an hour AWS already has until the window
-    # closed.
-    #
-    # `allocations` is the per-company split, which AWS carries for the buyer's
-    # own cost reporting and nothing else. Its parts must add up to `quantity`
-    # exactly or the whole call is refused, which is why the caller rounds them
-    # together rather than one at a time.
+    # second with DuplicateRequestException. That refusal means "recorded", so it
+    # is answered with :duplicate rather than an exception; otherwise the ledger
+    # would replay an hour AWS already has until the window closed.
     def meter_usage(dimension:, quantity:, occurred_at:, allocations: {})
       api do
         begin
@@ -54,15 +46,19 @@ module Billing
 
     private
 
-    def product_code = settings.product_code
+    def product_code
+      settings.product_code
+    end
 
-    def settings = ::Settings.aws_marketplace || Hashie::Mash.new
+    def settings
+      ::Settings.aws_marketplace || Hashie::Mash.new
+    end
 
-    # Region and credentials come from the environment: the pod runs under a
-    # service account annotated with an IAM role, and the SDK's default chain
-    # reads the token that projects into it. Nothing is configured here, so
-    # nothing here can be configured wrongly.
-    def client = @client ||= ::Aws::MarketplaceMetering::Client.new
+    # Region and credentials come from the SDK's default chain, which reads the
+    # token projected into the pod by its service account's IAM role.
+    def client
+      @client ||= ::Aws::MarketplaceMetering::Client.new
+    end
 
     def allocation_list(allocations)
       allocations.map do |company_id, allocated|
