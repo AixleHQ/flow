@@ -19,6 +19,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Integration } from '@/types/generated';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+
 import { requestJson as requestTrackerJson } from './requestJson';
 
 export interface LinearProps {
@@ -69,6 +71,7 @@ export const LinearConnectModal = ({ opened, onClose, basePath, linear }: Connec
     setDedicated(false);
     setError(null);
   }, [onClose]);
+  const requestClose = useConfirmClose(apiKey !== '' || teamIds.length > 0, close);
 
   const check = useCallback(async () => {
     setError(null);
@@ -102,7 +105,7 @@ export const LinearConnectModal = ({ opened, onClose, basePath, linear }: Connec
   }, [apiKey, basePath, close, dedicated, teamIds]);
 
   return (
-    <Modal opened={opened} onClose={close} title="Connect Linear" size="lg">
+    <Modal opened={opened} onClose={requestClose} title="Connect Linear" size="lg">
       <Stack gap="md">
         {linear.oauthEnabled && (
           <SegmentedControl
@@ -123,7 +126,7 @@ export const LinearConnectModal = ({ opened, onClose, basePath, linear }: Connec
               workspace&apos;s events on its own.
             </Text>
             <Group justify="flex-end">
-              <Button variant="default" onClick={close}>
+              <Button variant="default" onClick={requestClose}>
                 Cancel
               </Button>
               <Button component="a" href={`${basePath}/linear_oauth_start`}>
@@ -167,7 +170,7 @@ export const LinearConnectModal = ({ opened, onClose, basePath, linear }: Connec
               </>
             )}
             <Group justify="flex-end">
-              <Button variant="default" onClick={close}>
+              <Button variant="default" onClick={requestClose}>
                 Cancel
               </Button>
               {inspection ? (
@@ -218,6 +221,14 @@ export const LinearTeamsModal = ({ integration, onClose, basePath }: TeamsProps)
     };
   }, [basePath, integration]);
 
+  const covered = integration?.linearTeams.map((t) => t.id) ?? [];
+  const dirty =
+    !!integration &&
+    ((apiKeyMode && dedicated !== integration.linearDedicatedIdentity) ||
+      teamIds.length !== covered.length ||
+      teamIds.some((id) => !covered.includes(id)));
+  const requestClose = useConfirmClose(dirty, onClose);
+
   const save = useCallback(() => {
     if (!integration) return;
     setSaving(true);
@@ -234,7 +245,7 @@ export const LinearTeamsModal = ({ integration, onClose, basePath }: TeamsProps)
   }, [apiKeyMode, basePath, dedicated, integration, onClose, teamIds]);
 
   return (
-    <Modal opened={!!integration} onClose={onClose} title="Linear teams" size="lg">
+    <Modal opened={!!integration} onClose={requestClose} title="Linear teams" size="lg">
       <Stack gap="md">
         {error && (
           <Alert color="red" icon={<IconAlertCircle size={16} />}>
@@ -261,7 +272,7 @@ export const LinearTeamsModal = ({ integration, onClose, basePath }: TeamsProps)
           />
         )}
         <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
+          <Button variant="default" onClick={requestClose}>
             Cancel
           </Button>
           <Button onClick={save} loading={saving} disabled={!teams || teamIds.length === 0}>

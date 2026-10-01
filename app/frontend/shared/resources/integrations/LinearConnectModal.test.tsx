@@ -3,7 +3,7 @@ import { router } from '@inertiajs/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildIntegration } from 'test/factories/integration';
-import { renderPage, screen, userEvent } from 'test/renderPage';
+import { renderPage, screen, userEvent, within } from 'test/renderPage';
 
 import { LinearConnectModal, LinearTeamsModal } from './LinearConnectModal';
 
@@ -95,9 +95,62 @@ describe('LinearConnectModal', () => {
   });
 });
 
+describe('LinearConnectModal closing', () => {
+  it('asks before closing over a typed API key, and clears it once discarded', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderPage(<LinearConnectModal opened onClose={onClose} basePath={BASE} linear={{ oauthEnabled: false }} />);
+
+    await user.type(screen.getByLabelText('API key'), 'lin_api_x');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    const discard = await screen.findByRole('dialog', { name: 'Discard unsaved changes?' });
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(within(discard).getByRole('button', { name: 'Discard' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('API key')).toHaveValue('');
+  });
+
+  it('closes without asking when nothing was entered', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderPage(<LinearConnectModal opened onClose={onClose} basePath={BASE} linear={{ oauthEnabled: true }} />);
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Discard unsaved changes?' })).not.toBeInTheDocument();
+  });
+});
+
 describe('LinearTeamsModal', () => {
   beforeEach(() => vi.mocked(router.patch).mockClear());
   afterEach(() => vi.mocked(globalThis.fetch).mockReset());
+
+  it('asks before closing over a changed choice of teams, and not over an untouched one', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    mockFetch(() => ({ payload: { teams: TEAMS } }));
+    renderPage(
+      <LinearTeamsModal
+        integration={linearIntegration({ linearTeams: [TEAMS[0]] })}
+        onClose={onClose}
+        basePath={BASE}
+      />,
+    );
+
+    await screen.findByRole('combobox', { name: /Linear teams/ });
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await pickTeam(user, 'Operations (OPS)');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 
   it('finishes a pending app connection with the teams picked', async () => {
     const user = userEvent.setup();

@@ -90,4 +90,22 @@ describe('GithubProjectsModal', () => {
     expect(await screen.findByText(/Resource not accessible by integration/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
+
+  it('asks before closing over a changed choice, and not over the one it opened with', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    mockFetch(() => ({ payload: { projects: PROJECTS, selected: ['PVT_road'] } }));
+    renderPage(<GithubProjectsModal integration={githubIntegration()} onClose={onClose} basePath={BASE} />);
+
+    await screen.findByRole('combobox', { name: /GitHub projects/ });
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('combobox', { name: /GitHub projects/ }));
+    await user.click(await screen.findByRole('option', { name: 'Bugs (#7)' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Discard unsaved changes?' })).toBeInTheDocument();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

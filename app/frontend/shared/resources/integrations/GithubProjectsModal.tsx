@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { Integration } from '@/types/generated';
 
+import { useConfirmClose } from 'shared/lib/hooks/useConfirmClose';
+
 import { requestJson } from './requestJson';
 
 interface GithubProject {
@@ -25,6 +27,7 @@ interface Props {
 export const GithubProjectsModal = ({ integration, onClose, basePath }: Props) => {
   const [projects, setProjects] = useState<GithubProject[] | null>(null);
   const [projectIds, setProjectIds] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,17 +37,22 @@ export const GithubProjectsModal = ({ integration, onClose, basePath }: Props) =
     setProjects(null);
     setError(null);
     setProjectIds(integration.githubProjects.map((p) => p.id));
+    setSelected(integration.githubProjects.map((p) => p.id));
     requestJson(`${basePath}/${integration.id}/github_projects`, { method: 'GET' }, 'GitHub rejected the request')
       .then((result) => {
         if (cancelled) return;
         setProjects(result.projects as GithubProject[]);
         setProjectIds(result.selected as string[]);
+        setSelected(result.selected as string[]);
       })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : 'Could not list the GitHub projects'));
     return () => {
       cancelled = true;
     };
   }, [basePath, integration]);
+
+  const dirty = projectIds.length !== selected.length || projectIds.some((id) => !selected.includes(id));
+  const requestClose = useConfirmClose(dirty, onClose);
 
   const save = useCallback(() => {
     if (!integration) return;
@@ -62,7 +70,7 @@ export const GithubProjectsModal = ({ integration, onClose, basePath }: Props) =
   }, [basePath, integration, onClose, projectIds]);
 
   return (
-    <Modal opened={!!integration} onClose={onClose} title="GitHub Projects" size="lg">
+    <Modal opened={!!integration} onClose={requestClose} title="GitHub Projects" size="lg">
       <Stack gap="md">
         <Text size="sm" c="dimmed">
           Each project you pick becomes a tracker: its Status field is the board&apos;s columns, and its issues and pull
@@ -99,7 +107,7 @@ export const GithubProjectsModal = ({ integration, onClose, basePath }: Props) =
           />
         )}
         <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
+          <Button variant="default" onClick={requestClose}>
             Cancel
           </Button>
           <Button onClick={save} loading={saving} disabled={!projects}>
